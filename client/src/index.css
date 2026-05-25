@@ -1,0 +1,144 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+@import "leaflet/dist/leaflet.css";
+
+@custom-variant dark (&:is(.dark *));
+
+/* ============================================================
+   Lunchie Munchie Design System — "Soft Coral" (Option 8)
+   Primary: #EB5053 Coral Red | Accent: #F09D09 #EFD0D4 #3CBA44 #3E719B
+   ============================================================ */
+
+@theme inline {
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-chart-1: var(--chart-1);
+  --color-chart-2: var(--chart-2);
+  --color-chart-3: var(--chart-3);
+  --color-chart-4: var(--chart-4);
+  --color-chart-5: var(--chart-5);
+}
+
+:root {
+  --radius: 0.75rem;
+  --primary: oklch(0.58 0.19 22);
+  --primary-foreground: oklch(1 0 0);
+  --background: oklch(1 0 0);
+  --foreground: oklch(0.12 0.005 0);
+  --card: oklch(1 0 0);
+  --card-foreground: oklch(0.12 0.005 0);
+  --popover: oklch(1 0 0);
+  --popover-foreground: oklch(0.12 0.005 0);
+  --secondary: oklch(0.97 0.003 0);
+  --secondary-foreground: oklch(0.3 0.005 0);
+  --muted: oklch(0.96 0.003 0);
+  --muted-foreground: oklch(0.6 0.01 0);
+  --accent: oklch(0.92 0.04 25);
+  --accent-foreground: oklch(0.12 0.005 0);
+  --destructive: oklch(0.58 0.19 22);
+  --destructive-foreground: oklch(1 0 0);
+  --border: oklch(0.9 0.003 0);
+  --input: oklch(0.96 0.003 0);
+  --ring: oklch(0.58 0.19 22);
+  --chart-1: oklch(0.58 0.19 22);
+  --chart-2: oklch(0.68 0.17 55);
+  --chart-3: oklch(0.60 0.14 145);
+  --chart-4: oklch(0.48 0.12 230);
+  --chart-5: oklch(0.82 0.06 10);
+}
+
+@layer base {
+  * { @apply border-border outline-ring/50; }
+  body {
+    @apply bg-background text-foreground;
+    font-family: 'Pretendard Variable', 'Pretendard', -apple-system, BlinkMacSystemFont, sans-serif;
+    -webkit-tap-highlight-color: transparent;
+    overscroll-behavior: none;
+  }
+  button:not(:disabled), [role="button"]:not([aria-disabled="true"]),
+  [type="button"]:not(:disabled), [type="submit"]:not(:disabled),
+  a[href], select:not(:disabled) { @apply cursor-pointer; }
+}
+
+@layer components {
+  .container {
+    width: 100%; margin-left: auto; margin-right: auto;
+    padding-left: 1.25rem; padding-right: 1.25rem;
+  }
+  .flex { min-height: 0; min-width: 0; }
+  @media (min-width: 1024px) {
+    .container { padding-left: 2rem; padding-right: 2rem; max-width: 480px; }
+  }
+
+  .app-shell {
+    max-width: 480px; margin: 0 auto; min-height: 100dvh;
+    position: relative; background: #FFFFFF;
+    box-shadow: 0 0 60px rgba(0,0,0,0.08);
+  }
+
+  .lm-btn-primary {
+    background: #EB5053; color: white; border-radius: 12px;
+    height: 52px; font-weight: 600; font-size: 15px;
+    transition: all 150ms; border: none;
+  }
+  .lm-btn-primary:active { opacity: 0.85; transform: scale(0.98); }
+
+  .lm-btn-outline {
+    background: white; color: #1A1A1A; border-radius: 12px;
+    height: 52px; font-weight: 600; font-size: 15px;
+    border: 1px solid #E5E5E5; transition: all 150ms;
+  }
+  .lm-btn-outline:active { opacity: 0.8; transform: scale(0.98); }
+
+  .lm-card {
+    background: white; border-radius: 16px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+  }
+
+  .ai-banner {
+    background: linear-gradient(135deg, #EB5053 0%, #F09D09 100%);
+    border-radius: 16px; padding: 20px;
+  }
+
+  .tag { border-radius: 999px; padding: 4px 10px; font-size: 11px; font-weight: 500; display: inline-flex; align-items: center; }
+  .tag-date { background: #EB5053; color: white; }
+  .tag-food { background: #F09D09; color: white; }
+  .tag-cafe { background: #EFD0D4; color: #1A1A1A; }
+  .tag-culture { background: #3E719B; color: white; }
+  .tag-activity { background: #3CBA44; color: white; }
+  .tag-hash { background: #F5F5F5; color: #4A4A4A; }
+
+  .tab-bar {
+    position: fixed; bottom: 0; left: 50%; transform: translateX(-50%);
+    width: 100%; max-width: 480px; background: white;
+    border-top: 1px solid #E5E5E5; z-index: 50;
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+  }
+
+  .leaflet-container { border-radius: 1rem; z-index: 0; }
+}
+
+::-webkit-scrollbar { width: 3px; height: 3px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: #E5E5E5; border-radius: 2px; }
