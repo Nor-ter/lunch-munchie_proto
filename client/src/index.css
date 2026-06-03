@@ -5,8 +5,8 @@
 @custom-variant dark (&:is(.dark *));
 
 /* ============================================================
-   Lunchie Munchie Design System — "Soft Coral" (Option 8)
-   Primary: #EB5053 Coral Red | Accent: #F09D09 #EFD0D4 #3CBA44 #3E719B
+   Lunchie Munchie Design System — "Soft Coral"
+   Primary: #EB5053 | Accent: #F09D09 | BG: #FFF8F2
    ============================================================ */
 
 @theme inline {
@@ -33,11 +33,6 @@
   --color-border: var(--border);
   --color-input: var(--input);
   --color-ring: var(--ring);
-  --color-chart-1: var(--chart-1);
-  --color-chart-2: var(--chart-2);
-  --color-chart-3: var(--chart-3);
-  --color-chart-4: var(--chart-4);
-  --color-chart-5: var(--chart-5);
 }
 
 :root {
@@ -61,11 +56,16 @@
   --border: oklch(0.9 0.003 0);
   --input: oklch(0.96 0.003 0);
   --ring: oklch(0.58 0.19 22);
-  --chart-1: oklch(0.58 0.19 22);
-  --chart-2: oklch(0.68 0.17 55);
-  --chart-3: oklch(0.60 0.14 145);
-  --chart-4: oklch(0.48 0.12 230);
-  --chart-5: oklch(0.82 0.06 10);
+
+  /* LM Design Tokens */
+  --lm-primary: #EB5053;
+  --lm-accent: #F09D09;
+  --lm-green: #3CBA44;
+  --lm-blue: #3E719B;
+  --lm-bg: #FFF8F2;
+  --lm-card-warm: #FFF3C4;
+  --lm-text: #1A1A1A;
+  --lm-sub: #9B9B9B;
 }
 
 @layer base {
@@ -87,53 +87,56 @@
     padding-left: 1.25rem; padding-right: 1.25rem;
   }
   .flex { min-height: 0; min-width: 0; }
-  @media (min-width: 1024px) {
-    .container { padding-left: 2rem; padding-right: 2rem; max-width: 480px; }
-  }
 
   .app-shell {
     max-width: 480px; margin: 0 auto; min-height: 100dvh;
-    position: relative; background: #FFFFFF;
+    position: relative; background: var(--lm-bg);
     box-shadow: 0 0 60px rgba(0,0,0,0.08);
   }
 
   .lm-btn-primary {
-    background: #EB5053; color: white; border-radius: 12px;
-    height: 52px; font-weight: 600; font-size: 15px;
+    background: var(--lm-primary); color: white; border-radius: 16px;
+    height: 52px; font-weight: 700; font-size: 15px;
     transition: all 150ms; border: none;
   }
   .lm-btn-primary:active { opacity: 0.85; transform: scale(0.98); }
 
   .lm-btn-outline {
-    background: white; color: #1A1A1A; border-radius: 12px;
+    background: white; color: #1A1A1A; border-radius: 16px;
     height: 52px; font-weight: 600; font-size: 15px;
-    border: 1px solid #E5E5E5; transition: all 150ms;
+    border: 1.5px solid #E5E5E5; transition: all 150ms;
   }
   .lm-btn-outline:active { opacity: 0.8; transform: scale(0.98); }
 
   .lm-card {
-    background: white; border-radius: 16px;
-    box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+    background: white; border-radius: 20px;
+    box-shadow: 0 2px 12px rgba(0,0,0,0.06);
   }
 
-  .ai-banner {
-    background: linear-gradient(135deg, #EB5053 0%, #F09D09 100%);
-    border-radius: 16px; padding: 20px;
+  .lm-card-warm {
+    background: var(--lm-card-warm); border-radius: 20px;
   }
 
-  .tag { border-radius: 999px; padding: 4px 10px; font-size: 11px; font-weight: 500; display: inline-flex; align-items: center; }
+  .tag { border-radius: 999px; padding: 3px 10px; font-size: 11px; font-weight: 600; display: inline-flex; align-items: center; }
   .tag-date { background: #EB5053; color: white; }
   .tag-food { background: #F09D09; color: white; }
   .tag-cafe { background: #EFD0D4; color: #1A1A1A; }
   .tag-culture { background: #3E719B; color: white; }
   .tag-activity { background: #3CBA44; color: white; }
-  .tag-hash { background: #F5F5F5; color: #4A4A4A; }
+  .tag-hash { background: rgba(0,0,0,0.06); color: #4A4A4A; }
 
+  /* Red tab bar */
   .tab-bar {
     position: fixed; bottom: 0; left: 50%; transform: translateX(-50%);
-    width: 100%; max-width: 480px; background: white;
-    border-top: 1px solid #E5E5E5; z-index: 50;
+    width: 100%; max-width: 480px;
+    background: var(--lm-primary);
+    z-index: 50;
     padding-bottom: env(safe-area-inset-bottom, 0px);
+  }
+
+  /* Swipe card perspective wrapper */
+  .swipe-stack {
+    perspective: 1000px;
   }
 
   .leaflet-container { border-radius: 1rem; z-index: 0; }
@@ -141,4 +144,7 @@
 
 ::-webkit-scrollbar { width: 3px; height: 3px; }
 ::-webkit-scrollbar-track { background: transparent; }
-::-webkit-scrollbar-thumb { background: #E5E5E5; border-radius: 2px; }
+::-webkit-scrollbar-thumb { background: rgba(0,0,0,0.12); border-radius: 2px; }
+
+.scrollbar-hide::-webkit-scrollbar { display: none; }
+.scrollbar-hide { -ms-overflow-style: none; scrollbar-width: none; }

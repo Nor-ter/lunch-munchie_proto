@@ -22,7 +22,7 @@ import SessionLobbyPage from "./pages/SessionLobbyPage";
 import TourMapPage from "./pages/TourMapPage";
 import TourModePage from "./pages/TourModePage";
 
-const NO_TABBAR = ['/onboarding', '/quick-match', '/tour-mode'];
+const NO_TABBAR = ['/onboarding', '/tour-mode', '/quick-match'];
 
 function AppShell() {
   const [location] = useLocation();
