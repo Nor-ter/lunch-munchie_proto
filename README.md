@@ -58,6 +58,11 @@ pnpm dev
 
 ## 📝 Changelog
 
+### v3 — sj_branch & tl_branch 병합 및 추가 개발 *(Ongoing Development)*
+- sj_branch와 tl_branch 병합 완료
+- 통합 개발 환경 구축
+- 추가 기능 및 개선사항 진행 중
+
 ### v2 — Lunchie Mode 풀 플로우 *(vibecoded with Claude Code)*
 - 홈 화면을 디자이너 랜딩 시안(코랄/크림 톤)에 맞춰 리디자인, 레드 탭바(5탭)
 - Lunchie Mode 토너먼트 플로우 구현 — 초대 링크 / 예선전 / 결승전(대각선) / 우승자
