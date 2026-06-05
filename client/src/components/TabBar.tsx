@@ -10,7 +10,7 @@ import { useLocation } from 'wouter';
 
 const TABS = [
   { path: '/', icon: Home, label: '홈' },
-  { path: '/explore', icon: Map, label: '코스' },
+  { path: '/courses/feeds', icon: Map, label: '피드' },
   { path: '/saved', icon: Bookmark, label: '저장' },
   { path: '/profile', icon: User, label: '내 정보' },
 ];

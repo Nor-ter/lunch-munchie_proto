@@ -1,0 +1,142 @@
+erDiagram
+    User ||--o{ LunchieSession : "hosts"
+    User ||--o{ LunchieParticipant : "participates in"
+    User ||--o{ LunchieSwipe : "makes"
+    User ||--o{ Course : "authors"
+    User ||--o{ UserSavedCourse : "saves"
+    User ||--o{ UserSavedRestaurant : "saves"
+    User ||--o{ UserFollow : "follows/followed by"
+    User ||--o{ CourseComment : "comments on"
+    User ||--o{ RestaurantReview : "writes"
+
+    Restaurant ||--o{ LunchieSession : "is finalized in"
+    Restaurant ||--o{ LunchieSwipe : "is swiped in"
+    Restaurant ||--o{ CourseItem : "included in"
+    Restaurant ||--o{ UserSavedRestaurant : "saved by"
+    Restaurant ||--o{ RestaurantReview : "has"
+
+    LunchieSession ||--o{ LunchieParticipant : "has"
+    LunchieSession ||--o{ LunchieSwipe : "contains"
+    
+    Course ||--o{ CourseItem : "contains"
+    Course ||--o{ UserSavedCourse : "is saved by"
+    Course ||--o{ CourseComment : "has"
+
+    User {
+        String id PK
+        String username
+        String profile_image_url
+        String bio
+        String location
+        DateTime created_at
+    }
+
+    Restaurant {
+        String id PK "External Place ID"
+        String name
+        String address
+        Float latitude
+        Float longitude
+        Float rating
+        Int price_level
+        String short_description
+        String[] tags
+        String[] dietary_options
+        String[] photos
+        String phone_number
+        String business_hours
+    }
+
+    LunchieSession {
+        String id PK
+        String host_user_id FK
+        String share_token
+        String status "WAITING, SWIPING_1, SWIPING_2, COMPLETED"
+        DateTime deadline_at
+        Int group_size
+        Int filter_distance
+        Int filter_budget
+        Float filter_min_rating
+        String[] filter_dietary
+        String[] filter_vibe
+        Int swipe_limit
+        String final_restaurant_id FK
+        DateTime created_at
+    }
+
+    LunchieParticipant {
+        String id PK
+        String session_id FK
+        String user_id FK
+        String status "JOINED, READY, DONE_SWIPING"
+        DateTime created_at
+    }
+
+    LunchieSwipe {
+        String id PK
+        String session_id FK
+        String user_id FK
+        String restaurant_id FK
+        Int round "1 or 2"
+        String swipe_action "LIKE, DISLIKE"
+        DateTime created_at
+    }
+
+    Course {
+        String id PK
+        String author_id FK
+        String title
+        String category
+        String[] tags
+        Float total_distance
+        Int total_duration
+        Int likes_count
+        Int saves_count
+        Int comments_count
+        Boolean is_public
+        DateTime created_at
+    }
+
+    CourseItem {
+        String id PK
+        String course_id FK
+        String restaurant_id FK
+        Int order_index
+        String memo
+        DateTime created_at
+    }
+
+    UserSavedCourse {
+        String user_id FK
+        String course_id FK
+        DateTime created_at
+    }
+
+    UserSavedRestaurant {
+        String user_id FK
+        String restaurant_id FK
+        DateTime created_at
+    }
+
+    UserFollow {
+        String follower_id FK
+        String following_id FK
+        DateTime created_at
+    }
+
+    CourseComment {
+        String id PK
+        String course_id FK
+        String user_id FK
+        String content
+        DateTime created_at
+    }
+
+    RestaurantReview {
+        String id PK
+        String restaurant_id FK
+        String user_id FK
+        Float rating
+        String content
+        DateTime created_at
+    }

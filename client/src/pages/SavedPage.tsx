@@ -8,6 +8,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { useLocation } from 'wouter';
 import { MapPin, Clock, Bookmark, Plus } from 'lucide-react';
 import { useApp, TagType } from '@/contexts/AppContext';
+import CourseMapOverlay from '@/components/CourseMapOverlay';
 
 const FILTER_TABS: { label: string; value: TagType | 'all' }[] = [
   { label: '전체', value: 'all' },
@@ -70,14 +71,18 @@ export default function SavedPage() {
               initial={{ opacity: 0, y: 10 }}
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, x: -100 }}
-              className="flex gap-3 p-3 rounded-2xl border border-[#E5E5E5] cursor-pointer active:scale-[0.98] transition-all"
+              className="flex flex-col gap-3 p-3 rounded-2xl border border-[#E5E5E5] cursor-pointer active:scale-[0.98] transition-all"
               onClick={() => navigate(`/courses/${course.id}`)}
             >
-              <img
-                src={course.heroImage}
-                alt={course.title}
-                className="w-20 h-20 object-cover rounded-xl flex-shrink-0"
-              />
+              <div className="relative h-32 bg-gray-100 rounded-xl overflow-hidden">
+                <img 
+                  src={course.heroImage} 
+                  alt={course.title} 
+                  className="w-full h-full object-cover"
+                />
+                <CourseMapOverlay course={course} />
+                <div className="absolute inset-0 bg-gradient-to-t from-black/50 to-transparent pointer-events-none" />
+              </div>
               <div className="flex-1 min-w-0">
                 <div className="flex items-start justify-between gap-2">
                   <div className="min-w-0">
@@ -125,7 +130,7 @@ export default function SavedPage() {
             </p>
             {activeFilter === 'all' && (
               <button
-                onClick={() => navigate('/explore')}
+                onClick={() => navigate('/courses/feeds')}
                 className="lm-btn-primary px-6 inline-flex items-center justify-center"
               >
                 코스 탐색하기
@@ -137,7 +142,7 @@ export default function SavedPage() {
 
       {/* Create Course FAB */}
       <motion.button
-        onClick={() => navigate('/session/create')}
+        onClick={() => navigate('/lunchie/settings')}
         className="fixed bottom-24 right-4 flex items-center gap-2 px-4 h-12 rounded-full shadow-xl text-white font-bold text-[13px] z-40"
         style={{ background: '#EB5053' }}
         whileHover={{ scale: 1.05 }}

@@ -17,22 +17,39 @@ const RADIUS_OPTIONS = [{ v: 500, l: '500m' }, { v: 1000, l: '1km' }, { v: 2000,
 
 export default function SessionCreatePage() {
   const [, navigate] = useLocation();
-  const { createSession, profile } = useApp();
+  const { createSession, profile, updateProfile } = useApp();
   const [step, setStep] = useState(1);
-  const [sessionName, setSessionName] = useState(`${profile.name}의 점심 세션`);
+  const [hostName, setHostName] = useState(profile.name === '사용자' ? '' : profile.name);
+  const [hostEmoji, setHostEmoji] = useState(profile.emoji || '🙂');
+  const [sessionName, setSessionName] = useState(`${profile.name === '사용자' ? '호스트' : profile.name}의 점심 세션`);
   const [partySize, setPartySize] = useState(4);
   const [dietary, setDietary] = useState<string[]>([]);
   const [budget, setBudget] = useState<1 | 2 | 3 | 4>(2);
   const [radius, setRadius] = useState(1000);
   const [categories, setCategories] = useState<string[]>([]);
+  const [deadlineMinutes, setDeadlineMinutes] = useState(10);
+  const [isCreating, setIsCreating] = useState(false);
 
   const toggleDiet = (d: string) => setDietary(prev => prev.includes(d) ? prev.filter(x => x !== d) : [...prev, d]);
   const toggleCat = (c: string) => setCategories(prev => prev.includes(c) ? prev.filter(x => x !== c) : [...prev, c]);
 
-  const handleCreate = () => {
-    const session = createSession(sessionName, { partySize, dietary, budget, radius, categories });
-    toast.success(`"${session.name}" 세션이 생성되었습니다! 🎉`);
-    navigate('/session/lobby');
+  const handleCreate = async () => {
+    if (!hostName.trim()) {
+      toast.error('내 닉네임을 입력해주세요!');
+      setStep(1);
+      return;
+    }
+    setIsCreating(true);
+    try {
+      updateProfile({ name: hostName.trim(), emoji: hostEmoji });
+      const session = await createSession(sessionName, { partySize, dietary, budget, radius, categories }, hostName.trim(), hostEmoji, deadlineMinutes);
+      toast.success(`"${session.name}" 세션이 생성되었습니다! 🎉`);
+      navigate('/session/lobby');
+    } catch (e) {
+      toast.error('세션 생성에 실패했습니다.');
+    } finally {
+      setIsCreating(false);
+    }
   };
 
   return (
@@ -59,6 +76,48 @@ export default function SessionCreatePage() {
       <AnimatePresence mode="wait">
         {step === 1 && (
           <motion.div key="s1" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }} className="space-y-5">
+            {/* Host Profile Configuration */}
+            <div className="bg-[#FFF5F5] rounded-2xl p-4">
+              <p className="font-bold text-[13px] text-[#EB5053] mb-3">내 프로필 설정 👤</p>
+              <div className="flex items-center gap-4">
+                <div className="w-12 h-12 rounded-xl bg-white flex items-center justify-center text-2xl shadow-sm border border-black/5 flex-shrink-0">
+                  {hostEmoji}
+                </div>
+                <div className="flex-1">
+                  <input
+                    type="text"
+                    value={hostName}
+                    onChange={e => {
+                      setHostName(e.target.value);
+                      if (sessionName.endsWith('의 점심 세션')) {
+                        setSessionName(`${e.target.value || '호스트'}의 점심 세션`);
+                      }
+                    }}
+                    placeholder="내 닉네임 입력"
+                    maxLength={15}
+                    className="w-full h-10 bg-white rounded-lg px-3 text-[13px] font-semibold text-[#1A1A1A] outline-none border border-[#E5E5E5] focus:border-[#EB5053] focus:ring-1 focus:ring-[#EB5053]/30"
+                  />
+                </div>
+              </div>
+              
+              <div className="grid grid-cols-8 gap-1.5 mt-3 justify-center">
+                {['😊', '🍱', '🍜', '🍣', '🥩', '🍕', '🌮', '🍔', '🥗', '☕', '🦊', '🐱', '🐼', '🐨', '🍺', '🍰'].map(e => (
+                  <button
+                    key={e}
+                    type="button"
+                    onClick={() => setHostEmoji(e)}
+                    className={`text-base p-0.5 rounded-lg transition-all ${
+                      hostEmoji === e 
+                        ? 'bg-white ring-2 ring-[#EB5053] scale-110' 
+                        : 'hover:bg-white/50'
+                    }`}
+                  >
+                    {e}
+                  </button>
+                ))}
+              </div>
+            </div>
+
             <div>
               <label className="font-semibold text-[14px] text-[#1A1A1A] block mb-2">세션 이름</label>
               <input
@@ -131,6 +190,26 @@ export default function SessionCreatePage() {
         {step === 3 && (
           <motion.div key="s3" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }} className="space-y-5">
             <div>
+              <label className="font-semibold text-[14px] text-[#1A1A1A] block mb-1">⏱️ 투표 시간 제한</label>
+              <p className="text-[12px] text-[#9B9B9B] mb-3">제한시간 종료 시 그 시점의 득표수로 결과가 결정됩니다.</p>
+              <div className="grid grid-cols-5 gap-2">
+                {[
+                  { v: 5, l: '5분' },
+                  { v: 10, l: '10분' },
+                  { v: 15, l: '15분' },
+                  { v: 1440, l: '1일' },
+                  { v: 7200, l: '5일' },
+                ].map(opt => (
+                  <button key={opt.v} type="button" onClick={() => setDeadlineMinutes(opt.v)}
+                    className={`py-2.5 rounded-xl text-[12px] font-bold transition-all active:scale-95 ${deadlineMinutes === opt.v ? 'text-white' : 'bg-[#F5F5F5] text-[#4A4A4A]'}`}
+                    style={deadlineMinutes === opt.v ? { background: '#EB5053' } : {}}>
+                    {opt.l}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div>
               <div className="flex items-center gap-2 mb-1">
                 <AlertCircle size={16} color="#EB5053" />
                 <label className="font-semibold text-[14px] text-[#1A1A1A]">식단 제한 사항</label>
@@ -157,6 +236,7 @@ export default function SessionCreatePage() {
                 ['예산', '₩'.repeat(budget)],
                 ['카테고리', categories.length === 0 ? '전체' : categories.join(', ')],
                 ['식단 제한', dietary.length === 0 ? '없음' : dietary.join(', ')],
+                ['투표 시간 제한', deadlineMinutes === 1440 ? '1일' : deadlineMinutes === 7200 ? '5일' : `${deadlineMinutes}분`],
               ].map(([k, v]) => (
                 <div key={k} className="flex justify-between">
                   <span className="text-[12px] text-[#9B9B9B]">{k}</span>
@@ -178,8 +258,8 @@ export default function SessionCreatePage() {
             다음 <ChevronRight size={16} />
           </button>
         ) : (
-          <button onClick={handleCreate} className="lm-btn-primary flex-1 flex items-center justify-center">
-            🎉 세션 만들기
+          <button onClick={handleCreate} disabled={isCreating} className="lm-btn-primary flex-1 flex items-center justify-center">
+            {isCreating ? '생성 중...' : '🎉 세션 만들기'}
           </button>
         )}
       </div>

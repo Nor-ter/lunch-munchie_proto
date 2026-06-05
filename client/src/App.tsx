@@ -11,18 +11,23 @@ import { AppProvider } from "./contexts/AppContext";
 import TabBar from "./components/TabBar";
 import OnboardingPage from "./pages/OnboardingPage";
 import HomePage from "./pages/HomePage";
-import QuickMatchPage from "./pages/QuickMatchPage";
-import ExplorePage from "./pages/ExplorePage";
+import LunchieSwipePage from "./pages/LunchieSwipePage";
+import CourseFeedsPage from "./pages/CourseFeedsPage";
 import CourseDetailPage from "./pages/CourseDetailPage";
 import CourseNavigatePage from "./pages/CourseNavigatePage";
 import SavedPage from "./pages/SavedPage";
 import ProfilePage from "./pages/ProfilePage";
-import SessionCreatePage from "./pages/SessionCreatePage";
+import LunchieSettingsPage from "./pages/LunchieSettingsPage";
 import SessionLobbyPage from "./pages/SessionLobbyPage";
 import TourMapPage from "./pages/TourMapPage";
-import TourModePage from "./pages/TourModePage";
+import CourseEditorPage from "./pages/CourseEditorPage";
+import SessionJoinPage from "./pages/SessionJoinPage";
+import LunchieResultsPage from "./pages/LunchieResultsPage";
+import LunchieMapPage from "./pages/LunchieMapPage";
+import RestaurantDetailPage from "./pages/RestaurantDetailPage";
+import CourseSharePage from "./pages/CourseSharePage";
 
-const NO_TABBAR = ['/onboarding', '/quick-match', '/tour-mode'];
+const NO_TABBAR = ['/onboarding', '/lunchie/swipe', '/lunchie/results', '/lunchie/map', '/courses/', '/restaurant/', '/join'];
 
 function AppShell() {
   const [location] = useLocation();
@@ -33,16 +38,28 @@ function AppShell() {
         <Switch>
           <Route path="/onboarding" component={OnboardingPage} />
           <Route path="/" component={HomePage} />
-          <Route path="/quick-match" component={QuickMatchPage} />
-          <Route path="/explore" component={ExplorePage} />
-          <Route path="/courses/:id/navigate" component={CourseNavigatePage} />
+          
+          {/* Lunchie Mode */}
+          <Route path="/lunchie/settings" component={LunchieSettingsPage} />
+          <Route path="/lunchie/swipe" component={LunchieSwipePage} />
+          <Route path="/lunchie/results" component={LunchieResultsPage} />
+          <Route path="/lunchie/map" component={LunchieMapPage} />
+          <Route path="/session/lobby" component={SessionLobbyPage} />
+          <Route path="/join/:token" component={SessionJoinPage} />
+          
+          {/* Munchie Mode */}
+          <Route path="/courses/feeds" component={CourseFeedsPage} />
           <Route path="/courses/:id" component={CourseDetailPage} />
+          <Route path="/courses/:id/edit" component={CourseEditorPage} />
+          <Route path="/courses/:id/navigate" component={CourseNavigatePage} />
+          <Route path="/courses/:id/share" component={CourseSharePage} />
+          <Route path="/tour-map" component={TourMapPage} />
+
+          {/* Common / Misc */}
+          <Route path="/restaurant/:id" component={RestaurantDetailPage} />
           <Route path="/saved" component={SavedPage} />
           <Route path="/profile" component={ProfilePage} />
-          <Route path="/session/create" component={SessionCreatePage} />
-          <Route path="/session/lobby" component={SessionLobbyPage} />
-          <Route path="/tour-map" component={TourMapPage} />
-          <Route path="/tour-mode" component={TourModePage} />
+          
           <Route path="/404" component={NotFound} />
           <Route component={NotFound} />
         </Switch>

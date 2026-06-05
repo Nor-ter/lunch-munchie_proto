@@ -8,6 +8,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { useLocation } from 'wouter';
 import { MapPin, Clock, Bookmark, Star, SlidersHorizontal } from 'lucide-react';
 import { useApp, Course, TagType } from '@/contexts/AppContext';
+import CourseMapOverlay from '@/components/CourseMapOverlay';
 
 const FILTER_TAGS: { label: string; value: TagType | 'all' }[] = [
   { label: '전체', value: 'all' },
@@ -46,7 +47,8 @@ function CourseListCard({ course, onTap }: { course: Course; onTap: () => void }
     >
       <div className="relative h-40">
         <img src={course.heroImage} alt={course.title} className="w-full h-full object-cover" />
-        <div className="absolute inset-0 bg-gradient-to-t from-black/50 to-transparent" />
+        <CourseMapOverlay course={course} />
+        <div className="absolute inset-0 bg-gradient-to-t from-black/50 to-transparent pointer-events-none" />
         <button
           onClick={e => { e.stopPropagation(); isSaved ? unsaveCourse(course.id) : saveCourse(course.id); }}
           className="absolute top-3 right-3 w-8 h-8 rounded-full bg-white/80 flex items-center justify-center"
@@ -147,7 +149,7 @@ export default function ExplorePage() {
 
       {/* Create Course FAB */}
       <motion.button
-        onClick={() => navigate('/session/create')}
+        onClick={() => navigate('/lunchie/settings')}
         className="fixed bottom-24 right-4 w-14 h-14 rounded-full shadow-xl flex items-center justify-center z-40 text-white font-bold text-2xl"
         style={{ background: '#EB5053' }}
         whileHover={{ scale: 1.1 }}

@@ -50,7 +50,7 @@ export default function HomePage() {
 
         {/* Quick Match Card */}
         <motion.button
-          onClick={() => navigate('/quick-match')}
+          onClick={() => navigate('/lunchie/settings')}
           className="w-full rounded-3xl overflow-hidden text-left active:scale-[0.98] transition-all"
           style={{ background: 'linear-gradient(135deg, #EB5053 0%, #C0392B 100%)' }}
           whileTap={{ scale: 0.97 }}
@@ -87,7 +87,7 @@ export default function HomePage() {
 
         {/* Tour Mode Card */}
         <motion.button
-          onClick={() => navigate('/tour-mode')}
+          onClick={() => navigate('/courses/feeds')}
           className="w-full rounded-3xl overflow-hidden text-left active:scale-[0.98] transition-all"
           style={{ background: 'linear-gradient(135deg, #2C3E50 0%, #1a252f 100%)' }}
           whileTap={{ scale: 0.97 }}

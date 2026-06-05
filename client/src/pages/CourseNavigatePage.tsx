@@ -44,7 +44,7 @@ export default function CourseNavigatePage() {
   if (!course) {
     return (
       <div className="min-h-dvh flex items-center justify-center">
-        <button onClick={() => navigate('/explore')} className="lm-btn-primary px-6 flex items-center justify-center">
+        <button onClick={() => navigate('/courses/feeds')} className="lm-btn-primary px-6 flex items-center justify-center">
           코스 탐색
         </button>
       </div>
