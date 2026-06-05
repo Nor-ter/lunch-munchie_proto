@@ -7,7 +7,7 @@ import { nanoid } from "nanoid";
 const router = Router();
 
 // Users
-router.get("/users", async (req, res) => {
+router.get("/users", async (req: any, res: any) => {
   try {
     const allUsers = await db.select().from(users);
     res.json(allUsers);
@@ -17,7 +17,7 @@ router.get("/users", async (req, res) => {
   }
 });
 
-router.post("/users", async (req, res) => {
+router.post("/users", async (req: any, res: any) => {
   try {
     const newUser = req.body;
     await db.insert(users).values(newUser);
@@ -29,7 +29,7 @@ router.post("/users", async (req, res) => {
 });
 
 // Sessions
-router.post("/sessions/create", async (req, res) => {
+router.post("/sessions/create", async (req: any, res: any) => {
   try {
     const { hostId, hostName, emoji, name, groupSize, filterDistance, filterBudget, filterCategories, filterDietary, deadlineMinutes } = req.body;
     const token = Math.random().toString(36).substring(2, 8).toUpperCase();
@@ -75,7 +75,7 @@ router.post("/sessions/create", async (req, res) => {
   }
 });
 
-router.get("/sessions/:token", async (req, res) => {
+router.get("/sessions/:token", async (req: any, res: any) => {
   try {
     const token = req.params.token;
     const [session] = await db.select().from(sessions).where(eq(sessions.share_token, token));
@@ -89,7 +89,7 @@ router.get("/sessions/:token", async (req, res) => {
   }
 });
 
-router.post("/sessions/:token/join", async (req, res) => {
+router.post("/sessions/:token/join", async (req: any, res: any) => {
   try {
     const token = req.params.token;
     const { userId, userName, emoji } = req.body;
@@ -122,7 +122,7 @@ router.post("/sessions/:token/join", async (req, res) => {
   }
 });
 
-router.post("/sessions/:token/ready", async (req, res) => {
+router.post("/sessions/:token/ready", async (req: any, res: any) => {
   try {
     const token = req.params.token;
     const { userId, isReady } = req.body;
@@ -140,7 +140,7 @@ router.post("/sessions/:token/ready", async (req, res) => {
   }
 });
 
-router.post("/sessions/:token/status", async (req, res) => {
+router.post("/sessions/:token/status", async (req: any, res: any) => {
   try {
     const token = req.params.token;
     const { status } = req.body;
@@ -158,7 +158,7 @@ router.post("/sessions/:token/status", async (req, res) => {
   }
 });
 
-router.get("/sessions/:token/results", async (req, res) => {
+router.get("/sessions/:token/results", async (req: any, res: any) => {
   try {
     const token = req.params.token;
     const [session] = await db.select().from(sessions).where(eq(sessions.share_token, token));
@@ -234,7 +234,7 @@ router.get("/sessions/:token/results", async (req, res) => {
 });
 
 // Restaurants
-router.get("/restaurants", async (req, res) => {
+router.get("/restaurants", async (req: any, res: any) => {
   try {
     const allRestaurants = await db.select().from(restaurants);
     const formatted = allRestaurants.map(r => ({
@@ -262,7 +262,7 @@ router.get("/restaurants", async (req, res) => {
 });
 
 // Courses
-router.get("/courses", async (req, res) => {
+router.get("/courses", async (req: any, res: any) => {
   try {
     const allCourses = await db.select().from(courses);
     const allCourseItems = await db.select().from(courseItems);
@@ -304,7 +304,7 @@ router.get("/courses", async (req, res) => {
 });
 
 // Swipes
-router.post("/swipes", async (req, res) => {
+router.post("/swipes", async (req: any, res: any) => {
   try {
     const { id, session_id, user_id, restaurant_id, round, swipe_action, created_at } = req.body;
     await db.insert(swipes).values({
