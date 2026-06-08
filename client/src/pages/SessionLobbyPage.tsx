@@ -4,26 +4,33 @@
  * Features: QR code invite, member list, start voting
  */
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useLocation } from 'wouter';
-import { ArrowLeft, Copy, Share2, Play, QrCode, Users, ChevronDown, ChevronUp } from 'lucide-react';
+import { ArrowLeft, Copy, Share2, Play, QrCode, Users, ChevronDown, ChevronUp, CheckCircle } from 'lucide-react';
 import { QRCodeSVG } from 'qrcode.react';
 import { useApp } from '@/contexts/AppContext';
 import { toast } from 'sonner';
 
 export default function SessionLobbyPage() {
   const [, navigate] = useLocation();
-  const { currentSession, setCurrentSession } = useApp();
+  const { currentSession, setCurrentSession, fetchSession, profile, toggleReady, startSession } = useApp();
   const [showQR, setShowQR] = useState(true);
   const [showMembers, setShowMembers] = useState(true);
+
+  // Auto-navigate when session status shifts from waiting to active voting
+  useEffect(() => {
+    if (currentSession && currentSession.status !== 'waiting') {
+      navigate('/lunchie/swipe');
+    }
+  }, [currentSession?.status, navigate]);
 
   if (!currentSession) {
     return (
       <div className="min-h-dvh flex items-center justify-center px-5">
         <div className="text-center">
           <p className="font-bold text-[16px] text-[#1A1A1A] mb-4">진행 중인 세션이 없어요</p>
-          <button onClick={() => navigate('/session/create')} className="lm-btn-primary px-6 flex items-center justify-center">
+          <button onClick={() => navigate('/lunchie/settings')} className="lm-btn-primary px-6 flex items-center justify-center">
             세션 만들기
           </button>
         </div>
@@ -31,7 +38,15 @@ export default function SessionLobbyPage() {
     );
   }
 
-  const inviteUrl = `${window.location.origin}/join/${currentSession.id}`;
+  const inviteUrl = `${window.location.origin}/join/${currentSession.inviteCode}`;
+
+  useEffect(() => {
+    if (!currentSession) return;
+    const interval = setInterval(() => {
+      fetchSession(currentSession.inviteCode).catch(console.error);
+    }, 3000);
+    return () => clearInterval(interval);
+  }, [currentSession?.inviteCode, fetchSession]);
 
   const handleCopy = () => {
     navigator.clipboard.writeText(inviteUrl).then(() => toast.success('링크 복사됨! 📋'));
@@ -43,9 +58,14 @@ export default function SessionLobbyPage() {
     } else handleCopy();
   };
 
-  const handleStart = () => {
-    setCurrentSession({ ...currentSession, status: 'voting' });
-    navigate('/quick-match');
+  const handleStart = async () => {
+    try {
+      await startSession(currentSession.inviteCode);
+      navigate('/lunchie/swipe');
+    } catch (e) {
+      console.error(e);
+      toast.error('투표를 시작하지 못했습니다.');
+    }
   };
 
   return (
@@ -141,7 +161,11 @@ export default function SessionLobbyPage() {
                         {i === 0 && <span className="ml-2 text-[#F09D09] text-[11px]">👑 호스트</span>}
                       </p>
                     </div>
-                    <div className={`w-2 h-2 rounded-full ${member.hasVoted ? 'bg-[#3CBA44]' : 'bg-[#E5E5E5]'}`} />
+                    {member.ready ? (
+                      <CheckCircle size={16} color="#3CBA44" />
+                    ) : (
+                      <div className="w-2 h-2 rounded-full bg-[#E5E5E5]" />
+                    )}
                   </div>
                 ))}
               </div>

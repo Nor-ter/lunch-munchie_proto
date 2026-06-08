@@ -9,6 +9,7 @@ import { motion } from 'framer-motion';
 import { useLocation, useParams } from 'wouter';
 import { ArrowLeft, Share2, MapPin, Clock, Bookmark, Star, ChevronRight } from 'lucide-react';
 import { useApp } from '@/contexts/AppContext';
+import CourseMapOverlay from '@/components/CourseMapOverlay';
 import { toast } from 'sonner';
 
 const TAG_CLASS: Record<string, string> = {
@@ -34,7 +35,7 @@ export default function CourseDetailPage() {
       <div className="min-h-dvh flex items-center justify-center">
         <div className="text-center">
           <p className="font-bold text-[16px] text-[#1A1A1A] mb-4">코스를 찾을 수 없어요</p>
-          <button onClick={() => navigate('/explore')} className="lm-btn-primary px-6 flex items-center justify-center">
+          <button onClick={() => navigate('/courses/feeds')} className="lm-btn-primary px-6 flex items-center justify-center">
             코스 탐색
           </button>
         </div>
@@ -43,9 +44,7 @@ export default function CourseDetailPage() {
   }
 
   const handleShare = () => {
-    navigator.clipboard.writeText(window.location.href).then(() => {
-      toast.success('링크가 복사되었습니다! 📋');
-    });
+    navigate(`/courses/${course.id}/share`);
   };
 
   const toggleStopBookmark = (placeId: string) => {
@@ -69,15 +68,16 @@ export default function CourseDetailPage() {
 
   return (
     <div className="min-h-dvh bg-white pb-28">
-      {/* Hero Image */}
-      <div className="relative h-56">
+      {/* Hero Header */}
+      <div className="relative h-[250px] md:h-[300px]">
         <img src={course.heroImage} alt={course.title} className="w-full h-full object-cover" />
-        <div className="absolute inset-0 bg-gradient-to-b from-black/30 via-transparent to-transparent" />
+        <CourseMapOverlay course={course} />
+        <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/30 to-transparent pointer-events-none" />
 
         {/* Header */}
         <div className="absolute top-0 left-0 right-0 flex items-center justify-between px-5 pt-12">
           <button
-            onClick={() => navigate(-1 as unknown as string)}
+            onClick={() => window.history.back()}
             className="w-9 h-9 rounded-full bg-white/80 flex items-center justify-center active:scale-95"
           >
             <ArrowLeft size={17} color="#1A1A1A" />

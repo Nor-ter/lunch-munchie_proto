@@ -93,6 +93,7 @@ export interface UserProfile {
   totalSwipes: number;
   totalLikes: number;
   joinedAt: string;
+  isLoggedIn?: boolean;
 }
 
 export interface SwipeRecord {

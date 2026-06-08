@@ -3,8 +3,61 @@ import { db } from "./db.js";
 import { users, sessions, restaurants, swipes, courses, courseItems, sessionMembers } from "../shared/schema.js";
 import { eq, and } from "drizzle-orm";
 import { nanoid } from "nanoid";
+import { MOCK_RESTAURANTS, MOCK_COURSES } from "./melbourneData.js";
 
 const router = Router();
+
+// DB 연결이 불가능할 때(예: Supabase 일시정지/포트 차단) 코스맵 프로토타입이
+// 그대로 동작하도록, 멜버른 샘플 데이터를 API 응답 형태로 변환하는 폴백 헬퍼.
+function mockRestaurantsResponse() {
+  return MOCK_RESTAURANTS.map(r => ({
+    id: r.id,
+    name: r.name,
+    category: r.category,
+    tags: r.tags || [],
+    rating: r.rating,
+    reviewCount: r.review_count,
+    distance: "500m",
+    address: r.address,
+    image: (r.photos && r.photos.length > 0) ? r.photos[0] : "",
+    lat: r.latitude,
+    lng: r.longitude,
+    priceRange: r.price_level,
+    openHours: r.business_hours,
+    dietary: r.dietary_options || [],
+    description: r.short_description,
+  }));
+}
+
+function mockCoursesResponse() {
+  return MOCK_COURSES.map(c => ({
+    id: c.id,
+    title: c.title,
+    description: c.description,
+    heroImage: c.hero_image,
+    tags: c.tags || [],
+    hashtags: c.hashtags || [],
+    region: c.region,
+    metadata: {
+      distance: c.total_distance,
+      duration: c.total_duration,
+      placeCount: c.stops.length,
+    },
+    stops: [...c.stops]
+      .sort((a, b) => a.order - b.order)
+      .map(s => ({
+        placeId: s.placeId,
+        order: s.order,
+        startTime: s.startTime,
+        endTime: s.endTime,
+        isBookmarked: s.isBookmarked,
+      })),
+    createdAt: new Date(c.created_at).toISOString().split('T')[0],
+    isPublic: true,
+    creatorId: c.author_id,
+    savedCount: 0,
+  }));
+}
 
 // Users
 router.get("/users", async (req: any, res: any) => {
@@ -254,10 +307,11 @@ router.get("/restaurants", async (req: any, res: any) => {
       dietary: r.dietary_options || [],
       description: r.short_description
     }));
-    res.json(formatted);
+    // DB가 비어 있으면(시드 전) 멜버른 샘플 데이터로 폴백.
+    res.json(formatted.length > 0 ? formatted : mockRestaurantsResponse());
   } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: "Failed to fetch restaurants" });
+    console.error("Falling back to mock restaurants:", (err as Error)?.message);
+    res.json(mockRestaurantsResponse());
   }
 });
 
@@ -296,10 +350,10 @@ router.get("/courses", async (req: any, res: any) => {
         savedCount: c.saves_count
       };
     });
-    res.json(formattedCourses);
+    res.json(formattedCourses.length > 0 ? formattedCourses : mockCoursesResponse());
   } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: "Failed to fetch courses" });
+    console.error("Falling back to mock courses:", (err as Error)?.message);
+    res.json(mockCoursesResponse());
   }
 });
 
