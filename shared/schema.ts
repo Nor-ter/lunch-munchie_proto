@@ -1,0 +1,131 @@
+import { pgTable, text, integer, doublePrecision, boolean, timestamp, jsonb } from "drizzle-orm/pg-core";
+import { createSelectSchema, createInsertSchema } from "drizzle-zod";
+import { z } from "zod";
+
+export const users = pgTable("users", {
+  id: text("id").primaryKey(),
+  username: text("username").notNull(),
+  profile_image_url: text("profile_image_url"),
+  bio: text("bio"),
+  location: text("location"),
+  created_at: timestamp("created_at").notNull(),
+});
+
+export const restaurants = pgTable("restaurants", {
+  id: text("id").primaryKey(),
+  name: text("name").notNull(),
+  category: text("category").notNull().default("기타"),
+  address: text("address").notNull(),
+  latitude: doublePrecision("latitude").notNull(),
+  longitude: doublePrecision("longitude").notNull(),
+  rating: doublePrecision("rating").notNull(),
+  review_count: integer("review_count").notNull().default(0),
+  price_level: integer("price_level").notNull(),
+  short_description: text("short_description"),
+  tags: jsonb("tags").$type<string[]>(),
+  dietary_options: jsonb("dietary_options").$type<string[]>(),
+  photos: jsonb("photos").$type<string[]>(),
+  menu_items: jsonb("menu_items").$type<{name: string, price: number}[]>(),
+  phone_number: text("phone_number"),
+  business_hours: text("business_hours"),
+});
+
+export const courses = pgTable("courses", {
+  id: text("id").primaryKey(),
+  author_id: text("author_id").notNull(),
+  title: text("title").notNull(),
+  description: text("description").notNull().default(""),
+  hero_image: text("hero_image").notNull().default(""),
+  category: text("category").notNull(),
+  region: text("region").notNull().default(""),
+  tags: jsonb("tags").$type<string[]>(),
+  hashtags: jsonb("hashtags").$type<string[]>(),
+  total_distance: doublePrecision("total_distance").notNull(),
+  total_duration: integer("total_duration").notNull(),
+  likes_count: integer("likes_count").notNull().default(0),
+  saves_count: integer("saves_count").notNull().default(0),
+  route_polyline: text("route_polyline"),
+  share_image_url: text("share_image_url"),
+  comments_count: integer("comments_count").notNull().default(0),
+  is_public: boolean("is_public").notNull().default(true),
+  created_at: timestamp("created_at").notNull(),
+});
+
+export const courseItems = pgTable("course_items", {
+  id: text("id").primaryKey(),
+  course_id: text("course_id").notNull(),
+  restaurant_id: text("restaurant_id").notNull(),
+  order_index: integer("order_index").notNull(),
+  start_time: text("start_time"),
+  end_time: text("end_time"),
+  is_bookmarked: boolean("is_bookmarked").notNull().default(false),
+  memo: text("memo"),
+  created_at: timestamp("created_at").notNull(),
+});
+
+export const sessions = pgTable("sessions", {
+  id: text("id").primaryKey(),
+  host_user_id: text("host_user_id").notNull(),
+  share_token: text("share_token").notNull(),
+  status: text("status").notNull(), // "WAITING", "SWIPING_1", "SWIPING_2", "COMPLETED"
+  deadline_at: timestamp("deadline_at").notNull(),
+  group_size: integer("group_size").notNull(),
+  filter_distance: integer("filter_distance").notNull(),
+  filter_budget: integer("filter_budget").notNull(),
+  filter_min_rating: doublePrecision("filter_min_rating").notNull(),
+  filter_dietary: jsonb("filter_dietary").$type<string[]>(),
+  filter_vibe: jsonb("filter_vibe").$type<string[]>(),
+  swipe_limit: integer("swipe_limit").notNull(),
+  top_restaurant_ids: jsonb("top_restaurant_ids").$type<string[]>(),
+  final_restaurant_id: text("final_restaurant_id"),
+  created_at: timestamp("created_at").notNull(),
+});
+
+export const swipes = pgTable("swipes", {
+  id: text("id").primaryKey(),
+  session_id: text("session_id").notNull(),
+  user_id: text("user_id").notNull(),
+  restaurant_id: text("restaurant_id").notNull(),
+  round: integer("round").notNull(),
+  swipe_action: text("swipe_action").notNull(), // "LIKE", "DISLIKE"
+  created_at: timestamp("created_at").notNull(),
+});
+
+export const sessionMembers = pgTable("session_members", {
+  id: text("id").primaryKey(),
+  session_id: text("session_id").notNull(),
+  user_id: text("user_id").notNull(),
+  user_name: text("user_name").notNull(),
+  emoji: text("emoji").notNull(),
+  is_ready: boolean("is_ready").notNull().default(false),
+  created_at: timestamp("created_at").notNull(),
+});
+
+// Zod schemas generated from Drizzle
+export const UserSchema = createSelectSchema(users);
+export const InsertUserSchema = createInsertSchema(users);
+export type User = z.infer<typeof UserSchema>;
+
+export const RestaurantSchema = createSelectSchema(restaurants);
+export const InsertRestaurantSchema = createInsertSchema(restaurants);
+export type Restaurant = z.infer<typeof RestaurantSchema>;
+
+export const CourseSchema = createSelectSchema(courses);
+export const InsertCourseSchema = createInsertSchema(courses);
+export type Course = z.infer<typeof CourseSchema>;
+
+export const CourseItemSchema = createSelectSchema(courseItems);
+export const InsertCourseItemSchema = createInsertSchema(courseItems);
+export type CourseItem = z.infer<typeof CourseItemSchema>;
+
+export const LunchieSessionSchema = createSelectSchema(sessions);
+export const InsertLunchieSessionSchema = createInsertSchema(sessions);
+export type LunchieSession = z.infer<typeof LunchieSessionSchema>;
+
+export const LunchieSwipeSchema = createSelectSchema(swipes);
+export const InsertLunchieSwipeSchema = createInsertSchema(swipes);
+export type LunchieSwipe = z.infer<typeof LunchieSwipeSchema>;
+
+export const SessionMemberSchema = createSelectSchema(sessionMembers);
+export const InsertSessionMemberSchema = createInsertSchema(sessionMembers);
+export type SessionMemberDB = z.infer<typeof SessionMemberSchema>;
