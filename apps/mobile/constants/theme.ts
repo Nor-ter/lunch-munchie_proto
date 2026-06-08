@@ -1,0 +1,17 @@
+export const THEME = {
+  coral:       '#FF6B6B',
+  coralLight:  '#FFF0EE',
+  coralDark:   '#E55555',
+  mapBg:       '#F8F5F0',
+  mapGrid:     '#E8E3DC',
+  ink:         '#1A1A1A',
+  gray50:      '#F9FAFB',
+  gray100:     '#F3F4F6',
+  gray200:     '#E5E7EB',
+  gray300:     '#D1D5DB',
+  gray400:     '#9CA3AF',
+  gray500:     '#6B7280',
+  gray600:     '#4B5563',
+  white:       '#FFFFFF',
+  deleteRed:   '#EF4444',
+} as const;
