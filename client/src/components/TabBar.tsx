@@ -57,7 +57,7 @@ export default function TabBar() {
               >
                 {'customIcon' in tab && tab.customIcon ? (
                   <OverlappingHeartsIcon active={isActive} />
-                ) : (
+                ) : 'icon' in tab ? (
                   <tab.icon
                     size={24}
                     strokeWidth={isActive ? 2.2 : 1.8}
@@ -65,7 +65,7 @@ export default function TabBar() {
                     fill="none"
                     style={{ opacity: isActive ? 1 : 0.55 }}
                   />
-                )}
+                ) : null}
               </motion.div>
             </button>
           );

@@ -8,6 +8,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { useLocation } from 'wouter';
 import { MapPin, Clock, Bookmark, Star, SlidersHorizontal } from 'lucide-react';
 import { useApp, Course, TagType } from '@/contexts/AppContext';
+import CourseMapOverlay from '@/components/CourseMapOverlay';
 
 const FILTER_TAGS: { label: string; value: TagType | 'all' }[] = [
   { label: '전체', value: 'all' },
@@ -46,6 +47,7 @@ function CourseListCard({ course, onTap }: { course: Course; onTap: () => void }
     >
       <div className="relative h-40">
         <img src={course.heroImage} alt={course.title} className="w-full h-full object-cover" />
+        <CourseMapOverlay course={course} />
         <div className="absolute inset-0 bg-gradient-to-t from-black/50 to-transparent" />
         <button
           onClick={e => { e.stopPropagation(); isSaved ? unsaveCourse(course.id) : saveCourse(course.id); }}

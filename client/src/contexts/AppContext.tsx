@@ -81,6 +81,7 @@ export interface SessionMember {
   emoji: string;
   hasVoted: boolean;
   preferences: { categoryId: string; score: number }[];
+  ready?: boolean;
 }
 
 export interface UserProfile {
@@ -375,40 +376,80 @@ const DEFAULT_PROFILE: UserProfile = {
 // ─── Context ──────────────────────────────────────────────────────────────────
 
 interface AppContextValue {
-  // Courses
   courses: Course[];
   savedCourseIds: string[];
   saveCourse: (courseId: string) => void;
   unsaveCourse: (courseId: string) => void;
   addCourse: (course: Course) => void;
 
-  // Session
   currentSession: GroupSession | null;
   setCurrentSession: (s: GroupSession | null) => void;
-  createSession: (name: string, filters: GroupSession['filters']) => GroupSession;
+  createSession: (
+    name: string,
+    filters: GroupSession['filters'],
+    hostName?: string,
+    emoji?: string,
+    deadlineMinutes?: number,
+  ) => Promise<GroupSession>;
+  joinSession: (token: string, name?: string, emoji?: string) => Promise<GroupSession>;
+  fetchSession: (token: string) => Promise<GroupSession>;
+  toggleReady: (token: string, isReady: boolean) => Promise<GroupSession>;
+  startSession: (token: string) => Promise<GroupSession>;
 
-  // Swipe
   swipeRecords: SwipeRecord[];
   addSwipe: (restaurantId: string, action: SwipeRecord['action']) => void;
   likedRestaurantIds: string[];
 
-  // Profile
   profile: UserProfile;
   updateProfile: (updates: Partial<UserProfile>) => void;
 
-  // Restaurants
   restaurants: Restaurant[];
   getRestaurantById: (id: string) => Restaurant | undefined;
   getCourseById: (id: string) => Course | undefined;
+  isLoading: boolean;
+  apiAvailable: boolean;
 }
 
 const AppContext = createContext<AppContextValue | null>(null);
+
+function buildLocalSession(
+  name: string,
+  filters: GroupSession['filters'],
+  profile: UserProfile,
+  restaurants: Restaurant[],
+): GroupSession {
+  const code = Math.random().toString(36).substring(2, 8).toUpperCase();
+  return {
+    id: `session_${Date.now()}`,
+    name,
+    inviteCode: code,
+    hostId: profile.id,
+    members: [{
+      id: profile.id,
+      name: profile.name,
+      emoji: profile.emoji,
+      hasVoted: false,
+      preferences: profile.categoryPrefs.map(p => ({ categoryId: p.category, score: p.score })),
+    }],
+    filters,
+    deadline: null,
+    status: 'waiting',
+    restaurants: restaurants.filter(r =>
+      filters.categories.length === 0 || filters.categories.includes(r.category),
+    ),
+    results: [],
+  };
+}
 
 export function AppProvider({ children }: { children: React.ReactNode }) {
   const [courses, setCourses] = useState<Course[]>(() => {
     try { const s = localStorage.getItem('lm_courses'); return s ? JSON.parse(s) : MOCK_COURSES; }
     catch { return MOCK_COURSES; }
   });
+
+  const [restaurants, setRestaurants] = useState<Restaurant[]>(MOCK_RESTAURANTS);
+  const [isLoading, setIsLoading] = useState(true);
+  const [apiAvailable, setApiAvailable] = useState(false);
 
   const [savedCourseIds, setSavedCourseIds] = useState<string[]>(() => {
     try { const s = localStorage.getItem('lm_saved'); return s ? JSON.parse(s) : ['c1']; }
@@ -429,6 +470,21 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     try { const s = localStorage.getItem('lm_profile'); return s ? JSON.parse(s) : DEFAULT_PROFILE; }
     catch { return DEFAULT_PROFILE; }
   });
+
+  useEffect(() => {
+    setIsLoading(true);
+    Promise.all([
+      fetch('/api/restaurants').then(r => (r.ok ? r.json() : Promise.reject())),
+      fetch('/api/courses').then(r => (r.ok ? r.json() : Promise.reject())),
+    ])
+      .then(([resData, courseData]) => {
+        if (Array.isArray(resData) && resData.length > 0) setRestaurants(resData);
+        if (Array.isArray(courseData) && courseData.length > 0) setCourses(courseData);
+        setApiAvailable(true);
+      })
+      .catch(() => setApiAvailable(false))
+      .finally(() => setIsLoading(false));
+  }, []);
 
   useEffect(() => { localStorage.setItem('lm_courses', JSON.stringify(courses)); }, [courses]);
   useEffect(() => { localStorage.setItem('lm_saved', JSON.stringify(savedCourseIds)); }, [savedCourseIds]);
@@ -451,41 +507,167 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     setCourses(prev => [course, ...prev]);
   }, []);
 
-  const createSession = useCallback((name: string, filters: GroupSession['filters']): GroupSession => {
-    const code = Math.random().toString(36).substring(2, 8).toUpperCase();
+  const createSession = useCallback(async (
+    name: string,
+    filters: GroupSession['filters'],
+    hostName?: string,
+    emoji?: string,
+    deadlineMinutes?: number,
+  ): Promise<GroupSession> => {
+    const actualHostName = hostName || profile.name;
+    const actualEmoji = emoji || profile.emoji;
+
+    if (apiAvailable) {
+      try {
+        const res = await fetch('/api/sessions/create', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            hostId: profile.id,
+            hostName: actualHostName,
+            emoji: actualEmoji,
+            name,
+            groupSize: filters.partySize,
+            filterDistance: filters.radius,
+            filterBudget: filters.budget,
+            filterCategories: filters.categories,
+            filterDietary: filters.dietary,
+            deadlineMinutes,
+          }),
+        });
+        if (res.ok) {
+          const data = await res.json();
+          const session: GroupSession = {
+            id: data.session.id,
+            name,
+            inviteCode: data.token,
+            hostId: profile.id,
+            members: [{
+              id: profile.id,
+              name: actualHostName,
+              emoji: actualEmoji,
+              hasVoted: false,
+              preferences: profile.categoryPrefs.map(p => ({ categoryId: p.category, score: p.score })),
+              ready: false,
+            }],
+            filters,
+            deadline: data.session.deadline_at,
+            status: 'waiting',
+            restaurants: restaurants.filter(r =>
+              filters.categories.length === 0 || filters.categories.includes(r.category),
+            ),
+            results: [],
+          };
+          setCurrentSession(session);
+          return session;
+        }
+      } catch {
+        // fall through to local session
+      }
+    }
+
+    const session = buildLocalSession(name, filters, { ...profile, name: actualHostName, emoji: actualEmoji }, restaurants);
+    setCurrentSession(session);
+    return session;
+  }, [apiAvailable, profile, restaurants]);
+
+  const fetchSession = useCallback(async (token: string): Promise<GroupSession> => {
+    const res = await fetch(`/api/sessions/${token}`);
+    if (!res.ok) throw new Error('Session not found');
+    const data = await res.json();
     const session: GroupSession = {
-      id: `session_${Date.now()}`,
-      name,
-      inviteCode: code,
-      hostId: profile.id,
-      members: [{
-        id: profile.id,
-        name: profile.name,
-        emoji: profile.emoji,
+      id: data.session.id,
+      name: '점심 세션',
+      inviteCode: token,
+      hostId: data.session.host_user_id,
+      members: data.members.map((m: { user_id: string; user_name: string; emoji: string; is_ready: boolean }) => ({
+        id: m.user_id,
+        name: m.user_name,
+        emoji: m.emoji,
         hasVoted: false,
-        preferences: profile.categoryPrefs.map(p => ({ categoryId: p.category, score: p.score })),
-      }],
-      filters,
-      deadline: null,
-      status: 'waiting',
-      restaurants: MOCK_RESTAURANTS.filter(r =>
-        filters.categories.length === 0 || filters.categories.includes(r.category)
+        preferences: [],
+        ready: m.is_ready,
+      })),
+      filters: {
+        partySize: data.session.group_size,
+        dietary: data.session.filter_dietary || [],
+        budget: data.session.filter_budget,
+        radius: data.session.filter_distance,
+        categories: data.session.filter_vibe || [],
+      },
+      deadline: data.session.deadline_at,
+      status: (data.session.status as string).toLowerCase() as GroupSession['status'],
+      restaurants: restaurants.filter(r =>
+        (data.session.filter_vibe || []).length === 0 ||
+        (data.session.filter_vibe || []).includes(r.category),
       ),
       results: [],
     };
     setCurrentSession(session);
     return session;
-  }, [profile]);
+  }, [restaurants]);
+
+  const joinSession = useCallback(async (token: string, name?: string, emoji?: string) => {
+    await fetch(`/api/sessions/${token}/join`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        userId: profile.id,
+        userName: name || profile.name,
+        emoji: emoji || profile.emoji,
+      }),
+    });
+    return fetchSession(token);
+  }, [profile, fetchSession]);
+
+  const toggleReady = useCallback(async (token: string, isReady: boolean) => {
+    await fetch(`/api/sessions/${token}/ready`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ userId: profile.id, isReady }),
+    });
+    return fetchSession(token);
+  }, [profile, fetchSession]);
+
+  const startSession = useCallback(async (token: string) => {
+    await fetch(`/api/sessions/${token}/status`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ status: 'SWIPING_1' }),
+    });
+    return fetchSession(token);
+  }, [fetchSession]);
 
   const addSwipe = useCallback((restaurantId: string, action: SwipeRecord['action']) => {
-    const record: SwipeRecord = { restaurantId, action, timestamp: new Date().toISOString() };
+    const record: SwipeRecord = {
+      restaurantId,
+      action,
+      timestamp: new Date().toISOString(),
+      sessionId: currentSession?.id,
+    };
     setSwipeRecords(prev => [...prev, record]);
     setProfile(prev => ({
       ...prev,
       totalSwipes: prev.totalSwipes + 1,
       totalLikes: action === 'like' ? prev.totalLikes + 1 : prev.totalLikes,
     }));
-  }, []);
+
+    if (apiAvailable && currentSession) {
+      fetch('/api/swipes', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          id: `swipe_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
+          session_id: currentSession.id,
+          user_id: profile.id,
+          restaurant_id: restaurantId,
+          round: 1,
+          swipe_action: action === 'like' || action === 'save' ? 'LIKE' : 'DISLIKE',
+          created_at: new Date(),
+        }),
+      }).catch(() => {});
+    }
+  }, [apiAvailable, currentSession, profile.id]);
 
   const likedRestaurantIds = swipeRecords
     .filter(s => s.action === 'like' || s.action === 'save')
@@ -495,17 +677,18 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     setProfile(prev => ({ ...prev, ...updates }));
   }, []);
 
-  const getRestaurantById = useCallback((id: string) => MOCK_RESTAURANTS.find(r => r.id === id), []);
+  const getRestaurantById = useCallback((id: string) => restaurants.find(r => r.id === id), [restaurants]);
   const getCourseById = useCallback((id: string) => courses.find(c => c.id === id), [courses]);
 
   return (
     <AppContext.Provider value={{
       courses, savedCourseIds, saveCourse, unsaveCourse, addCourse,
-      currentSession, setCurrentSession, createSession,
+      currentSession, setCurrentSession, createSession, joinSession, fetchSession, toggleReady, startSession,
       swipeRecords, addSwipe, likedRestaurantIds,
       profile, updateProfile,
-      restaurants: MOCK_RESTAURANTS,
+      restaurants,
       getRestaurantById, getCourseById,
+      isLoading, apiAvailable,
     }}>
       {children}
     </AppContext.Provider>

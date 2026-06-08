@@ -29,8 +29,8 @@ export default function SessionCreatePage() {
   const toggleDiet = (d: string) => setDietary(prev => prev.includes(d) ? prev.filter(x => x !== d) : [...prev, d]);
   const toggleCat = (c: string) => setCategories(prev => prev.includes(c) ? prev.filter(x => x !== c) : [...prev, c]);
 
-  const handleCreate = () => {
-    const session = createSession(sessionName, { partySize, dietary, budget, radius, categories });
+  const handleCreate = async () => {
+    const session = await createSession(sessionName, { partySize, dietary, budget, radius, categories });
     toast.success(`"${session.name}" 세션이 생성되었습니다! 🎉`);
     navigate('/session/lobby');
   };
