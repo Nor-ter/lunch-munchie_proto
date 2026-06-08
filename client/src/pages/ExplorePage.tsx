@@ -131,7 +131,7 @@ export default function ExplorePage() {
             <CourseListCard
               key={course.id}
               course={course}
-              onTap={() => navigate(`/courses/${course.id}`)}
+              onTap={() => navigate(`/course/${course.id}?from=explore`)}
             />
           ))}
         </AnimatePresence>

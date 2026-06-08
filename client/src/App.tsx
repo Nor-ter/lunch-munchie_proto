@@ -4,7 +4,7 @@
 import { Toaster } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import NotFound from "@/pages/NotFound";
-import { Route, Switch, useLocation } from "wouter";
+import { Route, Switch, useLocation, useParams, Redirect } from "wouter";
 import ErrorBoundary from "./components/ErrorBoundary";
 import { ThemeProvider } from "./contexts/ThemeContext";
 import { AppProvider } from "./contexts/AppContext";
@@ -13,8 +13,10 @@ import OnboardingPage from "./pages/OnboardingPage";
 import HomePage from "./pages/HomePage";
 import QuickMatchPage from "./pages/QuickMatchPage";
 import ExplorePage from "./pages/ExplorePage";
-import CourseDetailPage from "./pages/CourseDetailPage";
 import CourseNavigatePage from "./pages/CourseNavigatePage";
+import NewCourseDetailPage from "./pages/course/CourseDetailPage";
+import CourseEditPage from "./pages/course/CourseEditPage";
+import CourseSharePage from "./pages/course/CourseSharePage";
 import SavedPage from "./pages/SavedPage";
 import ProfilePage from "./pages/ProfilePage";
 import SessionCreatePage from "./pages/SessionCreatePage";
@@ -22,7 +24,12 @@ import SessionLobbyPage from "./pages/SessionLobbyPage";
 import TourMapPage from "./pages/TourMapPage";
 import TourModePage from "./pages/TourModePage";
 
-const NO_TABBAR = ['/onboarding', '/tour-mode', '/quick-match'];
+const NO_TABBAR = ['/onboarding', '/tour-mode', '/quick-match', '/course/'];
+
+function CoursesRedirect() {
+  const params = useParams<{ id: string }>();
+  return <Redirect to={`/course/${params.id}`} />;
+}
 
 function AppShell() {
   const [location] = useLocation();
@@ -36,7 +43,10 @@ function AppShell() {
           <Route path="/quick-match" component={QuickMatchPage} />
           <Route path="/explore" component={ExplorePage} />
           <Route path="/courses/:id/navigate" component={CourseNavigatePage} />
-          <Route path="/courses/:id" component={CourseDetailPage} />
+          <Route path="/courses/:id" component={CoursesRedirect} />
+          <Route path="/course/:id/edit" component={CourseEditPage} />
+          <Route path="/course/:id/share" component={CourseSharePage} />
+          <Route path="/course/:id" component={NewCourseDetailPage} />
           <Route path="/saved" component={SavedPage} />
           <Route path="/profile" component={ProfilePage} />
           <Route path="/session/create" component={SessionCreatePage} />

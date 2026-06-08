@@ -58,12 +58,12 @@
   --ring: oklch(0.58 0.19 22);
 
   /* LM Design Tokens */
-  --lm-primary: #EB5053;
+  --lm-primary: #F05E5E;
   --lm-accent: #F09D09;
   --lm-green: #3CBA44;
   --lm-blue: #3E719B;
-  --lm-bg: #FFF8F2;
-  --lm-card-warm: #FFF3C4;
+  --lm-bg: #FFF9F2;
+  --lm-card-warm: #FEE7A6;
   --lm-text: #1A1A1A;
   --lm-sub: #9B9B9B;
 }
@@ -130,6 +130,8 @@
     position: fixed; bottom: 0; left: 50%; transform: translateX(-50%);
     width: 100%; max-width: 480px;
     background: var(--lm-primary);
+    border-radius: 20px 20px 0 0;
+    box-shadow: 0 -4px 20px rgba(240, 94, 94, 0.2);
     z-index: 50;
     padding-bottom: env(safe-area-inset-bottom, 0px);
   }

@@ -71,7 +71,7 @@ export default function SavedPage() {
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, x: -100 }}
               className="flex gap-3 p-3 rounded-2xl border border-[#E5E5E5] cursor-pointer active:scale-[0.98] transition-all"
-              onClick={() => navigate(`/courses/${course.id}`)}
+              onClick={() => navigate(`/course/${course.id}?from=saved`)}
             >
               <img
                 src={course.heroImage}

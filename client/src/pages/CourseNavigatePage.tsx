@@ -71,7 +71,7 @@ export default function CourseNavigatePage() {
       {/* Header */}
       <div className="flex items-center justify-between px-5 pt-12 pb-3 bg-white z-10">
         <button
-          onClick={() => navigate(`/courses/${params.id}`)}
+          onClick={() => navigate(`/course/${params.id}`)}
           className="w-9 h-9 rounded-full bg-[#F5F5F5] flex items-center justify-center active:scale-95"
         >
           <ArrowLeft size={17} color="#1A1A1A" />

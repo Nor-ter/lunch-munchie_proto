@@ -1,70 +1,72 @@
 import { motion } from 'framer-motion';
-import { Home, Compass, BookmarkCheck, Zap, User } from 'lucide-react';
+import { Home, MapPin, BookOpen, User } from 'lucide-react';
 import { useLocation } from 'wouter';
+
+function OverlappingHeartsIcon({ active }: { active: boolean }) {
+  return (
+    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" aria-hidden>
+      <path
+        d="M8.5 5.5C6.5 5.5 5 7.2 5 9.2c0 2.8 3.5 5.3 6 7.3 2.5-2 6-4.5 6-7.3 0-2-1.5-3.7-3.5-3.7-1.1 0-2.1.6-2.5 1.5-.4-.9-1.4-1.5-2.5-1.5z"
+        stroke="white"
+        strokeWidth={active ? 2 : 1.8}
+        fill="none"
+        opacity={active ? 1 : 0.55}
+        transform="translate(-2, 1)"
+      />
+      <path
+        d="M13.5 4.5C11.8 4.5 10.5 5.9 10.5 7.5c0 2.2 2.8 4.2 4.8 5.8 2-1.6 4.8-3.6 4.8-5.8 0-1.6-1.3-3-3-3-.9 0-1.7.5-2 .9-.3-.4-1.1-.9-2-.9z"
+        stroke="white"
+        strokeWidth={active ? 2 : 1.8}
+        fill="none"
+        opacity={active ? 1 : 0.55}
+        transform="translate(2, -1)"
+      />
+    </svg>
+  );
+}
 
 const TABS = [
   { path: '/', icon: Home, label: '홈' },
-  { path: '/explore', icon: Compass, label: '코스' },
-  { path: '/quick-match', icon: Zap, label: '런치', special: true },
-  { path: '/saved', icon: BookmarkCheck, label: '저장' },
+  { path: '/explore', icon: MapPin, label: '코스' },
+  { path: '/quick-match', customIcon: true, label: '런치' },
+  { path: '/saved', icon: BookOpen, label: '저장' },
   { path: '/profile', icon: User, label: '프로필' },
-];
+] as const;
 
 export default function TabBar() {
   const [location, navigate] = useLocation();
 
   return (
     <div className="tab-bar">
-      <div className="flex items-center justify-around h-16">
+      <div className="flex items-center justify-around h-[58px] px-2">
         {TABS.map((tab) => {
-          const isActive = location === tab.path || (tab.path !== '/' && location.startsWith(tab.path));
-          const Icon = tab.icon;
-
-          if (tab.special) {
-            return (
-              <button
-                key={tab.path}
-                onClick={() => navigate(tab.path)}
-                className="flex flex-col items-center gap-0.5 flex-1 py-2 transition-all active:scale-90"
-              >
-                <motion.div
-                  whileTap={{ scale: 0.85 }}
-                  className="w-10 h-10 rounded-full flex items-center justify-center"
-                  style={{ background: isActive ? 'white' : 'rgba(255,255,255,0.25)' }}
-                >
-                  <Icon
-                    size={20}
-                    strokeWidth={2.5}
-                    style={{ color: isActive ? '#EB5053' : 'white' }}
-                  />
-                </motion.div>
-                <span className="text-[9px] font-bold" style={{ color: isActive ? 'white' : 'rgba(255,255,255,0.7)' }}>
-                  {tab.label}
-                </span>
-              </button>
-            );
-          }
+          const isActive =
+            location === tab.path || (tab.path !== '/' && location.startsWith(tab.path));
 
           return (
             <button
               key={tab.path}
+              type="button"
               onClick={() => navigate(tab.path)}
-              className="flex flex-col items-center gap-0.5 flex-1 py-2 transition-all active:scale-95"
+              className="flex items-center justify-center flex-1 h-full transition-all active:opacity-70"
+              aria-label={tab.label}
             >
               <motion.div
-                animate={isActive ? { scale: 1.1 } : { scale: 1 }}
-                transition={{ type: 'spring', stiffness: 400, damping: 20 }}
+                animate={isActive ? { scale: 1.06 } : { scale: 1 }}
+                transition={{ type: 'spring', stiffness: 400, damping: 22 }}
               >
-                <Icon
-                  size={22}
-                  strokeWidth={isActive ? 2.5 : 1.8}
-                  style={{ color: isActive ? 'white' : 'rgba(255,255,255,0.55)' }}
-                  fill={isActive ? 'white' : 'none'}
-                />
+                {'customIcon' in tab && tab.customIcon ? (
+                  <OverlappingHeartsIcon active={isActive} />
+                ) : (
+                  <tab.icon
+                    size={24}
+                    strokeWidth={isActive ? 2.2 : 1.8}
+                    color="white"
+                    fill="none"
+                    style={{ opacity: isActive ? 1 : 0.55 }}
+                  />
+                )}
               </motion.div>
-              <span className="text-[10px] font-semibold" style={{ color: isActive ? 'white' : 'rgba(255,255,255,0.55)' }}>
-                {tab.label}
-              </span>
             </button>
           );
         })}
