@@ -2,6 +2,7 @@ import { motion } from 'framer-motion';
 import { useLocation } from 'wouter';
 import { Heart, X, ChevronRight, Circle } from 'lucide-react';
 import { useApp, Course, MOCK_RESTAURANTS } from '@/contexts/AppContext';
+import lunchieLogoImg from '@/assets/lunchie-logo.png';
 
 const COLORS = {
   bg: '#FFF9F2',
@@ -17,28 +18,11 @@ const COLORS = {
 function LunchieLogo() {
   return (
     <div className="flex items-center justify-center gap-2">
-      <div
-        className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0"
-        style={{ background: COLORS.coral }}
+      <img src={lunchieLogoImg} alt="Lunchie Munchie" className="w-10 h-10 flex-shrink-0" draggable={false} />
+      <span
+        className="text-[22px]"
+        style={{ color: COLORS.coral, fontFamily: "'Baloo 2', cursive", fontWeight: 700 }}
       >
-        <svg width="22" height="22" viewBox="0 0 24 24" fill="none">
-          <circle cx="12" cy="10" r="6" fill="white" />
-          <circle cx="9.5" cy="9.2" r="1" fill={COLORS.coral} />
-          <circle cx="14.5" cy="9.2" r="1" fill={COLORS.coral} />
-          <path
-            d="M9.5 12.2 Q12 14 14.5 12.2"
-            stroke={COLORS.coral}
-            strokeWidth="1.2"
-            strokeLinecap="round"
-            fill="none"
-          />
-          <path d="M8 16.5 L8 20.5" stroke="white" strokeWidth="1.6" strokeLinecap="round" />
-          <path d="M16 16.5 L16 20.5" stroke="white" strokeWidth="1.6" strokeLinecap="round" />
-          <path d="M6.5 16.5 L8 16.5" stroke="white" strokeWidth="1.6" strokeLinecap="round" />
-          <path d="M16 16.5 L17.5 16.5" stroke="white" strokeWidth="1.6" strokeLinecap="round" />
-        </svg>
-      </div>
-      <span className="font-black text-[18px]" style={{ color: COLORS.coral }}>
         Lunchie Munchie
       </span>
     </div>
@@ -83,7 +67,7 @@ function MunchieCourseCard({ course, idx }: { course: Course; idx: number }) {
       style={{
         background: COLORS.yellow,
         boxShadow: '0 2px 10px rgba(0,0,0,0.06)',
-        minHeight: 112,
+        minHeight: 192,
       }}
       whileTap={{ scale: 0.98 }}
     >
@@ -111,7 +95,7 @@ function MunchieCourseCard({ course, idx }: { course: Course; idx: number }) {
           </span>
         </div>
       </div>
-      <div className="w-[100px] p-3 flex items-center justify-center flex-shrink-0">
+      <div className="w-[152px] p-3 flex items-center justify-center flex-shrink-0">
         <div
           className="w-full aspect-square bg-white rounded-[18px] flex items-center justify-center p-2.5"
           style={{ boxShadow: 'inset 0 0 0 1px rgba(0,0,0,0.04)' }}
@@ -188,7 +172,7 @@ export default function HomePage() {
           오늘 어떻게<br />먹을까요?
         </h1>
         <p className="text-[13px] mt-1.5" style={{ color: COLORS.sub }}>
-          모드를 선택해주세요
+          모드를 선택해주세요.
         </p>
       </motion.div>
 
@@ -219,7 +203,7 @@ export default function HomePage() {
               <p className="text-white/90 text-[11.5px] mt-2.5 leading-[1.55]">
                 그룹 멤버들과 함께 음식 카드를
                 <br />
-                스와이프로 빠르게 메뉴를 결정해요
+                스와이프로 빠르게 메뉴를 결정해요.
               </p>
               <div className="flex gap-2 mt-3.5">
                 <span className="flex items-center gap-1 px-3 py-1.5 rounded-full border border-white/75 text-white text-[11px] font-semibold">
@@ -245,7 +229,7 @@ export default function HomePage() {
               Munchie Mode
             </p>
             <p className="text-[12px] mt-0.5" style={{ color: COLORS.sub }}>
-              여러 사람들이 먹어본 맛집 코스
+              이번주 사람들이 많이 저장한 코스
             </p>
           </div>
           <button
