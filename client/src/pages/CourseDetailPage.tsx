@@ -196,19 +196,25 @@ export default function CourseDetailPage() {
         className="fixed bottom-0 left-1/2 -translate-x-1/2 w-full max-w-[480px] bg-white px-5 py-4 z-40"
         style={{ boxShadow: '0 -4px 16px rgba(0,0,0,0.08)' }}
       >
-        <div className="flex gap-3">
+        <div className="flex gap-2">
           <button
             onClick={handleSave}
-            className="lm-btn-outline flex items-center justify-center gap-2 flex-[3]"
+            className="lm-btn-outline flex items-center justify-center gap-1.5 flex-[2]"
           >
-            <Bookmark size={16} fill={isSaved ? '#EB5053' : 'none'} stroke={isSaved ? '#EB5053' : '#1A1A1A'} />
-            {isSaved ? '저장됨' : '저장하기'}
+            <Bookmark size={15} fill={isSaved ? '#EB5053' : 'none'} stroke={isSaved ? '#EB5053' : '#1A1A1A'} />
+            {isSaved ? '저장됨' : '저장'}
+          </button>
+          <button
+            onClick={() => navigate(`/courses/${course.id}/edit`)}
+            className="lm-btn-outline flex items-center justify-center gap-1.5 flex-[2]"
+          >
+            편집
           </button>
           <button
             onClick={() => navigate(`/courses/${course.id}/navigate`)}
-            className="lm-btn-primary flex items-center justify-center gap-2 flex-[7]"
+            className="lm-btn-primary flex items-center justify-center gap-1.5 flex-[4]"
           >
-            코스 따라가기 <ChevronRight size={16} />
+            따라가기 <ChevronRight size={15} />
           </button>
         </div>
       </div>

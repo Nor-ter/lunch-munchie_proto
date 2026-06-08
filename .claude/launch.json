@@ -1,0 +1,11 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "lunchie-web",
+      "runtimeExecutable": "pnpm",
+      "runtimeArgs": ["--dir", "Prototype/lunch-munchie_proto", "dev"],
+      "port": 3000
+    }
+  ]
+}
