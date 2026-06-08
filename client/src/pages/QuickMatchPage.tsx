@@ -932,9 +932,11 @@ function FinalBattleScreen({
 
 // ─── Image → data URL (pre-inlines images so capture is CORS-safe) ──────────────
 
-async function imageToDataURL(url: string): Promise<string> {
+async function imageToDataURL(url: string, timeoutMs = 5000): Promise<string> {
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), timeoutMs);
   try {
-    const res = await fetch(url, { mode: 'cors' });
+    const res = await fetch(url, { mode: 'cors', signal: ctrl.signal });
     const blob = await res.blob();
     return await new Promise<string>((resolve, reject) => {
       const reader = new FileReader();
@@ -943,7 +945,9 @@ async function imageToDataURL(url: string): Promise<string> {
       reader.readAsDataURL(blob);
     });
   } catch {
-    return url; // fallback to original (may taint, but better than crashing)
+    return url; // timeout/error → fall back to original URL (html-to-image inlines it)
+  } finally {
+    clearTimeout(timer);
   }
 }
 
@@ -1042,9 +1046,67 @@ function ShareStoryCard({ winner, cardRef, heroSrc, foodSrcs }: {
   );
 }
 
+// ─── Tournament Bracket ───────────────────────────────────────────────────────
+
+function TournamentBracket({ finalist1, finalist2, winner }: {
+  finalist1: Restaurant;
+  finalist2: Restaurant;
+  winner: Restaurant;
+}) {
+  return (
+    <div className="px-5 pt-5">
+      <p className="text-[11px] font-bold text-[#9B9B9B] uppercase tracking-wider text-center mb-3">결승전 대진표</p>
+      <div className="rounded-2xl bg-white border border-[#F0F0F0] p-4" style={{ boxShadow: '0 2px 12px rgba(0,0,0,0.05)' }}>
+        <div className="flex items-center gap-2">
+          {/* Finalist 1 */}
+          <div className={`flex-1 rounded-xl p-2.5 text-center border-2 transition-all ${finalist1.id === winner.id ? 'border-[#EB5053] bg-[#FFF5F5]' : 'border-transparent bg-[#F5F5F5] opacity-60'}`}>
+            <img src={finalist1.image} alt={finalist1.name}
+              className="w-14 h-14 object-cover rounded-xl mx-auto mb-1.5" />
+            <p className="text-[11px] font-bold text-[#1A1A1A] leading-tight line-clamp-2">{finalist1.name}</p>
+            <div className="flex items-center justify-center gap-1 mt-1">
+              <span className="text-[10px] text-[#9B9B9B]">⭐ {finalist1.rating}</span>
+            </div>
+            {finalist1.id === winner.id && (
+              <p className="text-[9px] font-black text-[#EB5053] mt-1">🏆 우승</p>
+            )}
+          </div>
+
+          {/* VS divider */}
+          <div className="flex flex-col items-center gap-1">
+            <p className="text-[13px] font-black text-[#EB5053]">VS</p>
+            <div className="w-px h-6 bg-[#E5E5E5]" />
+          </div>
+
+          {/* Finalist 2 */}
+          <div className={`flex-1 rounded-xl p-2.5 text-center border-2 transition-all ${finalist2.id === winner.id ? 'border-[#EB5053] bg-[#FFF5F5]' : 'border-transparent bg-[#F5F5F5] opacity-60'}`}>
+            <img src={finalist2.image} alt={finalist2.name}
+              className="w-14 h-14 object-cover rounded-xl mx-auto mb-1.5" />
+            <p className="text-[11px] font-bold text-[#1A1A1A] leading-tight line-clamp-2">{finalist2.name}</p>
+            <div className="flex items-center justify-center gap-1 mt-1">
+              <span className="text-[10px] text-[#9B9B9B]">⭐ {finalist2.rating}</span>
+            </div>
+            {finalist2.id === winner.id && (
+              <p className="text-[9px] font-black text-[#EB5053] mt-1">🏆 우승</p>
+            )}
+          </div>
+        </div>
+
+        {/* Flow arrow */}
+        <div className="flex items-center justify-center mt-3 gap-2">
+          <div className="flex-1 h-px bg-[#E5E5E5]" />
+          <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-full" style={{ background: '#EB5053' }}>
+            <span className="text-[10px] font-black text-white">🏆 {winner.name}</span>
+          </div>
+          <div className="flex-1 h-px bg-[#E5E5E5]" />
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ─── Phase 4: Winner ────────────────────────────────────────────────────────────
 
-function WinnerScreen({ winner }: { winner: Restaurant; onReset: () => void }) {
+function WinnerScreen({ winner, finalists = [], onReset }: { winner: Restaurant; finalists?: Restaurant[]; onReset: () => void }) {
   const [, navigate] = useLocation();
   const foodPhotos = getFoodPhotos(winner);
   const shareCardRef = useRef<HTMLDivElement>(null);
@@ -1092,19 +1154,27 @@ function WinnerScreen({ winner }: { winner: Restaurant; onReset: () => void }) {
   const handleGenerateCard = async () => {
     setIsGenerating(true);
     try {
-      // 1. Convert all images to data URLs (prevents CORS taint)
-      const [hero, ...foods] = await Promise.all([
-        imageToDataURL(winner.image),
-        ...foodPhotos.slice(0, 4).map(imageToDataURL),
+      // Overall guard so the UI never gets stuck on "생성 중" if image
+      // network or the renderer hangs (e.g. offline / sandboxed env).
+      const blob = await Promise.race<Blob | null>([
+        (async () => {
+          // 1. Convert all images to data URLs (prevents CORS taint)
+          const [hero, ...foods] = await Promise.all([
+            imageToDataURL(winner.image),
+            ...foodPhotos.slice(0, 4).map(u => imageToDataURL(u)),
+          ]);
+          setCardImages({ hero, foods });
+
+          // 2. Wait for the off-screen card to render with the new images
+          await new Promise<void>(resolve => requestAnimationFrame(() => requestAnimationFrame(() => resolve())));
+          await new Promise(r => setTimeout(r, 120));
+
+          // 3. Capture
+          return captureCard();
+        })(),
+        new Promise<null>((_, reject) => setTimeout(() => reject(new Error('timeout')), 15000)),
       ]);
-      setCardImages({ hero, foods });
 
-      // 2. Wait for the off-screen card to render with the new images
-      await new Promise<void>(resolve => requestAnimationFrame(() => requestAnimationFrame(() => resolve())));
-      await new Promise(r => setTimeout(r, 120));
-
-      // 3. Capture
-      const blob = await captureCard();
       if (!blob) throw new Error('capture failed');
       previewBlobRef.current = blob;
       setPreviewUrl(URL.createObjectURL(blob));
@@ -1211,8 +1281,13 @@ function WinnerScreen({ winner }: { winner: Restaurant; onReset: () => void }) {
         )}
       </AnimatePresence>
 
+      {/* Tournament bracket */}
+      {finalists.length >= 2 && (
+        <TournamentBracket finalist1={finalists[0]!} finalist2={finalists[1]!} winner={winner} />
+      )}
+
       {/* Trophy header */}
-      <div className="relative h-64">
+      <div className="relative h-64 mt-4">
         <img src={winner.image} alt={winner.name} className="w-full h-full object-cover" />
         <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-black/20 to-transparent" />
 
@@ -1405,7 +1480,7 @@ export default function QuickMatchPage() {
 
   // Winner screen
   if (phase === 'winner' && winner) {
-    return <WinnerScreen winner={winner} onReset={handleReset} />;
+    return <WinnerScreen winner={winner} finalists={finalists} onReset={handleReset} />;
   }
 
   // Final battle

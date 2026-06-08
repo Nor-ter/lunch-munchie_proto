@@ -1,6 +1,6 @@
 import { motion } from 'framer-motion';
 import { useLocation } from 'wouter';
-import { Heart, X, ChevronRight } from 'lucide-react';
+import { Heart, X, ChevronRight, MapPin, Clock } from 'lucide-react';
 import { useApp, Course, MOCK_RESTAURANTS } from '@/contexts/AppContext';
 
 // ─── Route Illustration SVG ───────────────────────────────────────────────────
@@ -12,30 +12,27 @@ function RouteIllustration({ seed = 0 }: { seed?: number }) {
     'M 10 90 C 50 20, 80 110, 120 45 S 160 100, 190 40 S 210 10, 220 60',
     'M 10 60 C 35 130, 75 10, 105 80 S 150 130, 175 55 S 200 20, 215 70',
   ];
-
   const stops = [
     [10, 80], [90, 50], [160, 60], [200, 55],
     [10, 50], [100, 70], [170, 50], [210, 75],
     [10, 90], [120, 45], [190, 40], [220, 60],
     [10, 60], [105, 80], [175, 55], [215, 70],
   ];
-
   const p = seed % paths.length;
   const baseStops = stops.slice(p * 4, p * 4 + 4);
-
   return (
     <svg viewBox="0 0 230 130" className="w-full h-full" fill="none">
-      <path d={paths[p]} stroke="#5C3D2E" strokeWidth="3.5" strokeLinecap="round" strokeLinejoin="round" opacity="0.7" />
+      <path d={paths[p]} stroke="#EB5053" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" opacity="0.6" />
       {baseStops.map(([cx, cy], i) => (
         <circle key={i} cx={cx} cy={cy} r={i === 0 || i === baseStops.length - 1 ? 7 : 5}
-          fill={i === 0 || i === baseStops.length - 1 ? '#5C3D2E' : 'white'}
-          stroke="#5C3D2E" strokeWidth="2.5" opacity="0.8" />
+          fill={i === 0 || i === baseStops.length - 1 ? '#EB5053' : 'white'}
+          stroke="#EB5053" strokeWidth="2.5" opacity="0.8" />
       ))}
     </svg>
   );
 }
 
-// ─── Munchie Course Card ──────────────────────────────────────────────────────
+// ─── Munchie Course Card ─────────────────────────────────────────────────────
 
 const BADGES = ['HOT', 'MZ', 'NEW', 'HOT'];
 
@@ -45,10 +42,13 @@ function MunchieCourseCard({ course, idx }: { course: Course; idx: number }) {
   return (
     <motion.div
       onClick={() => navigate(`/courses/${course.id}`)}
-      className="flex overflow-hidden rounded-2xl cursor-pointer"
-      style={{ background: '#FFF3C4', minHeight: 110 }}
+      className="flex overflow-hidden rounded-2xl cursor-pointer bg-white"
+      style={{ minHeight: 110, border: '1px solid #F0F0F0', boxShadow: '0 2px 8px rgba(0,0,0,0.05)' }}
       whileTap={{ scale: 0.97 }}
     >
+      {/* Left coral accent bar */}
+      <div className="w-1 flex-shrink-0" style={{ background: '#EB5053' }} />
+
       <div className="flex-1 p-4">
         <span className="text-[10px] font-black text-white px-2.5 py-1 rounded-full"
           style={{ background: '#EB5053' }}>
@@ -60,19 +60,30 @@ function MunchieCourseCard({ course, idx }: { course: Course; idx: number }) {
             <span key={h} className="text-[11px] text-[#9B9B9B]">{h}</span>
           ))}
         </div>
-        <div className="flex items-center gap-1 mt-2">
-          <Heart size={11} color="#9B9B9B" />
-          <span className="text-[11px] text-[#9B9B9B]">{course.savedCount.toLocaleString()}</span>
+        <div className="flex items-center gap-3 mt-2">
+          <span className="flex items-center gap-1">
+            <MapPin size={10} color="#EB5053" />
+            <span className="text-[11px] text-[#9B9B9B]">{course.metadata.distance}km</span>
+          </span>
+          <span className="flex items-center gap-1">
+            <Clock size={10} color="#9B9B9B" />
+            <span className="text-[11px] text-[#9B9B9B]">{Math.floor(course.metadata.duration / 60)}시간</span>
+          </span>
+          <span className="flex items-center gap-1 ml-auto">
+            <Heart size={10} color="#9B9B9B" />
+            <span className="text-[11px] text-[#9B9B9B]">{course.savedCount.toLocaleString()}</span>
+          </span>
         </div>
       </div>
-      <div className="w-28 p-3 flex items-center justify-center flex-shrink-0">
+
+      <div className="w-24 p-3 flex items-center justify-center flex-shrink-0">
         <RouteIllustration seed={idx} />
       </div>
     </motion.div>
   );
 }
 
-// ─── Stacked Food Cards ────────────────────────────────────────────────────────
+// ─── Stacked Food Cards ───────────────────────────────────────────────────────
 
 function StackedCards() {
   return (
@@ -193,7 +204,7 @@ export default function HomePage() {
         <motion.button
           onClick={() => navigate('/explore')}
           className="w-full py-4 mt-4 rounded-2xl font-bold text-[14px] flex items-center justify-center gap-2 text-white"
-          style={{ background: '#F09D09' }}
+          style={{ background: '#EB5053' }}
           whileTap={{ scale: 0.97 }}
         >
           코스 더보기 <ChevronRight size={16} strokeWidth={2.5} />

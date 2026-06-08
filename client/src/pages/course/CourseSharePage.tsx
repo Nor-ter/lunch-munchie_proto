@@ -147,6 +147,7 @@ export default function CourseSharePage() {
 
   const [selected, setSelected] = useState(0);
   const [platform, setPlatform] = useState<Platform>('ig-story');
+  const [ratio, setRatio] = useState<'9:12' | '9:16'>('9:16');
   const [isCapturing, setIsCapturing] = useState(false);
 
   const cardRefs = useRef<(HTMLDivElement | null)[]>([]);
@@ -222,6 +223,22 @@ export default function CourseSharePage() {
             key={i}
             className={`rounded-full transition-all duration-200 ${i === selected ? 'w-4 h-1.5 bg-[#EB5053]' : 'w-1.5 h-1.5 bg-gray-200'}`}
           />
+        ))}
+      </div>
+
+      {/* Ratio selector */}
+      <div className="mx-4 mt-4 flex gap-2 p-1 rounded-xl bg-gray-100">
+        {(['9:12', '9:16'] as const).map(r => (
+          <button
+            key={r}
+            onClick={() => setRatio(r)}
+            className="flex-1 py-2 rounded-lg text-[12px] font-bold transition-all"
+            style={ratio === r
+              ? { background: '#EB5053', color: 'white' }
+              : { background: 'transparent', color: '#9B9B9B' }}
+          >
+            {r} {r === '9:16' ? '(스토리)' : '(피드)'}
+          </button>
         ))}
       </div>
 
