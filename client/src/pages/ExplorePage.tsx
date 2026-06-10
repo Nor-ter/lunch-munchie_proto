@@ -149,7 +149,7 @@ export default function ExplorePage() {
 
       {/* Create Course FAB */}
       <motion.button
-        onClick={() => navigate('/session/create')}
+        onClick={() => navigate('/lunchie/settings')}
         className="fixed bottom-24 right-4 w-14 h-14 rounded-full shadow-xl flex items-center justify-center z-40 text-white font-bold text-2xl"
         style={{ background: '#EB5053' }}
         whileHover={{ scale: 1.1 }}

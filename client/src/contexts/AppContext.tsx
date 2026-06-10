@@ -357,6 +357,12 @@ const THEMES = [
 
 export { THEMES };
 
+// 그룹 세션은 userId로 멤버를 구분하므로, 기기마다 고유 ID가 있어야 한다.
+// (모두 'me'였던 과거 값은 서버에서 한 명으로 합쳐져 멀티유저 투표가 깨진다.)
+function generateUserId() {
+  return 'user_' + Math.random().toString(36).substring(2, 15);
+}
+
 const DEFAULT_PROFILE: UserProfile = {
   id: 'me',
   name: '지민',
@@ -468,8 +474,19 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   });
 
   const [profile, setProfile] = useState<UserProfile>(() => {
-    try { const s = localStorage.getItem('lm_profile'); return s ? JSON.parse(s) : DEFAULT_PROFILE; }
-    catch { return DEFAULT_PROFILE; }
+    try {
+      const s = localStorage.getItem('lm_profile');
+      if (s) {
+        const parsed = JSON.parse(s);
+        // 과거 공용 ID('me')는 기기 고유 ID로 마이그레이션.
+        if (!parsed.id || parsed.id === 'me') {
+          parsed.id = generateUserId();
+          localStorage.setItem('lm_profile', JSON.stringify(parsed));
+        }
+        return parsed;
+      }
+    } catch { /* fall through */ }
+    return { ...DEFAULT_PROFILE, id: generateUserId() };
   });
 
   useEffect(() => {

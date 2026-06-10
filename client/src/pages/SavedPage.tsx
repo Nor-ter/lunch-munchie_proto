@@ -137,7 +137,7 @@ export default function SavedPage() {
 
       {/* Create Course FAB */}
       <motion.button
-        onClick={() => navigate('/session/create')}
+        onClick={() => navigate('/lunchie/settings')}
         className="fixed bottom-24 right-4 flex items-center gap-2 px-4 h-12 rounded-full shadow-xl text-white font-bold text-[13px] z-40"
         style={{ background: '#EB5053' }}
         whileHover={{ scale: 1.05 }}

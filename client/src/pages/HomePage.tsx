@@ -169,7 +169,7 @@ export default function HomePage() {
 
         <motion.button
           type="button"
-          onClick={() => navigate('/quick-match')}
+          onClick={() => navigate('/lunchie/settings')}
           className="w-full rounded-[28px] overflow-hidden text-left"
           style={{
             background: COLORS.coral,

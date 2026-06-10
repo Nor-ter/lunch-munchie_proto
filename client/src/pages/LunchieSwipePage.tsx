@@ -7,12 +7,57 @@
 import { useState, useCallback, useEffect } from 'react';
 import { motion, useMotionValue, useTransform, AnimatePresence } from 'framer-motion';
 import { useLocation } from 'wouter';
-import { ArrowLeft, Heart, X, Triangle, Star, MapPin } from 'lucide-react';
+import { ArrowLeft, Heart, X, Star, MapPin, Clock } from 'lucide-react';
 import { useApp } from '@/contexts/AppContext';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
-type SwipeAction = 'like' | 'maybe' | 'dislike';
+type SwipeAction = 'like' | 'dislike';
+
+// ─── Food photo references (for tap-to-reveal menu panel) ─────────────────────
+
+const FOOD_PHOTOS: Record<string, string[]> = {
+  '카페': [
+    'https://images.unsplash.com/photo-1495474472287-4d71bcdd2085?w=400&q=80',
+    'https://images.unsplash.com/photo-1509042239860-f550ce710b93?w=400&q=80',
+    'https://images.unsplash.com/photo-1461023058943-07fcbe16d735?w=400&q=80',
+    'https://images.unsplash.com/photo-1572442388796-11668a67e53d?w=400&q=80',
+  ],
+  '베이커리': [
+    'https://images.unsplash.com/photo-1555507036-ab1f4038808a?w=400&q=80',
+    'https://images.unsplash.com/photo-1509440159596-0249088772ff?w=400&q=80',
+    'https://images.unsplash.com/photo-1586985289688-ca3cf47d3e6e?w=400&q=80',
+    'https://images.unsplash.com/photo-1517433367423-c7e5b0f35086?w=400&q=80',
+  ],
+  '이탈리안': [
+    'https://images.unsplash.com/photo-1555396273-367ea4eb4db5?w=400&q=80',
+    'https://images.unsplash.com/photo-1621996346565-e3dbc646d9a9?w=400&q=80',
+    'https://images.unsplash.com/photo-1473093295043-cdd812d0e601?w=400&q=80',
+    'https://images.unsplash.com/photo-1563379926898-05f4575a45d8?w=400&q=80',
+  ],
+  '일식': [
+    'https://images.unsplash.com/photo-1579871494447-9811cf80d66c?w=400&q=80',
+    'https://images.unsplash.com/photo-1569050467447-ce54b3bbc37d?w=400&q=80',
+    'https://images.unsplash.com/photo-1611143669185-af224c5e3252?w=400&q=80',
+    'https://images.unsplash.com/photo-1617196034183-421b4040ed20?w=400&q=80',
+  ],
+  '중식': [
+    'https://images.unsplash.com/photo-1569050467447-ce54b3bbc37d?w=400&q=80',
+    'https://images.unsplash.com/photo-1582878826629-29b7ad1cdc43?w=400&q=80',
+    'https://images.unsplash.com/photo-1606756790138-261d2b21cd75?w=400&q=80',
+    'https://images.unsplash.com/photo-1563245372-f21724e3856d?w=400&q=80',
+  ],
+  'default': [
+    'https://images.unsplash.com/photo-1565299624946-b28f40a0ae38?w=400&q=80',
+    'https://images.unsplash.com/photo-1567620905732-2d1ec7ab7445?w=400&q=80',
+    'https://images.unsplash.com/photo-1540189549336-e6e99c3679fe?w=400&q=80',
+    'https://images.unsplash.com/photo-1512621776951-a57141f2eefd?w=400&q=80',
+  ],
+};
+
+function getFoodPhotos(category: string): string[] {
+  return FOOD_PHOTOS[category] || FOOD_PHOTOS['default'];
+}
 
 // ─── Swipe Card ───────────────────────────────────────────────────────────────
 
@@ -31,31 +76,28 @@ function SwipeCard({
   progress: number;
   total: number;
 }) {
+  const [isRevealed, setIsRevealed] = useState(false);
+  const [photoIndex, setPhotoIndex] = useState(0);
   const x = useMotionValue(0);
-  const rotate = useTransform(x, [-200, 200], [-18, 18]);
-  const opacity = useTransform(x, [-200, -80, 0, 80, 200], [0, 1, 1, 1, 0]);
+  const rotate = useTransform(x, [-220, 220], [-16, 16]);
   const likeOp = useTransform(x, [0, 70], [0, 1]);
-  const dislikeOp = useTransform(x, [-70, 0], [1, 0]);
+  const nopeOp = useTransform(x, [-70, 0], [1, 0]);
+  const foodPhotos = getFoodPhotos(restaurant.category);
 
   const handleDragEnd = useCallback((_: unknown, info: { offset: { x: number } }) => {
-    if (info.offset.x > 100) onAction('like');
-    else if (info.offset.x < -100) onAction('dislike');
+    if (info.offset.x > 90) onAction('like');
+    else if (info.offset.x < -90) onAction('dislike');
   }, [onAction]);
-
-  const catColor = restaurant.category === '카페' ? '#3E719B'
-    : restaurant.category === '치킨' ? '#EB5053'
-    : restaurant.category === '일식' ? '#3CBA44'
-    : '#D94447';
 
   if (!isTop) {
     return (
       <div
         className="absolute inset-0 rounded-3xl overflow-hidden"
         style={{
-          transform: `scale(${1 - stackIndex * 0.05}) translateY(${stackIndex * 16}px)`,
+          transform: `scale(${1 - stackIndex * 0.04}) translateY(${stackIndex * 14}px)`,
           zIndex: 10 - stackIndex,
-          opacity: 1 - stackIndex * 0.2,
-          background: stackIndex === 1 ? '#EFD0D4' : '#FFD6D6',
+          background: stackIndex === 1 ? '#e8c9a0' : '#d4a574',
+          opacity: 1 - stackIndex * 0.15,
         }}
       />
     );
@@ -63,60 +105,176 @@ function SwipeCard({
 
   return (
     <motion.div
-      className="absolute inset-0 rounded-3xl overflow-hidden cursor-grab active:cursor-grabbing"
-      style={{ x, rotate, opacity, zIndex: 20 }}
-      drag="x"
+      className="absolute inset-0 rounded-3xl overflow-hidden"
+      style={{ x, rotate, zIndex: 20 }}
+      drag={isRevealed ? false : 'x'}
       dragConstraints={{ left: 0, right: 0 }}
+      dragElastic={0.6}
       onDragEnd={handleDragEnd}
-      whileDrag={{ scale: 1.02 }}
+      whileDrag={{ cursor: 'grabbing' }}
+      onTap={() => {
+        if (!isRevealed) {
+          setPhotoIndex(0);
+          setIsRevealed(true);
+        }
+      }}
     >
-      <div className="w-full h-full relative" style={{ background: 'linear-gradient(160deg, #c8956c 0%, #a0522d 100%)' }}>
-        <div className="flex items-center justify-center h-[55%] relative">
-          <img
-            src={restaurant.image}
-            alt={restaurant.name}
-            className="w-40 h-40 object-cover rounded-full border-4 border-white/30 shadow-2xl"
-            draggable={false}
-          />
-          <div className="absolute top-4 left-0 right-0 flex items-center justify-between px-5">
-            <span className="text-white/80 text-[12px] font-semibold">{progress}/{total}</span>
+      {/* Restaurant photo */}
+      <div className="w-full h-full relative cursor-grab">
+        <img
+          src={restaurant.image}
+          alt={restaurant.name}
+          className="w-full h-full object-cover"
+          draggable={false}
+        />
+        <div className="absolute inset-0 bg-gradient-to-t from-black/75 via-black/10 to-transparent" />
+
+        {/* Progress */}
+        <div className="absolute top-4 left-5 right-5 flex items-center justify-between">
+          <div className="flex gap-1">
+            {Array.from({ length: total }).map((_, i) => (
+              <div key={i} className="h-1 rounded-full transition-all"
+                style={{
+                  width: i < progress ? 22 : 14,
+                  background: i < progress ? 'white' : 'rgba(255,255,255,0.35)',
+                }} />
+            ))}
           </div>
+          <span className="text-white/80 text-[12px] font-bold bg-black/20 px-2 py-0.5 rounded-full">
+            {progress}/{total}
+          </span>
         </div>
 
-        <div className="px-5 pb-5">
-          <div className="flex items-center gap-2 mb-1">
-            <span className="text-[11px] font-bold px-2 py-0.5 rounded-full text-white"
-              style={{ background: catColor }}>
-              {restaurant.category}
-            </span>
+        {/* Touch hint */}
+        {!isRevealed && (
+          <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 pointer-events-none">
+            <div className="bg-black/30 text-white text-[11px] font-semibold px-3 py-1.5 rounded-full opacity-70">
+              탭 → 메뉴 보기
+            </div>
           </div>
-          <h2 className="text-white font-black text-[22px] leading-tight">{restaurant.name}</h2>
-          <p className="text-white/70 text-[12px] mt-1 leading-relaxed">{restaurant.description}</p>
+        )}
+
+        {/* Bottom info */}
+        <div className="absolute bottom-0 left-0 right-0 p-5">
+          <div className="flex gap-1.5 mb-2 flex-wrap">
+            {(restaurant.tags || []).slice(0, 2).map((t: string) => (
+              <span key={t} className="text-[10px] font-bold bg-white/20 text-white px-2.5 py-0.5 rounded-full">
+                {t}
+              </span>
+            ))}
+          </div>
+          <h2 className="text-white font-black text-[24px] leading-tight">{restaurant.name}</h2>
+          <p className="text-white/70 text-[12px] mt-1">{restaurant.description}</p>
           <div className="flex items-center gap-3 mt-2">
             <div className="flex items-center gap-1">
               <Star size={12} fill="#FFD700" color="#FFD700" />
-              <span className="text-white text-[12px] font-semibold">{restaurant.rating}</span>
+              <span className="text-white text-[12px] font-bold">{restaurant.rating}</span>
             </div>
             <div className="flex items-center gap-1">
               <MapPin size={11} color="rgba(255,255,255,0.6)" />
-              <span className="text-white/60 text-[11px]">{restaurant.distance || '500m'}</span>
+              <span className="text-white/70 text-[11px]">{restaurant.distance}</span>
             </div>
+            <span className="text-white/70 text-[11px]">{'₩'.repeat(restaurant.priceRange || 1)}</span>
+            <span className="text-white/60 text-[10px] bg-white/15 px-2 py-0.5 rounded-full">
+              {restaurant.category}
+            </span>
           </div>
         </div>
 
+        {/* LIKE overlay */}
         <motion.div
-          className="absolute top-6 left-5 border-4 border-[#3CBA44] rounded-2xl px-4 py-2 rotate-[-12deg]"
-          style={{ opacity: likeOp }}
+          className="absolute top-8 left-5 border-[3px] border-[#3CBA44] rounded-2xl px-4 py-2"
+          style={{ opacity: likeOp, rotate: -12 }}
         >
-          <span className="text-[#3CBA44] font-black text-[18px]">좋아요 ○</span>
+          <span className="text-[#3CBA44] font-black text-[18px]">LIKE ♡</span>
         </motion.div>
+
+        {/* NOPE overlay */}
         <motion.div
-          className="absolute top-6 right-5 border-4 border-[#EB5053] rounded-2xl px-4 py-2 rotate-[12deg]"
-          style={{ opacity: dislikeOp }}
+          className="absolute top-8 right-5 border-[3px] border-[#EB5053] rounded-2xl px-4 py-2"
+          style={{ opacity: nopeOp, rotate: 12 }}
         >
-          <span className="text-[#EB5053] font-black text-[18px]">싫어요 ✕</span>
+          <span className="text-[#EB5053] font-black text-[18px]">NOPE ✕</span>
         </motion.div>
       </div>
+
+      {/* Food photos reveal panel — dark, one-photo-at-a-time vertical scroll */}
+      <AnimatePresence>
+        {isRevealed && (
+          <motion.div
+            className="absolute inset-0 flex flex-col"
+            style={{ background: 'rgba(20,16,14,0.92)', backdropFilter: 'blur(8px)' }}
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.25 }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Panel header */}
+            <div className="flex items-center justify-between px-5 pt-5 pb-3 flex-shrink-0">
+              <div className="min-w-0">
+                <p className="font-black text-[17px] text-white truncate">{restaurant.name}</p>
+                <p className="text-[11px] text-white/50 truncate">{restaurant.category} · 메뉴 둘러보기</p>
+              </div>
+              <button
+                onClick={() => setIsRevealed(false)}
+                className="w-9 h-9 rounded-full bg-white/15 flex items-center justify-center active:scale-90 flex-shrink-0 ml-2">
+                <X size={16} color="white" />
+              </button>
+            </div>
+
+            {/* Single food photo with left/right tap navigation */}
+            <div className="flex-1 px-5 pb-4 flex flex-col min-h-0">
+              <div className="rounded-2xl overflow-hidden relative flex-1">
+                <img src={foodPhotos[photoIndex]} alt="" className="w-full h-full object-cover" draggable={false} />
+
+                {/* Left tap zone — previous photo */}
+                <button
+                  className="absolute inset-y-0 left-0 w-1/2"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setPhotoIndex(i => (i - 1 + foodPhotos.length) % foodPhotos.length);
+                  }}
+                  aria-label="이전 메뉴"
+                />
+                {/* Right tap zone — next photo */}
+                <button
+                  className="absolute inset-y-0 right-0 w-1/2"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setPhotoIndex(i => (i + 1) % foodPhotos.length);
+                  }}
+                  aria-label="다음 메뉴"
+                />
+
+                {/* dot indicator */}
+                <div className="absolute top-3 left-1/2 -translate-x-1/2 flex gap-1.5 pointer-events-none">
+                  {foodPhotos.map((_, j) => (
+                    <div key={j} className="w-1.5 h-1.5 rounded-full"
+                      style={{ background: j === photoIndex ? 'white' : 'rgba(255,255,255,0.4)' }} />
+                  ))}
+                </div>
+              </div>
+              <div className="pt-3 flex-shrink-0">
+                <p className="font-bold text-[16px] text-white">메뉴 {photoIndex + 1}</p>
+                <p className="text-[12px] text-white/50 mt-0.5">{restaurant.description}</p>
+                <div className="flex gap-1.5 mt-2 flex-wrap">
+                  {(restaurant.tags || []).map((t: string) => (
+                    <span key={t} className="text-[11px] font-semibold bg-white/15 text-white/90 px-2.5 py-1 rounded-full">
+                      {t}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            </div>
+
+            {/* hint */}
+            <div className="text-center pb-2 flex-shrink-0">
+              <p className="text-white/40 text-[11px]">← 이전 / 다음 메뉴 → · ✕ 눌러서 닫기</p>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </motion.div>
   );
 }
@@ -203,7 +361,7 @@ function ResultsScreen({ swipeData, onReset }: {
   // Personal scores based on local swipes
   const personalScores = restaurants.map(r => {
     const record = swipeData.find(s => s.restaurant.id === r.id);
-    const score = record?.action === 'like' ? 14 : record?.action === 'maybe' ? 8 : 0;
+    const score = record?.action === 'like' ? 14 : 0;
     return { restaurant: r, score };
   }).filter(s => s.score > 0).sort((a, b) => b.score - a.score);
 
@@ -337,6 +495,104 @@ function ResultsScreen({ swipeData, onReset }: {
   );
 }
 
+// ─── Finals (결승전) Screen ──────────────────────────────────────────────────
+
+function FinalBattleResultScreen({
+  finalist1,
+  finalist2,
+  onContinue,
+}: {
+  finalist1: any;
+  finalist2: any;
+  onContinue: () => void;
+}) {
+  return (
+    <motion.div
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      className="min-h-dvh flex flex-col bg-[#1A1A1A]"
+    >
+      {/* Header */}
+      <div className="px-5 pt-12 pb-4 text-center">
+        <p className="font-black text-white text-[22px]">결승전 🏆</p>
+        <p className="text-white/50 text-[13px] mt-1">모두의 투표로 결정된 최후의 2곳</p>
+      </div>
+
+      {/* Diagonal split layout */}
+      <div className="flex-1 relative overflow-hidden">
+        {/* Finalist 1 — winner, top-left triangle */}
+        <div
+          className="absolute inset-0"
+          style={{ clipPath: 'polygon(0 0, 100% 0, 0 100%)' }}
+        >
+          <img src={finalist1.image} alt={finalist1.name} className="w-full h-full object-cover" draggable={false} />
+          <div className="absolute inset-0 bg-gradient-to-br from-black/30 via-black/45 to-black/70" />
+          <div className="absolute top-6 left-5 right-20 text-left">
+            <span className="inline-block bg-[#FFD700] text-[#1A1A1A] text-[11px] font-black px-3 py-1 rounded-full mb-2">
+              🏆 1위
+            </span>
+            <p className="text-white font-black text-[19px] leading-tight">{finalist1.name}</p>
+            <div className="flex items-center gap-2 mt-1">
+              <Star size={12} fill="#FFD700" color="#FFD700" />
+              <span className="text-white/85 text-[12px]">{finalist1.rating}</span>
+              <span className="text-white/60 text-[11px]">{finalist1.distance}</span>
+            </div>
+          </div>
+        </div>
+
+        {/* Finalist 2 — runner-up, bottom-right triangle */}
+        <div
+          className="absolute inset-0"
+          style={{ clipPath: 'polygon(100% 0, 100% 100%, 0 100%)', opacity: 0.55 }}
+        >
+          <img src={finalist2.image} alt={finalist2.name} className="w-full h-full object-cover" draggable={false} />
+          <div className="absolute inset-0 bg-gradient-to-br from-black/70 via-black/45 to-black/30" />
+          <div className="absolute bottom-6 right-5 left-20 text-right">
+            <span className="inline-block bg-white/20 text-white text-[11px] font-black px-3 py-1 rounded-full mb-2">
+              2위
+            </span>
+            <p className="text-white font-black text-[19px] leading-tight">{finalist2.name}</p>
+            <div className="flex items-center gap-2 mt-1 justify-end">
+              <Star size={12} fill="#FFD700" color="#FFD700" />
+              <span className="text-white/85 text-[12px]">{finalist2.rating}</span>
+              <span className="text-white/60 text-[11px]">{finalist2.distance}</span>
+            </div>
+          </div>
+        </div>
+
+        {/* Diagonal divider line */}
+        <div className="absolute inset-0 pointer-events-none z-10">
+          <svg className="w-full h-full" preserveAspectRatio="none" viewBox="0 0 100 100">
+            <line x1="100" y1="0" x2="0" y2="100" stroke="rgba(255,255,255,0.35)" strokeWidth="0.6" />
+          </svg>
+        </div>
+
+        {/* VS badge center */}
+        <motion.div
+          className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-20 pointer-events-none"
+          animate={{ scale: [1, 1.12, 1] }}
+          transition={{ duration: 1.4, repeat: Infinity, ease: 'easeInOut' }}
+        >
+          <div className="w-14 h-14 rounded-full bg-[#F09D09] border-[3px] border-white flex items-center justify-center shadow-2xl">
+            <span className="font-black text-white text-[15px]">VS</span>
+          </div>
+        </motion.div>
+      </div>
+
+      {/* Continue */}
+      <div className="px-5 py-5">
+        <button
+          onClick={onContinue}
+          className="w-full py-4 rounded-2xl font-bold text-white text-[15px] active:scale-[0.98] shadow-xl"
+          style={{ background: '#F09D09' }}
+        >
+          최종 순위 보기 📊
+        </button>
+      </div>
+    </motion.div>
+  );
+}
+
 // ─── Decided Screen ───────────────────────────────────────────────────────────
 
 function WaitingOrDecidedScreen({ onContinue }: { onContinue: () => void }) {
@@ -394,10 +650,17 @@ function WaitingOrDecidedScreen({ onContinue }: { onContinue: () => void }) {
   }, [currentSession]);
 
   const isAllCompleted = liveResults.completedCount >= liveResults.totalMembers || liveResults.isExpired;
-  
-  // Find group winner (first item in results looked up in restaurants list)
+
+  // Find group winner + runner-up (top 2 in results, looked up in restaurants list)
   const winnerId = liveResults.results[0]?.restaurantId;
+  const runnerUpId = liveResults.results[1]?.restaurantId;
   const winner = restaurants.find(r => r.id === winnerId) || currentSession?.restaurants[0];
+  const runnerUp = restaurants.find(r => r.id === runnerUpId);
+
+  // 최종 음식점 두 곳이 모두 정해졌으면 결승전(VS) 화면으로 결과를 보여준다.
+  if (isAllCompleted && winner && runnerUp) {
+    return <FinalBattleResultScreen finalist1={winner} finalist2={runnerUp} onContinue={onContinue} />;
+  }
 
   return (
     <motion.div
@@ -535,6 +798,20 @@ export default function QuickMatchPage() {
   });
   const [swipeData, setSwipeData] = useState<{ restaurant: any; action: SwipeAction }[]>([]);
   const [showIntro, setShowIntro] = useState(true);
+  const [remainingMs, setRemainingMs] = useState(() => {
+    if (!currentSession?.deadline) return 0;
+    return Math.max(0, new Date(currentSession.deadline).getTime() - Date.now());
+  });
+
+  // Countdown ticker for the header badge
+  useEffect(() => {
+    if (!currentSession?.deadline) return;
+    const deadlineTime = new Date(currentSession.deadline).getTime();
+    const iv = setInterval(() => {
+      setRemainingMs(Math.max(0, deadlineTime - Date.now()));
+    }, 1000);
+    return () => clearInterval(iv);
+  }, [currentSession?.deadline]);
 
   // If no session, go to create session page
   useEffect(() => {
@@ -583,7 +860,7 @@ export default function QuickMatchPage() {
     const restaurant = targetRestaurants[currentIndex];
     if (!restaurant) return;
 
-    addSwipe(restaurant.id, action === 'like' ? 'like' : action === 'maybe' ? 'save' : 'skip');
+    addSwipe(restaurant.id, action === 'like' ? 'like' : 'skip');
     setSwipeData(prev => [...prev, { restaurant, action }]);
 
     if (currentIndex + 1 >= total) {
@@ -604,60 +881,72 @@ export default function QuickMatchPage() {
     return <ResultsScreen swipeData={swipeData} onReset={() => { setCurrentIndex(0); setSwipeData([]); }} />;
   }
 
+  // Countdown formatting for header badge
+  const totalSec = Math.ceil(remainingMs / 1000);
+  const mm = String(Math.floor(totalSec / 60)).padStart(2, '0');
+  const ss = String(totalSec % 60).padStart(2, '0');
+  const urgent = remainingMs > 0 && remainingMs <= 30000;
+
   return (
-    <div className="min-h-dvh bg-white">
+    <div className="min-h-dvh bg-[#FFF8F2] relative">
       {/* Header */}
-      <div className="flex items-center justify-between px-5 pt-12 pb-4">
+      <div className="flex items-center justify-between px-5 pt-12 pb-3">
         <button onClick={() => navigate('/session/lobby')}
-          className="w-10 h-10 rounded-full bg-[#F5F5F5] flex items-center justify-center active:scale-95">
+          className="w-10 h-10 rounded-full bg-white shadow-sm flex items-center justify-center active:scale-95 flex-shrink-0">
           <ArrowLeft size={18} color="#1A1A1A" />
         </button>
-        <span className="font-bold text-[17px] text-[#1A1A1A]">스와이프 투표</span>
-        <div className="w-10" />
+        <div className="text-center">
+          <p className="font-black text-[16px] text-[#1A1A1A]">예선전 🍽️</p>
+          <p className="text-[11px] text-[#9B9B9B]">마음에 드는 음식을 골라보세요 · {progress}/{total}</p>
+        </div>
+        {currentSession?.deadline ? (
+          <motion.div
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-full flex-shrink-0"
+            style={{ background: urgent ? '#F09D09' : '#FFF1E0' }}
+            animate={urgent ? { scale: [1, 1.08, 1] } : {}}
+            transition={{ duration: 1, repeat: urgent ? Infinity : 0 }}
+          >
+            <Clock size={14} color={urgent ? 'white' : '#F09D09'} />
+            <span className="font-black text-[13px] tabular-nums" style={{ color: urgent ? 'white' : '#F09D09' }}>
+              {mm}:{ss}
+            </span>
+          </motion.div>
+        ) : (
+          <div className="w-10 flex-shrink-0" />
+        )}
       </div>
 
-      <div className="px-4">
-        {/* Intro overlay */}
-        <AnimatePresence>
-          {showIntro && (
-            <motion.div
-              className="absolute inset-0 bg-white z-50 flex flex-col items-center justify-center"
-              exit={{ opacity: 0 }}
-            >
-              <motion.div
-                animate={{ x: [-50, 50, -50], rotate: [-15, 15, -15] }}
-                transition={{ duration: 1.2, repeat: Infinity }}
-                className="text-6xl mb-4"
-              >
-                🍱
-              </motion.div>
-              <p className="font-bold text-[18px] text-[#1A1A1A]">카드를 스와이프하세요!</p>
-              <div className="flex gap-6 mt-4">
-                <div className="flex flex-col items-center gap-1">
-                  <div className="w-12 h-12 rounded-full bg-[#FFF5F5] border-2 border-[#EB5053] flex items-center justify-center">
-                    <X size={22} color="#EB5053" />
-                  </div>
-                  <span className="text-[11px] text-[#9B9B9B]">싫어요</span>
+      {/* Intro overlay */}
+      <AnimatePresence>
+        {showIntro && (
+          <motion.div
+            className="absolute inset-0 bg-[#1A1A1A] z-50 flex flex-col items-center justify-center"
+            exit={{ opacity: 0, scale: 1.05 }}
+            transition={{ duration: 0.3 }}
+          >
+            <p className="font-black text-white text-[22px]">예선전 시작! 🍽️</p>
+            <p className="text-white/60 text-[14px] mt-2">카드를 스와이프 하세요</p>
+            <div className="flex gap-8 mt-6">
+              <div className="flex flex-col items-center gap-2">
+                <div className="w-14 h-14 rounded-full bg-white flex items-center justify-center">
+                  <X size={24} color="#EB5053" strokeWidth={2.5} />
                 </div>
-                <div className="flex flex-col items-center gap-1">
-                  <div className="w-12 h-12 rounded-full bg-[#FFF0EE] border-2 border-[#D94447] flex items-center justify-center">
-                    <Triangle size={20} color="#D94447" />
-                  </div>
-                  <span className="text-[11px] text-[#9B9B9B]">그냥봄</span>
-                </div>
-                <div className="flex flex-col items-center gap-1">
-                  <div className="w-12 h-12 rounded-full bg-[#F0FFF4] border-2 border-[#3CBA44] flex items-center justify-center">
-                    <Heart size={22} color="#3CBA44" fill="#3CBA44" />
-                  </div>
-                  <span className="text-[11px] text-[#9B9B9B]">좋아요</span>
-                </div>
+                <span className="text-white/70 text-[12px]">싫어요</span>
               </div>
-            </motion.div>
-          )}
-        </AnimatePresence>
+              <div className="flex flex-col items-center gap-2">
+                <div className="w-14 h-14 rounded-full flex items-center justify-center" style={{ background: '#EB5053' }}>
+                  <Heart size={24} color="white" fill="white" />
+                </div>
+                <span className="text-white/70 text-[12px]">좋아요</span>
+              </div>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
-        {/* Card stack */}
-        <div className="relative h-[420px] mb-6">
+      {/* Card stack — 9:12 ratio */}
+      <div className="px-5 py-2 relative flex items-center justify-center">
+        <div className="relative w-full" style={{ aspectRatio: '9/12', maxHeight: '64dvh' }}>
           <AnimatePresence>
             {visibleCards.map((restaurant, i) => (
               <SwipeCard
@@ -672,36 +961,25 @@ export default function QuickMatchPage() {
             ))}
           </AnimatePresence>
         </div>
+      </div>
 
-        {/* Action buttons */}
-        <div className="flex items-center justify-center gap-5">
-          <motion.button
-            onClick={() => handleAction('dislike')}
-            className="w-16 h-16 rounded-full bg-white shadow-lg border border-[#E5E5E5] flex items-center justify-center active:scale-90"
-            whileTap={{ scale: 0.85 }}
-          >
-            <X size={26} color="#EB5053" strokeWidth={2.5} />
-          </motion.button>
-          <motion.button
-            onClick={() => handleAction('maybe')}
-            className="w-14 h-14 rounded-full bg-white shadow-md border border-[#E5E5E5] flex items-center justify-center active:scale-90"
-            whileTap={{ scale: 0.85 }}
-          >
-            <Triangle size={22} color="#D94447" />
-          </motion.button>
-          <motion.button
-            onClick={() => handleAction('like')}
-            className="w-16 h-16 rounded-full shadow-lg flex items-center justify-center active:scale-90"
-            style={{ background: '#3CBA44' }}
-            whileTap={{ scale: 0.85 }}
-          >
-            <Heart size={26} color="white" fill="white" />
-          </motion.button>
-        </div>
-
-        <p className="text-[11px] text-[#9B9B9B] text-center mt-3">
-          싫어요 · 그냥봄 · 좋아요
-        </p>
+      {/* Action buttons */}
+      <div className="px-8 pb-10 pt-4 flex items-center justify-center gap-8">
+        <motion.button
+          onClick={() => handleAction('dislike')}
+          className="w-20 h-20 rounded-full bg-white shadow-xl flex items-center justify-center active:scale-90"
+          whileTap={{ scale: 0.85 }}
+        >
+          <X size={32} color="#EB5053" strokeWidth={2.5} />
+        </motion.button>
+        <motion.button
+          onClick={() => handleAction('like')}
+          className="w-20 h-20 rounded-full shadow-xl flex items-center justify-center active:scale-90"
+          style={{ background: '#EB5053' }}
+          whileTap={{ scale: 0.85 }}
+        >
+          <Heart size={32} color="white" fill="white" />
+        </motion.button>
       </div>
     </div>
   );

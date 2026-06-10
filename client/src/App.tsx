@@ -11,7 +11,6 @@ import { AppProvider } from "./contexts/AppContext";
 import TabBar from "./components/TabBar";
 import OnboardingPage from "./pages/OnboardingPage";
 import HomePage from "./pages/HomePage";
-import QuickMatchPage from "./pages/QuickMatchPage";
 import ExplorePage from "./pages/ExplorePage";
 import CourseNavigatePage from "./pages/CourseNavigatePage";
 import NewCourseDetailPage from "./pages/course/CourseDetailPage";
@@ -19,12 +18,17 @@ import CourseEditPage from "./pages/course/CourseEditPage";
 import CourseSharePage from "./pages/course/CourseSharePage";
 import SavedPage from "./pages/SavedPage";
 import ProfilePage from "./pages/ProfilePage";
-import SessionCreatePage from "./pages/SessionCreatePage";
+// Lunchie 그룹 세션 모드 (data-jp 플로우): 설정 → 로비/초대 → 스와이프 투표 → 결과
+import LunchieSettingsPage from "./pages/LunchieSettingsPage";
 import SessionLobbyPage from "./pages/SessionLobbyPage";
+import SessionJoinPage from "./pages/SessionJoinPage";
+import LunchieSwipePage from "./pages/LunchieSwipePage";
+import LunchieResultsPage from "./pages/LunchieResultsPage";
+import LunchieMapPage from "./pages/LunchieMapPage";
 import TourMapPage from "./pages/TourMapPage";
 import TourModePage from "./pages/TourModePage";
 
-const NO_TABBAR = ['/onboarding', '/tour-mode', '/quick-match', '/course/'];
+const NO_TABBAR = ['/onboarding', '/tour-mode', '/course/', '/lunchie/swipe', '/lunchie/results', '/lunchie/map', '/join'];
 
 function CoursesRedirect() {
   const params = useParams<{ id: string }>();
@@ -40,7 +44,6 @@ function AppShell() {
         <Switch>
           <Route path="/onboarding" component={OnboardingPage} />
           <Route path="/" component={HomePage} />
-          <Route path="/quick-match" component={QuickMatchPage} />
           <Route path="/explore" component={ExplorePage} />
           <Route path="/courses/:id/navigate" component={CourseNavigatePage} />
           <Route path="/courses/:id" component={CoursesRedirect} />
@@ -49,8 +52,13 @@ function AppShell() {
           <Route path="/course/:id" component={NewCourseDetailPage} />
           <Route path="/saved" component={SavedPage} />
           <Route path="/profile" component={ProfilePage} />
-          <Route path="/session/create" component={SessionCreatePage} />
+          {/* Lunchie 그룹 세션 플로우 (data-jp) */}
+          <Route path="/lunchie/settings" component={LunchieSettingsPage} />
           <Route path="/session/lobby" component={SessionLobbyPage} />
+          <Route path="/join/:token" component={SessionJoinPage} />
+          <Route path="/lunchie/swipe" component={LunchieSwipePage} />
+          <Route path="/lunchie/results" component={LunchieResultsPage} />
+          <Route path="/lunchie/map" component={LunchieMapPage} />
           <Route path="/tour-map" component={TourMapPage} />
           <Route path="/tour-mode" component={TourModePage} />
           <Route path="/404" component={NotFound} />

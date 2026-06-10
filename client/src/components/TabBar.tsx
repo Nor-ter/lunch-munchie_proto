@@ -120,7 +120,7 @@ function ProfileIcon({ active }: { active: boolean }) {
 const TABS = [
   { path: '/', Icon: HomeIcon, label: '홈' },
   { path: '/explore', Icon: CompassIcon, label: '코스' },
-  { path: '/quick-match', Icon: LightningIcon, label: '런치' },
+  { path: '/lunchie/settings', Icon: LightningIcon, label: '런치' },
   { path: '/saved', Icon: BookmarkIcon, label: '저장' },
   { path: '/profile', Icon: ProfileIcon, label: '프로필' },
 ] as const;
