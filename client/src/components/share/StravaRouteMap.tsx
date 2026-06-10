@@ -15,7 +15,7 @@ const VARIANT_STYLES: Record<
   { stroke: string; width: number; glow?: string; dash?: string }
 > = {
   strava: { stroke: '#FC4C02', width: 5.5 },
-  coral: { stroke: '#FF6B5B', width: 5, glow: '#FFB4A8' },
+  coral: { stroke: '#EB5053', width: 5, glow: '#FFB4A8' },
   mono: { stroke: '#1A1A1A', width: 3.5 },
   neon: { stroke: 'url(#routeNeonGrad)', width: 5, glow: '#7DD3FC' },
 };
@@ -49,7 +49,7 @@ export function StravaRouteMap({
         <linearGradient id="routeNeonGrad" x1="0%" y1="0%" x2="100%" y2="100%">
           <stop offset="0%" stopColor="#38BDF8" />
           <stop offset="50%" stopColor="#A78BFA" />
-          <stop offset="100%" stopColor="#FF6B5B" />
+          <stop offset="100%" stopColor="#EB5053" />
         </linearGradient>
         <filter id="routeGlow" x="-40%" y="-40%" width="180%" height="180%">
           <feGaussianBlur stdDeviation="3" result="blur" />
@@ -113,7 +113,7 @@ export function StravaRouteMap({
             cy={toY(place.coords.y)}
             r={4}
             fill="#FFFFFF"
-            stroke={variant === 'mono' ? '#1A1A1A' : style.stroke === 'url(#routeNeonGrad)' ? '#FF6B5B' : style.stroke}
+            stroke={variant === 'mono' ? '#1A1A1A' : style.stroke === 'url(#routeNeonGrad)' ? '#EB5053' : style.stroke}
             strokeWidth={2}
           />
         ))}

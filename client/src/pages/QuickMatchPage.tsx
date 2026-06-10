@@ -13,27 +13,9 @@ import {
 } from 'lucide-react';
 import { toBlob } from 'html-to-image';
 import { useApp, MOCK_RESTAURANTS, Restaurant } from '@/contexts/AppContext';
+import { LunchieLogo } from '@/components/brand/LunchieLogo';
+import { BRAND } from '@/constants/brand';
 import { toast } from 'sonner';
-
-// ─── Brand Logo ─────────────────────────────────────────────────────────────────
-
-function LunchieLogo({ size = 40 }: { size?: number }) {
-  return (
-    <div
-      className="rounded-2xl flex items-center justify-center flex-shrink-0"
-      style={{ width: size, height: size, background: '#EB5053' }}
-    >
-      <svg width={size * 0.62} height={size * 0.62} viewBox="0 0 24 24" fill="none">
-        <circle cx="12" cy="10" r="7" fill="white" opacity="0.97" />
-        <circle cx="9.5" cy="9" r="1.2" fill="#EB5053" />
-        <circle cx="14.5" cy="9" r="1.2" fill="#EB5053" />
-        <path d="M9 12.5 Q12 15 15 12.5" stroke="#EB5053" strokeWidth="1.4" strokeLinecap="round" fill="none" />
-        <rect x="9" y="18" width="6" height="2.5" rx="1.2" fill="white" opacity="0.92" />
-        <rect x="10.5" y="16.5" width="3" height="2" rx="0.8" fill="white" opacity="0.92" />
-      </svg>
-    </div>
-  );
-}
 
 // ─── Food Photo Sets ──────────────────────────────────────────────────────────
 
@@ -1245,7 +1227,7 @@ function WinnerScreen({ winner }: { winner: Restaurant; onReset: () => void }) {
           {/* Meta row */}
           <div className="flex items-center gap-4 mb-4">
             <div className="flex items-center gap-1.5">
-              <Star size={15} fill="#F09D09" color="#F09D09" />
+              <Star size={15} fill={BRAND.primaryDark} color={BRAND.primaryDark} />
               <span className="font-bold text-[14px]">{winner.rating}</span>
             </div>
             <div className="flex items-center gap-1.5 text-[#9B9B9B]">
@@ -1314,7 +1296,7 @@ function WinnerScreen({ winner }: { winner: Restaurant; onReset: () => void }) {
           onClick={handleGenerateCard}
           disabled={isGenerating}
           className="w-full py-4 rounded-2xl font-bold text-white text-[15px] flex items-center justify-center gap-2 active:scale-[0.98]"
-          style={{ background: isGenerating ? '#C0392B' : 'linear-gradient(135deg, #EB5053 0%, #F09D09 100%)' }}
+          style={{ background: isGenerating ? BRAND.primaryDeep : `linear-gradient(135deg, ${BRAND.primary} 0%, ${BRAND.primaryDark} 100%)` }}
           whileTap={{ scale: 0.97 }}
         >
           {isGenerating ? (

@@ -173,7 +173,7 @@ export default function CourseEditPage() {
         <span className="flex-1 text-center font-semibold">코스 편집</span>
         <button
           onClick={handleSave}
-          className="bg-[#FF6B5B] text-white text-sm px-4 py-1.5 rounded-lg"
+          className="bg-[#EB5053] text-white text-sm px-4 py-1.5 rounded-lg"
         >
           저장
         </button>
@@ -214,7 +214,7 @@ export default function CourseEditPage() {
                 onChange={(e) => setNewTag(e.target.value)}
                 onKeyDown={(e) => e.key === 'Enter' && commitTag()}
                 onBlur={commitTag}
-                className="border border-[#FF6B5B] rounded-full px-3 py-1 text-sm outline-none w-24"
+                className="border border-[#EB5053] rounded-full px-3 py-1 text-sm outline-none w-24"
                 placeholder="#태그"
               />
             ) : (
@@ -232,7 +232,7 @@ export default function CourseEditPage() {
         <div>
           <div className="flex items-center justify-between mb-1.5">
             <span className="text-xs text-gray-400">지도 · 현재 코스</span>
-            <button className="text-xs text-[#FF6B5B]">+ 근처 식당 추가</button>
+            <button className="text-xs text-[#EB5053]">+ 근처 식당 추가</button>
           </div>
           <CourseMap
             places={places}
@@ -290,7 +290,7 @@ export default function CourseEditPage() {
         </button>
         <button
           onClick={() => navigate(`/course/${id}/share?from=edit`)}
-          className="flex-1 bg-[#FF6B5B] text-white rounded-xl h-11 text-sm font-medium"
+          className="flex-1 bg-[#EB5053] text-white rounded-xl h-11 text-sm font-medium"
         >
           코스 공유
         </button>

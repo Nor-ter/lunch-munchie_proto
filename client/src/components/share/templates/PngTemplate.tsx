@@ -37,7 +37,7 @@ const PngTemplate = forwardRef<HTMLDivElement, TemplateProps>(({ course }, ref) 
         <p style={{ fontSize: 16, fontWeight: 'bold', color: '#1A1A1A', margin: 0 }}>
           {course.title}
         </p>
-        <p style={{ fontSize: 11, color: '#FF6B5B', margin: '6px 0 0 0' }}>
+        <p style={{ fontSize: 11, color: '#EB5053', margin: '6px 0 0 0' }}>
           맛있는 하루 코스 ♥
         </p>
         <div style={{ marginTop: 8 }}>

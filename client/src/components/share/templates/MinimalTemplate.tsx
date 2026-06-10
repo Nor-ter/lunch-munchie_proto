@@ -40,7 +40,7 @@ const MinimalTemplate = forwardRef<HTMLDivElement, TemplateProps>(({ course }, r
       <p style={{ fontSize: 20, fontWeight: 'bold', color: '#1A1A1A', margin: 0, textAlign: 'center' }}>
         {course.title}
       </p>
-      <p style={{ fontSize: 12, color: '#FF6B5B', margin: 0 }}>
+      <p style={{ fontSize: 12, color: '#EB5053', margin: 0 }}>
         맛있는 하루 코스 ♥
       </p>
       <CourseMap places={course.places} width={200} height={150} />

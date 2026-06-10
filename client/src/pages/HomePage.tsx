@@ -2,32 +2,17 @@ import { motion } from 'framer-motion';
 import { useLocation } from 'wouter';
 import { Heart, X, ChevronRight, Circle } from 'lucide-react';
 import { useApp, Course, MOCK_RESTAURANTS } from '@/contexts/AppContext';
-import lunchieLogoImg from '@/assets/lunchie-logo.png';
+import { LunchieLogo } from '@/components/brand/LunchieLogo';
+import { BRAND } from '@/constants/brand';
 
 const COLORS = {
-  bg: '#FFF9F2',
-  coral: '#F05E5E',
-  yellow: '#FEE7A6',
-  yellowBadge: '#EDCF7A',
-  text: '#1A1A1A',
-  sub: '#9B9B9B',
+  bg: BRAND.bg,
+  coral: BRAND.primary,
+  munchieCard: BRAND.primaryLight,
+  munchieBadge: BRAND.primaryDark,
+  text: BRAND.text,
+  sub: BRAND.sub,
 } as const;
-
-// ─── Logo ─────────────────────────────────────────────────────────────────────
-
-function LunchieLogo() {
-  return (
-    <div className="flex items-center justify-center gap-2">
-      <img src={lunchieLogoImg} alt="Lunchie Munchie" className="w-10 h-10 flex-shrink-0" draggable={false} />
-      <span
-        className="text-[22px]"
-        style={{ color: COLORS.coral, fontFamily: "'Baloo 2', cursive", fontWeight: 700 }}
-      >
-        Lunchie Munchie
-      </span>
-    </div>
-  );
-}
 
 // ─── Route Illustration SVG ───────────────────────────────────────────────────
 
@@ -65,8 +50,8 @@ function MunchieCourseCard({ course, idx }: { course: Course; idx: number }) {
       onClick={() => navigate(`/course/${course.id}?from=explore`)}
       className="w-full flex items-stretch rounded-[24px] text-left"
       style={{
-        background: COLORS.yellow,
-        boxShadow: '0 2px 10px rgba(0,0,0,0.06)',
+        background: COLORS.munchieCard,
+        boxShadow: '0 2px 10px rgba(235, 80, 83, 0.08)',
         minHeight: 192,
       }}
       whileTap={{ scale: 0.98 }}
@@ -74,7 +59,7 @@ function MunchieCourseCard({ course, idx }: { course: Course; idx: number }) {
       <div className="flex-1 px-4 py-3.5 flex flex-col justify-center min-w-0">
         <span
           className="inline-flex self-start text-[10px] font-bold text-white px-2 py-0.5 rounded-md"
-          style={{ background: COLORS.yellowBadge }}
+          style={{ background: COLORS.munchieBadge }}
         >
           {BADGES[idx % BADGES.length]}
         </span>
@@ -165,7 +150,7 @@ export default function HomePage() {
       {/* Header */}
       <motion.div variants={fadeUp} className="px-5 pt-10">
         <div className="flex justify-center mb-7">
-          <LunchieLogo />
+          <LunchieLogo showWordmark />
         </div>
 
         <h1 className="font-bold text-[30px] leading-[1.25]" style={{ color: COLORS.text }}>
@@ -188,7 +173,7 @@ export default function HomePage() {
           className="w-full rounded-[28px] overflow-hidden text-left"
           style={{
             background: COLORS.coral,
-            boxShadow: '0 6px 20px rgba(240, 94, 94, 0.28)',
+            boxShadow: '0 6px 20px rgba(235, 80, 83, 0.28)',
           }}
           whileTap={{ scale: 0.98 }}
         >
@@ -253,9 +238,9 @@ export default function HomePage() {
           onClick={() => navigate('/explore')}
           className="w-full py-3.5 mt-4 rounded-[24px] font-bold text-[14px] flex items-center justify-center gap-0.5"
           style={{
-            background: COLORS.yellow,
+            background: COLORS.munchieCard,
             color: COLORS.text,
-            boxShadow: '0 2px 8px rgba(0,0,0,0.05)',
+            boxShadow: '0 2px 8px rgba(235, 80, 83, 0.06)',
           }}
           whileTap={{ scale: 0.98 }}
         >

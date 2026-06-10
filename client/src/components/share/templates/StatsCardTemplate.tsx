@@ -31,7 +31,7 @@ const StatsCardTemplate = forwardRef<HTMLDivElement, TemplateProps>(({ course },
       <p style={{ fontSize: 16, fontWeight: 'bold', color: '#1A1A1A', margin: 0 }}>
         {course.title}
       </p>
-      <p style={{ fontSize: 10, color: '#FF6B5B', margin: '4px 0 12px' }}>
+      <p style={{ fontSize: 10, color: '#EB5053', margin: '4px 0 12px' }}>
         {course.hashtags.map((t) => `#${t}`).join(' ')}
       </p>
 

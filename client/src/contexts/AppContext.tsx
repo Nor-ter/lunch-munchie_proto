@@ -350,7 +350,7 @@ export const MOCK_COURSES: Course[] = [
 
 const THEMES = [
   { id: 'date', label: '데이트 코스', emoji: '💕', color: '#EB5053', tag: '데이트 코스' as TagType },
-  { id: 'solo', label: '혼자 여유 코스', emoji: '☕', color: '#F09D09', tag: '혼자 여행' as TagType },
+  { id: 'solo', label: '혼자 여유 코스', emoji: '☕', color: '#D94447', tag: '혼자 여행' as TagType },
   { id: 'budget', label: '가성비 맛집', emoji: '💰', color: '#3CBA44', tag: '가성비' as TagType },
   { id: 'special', label: '특별한 날', emoji: '🎁', color: '#3E719B', tag: '전시/문화' as TagType },
 ];

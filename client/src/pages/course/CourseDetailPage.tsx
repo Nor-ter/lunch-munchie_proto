@@ -53,7 +53,7 @@ function PlaceItem({
         <div className="flex flex-col justify-center min-w-0 flex-1">
           <p className="font-medium text-sm truncate">{place.name}</p>
           <p className="text-xs text-gray-400 mt-0.5">
-            <Star size={10} className="inline mb-0.5 text-yellow-400 fill-yellow-400" />
+            <Star size={10} className="inline mb-0.5 text-[#D94447] fill-[#D94447]" />
             {' '}{place.rating} · {place.distance}
           </p>
           <p className="text-xs text-gray-400">{place.category}</p>
@@ -159,8 +159,8 @@ export default function CourseDetailPage() {
             >
               <Bookmark
                 size={18}
-                fill={isBookmarked ? '#FF6B5B' : 'none'}
-                stroke={isBookmarked ? '#FF6B5B' : 'currentColor'}
+                fill={isBookmarked ? '#EB5053' : 'none'}
+                stroke={isBookmarked ? '#EB5053' : 'currentColor'}
               />
             </button>
           )}
@@ -175,7 +175,7 @@ export default function CourseDetailPage() {
             <div className="flex items-center gap-1.5">
               <span className="font-medium text-sm">{MOCK_COURSE.authorHandle}</span>
               {MOCK_COURSE.authorBadge && (
-                <span className="bg-[#FF6B5B] text-white text-xs px-2 py-0.5 rounded-full">
+                <span className="bg-[#EB5053] text-white text-xs px-2 py-0.5 rounded-full">
                   {MOCK_COURSE.authorBadge}
                 </span>
               )}
@@ -226,7 +226,7 @@ export default function CourseDetailPage() {
                   onChange={e => setNewTag(e.target.value)}
                   onKeyDown={e => e.key === 'Enter' && commitTag()}
                   onBlur={commitTag}
-                  className="border border-[#FF6B5B] rounded-full px-2.5 py-0.5 text-xs outline-none w-20"
+                  className="border border-[#EB5053] rounded-full px-2.5 py-0.5 text-xs outline-none w-20"
                   placeholder="#태그"
                 />
               ) : (
@@ -332,7 +332,7 @@ export default function CourseDetailPage() {
             </button>
             <button
               onClick={() => navigate(`/course/${id}/share${fromSaved ? '?from=saved' : ''}`)}
-              className="flex-1 bg-[#FF6B5B] text-white rounded-xl h-11 text-sm font-medium"
+              className="flex-1 bg-[#EB5053] text-white rounded-xl h-11 text-sm font-medium"
             >
               공유하기
             </button>
@@ -348,8 +348,8 @@ export default function CourseDetailPage() {
             >
               <Bookmark
                 size={20}
-                fill={isBookmarked ? '#FF6B5B' : 'none'}
-                stroke={isBookmarked ? '#FF6B5B' : 'currentColor'}
+                fill={isBookmarked ? '#EB5053' : 'none'}
+                stroke={isBookmarked ? '#EB5053' : 'currentColor'}
               />
             </button>
             <button

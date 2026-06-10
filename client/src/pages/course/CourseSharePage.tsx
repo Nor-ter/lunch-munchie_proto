@@ -102,7 +102,7 @@ function TemplateSlide({
   return (
     <div
       className={`flex-shrink-0 transition-all duration-200 ${
-        selected ? 'ring-2 ring-[#FF6B5B] rounded-2xl scale-[1.02]' : 'opacity-70'
+        selected ? 'ring-2 ring-[#EB5053] rounded-2xl scale-[1.02]' : 'opacity-70'
       }`}
       style={{ scrollSnapAlign: 'center' }}
     >
@@ -253,7 +253,7 @@ export default function CourseSharePage() {
           <div
             key={i}
             className={`rounded-full transition-all duration-200 ${
-              i === selectedTemplate ? 'w-4 h-1.5 bg-[#FF6B5B]' : 'w-1.5 h-1.5 bg-gray-200'
+              i === selectedTemplate ? 'w-4 h-1.5 bg-[#EB5053]' : 'w-1.5 h-1.5 bg-gray-200'
             }`}
           />
         ))}
@@ -279,7 +279,7 @@ export default function CourseSharePage() {
                     active ? 'bg-[#FFF0EE]' : 'bg-gray-100'
                   }`}
                 >
-                  <Icon size={22} className={active ? 'text-[#FF6B5B]' : 'text-gray-400'} />
+                  <Icon size={22} className={active ? 'text-[#EB5053]' : 'text-gray-400'} />
                 </div>
                 <span className="text-xs text-gray-500 whitespace-nowrap">{label}</span>
               </button>
@@ -290,7 +290,7 @@ export default function CourseSharePage() {
         <button
           onClick={handleShare}
           disabled={isCapturing}
-          className="w-full mt-4 mb-6 bg-[#FF6B5B] text-white rounded-xl h-11 text-sm font-medium disabled:opacity-60"
+          className="w-full mt-4 mb-6 bg-[#EB5053] text-white rounded-xl h-11 text-sm font-medium disabled:opacity-60"
         >
           {isCapturing ? '저장 중...' : PLATFORM_LABELS[selectedPlatform]}
         </button>

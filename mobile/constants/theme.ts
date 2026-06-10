@@ -1,7 +1,7 @@
 export const THEME = {
-  coral:       '#FF6B6B',
+  coral:       '#EB5053',
   coralLight:  '#FFF0EE',
-  coralDark:   '#E55555',
+  coralDark:   '#D94447',
   mapBg:       '#F8F5F0',
   mapGrid:     '#E8E3DC',
   ink:         '#1A1A1A',

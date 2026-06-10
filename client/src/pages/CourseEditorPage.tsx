@@ -77,7 +77,7 @@ const TOUR_TYPES = [
     emoji: '🔥',
     title: '핫플 코스',
     subtitle: '지금 가장 핫한 장소들',
-    color: '#F09D09',
+    color: '#D94447',
     tag: '',
   },
 ];

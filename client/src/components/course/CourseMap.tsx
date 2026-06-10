@@ -60,7 +60,7 @@ export function CourseMap({
       {places.length > 1 && (
         <polyline
           points={polylinePoints}
-          stroke="#FF6B5B"
+          stroke="#EB5053"
           strokeWidth={2}
           strokeDasharray="6,4"
           fill="none"

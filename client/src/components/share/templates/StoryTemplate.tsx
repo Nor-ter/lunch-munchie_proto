@@ -33,7 +33,7 @@ const StoryTemplate = forwardRef<HTMLDivElement, TemplateProps>(({ course }, ref
       </p>
 
       {/* Sub comment */}
-      <p style={{ fontSize: 12, color: '#FF6B5B', fontStyle: 'italic', margin: '4px 0 0 0' }}>
+      <p style={{ fontSize: 12, color: '#EB5053', fontStyle: 'italic', margin: '4px 0 0 0' }}>
         맛있는 하루 코스 ♥
       </p>
 
@@ -49,8 +49,8 @@ const StoryTemplate = forwardRef<HTMLDivElement, TemplateProps>(({ course }, ref
 
       {/* Footer */}
       <div>
-        <div style={{ height: 1, backgroundColor: '#FF6B5B', opacity: 0.3, marginBottom: 6 }} />
-        <span style={{ fontSize: 10, color: '#FF6B5B' }}>Lunchie Munchie</span>
+        <div style={{ height: 1, backgroundColor: '#EB5053', opacity: 0.3, marginBottom: 6 }} />
+        <span style={{ fontSize: 10, color: '#EB5053' }}>Lunchie Munchie</span>
       </div>
     </div>
   );

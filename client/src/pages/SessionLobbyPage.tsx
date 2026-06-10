@@ -158,7 +158,7 @@ export default function SessionLobbyPage() {
                     <div className="flex-1 min-w-0">
                       <p className="font-semibold text-[13px] text-[#1A1A1A] truncate">
                         {member.name}
-                        {i === 0 && <span className="ml-2 text-[#F09D09] text-[11px]">👑 호스트</span>}
+                        {i === 0 && <span className="ml-2 text-[#D94447] text-[11px]">👑 호스트</span>}
                       </p>
                     </div>
                     {member.ready ? (

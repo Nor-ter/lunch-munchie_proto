@@ -49,7 +49,7 @@ const PolaroidTemplate = forwardRef<HTMLDivElement, TemplateProps>(({ course }, 
       </div>
       <div style={{ display: 'flex', gap: 4, marginTop: 10, flexWrap: 'wrap', justifyContent: 'center' }}>
         {course.hashtags.slice(0, 3).map((tag) => (
-          <span key={tag} style={{ fontSize: 9, color: '#FF6B5B' }}>
+          <span key={tag} style={{ fontSize: 9, color: '#EB5053' }}>
             #{tag}
           </span>
         ))}

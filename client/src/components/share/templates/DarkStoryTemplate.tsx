@@ -21,7 +21,7 @@ const DarkStoryTemplate = forwardRef<HTMLDivElement, TemplateProps>(({ course },
         fontFamily: 'sans-serif',
       }}
     >
-      <span style={{ fontSize: 9, color: '#FF6B5B', letterSpacing: 1 }}>LUNCHIE MUNCHIE</span>
+      <span style={{ fontSize: 9, color: '#EB5053', letterSpacing: 1 }}>LUNCHIE MUNCHIE</span>
       <p style={{ fontSize: 18, fontWeight: 'bold', color: '#fff', margin: '8px 0 4px' }}>
         {course.title}
       </p>

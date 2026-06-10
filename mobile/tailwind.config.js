@@ -6,7 +6,7 @@ module.exports = {
     extend: {
       colors: {
         coral: {
-          DEFAULT: '#FF6B6B',
+          DEFAULT: '#EB5053',
           light: '#FFF0EE',
         },
         ink: '#1A1A1A',

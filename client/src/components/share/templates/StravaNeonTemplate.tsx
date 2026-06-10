@@ -68,7 +68,7 @@ const StravaNeonTemplate = forwardRef<HTMLDivElement, TemplateProps>(
               background: 'rgba(255,255,255,0.9)',
               borderRadius: 10,
               padding: '8px 10px',
-              borderRight: '3px solid #FF6B5B',
+              borderRight: '3px solid #EB5053',
               textAlign: 'right',
             }}
           >

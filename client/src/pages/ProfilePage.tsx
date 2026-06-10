@@ -15,7 +15,7 @@ const DIETARY_OPTIONS = ['비건', '채식', '글루텐프리', '할랄', '유�
 
 const CATEGORY_COLORS: Record<string, string> = {
   '카페': '#EB5053',
-  '브런치': '#F09D09',
+  '브런치': '#D94447',
   '이탈리안': '#3CBA44',
   '일식': '#3E719B',
   '중식': '#EFD0D4',
@@ -103,7 +103,7 @@ export default function ProfilePage() {
         {/* Stats */}
         <div className="grid grid-cols-3 gap-3 mt-4">
           {[
-            { label: '총 스와이프', value: profile.totalSwipes, icon: Zap, color: '#F09D09' },
+            { label: '총 스와이프', value: profile.totalSwipes, icon: Zap, color: '#D94447' },
             { label: '좋아요', value: profile.totalLikes, icon: Heart, color: '#EB5053' },
             { label: '저장한 맛집', value: likedRestaurantIds.length, icon: BarChart3, color: '#3CBA44' },
           ].map(stat => (

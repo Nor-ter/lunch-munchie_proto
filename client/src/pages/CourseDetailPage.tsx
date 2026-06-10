@@ -164,7 +164,7 @@ export default function CourseDetailPage() {
                     <p className="font-bold text-[15px] text-[#1A1A1A]">{restaurant.name}</p>
                     <p className="text-[12px] text-[#9B9B9B] mt-0.5">{stop.startTime} — {stop.endTime}</p>
                     <div className="flex items-center gap-1.5 mt-1">
-                      <Star size={11} fill="#F09D09" color="#F09D09" />
+                      <Star size={11} fill="#D94447" color="#D94447" />
                       <span className="text-[11px] text-[#4A4A4A]">{restaurant.rating}</span>
                       <span className="text-[11px] text-[#9B9B9B]">· {restaurant.category}</span>
                     </div>

@@ -1,5 +1,5 @@
 export const COURSE_THEME = {
-  primary: '#FF6B5B',
+  primary: '#EB5053',
   primaryLight: '#FFF0EE',
   mapBg: '#F8F5F0',
   mapGrid: '#E8E3DC',

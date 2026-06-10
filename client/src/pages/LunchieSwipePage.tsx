@@ -45,7 +45,7 @@ function SwipeCard({
   const catColor = restaurant.category === '카페' ? '#3E719B'
     : restaurant.category === '치킨' ? '#EB5053'
     : restaurant.category === '일식' ? '#3CBA44'
-    : '#F09D09';
+    : '#D94447';
 
   if (!isTop) {
     return (
@@ -55,7 +55,7 @@ function SwipeCard({
           transform: `scale(${1 - stackIndex * 0.05}) translateY(${stackIndex * 16}px)`,
           zIndex: 10 - stackIndex,
           opacity: 1 - stackIndex * 0.2,
-          background: stackIndex === 1 ? '#d4a574' : '#c4956a',
+          background: stackIndex === 1 ? '#EFD0D4' : '#FFD6D6',
         }}
       />
     );
@@ -640,8 +640,8 @@ export default function QuickMatchPage() {
                   <span className="text-[11px] text-[#9B9B9B]">싫어요</span>
                 </div>
                 <div className="flex flex-col items-center gap-1">
-                  <div className="w-12 h-12 rounded-full bg-[#FFFBF0] border-2 border-[#F09D09] flex items-center justify-center">
-                    <Triangle size={20} color="#F09D09" />
+                  <div className="w-12 h-12 rounded-full bg-[#FFF0EE] border-2 border-[#D94447] flex items-center justify-center">
+                    <Triangle size={20} color="#D94447" />
                   </div>
                   <span className="text-[11px] text-[#9B9B9B]">그냥봄</span>
                 </div>
@@ -687,7 +687,7 @@ export default function QuickMatchPage() {
             className="w-14 h-14 rounded-full bg-white shadow-md border border-[#E5E5E5] flex items-center justify-center active:scale-90"
             whileTap={{ scale: 0.85 }}
           >
-            <Triangle size={22} color="#F09D09" />
+            <Triangle size={22} color="#D94447" />
           </motion.button>
           <motion.button
             onClick={() => handleAction('like')}

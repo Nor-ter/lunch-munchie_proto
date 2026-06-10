@@ -82,7 +82,7 @@ function BookmarkIcon({ active }: { active: boolean }) {
       />
       <path
         d="M10 12.3 L12 14.3 L16 9.8"
-        stroke={active ? '#F05E5E' : 'white'}
+        stroke={active ? '#EB5053' : 'white'}
         strokeWidth={1.6}
         strokeLinecap="round"
         strokeLinejoin="round"

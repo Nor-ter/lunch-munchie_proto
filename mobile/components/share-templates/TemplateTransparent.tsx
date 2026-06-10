@@ -31,7 +31,7 @@ export function TemplateTransparent({ course, showCheckerboard = true }: Props) 
         showGrid={false}
         bgColor="transparent"
         markerColor="#1A1A1A"
-        routeColor="#FF6B6B"
+        routeColor="#EB5053"
       />
     </View>
   );
