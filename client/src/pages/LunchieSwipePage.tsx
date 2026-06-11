@@ -9,7 +9,7 @@ import { motion, useMotionValue, useTransform, AnimatePresence } from 'framer-mo
 import { useLocation } from 'wouter';
 import { ArrowLeft, Heart, X, Star, MapPin, Clock, Phone, Navigation, Share2, Download, Link2, Home } from 'lucide-react';
 import { toast } from 'sonner';
-import { useApp } from '@/contexts/AppContext';
+import { useApp, type Restaurant } from '@/contexts/AppContext';
 import { getFoodPhotos } from '@/lib/foodPhotos';
 import { useCourseShare } from '@/hooks/useCourseShare';
 import WinnerShareCard from '@/components/lunchie/WinnerShareCard';
@@ -263,7 +263,7 @@ function formatRemainingTime(deadlineStr: string | null): string {
 
 // ─── Winner Screen ────────────────────────────────────────────────────────────
 
-function WinnerScreen({ onReset }: { onReset: () => void }) {
+function WinnerScreen({ selectedWinner, onReset }: { selectedWinner?: Restaurant | null; onReset: () => void }) {
   const [, navigate] = useLocation();
   const { currentSession, restaurants } = useApp();
   const { captureCard, downloadImage } = useCourseShare();
@@ -274,9 +274,9 @@ function WinnerScreen({ onReset }: { onReset: () => void }) {
     results: { restaurantId: string; score: number; likeCount: number; dislikeCount: number }[];
   }>({ results: [] });
 
-  // Poll server results to determine the winning restaurant
+  // Poll server results to determine the winning restaurant (skipped once the user has picked one in the finals)
   useEffect(() => {
-    if (!currentSession) return;
+    if (!currentSession || selectedWinner) return;
 
     const fetchLiveResults = async () => {
       try {
@@ -293,10 +293,10 @@ function WinnerScreen({ onReset }: { onReset: () => void }) {
     fetchLiveResults();
     const interval = setInterval(fetchLiveResults, 3000);
     return () => clearInterval(interval);
-  }, [currentSession]);
+  }, [currentSession, selectedWinner]);
 
   const winnerId = liveResults.results[0]?.restaurantId;
-  const winner = restaurants.find(r => r.id === winnerId) || currentSession?.restaurants[0];
+  const winner = selectedWinner || restaurants.find(r => r.id === winnerId) || currentSession?.restaurants[0];
 
   if (!winner) return null;
 
@@ -508,8 +508,10 @@ function FinalBattleResultScreen({
 }: {
   finalist1: any;
   finalist2: any;
-  onContinue: () => void;
+  onContinue: (winner?: any) => void;
 }) {
+  const [selected, setSelected] = useState<1 | 2 | null>(null);
+
   return (
     <motion.div
       initial={{ opacity: 0 }}
@@ -519,22 +521,37 @@ function FinalBattleResultScreen({
       {/* Header */}
       <div className="px-5 pt-12 pb-4 text-center">
         <p className="font-black text-white text-[22px]">결승전 🏆</p>
-        <p className="text-white/50 text-[13px] mt-1">모두의 투표로 결정된 최후의 2곳</p>
+        <p className="text-white/50 text-[13px] mt-1">모두의 투표로 결정된 최후의 2곳 · 마음에 드는 곳을 골라보세요</p>
       </div>
 
       {/* Diagonal split layout */}
       <div className="flex-1 relative overflow-hidden">
-        {/* Finalist 1 — winner, top-left triangle */}
-        <div
-          className="absolute inset-0"
+        {/* Finalist 1 — top-left triangle */}
+        <button
+          onClick={() => setSelected(1)}
+          className="absolute inset-0 text-left"
           style={{ clipPath: 'polygon(0 0, 100% 0, 0 100%)' }}
         >
           <img src={finalist1.image} alt={finalist1.name} className="w-full h-full object-cover" draggable={false} />
           <div className="absolute inset-0 bg-gradient-to-br from-black/30 via-black/45 to-black/70" />
+          {selected !== null && (
+            <div
+              className="absolute inset-0 transition-opacity"
+              style={{ background: selected === 1 ? 'transparent' : 'rgba(0,0,0,0.55)' }}
+            />
+          )}
+          {selected === 1 && (
+            <div className="absolute inset-0 ring-4 ring-inset" style={{ boxShadow: 'inset 0 0 0 4px #F09D09' }} />
+          )}
           <div className="absolute top-6 left-5 right-20 text-left">
             <span className="inline-block bg-[#FFD700] text-[#1A1A1A] text-[11px] font-black px-3 py-1 rounded-full mb-2">
-              🏆 1위
+              🏆 1위 후보
             </span>
+            {selected === 1 && (
+              <span className="inline-block bg-[#F09D09] text-white text-[11px] font-black px-3 py-1 rounded-full mb-2 ml-1.5">
+                ✓ 선택됨
+              </span>
+            )}
             <p className="text-white font-black text-[19px] leading-tight">{finalist1.name}</p>
             <div className="flex items-center gap-2 mt-1">
               <Star size={12} fill="#FFD700" color="#FFD700" />
@@ -542,19 +559,28 @@ function FinalBattleResultScreen({
               <span className="text-white/60 text-[11px]">{finalist1.distance}</span>
             </div>
           </div>
-        </div>
+        </button>
 
-        {/* Finalist 2 — runner-up, bottom-right triangle */}
-        <div
-          className="absolute inset-0"
-          style={{ clipPath: 'polygon(100% 0, 100% 100%, 0 100%)', opacity: 0.55 }}
+        {/* Finalist 2 — bottom-right triangle */}
+        <button
+          onClick={() => setSelected(2)}
+          className="absolute inset-0 text-right"
+          style={{ clipPath: 'polygon(100% 0, 100% 100%, 0 100%)', opacity: selected === 1 ? 0.4 : selected === 2 ? 1 : 0.55 }}
         >
           <img src={finalist2.image} alt={finalist2.name} className="w-full h-full object-cover" draggable={false} />
           <div className="absolute inset-0 bg-gradient-to-br from-black/70 via-black/45 to-black/30" />
+          {selected === 2 && (
+            <div className="absolute inset-0" style={{ boxShadow: 'inset 0 0 0 4px #F09D09' }} />
+          )}
           <div className="absolute bottom-6 right-5 left-20 text-right">
             <span className="inline-block bg-white/20 text-white text-[11px] font-black px-3 py-1 rounded-full mb-2">
-              2위
+              2위 후보
             </span>
+            {selected === 2 && (
+              <span className="inline-block bg-[#F09D09] text-white text-[11px] font-black px-3 py-1 rounded-full mb-2 mr-1.5">
+                ✓ 선택됨
+              </span>
+            )}
             <p className="text-white font-black text-[19px] leading-tight">{finalist2.name}</p>
             <div className="flex items-center gap-2 mt-1 justify-end">
               <Star size={12} fill="#FFD700" color="#FFD700" />
@@ -562,7 +588,7 @@ function FinalBattleResultScreen({
               <span className="text-white/60 text-[11px]">{finalist2.distance}</span>
             </div>
           </div>
-        </div>
+        </button>
 
         {/* Diagonal divider line */}
         <div className="absolute inset-0 pointer-events-none z-10">
@@ -586,11 +612,12 @@ function FinalBattleResultScreen({
       {/* Continue */}
       <div className="px-5 py-5">
         <button
-          onClick={onContinue}
-          className="w-full py-4 rounded-2xl font-bold text-white text-[15px] active:scale-[0.98] shadow-xl"
+          onClick={() => onContinue(selected === 1 ? finalist1 : selected === 2 ? finalist2 : undefined)}
+          disabled={selected === null}
+          className="w-full py-4 rounded-2xl font-bold text-white text-[15px] active:scale-[0.98] shadow-xl transition-opacity disabled:opacity-40"
           style={{ background: '#F09D09' }}
         >
-          결과 확인하기 🎉
+          {selected === null ? '음식점을 선택해주세요 👆' : '이 곳으로 결정! 🎉'}
         </button>
       </div>
     </motion.div>
@@ -599,7 +626,7 @@ function FinalBattleResultScreen({
 
 // ─── Decided Screen ───────────────────────────────────────────────────────────
 
-function WaitingOrDecidedScreen({ onContinue }: { onContinue: () => void }) {
+function WaitingOrDecidedScreen({ onContinue }: { onContinue: (winner?: any) => void }) {
   const [, navigate] = useLocation();
   const { currentSession, restaurants } = useApp();
   const [liveResults, setLiveResults] = useState<{
@@ -796,6 +823,7 @@ export default function QuickMatchPage() {
     return initialIndex === -1 ? 0 : initialIndex;
   });
   const [swipeData, setSwipeData] = useState<{ restaurant: any; action: SwipeAction }[]>([]);
+  const [selectedWinner, setSelectedWinner] = useState<Restaurant | null>(null);
   const [showIntro, setShowIntro] = useState(true);
   const [remainingMs, setRemainingMs] = useState(() => {
     if (!currentSession?.deadline) return 0;
@@ -850,7 +878,7 @@ export default function QuickMatchPage() {
 
   useEffect(() => {
     if (showIntro) {
-      const t = setTimeout(() => setShowIntro(false), 1800);
+      const t = setTimeout(() => setShowIntro(false), 2800);
       return () => clearTimeout(t);
     }
   }, [showIntro]);
@@ -874,10 +902,10 @@ export default function QuickMatchPage() {
   if (!currentSession) return null;
 
   if (phase === 'decided') {
-    return <WaitingOrDecidedScreen onContinue={() => setPhase('results')} />;
+    return <WaitingOrDecidedScreen onContinue={(winner) => { if (winner) setSelectedWinner(winner); setPhase('results'); }} />;
   }
   if (phase === 'results') {
-    return <WinnerScreen onReset={() => { setCurrentIndex(0); setSwipeData([]); }} />;
+    return <WinnerScreen selectedWinner={selectedWinner} onReset={() => { setCurrentIndex(0); setSwipeData([]); setSelectedWinner(null); }} />;
   }
 
   // Countdown formatting for header badge
@@ -924,19 +952,51 @@ export default function QuickMatchPage() {
             transition={{ duration: 0.3 }}
           >
             <p className="font-black text-white text-[22px]">예선전 시작! 🍽️</p>
-            <p className="text-white/60 text-[14px] mt-2">카드를 스와이프 하세요</p>
-            <div className="flex gap-8 mt-6">
+            <p className="text-white/60 text-[14px] mt-2">카드를 좌우로 스와이프 해보세요</p>
+
+            {/* Swipe gesture demo card */}
+            <div className="relative w-36 h-48 mt-8 flex items-center justify-center">
+              <motion.div
+                className="absolute w-32 h-44 rounded-2xl shadow-2xl flex items-center justify-center text-6xl overflow-hidden"
+                style={{ background: '#FFF1E0' }}
+                animate={{
+                  x: [0, -90, -90, 0, 90, 90, 0],
+                  rotate: [0, -16, -16, 0, 16, 16, 0],
+                }}
+                transition={{ duration: 2.6, times: [0, 0.2, 0.32, 0.5, 0.7, 0.82, 1], repeat: Infinity, ease: 'easeInOut' }}
+              >
+                🍱
+                <motion.div
+                  className="absolute top-4 right-4 border-[3px] rounded-lg px-2 py-0.5 font-black text-[13px]"
+                  style={{ borderColor: '#EB5053', color: '#EB5053', transform: 'rotate(15deg)' }}
+                  animate={{ opacity: [0, 0, 1, 1, 0, 0] }}
+                  transition={{ duration: 2.6, times: [0, 0.15, 0.18, 0.34, 0.37, 1], repeat: Infinity, ease: 'easeInOut' }}
+                >
+                  NOPE
+                </motion.div>
+                <motion.div
+                  className="absolute top-4 left-4 border-[3px] rounded-lg px-2 py-0.5 font-black text-[13px]"
+                  style={{ borderColor: '#3CBA44', color: '#3CBA44', transform: 'rotate(-15deg)' }}
+                  animate={{ opacity: [0, 0, 1, 1, 0, 0] }}
+                  transition={{ duration: 2.6, times: [0, 0.65, 0.68, 0.84, 0.87, 1], repeat: Infinity, ease: 'easeInOut' }}
+                >
+                  LIKE
+                </motion.div>
+              </motion.div>
+            </div>
+
+            <div className="flex gap-8 mt-8">
               <div className="flex flex-col items-center gap-2">
                 <div className="w-14 h-14 rounded-full bg-white flex items-center justify-center">
                   <X size={24} color="#EB5053" strokeWidth={2.5} />
                 </div>
-                <span className="text-white/70 text-[12px]">싫어요</span>
+                <span className="text-white/70 text-[12px]">← 싫어요</span>
               </div>
               <div className="flex flex-col items-center gap-2">
                 <div className="w-14 h-14 rounded-full flex items-center justify-center" style={{ background: '#EB5053' }}>
                   <Heart size={24} color="white" fill="white" />
                 </div>
-                <span className="text-white/70 text-[12px]">좋아요</span>
+                <span className="text-white/70 text-[12px]">좋아요 →</span>
               </div>
             </div>
           </motion.div>
