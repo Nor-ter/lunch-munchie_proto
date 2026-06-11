@@ -94,28 +94,31 @@ function useFromExplore(): boolean {
 
 export default function CourseEditPage() {
   const { id } = useParams<{ id: string }>();
+  const isNew = id === 'new';
   const [, navigate] = useLocation();
   const fromExplore = useFromExplore();
   const { saveCourse } = useApp();
 
   const goBack = () => {
-    if (fromExplore && id) {
+    if (isNew) {
+      navigate('/saved');
+    } else if (fromExplore && id) {
       navigate(`/course/${id}?from=explore`);
     } else {
       navigate(-1 as never);
     }
   };
 
+  const [title, setTitle] = useState(isNew ? '' : MOCK_COURSE.title);
+  const [hashtags, setHashtags] = useState<string[]>(isNew ? [] : [...MOCK_COURSE.hashtags]);
+  const [places, setPlaces] = useState<CoursePlace[]>(
+    isNew ? [] : MOCK_COURSE.places.map((p) => ({ ...p }))
+  );
+
   const handleSave = () => {
-    if (id) saveCourse(id);
+    if (!isNew && id) saveCourse(id);
     navigate('/saved');
   };
-
-  const [title, setTitle] = useState(MOCK_COURSE.title);
-  const [hashtags, setHashtags] = useState<string[]>([...MOCK_COURSE.hashtags]);
-  const [places, setPlaces] = useState<CoursePlace[]>(
-    MOCK_COURSE.places.map((p) => ({ ...p }))
-  );
   const [newTag, setNewTag] = useState('');
   const [isAddingTag, setIsAddingTag] = useState(false);
 
@@ -170,12 +173,12 @@ export default function CourseEditPage() {
         <button onClick={goBack}>
           <ChevronLeft size={22} />
         </button>
-        <span className="flex-1 text-center font-semibold">코스 편집</span>
+        <span className="flex-1 text-center font-semibold">{isNew ? '새 코스 만들기' : '코스 편집'}</span>
         <button
           onClick={handleSave}
           className="bg-[#EB5053] text-white text-sm px-4 py-1.5 rounded-lg"
         >
-          저장
+          {isNew ? '만들기' : '저장'}
         </button>
       </div>
 
@@ -288,12 +291,21 @@ export default function CourseEditPage() {
         >
           취소
         </button>
-        <button
-          onClick={() => navigate(`/course/${id}/share?from=edit`)}
-          className="flex-1 bg-[#EB5053] text-white rounded-xl h-11 text-sm font-medium"
-        >
-          코스 공유
-        </button>
+        {isNew ? (
+          <button
+            onClick={handleSave}
+            className="flex-1 bg-[#EB5053] text-white rounded-xl h-11 text-sm font-medium"
+          >
+            코스 만들기
+          </button>
+        ) : (
+          <button
+            onClick={() => navigate(`/course/${id}/share?from=edit`)}
+            className="flex-1 bg-[#EB5053] text-white rounded-xl h-11 text-sm font-medium"
+          >
+            코스 공유
+          </button>
+        )}
       </div>
     </motion.div>
   );

@@ -1,10 +1,27 @@
 import { useEffect, useRef, useState } from 'react';
 import { useParams, useLocation, useSearch } from 'wouter';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Heart, Bookmark, Share2, ChevronLeft, Star, X } from 'lucide-react';
+import { Heart, Bookmark, Share2, ChevronLeft, Star, X, GripVertical } from 'lucide-react';
+import {
+  DndContext,
+  closestCenter,
+  PointerSensor,
+  KeyboardSensor,
+  useSensor,
+  useSensors,
+  DragEndEvent,
+} from '@dnd-kit/core';
+import {
+  SortableContext,
+  sortableKeyboardCoordinates,
+  useSortable,
+  verticalListSortingStrategy,
+  arrayMove,
+} from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
 import { CourseMap } from '@/components/course/CourseMap';
 import { useApp } from '@/contexts/AppContext';
-import { MOCK_COURSE } from '@/data/mockCourse';
+import { getCourseById } from '@/data/mockCourse';
 import { CoursePlace } from '@/types/course';
 
 type FromMode = 'explore' | 'saved';
@@ -30,8 +47,17 @@ function PlaceItem({
   isEditing: boolean;
   onRemove?: (id: string) => void;
 }) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
+    id: place.id,
+    disabled: !isEditing,
+  });
+
   return (
-    <div className="flex gap-3">
+    <div
+      ref={setNodeRef}
+      style={{ transform: CSS.Transform.toString(transform), transition }}
+      className={`flex gap-3 ${isDragging ? 'opacity-50' : ''}`}
+    >
       <div className="flex flex-col items-center">
         <div className="w-7 h-7 rounded-full bg-[#1A1A1A] text-white text-xs flex items-center justify-center shrink-0">
           {index + 1}
@@ -45,6 +71,21 @@ function PlaceItem({
         layout
         className={`flex-1 border border-gray-100 rounded-xl p-3 flex gap-3 items-center ${!isLast ? 'mb-2' : ''}`}
       >
+        <AnimatePresence>
+          {isEditing && (
+            <motion.button
+              initial={{ opacity: 0, scale: 0.7 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.7 }}
+              transition={{ duration: 0.15 }}
+              className="text-gray-300 cursor-grab touch-none shrink-0"
+              {...attributes}
+              {...listeners}
+            >
+              <GripVertical size={18} />
+            </motion.button>
+          )}
+        </AnimatePresence>
         {place.imageUrl ? (
           <img src={place.imageUrl} alt={place.name} className="w-14 h-14 rounded-lg object-cover shrink-0" />
         ) : (
@@ -93,10 +134,12 @@ export default function CourseDetailPage() {
     else saveCourse(id);
   };
 
+  const courseData = getCourseById(id);
+
   // Local editable state (only used in saved mode)
-  const [title, setTitle] = useState(MOCK_COURSE.title);
-  const [hashtags, setHashtags] = useState<string[]>([...MOCK_COURSE.hashtags]);
-  const [places, setPlaces] = useState<CoursePlace[]>(MOCK_COURSE.places.map(p => ({ ...p })));
+  const [title, setTitle] = useState(courseData.title);
+  const [hashtags, setHashtags] = useState<string[]>([...courseData.hashtags]);
+  const [places, setPlaces] = useState<CoursePlace[]>(courseData.places.map(p => ({ ...p })));
   const [isEditing, setIsEditing] = useState(false);
   const [newTag, setNewTag] = useState('');
   const [isAddingTag, setIsAddingTag] = useState(false);
@@ -124,6 +167,22 @@ export default function CourseDetailPage() {
   const handleDelete = () => {
     if (window.confirm('이 코스를 삭제할까요?')) {
       navigate('/saved');
+    }
+  };
+
+  const sensors = useSensors(
+    useSensor(PointerSensor),
+    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates })
+  );
+
+  const handleDragEnd = (event: DragEndEvent) => {
+    const { active, over } = event;
+    if (over && active.id !== over.id) {
+      setPlaces(prev => {
+        const oldIdx = prev.findIndex(p => p.id === active.id);
+        const newIdx = prev.findIndex(p => p.id === over.id);
+        return arrayMove(prev, oldIdx, newIdx);
+      });
     }
   };
 
@@ -173,14 +232,14 @@ export default function CourseDetailPage() {
           <div className="w-10 h-10 rounded-full bg-gray-200 shrink-0" />
           <div>
             <div className="flex items-center gap-1.5">
-              <span className="font-medium text-sm">{MOCK_COURSE.authorHandle}</span>
-              {MOCK_COURSE.authorBadge && (
+              <span className="font-medium text-sm">{courseData.authorHandle}</span>
+              {courseData.authorBadge && (
                 <span className="bg-[#EB5053] text-white text-xs px-2 py-0.5 rounded-full">
-                  {MOCK_COURSE.authorBadge}
+                  {courseData.authorBadge}
                 </span>
               )}
             </div>
-            <span className="text-xs text-gray-500">{MOCK_COURSE.followerCount} followers</span>
+            <span className="text-xs text-gray-500">{courseData.followerCount} followers</span>
           </div>
         </div>
 
@@ -288,10 +347,10 @@ export default function CourseDetailPage() {
       {/* Stats bar */}
       <div className="mx-4 mb-4 border border-gray-100 rounded-xl grid grid-cols-4">
         {[
-          { value: `${MOCK_COURSE.distanceKm}km`, label: '거리' },
-          { value: `${MOCK_COURSE.durationHours}h`, label: '소요' },
+          { value: `${courseData.distanceKm}km`, label: '거리' },
+          { value: `${courseData.durationHours}h`, label: '소요' },
           { value: `${places.length}`, label: '장소' },
-          { value: `${MOCK_COURSE.saveCount.toLocaleString()}`, label: '저장' },
+          { value: `${courseData.saveCount.toLocaleString()}`, label: '저장' },
         ].map((stat, i, arr) => (
           <div
             key={stat.label}
@@ -306,18 +365,22 @@ export default function CourseDetailPage() {
       {/* Place list */}
       <div className="px-4">
         <p className="text-sm font-semibold mb-3">코스 순서</p>
-        <motion.div layout className="flex flex-col">
-          {places.map((place, i) => (
-            <PlaceItem
-              key={place.id}
-              place={place}
-              index={i}
-              isLast={i === places.length - 1}
-              isEditing={fromSaved && isEditing}
-              onRemove={id => setPlaces(prev => prev.filter(p => p.id !== id))}
-            />
-          ))}
-        </motion.div>
+        <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
+          <SortableContext items={places.map(p => p.id)} strategy={verticalListSortingStrategy}>
+            <motion.div layout className="flex flex-col">
+              {places.map((place, i) => (
+                <PlaceItem
+                  key={place.id}
+                  place={place}
+                  index={i}
+                  isLast={i === places.length - 1}
+                  isEditing={fromSaved && isEditing}
+                  onRemove={id => setPlaces(prev => prev.filter(p => p.id !== id))}
+                />
+              ))}
+            </motion.div>
+          </SortableContext>
+        </DndContext>
       </div>
 
       {/* Bottom bar */}

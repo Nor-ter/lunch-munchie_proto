@@ -311,7 +311,7 @@ function WinnerScreen({ selectedWinner, onReset }: { selectedWinner?: Restaurant
     setIsCapturing(true);
     try {
       const dataUrl = await captureCard(shareCardRef);
-      downloadImage(dataUrl, `lunchie-${winner.name}.png`);
+      await downloadImage(dataUrl, `lunchie-${winner.name}.png`);
       toast.success('이미지가 저장됐어요! 🎉');
     } catch (e) {
       console.error('Failed to save share card:', e);
@@ -335,7 +335,7 @@ function WinnerScreen({ selectedWinner, onReset }: { selectedWinner?: Restaurant
           text: `오늘의 점심은 ${winner.name}! 🍽️`,
         });
       } else {
-        downloadImage(dataUrl, `lunchie-${winner.name}.png`);
+        await downloadImage(dataUrl, `lunchie-${winner.name}.png`);
         toast.success('이미지가 저장됐어요. 갤러리에서 공유해보세요! 📤');
       }
     } catch (e) {

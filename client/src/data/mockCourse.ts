@@ -1,5 +1,97 @@
 import type { Course } from '@/types/course';
 
+const STOP_COLORS = ['#FF6B35', '#4CAF50', '#2196F3', '#9C27B0', '#E91E63'];
+
+/** 성수동 맛집 투어 — c1 share page showcase data */
+export const COURSE_C1: Course = {
+  id: 'c1',
+  authorHandle: 'whale_jenny',
+  authorBadge: 'WHALE',
+  followerCount: '12.4k',
+  title: '맛있는 하루 코스',
+  subtitle: '맛있는 하루의 기록 😋',
+  note: '맛있는 곳들로 꽉 채운 하루, 너무 완벽해!',
+  region: '성수동',
+  date: '2024.05.18 SAT',
+  weather: 'SUNNY 22°C',
+  hashtags: ['점심부터_바까지', '맛집_투어', '성수동'],
+  distanceKm: 8.2,
+  durationHours: 6.5,
+  saveCount: 2450,
+  places: [
+    {
+      id: 'place-1',
+      name: '온더보더 성수점',
+      rating: 4.7,
+      distance: '0km',
+      category: '멕시칸',
+      label: '점심',
+      time: '12:30',
+      caption: '맛있는 타코와 파히타!',
+      color: STOP_COLORS[0],
+      priceLevel: 2,
+      imageUrl: 'https://images.unsplash.com/photo-1565299585323-38d6b0865b47?w=200&q=80',
+      coords: { x: 24, y: 68 },
+    },
+    {
+      id: 'place-2',
+      name: '어니언 성수',
+      rating: 4.9,
+      distance: '0.8km',
+      category: '베이커리',
+      label: '카페',
+      time: '14:00',
+      caption: '소금빵은 필수!',
+      color: STOP_COLORS[1],
+      priceLevel: 2,
+      imageUrl: 'https://images.unsplash.com/photo-1509440159596-0249088772ff?w=200&q=80',
+      coords: { x: 42, y: 52 },
+    },
+    {
+      id: 'place-3',
+      name: '대림창고',
+      rating: 4.7,
+      distance: '1.2km',
+      category: '브런치',
+      label: '브런치',
+      time: '16:00',
+      caption: '창고 감성 브런치',
+      color: STOP_COLORS[2],
+      priceLevel: 3,
+      imageUrl: 'https://images.unsplash.com/photo-1414235077428-338989a2e8c0?w=200&q=80',
+      coords: { x: 58, y: 38 },
+    },
+    {
+      id: 'place-4',
+      name: '카페 레이아웃',
+      rating: 4.8,
+      distance: '1.8km',
+      category: '카페',
+      label: '카페',
+      time: '17:30',
+      caption: '빈티지 인테리어 최고',
+      color: STOP_COLORS[3],
+      priceLevel: 2,
+      imageUrl: 'https://images.unsplash.com/photo-1554118811-1e0d58224f24?w=200&q=80',
+      coords: { x: 72, y: 48 },
+    },
+    {
+      id: 'place-5',
+      name: '성수 와인바',
+      rating: 4.6,
+      distance: '2.1km',
+      category: '바',
+      label: '바',
+      time: '19:00',
+      caption: '하루의 마무리 와인',
+      color: STOP_COLORS[4],
+      priceLevel: 3,
+      imageUrl: 'https://images.unsplash.com/photo-1510812431400-574012f507b?w=200&q=80',
+      coords: { x: 52, y: 22 },
+    },
+  ],
+};
+
 export const MOCK_COURSE: Course = {
   id: 'demo-1',
   authorHandle: 'whale_jenny',
@@ -49,3 +141,8 @@ export const MOCK_COURSE: Course = {
     },
   ],
 };
+
+export function getCourseById(id?: string): Course {
+  if (id === 'c1') return COURSE_C1;
+  return MOCK_COURSE;
+}

@@ -7,6 +7,11 @@ export interface CoursePlace {
   priceLevel: number;
   imageUrl?: string;
   coords: { x: number; y: number };
+  /** Display label e.g. 점심, 카페 */
+  label?: string;
+  time?: string;
+  caption?: string;
+  color?: string;
 }
 
 export interface Course {
@@ -15,6 +20,11 @@ export interface Course {
   authorBadge?: string;
   followerCount: string;
   title: string;
+  subtitle?: string;
+  note?: string;
+  region?: string;
+  date?: string;
+  weather?: string;
   hashtags: string[];
   distanceKm: number;
   durationHours: number;

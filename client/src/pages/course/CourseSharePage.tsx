@@ -12,20 +12,12 @@ import {
   Music2,
 } from 'lucide-react';
 import { toast } from 'sonner';
-import { MOCK_COURSE } from '@/data/mockCourse';
+import { getCourseById } from '@/data/mockCourse';
 import { useCourseShare } from '@/hooks/useCourseShare';
-import StoryTemplate from '@/components/share/templates/StoryTemplate';
-import PngTemplate from '@/components/share/templates/PngTemplate';
-import MinimalTemplate from '@/components/share/templates/MinimalTemplate';
-import ListTemplate from '@/components/share/templates/ListTemplate';
-import PolaroidTemplate from '@/components/share/templates/PolaroidTemplate';
-import DarkStoryTemplate from '@/components/share/templates/DarkStoryTemplate';
-import StatsCardTemplate from '@/components/share/templates/StatsCardTemplate';
-import StravaClassicTemplate from '@/components/share/templates/StravaClassicTemplate';
-import StravaCoralTemplate from '@/components/share/templates/StravaCoralTemplate';
-import StravaMonoTemplate from '@/components/share/templates/StravaMonoTemplate';
-import StravaNeonTemplate from '@/components/share/templates/StravaNeonTemplate';
-import StravaCompactTemplate from '@/components/share/templates/StravaCompactTemplate';
+import FoodCourseStoryTemplate from '@/components/share/templates/FoodCourseStoryTemplate';
+import StravaDarkTemplate from '@/components/share/templates/StravaDarkTemplate';
+import StravaMinimalTemplate from '@/components/share/templates/StravaMinimalTemplate';
+import FoodCourseDarkTemplate from '@/components/share/templates/FoodCourseDarkTemplate';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -38,20 +30,12 @@ type Platform =
   | 'message'
   | 'save';
 
-const TEMPLATE_INFO: { name: string; desc: string; aspect?: string }[] = [
-  { name: '스토리', desc: '배경 포함' },
-  { name: 'PNG', desc: '배경 투명' },
-  { name: '미니멀', desc: '지도+제목' },
-  { name: '리스트형', desc: '장소 목록' },
-  { name: '폴라로이드', desc: '감성 스냅' },
-  { name: '다크', desc: '나이트 모드' },
-  { name: '요약 카드', desc: '거리·시간' },
-  { name: '스트라바', desc: '오렌지 루트', aspect: 'PNG · 투명' },
-  { name: '스트라바 코랄', desc: '글로우 루트', aspect: 'PNG · 투명' },
-  { name: '스트라바 모노', desc: '미니멀 라인', aspect: 'PNG · 투명' },
-  { name: '스트라바 네온', desc: '시작·종료', aspect: 'PNG · 투명' },
-  { name: '맵 only', desc: '루트만', aspect: 'PNG · 투명' },
-];
+const TEMPLATES = [
+  { name: '푸드 코스', desc: '지도 + 일정', aspect: '9:16' },
+  { name: '스트라바', desc: '오렌지 루트 + 통계', aspect: '9:16' },
+  { name: '미니멀', desc: '루트만', aspect: '9:16' },
+  { name: '다크 스토리', desc: '풀스크린 지도', aspect: '9:16' },
+] as const;
 
 const PLATFORMS: {
   id: Platform;
@@ -87,8 +71,8 @@ const PLATFORM_TOAST: Record<Platform, string> = {
   save: '갤러리에 저장되었습니다!',
 };
 
-const CARD_WIDTH = 256;
-const TEMPLATE_COUNT = TEMPLATE_INFO.length;
+const CARD_WIDTH = 290;
+const TEMPLATE_COUNT = TEMPLATES.length;
 
 // ── Template carousel item ────────────────────────────────────────────────────
 
@@ -101,12 +85,18 @@ function TemplateSlide({
 }) {
   return (
     <div
-      className={`flex-shrink-0 transition-all duration-200 ${
-        selected ? 'ring-2 ring-[#EB5053] rounded-2xl scale-[1.02]' : 'opacity-70'
+      className={`flex-shrink-0 transition-all duration-300 ${
+        selected ? 'scale-100' : 'scale-[0.92] opacity-60'
       }`}
       style={{ scrollSnapAlign: 'center' }}
     >
-      {children}
+      <div
+        className={`rounded-[22px] overflow-hidden transition-shadow duration-300 ${
+          selected ? 'shadow-[0_8px_32px_rgba(0,0,0,0.18)] ring-2 ring-[#EB5053]' : 'shadow-[0_4px_16px_rgba(0,0,0,0.08)]'
+        }`}
+      >
+        {children}
+      </div>
     </div>
   );
 }
@@ -135,8 +125,8 @@ export default function CourseSharePage() {
     else navigate(-1 as never);
   };
 
-  const course = MOCK_COURSE;
-  const { captureCard, downloadImage } = useCourseShare();
+  const course = getCourseById(id);
+  const { saveImageToDevice } = useCourseShare();
 
   const [selectedTemplate, setSelectedTemplate] = useState(0);
   const [selectedPlatform, setSelectedPlatform] = useState<Platform>('ig-story');
@@ -153,8 +143,8 @@ export default function CourseSharePage() {
     const container = scrollContainerRef.current;
     if (!container) return;
     const center = container.scrollLeft + container.clientWidth / 2;
-    const offsetX = container.clientWidth / 2 - 120;
-    const index = Math.round((center - offsetX - 120) / CARD_WIDTH);
+    const offsetX = container.clientWidth / 2 - CARD_WIDTH / 2;
+    const index = Math.round((center - offsetX - CARD_WIDTH / 2) / (CARD_WIDTH + 16));
     setSelectedTemplate(Math.max(0, Math.min(TEMPLATE_COUNT - 1, index)));
   }, []);
 
@@ -163,11 +153,23 @@ export default function CourseSharePage() {
     if (!el) return;
     setIsCapturing(true);
     try {
-      const dataUrl = await captureCard({ current: el });
-      const slug = TEMPLATE_INFO[selectedTemplate].name.replace(/\s/g, '-');
-      downloadImage(dataUrl, `lunchie-${slug}.png`);
-      toast.success(PLATFORM_TOAST[selectedPlatform]);
-    } catch {
+      const slug = TEMPLATES[selectedTemplate].name.replace(/\s/g, '-');
+      const filename = `lunchie-${course.id}-${slug}.png`;
+      const method = await saveImageToDevice(
+        { current: el },
+        filename,
+        { preferNativeShare: selectedPlatform !== 'save' }
+      );
+
+      if (selectedPlatform === 'save') {
+        toast.success('이미지가 다운로드 폴더에 저장되었습니다!');
+      } else if (method === 'share') {
+        toast.success('공유 메뉴에서 저장하거나 보낼 수 있어요!');
+      } else {
+        toast.success(PLATFORM_TOAST[selectedPlatform]);
+      }
+    } catch (e) {
+      console.error('Failed to save share image:', e);
       toast.error('이미지 저장에 실패했습니다.');
     } finally {
       setIsCapturing(false);
@@ -176,91 +178,104 @@ export default function CourseSharePage() {
 
   return (
     <motion.div
-      className="max-w-[430px] mx-auto bg-white min-h-screen"
+      className="max-w-[430px] mx-auto bg-[#FAFAFA] min-h-screen"
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.3 }}
     >
-      <div className="px-4 py-3 flex items-center border-b border-gray-100">
-        <button onClick={goBack}>
+      {/* Header */}
+      <div className="px-4 py-3 flex items-center bg-white border-b border-gray-100">
+        <button onClick={goBack} className="w-9 h-9 flex items-center justify-center -ml-1">
           <ChevronLeft size={22} />
         </button>
-        <span className="flex-1 text-center font-semibold">공유하기</span>
-        <span className="text-xs text-gray-400">← 넘겨보기 →</span>
+        <div className="flex-1 text-center">
+          <p className="font-semibold text-[15px]">코스맵 공유하기</p>
+          <p className="text-[11px] text-gray-400 mt-0.5">{course.title}</p>
+        </div>
+        <div className="w-9" />
       </div>
 
-      <div className="mt-4 pb-4">
+      {/* Preview area */}
+      <div className="pt-6 pb-2 bg-gradient-to-b from-white to-[#FAFAFA]">
         <div
           ref={scrollContainerRef}
           onScroll={handleScroll}
-          className="flex gap-4 overflow-x-auto"
+          className="flex gap-4 overflow-x-auto pb-4"
           style={{
             scrollSnapType: 'x mandatory',
-            paddingLeft: 'calc(50% - 120px)',
-            paddingRight: 'calc(50% - 120px)',
+            paddingLeft: 'calc(50% - 145px)',
+            paddingRight: 'calc(50% - 145px)',
             scrollbarWidth: 'none',
           }}
         >
           <TemplateSlide selected={selectedTemplate === 0}>
-            <StoryTemplate ref={setCardRef(0)} course={course} />
+            <FoodCourseStoryTemplate ref={setCardRef(0)} course={course} />
           </TemplateSlide>
           <TemplateSlide selected={selectedTemplate === 1}>
-            <PngTemplate ref={setCardRef(1)} course={course} />
+            <StravaDarkTemplate ref={setCardRef(1)} course={course} />
           </TemplateSlide>
           <TemplateSlide selected={selectedTemplate === 2}>
-            <MinimalTemplate ref={setCardRef(2)} course={course} />
+            <StravaMinimalTemplate ref={setCardRef(2)} course={course} />
           </TemplateSlide>
           <TemplateSlide selected={selectedTemplate === 3}>
-            <ListTemplate ref={setCardRef(3)} course={course} />
-          </TemplateSlide>
-          <TemplateSlide selected={selectedTemplate === 4}>
-            <PolaroidTemplate ref={setCardRef(4)} course={course} />
-          </TemplateSlide>
-          <TemplateSlide selected={selectedTemplate === 5}>
-            <DarkStoryTemplate ref={setCardRef(5)} course={course} />
-          </TemplateSlide>
-          <TemplateSlide selected={selectedTemplate === 6}>
-            <StatsCardTemplate ref={setCardRef(6)} course={course} />
-          </TemplateSlide>
-          <TemplateSlide selected={selectedTemplate === 7}>
-            <StravaClassicTemplate ref={setCardRef(7)} course={course} />
-          </TemplateSlide>
-          <TemplateSlide selected={selectedTemplate === 8}>
-            <StravaCoralTemplate ref={setCardRef(8)} course={course} />
-          </TemplateSlide>
-          <TemplateSlide selected={selectedTemplate === 9}>
-            <StravaMonoTemplate ref={setCardRef(9)} course={course} />
-          </TemplateSlide>
-          <TemplateSlide selected={selectedTemplate === 10}>
-            <StravaNeonTemplate ref={setCardRef(10)} course={course} />
-          </TemplateSlide>
-          <TemplateSlide selected={selectedTemplate === 11}>
-            <StravaCompactTemplate ref={setCardRef(11)} course={course} />
+            <FoodCourseDarkTemplate ref={setCardRef(3)} course={course} />
           </TemplateSlide>
         </div>
       </div>
 
-      <div className="text-center mt-3">
-        <p className="text-sm font-semibold">{TEMPLATE_INFO[selectedTemplate].name}</p>
-        <p className="text-xs text-gray-400 mt-0.5">
-          {TEMPLATE_INFO[selectedTemplate].aspect ?? '9:16'}
-          {TEMPLATE_INFO[selectedTemplate].desc && ` · ${TEMPLATE_INFO[selectedTemplate].desc}`}
+      {/* Template info */}
+      <div className="text-center px-4">
+        <p className="text-[15px] font-bold text-[#1A1A1A]">
+          {TEMPLATES[selectedTemplate].name}
+        </p>
+        <p className="text-xs text-gray-400 mt-1">
+          {TEMPLATES[selectedTemplate].aspect} · {TEMPLATES[selectedTemplate].desc}
         </p>
       </div>
 
-      <div className="flex justify-center gap-1.5 mt-2 flex-wrap px-4 max-w-[320px] mx-auto">
-        {TEMPLATE_INFO.map((_, i) => (
-          <div
+      {/* Dots */}
+      <div className="flex justify-center gap-1.5 mt-3">
+        {TEMPLATES.map((_, i) => (
+          <button
             key={i}
+            onClick={() => {
+              setSelectedTemplate(i);
+              const container = scrollContainerRef.current;
+              if (container) {
+                const offset = i * (CARD_WIDTH + 16);
+                container.scrollTo({ left: offset, behavior: 'smooth' });
+              }
+            }}
             className={`rounded-full transition-all duration-200 ${
-              i === selectedTemplate ? 'w-4 h-1.5 bg-[#EB5053]' : 'w-1.5 h-1.5 bg-gray-200'
+              i === selectedTemplate ? 'w-5 h-1.5 bg-[#EB5053]' : 'w-1.5 h-1.5 bg-gray-200'
             }`}
           />
         ))}
       </div>
 
-      <div className="mt-4 px-4 border-t border-gray-100 pt-4">
-        <p className="text-xs text-gray-400 mb-3">어디에 공유할까요?</p>
+      {/* Course quick stats */}
+      <div className="mx-4 mt-5 bg-white rounded-2xl p-4 shadow-sm border border-gray-100">
+        <div className="flex justify-around text-center">
+          <div>
+            <p className="text-lg font-bold text-[#1A1A1A]">{course.distanceKm}km</p>
+            <p className="text-[10px] text-gray-400 mt-0.5">총 거리</p>
+          </div>
+          <div className="w-px bg-gray-100" />
+          <div>
+            <p className="text-lg font-bold text-[#1A1A1A]">{course.durationHours}h</p>
+            <p className="text-[10px] text-gray-400 mt-0.5">소요 시간</p>
+          </div>
+          <div className="w-px bg-gray-100" />
+          <div>
+            <p className="text-lg font-bold text-[#1A1A1A]">{course.places.length}곳</p>
+            <p className="text-[10px] text-gray-400 mt-0.5">방문 스팟</p>
+          </div>
+        </div>
+      </div>
+
+      {/* Platform picker */}
+      <div className="mt-5 px-4 pb-8">
+        <p className="text-xs text-gray-400 mb-3 font-medium">어디에 공유할까요?</p>
 
         <div
           className="flex gap-3 overflow-x-auto pb-2"
@@ -272,16 +287,24 @@ export default function CourseSharePage() {
               <button
                 key={pid}
                 onClick={() => setSelectedPlatform(pid)}
-                className="flex flex-col items-center gap-1 flex-shrink-0 min-w-[64px]"
+                className="flex flex-col items-center gap-1.5 flex-shrink-0 min-w-[64px]"
               >
                 <div
-                  className={`w-12 h-12 rounded-full flex items-center justify-center transition-colors ${
-                    active ? 'bg-[#FFF0EE]' : 'bg-gray-100'
+                  className={`w-12 h-12 rounded-2xl flex items-center justify-center transition-all duration-200 ${
+                    active
+                      ? 'bg-[#EB5053] text-white shadow-md shadow-[#EB5053]/30'
+                      : 'bg-white text-gray-400 border border-gray-100'
                   }`}
                 >
-                  <Icon size={22} className={active ? 'text-[#EB5053]' : 'text-gray-400'} />
+                  <Icon size={20} />
                 </div>
-                <span className="text-xs text-gray-500 whitespace-nowrap">{label}</span>
+                <span
+                  className={`text-[11px] whitespace-nowrap ${
+                    active ? 'text-[#EB5053] font-medium' : 'text-gray-400'
+                  }`}
+                >
+                  {label}
+                </span>
               </button>
             );
           })}
@@ -290,7 +313,7 @@ export default function CourseSharePage() {
         <button
           onClick={handleShare}
           disabled={isCapturing}
-          className="w-full mt-4 mb-6 bg-[#EB5053] text-white rounded-xl h-11 text-sm font-medium disabled:opacity-60"
+          className="w-full mt-5 bg-[#1A1A1A] text-white rounded-2xl h-12 text-sm font-semibold disabled:opacity-60 active:scale-[0.98] transition-transform"
         >
           {isCapturing ? '저장 중...' : PLATFORM_LABELS[selectedPlatform]}
         </button>
