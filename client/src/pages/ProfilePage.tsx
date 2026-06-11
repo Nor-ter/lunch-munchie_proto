@@ -47,7 +47,7 @@ export default function ProfilePage() {
   const maxScore = topCategories.length > 0 ? topCategories[0].score : 1;
 
   return (
-    <div className="min-h-dvh bg-[#F5F5F5]">
+    <div className="min-h-dvh bg-[#FCF4EE]">
       {/* Header */}
       <div className="bg-white px-5 pt-12 pb-5">
         <div className="flex items-center justify-between mb-5">

@@ -33,7 +33,7 @@ export default function SavedPage() {
     : savedCourses.filter(c => c.tags.includes(activeFilter as TagType));
 
   return (
-    <div className="min-h-dvh bg-white">
+    <div className="min-h-dvh bg-[#FCF4EE]">
       {/* Header */}
       <div className="px-5 pt-12 pb-4">
         <div className="flex items-center justify-between mb-4">

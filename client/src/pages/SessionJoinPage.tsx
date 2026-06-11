@@ -97,7 +97,7 @@ export default function SessionJoinPage() {
   }
 
   return (
-    <div className="min-h-dvh bg-[#F5F5F5] flex flex-col justify-between px-5 py-8">
+    <div className="min-h-dvh bg-[#FCF4EE] flex flex-col justify-between px-5 py-8">
       {/* Header */}
       <div className="flex items-center gap-3 pt-4">
         <button onClick={() => navigate('/')} className="w-10 h-10 rounded-full bg-white flex items-center justify-center active:scale-95 shadow-sm">

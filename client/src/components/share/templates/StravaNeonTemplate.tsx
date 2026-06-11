@@ -16,7 +16,7 @@ const StravaNeonTemplate = forwardRef<HTMLDivElement, TemplateProps>(
           display: 'flex',
           flexDirection: 'column',
           alignItems: 'center',
-          fontFamily: 'system-ui, sans-serif',
+          fontFamily: "'Baloo 2', 'Pretendard Variable', 'Pretendard', cursive",
         }}
       >
         <div

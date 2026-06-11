@@ -28,7 +28,7 @@ import LunchieMapPage from "./pages/LunchieMapPage";
 import TourMapPage from "./pages/TourMapPage";
 import TourModePage from "./pages/TourModePage";
 
-const NO_TABBAR = ['/onboarding', '/tour-mode', '/course/', '/lunchie/swipe', '/lunchie/results', '/lunchie/map', '/join'];
+const NO_TABBAR = ['/onboarding', '/tour-mode', '/course/', '/lunchie', '/session', '/join'];
 
 function CoursesRedirect() {
   const params = useParams<{ id: string }>();

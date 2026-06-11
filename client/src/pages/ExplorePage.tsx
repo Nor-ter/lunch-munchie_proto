@@ -97,11 +97,23 @@ export default function ExplorePage() {
     : courses.filter(c => c.tags.includes(activeFilter as TagType));
 
   return (
-    <div className="min-h-dvh bg-[#F5F5F5]">
+    <div className="min-h-dvh bg-[#FCF4EE]">
       {/* Header */}
       <div className="bg-white px-5 pt-12 pb-4">
         <div className="flex items-center justify-between mb-4">
-          <h1 className="font-bold text-[22px] text-[#1A1A1A]">코스 탐색 🗺️</h1>
+          <div>
+            <div className="flex items-center gap-2">
+              <h1 className="font-bold text-[28px] text-[#1A1A1A]">Munchie Mode</h1>
+              <svg width="28" height="28" viewBox="0 0 40 40" fill="none" stroke="#FF3E4D" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M5 12.5 L14 8.5 L25 12.5 L35 8.5 V29 L25 33 L14 29 L5 33 Z" strokeWidth="2.7" />
+                <path d="M14 8.5 V29" strokeWidth="2.4" />
+                <path d="M25 12.5 V33" strokeWidth="2.4" />
+                <path d="M20 4.7 C15.9 4.7 12.7 7.8 12.7 11.7 C12.7 16.7 20 23 20 23 C20 23 27.3 16.7 27.3 11.7 C27.3 7.8 24.1 4.7 20 4.7 Z" strokeWidth="2.7" />
+                <circle cx="20" cy="11.8" r="2.4" fill="#FF3E4D" strokeWidth="0" />
+              </svg>
+            </div>
+            <p className="text-[12px] mt-0.5" style={{ color: '#9B9B9B' }}>코스를 탐색해보아요</p>
+          </div>
           <button className="w-10 h-10 rounded-full bg-[#F5F5F5] flex items-center justify-center">
             <SlidersHorizontal size={18} color="#4A4A4A" />
           </button>

@@ -67,7 +67,7 @@ export default function CourseNavigatePage() {
     .map(r => [r!.lat, r!.lng]);
 
   return (
-    <div className="min-h-dvh bg-white flex flex-col">
+    <div className="min-h-dvh bg-[#FCF4EE] flex flex-col">
       {/* Header */}
       <div className="flex items-center justify-between px-5 pt-12 pb-3 bg-white z-10">
         <button

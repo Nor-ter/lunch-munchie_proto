@@ -99,7 +99,7 @@ export default function LunchieSettingsPage() {
   const totalDetailCount = activeFilters.reduce((sum, f) => sum + (details[f]?.length || 0), 0);
 
   return (
-    <div className="min-h-dvh" style={{ background: '#FFF8F2' }}>
+    <div className="min-h-dvh bg-[#FCF4EE]">
       {/* Header */}
       <div className="flex items-center justify-between px-5 pt-12 pb-5">
         <button

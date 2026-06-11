@@ -20,7 +20,7 @@ const MinimalTemplate = forwardRef<HTMLDivElement, TemplateProps>(({ course }, r
         flexDirection: 'column',
         alignItems: 'center',
         justifyContent: 'center',
-        fontFamily: 'sans-serif',
+        fontFamily: "'Baloo 2', 'Pretendard Variable', 'Pretendard', cursive",
         gap: 8,
       }}
     >

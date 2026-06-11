@@ -1,7 +1,19 @@
 import { motion } from "framer-motion";
 import { useLocation } from "wouter";
-import { Circle, Heart, X, ArrowRight } from "lucide-react";
+import { Heart, X, ArrowRight, MapPin, Clock, Bookmark } from "lucide-react";
 import { useApp, Course, MOCK_RESTAURANTS } from "@/contexts/AppContext";
+import CourseMapOverlay from "@/components/CourseMapOverlay";
+
+const TAG_CLASS: Record<string, string> = {
+  '데이트 코스': 'tag-date',
+  '맛집': 'tag-food',
+  '카페': 'tag-cafe',
+  '전시/문화': 'tag-culture',
+  '액티비티': 'tag-activity',
+  '혼자 여행': 'tag-hash',
+  '맛집 투어': 'tag-food',
+  '가성비': 'tag-activity',
+};
 
 function RouteIllustration({ seed = 0 }: { seed?: number }) {
   const paths = [
@@ -36,52 +48,54 @@ function RouteIllustration({ seed = 0 }: { seed?: number }) {
 
 const BADGES = ["HOT", "MZ", "NEW", "HOT"];
 
-function MunchieCourseCard({ course, idx }: { course: Course; idx: number }) {
+function MunchieCourseCard({ course }: { course: Course }) {
   const [, navigate] = useLocation();
+  const { savedCourseIds, saveCourse, unsaveCourse } = useApp();
+  const isSaved = savedCourseIds.includes(course.id);
 
   return (
     <motion.div
+      className="lm-card overflow-hidden cursor-pointer"
+      whileTap={{ scale: 0.98 }}
       onClick={() => navigate(`/course/${course.id}?from=explore`)}
-      className="flex cursor-pointer overflow-hidden"
-      style={{
-        background: "#FFE9A8",
-        borderRadius: 22,
-        height: 156,
-        boxShadow: "4px 5px 0 rgba(255, 213, 103, 0.55)",
-      }}
-      whileTap={{ scale: 0.97 }}
     >
-      <div className="flex flex-1 flex-col justify-between py-[38px] pl-[14px] pr-2 min-w-0">
-        <div className="min-w-0">
-          <span
-            className="inline-flex h-[21px] items-center rounded-[6px] px-2 py-[3px] text-[13px] font-black text-black"
-            style={{ background: "#FFD47A" }}
-          >
-            {BADGES[idx % BADGES.length]}
-          </span>
-          <p className="mt-[6px] text-[15px] font-bold leading-snug text-black truncate">
-            {course.title}
-          </p>
-          <div className="mt-[7px] flex flex-wrap gap-1.5">
-            {course.hashtags.slice(0, 2).map((h) => (
-              <span key={h} className="text-[11px] leading-none text-black">
-                {h}
-              </span>
-            ))}
-          </div>
-        </div>
-        <div className="flex items-center gap-[5px]">
-          <Heart size={10} color="#4B342F" strokeWidth={1.6} />
-          <span className="text-[9px] leading-none text-black">
-            {course.savedCount.toLocaleString()}
-          </span>
+      <div className="relative h-40">
+        <img src={course.heroImage} alt={course.title} className="w-full h-full object-cover" />
+        <CourseMapOverlay course={course} />
+        <div className="absolute inset-0 bg-gradient-to-t from-black/50 to-transparent" />
+        <button
+          onClick={e => { e.stopPropagation(); isSaved ? unsaveCourse(course.id) : saveCourse(course.id); }}
+          className="absolute top-3 right-3 w-8 h-8 rounded-full bg-white/80 flex items-center justify-center"
+        >
+          <Bookmark size={14} fill={isSaved ? '#EB5053' : 'none'} stroke={isSaved ? '#EB5053' : '#4A4A4A'} />
+        </button>
+        <div className="absolute bottom-3 left-3 flex gap-1.5 flex-wrap">
+          {course.tags.slice(0, 2).map(tag => (
+            <span key={tag} className={`tag ${TAG_CLASS[tag] || 'tag-hash'}`}>{tag}</span>
+          ))}
         </div>
       </div>
-      <div
-        className="mr-[12px] mt-[12px] flex h-[132px] w-[132px] flex-shrink-0 items-center justify-center"
-        style={{ background: "#FFF9ED", borderRadius: 14 }}
-      >
-        <RouteIllustration seed={idx} />
+      <div className="p-4">
+        <h3 className="font-bold text-[15px] text-[#1A1A1A] mb-1">{course.title}</h3>
+        <div className="flex gap-1.5 flex-wrap mb-2">
+          {course.hashtags.slice(0, 3).map(h => (
+            <span key={h} className="tag tag-hash">{h}</span>
+          ))}
+        </div>
+        <div className="flex items-center gap-3 text-[#9B9B9B]">
+          <span className="flex items-center gap-1 text-[12px]">
+            <MapPin size={11} /> {course.metadata.distance}km
+          </span>
+          <span className="flex items-center gap-1 text-[12px]">
+            <Clock size={11} /> {Math.floor(course.metadata.duration / 60)}시간
+          </span>
+          <span className="flex items-center gap-1 text-[12px]">
+            📍 {course.metadata.placeCount}개 장소
+          </span>
+          <span className="flex items-center gap-1 text-[12px] ml-auto">
+            <Bookmark size={11} /> {course.savedCount}
+          </span>
+        </div>
       </div>
     </motion.div>
   );
@@ -179,14 +193,14 @@ export default function HomePage() {
           </span>
         </div>
 
-        <h1 className="text-[30px] font-black leading-[1.2] text-black">
+        <h1 className="text-[30px] font-bold leading-[1.2] text-black" style={{ paddingLeft: 20 }}>
           오늘 어떻게
           <br />
           먹을까요?
         </h1>
         <p
           className="mt-[13px] text-[11px] leading-none"
-          style={{ color: "#6E6A67" }}
+          style={{ color: "#6E6A67", paddingLeft: 20 }}
         >
           모드를 선택해주세요.
         </p>
@@ -201,7 +215,7 @@ export default function HomePage() {
           paddingRight: "clamp(24px, 10.2vw, 41px)",
         }}
       >
-        <p className="mb-[15px] text-[20px] font-black leading-none text-black">
+        <p className="mb-[15px] text-[20px] font-black leading-none text-black" style={{ paddingLeft: 20 }}>
           Lunchie Mode
         </p>
 
@@ -218,11 +232,10 @@ export default function HomePage() {
         >
           <div className="flex h-full items-center justify-between gap-1 pl-[13px] pr-[18px] pt-[16px]">
             <div className="flex-1">
-              {/* Quick Match 타이틀은 merge1_v3의 Baloo 2 폰트 유지 */}
               <p
                 className="text-white leading-none"
                 style={{
-                  fontFamily: "'Baloo 2', cursive",
+                  fontFamily: "'Baloo 2', 'Pretendard Variable', 'Pretendard', cursive",
                   fontWeight: 700,
                   fontSize: 24,
                 }}
@@ -239,7 +252,7 @@ export default function HomePage() {
                   <X size={9} strokeWidth={3} /> 싫어요
                 </span>
                 <span className="flex h-[15px] items-center gap-[3px] rounded-full bg-white/20 px-[8px] text-[9px] font-medium leading-none text-black">
-                  <Circle size={8} strokeWidth={2.2} /> 좋아요
+                  <Heart size={8} fill="white" strokeWidth={0} /> 좋아요
                 </span>
               </div>
             </div>
@@ -258,7 +271,7 @@ export default function HomePage() {
         }}
       >
         <div className="mb-[6px] flex items-end justify-between">
-          <p className="text-[20px] font-black leading-none text-black">
+          <p className="text-[20px] font-black leading-none text-black" style={{ paddingLeft: 20 }}>
             Munchie Mode
           </p>
           <button
@@ -268,13 +281,13 @@ export default function HomePage() {
             더보기 <ArrowRight size={20} strokeWidth={2.4} />
           </button>
         </div>
-        <p className="mb-[12px] text-[10px] leading-none text-black">
+        <p className="mb-[12px] text-[10px] leading-none text-black" style={{ paddingLeft: 20 }}>
           이번주 사람들이 많이 저장한 코스
         </p>
 
         <div className="space-y-[36px]">
           {courses.slice(0, 4).map((course, idx) => (
-            <MunchieCourseCard key={course.id} course={course} idx={idx} />
+            <MunchieCourseCard key={course.id} course={course} />
           ))}
         </div>
 

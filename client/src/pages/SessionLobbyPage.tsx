@@ -79,7 +79,7 @@ export default function SessionLobbyPage() {
   const { partySize, radius } = currentSession.filters;
 
   return (
-    <div className="min-h-dvh bg-white px-5 pb-8">
+    <div className="min-h-dvh bg-[#FCF4EE] px-5 pb-8">
       {/* Header */}
       <div className="flex items-center gap-3 pt-12 pb-5">
         <button onClick={() => navigate('/')} className="w-10 h-10 rounded-full bg-[#F5F5F5] flex items-center justify-center active:scale-95">

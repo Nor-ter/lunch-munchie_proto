@@ -73,7 +73,7 @@
   * { @apply border-border outline-ring/50; }
   body {
     @apply bg-background text-foreground;
-    font-family: 'Pretendard Variable', 'Pretendard', -apple-system, BlinkMacSystemFont, sans-serif;
+    font-family: 'Baloo 2', 'Pretendard Variable', 'Pretendard', cursive;
     -webkit-tap-highlight-color: transparent;
     overscroll-behavior: none;
   }
@@ -91,7 +91,7 @@
 
   .app-shell {
     max-width: 480px; margin: 0 auto; min-height: 100dvh;
-    position: relative; background: var(--lm-bg);
+    position: relative; background: #FCF4EE;
     box-shadow: 0 0 60px rgba(0,0,0,0.08);
   }
 
@@ -130,7 +130,8 @@
   .tab-bar {
     position: fixed; bottom: 0; left: 50%; transform: translateX(-50%);
     width: 100%; max-width: 480px;
-    background: #F43D40;
+    background: #FF3E4D;
+    border-radius: 20px 20px 0 0;
     z-index: 50;
     padding-bottom: env(safe-area-inset-bottom, 0px);
   }
