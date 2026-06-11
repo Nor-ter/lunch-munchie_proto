@@ -350,7 +350,7 @@ function WinnerScreen({ selectedWinner, onReset }: { selectedWinner?: Restaurant
     <motion.div
       initial={{ opacity: 0, y: 30 }}
       animate={{ opacity: 1, y: 0 }}
-      className="min-h-dvh bg-[#FFF8F2] pb-10"
+      className="min-h-dvh bg-[#FCF4EE] pb-10"
     >
       {/* Hero */}
       <div className="relative w-full" style={{ aspectRatio: '4/3' }}>
@@ -915,7 +915,7 @@ export default function QuickMatchPage() {
   const urgent = remainingMs > 0 && remainingMs <= 30000;
 
   return (
-    <div className="min-h-dvh bg-[#FFF8F2] relative">
+    <div className="min-h-dvh bg-[#FCF4EE] relative">
       {/* Header */}
       <div className="flex items-center justify-between px-5 pt-12 pb-3">
         <button onClick={() => navigate('/session/lobby')}

@@ -97,7 +97,7 @@ export default function ExplorePage() {
     : courses.filter(c => c.tags.includes(activeFilter as TagType));
 
   return (
-    <div className="min-h-dvh bg-[#F5F5F5]">
+    <div className="min-h-dvh bg-[#FCF4EE]">
       {/* Header */}
       <div className="bg-white px-5 pt-12 pb-4">
         <div className="flex items-center justify-between mb-4">

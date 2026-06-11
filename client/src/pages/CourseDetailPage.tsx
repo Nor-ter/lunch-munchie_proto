@@ -67,7 +67,7 @@ export default function CourseDetailPage() {
   };
 
   return (
-    <div className="min-h-dvh bg-white pb-28">
+    <div className="min-h-dvh bg-[#FCF4EE] pb-28">
       {/* Hero Header */}
       <div className="relative h-[250px] md:h-[300px]">
         <img src={course.heroImage} alt={course.title} className="w-full h-full object-cover" />

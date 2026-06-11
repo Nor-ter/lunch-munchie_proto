@@ -91,7 +91,7 @@
 
   .app-shell {
     max-width: 480px; margin: 0 auto; min-height: 100dvh;
-    position: relative; background: var(--lm-bg);
+    position: relative; background: #FCF4EE;
     box-shadow: 0 0 60px rgba(0,0,0,0.08);
   }
 

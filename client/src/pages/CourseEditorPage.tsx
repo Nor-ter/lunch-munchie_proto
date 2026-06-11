@@ -231,7 +231,7 @@ function SharedMap({ tourType, onShare }: { tourType: typeof TOUR_TYPES[0]; onSh
   ]);
 
   return (
-    <div className="min-h-dvh bg-white flex flex-col">
+    <div className="min-h-dvh bg-[#FCF4EE] flex flex-col">
       {/* Map */}
       <div className="flex-1 relative" style={{ minHeight: '50vh' }}>
         <MapContainer center={mapCenter} zoom={15}
@@ -345,7 +345,7 @@ export default function TourModePage() {
   }
 
   return (
-    <div className="min-h-dvh bg-white">
+    <div className="min-h-dvh bg-[#FCF4EE]">
       {/* Header */}
       <div className="flex items-center justify-between px-5 pt-12 pb-4">
         <button onClick={() => phase === 'select' ? navigate('/') : setPhase('select')}
