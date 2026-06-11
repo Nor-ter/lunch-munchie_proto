@@ -4,60 +4,19 @@
  * Flow: 스와이프 → 결과 발표
  */
 
-import { useState, useCallback, useEffect } from 'react';
+import { useState, useCallback, useEffect, useRef } from 'react';
 import { motion, useMotionValue, useTransform, AnimatePresence } from 'framer-motion';
 import { useLocation } from 'wouter';
-import { ArrowLeft, Heart, X, Star, MapPin, Clock } from 'lucide-react';
+import { ArrowLeft, Heart, X, Star, MapPin, Clock, Phone, Navigation, Share2, Download, Link2, Home } from 'lucide-react';
+import { toast } from 'sonner';
 import { useApp } from '@/contexts/AppContext';
+import { getFoodPhotos } from '@/lib/foodPhotos';
+import { useCourseShare } from '@/hooks/useCourseShare';
+import WinnerShareCard from '@/components/lunchie/WinnerShareCard';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 type SwipeAction = 'like' | 'dislike';
-
-// ─── Food photo references (for tap-to-reveal menu panel) ─────────────────────
-
-const FOOD_PHOTOS: Record<string, string[]> = {
-  '카페': [
-    'https://images.unsplash.com/photo-1495474472287-4d71bcdd2085?w=400&q=80',
-    'https://images.unsplash.com/photo-1509042239860-f550ce710b93?w=400&q=80',
-    'https://images.unsplash.com/photo-1461023058943-07fcbe16d735?w=400&q=80',
-    'https://images.unsplash.com/photo-1572442388796-11668a67e53d?w=400&q=80',
-  ],
-  '베이커리': [
-    'https://images.unsplash.com/photo-1555507036-ab1f4038808a?w=400&q=80',
-    'https://images.unsplash.com/photo-1509440159596-0249088772ff?w=400&q=80',
-    'https://images.unsplash.com/photo-1586985289688-ca3cf47d3e6e?w=400&q=80',
-    'https://images.unsplash.com/photo-1517433367423-c7e5b0f35086?w=400&q=80',
-  ],
-  '이탈리안': [
-    'https://images.unsplash.com/photo-1555396273-367ea4eb4db5?w=400&q=80',
-    'https://images.unsplash.com/photo-1621996346565-e3dbc646d9a9?w=400&q=80',
-    'https://images.unsplash.com/photo-1473093295043-cdd812d0e601?w=400&q=80',
-    'https://images.unsplash.com/photo-1563379926898-05f4575a45d8?w=400&q=80',
-  ],
-  '일식': [
-    'https://images.unsplash.com/photo-1579871494447-9811cf80d66c?w=400&q=80',
-    'https://images.unsplash.com/photo-1569050467447-ce54b3bbc37d?w=400&q=80',
-    'https://images.unsplash.com/photo-1611143669185-af224c5e3252?w=400&q=80',
-    'https://images.unsplash.com/photo-1617196034183-421b4040ed20?w=400&q=80',
-  ],
-  '중식': [
-    'https://images.unsplash.com/photo-1569050467447-ce54b3bbc37d?w=400&q=80',
-    'https://images.unsplash.com/photo-1582878826629-29b7ad1cdc43?w=400&q=80',
-    'https://images.unsplash.com/photo-1606756790138-261d2b21cd75?w=400&q=80',
-    'https://images.unsplash.com/photo-1563245372-f21724e3856d?w=400&q=80',
-  ],
-  'default': [
-    'https://images.unsplash.com/photo-1565299624946-b28f40a0ae38?w=400&q=80',
-    'https://images.unsplash.com/photo-1567620905732-2d1ec7ab7445?w=400&q=80',
-    'https://images.unsplash.com/photo-1540189549336-e6e99c3679fe?w=400&q=80',
-    'https://images.unsplash.com/photo-1512621776951-a57141f2eefd?w=400&q=80',
-  ],
-};
-
-function getFoodPhotos(category: string): string[] {
-  return FOOD_PHOTOS[category] || FOOD_PHOTOS['default'];
-}
 
 // ─── Swipe Card ───────────────────────────────────────────────────────────────
 
@@ -302,45 +261,23 @@ function formatRemainingTime(deadlineStr: string | null): string {
   return `${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
 }
 
-// ─── Results Screen ───────────────────────────────────────────────────────────
+// ─── Winner Screen ────────────────────────────────────────────────────────────
 
-function ResultsScreen({ swipeData, onReset }: {
-  swipeData: { restaurant: any; action: SwipeAction }[];
-  onReset: () => void;
-}) {
+function WinnerScreen({ onReset }: { onReset: () => void }) {
   const [, navigate] = useLocation();
   const { currentSession, restaurants } = useApp();
-  const [view, setView] = useState<'group' | 'personal'>('group');
+  const { captureCard, downloadImage } = useCourseShare();
+  const shareCardRef = useRef<HTMLDivElement>(null);
+  const [showShare, setShowShare] = useState(false);
+  const [isCapturing, setIsCapturing] = useState(false);
   const [liveResults, setLiveResults] = useState<{
-    completedCount: number;
-    totalMembers: number;
     results: { restaurantId: string; score: number; likeCount: number; dislikeCount: number }[];
-    isExpired?: boolean;
-    deadlineAt?: string;
-  }>({
-    completedCount: 1,
-    totalMembers: currentSession?.members.length || 1,
-    results: []
-  });
-  const [timeLeft, setTimeLeft] = useState('');
+  }>({ results: [] });
 
-  // Ticking effect for the remaining time in results screen
-  useEffect(() => {
-    const deadline = liveResults.deadlineAt || currentSession?.deadline || null;
-    if (!deadline) return;
-    
-    const tick = () => {
-      setTimeLeft(formatRemainingTime(deadline));
-    };
-    tick();
-    const interval = setInterval(tick, 1000);
-    return () => clearInterval(interval);
-  }, [liveResults.deadlineAt, currentSession?.deadline]);
-
-  // Poll server results dynamically
+  // Poll server results to determine the winning restaurant
   useEffect(() => {
     if (!currentSession) return;
-    
+
     const fetchLiveResults = async () => {
       try {
         const res = await fetch(`/api/sessions/${currentSession.inviteCode}/results`);
@@ -358,139 +295,206 @@ function ResultsScreen({ swipeData, onReset }: {
     return () => clearInterval(interval);
   }, [currentSession]);
 
-  // Personal scores based on local swipes
-  const personalScores = restaurants.map(r => {
-    const record = swipeData.find(s => s.restaurant.id === r.id);
-    const score = record?.action === 'like' ? 14 : 0;
-    return { restaurant: r, score };
-  }).filter(s => s.score > 0).sort((a, b) => b.score - a.score);
+  const winnerId = liveResults.results[0]?.restaurantId;
+  const winner = restaurants.find(r => r.id === winnerId) || currentSession?.restaurants[0];
 
-  // Group scores fetched from backend
-  const groupScores = liveResults.results.map(item => {
-    const r = restaurants.find(x => x.id === item.restaurantId);
-    return {
-      restaurant: r!,
-      score: item.score,
-      likeCount: item.likeCount,
-      dislikeCount: item.dislikeCount
-    };
-  }).filter(s => s.restaurant !== undefined);
+  if (!winner) return null;
 
-  // If group scores is empty (no votes yet from anyone), fallback to personal scores or display loading
-  const displayScores = view === 'personal' 
-    ? personalScores 
-    : (groupScores.length > 0 ? groupScores : personalScores);
+  const foodPhotos = getFoodPhotos(winner.category).slice(0, 4);
 
-  const winner = displayScores[0]?.restaurant;
+  const handleCopyAddress = async () => {
+    await navigator.clipboard.writeText(winner.address);
+    toast.success('주소가 복사됐어요! 📋');
+  };
+
+  const handleSaveImage = async () => {
+    setIsCapturing(true);
+    try {
+      const dataUrl = await captureCard(shareCardRef);
+      downloadImage(dataUrl, `lunchie-${winner.name}.png`);
+      toast.success('이미지가 저장됐어요! 🎉');
+    } catch (e) {
+      console.error('Failed to save share card:', e);
+      toast.error('이미지 저장에 실패했어요');
+    } finally {
+      setIsCapturing(false);
+    }
+  };
+
+  const handleShareImage = async () => {
+    setIsCapturing(true);
+    try {
+      const dataUrl = await captureCard(shareCardRef);
+      const blob = await (await fetch(dataUrl)).blob();
+      const file = new File([blob], `lunchie-${winner.name}.png`, { type: 'image/png' });
+
+      if (navigator.canShare?.({ files: [file] })) {
+        await navigator.share({
+          files: [file],
+          title: 'Lunchie Munchie',
+          text: `오늘의 점심은 ${winner.name}! 🍽️`,
+        });
+      } else {
+        downloadImage(dataUrl, `lunchie-${winner.name}.png`);
+        toast.success('이미지가 저장됐어요. 갤러리에서 공유해보세요! 📤');
+      }
+    } catch (e) {
+      console.error('Failed to share card:', e);
+      toast.error('공유에 실패했어요');
+    } finally {
+      setIsCapturing(false);
+    }
+  };
 
   return (
     <motion.div
       initial={{ opacity: 0, y: 30 }}
       animate={{ opacity: 1, y: 0 }}
-      className="min-h-dvh bg-white pb-8"
+      className="min-h-dvh bg-[#FFF8F2] pb-10"
     >
-      <div className="px-5 pt-12 pb-4">
-        <h1 className="font-black text-[22px] text-[#1A1A1A]">
-          {liveResults.isExpired || liveResults.completedCount >= liveResults.totalMembers ? '🎉 결과 발표!' : '📊 현재 순위'}
-        </h1>
-        
-        {/* Completion Progress & Timer */}
-        <div className="mt-2 bg-[#FFF5F5] rounded-2xl p-4 border border-[#EB5053]/10 space-y-3">
-          {timeLeft && !liveResults.isExpired && liveResults.completedCount < liveResults.totalMembers && (
-            <div className="flex items-center justify-between pb-2.5 border-b border-[#EB5053]/10">
-              <span className="text-[12px] font-bold text-[#4A4A4A]">남은 투표 시간</span>
-              <span className="text-[16px] font-black text-[#EB5053] tracking-widest tabular-nums font-mono">{timeLeft}</span>
+      {/* Hero */}
+      <div className="relative w-full" style={{ aspectRatio: '4/3' }}>
+        <img src={winner.image} alt={winner.name} className="w-full h-full object-cover" />
+        <div className="absolute inset-0 bg-gradient-to-t from-black/75 via-black/15 to-transparent" />
+        <div className="absolute inset-x-0 bottom-0 px-5 pb-5 text-center">
+          <div className="text-[40px] leading-none mb-1">🏆</div>
+          <span className="inline-block text-[11px] font-black text-white bg-white/20 backdrop-blur-sm rounded-full px-3 py-1 mb-1.5">
+            오늘의 점심 당첨!
+          </span>
+          <h1 className="text-white font-black text-[24px] leading-tight">{winner.name}</h1>
+        </div>
+      </div>
+
+      {/* Detail Card */}
+      <div className="px-5 -mt-5 relative">
+        <div className="bg-white rounded-3xl p-5 shadow-lg space-y-4">
+          {/* Badges */}
+          <div className="flex items-center gap-2 flex-wrap">
+            <div className="flex items-center gap-1 bg-[#FFF5F5] rounded-full px-2.5 py-1">
+              <Star size={12} fill="#EB5053" color="#EB5053" />
+              <span className="text-[12px] font-bold text-[#EB5053]">{winner.rating}</span>
             </div>
-          )}
+            <span className="text-[12px] font-semibold text-[#4A4A4A] bg-[#F5F5F5] rounded-full px-2.5 py-1">
+              📍 {winner.distance}
+            </span>
+            <span className="text-[12px] font-semibold text-[#4A4A4A] bg-[#F5F5F5] rounded-full px-2.5 py-1">
+              {'₩'.repeat(winner.priceRange)}
+            </span>
+            <span className="text-[12px] font-semibold text-white rounded-full px-2.5 py-1" style={{ background: '#EB5053' }}>
+              {winner.category}
+            </span>
+          </div>
+
+          {/* Address */}
+          <div className="flex items-start gap-1.5">
+            <MapPin size={14} className="text-[#9B9B9B] mt-0.5 flex-shrink-0" />
+            <p className="text-[13px] text-[#4A4A4A]">{winner.address}</p>
+          </div>
+
+          {/* Tags */}
+          <div className="flex gap-1.5 flex-wrap">
+            {winner.tags.map(tag => (
+              <span key={tag} className="tag tag-hash">#{tag}</span>
+            ))}
+          </div>
+
+          {/* Description */}
+          <p className="text-[13px] text-[#4A4A4A] leading-relaxed">{winner.description}</p>
+
+          {/* Menu Photos */}
           <div>
-            <div className="flex items-center justify-between">
-              <span className="text-[12px] font-bold text-[#EB5053]">투표 진행 현황</span>
-              <span className="text-[13px] font-black text-[#EB5053]">
-                {liveResults.completedCount} / {liveResults.totalMembers} 명 완료
-              </span>
-            </div>
-            <div className="w-full bg-[#E5E5E5] h-2 rounded-full overflow-hidden mt-2">
-              <motion.div 
-                className="h-full rounded-full"
-                style={{ background: '#EB5053' }}
-                initial={{ width: 0 }}
-                animate={{ width: `${(liveResults.completedCount / (liveResults.totalMembers || 1)) * 100}%` }}
-                transition={{ duration: 0.5 }}
-              />
+            <p className="text-[12px] font-bold text-[#9B9B9B] mb-2">메뉴 사진</p>
+            <div className="grid grid-cols-4 gap-2">
+              {foodPhotos.map((url, i) => (
+                <div key={i} className="aspect-square rounded-xl overflow-hidden bg-[#F5F5F5]">
+                  <img src={url} alt="" className="w-full h-full object-cover" />
+                </div>
+              ))}
             </div>
           </div>
+
+          {/* Action Buttons */}
+          <div className="flex gap-2 pt-1">
+            <button
+              onClick={() => toast.info('예약 기능은 준비 중이에요 🙏')}
+              className="flex-1 py-3 rounded-2xl font-bold text-[14px] flex items-center justify-center gap-1.5 border border-[#E5E5E5] text-[#4A4A4A] active:scale-[0.98] transition-all"
+            >
+              <Phone size={15} /> 예약하기
+            </button>
+            <button
+              onClick={() => navigate(`/lunchie/map?id=${winner.id}`)}
+              className="flex-1 py-3 rounded-2xl font-bold text-white text-[14px] flex items-center justify-center gap-1.5 active:scale-[0.98] transition-all"
+              style={{ background: '#EB5053' }}
+            >
+              <Navigation size={15} /> 길찾기
+            </button>
+          </div>
+
+          {/* Share Card Button */}
+          <button
+            onClick={() => setShowShare(true)}
+            className="w-full py-3.5 rounded-2xl font-bold text-white text-[14px] flex items-center justify-center gap-2 active:scale-[0.98] transition-all shadow-lg"
+            style={{ background: 'linear-gradient(135deg, #F09D09 0%, #EB5053 100%)' }}
+          >
+            <Share2 size={16} /> 공유 카드 만들기
+          </button>
         </div>
       </div>
 
-      <div className="flex mx-5 mb-4 bg-[#F5F5F5] rounded-xl p-1">
-        {(['group', 'personal'] as const).map(v => (
-          <button key={v} onClick={() => setView(v)}
-            className="flex-1 py-2 rounded-lg text-[13px] font-semibold transition-all"
-            style={view === v ? { background: 'white', color: '#EB5053', boxShadow: '0 1px 4px rgba(0,0,0,0.08)' } : { color: '#9B9B9B' }}>
-            {v === 'group' ? '그룹 순위' : '개인 순위'}
-          </button>
-        ))}
+      {/* Bottom Row */}
+      <div className="px-5 mt-3 flex gap-2">
+        <button
+          onClick={handleCopyAddress}
+          className="flex-1 py-3 rounded-2xl font-bold text-[13px] flex items-center justify-center gap-1.5 bg-white border border-[#E5E5E5] text-[#4A4A4A] active:scale-[0.98] transition-all"
+        >
+          <Link2 size={14} /> 주소 복사
+        </button>
+        <button
+          onClick={() => { onReset(); navigate('/'); }}
+          className="flex-1 py-3 rounded-2xl font-bold text-[13px] flex items-center justify-center gap-1.5 bg-white border border-[#E5E5E5] text-[#4A4A4A] active:scale-[0.98] transition-all"
+        >
+          <Home size={14} /> 홈으로
+        </button>
       </div>
 
-      <div className="px-5 space-y-3 mb-6">
-        {displayScores.length === 0 ? (
-          <p className="text-[13px] text-[#9B9B9B] text-center py-12">투표 데이터가 아직 존재하지 않습니다</p>
-        ) : (
-          displayScores.slice(0, 5).map((item, i) => (
-            <motion.div
-              key={item.restaurant.id}
-              initial={{ opacity: 0, x: -20 }}
-              animate={{ opacity: 1, x: 0 }}
-              transition={{ delay: i * 0.08 }}
-              className="flex items-center gap-3 p-3 rounded-2xl border border-black/5"
-              style={{ background: i === 0 ? '#FFF5F5' : '#F5F5F5' }}
-            >
-              <img src={item.restaurant.image} alt="" className="w-12 h-12 object-cover rounded-xl flex-shrink-0" />
-              <div className="flex-1 min-w-0">
-                <p className="font-bold text-[14px] text-[#1A1A1A] truncate">{item.restaurant.name}</p>
-                <p className="text-[11px] text-[#9B9B9B] mt-0.5">{item.restaurant.category} · {item.restaurant.address}</p>
-              </div>
-              <div className="text-right">
-                <span className="font-black text-[20px]" style={{ color: i === 0 ? '#EB5053' : '#4A4A4A' }}>
-                  {item.score}
-                </span>
-                <p className="text-[9px] text-[#9B9B9B]">점</p>
-              </div>
-            </motion.div>
-          ))
-        )}
-      </div>
+      {/* Share Overlay */}
+      <AnimatePresence>
+        {showShare && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-50 bg-[#1A1A1A]/90 backdrop-blur-sm flex flex-col items-center justify-center px-6 py-10 overflow-y-auto"
+          >
+            <WinnerShareCard ref={shareCardRef} restaurant={winner} />
 
-      {winner && (
-        <div className="px-5">
-          {liveResults.isExpired || liveResults.completedCount >= liveResults.totalMembers ? (
-            <>
+            <div className="flex gap-3 mt-6 w-full max-w-[300px]">
               <button
-                onClick={() => navigate(`/lunchie/map?id=${winner.id}`)}
-                className="w-full py-4 rounded-2xl font-bold text-white text-[15px] flex items-center justify-center gap-2 active:scale-[0.98] shadow-lg shadow-[#EB5053]/20"
+                onClick={handleSaveImage}
+                disabled={isCapturing}
+                className="flex-1 py-3.5 rounded-2xl font-bold text-[14px] flex items-center justify-center gap-1.5 bg-white/10 text-white active:scale-[0.98] transition-all disabled:opacity-50"
+              >
+                <Download size={16} /> 저장
+              </button>
+              <button
+                onClick={handleShareImage}
+                disabled={isCapturing}
+                className="flex-1 py-3.5 rounded-2xl font-bold text-[14px] flex items-center justify-center gap-1.5 text-white active:scale-[0.98] transition-all disabled:opacity-50"
                 style={{ background: '#EB5053' }}
               >
-                🗺️ {winner.name} 식당 찾기
+                <Share2 size={16} /> 이미지 공유하기
               </button>
-              <button onClick={() => { onReset(); navigate('/'); }}
-                className="w-full py-3 mt-2 rounded-2xl font-semibold text-[#9B9B9B] text-[14px] active:scale-[0.98]">
-                처음으로
-              </button>
-            </>
-          ) : (
-            <>
-              <button onClick={() => window.history.back()}
-                className="w-full py-4 rounded-2xl font-bold text-[#EB5053] border border-[#EB5053] text-[15px] active:scale-[0.98] bg-white transition-all">
-                대기 화면으로 돌아가기 ⏳
-              </button>
-              <button onClick={() => { onReset(); navigate('/'); }}
-                className="w-full py-3 mt-2 rounded-2xl font-semibold text-[#9B9B9B] text-[14px] active:scale-[0.98]">
-                처음으로
-              </button>
-            </>
-          )}
-        </div>
-      )}
+            </div>
+
+            <button
+              onClick={() => setShowShare(false)}
+              className="mt-5 text-white/60 text-[13px] font-semibold active:scale-95"
+            >
+              닫기
+            </button>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </motion.div>
   );
 }
@@ -586,7 +590,7 @@ function FinalBattleResultScreen({
           className="w-full py-4 rounded-2xl font-bold text-white text-[15px] active:scale-[0.98] shadow-xl"
           style={{ background: '#F09D09' }}
         >
-          최종 순위 보기 📊
+          결과 확인하기 🎉
         </button>
       </div>
     </motion.div>
@@ -705,7 +709,7 @@ function WaitingOrDecidedScreen({ onContinue }: { onContinue: () => void }) {
             
             <button onClick={onContinue}
               className="w-full max-w-[340px] py-4 rounded-2xl font-bold text-[#EB5053] text-[15px] bg-white active:scale-[0.98] transition-all shadow-md mx-auto block">
-              최종 순위 보기 📊
+              결과 확인하기 🎉
             </button>
           </motion.div>
         ) : (
@@ -765,11 +769,6 @@ function WaitingOrDecidedScreen({ onContinue }: { onContinue: () => void }) {
                 </div>
               ))}
             </div>
-
-            <button onClick={onContinue}
-              className="w-full max-w-[340px] py-4 rounded-2xl font-bold text-white text-[15px] border border-white/30 hover:bg-white/10 active:scale-[0.98] transition-all mx-auto block">
-              실시간 순위 먼저 보기 📊
-            </button>
           </motion.div>
         )}
       </div>
@@ -878,7 +877,7 @@ export default function QuickMatchPage() {
     return <WaitingOrDecidedScreen onContinue={() => setPhase('results')} />;
   }
   if (phase === 'results') {
-    return <ResultsScreen swipeData={swipeData} onReset={() => { setCurrentIndex(0); setSwipeData([]); }} />;
+    return <WinnerScreen onReset={() => { setCurrentIndex(0); setSwipeData([]); }} />;
   }
 
   // Countdown formatting for header badge
