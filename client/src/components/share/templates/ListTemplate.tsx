@@ -17,7 +17,7 @@ const ListTemplate = forwardRef<HTMLDivElement, TemplateProps>(({ course }, ref)
         backgroundColor: '#ffffff',
         padding: 20,
         boxSizing: 'border-box',
-        fontFamily: 'sans-serif',
+        fontFamily: "'Pretendard Variable', 'Pretendard', sans-serif",
         display: 'flex',
         flexDirection: 'column',
       }}

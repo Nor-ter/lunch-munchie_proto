@@ -218,11 +218,10 @@ export default function HomePage() {
         >
           <div className="flex h-full items-center justify-between gap-1 pl-[13px] pr-[18px] pt-[16px]">
             <div className="flex-1">
-              {/* Quick Match 타이틀은 merge1_v3의 Baloo 2 폰트 유지 */}
               <p
                 className="text-white leading-none"
                 style={{
-                  fontFamily: "'Baloo 2', cursive",
+                  fontFamily: "'Pretendard Variable', 'Pretendard', sans-serif",
                   fontWeight: 700,
                   fontSize: 24,
                 }}

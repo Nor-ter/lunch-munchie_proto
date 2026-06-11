@@ -17,7 +17,7 @@ const StravaClassicTemplate = forwardRef<HTMLDivElement, TemplateProps>(
           flexDirection: 'column',
           alignItems: 'center',
           gap: 12,
-          fontFamily: 'system-ui, sans-serif',
+          fontFamily: "'Pretendard Variable', 'Pretendard', sans-serif",
         }}
       >
         <div

@@ -18,7 +18,7 @@ const StravaCoralTemplate = forwardRef<HTMLDivElement, TemplateProps>(
           flexDirection: 'column',
           alignItems: 'center',
           justifyContent: 'center',
-          fontFamily: 'system-ui, sans-serif',
+          fontFamily: "'Pretendard Variable', 'Pretendard', sans-serif",
           position: 'relative',
         }}
       >

@@ -31,7 +31,7 @@ const FoodCourseStoryTemplate = forwardRef<HTMLDivElement, TemplateProps>(({ cou
         background: '#FFFFFF',
         borderRadius: 20,
         overflow: 'hidden',
-        fontFamily: 'system-ui, -apple-system, sans-serif',
+        fontFamily: "'Pretendard Variable', 'Pretendard', sans-serif",
         boxSizing: 'border-box',
         display: 'flex',
         flexDirection: 'column',

@@ -32,7 +32,7 @@ const StravaDarkTemplate = forwardRef<HTMLDivElement, TemplateProps>(({ course }
         background: '#000000',
         borderRadius: 20,
         overflow: 'hidden',
-        fontFamily: 'system-ui, -apple-system, sans-serif',
+        fontFamily: "'Pretendard Variable', 'Pretendard', sans-serif",
         boxSizing: 'border-box',
         display: 'flex',
         flexDirection: 'column',
