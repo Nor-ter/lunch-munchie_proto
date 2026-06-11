@@ -267,7 +267,7 @@ export default function HomePage() {
             더보기 <ArrowRight size={20} strokeWidth={2.4} />
           </button>
         </div>
-        <p className="mb-[12px] text-[10px] leading-none text-black">
+        <p className="mb-[12px] text-[10px] leading-none text-black" style={{ paddingLeft: 20 }}>
           이번주 사람들이 많이 저장한 코스
         </p>
 
