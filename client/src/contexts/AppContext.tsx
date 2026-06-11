@@ -404,7 +404,6 @@ interface AppContextValue {
   fetchSession: (token: string) => Promise<GroupSession>;
   toggleReady: (token: string, isReady: boolean) => Promise<GroupSession>;
   startSession: (token: string, deadlineMinutes?: number) => Promise<GroupSession>;
-  updateSessionSettings: (updates: { partySize?: number; radius?: number }) => void;
 
   swipeRecords: SwipeRecord[];
   addSwipe: (restaurantId: string, action: SwipeRecord['action']) => void;
@@ -693,25 +692,6 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     return next;
   }, [currentSession, fetchSession]);
 
-  const updateSessionSettings = useCallback((updates: { partySize?: number; radius?: number }) => {
-    if (!currentSession) return;
-    const next: GroupSession = {
-      ...currentSession,
-      filters: {
-        ...currentSession.filters,
-        ...(updates.partySize !== undefined ? { partySize: updates.partySize } : {}),
-        ...(updates.radius !== undefined ? { radius: updates.radius } : {}),
-      },
-    };
-    setCurrentSession(next);
-    // 서버에도 베스트에포트로 반영 (실패해도 로컬 상태는 유지)
-    fetch(`/api/sessions/${currentSession.inviteCode}/settings`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ groupSize: next.filters.partySize, filterDistance: next.filters.radius }),
-    }).catch(() => {});
-  }, [currentSession]);
-
   const addSwipe = useCallback((restaurantId: string, action: SwipeRecord['action']) => {
     const record: SwipeRecord = {
       restaurantId,
@@ -757,7 +737,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   return (
     <AppContext.Provider value={{
       courses, savedCourseIds, saveCourse, unsaveCourse, addCourse,
-      currentSession, setCurrentSession, createSession, joinSession, fetchSession, toggleReady, startSession, updateSessionSettings,
+      currentSession, setCurrentSession, createSession, joinSession, fetchSession, toggleReady, startSession,
       swipeRecords, addSwipe, likedRestaurantIds,
       profile, updateProfile,
       restaurants,

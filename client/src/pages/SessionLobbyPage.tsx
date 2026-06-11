@@ -7,29 +7,16 @@
 import { useEffect, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useLocation } from 'wouter';
-import { ArrowLeft, Copy, Share2, Play, QrCode, Users, ChevronDown, ChevronUp, CheckCircle, Minus, Plus } from 'lucide-react';
+import { ArrowLeft, Copy, Share2, Play, QrCode, Users, ChevronDown, ChevronUp, CheckCircle } from 'lucide-react';
 import { QRCodeSVG } from 'qrcode.react';
 import { useApp } from '@/contexts/AppContext';
 import { toast } from 'sonner';
 
-const RADIUS_OPTIONS = [500, 1000, 2000, 3000, 5000];
-
-function formatRadius(r: number): string {
-  return r >= 1000 ? `${r / 1000}km` : `${r}m`;
-}
-
 export default function SessionLobbyPage() {
   const [, navigate] = useLocation();
-  const { currentSession, fetchSession, startSession, updateSessionSettings } = useApp();
+  const { currentSession, fetchSession, startSession, profile } = useApp();
   const [showQR, setShowQR] = useState(true);
   const [showMembers, setShowMembers] = useState(true);
-
-  // Auto-navigate when session status shifts from waiting to active voting
-  useEffect(() => {
-    if (currentSession && currentSession.status !== 'waiting') {
-      navigate('/lunchie/swipe');
-    }
-  }, [currentSession?.status, navigate]);
 
   // Poll the server so newly joined members (and the start signal) show up.
   // NOTE: early return보다 위에 있어야 한다 — hooks는 조건부로 호출되면 안 됨.
@@ -66,6 +53,9 @@ export default function SessionLobbyPage() {
     } else handleCopy();
   };
 
+  const isHost = currentSession.hostId === profile.id;
+  const isWaiting = currentSession.status === 'waiting';
+
   const handleStart = async () => {
     try {
       await startSession(currentSession.inviteCode, currentSession.deadlineMinutes);
@@ -76,7 +66,9 @@ export default function SessionLobbyPage() {
     }
   };
 
-  const { partySize, radius } = currentSession.filters;
+  const handleJoinSwipe = () => {
+    navigate('/lunchie/swipe');
+  };
 
   return (
     <div className="min-h-dvh bg-[#FCF4EE] px-5 pb-8">
@@ -87,7 +79,7 @@ export default function SessionLobbyPage() {
         </button>
         <div className="flex-1 min-w-0">
           <h1 className="font-bold text-[20px] text-[#1A1A1A] truncate">{currentSession.name}</h1>
-          <p className="text-[12px] text-[#9B9B9B]">대기 중 · {currentSession.members.length}명 참여</p>
+          <p className="text-[12px] text-[#9B9B9B]">{isWaiting ? '대기 중' : '투표 진행 중'} · {currentSession.members.length}명 참여</p>
         </div>
         <div className="px-3 py-1.5 rounded-full text-[11px] font-bold text-[#3CBA44] bg-[#3CBA44]/10">
           LIVE
@@ -173,64 +165,34 @@ export default function SessionLobbyPage() {
         </AnimatePresence>
       </div>
 
-      {/* Session Settings (editable) */}
-      <div className="lm-card p-4 mb-6">
-        <p className="font-semibold text-[14px] text-[#1A1A1A] mb-3">세션 설정</p>
-
-        {/* 인원수 */}
-        <div className="bg-[#F5F5F5] rounded-xl p-3 mb-2">
-          <p className="text-[11px] text-[#9B9B9B] mb-2">인원수</p>
-          <div className="flex items-center gap-4">
-            <button
-              onClick={() => updateSessionSettings({ partySize: Math.max(2, partySize - 1) })}
-              className="w-9 h-9 rounded-full bg-white shadow-sm flex items-center justify-center active:scale-90 disabled:opacity-40"
-              disabled={partySize <= 2}
-            >
-              <Minus size={16} color="#1A1A1A" />
-            </button>
-            <p className="font-black text-[20px] text-[#EB5053] w-12 text-center">{partySize}명</p>
-            <button
-              onClick={() => updateSessionSettings({ partySize: Math.min(12, partySize + 1) })}
-              className="w-9 h-9 rounded-full bg-white shadow-sm flex items-center justify-center active:scale-90 disabled:opacity-40"
-              disabled={partySize >= 12}
-            >
-              <Plus size={16} color="#1A1A1A" />
-            </button>
-          </div>
-        </div>
-
-        {/* 반경 */}
-        <div className="bg-[#F5F5F5] rounded-xl p-3">
-          <p className="text-[11px] text-[#9B9B9B] mb-2">검색 반경</p>
-          <div className="flex gap-1.5">
-            {RADIUS_OPTIONS.map(r => (
-              <button
-                key={r}
-                onClick={() => updateSessionSettings({ radius: r })}
-                className="flex-1 py-2 rounded-lg text-[12px] font-bold transition-all active:scale-95"
-                style={
-                  radius === r
-                    ? { background: '#EB5053', color: 'white' }
-                    : { background: 'white', color: '#4A4A4A' }
-                }
-              >
-                {formatRadius(r)}
-              </button>
-            ))}
-          </div>
-        </div>
-      </div>
-
       {/* Start Button */}
-      <motion.button
-        onClick={handleStart}
-        className="w-full lm-btn-primary flex items-center justify-center gap-3 text-[16px]"
-        whileHover={{ scale: 1.02 }}
-        whileTap={{ scale: 0.97 }}
-      >
-        <Play size={20} fill="white" />
-        투표 시작하기!
-      </motion.button>
+      {isWaiting ? (
+        isHost ? (
+          <motion.button
+            onClick={handleStart}
+            className="w-full lm-btn-primary flex items-center justify-center gap-3 text-[16px]"
+            whileHover={{ scale: 1.02 }}
+            whileTap={{ scale: 0.97 }}
+          >
+            <Play size={20} fill="white" />
+            투표 시작하기!
+          </motion.button>
+        ) : (
+          <div className="w-full py-4 rounded-2xl bg-[#F5F5F5] text-center text-[13px] font-semibold text-[#9B9B9B]">
+            호스트가 투표를 시작하길 기다리는 중...
+          </div>
+        )
+      ) : (
+        <motion.button
+          onClick={handleJoinSwipe}
+          className="w-full lm-btn-primary flex items-center justify-center gap-3 text-[16px]"
+          whileHover={{ scale: 1.02 }}
+          whileTap={{ scale: 0.97 }}
+        >
+          <Play size={20} fill="white" />
+          스와이핑 시작하기!
+        </motion.button>
+      )}
     </div>
   );
 }

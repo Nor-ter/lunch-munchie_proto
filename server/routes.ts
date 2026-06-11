@@ -273,31 +273,6 @@ router.post("/sessions/:token/status", async (req: any, res: any) => {
   res.status(404).json({ error: "Session not found" });
 });
 
-// 세션 설정(인원수/반경) 변경 — 로비에서 호스트가 수정
-router.post("/sessions/:token/settings", async (req: any, res: any) => {
-  const token = req.params.token;
-  const { groupSize, filterDistance } = req.body;
-  const patch: Record<string, any> = {};
-  if (groupSize !== undefined) patch.group_size = Number(groupSize);
-  if (filterDistance !== undefined) patch.filter_distance = Number(filterDistance);
-  if (Object.keys(patch).length === 0) return res.status(400).json({ error: "Nothing to update" });
-  try {
-    const [session] = await db.select().from(sessions).where(eq(sessions.share_token, token));
-    if (session) {
-      await db.update(sessions).set(patch).where(eq(sessions.share_token, token));
-      return res.status(200).json({ success: true });
-    }
-  } catch (err) {
-    console.error("DB unavailable for settings, trying memory:", (err as Error)?.message);
-  }
-  const mem = memByToken(token);
-  if (mem) {
-    Object.assign(mem.session, patch);
-    return res.status(200).json({ success: true });
-  }
-  res.status(404).json({ error: "Session not found" });
-});
-
 // 세션 결과 집계 — DB/메모리 공용 (rows는 컬럼명 기반 객체)
 function buildResultsPayload(
   session: Record<string, any>,

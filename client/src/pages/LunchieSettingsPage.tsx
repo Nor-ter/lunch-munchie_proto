@@ -7,7 +7,7 @@
 import { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useLocation } from 'wouter';
-import { ArrowLeft, Clock, SlidersHorizontal, X } from 'lucide-react';
+import { ArrowLeft, Clock, SlidersHorizontal, Users, Minus, Plus, X } from 'lucide-react';
 import { useApp } from '@/contexts/AppContext';
 import { toast } from 'sonner';
 
@@ -30,8 +30,10 @@ const DETAIL_OPTIONS: Record<string, string[]> = {
   '평점': ['4.0 이상', '4.5 이상', '4.8 이상'],
 };
 
-function distanceToMeters(d: string): number {
-  return d.includes('km') ? parseFloat(d) * 1000 : parseFloat(d);
+const RADIUS_OPTIONS = [500, 1000, 2000, 3000, 5000];
+
+function formatRadius(r: number): string {
+  return r >= 1000 ? `${r / 1000}km` : `${r}m`;
 }
 
 // ─── Lunchie Settings Page ────────────────────────────────────────────────────
@@ -41,6 +43,8 @@ export default function LunchieSettingsPage() {
   const { createSession, restaurants, profile } = useApp();
 
   const [deadlineMin, setDeadlineMin] = useState(10);
+  const [partySize, setPartySize] = useState(4);
+  const [radius, setRadius] = useState(1000);
   const [activeFilters, setActiveFilters] = useState<string[]>(['취향', '평점']);
   const [details, setDetails] = useState<Record<string, string[]>>({
     '취향': ['맛집'],
@@ -68,14 +72,11 @@ export default function LunchieSettingsPage() {
       const sel = (f: string) => (activeFilters.includes(f) ? details[f] || [] : []);
 
       const dietary = sel('식단');
-      const distSel = sel('거리');
-      const radius = distSel.length ? Math.max(...distSel.map(distanceToMeters)) : 1000;
       const budgetSel = sel('예산');
       const budget = (budgetSel[0]?.length || 2) as 1 | 2 | 3 | 4;
       // '취향' 값 중 실제 식당 카테고리와 일치하는 것만 필터로 사용 (빈 세션 방지)
       const realCats = new Set(restaurants.map(r => r.category));
       const categories = sel('취향').filter(t => realCats.has(t));
-      const partySize = 4;
 
       const hostName = profile.name && profile.name !== '사용자' ? profile.name : '호스트';
       const sessionName = `${hostName}의 점심 세션`;
@@ -138,6 +139,57 @@ export default function LunchieSettingsPage() {
                 {d.label}
               </button>
             ))}
+          </div>
+        </div>
+
+        {/* Session Settings */}
+        <div className="rounded-2xl p-4 bg-white">
+          <div className="flex items-center gap-2 mb-3">
+            <Users size={15} color="#EB5053" />
+            <p className="text-[13px] font-bold text-[#1A1A1A]">세션 설정</p>
+          </div>
+
+          {/* 인원수 */}
+          <div className="bg-[#F5F5F5] rounded-xl p-3 mb-2">
+            <p className="text-[11px] text-[#9B9B9B] mb-2">인원수</p>
+            <div className="flex items-center gap-4">
+              <button
+                onClick={() => setPartySize(p => Math.max(2, p - 1))}
+                className="w-9 h-9 rounded-full bg-white shadow-sm flex items-center justify-center active:scale-90 disabled:opacity-40"
+                disabled={partySize <= 2}
+              >
+                <Minus size={16} color="#1A1A1A" />
+              </button>
+              <p className="font-black text-[20px] text-[#EB5053] w-12 text-center">{partySize}명</p>
+              <button
+                onClick={() => setPartySize(p => Math.min(12, p + 1))}
+                className="w-9 h-9 rounded-full bg-white shadow-sm flex items-center justify-center active:scale-90 disabled:opacity-40"
+                disabled={partySize >= 12}
+              >
+                <Plus size={16} color="#1A1A1A" />
+              </button>
+            </div>
+          </div>
+
+          {/* 반경 */}
+          <div className="bg-[#F5F5F5] rounded-xl p-3">
+            <p className="text-[11px] text-[#9B9B9B] mb-2">검색 반경</p>
+            <div className="flex gap-1.5">
+              {RADIUS_OPTIONS.map(r => (
+                <button
+                  key={r}
+                  onClick={() => setRadius(r)}
+                  className="flex-1 py-2 rounded-lg text-[12px] font-bold transition-all active:scale-95"
+                  style={
+                    radius === r
+                      ? { background: '#EB5053', color: 'white' }
+                      : { background: 'white', color: '#4A4A4A' }
+                  }
+                >
+                  {formatRadius(r)}
+                </button>
+              ))}
+            </div>
           </div>
         </div>
 
