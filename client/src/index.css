@@ -73,7 +73,7 @@
   * { @apply border-border outline-ring/50; }
   body {
     @apply bg-background text-foreground;
-    font-family: 'Pretendard Variable', 'Pretendard', -apple-system, BlinkMacSystemFont, sans-serif;
+    font-family: 'Baloo 2', cursive;
     -webkit-tap-highlight-color: transparent;
     overscroll-behavior: none;
   }

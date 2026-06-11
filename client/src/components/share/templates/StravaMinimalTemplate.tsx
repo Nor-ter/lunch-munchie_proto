@@ -19,7 +19,7 @@ const StravaMinimalTemplate = forwardRef<HTMLDivElement, TemplateProps>(({ cours
       background: '#000000',
       borderRadius: 20,
       overflow: 'hidden',
-      fontFamily: "'Pretendard Variable', 'Pretendard', sans-serif",
+      fontFamily: "'Baloo 2', cursive",
       boxSizing: 'border-box',
       display: 'flex',
       flexDirection: 'column',

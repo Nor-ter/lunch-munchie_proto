@@ -18,7 +18,7 @@ const DarkStoryTemplate = forwardRef<HTMLDivElement, TemplateProps>(({ course },
         boxSizing: 'border-box',
         display: 'flex',
         flexDirection: 'column',
-        fontFamily: "'Pretendard Variable', 'Pretendard', sans-serif",
+        fontFamily: "'Baloo 2', cursive",
       }}
     >
       <span style={{ fontSize: 9, color: '#EB5053', letterSpacing: 1 }}>LUNCHIE MUNCHIE</span>

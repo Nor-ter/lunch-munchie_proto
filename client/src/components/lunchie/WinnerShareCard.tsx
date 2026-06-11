@@ -20,7 +20,7 @@ const WinnerShareCard = forwardRef<HTMLDivElement, WinnerShareCardProps>(({ rest
         borderRadius: 24,
         padding: 18,
         boxSizing: 'border-box',
-        fontFamily: "'Pretendard Variable', 'Pretendard', sans-serif",
+        fontFamily: "'Baloo 2', cursive",
       }}
     >
       <LunchieLogo showWordmark size={28} wordmarkClassName="text-[15px] font-black" />

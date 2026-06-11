@@ -25,7 +25,7 @@ const StatsCardTemplate = forwardRef<HTMLDivElement, TemplateProps>(({ course },
         boxSizing: 'border-box',
         display: 'flex',
         flexDirection: 'column',
-        fontFamily: "'Pretendard Variable', 'Pretendard', sans-serif",
+        fontFamily: "'Baloo 2', cursive",
       }}
     >
       <p style={{ fontSize: 16, fontWeight: 'bold', color: '#1A1A1A', margin: 0 }}>

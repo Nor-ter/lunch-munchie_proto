@@ -19,7 +19,7 @@ const FoodCourseDarkTemplate = forwardRef<HTMLDivElement, TemplateProps>(({ cour
       background: '#0A0A0A',
       borderRadius: 20,
       overflow: 'hidden',
-      fontFamily: "'Pretendard Variable', 'Pretendard', sans-serif",
+      fontFamily: "'Baloo 2', cursive",
       boxSizing: 'border-box',
       position: 'relative',
       display: 'flex',
