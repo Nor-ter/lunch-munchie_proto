@@ -179,14 +179,14 @@ export default function HomePage() {
           </span>
         </div>
 
-        <h1 className="text-[30px] font-bold leading-[1.2] text-black">
+        <h1 className="text-[30px] font-bold leading-[1.2] text-black" style={{ paddingLeft: 20 }}>
           오늘 어떻게
           <br />
           먹을까요?
         </h1>
         <p
           className="mt-[13px] text-[11px] leading-none"
-          style={{ color: "#6E6A67" }}
+          style={{ color: "#6E6A67", paddingLeft: 20 }}
         >
           모드를 선택해주세요.
         </p>
