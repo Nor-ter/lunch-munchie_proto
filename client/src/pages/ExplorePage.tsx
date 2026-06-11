@@ -101,7 +101,10 @@ export default function ExplorePage() {
       {/* Header */}
       <div className="bg-white px-5 pt-12 pb-4">
         <div className="flex items-center justify-between mb-4">
-          <h1 className="font-bold text-[22px] text-[#1A1A1A]">코스 탐색 🗺️</h1>
+          <div>
+            <h1 className="font-bold text-[22px] text-[#1A1A1A]">Munchie Mode</h1>
+            <p className="text-[12px] mt-0.5" style={{ color: '#9B9B9B' }}>코스를 탐색해보아요</p>
+          </div>
           <button className="w-10 h-10 rounded-full bg-[#F5F5F5] flex items-center justify-center">
             <SlidersHorizontal size={18} color="#4A4A4A" />
           </button>
