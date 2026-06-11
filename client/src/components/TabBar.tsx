@@ -57,23 +57,19 @@ function HomeIcon({ active }: { active: boolean }) {
 function LightningIcon({ active }: { active: boolean }) {
   return (
     <svg
-      className="h-[48px] w-[48px]"
+      className="h-[46px] w-[46px]"
       fill="none"
       stroke="white"
       strokeLinecap="round"
       strokeLinejoin="round"
-      viewBox="0 0 52 52"
+      viewBox="0 0 40 40"
       style={{ opacity: active ? 1 : 0.7 }}
     >
-      <circle cx="26" cy="26" r="22" strokeWidth="3.2" />
       <path
-        d="M24.8 10.8 L12.7 27.2 H24.1 L20.2 41.3 L37.2 21.9 H25.6 Z"
-        strokeWidth="3.4"
+        d="M22 5 L9 22 H19.5 L16 35 L31 18 H20.5 Z"
+        strokeWidth="2.8"
         fill={active ? "white" : "none"}
       />
-      <path d="M35.4 19.5 H43" strokeWidth="3" />
-      <path d="M34 26.6 H42.2" strokeWidth="3" />
-      <path d="M31.8 33.3 H38" strokeWidth="3" />
     </svg>
   );
 }
