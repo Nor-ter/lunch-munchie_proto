@@ -130,9 +130,7 @@
   .tab-bar {
     position: fixed; bottom: 0; left: 50%; transform: translateX(-50%);
     width: 100%; max-width: 480px;
-    background: var(--lm-primary);
-    border-radius: 20px 20px 0 0;
-    box-shadow: 0 -4px 20px rgba(235, 80, 83, 0.2);
+    background: #F43D40;
     z-index: 50;
     padding-bottom: env(safe-area-inset-bottom, 0px);
   }
