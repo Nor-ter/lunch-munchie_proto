@@ -179,7 +179,7 @@ export default function HomePage() {
           </span>
         </div>
 
-        <h1 className="text-[30px] font-black leading-[1.2] text-black">
+        <h1 className="text-[30px] font-bold leading-[1.2] text-black">
           오늘 어떻게
           <br />
           먹을까요?
@@ -201,7 +201,7 @@ export default function HomePage() {
           paddingRight: "clamp(24px, 10.2vw, 41px)",
         }}
       >
-        <p className="mb-[15px] text-[20px] font-black leading-none text-black">
+        <p className="mb-[15px] text-[20px] font-black leading-none text-black" style={{ paddingLeft: 20 }}>
           Lunchie Mode
         </p>
 
@@ -257,7 +257,7 @@ export default function HomePage() {
         }}
       >
         <div className="mb-[6px] flex items-end justify-between">
-          <p className="text-[20px] font-black leading-none text-black">
+          <p className="text-[20px] font-black leading-none text-black" style={{ paddingLeft: 20 }}>
             Munchie Mode
           </p>
           <button
