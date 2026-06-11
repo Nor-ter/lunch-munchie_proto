@@ -70,6 +70,8 @@ export interface GroupSession {
     categories: string[];
   };
   deadline: string | null;
+  /** 마감 타이밍(분) — 투표 시작 시점에 deadline으로 변환 적용 */
+  deadlineMinutes?: number;
   status: 'waiting' | 'voting' | 'completed';
   restaurants: Restaurant[];
   results: { restaurantId: string; score: number }[];
@@ -401,7 +403,8 @@ interface AppContextValue {
   joinSession: (token: string, name?: string, emoji?: string) => Promise<GroupSession>;
   fetchSession: (token: string) => Promise<GroupSession>;
   toggleReady: (token: string, isReady: boolean) => Promise<GroupSession>;
-  startSession: (token: string) => Promise<GroupSession>;
+  startSession: (token: string, deadlineMinutes?: number) => Promise<GroupSession>;
+  updateSessionSettings: (updates: { partySize?: number; radius?: number }) => void;
 
   swipeRecords: SwipeRecord[];
   addSwipe: (restaurantId: string, action: SwipeRecord['action']) => void;
@@ -569,7 +572,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
               ready: false,
             }],
             filters,
-            deadline: data.session.deadline_at,
+            deadline: null, // 마감 타이머는 투표 시작 시점에 적용
+            deadlineMinutes,
             status: 'waiting',
             restaurants: restaurants.filter(r =>
               filters.categories.length === 0 || filters.categories.includes(r.category),
@@ -585,6 +589,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     }
 
     const session = buildLocalSession(name, filters, { ...profile, name: actualHostName, emoji: actualEmoji }, restaurants);
+    session.deadlineMinutes = deadlineMinutes;
     setCurrentSession(session);
     return session;
   }, [apiAvailable, profile, restaurants]);
@@ -593,6 +598,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     const res = await fetch(`/api/sessions/${token}`);
     if (!res.ok) throw new Error('Session not found');
     const data = await res.json();
+    const status = (data.session.status as string).toLowerCase() as GroupSession['status'];
     const session: GroupSession = {
       id: data.session.id,
       name: '점심 세션',
@@ -613,15 +619,21 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         radius: data.session.filter_distance,
         categories: data.session.filter_vibe || [],
       },
-      deadline: data.session.deadline_at,
-      status: (data.session.status as string).toLowerCase() as GroupSession['status'],
+      // 대기 중에는 마감 미적용 — 투표 시작 시점에 서버가 deadline_at을 갱신한다
+      deadline: status === 'waiting' ? null : data.session.deadline_at,
+      status,
       restaurants: restaurants.filter(r =>
         (data.session.filter_vibe || []).length === 0 ||
         (data.session.filter_vibe || []).includes(r.category),
       ),
       results: [],
     };
-    setCurrentSession(session);
+    // 서버 응답에는 없는 로컬 정보(세션 이름, 마감 타이밍 설정)는 유지한다
+    setCurrentSession(prev =>
+      prev && prev.inviteCode === token
+        ? { ...session, name: prev.name, deadlineMinutes: prev.deadlineMinutes }
+        : session,
+    );
     return session;
   }, [restaurants]);
 
@@ -647,14 +659,58 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     return fetchSession(token);
   }, [profile, fetchSession]);
 
-  const startSession = useCallback(async (token: string) => {
-    await fetch(`/api/sessions/${token}/status`, {
+  const startSession = useCallback(async (token: string, deadlineMinutes?: number) => {
+    const minutes = deadlineMinutes ?? currentSession?.deadlineMinutes ?? 10;
+
+    // 1) 서버에 상태 변경을 시도한다 (DB가 살아 있을 때 정상 동작).
+    //    마감 타이머는 이 시점(투표 시작)부터 적용된다.
+    try {
+      const res = await fetch(`/api/sessions/${token}/status`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status: 'SWIPING_1', deadlineMinutes: minutes }),
+      });
+      if (res.ok) {
+        try {
+          return await fetchSession(token);
+        } catch {
+          // 서버 상태는 바꿨지만 재동기화 실패 → 아래 로컬 진행으로 폴백
+        }
+      }
+    } catch {
+      // 네트워크/DB 사용 불가 → 아래 로컬(오프라인) 세션으로 폴백
+    }
+
+    // 2) 로컬 폴백: 백엔드(DB)가 없어도 투표를 시작할 수 있게 메모리상의
+    //    세션 상태를 직접 진행시킨다. (restaurants/courses의 mock 폴백과 동일한 취지)
+    if (!currentSession) throw new Error('No active session to start');
+    const next: GroupSession = {
+      ...currentSession,
+      status: 'voting',
+      deadline: new Date(Date.now() + minutes * 60 * 1000).toISOString(),
+    };
+    setCurrentSession(next);
+    return next;
+  }, [currentSession, fetchSession]);
+
+  const updateSessionSettings = useCallback((updates: { partySize?: number; radius?: number }) => {
+    if (!currentSession) return;
+    const next: GroupSession = {
+      ...currentSession,
+      filters: {
+        ...currentSession.filters,
+        ...(updates.partySize !== undefined ? { partySize: updates.partySize } : {}),
+        ...(updates.radius !== undefined ? { radius: updates.radius } : {}),
+      },
+    };
+    setCurrentSession(next);
+    // 서버에도 베스트에포트로 반영 (실패해도 로컬 상태는 유지)
+    fetch(`/api/sessions/${currentSession.inviteCode}/settings`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ status: 'SWIPING_1' }),
-    });
-    return fetchSession(token);
-  }, [fetchSession]);
+      body: JSON.stringify({ groupSize: next.filters.partySize, filterDistance: next.filters.radius }),
+    }).catch(() => {});
+  }, [currentSession]);
 
   const addSwipe = useCallback((restaurantId: string, action: SwipeRecord['action']) => {
     const record: SwipeRecord = {
@@ -701,7 +757,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   return (
     <AppContext.Provider value={{
       courses, savedCourseIds, saveCourse, unsaveCourse, addCourse,
-      currentSession, setCurrentSession, createSession, joinSession, fetchSession, toggleReady, startSession,
+      currentSession, setCurrentSession, createSession, joinSession, fetchSession, toggleReady, startSession, updateSessionSettings,
       swipeRecords, addSwipe, likedRestaurantIds,
       profile, updateProfile,
       restaurants,

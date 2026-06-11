@@ -7,14 +7,20 @@
 import { useEffect, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useLocation } from 'wouter';
-import { ArrowLeft, Copy, Share2, Play, QrCode, Users, ChevronDown, ChevronUp, CheckCircle } from 'lucide-react';
+import { ArrowLeft, Copy, Share2, Play, QrCode, Users, ChevronDown, ChevronUp, CheckCircle, Minus, Plus } from 'lucide-react';
 import { QRCodeSVG } from 'qrcode.react';
 import { useApp } from '@/contexts/AppContext';
 import { toast } from 'sonner';
 
+const RADIUS_OPTIONS = [500, 1000, 2000, 3000, 5000];
+
+function formatRadius(r: number): string {
+  return r >= 1000 ? `${r / 1000}km` : `${r}m`;
+}
+
 export default function SessionLobbyPage() {
   const [, navigate] = useLocation();
-  const { currentSession, setCurrentSession, fetchSession, profile, toggleReady, startSession } = useApp();
+  const { currentSession, fetchSession, startSession, updateSessionSettings } = useApp();
   const [showQR, setShowQR] = useState(true);
   const [showMembers, setShowMembers] = useState(true);
 
@@ -24,6 +30,16 @@ export default function SessionLobbyPage() {
       navigate('/lunchie/swipe');
     }
   }, [currentSession?.status, navigate]);
+
+  // Poll the server so newly joined members (and the start signal) show up.
+  // NOTE: early return보다 위에 있어야 한다 — hooks는 조건부로 호출되면 안 됨.
+  useEffect(() => {
+    if (!currentSession?.inviteCode) return;
+    const interval = setInterval(() => {
+      fetchSession(currentSession.inviteCode).catch(console.error);
+    }, 3000);
+    return () => clearInterval(interval);
+  }, [currentSession?.inviteCode, fetchSession]);
 
   if (!currentSession) {
     return (
@@ -40,14 +56,6 @@ export default function SessionLobbyPage() {
 
   const inviteUrl = `${window.location.origin}/join/${currentSession.inviteCode}`;
 
-  useEffect(() => {
-    if (!currentSession) return;
-    const interval = setInterval(() => {
-      fetchSession(currentSession.inviteCode).catch(console.error);
-    }, 3000);
-    return () => clearInterval(interval);
-  }, [currentSession?.inviteCode, fetchSession]);
-
   const handleCopy = () => {
     navigator.clipboard.writeText(inviteUrl).then(() => toast.success('링크 복사됨! 📋'));
   };
@@ -60,13 +68,15 @@ export default function SessionLobbyPage() {
 
   const handleStart = async () => {
     try {
-      await startSession(currentSession.inviteCode);
+      await startSession(currentSession.inviteCode, currentSession.deadlineMinutes);
       navigate('/lunchie/swipe');
     } catch (e) {
       console.error(e);
       toast.error('투표를 시작하지 못했습니다.');
     }
   };
+
+  const { partySize, radius } = currentSession.filters;
 
   return (
     <div className="min-h-dvh bg-white px-5 pb-8">
@@ -82,17 +92,6 @@ export default function SessionLobbyPage() {
         <div className="px-3 py-1.5 rounded-full text-[11px] font-bold text-[#3CBA44] bg-[#3CBA44]/10">
           LIVE
         </div>
-      </div>
-
-      {/* Invite Code */}
-      <div className="bg-[#FFF5F5] rounded-2xl p-4 mb-4 flex items-center justify-between">
-        <div>
-          <p className="text-[11px] text-[#9B9B9B] mb-1">초대 코드</p>
-          <p className="font-black text-[24px] text-[#EB5053] tracking-widest">{currentSession.inviteCode}</p>
-        </div>
-        <button onClick={handleCopy} className="w-10 h-10 rounded-xl bg-[#EB5053] flex items-center justify-center active:scale-95">
-          <Copy size={16} color="white" />
-        </button>
       </div>
 
       {/* QR Code */}
@@ -174,21 +173,51 @@ export default function SessionLobbyPage() {
         </AnimatePresence>
       </div>
 
-      {/* Session Info */}
+      {/* Session Settings (editable) */}
       <div className="lm-card p-4 mb-6">
         <p className="font-semibold text-[14px] text-[#1A1A1A] mb-3">세션 설정</p>
-        <div className="grid grid-cols-2 gap-2">
-          {[
-            ['인원수', `${currentSession.filters.partySize}명`],
-            ['예산', '₩'.repeat(currentSession.filters.budget)],
-            ['반경', currentSession.filters.radius >= 1000 ? `${currentSession.filters.radius / 1000}km` : `${currentSession.filters.radius}m`],
-            ['식당 수', `${currentSession.restaurants.length}개`],
-          ].map(([k, v]) => (
-            <div key={k} className="bg-[#F5F5F5] rounded-xl p-3">
-              <p className="text-[11px] text-[#9B9B9B]">{k}</p>
-              <p className="font-bold text-[15px] text-[#1A1A1A]">{v}</p>
-            </div>
-          ))}
+
+        {/* 인원수 */}
+        <div className="bg-[#F5F5F5] rounded-xl p-3 mb-2">
+          <p className="text-[11px] text-[#9B9B9B] mb-2">인원수</p>
+          <div className="flex items-center gap-4">
+            <button
+              onClick={() => updateSessionSettings({ partySize: Math.max(2, partySize - 1) })}
+              className="w-9 h-9 rounded-full bg-white shadow-sm flex items-center justify-center active:scale-90 disabled:opacity-40"
+              disabled={partySize <= 2}
+            >
+              <Minus size={16} color="#1A1A1A" />
+            </button>
+            <p className="font-black text-[20px] text-[#EB5053] w-12 text-center">{partySize}명</p>
+            <button
+              onClick={() => updateSessionSettings({ partySize: Math.min(12, partySize + 1) })}
+              className="w-9 h-9 rounded-full bg-white shadow-sm flex items-center justify-center active:scale-90 disabled:opacity-40"
+              disabled={partySize >= 12}
+            >
+              <Plus size={16} color="#1A1A1A" />
+            </button>
+          </div>
+        </div>
+
+        {/* 반경 */}
+        <div className="bg-[#F5F5F5] rounded-xl p-3">
+          <p className="text-[11px] text-[#9B9B9B] mb-2">검색 반경</p>
+          <div className="flex gap-1.5">
+            {RADIUS_OPTIONS.map(r => (
+              <button
+                key={r}
+                onClick={() => updateSessionSettings({ radius: r })}
+                className="flex-1 py-2 rounded-lg text-[12px] font-bold transition-all active:scale-95"
+                style={
+                  radius === r
+                    ? { background: '#EB5053', color: 'white' }
+                    : { background: 'white', color: '#4A4A4A' }
+                }
+              >
+                {formatRadius(r)}
+              </button>
+            ))}
+          </div>
         </div>
       </div>
 

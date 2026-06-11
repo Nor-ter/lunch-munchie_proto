@@ -1,267 +1,281 @@
 /**
- * Lunchie Munchie — Session Create Page
- * Design: Soft Coral (Option 8)
- * Features: Party size, dietary, budget, radius, categories
+ * Lunchie Munchie — Lunchie Mode / Quick Match (Invitation & Settings)
+ * UI: sj_branch quick-match 설정 화면을 그대로 재현
+ * Logic: merge1_v3 — createSession(...) 후 /session/lobby 로 이동
  */
 
 import { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useLocation } from 'wouter';
-import { ArrowLeft, ChevronRight, Users, DollarSign, MapPin, AlertCircle } from 'lucide-react';
+import { ArrowLeft, Clock, SlidersHorizontal, X } from 'lucide-react';
 import { useApp } from '@/contexts/AppContext';
 import { toast } from 'sonner';
 
-const CATEGORIES = ['한식', '일식', '중식', '이탈리안', '브런치', '카페', '베이커리', '전통찻집'];
-const DIETARY_OPTIONS = ['비건', '채식', '글루텐프리', '할랄', '유제품 제외', '견과류 알러지'];
-const RADIUS_OPTIONS = [{ v: 500, l: '500m' }, { v: 1000, l: '1km' }, { v: 2000, l: '2km' }, { v: 3000, l: '3km' }, { v: 5000, l: '5km' }];
+// ─── Filter constants (sj_branch parity) ──────────────────────────────────────
 
-export default function SessionCreatePage() {
+const DEADLINE_OPTIONS = [
+  { label: '5분', min: 5 },
+  { label: '10분', min: 10 },
+  { label: '15분', min: 15 },
+];
+
+const FILTER_OPTIONS = ['식단', '거리', '예산', '카드수', '취향', '평점'];
+
+const DETAIL_OPTIONS: Record<string, string[]> = {
+  '식단': ['비건', '채식', '육식', '글루텐프리', '할랄', '해산물 제외'],
+  '거리': ['500m 이내', '1km 이내', '3km 이내', '5km 이내'],
+  '예산': ['₩', '₩₩', '₩₩₩', '₩₩₩₩'],
+  '카드수': ['5장', '7장', '10장', '15장'],
+  '취향': ['카페', '맛집', '데이트 코스', '혼자 여행', '전시/문화', '가성비'],
+  '평점': ['4.0 이상', '4.5 이상', '4.8 이상'],
+};
+
+function distanceToMeters(d: string): number {
+  return d.includes('km') ? parseFloat(d) * 1000 : parseFloat(d);
+}
+
+// ─── Lunchie Settings Page ────────────────────────────────────────────────────
+
+export default function LunchieSettingsPage() {
   const [, navigate] = useLocation();
-  const { createSession, profile, updateProfile } = useApp();
-  const [step, setStep] = useState(1);
-  const [hostName, setHostName] = useState(profile.name === '사용자' ? '' : profile.name);
-  const [hostEmoji, setHostEmoji] = useState(profile.emoji || '🙂');
-  const [sessionName, setSessionName] = useState(`${profile.name === '사용자' ? '호스트' : profile.name}의 점심 세션`);
-  const [partySize, setPartySize] = useState(4);
-  const [dietary, setDietary] = useState<string[]>([]);
-  const [budget, setBudget] = useState<1 | 2 | 3 | 4>(2);
-  const [radius, setRadius] = useState(1000);
-  const [categories, setCategories] = useState<string[]>([]);
-  const [deadlineMinutes, setDeadlineMinutes] = useState(10);
+  const { createSession, restaurants, profile } = useApp();
+
+  const [deadlineMin, setDeadlineMin] = useState(10);
+  const [activeFilters, setActiveFilters] = useState<string[]>(['취향', '평점']);
+  const [details, setDetails] = useState<Record<string, string[]>>({
+    '취향': ['맛집'],
+    '평점': ['4.0 이상'],
+  });
+  const [showDetailModal, setShowDetailModal] = useState(false);
   const [isCreating, setIsCreating] = useState(false);
 
-  const toggleDiet = (d: string) => setDietary(prev => prev.includes(d) ? prev.filter(x => x !== d) : [...prev, d]);
-  const toggleCat = (c: string) => setCategories(prev => prev.includes(c) ? prev.filter(x => x !== c) : [...prev, c]);
+  const toggleFilter = (f: string) => {
+    setActiveFilters(prev => (prev.includes(f) ? prev.filter(x => x !== f) : [...prev, f]));
+  };
 
-  const handleCreate = async () => {
-    if (!hostName.trim()) {
-      toast.error('내 닉네임을 입력해주세요!');
-      setStep(1);
-      return;
-    }
+  const toggleDetail = (filter: string, value: string) => {
+    setDetails(prev => {
+      const cur = prev[filter] || [];
+      const next = cur.includes(value) ? cur.filter(v => v !== value) : [...cur, value];
+      return { ...prev, [filter]: next };
+    });
+  };
+
+  // sj 설정값 → merge1_v3 createSession 파라미터로 매핑
+  const handleStart = async () => {
     setIsCreating(true);
     try {
-      updateProfile({ name: hostName.trim(), emoji: hostEmoji });
-      const session = await createSession(sessionName, { partySize, dietary, budget, radius, categories }, hostName.trim(), hostEmoji, deadlineMinutes);
+      const sel = (f: string) => (activeFilters.includes(f) ? details[f] || [] : []);
+
+      const dietary = sel('식단');
+      const distSel = sel('거리');
+      const radius = distSel.length ? Math.max(...distSel.map(distanceToMeters)) : 1000;
+      const budgetSel = sel('예산');
+      const budget = (budgetSel[0]?.length || 2) as 1 | 2 | 3 | 4;
+      // '취향' 값 중 실제 식당 카테고리와 일치하는 것만 필터로 사용 (빈 세션 방지)
+      const realCats = new Set(restaurants.map(r => r.category));
+      const categories = sel('취향').filter(t => realCats.has(t));
+      const partySize = 4;
+
+      const hostName = profile.name && profile.name !== '사용자' ? profile.name : '호스트';
+      const sessionName = `${hostName}의 점심 세션`;
+
+      const session = await createSession(
+        sessionName,
+        { partySize, dietary, budget, radius, categories },
+        hostName,
+        profile.emoji,
+        deadlineMin,
+      );
       toast.success(`"${session.name}" 세션이 생성되었습니다! 🎉`);
       navigate('/session/lobby');
-    } catch (e) {
+    } catch {
       toast.error('세션 생성에 실패했습니다.');
     } finally {
       setIsCreating(false);
     }
   };
 
+  const totalDetailCount = activeFilters.reduce((sum, f) => sum + (details[f]?.length || 0), 0);
+
   return (
-    <div className="min-h-dvh bg-white px-5">
+    <div className="min-h-dvh" style={{ background: '#FFF8F2' }}>
       {/* Header */}
-      <div className="flex items-center gap-3 pt-12 pb-5">
-        <button onClick={() => navigate('/')} className="w-10 h-10 rounded-full bg-[#F5F5F5] flex items-center justify-center active:scale-95">
+      <div className="flex items-center justify-between px-5 pt-12 pb-5">
+        <button
+          onClick={() => navigate('/')}
+          className="w-10 h-10 rounded-full bg-white flex items-center justify-center shadow-sm active:scale-95"
+        >
           <ArrowLeft size={18} color="#1A1A1A" />
         </button>
-        <div>
-          <h1 className="font-bold text-[20px] text-[#1A1A1A]">그룹 세션 만들기</h1>
-          <p className="text-[12px] text-[#9B9B9B]">단계 {step}/3</p>
+        <div className="text-center">
+          <p className="font-black text-[17px] text-[#1A1A1A]">Lunchie Mode</p>
+          <p className="text-[11px] text-[#9B9B9B]">Quick Match</p>
         </div>
+        <div className="w-10" />
       </div>
 
-      {/* Progress */}
-      <div className="flex gap-2 mb-6">
-        {[1, 2, 3].map(s => (
-          <div key={s} className="h-1.5 flex-1 rounded-full transition-all duration-500"
-            style={{ background: s <= step ? '#EB5053' : '#E5E5E5' }} />
-        ))}
-      </div>
+      <div className="px-5 space-y-4 pb-8">
+        {/* Deadline */}
+        <div className="rounded-2xl p-4 bg-white">
+          <div className="flex items-center gap-2 mb-1">
+            <Clock size={15} color="#EB5053" />
+            <p className="text-[13px] font-bold text-[#1A1A1A]">마감 타이밍</p>
+          </div>
+          <p className="text-[11px] text-[#9B9B9B] mb-3">투표 시작 후 제한 시간 · 마감 후엔 참여 불가</p>
+          <div className="flex gap-2">
+            {DEADLINE_OPTIONS.map(d => (
+              <button
+                key={d.min}
+                onClick={() => setDeadlineMin(d.min)}
+                className="flex-1 py-2.5 rounded-xl text-[12px] font-bold transition-all active:scale-95"
+                style={
+                  deadlineMin === d.min
+                    ? { background: '#EB5053', color: 'white' }
+                    : { background: '#F5F5F5', color: '#4A4A4A' }
+                }
+              >
+                {d.label}
+              </button>
+            ))}
+          </div>
+        </div>
 
-      <AnimatePresence mode="wait">
-        {step === 1 && (
-          <motion.div key="s1" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }} className="space-y-5">
-            {/* Host Profile Configuration */}
-            <div className="bg-[#FFF5F5] rounded-2xl p-4">
-              <p className="font-bold text-[13px] text-[#EB5053] mb-3">내 프로필 설정 👤</p>
-              <div className="flex items-center gap-4">
-                <div className="w-12 h-12 rounded-xl bg-white flex items-center justify-center text-2xl shadow-sm border border-black/5 flex-shrink-0">
-                  {hostEmoji}
-                </div>
-                <div className="flex-1">
-                  <input
-                    type="text"
-                    value={hostName}
-                    onChange={e => {
-                      setHostName(e.target.value);
-                      if (sessionName.endsWith('의 점심 세션')) {
-                        setSessionName(`${e.target.value || '호스트'}의 점심 세션`);
-                      }
-                    }}
-                    placeholder="내 닉네임 입력"
-                    maxLength={15}
-                    className="w-full h-10 bg-white rounded-lg px-3 text-[13px] font-semibold text-[#1A1A1A] outline-none border border-[#E5E5E5] focus:border-[#EB5053] focus:ring-1 focus:ring-[#EB5053]/30"
-                  />
-                </div>
-              </div>
-              
-              <div className="grid grid-cols-8 gap-1.5 mt-3 justify-center">
-                {['😊', '🍱', '🍜', '🍣', '🥩', '🍕', '🌮', '🍔', '🥗', '☕', '🦊', '🐱', '🐼', '🐨', '🍺', '🍰'].map(e => (
-                  <button
-                    key={e}
-                    type="button"
-                    onClick={() => setHostEmoji(e)}
-                    className={`text-base p-0.5 rounded-lg transition-all ${
-                      hostEmoji === e 
-                        ? 'bg-white ring-2 ring-[#EB5053] scale-110' 
-                        : 'hover:bg-white/50'
-                    }`}
+        {/* Filter Options */}
+        <div className="rounded-2xl p-4 bg-white">
+          <div className="flex items-center justify-between mb-3">
+            <div className="flex items-center gap-2">
+              <SlidersHorizontal size={15} color="#EB5053" />
+              <p className="text-[13px] font-bold text-[#1A1A1A]">옵션</p>
+            </div>
+            <button
+              onClick={() => setShowDetailModal(true)}
+              className="flex items-center gap-1 text-[11px] font-bold px-2.5 py-1 rounded-full active:scale-95"
+              style={{ background: '#FFF5F5', color: '#EB5053' }}
+            >
+              상세 설정 {totalDetailCount > 0 && `· ${totalDetailCount}`}
+            </button>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            {FILTER_OPTIONS.map(f => (
+              <button
+                key={f}
+                onClick={() => toggleFilter(f)}
+                className="px-3 py-1.5 rounded-full text-[12px] font-semibold transition-all active:scale-95"
+                style={
+                  activeFilters.includes(f)
+                    ? { background: '#EB5053', color: 'white' }
+                    : { background: '#F5F5F5', color: '#4A4A4A' }
+                }
+              >
+                {f}
+              </button>
+            ))}
+          </div>
+
+          {/* Selected detail chips preview */}
+          {totalDetailCount > 0 && (
+            <div className="mt-3 pt-3 border-t border-[#F0F0F0] flex flex-wrap gap-1.5">
+              {activeFilters.flatMap(f =>
+                (details[f] || []).map(v => (
+                  <span
+                    key={`${f}-${v}`}
+                    className="text-[10px] font-semibold bg-[#F5F5F5] text-[#4A4A4A] px-2 py-0.5 rounded-full"
                   >
-                    {e}
-                  </button>
-                ))}
-              </div>
+                    {v}
+                  </span>
+                )),
+              )}
             </div>
+          )}
+        </div>
 
-            <div>
-              <label className="font-semibold text-[14px] text-[#1A1A1A] block mb-2">세션 이름</label>
-              <input
-                type="text" value={sessionName} onChange={e => setSessionName(e.target.value)}
-                className="w-full h-12 bg-[#F5F5F5] rounded-xl px-4 text-[14px] text-[#1A1A1A] outline-none focus:ring-2 focus:ring-[#EB5053]/30"
-              />
-            </div>
-            <div>
-              <label className="font-semibold text-[14px] text-[#1A1A1A] block mb-3">
-                <Users size={14} className="inline mr-1" />인원수
-              </label>
-              <div className="flex items-center gap-4">
-                <button onClick={() => setPartySize(p => Math.max(1, p - 1))}
-                  className="w-10 h-10 rounded-full border border-[#E5E5E5] flex items-center justify-center font-bold text-[18px] active:scale-95">−</button>
-                <span className="font-black text-[28px] text-[#EB5053] w-12 text-center">{partySize}</span>
-                <button onClick={() => setPartySize(p => Math.min(20, p + 1))}
-                  className="w-10 h-10 rounded-full border border-[#E5E5E5] flex items-center justify-center font-bold text-[18px] active:scale-95">+</button>
-                <span className="text-[14px] text-[#9B9B9B]">명</span>
-              </div>
-            </div>
-            <div>
-              <label className="font-semibold text-[14px] text-[#1A1A1A] block mb-3">
-                <MapPin size={14} className="inline mr-1" />검색 반경
-              </label>
-              <div className="flex gap-2">
-                {RADIUS_OPTIONS.map(opt => (
-                  <button key={opt.v} onClick={() => setRadius(opt.v)}
-                    className={`flex-1 py-2.5 rounded-xl text-[12px] font-bold transition-all active:scale-95 ${radius === opt.v ? 'text-white' : 'bg-[#F5F5F5] text-[#4A4A4A]'}`}
-                    style={radius === opt.v ? { background: '#EB5053' } : {}}>
-                    {opt.l}
+        {/* Detail Settings Modal */}
+        <AnimatePresence>
+          {showDetailModal && (
+            <motion.div
+              className="fixed inset-0 z-[90] flex items-end justify-center"
+              style={{ background: 'rgba(0,0,0,0.5)' }}
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setShowDetailModal(false)}
+            >
+              <motion.div
+                className="w-full max-w-[480px] bg-white rounded-t-3xl max-h-[80vh] overflow-y-auto scrollbar-hide"
+                initial={{ y: '100%' }}
+                animate={{ y: 0 }}
+                exit={{ y: '100%' }}
+                transition={{ type: 'spring', stiffness: 350, damping: 34 }}
+                onClick={e => e.stopPropagation()}
+              >
+                <div className="sticky top-0 bg-white px-5 pt-5 pb-3 flex items-center justify-between border-b border-[#F0F0F0]">
+                  <div>
+                    <p className="font-black text-[17px] text-[#1A1A1A]">상세 설정</p>
+                    <p className="text-[11px] text-[#9B9B9B]">활성화된 옵션의 세부 태그를 골라주세요</p>
+                  </div>
+                  <button
+                    onClick={() => setShowDetailModal(false)}
+                    className="w-9 h-9 rounded-full bg-[#F5F5F5] flex items-center justify-center active:scale-90"
+                  >
+                    <X size={16} color="#4A4A4A" />
                   </button>
-                ))}
-              </div>
-            </div>
-          </motion.div>
-        )}
-
-        {step === 2 && (
-          <motion.div key="s2" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }} className="space-y-5">
-            <div>
-              <label className="font-semibold text-[14px] text-[#1A1A1A] block mb-3">
-                <DollarSign size={14} className="inline mr-1" />예산 범위
-              </label>
-              <div className="grid grid-cols-4 gap-2">
-                {[1, 2, 3, 4].map(b => (
-                  <button key={b} onClick={() => setBudget(b as 1 | 2 | 3 | 4)}
-                    className={`py-3 rounded-xl text-[13px] font-bold transition-all active:scale-95 ${budget === b ? 'text-white' : 'bg-[#F5F5F5] text-[#4A4A4A]'}`}
-                    style={budget === b ? { background: '#EB5053' } : {}}>
-                    {'₩'.repeat(b)}
-                  </button>
-                ))}
-              </div>
-            </div>
-            <div>
-              <label className="font-semibold text-[14px] text-[#1A1A1A] block mb-1">음식 카테고리</label>
-              <p className="text-[12px] text-[#9B9B9B] mb-3">선택 안 하면 전체 포함</p>
-              <div className="grid grid-cols-4 gap-2">
-                {CATEGORIES.map(cat => (
-                  <button key={cat} onClick={() => toggleCat(cat)}
-                    className={`py-2.5 rounded-xl text-[11px] font-bold transition-all active:scale-95 ${categories.includes(cat) ? 'text-white' : 'bg-[#F5F5F5] text-[#4A4A4A]'}`}
-                    style={categories.includes(cat) ? { background: '#EB5053' } : {}}>
-                    {cat}
-                  </button>
-                ))}
-              </div>
-            </div>
-          </motion.div>
-        )}
-
-        {step === 3 && (
-          <motion.div key="s3" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }} className="space-y-5">
-            <div>
-              <label className="font-semibold text-[14px] text-[#1A1A1A] block mb-1">⏱️ 투표 시간 제한</label>
-              <p className="text-[12px] text-[#9B9B9B] mb-3">제한시간 종료 시 그 시점의 득표수로 결과가 결정됩니다.</p>
-              <div className="grid grid-cols-5 gap-2">
-                {[
-                  { v: 5, l: '5분' },
-                  { v: 10, l: '10분' },
-                  { v: 15, l: '15분' },
-                  { v: 1440, l: '1일' },
-                  { v: 7200, l: '5일' },
-                ].map(opt => (
-                  <button key={opt.v} type="button" onClick={() => setDeadlineMinutes(opt.v)}
-                    className={`py-2.5 rounded-xl text-[12px] font-bold transition-all active:scale-95 ${deadlineMinutes === opt.v ? 'text-white' : 'bg-[#F5F5F5] text-[#4A4A4A]'}`}
-                    style={deadlineMinutes === opt.v ? { background: '#EB5053' } : {}}>
-                    {opt.l}
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            <div>
-              <div className="flex items-center gap-2 mb-1">
-                <AlertCircle size={16} color="#EB5053" />
-                <label className="font-semibold text-[14px] text-[#1A1A1A]">식단 제한 사항</label>
-              </div>
-              <p className="text-[12px] text-[#9B9B9B] mb-3">팀원 중 해당하는 식단 제한을 선택하세요</p>
-              <div className="flex flex-wrap gap-2">
-                {DIETARY_OPTIONS.map(d => (
-                  <button key={d} onClick={() => toggleDiet(d)}
-                    className={`px-4 py-2 rounded-full text-[12px] font-semibold transition-all active:scale-95 ${dietary.includes(d) ? 'text-white' : 'bg-[#F5F5F5] text-[#4A4A4A]'}`}
-                    style={dietary.includes(d) ? { background: '#EB5053' } : {}}>
-                    {d}
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            {/* Summary */}
-            <div className="bg-[#FFF5F5] rounded-2xl p-4 space-y-2">
-              <p className="font-bold text-[14px] text-[#1A1A1A] mb-2">세션 설정 요약</p>
-              {[
-                ['세션 이름', sessionName],
-                ['인원수', `${partySize}명`],
-                ['검색 반경', radius >= 1000 ? `${radius / 1000}km` : `${radius}m`],
-                ['예산', '₩'.repeat(budget)],
-                ['카테고리', categories.length === 0 ? '전체' : categories.join(', ')],
-                ['식단 제한', dietary.length === 0 ? '없음' : dietary.join(', ')],
-                ['투표 시간 제한', deadlineMinutes === 1440 ? '1일' : deadlineMinutes === 7200 ? '5일' : `${deadlineMinutes}분`],
-              ].map(([k, v]) => (
-                <div key={k} className="flex justify-between">
-                  <span className="text-[12px] text-[#9B9B9B]">{k}</span>
-                  <span className="text-[12px] font-semibold text-[#1A1A1A]">{v}</span>
                 </div>
-              ))}
-            </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
 
-      {/* Navigation */}
-      <div className="flex gap-3 mt-8">
-        {step > 1 && (
-          <button onClick={() => setStep(s => s - 1)} className="lm-btn-outline flex-1 flex items-center justify-center">이전</button>
-        )}
-        {step < 3 ? (
-          <button onClick={() => setStep(s => s + 1)} className="lm-btn-primary flex-1 flex items-center justify-center gap-2">
-            다음 <ChevronRight size={16} />
-          </button>
-        ) : (
-          <button onClick={handleCreate} disabled={isCreating} className="lm-btn-primary flex-1 flex items-center justify-center">
-            {isCreating ? '생성 중...' : '🎉 세션 만들기'}
-          </button>
-        )}
+                <div className="px-5 py-4 space-y-5">
+                  {activeFilters.length === 0 && (
+                    <p className="text-[13px] text-[#9B9B9B] text-center py-8">먼저 옵션에서 항목을 켜주세요</p>
+                  )}
+                  {activeFilters.map(filter => (
+                    <div key={filter}>
+                      <p className="text-[13px] font-bold text-[#1A1A1A] mb-2">{filter}</p>
+                      <div className="flex flex-wrap gap-2">
+                        {(DETAIL_OPTIONS[filter] || []).map(value => {
+                          const on = (details[filter] || []).includes(value);
+                          return (
+                            <button
+                              key={value}
+                              onClick={() => toggleDetail(filter, value)}
+                              className="px-3 py-1.5 rounded-full text-[12px] font-semibold transition-all active:scale-95"
+                              style={
+                                on
+                                  ? { background: '#EB5053', color: 'white' }
+                                  : { background: '#F5F5F5', color: '#4A4A4A' }
+                              }
+                            >
+                              {value}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+
+                <div className="sticky bottom-0 bg-white px-5 py-4 border-t border-[#F0F0F0]">
+                  <button
+                    onClick={() => setShowDetailModal(false)}
+                    className="w-full py-3.5 rounded-2xl font-bold text-white text-[14px] active:scale-[0.98]"
+                    style={{ background: '#EB5053' }}
+                  >
+                    적용하기 {totalDetailCount > 0 && `(${totalDetailCount})`}
+                  </button>
+                </div>
+              </motion.div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
+        {/* Start */}
+        <motion.button
+          onClick={handleStart}
+          disabled={isCreating}
+          className="w-full py-4 rounded-2xl font-black text-white text-[16px] disabled:opacity-60"
+          style={{ background: '#EB5053' }}
+          whileTap={{ scale: 0.97 }}
+        >
+          {isCreating ? '세션 만드는 중...' : 'Swipe 시작하기 🍱'}
+        </motion.button>
       </div>
     </div>
   );
