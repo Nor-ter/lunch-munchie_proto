@@ -5,7 +5,7 @@
 
 import { useState, useCallback, useRef, useEffect } from 'react';
 import type { Ref } from 'react';
-import { motion, useMotionValue, useTransform, AnimatePresence } from 'framer-motion';
+import { motion, useMotionValue, useTransform, AnimatePresence, animate } from 'framer-motion';
 import { useLocation } from 'wouter';
 import {
   ArrowLeft, Link2, Users, Clock, SlidersHorizontal,
@@ -20,17 +20,10 @@ import { toast } from 'sonner';
 function LunchieLogo({ size = 40 }: { size?: number }) {
   return (
     <div
-      className="rounded-2xl flex items-center justify-center flex-shrink-0"
-      style={{ width: size, height: size, background: '#EB5053' }}
+      className="rounded-2xl flex items-center justify-center flex-shrink-0 overflow-hidden"
+      style={{ width: size, height: size, background: 'transparent' }}
     >
-      <svg width={size * 0.62} height={size * 0.62} viewBox="0 0 24 24" fill="none">
-        <circle cx="12" cy="10" r="7" fill="white" opacity="0.97" />
-        <circle cx="9.5" cy="9" r="1.2" fill="#EB5053" />
-        <circle cx="14.5" cy="9" r="1.2" fill="#EB5053" />
-        <path d="M9 12.5 Q12 15 15 12.5" stroke="#EB5053" strokeWidth="1.4" strokeLinecap="round" fill="none" />
-        <rect x="9" y="18" width="6" height="2.5" rx="1.2" fill="white" opacity="0.92" />
-        <rect x="10.5" y="16.5" width="3" height="2" rx="0.8" fill="white" opacity="0.92" />
-      </svg>
+      <img src="/Logo 004.png" alt="Lunchie Munchie Logo" className="w-full h-full object-contain" />
     </div>
   );
 }
@@ -445,12 +438,40 @@ function SwipeCard({
   const rotate = useTransform(x, [-220, 220], [-16, 16]);
   const likeOp = useTransform(x, [0, 70], [0, 1]);
   const nopeOp = useTransform(x, [-70, 0], [1, 0]);
+  const likeTintOp = useTransform(x, [0, 120, 360], [0, 0.34, 0.72]);
+  const nopeTintOp = useTransform(x, [-360, -120, 0], [0.72, 0.34, 0]);
+  const [isLeaving, setIsLeaving] = useState(false);
   const foodPhotos = getFoodPhotos(restaurant);
 
   const handleDragEnd = useCallback((_: unknown, info: { offset: { x: number } }) => {
-    if (info.offset.x > 90) onSwipe('like');
-    else if (info.offset.x < -90) onSwipe('dislike');
-  }, [onSwipe]);
+    if (isLeaving) return;
+
+    if (info.offset.x > 90) {
+      setIsLeaving(true);
+      void animate(x, 520, {
+        type: 'spring',
+        stiffness: 210,
+        damping: 24,
+      }).then(() => onSwipe('like'));
+      return;
+    }
+
+    if (info.offset.x < -90) {
+      setIsLeaving(true);
+      void animate(x, -520, {
+        type: 'spring',
+        stiffness: 210,
+        damping: 24,
+      }).then(() => onSwipe('dislike'));
+      return;
+    }
+
+    void animate(x, 0, {
+      type: 'spring',
+      stiffness: 260,
+      damping: 24,
+    });
+  }, [isLeaving, onSwipe, x]);
 
   if (!isTop) {
     return (
@@ -462,7 +483,15 @@ function SwipeCard({
           background: stackIndex === 1 ? '#e8c9a0' : '#d4a574',
           opacity: 1 - stackIndex * 0.15,
         }}
-      />
+      >
+        <img
+          src={restaurant.image}
+          alt=""
+          className="w-full h-full object-cover"
+          draggable={false}
+        />
+        <div className="absolute inset-0 bg-gradient-to-t from-black/55 via-black/5 to-transparent" />
+      </div>
     );
   }
 
@@ -470,7 +499,7 @@ function SwipeCard({
     <motion.div
       className="absolute inset-0 rounded-3xl overflow-hidden"
       style={{ x, rotate, zIndex: 20 }}
-      drag={isRevealed ? false : 'x'}
+      drag={isRevealed || isLeaving ? false : 'x'}
       dragConstraints={{ left: 0, right: 0 }}
       dragElastic={0.6}
       onDragEnd={handleDragEnd}
@@ -486,6 +515,14 @@ function SwipeCard({
           draggable={false}
         />
         <div className="absolute inset-0 bg-gradient-to-t from-black/75 via-black/10 to-transparent" />
+        <motion.div
+          className="absolute inset-0 bg-[#3CBA44] pointer-events-none"
+          style={{ opacity: likeTintOp }}
+        />
+        <motion.div
+          className="absolute inset-0 bg-[#EB5053] pointer-events-none"
+          style={{ opacity: nopeTintOp }}
+        />
 
         {/* Progress */}
         <div className="absolute top-4 left-5 right-5 flex items-center justify-between">
@@ -582,14 +619,15 @@ function SwipeCard({
             </div>
 
             {/* Vertical snap-scroll food feed */}
-            <div className="flex-1 overflow-y-auto snap-y snap-mandatory scrollbar-hide">
+            <div className="flex-1 min-h-0 overflow-y-auto snap-y snap-mandatory scrollbar-hide">
               {foodPhotos.map((url, i) => (
                 <div
                   key={i}
-                  className="snap-center px-5 pb-4 flex flex-col"
-                  style={{ scrollSnapAlign: 'center' }}
+                  className="snap-start h-[92%] min-h-[92%] px-5 pb-3 flex flex-col justify-center"
+                  style={{ scrollSnapAlign: 'start' }}
                 >
-                  <div className="rounded-2xl overflow-hidden relative" style={{ aspectRatio: '1/1' }}
+                  <div
+                    className="rounded-2xl overflow-hidden relative bg-black flex-1 min-h-0 w-full"
                     onClick={() => setIsRevealed(false)}>
                     <img src={url} alt="" className="w-full h-full object-cover" draggable={false} />
                     {/* dot indicator */}
@@ -600,12 +638,12 @@ function SwipeCard({
                       ))}
                     </div>
                   </div>
-                  <div className="pt-3">
-                    <p className="font-bold text-[16px] text-white">메뉴 {i + 1}</p>
-                    <p className="text-[12px] text-white/50 mt-0.5">{restaurant.description}</p>
-                    <div className="flex gap-1.5 mt-2 flex-wrap">
+                  <div className="pt-2.5 shrink-0">
+                    <p className="font-bold text-[15px] text-white leading-tight">메뉴 {i + 1}</p>
+                    <p className="text-[11px] text-white/50 mt-0.5 line-clamp-2 leading-snug">{restaurant.description}</p>
+                    <div className="flex gap-1.5 mt-1.5 flex-wrap">
                       {restaurant.tags.map(t => (
-                        <span key={t} className="text-[11px] font-semibold bg-white/15 text-white/90 px-2.5 py-1 rounded-full">
+                        <span key={t} className="text-[10px] font-semibold bg-white/15 text-white/90 px-2.5 py-0.5 rounded-full">
                           {t}
                         </span>
                       ))}
@@ -640,11 +678,15 @@ function Swipe1Screen({
   const [currentIndex, setCurrentIndex] = useState(0);
   const [likedList, setLikedList] = useState<Restaurant[]>([]);
   const [showIntro, setShowIntro] = useState(true);
+  const [logoDirection, setLogoDirection] = useState<'right' | 'left'>('right');
+  const [logoVisible, setLogoVisible] = useState(true);
+  const [logoKey, setLogoKey] = useState(0);
   const [remainingMs, setRemainingMs] = useState(() => Math.max(0, config.deadlineTs - Date.now()));
   // Filtered + sorted + count-limited cards from settings
   const cardRestaurants = useRef(applyConfig(restaurants, config)).current;
   const likedRef = useRef<Restaurant[]>([]);
   likedRef.current = likedList;
+  const introTimers = useRef<number[]>([]);
 
   const finish = useCallback((liked: Restaurant[]) => {
     const top2 = liked.slice(0, 2);
@@ -656,8 +698,19 @@ function Swipe1Screen({
   }, [cardRestaurants, onComplete]);
 
   useEffect(() => {
-    const t = setTimeout(() => setShowIntro(false), 2000);
-    return () => clearTimeout(t);
+    introTimers.current.push(window.setTimeout(() => setLogoVisible(false), 900));
+    introTimers.current.push(window.setTimeout(() => {
+      setLogoDirection('left');
+      setLogoKey(prev => prev + 1);
+      setLogoVisible(true);
+    }, 1200));
+    introTimers.current.push(window.setTimeout(() => setLogoVisible(false), 2100));
+    introTimers.current.push(window.setTimeout(() => setShowIntro(false), 2800));
+
+    return () => {
+      introTimers.current.forEach(id => window.clearTimeout(id));
+      introTimers.current = [];
+    };
   }, []);
 
   // Countdown ticker — auto-finish when deadline hits
@@ -718,12 +771,30 @@ function Swipe1Screen({
               transition={{ type: 'spring', stiffness: 260, damping: 18 }}
               className="flex flex-col items-center mb-6"
             >
-              <motion.div
-                animate={{ y: [0, -8, 0] }}
-                transition={{ duration: 1.6, repeat: Infinity, ease: 'easeInOut' }}
-              >
-                <LunchieLogo size={88} />
-              </motion.div>
+              <div className="relative w-22 h-22 flex items-center justify-center">
+                <AnimatePresence mode="wait">
+                  {logoVisible && (
+                    <motion.div
+                      key={logoKey}
+                      initial={{ opacity: 0, x: 0, scale: 0.85 }}
+                      animate={{ opacity: 1, x: 0, scale: 1 }}
+                      exit={{
+                        opacity: 0,
+                        x: logoDirection === 'right' ? 450 : -450,
+                        transition: { duration: 0.8, ease: 'easeInOut' },
+                      }}
+                      transition={{
+                        type: 'spring',
+                        stiffness: 140,
+                        damping: 18,
+                      }}
+                      className="absolute"
+                    >
+                      <LunchieLogo size={88} />
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+              </div>
               <span className="font-black text-[22px] mt-3" style={{ color: '#EB5053' }}>
                 Lunchie Munchie
               </span>
@@ -794,7 +865,7 @@ function Swipe1Screen({
       <div className="px-8 pb-10 pt-4 flex items-center justify-center gap-8">
         <motion.button
           onClick={() => handleButtonSwipe('dislike')}
-          className="w-16 h-16 rounded-full bg-white shadow-lg flex items-center justify-center border border-[#E5E5E5] active:scale-90"
+          className="w-20 h-20 rounded-full bg-white shadow-lg flex items-center justify-center border border-[#E5E5E5] active:scale-90"
           whileTap={{ scale: 0.85 }}
         >
           <X size={26} color="#EB5053" strokeWidth={2.5} />
@@ -805,7 +876,7 @@ function Swipe1Screen({
           style={{ background: '#EB5053' }}
           whileTap={{ scale: 0.85 }}
         >
-          <Heart size={30} color="white" fill="white" />
+          <Heart size={26} color="white" fill="white" />
         </motion.button>
       </div>
     </div>

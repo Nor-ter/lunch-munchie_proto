@@ -1,70 +1,57 @@
-import { motion } from 'framer-motion';
-import { Home, Compass, BookmarkCheck, Zap, User } from 'lucide-react';
-import { useLocation } from 'wouter';
+import { motion } from "framer-motion";
+import { ContactRound, Heart, Home, MapPinned, User } from "lucide-react";
+import { useLocation } from "wouter";
 
 const TABS = [
-  { path: '/', icon: Home, label: '홈' },
-  { path: '/explore', icon: Compass, label: '코스' },
-  { path: '/quick-match', icon: Zap, label: '런치', special: true },
-  { path: '/saved', icon: BookmarkCheck, label: '저장' },
-  { path: '/profile', icon: User, label: '프로필' },
+  { path: "/", label: "홈", icon: "home" },
+  { path: "/explore", label: "코스", icon: "map" },
+  { path: "/quick-match", label: "런치", icon: "cards" },
+  { path: "/saved", label: "저장", icon: "contacts" },
+  { path: "/profile", label: "프로필", icon: "profile" },
 ];
 
+function CardStackIcon() {
+  return (
+    <div className="relative h-[30px] w-[32px]">
+      <div className="absolute left-[12px] top-[1px] h-[26px] w-[19px] rotate-[14deg] rounded-[5px] border-[3px] border-white" />
+      <div className="absolute left-[2px] top-[6px] flex h-[24px] w-[20px] items-center justify-center rounded-[5px] border-[3px] border-white bg-[#f43d40]">
+        <Heart size={12} color="white" fill="white" strokeWidth={2.4} />
+      </div>
+    </div>
+  );
+}
+
+function TabIcon({ type }: { type: string }) {
+  if (type === "cards") return <CardStackIcon />;
+
+  const shared = { size: 29, strokeWidth: 2.45, color: "white" };
+
+  if (type === "map") return <MapPinned {...shared} />;
+  if (type === "contacts") return <ContactRound {...shared} />;
+  if (type === "profile") return <User {...shared} />;
+  return <Home {...shared} />;
+}
+
 export default function TabBar() {
-  const [location, navigate] = useLocation();
+  const [, navigate] = useLocation();
 
   return (
     <div className="tab-bar">
-      <div className="flex items-center justify-around h-16">
+      <div className="flex h-[68px] items-center justify-around px-[42px]">
         {TABS.map((tab) => {
-          const isActive = location === tab.path || (tab.path !== '/' && location.startsWith(tab.path));
-          const Icon = tab.icon;
-
-          if (tab.special) {
-            return (
-              <button
-                key={tab.path}
-                onClick={() => navigate(tab.path)}
-                className="flex flex-col items-center gap-0.5 flex-1 py-2 transition-all active:scale-90"
-              >
-                <motion.div
-                  whileTap={{ scale: 0.85 }}
-                  className="w-10 h-10 rounded-full flex items-center justify-center"
-                  style={{ background: isActive ? 'white' : 'rgba(255,255,255,0.25)' }}
-                >
-                  <Icon
-                    size={20}
-                    strokeWidth={2.5}
-                    style={{ color: isActive ? '#EB5053' : 'white' }}
-                  />
-                </motion.div>
-                <span className="text-[9px] font-bold" style={{ color: isActive ? 'white' : 'rgba(255,255,255,0.7)' }}>
-                  {tab.label}
-                </span>
-              </button>
-            );
-          }
-
           return (
             <button
               key={tab.path}
               onClick={() => navigate(tab.path)}
-              className="flex flex-col items-center gap-0.5 flex-1 py-2 transition-all active:scale-95"
+              aria-label={tab.label}
+              className="flex h-10 w-10 items-center justify-center transition-all active:scale-95"
             >
               <motion.div
-                animate={isActive ? { scale: 1.1 } : { scale: 1 }}
-                transition={{ type: 'spring', stiffness: 400, damping: 20 }}
+                whileTap={{ scale: 0.92 }}
+                transition={{ type: "spring", stiffness: 400, damping: 20 }}
               >
-                <Icon
-                  size={22}
-                  strokeWidth={isActive ? 2.5 : 1.8}
-                  style={{ color: isActive ? 'white' : 'rgba(255,255,255,0.55)' }}
-                  fill={isActive ? 'white' : 'none'}
-                />
+                <TabIcon type={tab.icon} />
               </motion.div>
-              <span className="text-[10px] font-semibold" style={{ color: isActive ? 'white' : 'rgba(255,255,255,0.55)' }}>
-                {tab.label}
-              </span>
             </button>
           );
         })}
