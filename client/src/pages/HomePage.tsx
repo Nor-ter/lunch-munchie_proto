@@ -221,7 +221,7 @@ export default function HomePage() {
               <p
                 className="text-white leading-none"
                 style={{
-                  fontFamily: "'Baloo 2', cursive",
+                  fontFamily: "'Baloo 2', 'Pretendard Variable', 'Pretendard', cursive",
                   fontWeight: 700,
                   fontSize: 24,
                 }}

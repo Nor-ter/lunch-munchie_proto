@@ -18,7 +18,7 @@ const PolaroidTemplate = forwardRef<HTMLDivElement, TemplateProps>(({ course }, 
         boxSizing: 'border-box',
         display: 'flex',
         flexDirection: 'column',
-        fontFamily: "'Baloo 2', cursive",
+        fontFamily: "'Baloo 2', 'Pretendard Variable', 'Pretendard', cursive",
       }}
     >
       <div

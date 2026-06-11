@@ -18,7 +18,7 @@ const StoryTemplate = forwardRef<HTMLDivElement, TemplateProps>(({ course }, ref
         boxSizing: 'border-box',
         display: 'flex',
         flexDirection: 'column',
-        fontFamily: "'Baloo 2', cursive",
+        fontFamily: "'Baloo 2', 'Pretendard Variable', 'Pretendard', cursive",
       }}
     >
       {/* Author row */}

@@ -46,7 +46,7 @@ export function LunchieLogo({
       {icon}
       <span
         className={wordmarkClassName}
-        style={{ color: BRAND.primary, fontFamily: "'Baloo 2', cursive", fontWeight: 700 }}
+        style={{ color: BRAND.primary, fontFamily: "'Baloo 2', 'Pretendard Variable', 'Pretendard', cursive", fontWeight: 700 }}
       >
         Lunchie Munchie
       </span>

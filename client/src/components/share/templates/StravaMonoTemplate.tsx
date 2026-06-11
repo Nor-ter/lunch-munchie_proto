@@ -16,7 +16,7 @@ const StravaMonoTemplate = forwardRef<HTMLDivElement, TemplateProps>(
           display: 'flex',
           flexDirection: 'column',
           alignItems: 'center',
-          fontFamily: "'Baloo 2', cursive",
+          fontFamily: "'Baloo 2', 'Pretendard Variable', 'Pretendard', cursive",
         }}
       >
         <StravaRouteMap
@@ -44,7 +44,7 @@ const StravaMonoTemplate = forwardRef<HTMLDivElement, TemplateProps>(
               margin: '6px 0 0',
               fontSize: 10,
               color: '#6B6B6B',
-              fontFamily: "'Baloo 2', cursive",
+              fontFamily: "'Baloo 2', 'Pretendard Variable', 'Pretendard', cursive",
             }}
           >
             {course.distanceKm} km · {course.durationHours}h · @{course.authorHandle}

@@ -17,7 +17,7 @@ const PngTemplate = forwardRef<HTMLDivElement, TemplateProps>(({ course }, ref) 
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
-        fontFamily: "'Baloo 2', cursive",
+        fontFamily: "'Baloo 2', 'Pretendard Variable', 'Pretendard', cursive",
         backgroundImage:
           'repeating-conic-gradient(#dddddd 0% 25%, #ffffff 0% 50%)',
         backgroundSize: '16px 16px',
