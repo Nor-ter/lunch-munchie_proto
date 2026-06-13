@@ -951,7 +951,16 @@ export default function QuickMatchPage() {
             exit={{ opacity: 0, scale: 1.05 }}
             transition={{ duration: 0.3 }}
           >
-            <p className="font-black text-white text-[22px]">예선전 시작! 🍽️</p>
+            <div className="flex items-center justify-center gap-[9px]">
+              <div className="flex h-[38px] w-[38px] flex-shrink-0 items-center justify-center overflow-hidden">
+                <img
+                  src="/Logo 004.png"
+                  alt="Lunchie Munchie Logo"
+                  className="h-full w-full object-contain"
+                />
+              </div>
+              <p className="font-black text-white text-[22px]">예선전 시작! 🍽️</p>
+            </div>
             <p className="text-white/60 text-[14px] mt-2">카드를 좌우로 스와이프 해보세요</p>
 
             {/* Swipe gesture demo card */}
