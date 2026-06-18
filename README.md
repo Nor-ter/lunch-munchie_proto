@@ -31,6 +31,8 @@
 
 - 코스 피드 + 태그 필터 + **코스맵 오버레이** (`data-jp`)
 - 코스 상세·에디터 (드래그 정렬) · Strava 스타일 공유 12종 (`hi_branch`)
+- 코스 스톱 순서 기반 지도 좌표 동기화 + 단계별 컬러 라인/마커
+- 코스 태그별 공통 컬러 팔레트 적용 (피드·홈·탐색 필터)
 - Expo 모바일 앱 — NativeWind 에디터 + IG 공유 (`mobile/`)
 
 ## 🛠️ Tech Stack
@@ -72,6 +74,13 @@ pnpm seed         # DB 시드 (DATABASE_URL 필요)
 | `data-jp` | 스키마·필터링·API | `shared/schema.ts`, `server/routes.ts` |
 
 ## 📝 Changelog
+
+### v5 — 코스맵·태그 컬러 동기화 (sj_branch)
+- `courseMapSync` 유틸 추가: 코스 스톱 순서 정렬, 레스토랑 좌표 → 지도 포인트 변환, 상세·편집용 `CoursePlace` 생성
+- 코스 피드/홈/탐색 카드의 코스맵 오버레이를 실제 코스 스톱 데이터와 동기화
+- 지도 경로와 마커에 단계별 컬러 팔레트 적용, 흰색 외곽선으로 이미지 위 가독성 개선
+- 코스 태그 컬러 스타일을 `courseTheme`로 통합하고 필터/카드 태그 UI에 공통 적용
+- 코스 상세·편집 페이지가 AppContext 코스 데이터를 우선 사용하도록 개선하고 mock 데이터는 폴백으로 유지
 
 ### v4 — 전 브랜치 통합 (merge1)
 - `hi_branch` + `sj_branch` + `data-jp` 기능 단일 브랜치 통합

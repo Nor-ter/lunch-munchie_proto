@@ -6,7 +6,7 @@
 
 /* ============================================================
    Lunchie Munchie Design System — "Soft Coral"
-   Primary: #EB5053 | Accent: #D94447 | BG: #FFF8F2
+   Primary: #E85053 | Accent: #D94447 | BG: #FFF8F2
    (yellow/amber removed — red-tone brand only)
    ============================================================ */
 
@@ -59,7 +59,7 @@
   --ring: oklch(0.58 0.19 22);
 
   /* LM Design Tokens */
-  --lm-primary: #EB5053;
+  --lm-primary: #E85053;
   --lm-accent: #D94447;
   --lm-green: #3CBA44;
   --lm-blue: #3E719B;
@@ -119,11 +119,11 @@
   }
 
   .tag { border-radius: 999px; padding: 3px 10px; font-size: 11px; font-weight: 600; display: inline-flex; align-items: center; }
-  .tag-date { background: #EB5053; color: white; }
-  .tag-food { background: #D94447; color: white; }
-  .tag-cafe { background: #EFD0D4; color: #1A1A1A; }
-  .tag-culture { background: #3E719B; color: white; }
-  .tag-activity { background: #3CBA44; color: white; }
+  .tag-date { background: #E85053; color: white; }
+  .tag-food { background: #F09D09; color: white; }
+  .tag-cafe { background: #F39DA8; color: white; }
+  .tag-culture { background: #3CBA44; color: white; }
+  .tag-activity { background: #3E719B; color: white; }
   .tag-hash { background: rgba(0,0,0,0.06); color: #4A4A4A; }
 
   /* Red tab bar */

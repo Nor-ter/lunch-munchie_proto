@@ -9,6 +9,7 @@ import { useLocation } from 'wouter';
 import { MapPin, Clock, Bookmark, Star, SlidersHorizontal } from 'lucide-react';
 import { useApp, Course, TagType } from '@/contexts/AppContext';
 import CourseMapOverlay from '@/components/CourseMapOverlay';
+import { getCourseTagStyle } from '@/constants/courseTheme';
 
 const FILTER_TAGS: { label: string; value: TagType | 'all' }[] = [
   { label: '전체', value: 'all' },
@@ -19,17 +20,6 @@ const FILTER_TAGS: { label: string; value: TagType | 'all' }[] = [
   { label: '전시/문화', value: '전시/문화' },
   { label: '액티비티', value: '액티비티' },
 ];
-
-const TAG_CLASS: Record<string, string> = {
-  '데이트 코스': 'tag-date',
-  '맛집': 'tag-food',
-  '카페': 'tag-cafe',
-  '전시/문화': 'tag-culture',
-  '액티비티': 'tag-activity',
-  '혼자 여행': 'tag-hash',
-  '맛집 투어': 'tag-food',
-  '가성비': 'tag-activity',
-};
 
 function CourseListCard({ course, onTap }: { course: Course; onTap: () => void }) {
   const { savedCourseIds, saveCourse, unsaveCourse } = useApp();
@@ -48,16 +38,18 @@ function CourseListCard({ course, onTap }: { course: Course; onTap: () => void }
       <div className="relative h-40">
         <img src={course.heroImage} alt={course.title} className="w-full h-full object-cover" />
         <CourseMapOverlay course={course} />
-        <div className="absolute inset-0 bg-gradient-to-t from-black/50 to-transparent pointer-events-none" />
+        <div className="absolute inset-0 z-10 bg-gradient-to-t from-black/50 to-transparent pointer-events-none" />
         <button
           onClick={e => { e.stopPropagation(); isSaved ? unsaveCourse(course.id) : saveCourse(course.id); }}
-          className="absolute top-3 right-3 w-8 h-8 rounded-full bg-white/80 flex items-center justify-center"
+          className="absolute top-3 right-3 z-30 w-8 h-8 rounded-full bg-white/80 flex items-center justify-center"
         >
-          <Bookmark size={14} fill={isSaved ? '#EB5053' : 'none'} stroke={isSaved ? '#EB5053' : '#4A4A4A'} />
+          <Bookmark size={14} fill={isSaved ? '#E85053' : 'none'} stroke={isSaved ? '#E85053' : '#4A4A4A'} />
         </button>
-        <div className="absolute bottom-3 left-3 flex gap-1.5 flex-wrap">
+        <div className="absolute bottom-3 left-3 z-30 flex gap-1.5 flex-wrap">
           {course.tags.slice(0, 2).map(tag => (
-            <span key={tag} className={`tag ${TAG_CLASS[tag] || 'tag-hash'}`}>{tag}</span>
+            <span key={tag} className="tag" style={getCourseTagStyle(tag)}>
+              {tag}
+            </span>
           ))}
         </div>
       </div>
@@ -116,9 +108,13 @@ export default function ExplorePage() {
               className={`flex-shrink-0 px-4 py-2 rounded-full text-[12px] font-semibold transition-all active:scale-95 ${
                 activeFilter === f.value
                   ? 'text-white'
-                  : 'bg-[#F5F5F5] text-[#4A4A4A]'
+                  : ''
               }`}
-              style={activeFilter === f.value ? { background: '#EB5053' } : {}}
+              style={f.value === 'all'
+                ? activeFilter === f.value
+                  ? { background: '#1A1A1A', color: '#FFFFFF' }
+                  : { background: '#F5F5F5', color: '#4A4A4A' }
+                : getCourseTagStyle(f.value, activeFilter === f.value)}
             >
               {f.label}
             </button>
@@ -151,7 +147,7 @@ export default function ExplorePage() {
       <motion.button
         onClick={() => navigate('/lunchie/settings')}
         className="fixed bottom-24 right-4 w-14 h-14 rounded-full shadow-xl flex items-center justify-center z-40 text-white font-bold text-2xl"
-        style={{ background: '#EB5053' }}
+        style={{ background: '#E85053' }}
         whileHover={{ scale: 1.1 }}
         whileTap={{ scale: 0.9 }}
         initial={{ scale: 0 }}

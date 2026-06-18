@@ -1,4 +1,5 @@
 import { CoursePlace } from '@/types/course';
+import { getCourseSequenceColor } from '@/constants/courseTheme';
 
 interface CourseMapProps {
   places: CoursePlace[];
@@ -19,10 +20,6 @@ export function CourseMap({
 }: CourseMapProps) {
   const toX = (x: number) => (x / 100) * width;
   const toY = (y: number) => (y / 100) * height;
-
-  const polylinePoints = places
-    .map((p) => `${toX(p.coords.x)},${toY(p.coords.y)}`)
-    .join(' ');
 
   return (
     <svg
@@ -57,15 +54,31 @@ export function CourseMap({
       ))}
 
       {/* Path */}
-      {places.length > 1 && (
-        <polyline
-          points={polylinePoints}
-          stroke="#EB5053"
-          strokeWidth={2}
-          strokeDasharray="6,4"
-          fill="none"
-        />
-      )}
+      {places.slice(1).map((place, i) => {
+        const prev = places[i]!;
+        return (
+          <g key={`${prev.id}-${place.id}`}>
+            <line
+              x1={toX(prev.coords.x)}
+              y1={toY(prev.coords.y)}
+              x2={toX(place.coords.x)}
+              y2={toY(place.coords.y)}
+              stroke="#FFFFFF"
+              strokeWidth={9}
+              strokeLinecap="round"
+            />
+            <line
+              x1={toX(prev.coords.x)}
+              y1={toY(prev.coords.y)}
+              x2={toX(place.coords.x)}
+              y2={toY(place.coords.y)}
+              stroke={getCourseSequenceColor(i).base}
+              strokeWidth={5}
+              strokeLinecap="round"
+            />
+          </g>
+        );
+      })}
 
       {/* Nodes */}
       {places.map((place, i) => (
@@ -73,8 +86,10 @@ export function CourseMap({
           <circle
             cx={toX(place.coords.x)}
             cy={toY(place.coords.y)}
-            r={8}
-            fill="#1A1A1A"
+            r={10}
+            fill={getCourseSequenceColor(i).base}
+            stroke="#FFFFFF"
+            strokeWidth={2}
           />
           {showLabels && (
             <text
