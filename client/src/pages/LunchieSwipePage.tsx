@@ -18,6 +18,55 @@ import WinnerShareCard from '@/components/lunchie/WinnerShareCard';
 
 type SwipeAction = 'like' | 'dislike';
 
+// 메뉴 사진을 정육면체 옆면처럼 옆으로 돌려서 전환하는 모션.
+// 나가는 면과 들어오는 면이 같은 변(큐브의 모서리)을 공유하는 축으로 함께 돌아가야
+// 두 사진이 한 박스의 이어진 옆면처럼 보인다 (서로 다른 변을 축으로 하면 따로 펄럭이는 것처럼 보임).
+// direction=1(다음): 오른쪽 모서리를 축으로 회전. direction=-1(이전): 왼쪽 모서리를 축으로 회전.
+// 회전하며 멀어질수록 밝기를 낮춰 큐브 옆면이 그늘에 들어가는 듯한 입체감을 더한다.
+// 또한 모서리(축)가 화면 정면을 지나는 회전 중간 시점에 카메라와 가장 가까워지므로,
+// scaleY를 1 → 크게 커짐 → 1로 두어 그 변의 길이가 늘어났다가 줄어드는 것처럼 보이게 하고,
+// 반대로 scaleX는 1 → 살짝 줄어듦 → 1로 두어 옆변(폭)이 좁아 보이게 해 두 변의 대비로
+// 정육면체가 모서리를 축으로 입체적으로 도는 느낌을 강조한다.
+const cubePhotoVariants = {
+  enter: (direction: number) => ({
+    rotateY: direction > 0 ? 90 : -90,
+    originX: direction > 0 ? 1 : 0,
+    filter: 'brightness(0.4)',
+    scaleX: 1,
+    scaleY: 1,
+  }),
+  center: (direction: number) => ({
+    rotateY: 0,
+    originX: direction > 0 ? 1 : 0,
+    filter: 'brightness(1)',
+    scaleX: [1, 0.9, 1],
+    scaleY: [1, 1.18, 1],
+    // originX는 같은 모서리를 유지해야 하는 고정 축이므로 트윈 없이 즉시 고정한다
+    // (다른 방향으로 탭이 바뀌어도 회전 중 축이 미끄러지지 않게).
+    transition: {
+      duration: 0.5,
+      ease: [0.45, 0, 0.2, 1],
+      originX: { duration: 0 },
+      scaleX: { duration: 0.5, times: [0, 0.5, 1] },
+      scaleY: { duration: 0.5, times: [0, 0.5, 1] },
+    },
+  }),
+  exit: (direction: number) => ({
+    rotateY: direction > 0 ? -90 : 90,
+    originX: direction > 0 ? 1 : 0,
+    filter: 'brightness(0.4)',
+    scaleX: [1, 0.9, 1],
+    scaleY: [1, 1.18, 1],
+    transition: {
+      duration: 0.5,
+      ease: [0.45, 0, 0.2, 1],
+      originX: { duration: 0 },
+      scaleX: { duration: 0.5, times: [0, 0.5, 1] },
+      scaleY: { duration: 0.5, times: [0, 0.5, 1] },
+    },
+  }),
+};
+
 // ─── Swipe Card ───────────────────────────────────────────────────────────────
 
 function SwipeCard({
@@ -37,6 +86,7 @@ function SwipeCard({
 }) {
   const [isRevealed, setIsRevealed] = useState(false);
   const [photoIndex, setPhotoIndex] = useState(0);
+  const [photoDirection, setPhotoDirection] = useState(1);
   const x = useMotionValue(0);
   const rotate = useTransform(x, [-220, 220], [-16, 16]);
   const likeOp = useTransform(x, [0, 70], [0, 1]);
@@ -184,14 +234,29 @@ function SwipeCard({
 
             {/* Single food photo with left/right tap navigation */}
             <div className="flex-1 px-5 pb-4 flex flex-col min-h-0">
-              <div className="rounded-2xl overflow-hidden relative flex-1">
-                <img src={foodPhotos[photoIndex]} alt="" className="w-full h-full object-cover" draggable={false} />
+              <div className="rounded-2xl overflow-hidden relative flex-1" style={{ perspective: 1200 }}>
+                <AnimatePresence custom={photoDirection} initial={false}>
+                  <motion.img
+                    key={photoIndex}
+                    src={foodPhotos[photoIndex]}
+                    alt=""
+                    className="absolute inset-0 w-full h-full object-cover"
+                    draggable={false}
+                    custom={photoDirection}
+                    variants={cubePhotoVariants}
+                    initial="enter"
+                    animate="center"
+                    exit="exit"
+                    style={{ backfaceVisibility: 'hidden', WebkitBackfaceVisibility: 'hidden' }}
+                  />
+                </AnimatePresence>
 
                 {/* Left tap zone — previous photo */}
                 <button
                   className="absolute inset-y-0 left-0 w-1/2"
                   onClick={(e) => {
                     e.stopPropagation();
+                    setPhotoDirection(-1);
                     setPhotoIndex(i => (i - 1 + foodPhotos.length) % foodPhotos.length);
                   }}
                   aria-label="이전 메뉴"
@@ -201,6 +266,7 @@ function SwipeCard({
                   className="absolute inset-y-0 right-0 w-1/2"
                   onClick={(e) => {
                     e.stopPropagation();
+                    setPhotoDirection(1);
                     setPhotoIndex(i => (i + 1) % foodPhotos.length);
                   }}
                   aria-label="다음 메뉴"
