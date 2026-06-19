@@ -13,6 +13,10 @@ function usePrevious<T>(value: T): T | undefined {
 function getSlideDirection(from: string | undefined, to: string): number {
   if (from === "/" && to === "/lunchie/settings") return 1;
   if (from === "/lunchie/settings" && to === "/") return -1;
+  if (from === "/lunchie/settings" && to === "/session/lobby") return 1;
+  if (from === "/session/lobby" && to === "/lunchie/settings") return -1;
+  if (from === "/session/lobby" && to === "/lunchie/swipe") return 1;
+  if (from === "/lunchie/swipe" && to === "/session/lobby") return -1;
   return 0;
 }
 
