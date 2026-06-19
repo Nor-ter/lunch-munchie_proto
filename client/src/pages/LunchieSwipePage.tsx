@@ -951,8 +951,8 @@ export default function QuickMatchPage() {
             exit={{ opacity: 0, scale: 1.05 }}
             transition={{ duration: 0.3 }}
           >
-            <div className="flex items-center justify-center gap-[9px]">
-              <div className="flex h-[38px] w-[38px] flex-shrink-0 items-center justify-center overflow-hidden">
+            <div className="flex flex-col items-center">
+              <div className="flex h-[72px] w-[72px] flex-shrink-0 items-center justify-center overflow-hidden mb-3">
                 <img
                   src="/Logo 004.png"
                   alt="Lunchie Munchie Logo"
