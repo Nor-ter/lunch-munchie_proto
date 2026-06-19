@@ -4,7 +4,7 @@
  * Logic: merge1_v3 — createSession(...) 후 /session/lobby 로 이동
  */
 
-import { useState } from 'react';
+import { useState, type ReactNode, type CSSProperties } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useLocation } from 'wouter';
 import { ArrowLeft, Clock, SlidersHorizontal, Users, Minus, Plus, X } from 'lucide-react';
@@ -34,6 +34,96 @@ const RADIUS_OPTIONS = [500, 1000, 2000, 3000, 5000];
 
 function formatRadius(r: number): string {
   return r >= 1000 ? `${r / 1000}km` : `${r}m`;
+}
+
+const tapSpring = { type: "spring" as const, stiffness: 500, damping: 30 };
+
+function IconButton({
+  onClick,
+  disabled,
+  className,
+  children,
+}: {
+  onClick?: () => void;
+  disabled?: boolean;
+  className?: string;
+  children: ReactNode;
+}) {
+  return (
+    <motion.button
+      type="button"
+      onClick={onClick}
+      disabled={disabled}
+      className={className}
+      whileTap={disabled ? undefined : { scale: 0.88 }}
+      transition={tapSpring}
+    >
+      {children}
+    </motion.button>
+  );
+}
+
+function ChipButton({
+  selected,
+  onClick,
+  children,
+  className,
+  unselectedBg = "#F5F5F5",
+  unselectedColor = "#4A4A4A",
+}: {
+  selected: boolean;
+  onClick: () => void;
+  children: ReactNode;
+  className?: string;
+  unselectedBg?: string;
+  unselectedColor?: string;
+}) {
+  return (
+    <motion.button
+      type="button"
+      onClick={onClick}
+      className={className}
+      animate={{
+        backgroundColor: selected ? "#EB5053" : unselectedBg,
+        color: selected ? "#FFFFFF" : unselectedColor,
+      }}
+      whileTap={{
+        scale: 0.92,
+        backgroundColor: selected ? "#D94447" : "#E0E0E0",
+      }}
+      transition={tapSpring}
+    >
+      {children}
+    </motion.button>
+  );
+}
+
+function ActionButton({
+  onClick,
+  disabled,
+  children,
+  className,
+  style,
+}: {
+  onClick?: () => void;
+  disabled?: boolean;
+  children: ReactNode;
+  className?: string;
+  style?: CSSProperties;
+}) {
+  return (
+    <motion.button
+      type="button"
+      onClick={onClick}
+      disabled={disabled}
+      className={className}
+      style={style}
+      whileTap={disabled ? undefined : { scale: 0.97, opacity: 0.88 }}
+      transition={tapSpring}
+    >
+      {children}
+    </motion.button>
+  );
 }
 
 // ─── Lunchie Settings Page ────────────────────────────────────────────────────
@@ -103,12 +193,12 @@ export default function LunchieSettingsPage() {
     <div className="min-h-dvh bg-[#FCF4EE]">
       {/* Header */}
       <div className="flex items-center justify-between px-5 pt-12 pb-5">
-        <button
+        <IconButton
           onClick={() => navigate('/')}
-          className="w-10 h-10 rounded-full bg-white flex items-center justify-center shadow-sm active:scale-95"
+          className="w-10 h-10 rounded-full bg-white flex items-center justify-center shadow-sm"
         >
           <ArrowLeft size={18} color="#1A1A1A" />
-        </button>
+        </IconButton>
         <div className="text-center">
           <p className="font-black text-[17px] text-[#1A1A1A]">Lunchie Mode</p>
           <p className="text-[11px] text-[#9B9B9B]">Quick Match</p>
@@ -126,18 +216,14 @@ export default function LunchieSettingsPage() {
           <p className="text-[11px] text-[#9B9B9B] mb-3">투표 시작 후 제한 시간 · 마감 후엔 참여 불가</p>
           <div className="flex gap-2">
             {DEADLINE_OPTIONS.map(d => (
-              <button
+              <ChipButton
                 key={d.min}
+                selected={deadlineMin === d.min}
                 onClick={() => setDeadlineMin(d.min)}
-                className="flex-1 py-2.5 rounded-xl text-[12px] font-bold transition-all active:scale-95"
-                style={
-                  deadlineMin === d.min
-                    ? { background: '#EB5053', color: 'white' }
-                    : { background: '#F5F5F5', color: '#4A4A4A' }
-                }
+                className="flex-1 py-2.5 rounded-xl text-[12px] font-bold"
               >
                 {d.label}
-              </button>
+              </ChipButton>
             ))}
           </div>
         </div>
@@ -153,21 +239,21 @@ export default function LunchieSettingsPage() {
           <div className="bg-[#F5F5F5] rounded-xl p-3 mb-2">
             <p className="text-[11px] text-[#9B9B9B] mb-2">인원수</p>
             <div className="flex items-center gap-4">
-              <button
+              <IconButton
                 onClick={() => setPartySize(p => Math.max(2, p - 1))}
-                className="w-9 h-9 rounded-full bg-white shadow-sm flex items-center justify-center active:scale-90 disabled:opacity-40"
+                className="w-9 h-9 rounded-full bg-white shadow-sm flex items-center justify-center disabled:opacity-40"
                 disabled={partySize <= 2}
               >
                 <Minus size={16} color="#1A1A1A" />
-              </button>
+              </IconButton>
               <p className="font-black text-[20px] text-[#EB5053] w-12 text-center">{partySize}명</p>
-              <button
+              <IconButton
                 onClick={() => setPartySize(p => Math.min(12, p + 1))}
-                className="w-9 h-9 rounded-full bg-white shadow-sm flex items-center justify-center active:scale-90 disabled:opacity-40"
+                className="w-9 h-9 rounded-full bg-white shadow-sm flex items-center justify-center disabled:opacity-40"
                 disabled={partySize >= 12}
               >
                 <Plus size={16} color="#1A1A1A" />
-              </button>
+              </IconButton>
             </div>
           </div>
 
@@ -176,18 +262,15 @@ export default function LunchieSettingsPage() {
             <p className="text-[11px] text-[#9B9B9B] mb-2">검색 반경</p>
             <div className="flex gap-1.5">
               {RADIUS_OPTIONS.map(r => (
-                <button
+                <ChipButton
                   key={r}
+                  selected={radius === r}
                   onClick={() => setRadius(r)}
-                  className="flex-1 py-2 rounded-lg text-[12px] font-bold transition-all active:scale-95"
-                  style={
-                    radius === r
-                      ? { background: '#EB5053', color: 'white' }
-                      : { background: 'white', color: '#4A4A4A' }
-                  }
+                  unselectedBg="#FFFFFF"
+                  className="flex-1 py-2 rounded-lg text-[12px] font-bold"
                 >
                   {formatRadius(r)}
-                </button>
+                </ChipButton>
               ))}
             </div>
           </div>
@@ -200,28 +283,27 @@ export default function LunchieSettingsPage() {
               <SlidersHorizontal size={15} color="#EB5053" />
               <p className="text-[13px] font-bold text-[#1A1A1A]">옵션</p>
             </div>
-            <button
+            <motion.button
+              type="button"
               onClick={() => setShowDetailModal(true)}
-              className="flex items-center gap-1 text-[11px] font-bold px-2.5 py-1 rounded-full active:scale-95"
-              style={{ background: '#FFF5F5', color: '#EB5053' }}
+              className="flex items-center gap-1 text-[11px] font-bold px-2.5 py-1 rounded-full"
+              animate={{ backgroundColor: "#FFF5F5", color: "#EB5053" }}
+              whileTap={{ scale: 0.94, backgroundColor: "#FFD6D6" }}
+              transition={tapSpring}
             >
               상세 설정 {totalDetailCount > 0 && `· ${totalDetailCount}`}
-            </button>
+            </motion.button>
           </div>
           <div className="flex flex-wrap gap-2">
             {FILTER_OPTIONS.map(f => (
-              <button
+              <ChipButton
                 key={f}
+                selected={activeFilters.includes(f)}
                 onClick={() => toggleFilter(f)}
-                className="px-3 py-1.5 rounded-full text-[12px] font-semibold transition-all active:scale-95"
-                style={
-                  activeFilters.includes(f)
-                    ? { background: '#EB5053', color: 'white' }
-                    : { background: '#F5F5F5', color: '#4A4A4A' }
-                }
+                className="px-3 py-1.5 rounded-full text-[12px] font-semibold"
               >
                 {f}
-              </button>
+              </ChipButton>
             ))}
           </div>
 
@@ -266,12 +348,12 @@ export default function LunchieSettingsPage() {
                     <p className="font-black text-[17px] text-[#1A1A1A]">상세 설정</p>
                     <p className="text-[11px] text-[#9B9B9B]">활성화된 옵션의 세부 태그를 골라주세요</p>
                   </div>
-                  <button
+                  <IconButton
                     onClick={() => setShowDetailModal(false)}
-                    className="w-9 h-9 rounded-full bg-[#F5F5F5] flex items-center justify-center active:scale-90"
+                    className="w-9 h-9 rounded-full bg-[#F5F5F5] flex items-center justify-center"
                   >
                     <X size={16} color="#4A4A4A" />
-                  </button>
+                  </IconButton>
                 </div>
 
                 <div className="px-5 py-4 space-y-5">
@@ -285,18 +367,14 @@ export default function LunchieSettingsPage() {
                         {(DETAIL_OPTIONS[filter] || []).map(value => {
                           const on = (details[filter] || []).includes(value);
                           return (
-                            <button
+                            <ChipButton
                               key={value}
+                              selected={on}
                               onClick={() => toggleDetail(filter, value)}
-                              className="px-3 py-1.5 rounded-full text-[12px] font-semibold transition-all active:scale-95"
-                              style={
-                                on
-                                  ? { background: '#EB5053', color: 'white' }
-                                  : { background: '#F5F5F5', color: '#4A4A4A' }
-                              }
+                              className="px-3 py-1.5 rounded-full text-[12px] font-semibold"
                             >
                               {value}
-                            </button>
+                            </ChipButton>
                           );
                         })}
                       </div>
@@ -305,13 +383,13 @@ export default function LunchieSettingsPage() {
                 </div>
 
                 <div className="sticky bottom-0 bg-white px-5 py-4 border-t border-[#F0F0F0]">
-                  <button
+                  <ActionButton
                     onClick={() => setShowDetailModal(false)}
-                    className="w-full py-3.5 rounded-2xl font-bold text-white text-[14px] active:scale-[0.98]"
+                    className="w-full py-3.5 rounded-2xl font-bold text-white text-[14px]"
                     style={{ background: '#EB5053' }}
                   >
                     적용하기 {totalDetailCount > 0 && `(${totalDetailCount})`}
-                  </button>
+                  </ActionButton>
                 </div>
               </motion.div>
             </motion.div>
@@ -319,15 +397,14 @@ export default function LunchieSettingsPage() {
         </AnimatePresence>
 
         {/* Start */}
-        <motion.button
+        <ActionButton
           onClick={handleStart}
           disabled={isCreating}
           className="w-full py-4 rounded-2xl font-black text-white text-[16px] disabled:opacity-60"
           style={{ background: '#EB5053' }}
-          whileTap={{ scale: 0.97 }}
         >
           {isCreating ? '세션 만드는 중...' : 'Swipe 시작하기 🍱'}
-        </motion.button>
+        </ActionButton>
       </div>
     </div>
   );

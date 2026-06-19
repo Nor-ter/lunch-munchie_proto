@@ -27,6 +27,7 @@ import LunchieResultsPage from "./pages/LunchieResultsPage";
 import LunchieMapPage from "./pages/LunchieMapPage";
 import TourMapPage from "./pages/TourMapPage";
 import TourModePage from "./pages/TourModePage";
+import SlideTransitionRoutes from "./components/SlideTransitionRoutes";
 
 const NO_TABBAR = ['/onboarding', '/tour-mode', '/course/', '/lunchie', '/session', '/join'];
 
@@ -41,29 +42,31 @@ function AppShell() {
   return (
     <div className="app-shell">
       <div className={showTabBar ? "min-h-dvh pb-20" : "min-h-dvh"}>
-        <Switch>
-          <Route path="/onboarding" component={OnboardingPage} />
-          <Route path="/" component={HomePage} />
-          <Route path="/explore" component={ExplorePage} />
-          <Route path="/courses/:id/navigate" component={CourseNavigatePage} />
-          <Route path="/courses/:id" component={CoursesRedirect} />
-          <Route path="/course/:id/edit" component={CourseEditPage} />
-          <Route path="/course/:id/share" component={CourseSharePage} />
-          <Route path="/course/:id" component={NewCourseDetailPage} />
-          <Route path="/saved" component={SavedPage} />
-          <Route path="/profile" component={ProfilePage} />
-          {/* Lunchie 그룹 세션 플로우 (data-jp) */}
-          <Route path="/lunchie/settings" component={LunchieSettingsPage} />
-          <Route path="/session/lobby" component={SessionLobbyPage} />
-          <Route path="/join/:token" component={SessionJoinPage} />
-          <Route path="/lunchie/swipe" component={LunchieSwipePage} />
-          <Route path="/lunchie/results" component={LunchieResultsPage} />
-          <Route path="/lunchie/map" component={LunchieMapPage} />
-          <Route path="/tour-map" component={TourMapPage} />
-          <Route path="/tour-mode" component={TourModePage} />
-          <Route path="/404" component={NotFound} />
-          <Route component={NotFound} />
-        </Switch>
+        <SlideTransitionRoutes>
+          <Switch>
+            <Route path="/onboarding" component={OnboardingPage} />
+            <Route path="/" component={HomePage} />
+            <Route path="/explore" component={ExplorePage} />
+            <Route path="/courses/:id/navigate" component={CourseNavigatePage} />
+            <Route path="/courses/:id" component={CoursesRedirect} />
+            <Route path="/course/:id/edit" component={CourseEditPage} />
+            <Route path="/course/:id/share" component={CourseSharePage} />
+            <Route path="/course/:id" component={NewCourseDetailPage} />
+            <Route path="/saved" component={SavedPage} />
+            <Route path="/profile" component={ProfilePage} />
+            {/* Lunchie 그룹 세션 플로우 (data-jp) */}
+            <Route path="/lunchie/settings" component={LunchieSettingsPage} />
+            <Route path="/session/lobby" component={SessionLobbyPage} />
+            <Route path="/join/:token" component={SessionJoinPage} />
+            <Route path="/lunchie/swipe" component={LunchieSwipePage} />
+            <Route path="/lunchie/results" component={LunchieResultsPage} />
+            <Route path="/lunchie/map" component={LunchieMapPage} />
+            <Route path="/tour-map" component={TourMapPage} />
+            <Route path="/tour-mode" component={TourModePage} />
+            <Route path="/404" component={NotFound} />
+            <Route component={NotFound} />
+          </Switch>
+        </SlideTransitionRoutes>
       </div>
       {showTabBar && <TabBar />}
     </div>
