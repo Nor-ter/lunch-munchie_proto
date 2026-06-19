@@ -5,7 +5,7 @@
  */
 
 import { useState, useCallback, useEffect, useRef } from 'react';
-import { motion, useMotionValue, useTransform, AnimatePresence } from 'framer-motion';
+import { motion, useMotionValue, useTransform, useMotionTemplate, AnimatePresence, type MotionValue } from 'framer-motion';
 import { useLocation } from 'wouter';
 import { ArrowLeft, Heart, X, Star, MapPin, Clock, Phone, Navigation, Share2, Download, Link2, Home } from 'lucide-react';
 import { toast } from 'sonner';
@@ -45,7 +45,7 @@ const cubePhotoVariants = {
     // (다른 방향으로 탭이 바뀌어도 회전 중 축이 미끄러지지 않게).
     transition: {
       duration: 0.5,
-      ease: [0.45, 0, 0.2, 1],
+      ease: [0.45, 0, 0.2, 1] as const,
       originX: { duration: 0 },
       scaleX: { duration: 0.5, times: [0, 0.5, 1] },
       scaleY: { duration: 0.5, times: [0, 0.5, 1] },
@@ -59,13 +59,40 @@ const cubePhotoVariants = {
     scaleY: [1, 1.18, 1],
     transition: {
       duration: 0.5,
-      ease: [0.45, 0, 0.2, 1],
+      ease: [0.45, 0, 0.2, 1] as const,
       originX: { duration: 0 },
       scaleX: { duration: 0.5, times: [0, 0.5, 1] },
       scaleY: { duration: 0.5, times: [0, 0.5, 1] },
     },
   }),
 };
+
+// 좋아요로 끌 때 사방으로 튀어 날아가는 빛 파티클 한 조각.
+// 같은 x 모션값을 공유하지만 입자마다 다른 방향/크기/회전으로 날아가야 하므로
+// 개별 컴포넌트에서 각자 useTransform을 호출한다.
+function LikeSparkle({
+  x, dx, dy, size, rotateTo, top, left,
+}: {
+  x: MotionValue<number>; dx: number; dy: number; size: number; rotateTo: number; top: string; left: string;
+}) {
+  const opacity = useTransform(x, [0, 25, 90, 210], [0, 1, 1, 0]);
+  const tx = useTransform(x, [0, 210], [0, dx]);
+  const ty = useTransform(x, [0, 210], [0, dy]);
+  const rotate = useTransform(x, [0, 210], [0, rotateTo]);
+  const scale = useTransform(x, [0, 25, 210], [0.1, 1.1, 1.5]);
+  return (
+    <motion.span
+      className="absolute pointer-events-none select-none"
+      style={{
+        top, left, opacity, x: tx, y: ty, rotate, scale,
+        fontSize: size, lineHeight: 1, color: '#FFFDF0',
+        textShadow: '0 0 6px rgba(255,255,255,0.95), 0 0 16px rgba(255,221,130,0.9), 0 0 28px rgba(255,200,80,0.6)',
+      }}
+    >
+      ✦
+    </motion.span>
+  );
+}
 
 // ─── Swipe Card ───────────────────────────────────────────────────────────────
 
@@ -91,6 +118,16 @@ function SwipeCard({
   const rotate = useTransform(x, [-220, 220], [-16, 16]);
   const likeOp = useTransform(x, [0, 70], [0, 1]);
   const nopeOp = useTransform(x, [-70, 0], [1, 0]);
+  // 좋아요(오른쪽) — 빛이 카드를 가로질러 스치는 샤이닝 효과. 두 겹으로 어긋나게 스쳐 더 강렬하게 보이도록 한다.
+  const shineX = useTransform(x, [0, 220], ['-150%', '150%']);
+  const shineX2 = useTransform(x, [0, 220], ['-80%', '220%']);
+  const shineOp2 = useTransform(likeOp, v => v * 0.7);
+  const flashOp = useTransform(x, [0, 40, 220], [0, 0.5, 0.18]);
+  // 싫어요(왼쪽) — 벽돌이 완전히 금가 부서지는 느낌을 주기 위해 더 많이 움츠러들고 채도를 잃는다.
+  const crackScale = useTransform(x, [-220, 0], [0.78, 1]);
+  const crackGray = useTransform(x, [-220, 0], [0.85, 0]);
+  const crackDark = useTransform(x, [-220, 0], [0.55, 1]);
+  const crackFilter = useMotionTemplate`grayscale(${crackGray}) brightness(${crackDark})`;
   const foodPhotos = getFoodPhotos(restaurant.category);
 
   const handleDragEnd = useCallback((_: unknown, info: { offset: { x: number } }) => {
@@ -144,7 +181,7 @@ function SwipeCard({
             style={{ backfaceVisibility: 'hidden', WebkitBackfaceVisibility: 'hidden', pointerEvents: isRevealed ? 'none' : 'auto' }}
           >
       {/* Restaurant photo */}
-      <div className="w-full h-full relative cursor-grab">
+      <motion.div className="w-full h-full relative cursor-grab" style={{ scale: crackScale, filter: crackFilter }}>
         <img
           src={restaurant.image}
           alt={restaurant.name}
@@ -220,7 +257,104 @@ function SwipeCard({
         >
           <span className="text-[#EB5053] font-black text-[18px]">NOPE ✕</span>
         </motion.div>
-      </div>
+
+        {/* 좋아요 샤이닝 효과 — 두 겹의 대각선 빛이 어긋나게 스치고, 전체 플래시 + 사방으로 빛 파티클이 튄다 */}
+        <motion.div
+          className="absolute inset-0 pointer-events-none"
+          style={{
+            opacity: likeOp,
+            x: shineX,
+            background: 'linear-gradient(105deg, transparent 32%, rgba(255,255,255,1) 50%, transparent 68%)',
+            mixBlendMode: 'overlay',
+          }}
+        />
+        <motion.div
+          className="absolute inset-0 pointer-events-none"
+          style={{
+            opacity: shineOp2,
+            x: shineX2,
+            background: 'linear-gradient(105deg, transparent 42%, rgba(255,225,140,0.95) 50%, transparent 58%)',
+            mixBlendMode: 'overlay',
+          }}
+        />
+        <motion.div
+          className="absolute inset-0 pointer-events-none"
+          style={{ opacity: flashOp, background: 'white', mixBlendMode: 'overlay' }}
+        />
+        <motion.div
+          className="absolute inset-0 pointer-events-none rounded-3xl"
+          style={{ opacity: likeOp, boxShadow: 'inset 0 0 70px 22px rgba(255,255,255,0.85)' }}
+        />
+        {[
+          { dx: -90, dy: -120, size: 22, rotateTo: 140, top: '40%', left: '50%' },
+          { dx: 90, dy: -130, size: 16, rotateTo: -120, top: '38%', left: '46%' },
+          { dx: -130, dy: 10, size: 14, rotateTo: 200, top: '46%', left: '52%' },
+          { dx: 120, dy: 30, size: 20, rotateTo: -180, top: '44%', left: '48%' },
+          { dx: -50, dy: 110, size: 12, rotateTo: 90, top: '42%', left: '54%' },
+          { dx: 60, dy: 120, size: 18, rotateTo: -90, top: '40%', left: '50%' },
+        ].map((s, i) => <LikeSparkle key={i} x={x} {...s} />)}
+
+        {/* 싫어요 바사삭 효과 — 파편이 떨어지는 게 아니라 카드 전체에 와장창 금이 가며 부서지는 디자인.
+            중심 충격점에서 사방 모서리로 뻗는 균열 + 그 사이를 잇는 두 겹의 동심원 균열로
+            유리/벽돌이 통째로 깨지는 거미줄 패턴을 만든다. */}
+        <motion.svg
+          className="absolute inset-0 pointer-events-none"
+          viewBox="0 0 300 400"
+          preserveAspectRatio="none"
+          style={{ opacity: nopeOp }}
+        >
+          {/* 중심에서 사방으로 뻗는 균열 */}
+          <path
+            d="M150 190 L140 90 L150 0
+               M150 190 L230 70 L300 0
+               M150 190 L250 160 L300 140
+               M150 190 L260 230 L300 260
+               M150 190 L240 330 L300 400
+               M150 190 L170 300 L150 400
+               M150 190 L60 330 L0 400
+               M150 190 L40 230 L0 260
+               M150 190 L50 160 L0 140
+               M150 190 L70 70 L0 0"
+            stroke="rgba(0,0,0,0.7)" strokeWidth="4" fill="none" strokeLinecap="round"
+          />
+          <path
+            d="M150 190 L140 90 L150 0
+               M150 190 L230 70 L300 0
+               M150 190 L250 160 L300 140
+               M150 190 L260 230 L300 260
+               M150 190 L240 330 L300 400
+               M150 190 L170 300 L150 400
+               M150 190 L60 330 L0 400
+               M150 190 L40 230 L0 260
+               M150 190 L50 160 L0 140
+               M150 190 L70 70 L0 0"
+            stroke="rgba(255,255,255,0.85)" strokeWidth="1.4" fill="none" strokeLinecap="round"
+          />
+          {/* 안쪽 동심 균열 */}
+          <path
+            d="M150 100 L195 115 L215 150 L220 190 L210 230 L180 260 L150 265 L110 255 L85 225 L75 190 L80 150 L110 115 Z"
+            stroke="rgba(0,0,0,0.55)" strokeWidth="2.4" fill="none"
+          />
+          <path
+            d="M150 100 L195 115 L215 150 L220 190 L210 230 L180 260 L150 265 L110 255 L85 225 L75 190 L80 150 L110 115 Z"
+            stroke="rgba(255,255,255,0.6)" strokeWidth="1" fill="none"
+          />
+          {/* 바깥쪽 동심 균열 */}
+          <path
+            d="M150 40 L230 55 L265 110 L270 190 L255 260 L210 320 L150 335 L90 320 L45 260 L30 190 L35 110 L70 55 Z"
+            stroke="rgba(0,0,0,0.45)" strokeWidth="2" fill="none"
+          />
+          <path
+            d="M150 40 L230 55 L265 110 L270 190 L255 260 L210 320 L150 335 L90 320 L45 260 L30 190 L35 110 L70 55 Z"
+            stroke="rgba(255,255,255,0.5)" strokeWidth="0.8" fill="none"
+          />
+        </motion.svg>
+        {/* 충격점에서 어두워지는 비네트 + 전체 어두워짐 */}
+        <motion.div
+          className="absolute inset-0 pointer-events-none"
+          style={{ opacity: nopeOp, background: 'radial-gradient(circle at 50% 47%, rgba(0,0,0,0.05) 0%, rgba(15,12,10,0.6) 75%)' }}
+        />
+      </motion.div>
           </div>
 
           {/* 뒷면 — 메뉴 패널. preserve-3d 공간 안에서 처음부터 180도 돌려진 채 고정해두고,
