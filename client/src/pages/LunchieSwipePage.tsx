@@ -128,6 +128,21 @@ function SwipeCard({
         }
       }}
     >
+      {/* 카드 ↔ 메뉴 패널을 뒤집는 플립 모션.
+          perspective 컨테이너 안에서 preserve-3d로 두 면(앞면/뒷면)을 같은 3D 공간에 고정해두고,
+          바깥쪽 motion.div만 rotateY(0↔180)으로 통째로 돌리면 카드가 실제로 뒤집히는 것처럼 보인다. */}
+      <div className="w-full h-full relative" style={{ perspective: 1600 }}>
+        <motion.div
+          className="w-full h-full relative"
+          style={{ transformStyle: 'preserve-3d' }}
+          animate={{ rotateY: isRevealed ? 180 : 0 }}
+          transition={{ duration: 0.6, ease: [0.45, 0, 0.2, 1] }}
+        >
+          {/* 앞면 — 식당 카드 */}
+          <div
+            className="absolute inset-0 w-full h-full"
+            style={{ backfaceVisibility: 'hidden', WebkitBackfaceVisibility: 'hidden', pointerEvents: isRevealed ? 'none' : 'auto' }}
+          >
       {/* Restaurant photo */}
       <div className="w-full h-full relative cursor-grab">
         <img
@@ -206,17 +221,20 @@ function SwipeCard({
           <span className="text-[#EB5053] font-black text-[18px]">NOPE ✕</span>
         </motion.div>
       </div>
+          </div>
 
-      {/* Food photos reveal panel — dark, one-photo-at-a-time vertical scroll */}
-      <AnimatePresence>
-        {isRevealed && (
-          <motion.div
-            className="absolute inset-0 flex flex-col"
-            style={{ background: 'rgba(20,16,14,0.92)', backdropFilter: 'blur(8px)' }}
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            transition={{ duration: 0.25 }}
+          {/* 뒷면 — 메뉴 패널. preserve-3d 공간 안에서 처음부터 180도 돌려진 채 고정해두고,
+              바깥 컨테이너가 180도 돌 때 같이 따라가며 정면을 향하게 된다 (180+180=360). */}
+          <div
+            className="absolute inset-0 w-full h-full flex flex-col"
+            style={{
+              background: 'rgba(20,16,14,0.92)',
+              backdropFilter: 'blur(8px)',
+              transform: 'rotateY(180deg)',
+              backfaceVisibility: 'hidden',
+              WebkitBackfaceVisibility: 'hidden',
+              pointerEvents: isRevealed ? 'auto' : 'none',
+            }}
             onClick={(e) => e.stopPropagation()}
           >
             {/* Panel header */}
@@ -297,9 +315,9 @@ function SwipeCard({
             <div className="text-center pb-2 flex-shrink-0">
               <p className="text-white/40 text-[11px]">← 이전 / 다음 메뉴 → · ✕ 눌러서 닫기</p>
             </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
+          </div>
+        </motion.div>
+      </div>
     </motion.div>
   );
 }
