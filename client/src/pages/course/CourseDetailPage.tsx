@@ -23,7 +23,7 @@ import { CourseMap } from '@/components/course/CourseMap';
 import { useApp } from '@/contexts/AppContext';
 import { getCourseById as getMockCourseById } from '@/data/mockCourse';
 import { CoursePlace } from '@/types/course';
-import { getCourseSequenceColor } from '@/constants/courseTheme';
+import { COURSE_THEME, getCourseSequenceColor } from '@/constants/courseTheme';
 import { getCoursePlacesFromStops } from '@/lib/courseMapSync';
 
 type FromMode = 'explore' | 'saved';
@@ -458,7 +458,8 @@ export default function CourseDetailPage() {
             </button>
             <button
               onClick={() => navigate(`/course/${id}/edit?from=explore`)}
-              className="flex-1 bg-[#1A1A1A] text-white rounded-xl h-11 text-sm font-medium"
+              className="flex-1 text-white rounded-xl h-11 text-sm font-medium"
+              style={{ backgroundColor: COURSE_THEME.primary }}
             >
               복사해서 편집
             </button>

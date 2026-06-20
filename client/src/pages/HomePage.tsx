@@ -166,16 +166,9 @@ export default function HomePage() {
           paddingTop: 64,
         }}
       >
-        <div className="mb-[27px] flex items-center justify-center gap-[9px]">
-          <div className="flex h-[38px] w-[38px] flex-shrink-0 items-center justify-center overflow-hidden">
-            <img
-              src="/Logo 004.png"
-              alt="Lunchie Munchie Logo"
-              className="h-full w-full object-contain"
-            />
-          </div>
+        <div className="mb-[27px] flex items-center justify-center">
           <span
-            className="text-[19px] font-black leading-none"
+            className="text-center text-[19px] font-black leading-none"
             style={{
               color: "#FF393D",
               textShadow: "0 4px 10px rgba(235,80,83,0.18)",

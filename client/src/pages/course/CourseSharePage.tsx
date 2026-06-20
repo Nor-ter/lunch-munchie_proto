@@ -103,26 +103,32 @@ function TemplateSlide({
 
 // ── CourseSharePage ───────────────────────────────────────────────────────────
 
-function useShareFrom(): 'saved' | 'edit' | null {
+function useShareNavigation() {
   const search = useSearch();
-  const from = new URLSearchParams(search).get('from');
-  if (from === 'saved' || from === 'edit') return from;
-  return null;
+  const params = new URLSearchParams(search);
+  const from = params.get('from');
+  const shareFrom = from === 'saved' || from === 'edit' ? from : null;
+  const editorFrom = params.get('editorFrom') === 'saved' ? 'saved' : 'explore';
+  return { shareFrom, editorFrom } as const;
 }
 
 export default function CourseSharePage() {
   const { id } = useParams<{ id: string }>();
   const [, navigate] = useLocation();
-  const shareFrom = useShareFrom();
+  const { shareFrom, editorFrom } = useShareNavigation();
 
   const goBack = () => {
     if (!id) {
-      navigate(-1 as never);
+      navigate('/explore', { replace: true });
       return;
     }
-    if (shareFrom === 'saved') navigate(`/course/${id}?from=saved`);
-    else if (shareFrom === 'edit') navigate(`/course/${id}/edit`);
-    else navigate(-1 as never);
+    if (shareFrom === 'saved') {
+      navigate(`/course/${id}?from=saved`, { replace: true });
+    } else if (shareFrom === 'edit') {
+      navigate(`/course/${id}/edit?from=${editorFrom}`, { replace: true });
+    } else {
+      navigate(`/course/${id}?from=explore`, { replace: true });
+    }
   };
 
   const course = getCourseById(id);

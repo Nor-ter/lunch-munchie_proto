@@ -1,5 +1,10 @@
 import { CoursePlace } from '@/types/course';
-import { getCourseSequenceColor } from '@/constants/courseTheme';
+import {
+  COURSE_MAP_ROUTE_STYLE,
+  COURSE_THEME,
+  getCourseSequenceColor,
+} from '@/constants/courseTheme';
+import { getCurvedCourseSegments } from '@/lib/courseMapSync';
 
 interface CourseMapProps {
   places: CoursePlace[];
@@ -20,6 +25,7 @@ export function CourseMap({
 }: CourseMapProps) {
   const toX = (x: number) => (x / 100) * width;
   const toY = (y: number) => (y / 100) * height;
+  const segments = getCurvedCourseSegments(places.map((place) => place.coords));
 
   return (
     <svg
@@ -29,7 +35,7 @@ export function CourseMap({
       className={`rounded-xl overflow-hidden ${className}`}
     >
       {/* Background */}
-      <rect width={width} height={height} fill="#F8F5F0" />
+      <rect width={width} height={height} fill={COURSE_THEME.mapBg} />
 
       {/* Grid lines */}
       {GRID_STEPS.map((step) => (
@@ -39,7 +45,7 @@ export function CourseMap({
             y1={0}
             x2={toX(step)}
             y2={height}
-            stroke="#E8E3DC"
+            stroke={COURSE_THEME.mapGrid}
             strokeWidth={0.5}
           />
           <line
@@ -47,38 +53,46 @@ export function CourseMap({
             y1={toY(step)}
             x2={width}
             y2={toY(step)}
-            stroke="#E8E3DC"
+            stroke={COURSE_THEME.mapGrid}
             strokeWidth={0.5}
           />
         </g>
       ))}
 
       {/* Path */}
-      {places.slice(1).map((place, i) => {
-        const prev = places[i]!;
-        return (
-          <g key={`${prev.id}-${place.id}`}>
-            <line
-              x1={toX(prev.coords.x)}
-              y1={toY(prev.coords.y)}
-              x2={toX(place.coords.x)}
-              y2={toY(place.coords.y)}
-              stroke="#FFFFFF"
-              strokeWidth={9}
+      <g transform={`scale(${width / 100} ${height / 100})`}>
+        {segments.map((segment, i) => (
+          <g key={`${places[i]?.id}-${places[i + 1]?.id}`}>
+            <path
+              d={segment.path}
+              stroke={COURSE_MAP_ROUTE_STYLE.borderColor}
+              fill="none"
+              vectorEffect="non-scaling-stroke"
+              strokeWidth={COURSE_MAP_ROUTE_STYLE.borderWidth}
               strokeLinecap="round"
+              strokeLinejoin="round"
             />
-            <line
-              x1={toX(prev.coords.x)}
-              y1={toY(prev.coords.y)}
-              x2={toX(place.coords.x)}
-              y2={toY(place.coords.y)}
+            <path
+              d={segment.path}
               stroke={getCourseSequenceColor(i).base}
-              strokeWidth={5}
+              fill="none"
+              vectorEffect="non-scaling-stroke"
+              strokeWidth={COURSE_MAP_ROUTE_STYLE.routeWidth}
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            />
+            <path
+              d={segment.path}
+              stroke={COURSE_MAP_ROUTE_STYLE.centerLineColor}
+              fill="none"
+              vectorEffect="non-scaling-stroke"
+              strokeWidth={COURSE_MAP_ROUTE_STYLE.centerLineWidth}
+              strokeDasharray={COURSE_MAP_ROUTE_STYLE.centerLineDash}
               strokeLinecap="round"
             />
           </g>
-        );
-      })}
+        ))}
+      </g>
 
       {/* Nodes */}
       {places.map((place, i) => (
@@ -86,17 +100,17 @@ export function CourseMap({
           <circle
             cx={toX(place.coords.x)}
             cy={toY(place.coords.y)}
-            r={10}
+            r={COURSE_MAP_ROUTE_STYLE.nodeRadius}
             fill={getCourseSequenceColor(i).base}
-            stroke="#FFFFFF"
-            strokeWidth={2}
+            stroke={COURSE_MAP_ROUTE_STYLE.borderColor}
+            strokeWidth={COURSE_MAP_ROUTE_STYLE.nodeBorderWidth}
           />
           {showLabels && (
             <text
               x={toX(place.coords.x)}
               y={toY(place.coords.y)}
               fill="white"
-              fontSize={10}
+              fontSize={COURSE_MAP_ROUTE_STYLE.nodeLabelSize}
               textAnchor="middle"
               dominantBaseline="central"
             >

@@ -1,6 +1,10 @@
 import { useApp, Course } from '@/contexts/AppContext';
-import { getCourseSequenceColor } from '@/constants/courseTheme';
-import { getCourseMapPoints, getCourseRestaurants } from '@/lib/courseMapSync';
+import { COURSE_MAP_ROUTE_STYLE, getCourseSequenceColor } from '@/constants/courseTheme';
+import {
+  getCourseMapPoints,
+  getCourseRestaurants,
+  getCurvedCourseSegments,
+} from '@/lib/courseMapSync';
 
 export default function CourseMapOverlay({ course }: { course: Course }) {
   const { getRestaurantById } = useApp();
@@ -11,34 +15,39 @@ export default function CourseMapOverlay({ course }: { course: Course }) {
 
   const pts = getCourseMapPoints(stops);
 
-  const segmentPaths = pts.slice(1).map((curr, index) => {
-    const prev = pts[index]!;
-    const cx = prev.x + (curr.x - prev.x) / 2;
-    return `M ${prev.x} ${prev.y} C ${cx} ${prev.y}, ${cx} ${curr.y}, ${curr.x} ${curr.y}`;
-  });
+  const segments = getCurvedCourseSegments(pts);
 
   return (
     <div className="absolute inset-0 z-20 pointer-events-none overflow-hidden">
       <svg className="absolute inset-0 w-full h-full" viewBox="0 0 100 100" preserveAspectRatio="none">
-        {segmentPaths.map((pathD, i) => (
-          <g key={pathD} style={{ filter: 'drop-shadow(0px 2px 4px rgba(0,0,0,0.24))' }}>
+        {segments.map((segment, i) => (
+          <g key={`${i}-${segment.path}`} style={{ filter: 'drop-shadow(0px 2px 4px rgba(0,0,0,0.24))' }}>
             <path
-              d={pathD}
-              stroke="#FFFFFF"
+              d={segment.path}
+              stroke={COURSE_MAP_ROUTE_STYLE.borderColor}
               fill="none"
               vectorEffect="non-scaling-stroke"
-              strokeWidth="9"
+              strokeWidth={COURSE_MAP_ROUTE_STYLE.borderWidth}
               strokeLinecap="round"
               strokeLinejoin="round"
             />
             <path
-              d={pathD}
+              d={segment.path}
               stroke={getCourseSequenceColor(i).base}
               fill="none"
               vectorEffect="non-scaling-stroke"
-              strokeWidth="5"
+              strokeWidth={COURSE_MAP_ROUTE_STYLE.routeWidth}
               strokeLinecap="round"
               strokeLinejoin="round"
+            />
+            <path
+              d={segment.path}
+              stroke={COURSE_MAP_ROUTE_STYLE.centerLineColor}
+              fill="none"
+              vectorEffect="non-scaling-stroke"
+              strokeWidth={COURSE_MAP_ROUTE_STYLE.centerLineWidth}
+              strokeDasharray={COURSE_MAP_ROUTE_STYLE.centerLineDash}
+              strokeLinecap="round"
             />
           </g>
         ))}
@@ -46,8 +55,12 @@ export default function CourseMapOverlay({ course }: { course: Course }) {
       {pts.map((pt, i) => (
         <div
           key={i}
-          className="absolute w-[24px] h-[24px] rounded-full border-2 border-white flex items-center justify-center text-white font-bold text-[12px] shadow-md"
+          className="absolute rounded-full border-white flex items-center justify-center text-white font-bold shadow-md"
           style={{
+            width: COURSE_MAP_ROUTE_STYLE.nodeSize,
+            height: COURSE_MAP_ROUTE_STYLE.nodeSize,
+            borderWidth: COURSE_MAP_ROUTE_STYLE.nodeBorderWidth,
+            fontSize: COURSE_MAP_ROUTE_STYLE.nodeLabelSize,
             left: `${pt.x}%`,
             top: `${pt.y}%`,
             transform: 'translate(-50%, -50%)',

@@ -3,6 +3,50 @@ import { CoursePlace } from '@/types/course';
 
 export type CourseMapPoint = { x: number; y: number };
 
+export type CourseMapSegment = {
+  from: CourseMapPoint;
+  to: CourseMapPoint;
+  path: string;
+};
+
+const clamp = (value: number, min: number, max: number) =>
+  Math.min(max, Math.max(min, value));
+
+/**
+ * Builds the shared, road-like route geometry used by feed cards, the viewer,
+ * and the editor. Stops remain fixed to their data-backed coordinates; only
+ * the line between them receives a deterministic alternating bend.
+ */
+export function getCurvedCourseSegments(points: CourseMapPoint[]): CourseMapSegment[] {
+  return points.slice(1).map((to, index) => {
+    const from = points[index]!;
+    const previous = points[index - 1] ?? from;
+    const next = points[index + 2] ?? to;
+    const dx = to.x - from.x;
+    const dy = to.y - from.y;
+    const distance = Math.hypot(dx, dy) || 1;
+    const direction = index % 2 === 0 ? 1 : -1;
+    const bend = clamp(distance * 0.2, 5, 12) * direction;
+    const perpendicularX = (-dy / distance) * bend;
+    const perpendicularY = (dx / distance) * bend;
+
+    const control1 = {
+      x: from.x + (to.x - previous.x) * 0.28 + perpendicularX,
+      y: from.y + (to.y - previous.y) * 0.28 + perpendicularY,
+    };
+    const control2 = {
+      x: to.x - (next.x - from.x) * 0.28 + perpendicularX,
+      y: to.y - (next.y - from.y) * 0.28 + perpendicularY,
+    };
+
+    return {
+      from,
+      to,
+      path: `M ${from.x} ${from.y} C ${control1.x} ${control1.y}, ${control2.x} ${control2.y}, ${to.x} ${to.y}`,
+    };
+  });
+}
+
 export function getOrderedCourseStops(course: Course) {
   return [...course.stops].sort((a, b) => a.order - b.order);
 }

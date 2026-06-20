@@ -76,18 +76,13 @@ function LightningIcon({ active }: { active: boolean }) {
 
 function FaceIcon({ active }: { active: boolean }) {
   return (
-    <svg {...iconProps(active)} viewBox="0 0 40 40">
-      <circle cx="20" cy="20" r="15" strokeWidth="2.7" fill={active ? "white" : "none"} />
-      <circle cx="14.5" cy="20" r="1.7" fill={active ? "#F43D40" : "white"} strokeWidth="0" />
-      <circle cx="25.5" cy="20" r="1.7" fill={active ? "#F43D40" : "white"} strokeWidth="0" />
-      <path
-        d="M15.8 25.4 C18.3 27.6 21.7 27.6 24.2 25.4"
-        strokeWidth="2.5"
-        stroke={active ? "#F43D40" : "white"}
-      />
-      <path d="M10.8 24.5 H10.9" strokeWidth="3.3" stroke={active ? "#F43D40" : "white"} />
-      <path d="M29.1 24.5 H29.2" strokeWidth="3.3" stroke={active ? "#F43D40" : "white"} />
-    </svg>
+    <img
+      src="/assets/Logo%20003%203.png"
+      alt=""
+      aria-hidden="true"
+      className="h-[38px] w-[38px] object-contain"
+      style={{ opacity: active ? 1 : 0.62 }}
+    />
   );
 }
 

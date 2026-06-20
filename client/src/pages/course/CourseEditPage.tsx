@@ -91,9 +91,9 @@ function SortableItem({
   );
 }
 
-function useFromExplore(): boolean {
+function useEditorFrom(): 'explore' | 'saved' {
   const search = useSearch();
-  return new URLSearchParams(search).get('from') === 'explore';
+  return new URLSearchParams(search).get('from') === 'saved' ? 'saved' : 'explore';
 }
 
 function normalizeHashtags(tags: string[]) {
@@ -106,7 +106,7 @@ export default function CourseEditPage() {
   const { id } = useParams<{ id: string }>();
   const isNew = id === 'new';
   const [, navigate] = useLocation();
-  const fromExplore = useFromExplore();
+  const editorFrom = useEditorFrom();
   const { saveCourse, getCourseById, getRestaurantById } = useApp();
   const appCourse = !isNew && id ? getCourseById(id) : undefined;
   const syncedPlaces = useMemo(
@@ -125,12 +125,16 @@ export default function CourseEditPage() {
 
   const goBack = () => {
     if (isNew) {
-      navigate('/saved');
-    } else if (fromExplore && id) {
-      navigate(`/course/${id}?from=explore`);
-    } else {
-      navigate(-1 as never);
+      navigate('/saved', { replace: true });
+      return;
     }
+
+    if (!id) {
+      navigate('/explore', { replace: true });
+      return;
+    }
+
+    navigate(`/course/${id}?from=${editorFrom}`, { replace: true });
   };
 
   const [title, setTitle] = useState(initialTitle);
@@ -328,7 +332,7 @@ export default function CourseEditPage() {
           </button>
         ) : (
           <button
-            onClick={() => navigate(`/course/${id}/share?from=edit`)}
+            onClick={() => navigate(`/course/${id}/share?from=edit&editorFrom=${editorFrom}`)}
             className="flex-1 bg-[#E85053] text-white rounded-xl h-11 text-sm font-medium"
           >
             코스 공유

@@ -6,6 +6,19 @@ export const COURSE_THEME = {
   black: '#1A1A1A',
 } as const;
 
+export const COURSE_MAP_ROUTE_STYLE = {
+  borderColor: '#FFFFFF',
+  borderWidth: 11,
+  routeWidth: 7,
+  centerLineColor: 'rgba(255,255,255,0.82)',
+  centerLineWidth: 1.5,
+  centerLineDash: '7 7',
+  nodeRadius: 10,
+  nodeSize: 24,
+  nodeBorderWidth: 2,
+  nodeLabelSize: 10,
+} as const;
+
 export const COURSE_COLOR_PALETTE = [
   {
     name: 'Red',
