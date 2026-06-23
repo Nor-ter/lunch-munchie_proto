@@ -95,6 +95,8 @@ export interface GroupSession {
   slateId?: string;
   /** restaurant_id → {추천 propensity, 노출 position} (스와이프 로깅에 사용) */
   recMeta?: Record<string, { propensity: number; position: number }>;
+  /** 슬레이트를 만든 엔진 정책 버전 (스와이프 로깅의 model_version) */
+  modelVersion?: string;
 }
 
 export interface SessionMember {
@@ -446,7 +448,7 @@ async function buildDeck(
   filters: GroupSession['filters'],
   allRestaurants: Restaurant[],
   userId?: string,
-): Promise<{ restaurants: Restaurant[]; slateId?: string; recMeta?: GroupSession['recMeta'] }> {
+): Promise<{ restaurants: Restaurant[]; slateId?: string; recMeta?: GroupSession['recMeta']; modelVersion?: string }> {
   const base = allRestaurants.filter(r =>
     (filters.categories.length === 0 || filters.categories.includes(r.category)) &&
     matchesDiet(r.category, r.dietary, filters.dietary),
@@ -460,7 +462,8 @@ async function buildDeck(
         candidate_ids: base.map(r => r.id),
         // 앱이 이미 아는 맥락은 클라가 실어 보낸다 (companions=인원수). 나머지는 서버가 보강.
         context: { diet: filters.dietary, companions: filters.partySize },
-        k: Math.min(base.length, 20),
+        // 예선 = 엔진 추천 top-7 (결정 플로우 ①). 스와이프 덱 = 슬레이트와 1:1.
+        k: 7,
         slate_type: 'PRELIM',
         user_id: userId,
       }),
@@ -468,17 +471,14 @@ async function buildDeck(
     if (!res.ok) return { restaurants: base };
     const data = await res.json();
     const meta: GroupSession['recMeta'] = {};
-    const order: string[] = [];
+    const slate: Restaurant[] = [];
     for (const s of data.slate as { id: string; propensity: number; rank: number }[]) {
       meta![s.id] = { propensity: s.propensity, position: s.rank };
-      order.push(s.id);
+      const r = base.find(x => x.id === s.id);
+      if (r) slate.push(r);
     }
-    const inSlate = new Set(order);
-    const ordered = [
-      ...order.map(id => base.find(r => r.id === id)).filter((r): r is Restaurant => !!r),
-      ...base.filter(r => !inSlate.has(r.id)),
-    ];
-    return { restaurants: ordered, slateId: data.slate_id, recMeta: meta };
+    // 덱 = 슬레이트(top-7)만. 노출(IMPRESSION)·스와이프가 정확히 일치한다.
+    return { restaurants: slate.length ? slate : base, slateId: data.slate_id, recMeta: meta, modelVersion: data.model_version };
   } catch {
     return { restaurants: base };
   }
@@ -642,6 +642,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
             restaurants: deck.restaurants,
             slateId: deck.slateId,
             recMeta: deck.recMeta,
+            modelVersion: deck.modelVersion,
             results: [],
           };
           setCurrentSession(session);
@@ -657,6 +658,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     session.restaurants = deck.restaurants;
     session.slateId = deck.slateId;
     session.recMeta = deck.recMeta;
+    session.modelVersion = deck.modelVersion;
     session.deadlineMinutes = deadlineMinutes;
     setCurrentSession(session);
     return session;
@@ -695,6 +697,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       restaurants: deck.restaurants,
       slateId: deck.slateId,
       recMeta: deck.recMeta,
+      modelVersion: deck.modelVersion,
       results: [],
     };
     // 서버 응답에는 없는 로컬 정보(세션 이름, 마감 타이밍 설정)는 유지한다

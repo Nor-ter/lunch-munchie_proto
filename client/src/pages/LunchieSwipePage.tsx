@@ -699,9 +699,9 @@ function WaitingOrDecidedScreen({ onContinue }: { onContinue: (winner?: any) => 
 
   const isAllCompleted = liveResults.completedCount >= liveResults.totalMembers || liveResults.isExpired;
 
-  // Find group winner + runner-up (top 2).
-  // 좁히기 v0: 좋아요(투표) 동점이면 엔진 순위(recMeta.position)로 tiebreak → top2가 자의적이지 않음.
-  const ranked = [...liveResults.results].sort((a, b) => {
+  // 결정 플로우 ③: 좋아요(투표) 받은 곳만 후보. 동점이면 엔진 순위(recMeta.position)로 tiebreak.
+  const likedResults = liveResults.results.filter(r => r.likeCount >= 1);
+  const ranked = [...likedResults].sort((a, b) => {
     if (b.score !== a.score) return b.score - a.score; // 투표 많은 순
     const pa = currentSession?.recMeta?.[a.restaurantId]?.position ?? 999;
     const pb = currentSession?.recMeta?.[b.restaurantId]?.position ?? 999;
@@ -712,7 +712,7 @@ function WaitingOrDecidedScreen({ onContinue }: { onContinue: (winner?: any) => 
   const winner = restaurants.find(r => r.id === winnerId) || currentSession?.restaurants[0];
   const runnerUp = restaurants.find(r => r.id === runnerUpId);
 
-  // 최종 음식점 두 곳이 모두 정해졌으면 결승전(VS) 화면으로 결과를 보여준다.
+  // ⑤ 좋아요 2+ → 결승 DUEL(A vs B). 1곳뿐이면 결정 화면에서 바로 우승으로.
   if (isAllCompleted && winner && runnerUp) {
     return <FinalBattleResultScreen finalist1={winner} finalist2={runnerUp} onContinue={onContinue} />;
   }
@@ -887,7 +887,7 @@ export default function QuickMatchPage() {
     return () => clearInterval(timer);
   }, [currentSession?.deadline]);
 
-  const total = Math.min(targetRestaurants.length, 10);
+  const total = Math.min(targetRestaurants.length, 7); // 예선 = 엔진 top-7 (결정 플로우 ①)
   const visibleCards = targetRestaurants.slice(currentIndex, currentIndex + 3);
   const progress = Math.min(currentIndex + 1, total);
 
@@ -921,7 +921,7 @@ export default function QuickMatchPage() {
       round: 1,
       position: meta?.position ?? currentIndex,
       propensity: meta?.propensity ?? null,
-      model_version: 'v0-heuristic',
+      model_version: currentSession?.modelVersion ?? 'v0-heuristic',
     });
     setSwipeData(prev => [...prev, { restaurant, action }]);
 
@@ -936,11 +936,32 @@ export default function QuickMatchPage() {
 
   if (!currentSession) return null;
 
+  const handleReset = () => {
+    logEvent({ event_type: 'REROLL', user_id: profile.id, session_id: currentSession?.id ?? null, slate_id: currentSession?.slateId ?? null });
+    setCurrentIndex(0); setSwipeData([]); setSelectedWinner(null); setPhase('swipe');
+  };
+
   if (phase === 'decided') {
-    return <WaitingOrDecidedScreen onContinue={(winner) => { if (winner) setSelectedWinner(winner); setPhase('results'); }} />;
+    const goResults = (winner?: any) => { if (winner) setSelectedWinner(winner); setPhase('results'); };
+    const byEngine = (list: any[]) =>
+      [...list].sort((a, b) => (currentSession?.recMeta?.[a.id]?.position ?? 999) - (currentSession?.recMeta?.[b.id]?.position ?? 999));
+    const isSolo = (currentSession?.members?.length ?? 1) <= 1;
+    if (isSolo) {
+      // 솔로(이론 §4): 좋아요 집합에서 로컬 즉시 분기 — /results 폴링/플래시 없음.
+      const liked = byEngine(swipeData.filter(s => s.action === 'like').map(s => s.restaurant));
+      if (liked.length >= 2) // ③ 좋아요 2+ → ④ score top-2 → ⑤ 결승 DUEL
+        return <FinalBattleResultScreen finalist1={liked[0]} finalist2={liked[1]} onContinue={goResults} />;
+      if (liked.length === 1) // 좋아요 1 → 결승 생략, 바로 우승
+        return <WinnerScreen selectedWinner={liked[0]} onReset={handleReset} />;
+      // 좋아요 0 → 완화: 엔진 top-2로 "이 중엔?" 결승 (막다른 길 방지)
+      const fb = byEngine(targetRestaurants.slice(0, total));
+      if (fb.length >= 2) return <FinalBattleResultScreen finalist1={fb[0]} finalist2={fb[1]} onContinue={goResults} />;
+      return <WinnerScreen selectedWinner={fb[0] ?? null} onReset={handleReset} />;
+    }
+    return <WaitingOrDecidedScreen onContinue={goResults} />; // 그룹: 멤버 투표 폴링
   }
   if (phase === 'results') {
-    return <WinnerScreen selectedWinner={selectedWinner} onReset={() => { logEvent({ event_type: 'REROLL', user_id: profile.id, session_id: currentSession?.id ?? null, slate_id: currentSession?.slateId ?? null }); setCurrentIndex(0); setSwipeData([]); setSelectedWinner(null); }} />;
+    return <WinnerScreen selectedWinner={selectedWinner} onReset={handleReset} />;
   }
 
   // Countdown formatting for header badge
