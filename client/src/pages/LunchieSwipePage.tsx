@@ -699,9 +699,16 @@ function WaitingOrDecidedScreen({ onContinue }: { onContinue: (winner?: any) => 
 
   const isAllCompleted = liveResults.completedCount >= liveResults.totalMembers || liveResults.isExpired;
 
-  // Find group winner + runner-up (top 2 in results, looked up in restaurants list)
-  const winnerId = liveResults.results[0]?.restaurantId;
-  const runnerUpId = liveResults.results[1]?.restaurantId;
+  // Find group winner + runner-up (top 2).
+  // 좁히기 v0: 좋아요(투표) 동점이면 엔진 순위(recMeta.position)로 tiebreak → top2가 자의적이지 않음.
+  const ranked = [...liveResults.results].sort((a, b) => {
+    if (b.score !== a.score) return b.score - a.score; // 투표 많은 순
+    const pa = currentSession?.recMeta?.[a.restaurantId]?.position ?? 999;
+    const pb = currentSession?.recMeta?.[b.restaurantId]?.position ?? 999;
+    return pa - pb; // 동점 → 엔진 추천 순위 우선
+  });
+  const winnerId = ranked[0]?.restaurantId;
+  const runnerUpId = ranked[1]?.restaurantId;
   const winner = restaurants.find(r => r.id === winnerId) || currentSession?.restaurants[0];
   const runnerUp = restaurants.find(r => r.id === runnerUpId);
 
