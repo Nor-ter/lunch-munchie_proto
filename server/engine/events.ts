@@ -7,6 +7,7 @@ import { db } from "../db.js";
 import { recEvents } from "../../shared/schema.js";
 import type { RecEventInput } from "../../shared/engine.js";
 import { assignVariant } from "./scorer.js";
+import { tasteStats } from "./taste.js";
 import { nanoid } from "nanoid";
 
 const MEM_CAP = 5000;
@@ -30,6 +31,11 @@ export function recordItemFeatures(
 ): void {
   for (const it of items)
     if (it.id) itemFeatures.set(it.id, { category: it.category ?? undefined, price_level: it.price_level ?? undefined, rating: it.rating ?? undefined });
+}
+
+// v1 온라인 학습기가 restaurant_id로 아이템 메타(카테고리·가격)를 조회 → x_i 계산
+export function getItemFeatures(id: string): ItemFeat | undefined {
+  return itemFeatures.get(id);
 }
 
 // 대시보드용 집계 (dev: 인메모리 버퍼 기준; 프로덕션은 rec_events 쿼리로 대체 예정)
@@ -535,6 +541,7 @@ export function getMetrics() {
     mechanism,
     featureEffects,
     experiment,
+    engine: tasteStats(),
     byType, bySlate, byAction, byVariant, byRound,
     swipes: { like, nope, acceptance: like + nope > 0 ? like / (like + nope) : null },
     duels: choose,

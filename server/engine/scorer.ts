@@ -8,12 +8,15 @@
 // 슬레이트는 p_i 분포에서 비복원 샘플링 → 로그된 propensity = 실제 노출 확률(근사).
 
 import type { Candidate, RecContext, ScoredItem } from "../../shared/engine.js";
+import { buildItemVector } from "./features.js";
+import { tasteScore, MIN_TASTE, type Taste } from "./taste.js";
 
 export interface SlateOptions {
   k?: number;    // 슬레이트 크기 (예선 카드 수)
   eps?: number;  // 탐색 비율 (0~1)
   tau?: number;  // softmax 온도
   seed?: number; // 재현용(테스트)
+  userTaste?: Taste | null; // v1 취향 벡터 (있고 충분히 학습됐으면 점수에 반영)
 }
 
 function norm(x: number, lo: number, hi: number): number {
@@ -33,14 +36,19 @@ function contextFit(c: Candidate, ctx: RecContext): number {
   return Math.max(0, Math.min(1, f));
 }
 
-export function scoreCandidate(c: Candidate, ctx: RecContext, pool: Candidate[]): number {
+export function scoreCandidate(c: Candidate, ctx: RecContext, pool: Candidate[], userTaste?: Taste | null): number {
   const ratings = pool.map((p) => p.rating ?? 0);
   const reviews = pool.map((p) => p.review_count ?? 0);
   const rLo = Math.min(...ratings, 0), rHi = Math.max(...ratings, 5);
   const vHi = Math.max(...reviews, 1);
   const reputation = 0.7 * norm(c.rating ?? 0, rLo, rHi) + 0.3 * norm(c.review_count ?? 0, 0, vHi);
-  // v0 가중: 평판 0.6 + 맥락 0.4 (취향·포만·연쇄는 v1~v2에서 추가)
-  return 0.6 * reputation + 0.4 * contextFit(c, ctx);
+  const cf = contextFit(c, ctx);
+  // v1: 충분히 학습된 취향이 있으면 tasteFit을 섞는다. 아니면 v0 가중(콜드스타트 보호).
+  if (userTaste && userTaste.n >= MIN_TASTE) {
+    const tf = tasteScore(userTaste, buildItemVector(c));
+    return 0.4 * reputation + 0.3 * cf + 0.3 * tf;
+  }
+  return 0.6 * reputation + 0.4 * cf;
 }
 
 // 간단한 시드 RNG (테스트 재현용). seed 없으면 Math.random.
@@ -65,7 +73,7 @@ export function buildSlate(pool: Candidate[], ctx: RecContext, opts: SlateOption
   const n = pool.length;
   if (n === 0) return [];
 
-  const scores = pool.map((c) => scoreCandidate(c, ctx, pool));
+  const scores = pool.map((c) => scoreCandidate(c, ctx, pool, opts.userTaste));
   const maxS = Math.max(...scores);
   const exps = scores.map((s) => Math.exp((s - maxS) / tau));
   const sumExp = exps.reduce((a, b) => a + b, 0);

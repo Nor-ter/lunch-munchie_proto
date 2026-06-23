@@ -5,8 +5,10 @@ import { eq, and } from "drizzle-orm";
 import { nanoid } from "nanoid";
 import { MOCK_RESTAURANTS, MOCK_COURSES } from "./melbourneData.js";
 import { buildSlate, buildControlSlate, assignVariant } from "./engine/scorer.js";
-import { recordEvents, memEventCount, getMetrics, recordCatalogSize, recordItemFeatures } from "./engine/events.js";
+import { recordEvents, memEventCount, getMetrics, recordCatalogSize, recordItemFeatures, getItemFeatures } from "./engine/events.js";
 import { enrichContext } from "./engine/context.js";
+import { getTaste, updateTaste, MIN_TASTE } from "./engine/taste.js";
+import { buildItemVector } from "./engine/features.js";
 import { ENGINE_MODEL_VERSION } from "../shared/engine.js";
 import type { Candidate, RecContext, RecEventInput } from "../shared/engine.js";
 import { normalizeDiet, isHardRestriction } from "../shared/const.js";
@@ -527,6 +529,13 @@ router.post("/events", async (req, res) => {
       ? [body]
       : [];
   if (!events.length) return res.status(400).json({ error: "no events" });
+  // v1 온라인 학습: 스와이프(암묵 라벨)마다 취향 벡터 theta_u를 즉시 SGD 갱신.
+  for (const e of events) {
+    if (e.event_type === "SWIPE" && (e.action === "LIKE" || e.action === "NOPE") && e.user_id && e.restaurant_id) {
+      const feat = getItemFeatures(String(e.restaurant_id));
+      if (feat) updateTaste(String(e.user_id), buildItemVector(feat), e.action === "LIKE" ? 1 : 0);
+    }
+  }
   const result = await recordEvents(events);
   res.status(201).json(result);
 });
@@ -559,8 +568,15 @@ router.post("/recommend", async (req, res) => {
       diet_relaxed = true;
     }
   }
-  // 처치가 실제로 다르다: control=랜덤 베이스라인, B=엔진 스코어러.
-  const slate = variant === "control" ? buildControlSlate(filtered, ctx, { k }) : buildSlate(filtered, ctx, { k, eps: 0.15 });
+  // 처치가 실제로 다르다: control=랜덤 베이스라인, B=엔진 스코어러(v1 취향 반영).
+  const taste = getTaste(body.user_id);
+  const slate = variant === "control"
+    ? buildControlSlate(filtered, ctx, { k })
+    : buildSlate(filtered, ctx, { k, eps: 0.15, userTaste: taste });
+  // arm·학습 상태별 model_version (어떤 정책이 이 슬레이트를 만들었나)
+  const mv = variant === "control"
+    ? "control-random"
+    : taste && taste.n >= MIN_TASTE ? "v1-taste" : ENGINE_MODEL_VERSION;
   const slate_id = nanoid();
   const slate_type = (body.slate_type as "PRELIM" | "FINAL" | "NEXT_STOP" | "COURSE_FEED") ?? "PRELIM";
 
@@ -577,13 +593,13 @@ router.post("/recommend", async (req, res) => {
       position: s.rank,
       propensity: s.propensity,
       score: s.score,
-      model_version: ENGINE_MODEL_VERSION,
+      model_version: mv,
       variant,
       context: ctx,
     }))
   );
 
-  res.json({ slate, slate_id, slate_type, model_version: ENGINE_MODEL_VERSION, variant, diet_relaxed });
+  res.json({ slate, slate_id, slate_type, model_version: mv, variant, diet_relaxed });
 });
 
 // 디버그: 인메모리 버퍼에 쌓인 이벤트 수 (DB 폴백 동작 확인용)
