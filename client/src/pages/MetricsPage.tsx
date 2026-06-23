@@ -1,6 +1,6 @@
 // 런치 엔진 지표 대시보드 (내부용, dev)
 // rec_events 집계 + 최근 이벤트 원본을 recharts/표로 가시화.
-import { useEffect, useState } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts';
 
 interface RecentEvent {
@@ -33,12 +33,19 @@ interface Fatigue {
   rerollRate: number | null;
   abandonRate: number | null;
 }
+interface Mechanism {
+  exposureFatigue: { exposures: string; likeRate: number | null; n: number }[];
+  discrimination: { n: number; buckets: { q: string; likeRate: number; n: number }[]; gap: number | null };
+  exploration: { noveltyRate: number | null; distinctShown: number; catalogSize: number | null; coverage: number | null; propensityDist: { range: string; n: number }[] };
+  groupFairness: { multiGroups: number; avgConsensus: number | null; unanimousRate: number | null; someoneUnhappyRate: number | null };
+}
 interface Metrics {
   total: number;
   dataHealth: DataHealth;
   satisfaction: Satisfaction;
   fatigue: Fatigue;
   quadrants: { quadrant: string; sessions: number }[];
+  mechanism: Mechanism;
   byType: Record<string, number>;
   bySlate: Record<string, number>;
   byAction: Record<string, number>;
@@ -88,6 +95,30 @@ function MiniStat({ label, value }: { label: string; value: string }) {
     <div className="bg-[#FBF1F1] rounded-lg p-2">
       <div className="text-[10px] text-[#6E6E6E] leading-tight">{label}</div>
       <div className="text-[15px] font-bold text-[#1A1A1A] mt-0.5">{value}</div>
+    </div>
+  );
+}
+// 비율 막대 (good/bad 색칠 없이 값만 — 분별력·노출피로처럼 중립 지표용)
+function RateBar({ label, value, n, color = '#3E719B' }: { label: string; value: number | null; n?: number; color?: string }) {
+  const pct = value != null ? Math.round(value * 100) : null;
+  return (
+    <div className="flex items-center gap-2 mb-1.5">
+      <div className="w-[112px] text-[11px] text-[#4A4A4A] shrink-0 truncate">{label}</div>
+      <div className="flex-1 h-[14px] bg-[#F1EFE8] rounded overflow-hidden">
+        <div style={{ width: (pct ?? 0) + '%', background: color }} className="h-full rounded" />
+      </div>
+      <div className="w-[70px] text-right text-[11px] tabular-nums shrink-0 text-[#1A1A1A]">
+        {pct != null ? pct + '%' : '—'}{n != null && <span className="text-[#9A9A9A]"> n={n}</span>}
+      </div>
+    </div>
+  );
+}
+function MCard({ title, hint, children }: { title: string; hint?: string; children: ReactNode }) {
+  return (
+    <div className="rounded-xl border border-[#E7E1DA] p-4">
+      <div className="text-[12px] font-semibold text-[#1A1A1A]">{title}</div>
+      {hint && <div className="text-[10px] text-[#9A9A9A] mt-0.5 mb-2">{hint}</div>}
+      <div className={hint ? '' : 'mt-2'}>{children}</div>
     </div>
   );
 }
@@ -298,6 +329,59 @@ export default function MetricsPage() {
             만족 × 피로 2×2 <span className="font-normal text-[#9A9A9A]">— 이상적 = 만족·피로낮음(좌상), 최악 = 불만족·피로높음(우하)</span>
           </div>
           <Quadrant data={m.quadrants} total={m.satisfaction.sessions} />
+        </div>
+      </section>
+
+      {/* ── Tier 2: 엔진 메커니즘 (가설 검증) ── */}
+      <section className="mb-6">
+        <div className="flex items-baseline justify-between mb-2">
+          <h2 className="text-[14px] font-bold text-[#1A1A1A]">엔진 메커니즘 (Tier 2 · 가설 검증)</h2>
+          <span className="text-[11px] text-[#6E6E6E]">엔진이 실제로 작동하나</span>
+        </div>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          {/* A. 노출 피로 곡선 */}
+          <MCard title="노출 피로 — 누적 노출 ↔ LIKE율" hint="재노출될수록 호감 떨어지나 (v0=패널티 전, 평탄해도 정상)">
+            {m.mechanism.exposureFatigue.map((b) => (
+              <RateBar key={b.exposures} label={b.exposures + '회 노출'} value={b.likeRate} n={b.n} color="#D85A30" />
+            ))}
+          </MCard>
+          {/* B. 분별력 (score → 선호 예측) */}
+          <MCard title="분별력 — score 사분위 → LIKE율" hint={m.mechanism.discrimination.gap != null ? `gap ${Math.round(m.mechanism.discrimination.gap * 100)}%p (양수·클수록 score가 선호 예측)` : '표본 부족'}>
+            {m.mechanism.discrimination.buckets.map((b) => (
+              <RateBar key={b.q} label={b.q} value={b.likeRate} n={b.n} color="#7F77DD" />
+            ))}
+          </MCard>
+          {/* C. 탐색 건강성 */}
+          <MCard title="탐색 건강성 — coverage · novelty · propensity">
+            <div className="grid grid-cols-2 gap-2 mb-2">
+              <MiniStat label="카탈로그 커버리지" value={m.mechanism.exploration.coverage != null ? Math.round(m.mechanism.exploration.coverage * 100) + '%' : '—'} />
+              <MiniStat label="novelty (첫 노출)" value={pct(m.mechanism.exploration.noveltyRate)} />
+            </div>
+            <div className="text-[10px] text-[#9A9A9A] mb-1">propensity 분포 (낮을수록 탐색)</div>
+            {(() => {
+              const mx = Math.max(1, ...m.mechanism.exploration.propensityDist.map((p) => p.n));
+              return m.mechanism.exploration.propensityDist.map((p) => (
+                <div key={p.range} className="flex items-center gap-2 mb-1">
+                  <div className="w-[52px] text-[10px] text-[#6E6E6E] shrink-0">{p.range}</div>
+                  <div className="flex-1 h-[12px] bg-[#F1EFE8] rounded overflow-hidden"><div style={{ width: Math.max(2, (p.n / mx) * 100) + '%' }} className="h-full bg-[#3E719B] rounded" /></div>
+                  <div className="w-[28px] text-right text-[10px] tabular-nums text-[#1A1A1A]">{p.n}</div>
+                </div>
+              ));
+            })()}
+          </MCard>
+          {/* D. 그룹 공정성 (least-misery) */}
+          <MCard title="그룹 공정성 (least-misery)" hint={`멀티멤버 그룹 ${m.mechanism.groupFairness.multiGroups}개 — 우승을 모두가 좋아했나`}>
+            {m.mechanism.groupFairness.multiGroups > 0 ? (
+              <div className="grid grid-cols-2 gap-2">
+                <MiniStat label="합의 평균" value={pct(m.mechanism.groupFairness.avgConsensus)} />
+                <MiniStat label="만장일치율" value={pct(m.mechanism.groupFairness.unanimousRate)} />
+                <MiniStat label="누군가 불만" value={pct(m.mechanism.groupFairness.someoneUnhappyRate)} />
+                <MiniStat label="그룹 수" value={String(m.mechanism.groupFairness.multiGroups)} />
+              </div>
+            ) : (
+              <div className="text-[11px] text-[#9A9A9A]">멀티멤버 그룹 데이터 없음 (단일 유저 세션만)</div>
+            )}
+          </MCard>
         </div>
       </section>
 

@@ -15,6 +15,12 @@ export function memEventCount(): number {
   return memEvents.length;
 }
 
+// 카탈로그 크기(커버리지 분모) — /recommend가 후보 풀 크기를 알려준다.
+let catalogSize = 0;
+export function recordCatalogSize(n: number): void {
+  if (n > catalogSize) catalogSize = n;
+}
+
 // 대시보드용 집계 (dev: 인메모리 버퍼 기준; 프로덕션은 rec_events 쿼리로 대체 예정)
 function inc(obj: Record<string, number>, key: unknown) {
   if (key === undefined || key === null || key === "") return;
@@ -260,6 +266,117 @@ export function getMetrics() {
   };
   const quadrants = Object.entries(quad).map(([quadrant, sessions]) => ({ quadrant, sessions }));
 
+  // ── Tier 2: 메커니즘 (가설 검증) — "엔진이 실제로 작동하나" ──────────────
+  const tsOf = (e: Record<string, unknown>) =>
+    e.created_at instanceof Date ? (e.created_at as Date).getTime() : new Date(String(e.created_at)).getTime();
+  const evSorted = [...ev].sort((a, b) => tsOf(a) - tsOf(b));
+
+  // A. 노출 피로: (user,restaurant) 누적 노출 ↔ LIKE율 감소 (엔진 시그니처)
+  const expCount = new Map<string, number>();
+  const fb: Record<string, { like: number; nope: number }> = { "1": { like: 0, nope: 0 }, "2": { like: 0, nope: 0 }, "3+": { like: 0, nope: 0 } };
+  for (const e of evSorted) {
+    const rid = nonNull(e.restaurant_id) ? String(e.restaurant_id) : null;
+    if (!rid) continue;
+    const key = (nonNull(e.user_id) ? String(e.user_id) : "(anon)") + "|" + rid;
+    if (e.event_type === "IMPRESSION") expCount.set(key, (expCount.get(key) ?? 0) + 1);
+    else if (e.event_type === "SWIPE" && (e.action === "LIKE" || e.action === "NOPE")) {
+      const seen = expCount.get(key) ?? 1;
+      const bucket = seen <= 1 ? "1" : seen === 2 ? "2" : "3+";
+      if (e.action === "LIKE") fb[bucket].like++; else fb[bucket].nope++;
+    }
+  }
+  const exposureFatigue = Object.entries(fb).map(([exposures, b]) => ({
+    exposures, likeRate: b.like + b.nope ? b.like / (b.like + b.nope) : null, n: b.like + b.nope,
+  }));
+
+  // B. 분별력: 모델 score 사분위 → 실제 LIKE율 (score가 선호를 예측하나)
+  const imprScore = new Map<string, number>();
+  for (const e of ev)
+    if (e.event_type === "IMPRESSION" && typeof e.score === "number" && nonNull(e.slate_id) && nonNull(e.restaurant_id))
+      imprScore.set(String(e.slate_id) + "|" + String(e.restaurant_id), e.score as number);
+  const swScored: { score: number; like: boolean }[] = [];
+  for (const e of ev)
+    if (e.event_type === "SWIPE" && (e.action === "LIKE" || e.action === "NOPE")) {
+      let sc = typeof e.score === "number" ? (e.score as number) : undefined;
+      if (sc === undefined && nonNull(e.slate_id) && nonNull(e.restaurant_id))
+        sc = imprScore.get(String(e.slate_id) + "|" + String(e.restaurant_id));
+      if (typeof sc === "number") swScored.push({ score: sc, like: e.action === "LIKE" });
+    }
+  swScored.sort((a, b) => a.score - b.score);
+  let discriminationBuckets: { q: string; likeRate: number; n: number }[] = [];
+  let discriminationGap: number | null = null;
+  if (swScored.length >= 4) {
+    const labels = ["Q1(낮음)", "Q2", "Q3", "Q4(높음)"];
+    const quarts: { score: number; like: boolean }[][] = [[], [], [], []];
+    swScored.forEach((s, i) => quarts[Math.min(3, Math.floor((i / swScored.length) * 4))].push(s));
+    discriminationBuckets = quarts.map((q, i) => ({ q: labels[i], likeRate: q.length ? q.filter((x) => x.like).length / q.length : 0, n: q.length }));
+    discriminationGap = discriminationBuckets[3].likeRate - discriminationBuckets[0].likeRate;
+  }
+  const discrimination = { n: swScored.length, buckets: discriminationBuckets, gap: discriminationGap };
+
+  // C. 탐색 건강성: novelty(첫 노출 비율) · coverage · propensity 분포
+  const seenSet = new Set<string>();
+  const distinctShown = new Set<string>();
+  const propVals: number[] = [];
+  let firstTime = 0, totalImpr = 0;
+  for (const e of evSorted)
+    if (e.event_type === "IMPRESSION") {
+      totalImpr++;
+      const rid = nonNull(e.restaurant_id) ? String(e.restaurant_id) : "?";
+      distinctShown.add(rid);
+      const key = (nonNull(e.user_id) ? String(e.user_id) : "(anon)") + "|" + rid;
+      if (!seenSet.has(key)) { firstTime++; seenSet.add(key); }
+      if (typeof e.propensity === "number") propVals.push(e.propensity as number);
+    }
+  const propHist = [0, 0, 0, 0, 0];
+  for (const p of propVals) propHist[p < 0.02 ? 0 : p < 0.05 ? 1 : p < 0.1 ? 2 : p < 0.2 ? 3 : 4]++;
+  const exploration = {
+    noveltyRate: totalImpr ? firstTime / totalImpr : null,
+    distinctShown: distinctShown.size,
+    catalogSize: catalogSize > 0 ? catalogSize : null,
+    coverage: catalogSize > 0 ? distinctShown.size / catalogSize : null,
+    propensityDist: [
+      { range: "<2%", n: propHist[0] }, { range: "2-5%", n: propHist[1] }, { range: "5-10%", n: propHist[2] },
+      { range: "10-20%", n: propHist[3] }, { range: "20%+", n: propHist[4] },
+    ],
+  };
+
+  // D. 그룹 공정성: 멀티멤버 그룹에서 우승을 각 멤버가 LIKE 했나 (least-misery)
+  const grp = new Map<string, { users: Set<string>; winner: string | null; likes: Map<string, Set<string>> }>();
+  for (const e of ev) {
+    const g = nonNull(e.group_id) ? String(e.group_id) : null;
+    if (!g) continue;
+    let o = grp.get(g);
+    if (!o) { o = { users: new Set(), winner: null, likes: new Map() }; grp.set(g, o); }
+    if (nonNull(e.user_id)) o.users.add(String(e.user_id));
+    if (e.event_type === "WINNER" && nonNull(e.restaurant_id)) o.winner = String(e.restaurant_id);
+    if (e.event_type === "SWIPE" && e.action === "LIKE" && nonNull(e.restaurant_id) && nonNull(e.user_id)) {
+      const rid = String(e.restaurant_id);
+      let s = o.likes.get(rid);
+      if (!s) { s = new Set(); o.likes.set(rid, s); }
+      s.add(String(e.user_id));
+    }
+  }
+  let multiGroups = 0, unanimous = 0, someoneUnhappy = 0, consensusSum = 0;
+  for (const o of Array.from(grp.values())) {
+    if (o.users.size < 2 || !o.winner) continue;
+    multiGroups++;
+    const likedWinner = o.likes.get(o.winner) ?? new Set<string>();
+    let liked = 0;
+    for (const u of Array.from(o.users)) if (likedWinner.has(u)) liked++;
+    const consensus = liked / o.users.size;
+    consensusSum += consensus;
+    if (consensus >= 1) unanimous++; else someoneUnhappy++;
+  }
+  const groupFairness = {
+    multiGroups,
+    avgConsensus: multiGroups ? consensusSum / multiGroups : null,
+    unanimousRate: multiGroups ? unanimous / multiGroups : null,
+    someoneUnhappyRate: multiGroups ? someoneUnhappy / multiGroups : null,
+  };
+
+  const mechanism = { exposureFatigue, discrimination, exploration, groupFairness };
+
   const recent = ev.slice(-40).reverse().map((e) => ({
     ts: e.created_at instanceof Date ? (e.created_at as Date).toISOString() : String(e.created_at ?? ""),
     user_id: e.user_id ?? null,
@@ -277,6 +394,7 @@ export function getMetrics() {
     total: ev.length,
     dataHealth,
     satisfaction, fatigue, quadrants,
+    mechanism,
     byType, bySlate, byAction, byVariant, byRound,
     swipes: { like, nope, acceptance: like + nope > 0 ? like / (like + nope) : null },
     duels: choose,
