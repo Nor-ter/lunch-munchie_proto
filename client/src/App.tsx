@@ -27,6 +27,7 @@ import LunchieResultsPage from "./pages/LunchieResultsPage";
 import LunchieMapPage from "./pages/LunchieMapPage";
 import TourMapPage from "./pages/TourMapPage";
 import TourModePage from "./pages/TourModePage";
+import MetricsPage from "./pages/MetricsPage";
 
 const NO_TABBAR = ['/onboarding', '/tour-mode', '/course/', '/lunchie', '/session', '/join'];
 
@@ -59,6 +60,7 @@ function AppShell() {
           <Route path="/lunchie/swipe" component={LunchieSwipePage} />
           <Route path="/lunchie/results" component={LunchieResultsPage} />
           <Route path="/lunchie/map" component={LunchieMapPage} />
+          <Route path="/metrics" component={MetricsPage} />
           <Route path="/tour-map" component={TourMapPage} />
           <Route path="/tour-mode" component={TourModePage} />
           <Route path="/404" component={NotFound} />

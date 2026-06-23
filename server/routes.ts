@@ -5,7 +5,7 @@ import { eq, and } from "drizzle-orm";
 import { nanoid } from "nanoid";
 import { MOCK_RESTAURANTS, MOCK_COURSES } from "./melbourneData.js";
 import { buildSlate } from "./engine/scorer.js";
-import { recordEvents, memEventCount } from "./engine/events.js";
+import { recordEvents, memEventCount, getMetrics } from "./engine/events.js";
 import { ENGINE_MODEL_VERSION } from "../shared/engine.js";
 import type { Candidate, RecContext, RecEventInput } from "../shared/engine.js";
 import { normalizeDiet, isHardRestriction } from "../shared/const.js";
@@ -582,6 +582,11 @@ router.post("/recommend", async (req, res) => {
 // 디버그: 인메모리 버퍼에 쌓인 이벤트 수 (DB 폴백 동작 확인용)
 router.get("/events/_debug", (_req, res) => {
   res.json({ memBuffered: memEventCount() });
+});
+
+// 대시보드 집계
+router.get("/metrics", (_req, res) => {
+  res.json(getMetrics());
 });
 
 export default router;

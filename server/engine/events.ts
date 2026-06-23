@@ -15,6 +15,38 @@ export function memEventCount(): number {
   return memEvents.length;
 }
 
+// 대시보드용 집계 (dev: 인메모리 버퍼 기준; 프로덕션은 rec_events 쿼리로 대체 예정)
+export function getMetrics() {
+  const ev = memEvents as Array<Record<string, unknown>>;
+  const byType: Record<string, number> = {};
+  const bySlate: Record<string, number> = {};
+  let like = 0, nope = 0, choose = 0, impressions = 0, propSum = 0;
+  for (const e of ev) {
+    const t = String(e.event_type ?? "?");
+    byType[t] = (byType[t] ?? 0) + 1;
+    if (e.slate_type) {
+      const s = String(e.slate_type);
+      bySlate[s] = (bySlate[s] ?? 0) + 1;
+    }
+    if (e.action === "LIKE") like++;
+    else if (e.action === "NOPE") nope++;
+    else if (e.action === "CHOOSE") choose++;
+    if (e.event_type === "IMPRESSION") {
+      impressions++;
+      if (typeof e.propensity === "number") propSum += e.propensity;
+    }
+  }
+  return {
+    total: ev.length,
+    byType,
+    bySlate,
+    swipes: { like, nope, acceptance: like + nope > 0 ? like / (like + nope) : null },
+    duels: choose,
+    impressions,
+    avgPropensity: impressions > 0 ? propSum / impressions : null,
+  };
+}
+
 function toRow(e: RecEventInput) {
   return {
     id: nanoid(),
