@@ -17,7 +17,10 @@ export interface SlateOptions {
   tau?: number;  // softmax 온도
   seed?: number; // 재현용(테스트)
   userTaste?: Taste | null; // v1 취향 벡터 (있고 충분히 학습됐으면 점수에 반영)
+  exposurePenalty?: (id: string) => number; // v1 단기 노출 피로 g(누적 노출) in [0,1)
 }
+
+const W_FATIGUE = 0.3; // -w6 노출 피로 가중
 
 function norm(x: number, lo: number, hi: number): number {
   if (hi <= lo) return 0;
@@ -36,7 +39,9 @@ function contextFit(c: Candidate, ctx: RecContext): number {
   return Math.max(0, Math.min(1, f));
 }
 
-export function scoreCandidate(c: Candidate, ctx: RecContext, pool: Candidate[], userTaste?: Taste | null): number {
+export function scoreCandidate(
+  c: Candidate, ctx: RecContext, pool: Candidate[], userTaste?: Taste | null, fatigue = 0,
+): number {
   const ratings = pool.map((p) => p.rating ?? 0);
   const reviews = pool.map((p) => p.review_count ?? 0);
   const rLo = Math.min(...ratings, 0), rHi = Math.max(...ratings, 5);
@@ -44,11 +49,11 @@ export function scoreCandidate(c: Candidate, ctx: RecContext, pool: Candidate[],
   const reputation = 0.7 * norm(c.rating ?? 0, rLo, rHi) + 0.3 * norm(c.review_count ?? 0, 0, vHi);
   const cf = contextFit(c, ctx);
   // v1: 충분히 학습된 취향이 있으면 tasteFit을 섞는다. 아니면 v0 가중(콜드스타트 보호).
-  if (userTaste && userTaste.n >= MIN_TASTE) {
-    const tf = tasteScore(userTaste, buildItemVector(c));
-    return 0.4 * reputation + 0.3 * cf + 0.3 * tf;
-  }
-  return 0.6 * reputation + 0.4 * cf;
+  const base = userTaste && userTaste.n >= MIN_TASTE
+    ? 0.4 * reputation + 0.3 * cf + 0.3 * tasteScore(userTaste, buildItemVector(c))
+    : 0.6 * reputation + 0.4 * cf;
+  // v1: 단기 노출 피로 감점 (최근에 자주 본 카드일수록 ↓)
+  return base - W_FATIGUE * fatigue;
 }
 
 // 간단한 시드 RNG (테스트 재현용). seed 없으면 Math.random.
@@ -73,7 +78,8 @@ export function buildSlate(pool: Candidate[], ctx: RecContext, opts: SlateOption
   const n = pool.length;
   if (n === 0) return [];
 
-  const scores = pool.map((c) => scoreCandidate(c, ctx, pool, opts.userTaste));
+  const pen = opts.exposurePenalty;
+  const scores = pool.map((c) => scoreCandidate(c, ctx, pool, opts.userTaste, pen ? pen(c.id) : 0));
   const maxS = Math.max(...scores);
   const exps = scores.map((s) => Math.exp((s - maxS) / tau));
   const sumExp = exps.reduce((a, b) => a + b, 0);

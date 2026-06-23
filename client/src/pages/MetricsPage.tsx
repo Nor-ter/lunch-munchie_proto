@@ -46,7 +46,7 @@ interface Metrics {
   fatigue: Fatigue;
   quadrants: { quadrant: string; sessions: number }[];
   mechanism: Mechanism;
-  engine: { modelVersion: string; dim: number; users: number; learnedUsers: number; avgThetaNorm: number | null };
+  engine: { modelVersion: string; dim: number; users: number; learnedUsers: number; avgThetaNorm: number | null; exposureTracked: number };
   featureEffects: { key: string; group: string; effect: number | null; buckets: { value: string; rate: number; n: number }[] }[];
   experiment: {
     arms: { arm: string; users: number; sessions: number; swipes: number; likeRate: number | null }[];
@@ -347,11 +347,11 @@ export default function MetricsPage() {
           <span className="text-[11px] text-[#6E6E6E]">엔진이 실제로 작동하나</span>
         </div>
         <div className="mb-3 p-2.5 rounded-lg bg-[#EAF7EC] text-[11px] text-[#2E6B36]">
-          <b>v1 취향 학습 가동</b> — 모델 <code>{m.engine.modelVersion}</code> · 학습 유저 {m.engine.learnedUsers}/{m.engine.users}명(스와이프 충분) · θ {m.engine.dim}차원 · 평균 |θ| {m.engine.avgThetaNorm ?? '—'} · 스와이프마다 온라인 SGD 갱신
+          <b>v1 가동</b> — 모델 <code>{m.engine.modelVersion}</code> · 취향 학습 유저 {m.engine.learnedUsers}/{m.engine.users}명 · θ {m.engine.dim}차원 · 평균 |θ| {m.engine.avgThetaNorm ?? '—'} · 노출피로 추적 {m.engine.exposureTracked}쌍 · 스와이프마다 온라인 SGD
         </div>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           {/* A. 노출 피로 곡선 */}
-          <MCard title="노출 피로 — 누적 노출 ↔ LIKE율" hint="재노출될수록 호감 떨어지나 (v0=패널티 전, 평탄해도 정상)">
+          <MCard title="노출 피로 — 누적 노출 ↔ LIKE율" hint="v1 패널티 가동 — 재노출 카드는 점수↓로 덜 노출/덜 수락">
             {m.mechanism.exposureFatigue.map((b) => (
               <RateBar key={b.exposures} label={b.exposures + '회 노출'} value={b.likeRate} n={b.n} color="#D85A30" />
             ))}

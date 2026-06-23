@@ -9,6 +9,7 @@ import { recordEvents, memEventCount, getMetrics, recordCatalogSize, recordItemF
 import { enrichContext } from "./engine/context.js";
 import { getTaste, updateTaste, MIN_TASTE } from "./engine/taste.js";
 import { buildItemVector } from "./engine/features.js";
+import { exposurePenalty, recordExposure } from "./engine/exposure.js";
 import { ENGINE_MODEL_VERSION } from "../shared/engine.js";
 import type { Candidate, RecContext, RecEventInput } from "../shared/engine.js";
 import { normalizeDiet, isHardRestriction } from "../shared/const.js";
@@ -568,11 +569,15 @@ router.post("/recommend", async (req, res) => {
       diet_relaxed = true;
     }
   }
-  // 처치가 실제로 다르다: control=랜덤 베이스라인, B=엔진 스코어러(v1 취향 반영).
+  // 처치가 실제로 다르다: control=랜덤 베이스라인, B=엔진 스코어러(v1 취향 + 노출 피로).
+  const now = Date.now();
   const taste = getTaste(body.user_id);
   const slate = variant === "control"
     ? buildControlSlate(filtered, ctx, { k })
-    : buildSlate(filtered, ctx, { k, eps: 0.15, userTaste: taste });
+    : buildSlate(filtered, ctx, {
+        k, eps: 0.15, userTaste: taste,
+        exposurePenalty: (id) => exposurePenalty(body.user_id, id, now),
+      });
   // arm·학습 상태별 model_version (어떤 정책이 이 슬레이트를 만들었나)
   const mv = variant === "control"
     ? "control-random"
@@ -598,6 +603,8 @@ router.post("/recommend", async (req, res) => {
       context: ctx,
     }))
   );
+  // 실제 보여준 카드만 노출 누적 (다음 추천의 단기 피로 패널티에 반영)
+  for (const s of slate) recordExposure(body.user_id, s.id, now);
 
   res.json({ slate, slate_id, slate_type, model_version: mv, variant, diet_relaxed });
 });
