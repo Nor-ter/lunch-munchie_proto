@@ -63,13 +63,10 @@ export function getMetrics() {
     }
     if (typeof e.dwell_ms === "number") { dwellSum += e.dwell_ms; dwellN++; }
   }
-  // 조건별 수락률 분해 (round1 예선 스와이프 기준) — "어떤 조건에서 지표가 달라지나"
-  const hourBucket = (h: number) =>
-    h < 11 ? "아침" : h < 14 ? "점심" : h < 17 ? "오후" : h < 22 ? "저녁" : "심야";
+  // 조건별 수락률 분해 (round1 예선 스와이프) — 포지션 편향 + 유저 분포
+  // (시간대·A/B·feature 분해는 Tier 3·4로 일반화됨)
   const posAcc: Record<number, { like: number; nope: number }> = {};
-  const varAcc: Record<string, { like: number; nope: number }> = {};
   const userAcc: Record<string, { like: number; nope: number }> = {};
-  const timeAcc: Record<string, { like: number; nope: number }> = {};
   const bump = (m: Record<string, { like: number; nope: number }>, k: string, like: boolean) => {
     const b = m[k] ?? (m[k] = { like: 0, nope: 0 });
     like ? b.like++ : b.nope++;
@@ -78,10 +75,7 @@ export function getMetrics() {
     if (e.event_type === "SWIPE" && (e.action === "LIKE" || e.action === "NOPE") && e.round === 1) {
       const like = e.action === "LIKE";
       if (typeof e.position === "number") bump(posAcc as never, String(e.position), like);
-      bump(varAcc, String(e.variant ?? "(none)"), like);
       bump(userAcc, String(e.user_id ?? "(anon)"), like);
-      const dt = e.created_at instanceof Date ? (e.created_at as Date) : new Date(String(e.created_at));
-      bump(timeAcc, hourBucket(dt.getHours()), like);
     }
   }
   const accList = (m: Record<string, { like: number; nope: number }>) =>
@@ -89,7 +83,6 @@ export function getMetrics() {
   const acceptanceByPosition = accList(posAcc as never)
     .map((d) => ({ position: Number(d.key), acceptance: d.acceptance, n: d.n }))
     .sort((a, b) => a.position - b.position);
-  const acceptanceByVariant = accList(varAcc).map((d) => ({ variant: d.key, acceptance: d.acceptance, n: d.n }));
   // 유저별 수락률은 "무한 차원" — 절대 나열하지 않는다(10만 유저=10만 막대).
   // 분포(히스토그램)+요약통계로 압축. 표본 적은 유저(스와이프<3)는 노이즈라 제외.
   const userRates = Object.values(userAcc)
@@ -101,10 +94,6 @@ export function getMetrics() {
   const userAcceptanceDist = histo.map((c, i) => ({ range: i * 20 + "-" + (i + 1) * 20 + "%", users: c }));
   const q = (p: number) => (userRates.length ? userRates[Math.min(userRates.length - 1, Math.floor(p * userRates.length))] : null);
   const userSummary = { users: userRates.length, median: q(0.5), p10: q(0.1), p90: q(0.9) };
-  const order = ["아침", "점심", "오후", "저녁", "심야"];
-  const acceptanceByTime = accList(timeAcc)
-    .map((d) => ({ bucket: d.key, acceptance: d.acceptance, n: d.n }))
-    .sort((a, b) => order.indexOf(a.bucket) - order.indexOf(b.bucket));
 
   // ── Tier 0: 데이터 신뢰성 (계측 무결성) — 모든 분석의 전제 ──────────────
   // "분석 가능한 데이터인가"를 먼저 본다. 비면 위층 지표는 전부 신뢰 불가.
@@ -557,10 +546,8 @@ export function getMetrics() {
     avgPosition: impressions > 0 ? posSum / impressions : null,
     avgDwellMs: dwellN > 0 ? dwellSum / dwellN : null,
     acceptanceByPosition,
-    acceptanceByVariant,
     userAcceptanceDist,
     userSummary,
-    acceptanceByTime,
     recent,
   };
 }

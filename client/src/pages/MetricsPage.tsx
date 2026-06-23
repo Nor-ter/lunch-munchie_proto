@@ -64,10 +64,8 @@ interface Metrics {
   duels: number; impressions: number; navigate: number; winner: number; reroll: number;
   avgPropensity: number | null; avgPosition: number | null; avgDwellMs: number | null;
   acceptanceByPosition: { position: number; acceptance: number; n: number }[];
-  acceptanceByVariant: { variant: string; acceptance: number; n: number }[];
   userAcceptanceDist: { range: string; users: number }[];
   userSummary: { users: number; median: number | null; p10: number | null; p90: number | null };
-  acceptanceByTime: { bucket: string; acceptance: number; n: number }[];
   recent: RecentEvent[];
 }
 
@@ -515,11 +513,10 @@ export default function MetricsPage() {
       </div>
 
       <div className="mt-2 mb-1 p-3 rounded-lg bg-[#FFF5F2]">
-        <div className="text-[13px] font-semibold text-[#D83A3D]">조건별 수락률 (%) — 어떤 조건에서 달라지나</div>
-        <div className="text-[11px] text-[#6E6E6E] mt-0.5">flat 집계가 아니라 조건별로 분해해야 의미가 생긴다. (표본 적으면 노이즈)</div>
+        <div className="text-[13px] font-semibold text-[#D83A3D]">보조 진단 · 원자료</div>
+        <div className="text-[11px] text-[#6E6E6E] mt-0.5">Tier에서 다루지 않는 보조 지표. (A/B → Tier 4, 시간대·feature → Tier 3 참고)</div>
       </div>
       <Chart title="수락률 × 노출 위치 (포지션 편향 점검)" data={m.acceptanceByPosition.map(d => ({ name: 'pos ' + d.position, value: Math.round(d.acceptance * 100) }))} color="#3E719B" />
-      <Chart title="수락률 × A/B 변형" data={m.acceptanceByVariant.map(d => ({ name: d.variant + ' (n=' + d.n + ')', value: Math.round(d.acceptance * 100) }))} color="#7F77DD" />
       <div className="mb-5">
         <h2 className="text-[13px] font-semibold text-[#1A1A1A] mb-1">유저 수락률 분포 (누가 잘 수락하나)</h2>
         <p className="text-[11px] text-[#6E6E6E] mb-2">
@@ -538,13 +535,10 @@ export default function MetricsPage() {
           </ResponsiveContainer>
         </div>
       </div>
-      <Chart title="수락률 × 시간대" data={m.acceptanceByTime.map(d => ({ name: d.bucket + ' (n=' + d.n + ')', value: Math.round(d.acceptance * 100) }))} color="#D85A30" />
-
       <div className="text-[13px] font-semibold text-[#1A1A1A] mt-3 mb-1">원자료 분포</div>
       <Chart title="이벤트 타입" data={toData(m.byType)} color="#EB5053" />
       <Chart title="액션 (LIKE/NOPE/CHOOSE)" data={toData(m.byAction)} color="#3CBA44" />
       <Chart title="슬레이트 타입 (PRELIM/FINAL)" data={toData(m.bySlate)} color="#F09D09" />
-      {Object.keys(m.byVariant).length > 0 && <Chart title="A/B 변형" data={toData(m.byVariant)} color="#3E719B" />}
       {Object.keys(m.byRound).length > 0 && <Chart title="라운드" data={toData(m.byRound)} color="#7F77DD" />}
 
       <h2 className="text-[13px] font-semibold text-[#1A1A1A] mb-2 mt-2">최근 이벤트 (원본, 최신순)</h2>
