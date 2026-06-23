@@ -4,6 +4,12 @@ import { users, sessions, restaurants, swipes, courses, courseItems, sessionMemb
 import { eq, and } from "drizzle-orm";
 import { nanoid } from "nanoid";
 import { MOCK_RESTAURANTS, MOCK_COURSES } from "./melbourneData.js";
+import { buildSlate } from "./engine/scorer.js";
+import { recordEvents, memEventCount } from "./engine/events.js";
+import { ENGINE_MODEL_VERSION } from "../shared/engine.js";
+import type { Candidate, RecContext, RecEventInput } from "../shared/engine.js";
+import { normalizeDiet, isHardRestriction } from "../shared/const.js";
+import type { DietTag } from "../shared/const.js";
 
 const router = Router();
 
@@ -463,6 +469,119 @@ router.post("/swipes", async (req: any, res: any) => {
     return res.status(201).json({ success: true });
   }
   res.status(500).json({ error: "Failed to insert swipe" });
+});
+
+// ── 런치 엔진 v0 — 로깅 / 추천 (Phase 0) ─────────────────────────────────────
+// 후보 풀: DB 우선, 실패 시 멜버른 mock 폴백.
+async function candidatePool(): Promise<Candidate[]> {
+  try {
+    const rows = await db
+      .select({
+        id: restaurants.id,
+        rating: restaurants.rating,
+        review_count: restaurants.review_count,
+        price_level: restaurants.price_level,
+        category: restaurants.category,
+        dietary_options: restaurants.dietary_options,
+      })
+      .from(restaurants);
+    if (rows.length) return rows as Candidate[];
+  } catch (err) {
+    console.error("DB unavailable for candidates, using mock:", (err as Error)?.message);
+  }
+  return MOCK_RESTAURANTS.map((r) => ({
+    id: r.id,
+    rating: r.rating,
+    review_count: r.review_count,
+    price_level: r.price_level,
+    category: r.category,
+    dietary_options: r.dietary_options,
+  }));
+}
+
+// 하드 diet 제약 충족 여부. 식당 태그('비건 옵션')와 필터('비건')를 enum으로 정규화해 비교.
+const SEAFOOD_RE = /해산물|seafood|스시|sushi|초밥|회|sashimi|오마카세|omakase/i;
+function satisfiesDiet(c: Candidate, tag: DietTag): boolean {
+  if (tag === "NO_SEAFOOD") return !SEAFOOD_RE.test(c.category ?? "");
+  const offered = (c.dietary_options ?? []).map(normalizeDiet);
+  return offered.includes(tag);
+}
+
+// 유저 diet 입력(라벨/태그)에서 하드 제약만 추출 + 정규화.
+function requiredHardDiets(diet?: string[]): DietTag[] {
+  const out: DietTag[] = [];
+  for (const raw of diet ?? []) {
+    const norm = normalizeDiet(raw);
+    if (norm && isHardRestriction(norm)) out.push(norm);
+  }
+  return out;
+}
+
+// 이벤트 수집: 단건 또는 { events: [...] } 배치 모두 허용.
+router.post("/events", async (req, res) => {
+  const body = req.body ?? {};
+  const events: RecEventInput[] = Array.isArray(body.events)
+    ? body.events
+    : body.event_type
+      ? [body]
+      : [];
+  if (!events.length) return res.status(400).json({ error: "no events" });
+  const result = await recordEvents(events);
+  res.status(201).json(result);
+});
+
+// 추천 슬레이트 + propensity 로깅. v0 휴리스틱 스코어러.
+router.post("/recommend", async (req, res) => {
+  const body = req.body ?? {};
+  const ctx: RecContext = body.context ?? {};
+  const k = typeof body.k === "number" ? body.k : 7;
+  const variant: string = body.variant ?? "control";
+  const pool = await candidatePool();
+  // 클라이언트가 사전 필터(카테고리 등)한 후보만 점수화하도록 범위 제한 (선택)
+  const candidateIds: string[] | undefined = Array.isArray(body.candidate_ids) ? body.candidate_ids : undefined;
+  const scoped = candidateIds && candidateIds.length
+    ? pool.filter((c) => new Set(candidateIds).has(c.id))
+    : pool;
+  // diet 하드 제약 필터 (정규화 후 매칭). 모두 걸러지면 빈 덱 방지를 위해 완화.
+  const reqDiet = requiredHardDiets(ctx.diet);
+  let filtered = scoped;
+  let diet_relaxed = false;
+  if (reqDiet.length) {
+    filtered = scoped.filter((c) => reqDiet.every((tag) => satisfiesDiet(c, tag)));
+    if (filtered.length === 0) {
+      filtered = scoped;
+      diet_relaxed = true;
+    }
+  }
+  const slate = buildSlate(filtered, ctx, { k, eps: 0.15 });
+  const slate_id = nanoid();
+  const slate_type = (body.slate_type as "PRELIM" | "FINAL" | "NEXT_STOP" | "COURSE_FEED") ?? "PRELIM";
+
+  // 노출(IMPRESSION) 이벤트를 slate_id·propensity와 함께 기록 → off-policy 평가 기반
+  await recordEvents(
+    slate.map((s) => ({
+      event_type: "IMPRESSION" as const,
+      slate_id,
+      slate_type,
+      user_id: body.user_id ?? null,
+      session_id: body.session_id ?? null,
+      group_id: body.session_id ?? null,
+      restaurant_id: s.id,
+      position: s.rank,
+      propensity: s.propensity,
+      score: s.score,
+      model_version: ENGINE_MODEL_VERSION,
+      variant,
+      context: ctx,
+    }))
+  );
+
+  res.json({ slate, slate_id, slate_type, model_version: ENGINE_MODEL_VERSION, variant, diet_relaxed });
+});
+
+// 디버그: 인메모리 버퍼에 쌓인 이벤트 수 (DB 폴백 동작 확인용)
+router.get("/events/_debug", (_req, res) => {
+  res.json({ memBuffered: memEventCount() });
 });
 
 export default router;

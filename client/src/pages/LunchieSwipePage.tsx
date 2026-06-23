@@ -13,6 +13,7 @@ import { useApp, type Restaurant } from '@/contexts/AppContext';
 import { getFoodPhotos } from '@/lib/foodPhotos';
 import { useCourseShare } from '@/hooks/useCourseShare';
 import WinnerShareCard from '@/components/lunchie/WinnerShareCard';
+import { logSwipe, logWinner, logNavigate, logEvent } from '@/lib/eventLogger';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -298,6 +299,10 @@ function WinnerScreen({ selectedWinner, onReset }: { selectedWinner?: Restaurant
   const winnerId = liveResults.results[0]?.restaurantId;
   const winner = selectedWinner || restaurants.find(r => r.id === winnerId) || currentSession?.restaurants[0];
 
+  useEffect(() => {
+    if (winner) logWinner(winner.id, { session_id: currentSession?.id ?? null, slate_id: currentSession?.slateId ?? null });
+  }, [winner?.id]);
+
   if (!winner) return null;
 
   const foodPhotos = getFoodPhotos(winner.category).slice(0, 4);
@@ -422,7 +427,7 @@ function WinnerScreen({ selectedWinner, onReset }: { selectedWinner?: Restaurant
               <Phone size={15} /> 예약하기
             </button>
             <button
-              onClick={() => navigate(`/lunchie/map?id=${winner.id}`)}
+              onClick={() => { logNavigate(winner.id, { session_id: currentSession?.id ?? null }); navigate(`/lunchie/map?id=${winner.id}`); }}
               className="flex-1 py-3 rounded-2xl font-bold text-white text-[14px] flex items-center justify-center gap-1.5 active:scale-[0.98] transition-all"
               style={{ background: '#EB5053' }}
             >
@@ -888,6 +893,16 @@ export default function QuickMatchPage() {
     if (!restaurant) return;
 
     addSwipe(restaurant.id, action === 'like' ? 'like' : 'skip');
+    const meta = currentSession?.recMeta?.[restaurant.id];
+    logSwipe(restaurant.id, action === 'like' ? 'LIKE' : 'NOPE', {
+      session_id: currentSession?.id ?? null,
+      slate_id: currentSession?.slateId ?? null,
+      slate_type: 'PRELIM',
+      round: 1,
+      position: meta?.position ?? currentIndex,
+      propensity: meta?.propensity ?? null,
+      model_version: 'v0-heuristic',
+    });
     setSwipeData(prev => [...prev, { restaurant, action }]);
 
     if (currentIndex + 1 >= total) {
@@ -895,7 +910,7 @@ export default function QuickMatchPage() {
     } else {
       setCurrentIndex(i => i + 1);
     }
-  }, [currentIndex, targetRestaurants, addSwipe, total]);
+  }, [currentIndex, targetRestaurants, addSwipe, total, currentSession]);
 
   const topPick = swipeData.find(s => s.action === 'like')?.restaurant || targetRestaurants[0];
 
@@ -905,7 +920,7 @@ export default function QuickMatchPage() {
     return <WaitingOrDecidedScreen onContinue={(winner) => { if (winner) setSelectedWinner(winner); setPhase('results'); }} />;
   }
   if (phase === 'results') {
-    return <WinnerScreen selectedWinner={selectedWinner} onReset={() => { setCurrentIndex(0); setSwipeData([]); setSelectedWinner(null); }} />;
+    return <WinnerScreen selectedWinner={selectedWinner} onReset={() => { logEvent({ event_type: 'REROLL', session_id: currentSession?.id ?? null, slate_id: currentSession?.slateId ?? null }); setCurrentIndex(0); setSwipeData([]); setSelectedWinner(null); }} />;
   }
 
   // Countdown formatting for header badge

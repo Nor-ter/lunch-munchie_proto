@@ -5,8 +5,24 @@
  */
 
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
+import { normalizeDiet, isHardRestriction, type DietTag } from '@shared/const';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
+
+// diet 하드 제약 매칭: 필터('비건')와 식당 태그('비건 옵션')를 enum으로 정규화해 비교.
+const SEAFOOD_RE = /해산물|seafood|스시|sushi|초밥|회|sashimi|오마카세|omakase/i;
+function matchesDiet(category: string, restaurantDietary: string[], filterDietary: string[]): boolean {
+  const required: DietTag[] = [];
+  for (const raw of filterDietary || []) {
+    const n = normalizeDiet(raw);
+    if (n && isHardRestriction(n)) required.push(n);
+  }
+  if (required.length === 0) return true;
+  const offered = (restaurantDietary || []).map(normalizeDiet);
+  return required.every((tag) =>
+    tag === 'NO_SEAFOOD' ? !SEAFOOD_RE.test(category) : offered.includes(tag),
+  );
+}
 
 export type TagType = '데이트 코스' | '맛집' | '카페' | '전시/문화' | '액티비티' | '혼자 여행' | '맛집 투어' | '가성비';
 
@@ -75,6 +91,10 @@ export interface GroupSession {
   status: 'waiting' | 'voting' | 'completed';
   restaurants: Restaurant[];
   results: { restaurantId: string; score: number }[];
+  /** 런치 엔진 추천 슬레이트 식별자 (로깅 propensity 승계용) */
+  slateId?: string;
+  /** restaurant_id → {추천 propensity, 노출 position} (스와이프 로깅에 사용) */
+  recMeta?: Record<string, { propensity: number; position: number }>;
 }
 
 export interface SessionMember {
@@ -421,6 +441,46 @@ interface AppContextValue {
 
 const AppContext = createContext<AppContextValue | null>(null);
 
+// 런치 엔진 추천으로 덱을 정렬 + propensity 메타 부착. 실패 시 필터 순서 그대로(폴백).
+async function buildDeck(
+  filters: GroupSession['filters'],
+  allRestaurants: Restaurant[],
+): Promise<{ restaurants: Restaurant[]; slateId?: string; recMeta?: GroupSession['recMeta'] }> {
+  const base = allRestaurants.filter(r =>
+    (filters.categories.length === 0 || filters.categories.includes(r.category)) &&
+    matchesDiet(r.category, r.dietary, filters.dietary),
+  );
+  if (base.length === 0) return { restaurants: base };
+  try {
+    const res = await fetch('/api/recommend', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        candidate_ids: base.map(r => r.id),
+        context: { diet: filters.dietary },
+        k: Math.min(base.length, 20),
+        slate_type: 'PRELIM',
+      }),
+    });
+    if (!res.ok) return { restaurants: base };
+    const data = await res.json();
+    const meta: GroupSession['recMeta'] = {};
+    const order: string[] = [];
+    for (const s of data.slate as { id: string; propensity: number; rank: number }[]) {
+      meta![s.id] = { propensity: s.propensity, position: s.rank };
+      order.push(s.id);
+    }
+    const inSlate = new Set(order);
+    const ordered = [
+      ...order.map(id => base.find(r => r.id === id)).filter((r): r is Restaurant => !!r),
+      ...base.filter(r => !inSlate.has(r.id)),
+    ];
+    return { restaurants: ordered, slateId: data.slate_id, recMeta: meta };
+  } catch {
+    return { restaurants: base };
+  }
+}
+
 function buildLocalSession(
   name: string,
   filters: GroupSession['filters'],
@@ -444,7 +504,8 @@ function buildLocalSession(
     deadline: null,
     status: 'waiting',
     restaurants: restaurants.filter(r =>
-      filters.categories.length === 0 || filters.categories.includes(r.category),
+      (filters.categories.length === 0 || filters.categories.includes(r.category)) &&
+      matchesDiet(r.category, r.dietary, filters.dietary),
     ),
     results: [],
   };
@@ -557,6 +618,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         });
         if (res.ok) {
           const data = await res.json();
+          const deck = await buildDeck(filters, restaurants);
           const session: GroupSession = {
             id: data.session.id,
             name,
@@ -574,9 +636,9 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
             deadline: null, // 마감 타이머는 투표 시작 시점에 적용
             deadlineMinutes,
             status: 'waiting',
-            restaurants: restaurants.filter(r =>
-              filters.categories.length === 0 || filters.categories.includes(r.category),
-            ),
+            restaurants: deck.restaurants,
+            slateId: deck.slateId,
+            recMeta: deck.recMeta,
             results: [],
           };
           setCurrentSession(session);
@@ -588,6 +650,10 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     }
 
     const session = buildLocalSession(name, filters, { ...profile, name: actualHostName, emoji: actualEmoji }, restaurants);
+    const deck = await buildDeck(filters, restaurants);
+    session.restaurants = deck.restaurants;
+    session.slateId = deck.slateId;
+    session.recMeta = deck.recMeta;
     session.deadlineMinutes = deadlineMinutes;
     setCurrentSession(session);
     return session;
@@ -598,6 +664,14 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     if (!res.ok) throw new Error('Session not found');
     const data = await res.json();
     const status = (data.session.status as string).toLowerCase() as GroupSession['status'];
+    const sessFilters = {
+      partySize: data.session.group_size,
+      dietary: data.session.filter_dietary || [],
+      budget: data.session.filter_budget,
+      radius: data.session.filter_distance,
+      categories: data.session.filter_vibe || [],
+    };
+    const deck = await buildDeck(sessFilters, restaurants);
     const session: GroupSession = {
       id: data.session.id,
       name: '점심 세션',
@@ -611,20 +685,13 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         preferences: [],
         ready: m.is_ready,
       })),
-      filters: {
-        partySize: data.session.group_size,
-        dietary: data.session.filter_dietary || [],
-        budget: data.session.filter_budget,
-        radius: data.session.filter_distance,
-        categories: data.session.filter_vibe || [],
-      },
+      filters: sessFilters,
       // 대기 중에는 마감 미적용 — 투표 시작 시점에 서버가 deadline_at을 갱신한다
       deadline: status === 'waiting' ? null : data.session.deadline_at,
       status,
-      restaurants: restaurants.filter(r =>
-        (data.session.filter_vibe || []).length === 0 ||
-        (data.session.filter_vibe || []).includes(r.category),
-      ),
+      restaurants: deck.restaurants,
+      slateId: deck.slateId,
+      recMeta: deck.recMeta,
       results: [],
     };
     // 서버 응답에는 없는 로컬 정보(세션 이름, 마감 타이밍 설정)는 유지한다
