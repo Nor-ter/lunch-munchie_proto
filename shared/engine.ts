@@ -11,6 +11,7 @@ export const EVENT_TYPES = [
   "COURSE_SAVE",// 추천 코스 저장 (명시 신호)
   "COURSE_EDIT",// 추천 코스 수정 (연쇄 선호 신호)
   "REROLL",     // 다시하기 (불만족·피로 신호)
+  "SURVEY",     // 회고 마이크로설문 (action: POS|NEU|NEG = 👍😐👎, 만족 정답)
 ] as const;
 export type EventType = (typeof EVENT_TYPES)[number];
 

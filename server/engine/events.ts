@@ -149,6 +149,117 @@ export function getMetrics() {
 
   const dataHealth = { essential, slateJoin, contextCoverage, funnel, volume };
 
+  // ── Tier 1: 결정 만족(결과축) ⟂ 과정 피로(여정축) — 세션 단위 ──────────
+  // 측정 철학: 두 축은 다르므로 따로 측정. 세션을 단위로 신호를 모은다.
+  const median = (arr: number[]) => {
+    if (!arr.length) return null;
+    const s = [...arr].sort((a, b) => a - b);
+    const mid = Math.floor(s.length / 2);
+    return s.length % 2 ? s[mid] : (s[mid - 1] + s[mid]) / 2;
+  };
+  type SwipeRec = { pos: number | null; like: boolean; dwell: number | null };
+  type SessAgg = {
+    swipes: SwipeRec[]; winner: boolean; navigate: boolean; reroll: boolean;
+    survey: string | null; winnerTs: number | null; firstTs: number | null; decisionMs: number | null;
+  };
+  const sessMap = new Map<string, SessAgg>();
+  const getSess = (id: string) => {
+    let o = sessMap.get(id);
+    if (!o) { o = { swipes: [], winner: false, navigate: false, reroll: false, survey: null, winnerTs: null, firstTs: null, decisionMs: null }; sessMap.set(id, o); }
+    return o;
+  };
+  for (const e of ev) {
+    const sid = nonNull(e.session_id) ? String(e.session_id) : null;
+    if (!sid) continue;
+    const o = getSess(sid);
+    const t = e.created_at instanceof Date ? (e.created_at as Date).getTime() : new Date(String(e.created_at)).getTime();
+    if (!isNaN(t) && (o.firstTs == null || t < o.firstTs)) o.firstTs = t;
+    switch (e.event_type) {
+      case "SWIPE":
+        if (e.action === "LIKE" || e.action === "NOPE")
+          o.swipes.push({ pos: typeof e.position === "number" ? e.position : null, like: e.action === "LIKE", dwell: typeof e.dwell_ms === "number" ? e.dwell_ms : null });
+        break;
+      case "WINNER": {
+        o.winner = true;
+        if (!isNaN(t)) o.winnerTs = t;
+        const c = e.context as Record<string, unknown> | null | undefined;
+        if (c && typeof c.decision_time_ms === "number") o.decisionMs = c.decision_time_ms;
+        break;
+      }
+      case "NAVIGATE": o.navigate = true; break;
+      case "REROLL": o.reroll = true; break;
+      case "SURVEY": o.survey = (e.action as string) ?? null; break; // POS|NEU|NEG
+    }
+  }
+  // "시도된" 세션만 (스와이프가 있거나 우승에 도달) — 노출만 있고 안 한 건 제외
+  const attempted = Array.from(sessMap.values()).filter((o) => o.swipes.length > 0 || o.winner);
+
+  let satImplicit = 0, satConfirmed = 0, confirmable = 0;
+  let reachWinner = 0, noReroll = 0, navigated = 0, abandoned = 0, rerolledSess = 0;
+  const decisionTimes: number[] = [], swipeCounts: number[] = [];
+  let earlyNope = 0, earlyTot = 0, lateNope = 0, lateTot = 0;
+  let earlyDwellSum = 0, earlyDwellN = 0, lateDwellSum = 0, lateDwellN = 0;
+  const survey = { POS: 0, NEU: 0, NEG: 0 };
+  const quadInput: { satisfied: boolean; dt: number | null; swipes: number; reroll: boolean; abandoned: boolean }[] = [];
+
+  for (const o of attempted) {
+    if (o.winner) reachWinner++; else abandoned++;
+    if (o.reroll) rerolledSess++; else noReroll++;
+    if (o.navigate) navigated++;
+    if (o.survey === "POS") survey.POS++; else if (o.survey === "NEU") survey.NEU++; else if (o.survey === "NEG") survey.NEG++;
+
+    const dt = o.decisionMs ?? (o.winnerTs != null && o.firstTs != null ? o.winnerTs - o.firstTs : null);
+    if (dt != null) decisionTimes.push(dt);
+    swipeCounts.push(o.swipes.length);
+
+    // 초반/후반 분할 (position 우선, 없으면 배열 순서) → 후반 피로 측정
+    const sw = o.swipes;
+    const ordered = sw.every((s) => s.pos != null) ? [...sw].sort((a, b) => (a.pos as number) - (b.pos as number)) : sw;
+    const lateFrom = Math.ceil(ordered.length / 2);
+    ordered.forEach((s, i) => {
+      const late = i >= lateFrom;
+      if (late) { lateTot++; if (!s.like) lateNope++; if (s.dwell != null) { lateDwellSum += s.dwell; lateDwellN++; } }
+      else { earlyTot++; if (!s.like) earlyNope++; if (s.dwell != null) { earlyDwellSum += s.dwell; earlyDwellN++; } }
+    });
+
+    const satImp = o.winner && !o.reroll && o.navigate; // 암묵 만족: 우승∧재롤없음∧길찾기
+    if (satImp) satImplicit++;
+    if (o.survey != null) { confirmable++; if (satImp && o.survey === "POS") satConfirmed++; } // 확정: 회고 있는 세션만
+    quadInput.push({ satisfied: satImp, dt, swipes: o.swipes.length, reroll: o.reroll, abandoned: !o.winner });
+  }
+
+  // 2×2: 만족(세로) × 피로(가로). 피로 = 재롤∨이탈∨결정시간>중앙값∨스와이프수>중앙값
+  const dtMed = median(decisionTimes), swMed = median(swipeCounts);
+  const quad: Record<string, number> = { "만족·피로낮음": 0, "만족·피로높음": 0, "불만족·피로낮음": 0, "불만족·피로높음": 0 };
+  for (const q of quadInput) {
+    const fatigued = q.reroll || q.abandoned || (dtMed != null && q.dt != null && q.dt > dtMed) || (swMed != null && q.swipes > swMed);
+    quad[(q.satisfied ? "만족" : "불만족") + "·" + (fatigued ? "피로높음" : "피로낮음")]++;
+  }
+
+  const satisfaction = {
+    sessions: attempted.length,
+    implicitRate: attempted.length ? satImplicit / attempted.length : null,
+    confirmedRate: confirmable ? satConfirmed / confirmable : null,
+    confirmable,
+    components: [
+      { key: "우승 도달", rate: attempted.length ? reachWinner / attempted.length : null },
+      { key: "재롤 없음", rate: attempted.length ? noReroll / attempted.length : null },
+      { key: "길찾기", rate: attempted.length ? navigated / attempted.length : null },
+    ],
+    survey,
+  };
+  const fatigue = {
+    decisionTimeMedianMs: dtMed,
+    swipesMedian: swMed,
+    earlyNopeRate: earlyTot ? earlyNope / earlyTot : null,
+    lateNopeRate: lateTot ? lateNope / lateTot : null,
+    earlyDwellMs: earlyDwellN ? earlyDwellSum / earlyDwellN : null,
+    lateDwellMs: lateDwellN ? lateDwellSum / lateDwellN : null,
+    rerollRate: attempted.length ? rerolledSess / attempted.length : null,
+    abandonRate: attempted.length ? abandoned / attempted.length : null,
+  };
+  const quadrants = Object.entries(quad).map(([quadrant, sessions]) => ({ quadrant, sessions }));
+
   const recent = ev.slice(-40).reverse().map((e) => ({
     ts: e.created_at instanceof Date ? (e.created_at as Date).toISOString() : String(e.created_at ?? ""),
     user_id: e.user_id ?? null,
@@ -165,6 +276,7 @@ export function getMetrics() {
   return {
     total: ev.length,
     dataHealth,
+    satisfaction, fatigue, quadrants,
     byType, bySlate, byAction, byVariant, byRound,
     swipes: { like, nope, acceptance: like + nope > 0 ? like / (like + nope) : null },
     duels: choose,

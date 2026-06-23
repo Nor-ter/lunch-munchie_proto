@@ -15,9 +15,30 @@ interface DataHealth {
   funnel: { stage: string; count: number }[];
   volume: { total: number; sessions: number; eventsPerSession: number | null; lastEventTs: string | null };
 }
+interface Satisfaction {
+  sessions: number;
+  implicitRate: number | null;
+  confirmedRate: number | null;
+  confirmable: number;
+  components: { key: string; rate: number | null }[];
+  survey: { POS: number; NEU: number; NEG: number };
+}
+interface Fatigue {
+  decisionTimeMedianMs: number | null;
+  swipesMedian: number | null;
+  earlyNopeRate: number | null;
+  lateNopeRate: number | null;
+  earlyDwellMs: number | null;
+  lateDwellMs: number | null;
+  rerollRate: number | null;
+  abandonRate: number | null;
+}
 interface Metrics {
   total: number;
   dataHealth: DataHealth;
+  satisfaction: Satisfaction;
+  fatigue: Fatigue;
+  quadrants: { quadrant: string; sessions: number }[];
   byType: Record<string, number>;
   bySlate: Record<string, number>;
   byAction: Record<string, number>;
@@ -60,6 +81,45 @@ function Chart({ title, data, color }: { title: string; data: { name: string; va
   );
 }
 const toData = (o: Record<string, number>) => Object.entries(o).map(([name, value]) => ({ name, value }));
+
+// ── Tier 1: 만족/피로 표시용 ──────────────────────────────────────
+function MiniStat({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="bg-[#FBF1F1] rounded-lg p-2">
+      <div className="text-[10px] text-[#6E6E6E] leading-tight">{label}</div>
+      <div className="text-[15px] font-bold text-[#1A1A1A] mt-0.5">{value}</div>
+    </div>
+  );
+}
+function Quadrant({ data, total }: { data: { quadrant: string; sessions: number }[]; total: number }) {
+  const get = (q: string) => data.find((d) => d.quadrant === q)?.sessions ?? 0;
+  const cell = (q: string, title: string, sub: string, bg: string, fg: string) => {
+    const n = get(q);
+    const p = total ? Math.round((n / total) * 100) : 0;
+    return (
+      <div className="rounded-lg p-3" style={{ background: bg }}>
+        <div className="text-[11px] font-semibold" style={{ color: fg }}>{title}</div>
+        <div className="text-[20px] font-black text-[#1A1A1A] leading-tight">
+          {n}<span className="text-[12px] font-normal text-[#6E6E6E]"> · {p}%</span>
+        </div>
+        <div className="text-[10px] text-[#9A9A9A]">{sub}</div>
+      </div>
+    );
+  };
+  return (
+    <div>
+      <div className="grid grid-cols-2 gap-2">
+        {cell('만족·피로낮음', '만족 · 피로낮음', '이상적 (엔진 목표)', '#EAF7EC', '#2E9E42')}
+        {cell('만족·피로높음', '만족 · 피로높음', '좋지만 지침', '#FDF4E3', '#C98A12')}
+        {cell('불만족·피로낮음', '불만족 · 피로낮음', '무관심·조기포기', '#F2F1EE', '#7A7A7A')}
+        {cell('불만족·피로높음', '불만족 · 피로높음', '최악 — 이탈', '#FBECEC', '#D83A3D')}
+      </div>
+      <div className="flex justify-between text-[9px] text-[#B0B0B0] mt-1 px-1">
+        <span>← 피로 낮음</span><span>피로 높음 →</span>
+      </div>
+    </div>
+  );
+}
 
 // ── Tier 0: 데이터 신뢰성 표시용 헬퍼 ──────────────────────────────
 const covColor = (c: number | null) =>
@@ -171,6 +231,74 @@ export default function MetricsPage() {
 
         <div className="text-[12px] font-semibold text-[#1A1A1A] mt-4 mb-2">계측 퍼널 <span className="font-normal text-[#9A9A9A]">(전환·누락)</span></div>
         <Funnel stages={m.dataHealth.funnel} />
+      </section>
+
+      {/* ── Tier 1: 결정 만족(결과) ⟂ 과정 피로(여정) — north star ── */}
+      <section className="mb-6">
+        <div className="flex items-baseline justify-between mb-2">
+          <h2 className="text-[14px] font-bold text-[#1A1A1A]">결정 만족 × 과정 피로 (Tier 1 · north star)</h2>
+          <span className="text-[11px] text-[#6E6E6E]">세션 {m.satisfaction.sessions}개 · 두 축은 따로 측정</span>
+        </div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          {/* 만족 패널 (결과축) */}
+          <div className="rounded-xl border border-[#E7E1DA] p-4">
+            <div className="text-[13px] font-bold text-[#2E9E42] mb-2">😊 결정 만족 (결과축)</div>
+            <div className="flex items-end gap-4 mb-3">
+              <div>
+                <div className="text-[26px] font-black text-[#1A1A1A] leading-none">{pct(m.satisfaction.implicitRate)}</div>
+                <div className="text-[10px] text-[#9A9A9A] mt-1">암묵 만족율<br />(재롤없이 ∧ 길찾기)</div>
+              </div>
+              <div className="border-l border-[#F1EFE8] pl-4">
+                <div className="text-[20px] font-bold text-[#2E9E42] leading-none">{pct(m.satisfaction.confirmedRate)}</div>
+                <div className="text-[10px] text-[#9A9A9A] mt-1">확정 만족율<br />(회고👍 · n={m.satisfaction.confirmable})</div>
+              </div>
+            </div>
+            {m.satisfaction.components.map((c) => (
+              <CovBar key={c.key} label={c.key} coverage={c.rate} n={m.satisfaction.sessions} />
+            ))}
+            <div className="mt-2 text-[11px] text-[#6E6E6E] border-t border-[#F1EFE8] pt-2">
+              회고 분포 — 👍 {m.satisfaction.survey.POS} · 😐 {m.satisfaction.survey.NEU} · 👎 {m.satisfaction.survey.NEG}
+            </div>
+          </div>
+
+          {/* 피로 패널 (여정축) */}
+          <div className="rounded-xl border border-[#E7E1DA] p-4">
+            <div className="text-[13px] font-bold text-[#D83A3D] mb-2">😮‍💨 과정 피로 (여정축)</div>
+            <div className="grid grid-cols-2 gap-2 mb-3">
+              <MiniStat label="결정시간 (중앙값)" value={m.fatigue.decisionTimeMedianMs != null ? Math.round(m.fatigue.decisionTimeMedianMs / 1000) + 's' : '—'} />
+              <MiniStat label="스와이프수 (중앙값)" value={num(m.fatigue.swipesMedian, 0)} />
+              <MiniStat label="재롤율" value={pct(m.fatigue.rerollRate)} />
+              <MiniStat label="중도이탈율" value={pct(m.fatigue.abandonRate)} />
+            </div>
+            <div className="text-[11px] text-[#6E6E6E] space-y-1 border-t border-[#F1EFE8] pt-2">
+              <div>
+                후반 지침 — nope율 초반 {pct(m.fatigue.earlyNopeRate)} → 후반 {pct(m.fatigue.lateNopeRate)}{' '}
+                {m.fatigue.lateNopeRate != null && m.fatigue.earlyNopeRate != null && (
+                  <span style={{ color: m.fatigue.lateNopeRate > m.fatigue.earlyNopeRate ? '#D83A3D' : '#2E9E42', fontWeight: 600 }}>
+                    {m.fatigue.lateNopeRate > m.fatigue.earlyNopeRate ? '↑ 지침' : '↓ 양호'}
+                  </span>
+                )}
+              </div>
+              <div>
+                참여 소진 — dwell 초반 {m.fatigue.earlyDwellMs != null ? Math.round(m.fatigue.earlyDwellMs) + 'ms' : '—'} → 후반 {m.fatigue.lateDwellMs != null ? Math.round(m.fatigue.lateDwellMs) + 'ms' : '—'}{' '}
+                {m.fatigue.lateDwellMs != null && m.fatigue.earlyDwellMs != null && (
+                  <span style={{ color: m.fatigue.lateDwellMs < m.fatigue.earlyDwellMs ? '#D83A3D' : '#2E9E42', fontWeight: 600 }}>
+                    {m.fatigue.lateDwellMs < m.fatigue.earlyDwellMs ? '↓ 소진' : '↑ 유지'}
+                  </span>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* 만족 × 피로 2×2 */}
+        <div className="mt-3 rounded-xl border border-[#E7E1DA] p-4">
+          <div className="text-[12px] font-semibold text-[#1A1A1A] mb-2">
+            만족 × 피로 2×2 <span className="font-normal text-[#9A9A9A]">— 이상적 = 만족·피로낮음(좌상), 최악 = 불만족·피로높음(우하)</span>
+          </div>
+          <Quadrant data={m.quadrants} total={m.satisfaction.sessions} />
+        </div>
       </section>
 
       <div className="grid grid-cols-3 sm:grid-cols-4 gap-2.5 mb-3">
