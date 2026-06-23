@@ -1,29 +1,53 @@
-// 런치 엔진 v1 — 유저 취향 벡터 theta_u (로지스틱) + 온라인 SGD 학습기
+// 런치 엔진 v3 — 베이지안 취향 모델 + Thompson Sampling (contextual bandit)
 //
-// P(like | u, i) = sigmoid(theta_u dot x_i + bias). 스와이프(암묵 라벨)로 학습.
-// 온라인: 스와이프마다 즉시 갱신("오늘 뭐 골랐지"가 바로 반영).
-// 아키텍처상 theta_u는 피처 스토어(user_taste)에 보관하지만, 프로토타입에선 인메모리
-// (DB 폴백과 동일 취지). 오프라인 IPS 재적합은 후속(Python 배치).
+// v1은 점추정(SGD). v3는 사후분포 N(mu, A^-1)을 유지해 "불확실하면 탐색"한다.
+// 추천 시 theta를 사후에서 샘플(Thompson) → 데이터 적은 유저/피처는 자연히 더 탐색,
+// 많이 본 곳은 활용. 랜덤 epsilon 대신 불확실성 기반 탐색. propensity는 여전히 로깅(off-policy).
+//
+// 베이지안 선형회귀: A = lambda*I + sum x x^T,  b = sum y x.  mu = A^-1 b.
+// 인메모리(피처 스토어 대체). 오프라인 정밀화는 후속(Python).
 
 import { FEATURE_DIM } from "./features.js";
 
-export const MIN_TASTE = 5; // 이 수 이상 스와이프해야 취향항을 점수에 반영(콜드스타트 보호)
-const LR = 0.12;
-const L2 = 0.002;
+export const MIN_TASTE = 5;
+const D = FEATURE_DIM;
+const PRIOR = 1.0; // 사전 정밀도 A0 = PRIOR*I → 콜드스타트 mu=0(중립), 분산 큼(탐색)
 
-export interface Taste {
-  theta: number[];
-  bias: number;
-  n: number; // 학습에 쓰인 스와이프 수
-}
+export interface Taste { A: number[][]; b: number[]; n: number }
 
 const store = new Map<string, Taste>();
 
+const dot = (a: number[], x: number[]) => { let s = 0; for (let i = 0; i < D; i++) s += a[i] * x[i]; return s; };
 const sigmoid = (z: number) => 1 / (1 + Math.exp(-z));
-const dot = (a: number[], b: number[]) => {
-  let s = 0;
-  for (let i = 0; i < a.length; i++) s += a[i] * b[i];
-  return s;
+const randn = () => {
+  let u = 0, v = 0;
+  while (u === 0) u = Math.random();
+  while (v === 0) v = Math.random();
+  return Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * v);
+};
+
+// Cholesky A = L L^T (하삼각). PD 아니면 null.
+function chol(A: number[][]): number[][] | null {
+  const L = Array.from({ length: D }, () => new Array(D).fill(0));
+  for (let i = 0; i < D; i++) {
+    for (let j = 0; j <= i; j++) {
+      let s = A[i][j];
+      for (let k = 0; k < j; k++) s -= L[i][k] * L[j][k];
+      if (i === j) { if (s <= 1e-9) return null; L[i][j] = Math.sqrt(s); }
+      else L[i][j] = s / L[j][j];
+    }
+  }
+  return L;
+}
+const solveLower = (L: number[][], rhs: number[]) => { // L y = rhs
+  const y = new Array(D).fill(0);
+  for (let i = 0; i < D; i++) { let s = rhs[i]; for (let k = 0; k < i; k++) s -= L[i][k] * y[k]; y[i] = s / L[i][i]; }
+  return y;
+};
+const solveUpper = (L: number[][], rhs: number[]) => { // L^T x = rhs
+  const x = new Array(D).fill(0);
+  for (let i = D - 1; i >= 0; i--) { let s = rhs[i]; for (let k = i + 1; k < D; k++) s -= L[k][i] * x[k]; x[i] = s / L[i][i]; }
+  return x;
 };
 
 export function getTaste(userId: string | null | undefined): Taste | null {
@@ -31,37 +55,55 @@ export function getTaste(userId: string | null | undefined): Taste | null {
   return store.get(String(userId)) ?? null;
 }
 
-// tasteFit = P(like) 추정. 0~1. (콜드스타트 판단은 호출부에서 n으로.)
-export function tasteScore(t: Taste, x: number[]): number {
-  return sigmoid(dot(t.theta, x) + t.bias);
+// 사후 평균 mu = A^-1 b (결정적; 분석·랭킹용)
+export function posteriorMean(t: Taste): number[] {
+  const L = chol(t.A);
+  if (!L) return new Array(D).fill(0);
+  return solveUpper(L, solveLower(L, t.b));
 }
 
-// 온라인 SGD 1스텝: theta += lr*((y - p) * x - l2*theta).  y = LIKE?1:0
+// Thompson 샘플: theta ~ N(mu, A^-1). 불확실할수록(데이터 적을수록) 더 흩어짐 → 탐색.
+export function sampleTheta(t: Taste): number[] {
+  const L = chol(t.A);
+  if (!L) return new Array(D).fill(0);
+  const mu = solveUpper(L, solveLower(L, t.b));
+  const z = Array.from({ length: D }, () => randn());
+  const w = solveUpper(L, z); // L^T w = z → Cov(w)=A^-1
+  return mu.map((m, i) => m + w[i]);
+}
+
+export const tasteFitFromTheta = (theta: number[], x: number[]) => sigmoid(dot(theta, x));
+
+// 베이지안 갱신: A += x x^T, b += y x.  y = LIKE?1:0
 export function updateTaste(userId: string, x: number[], y: number): void {
   const uid = String(userId);
   let t = store.get(uid);
-  if (!t) { t = { theta: new Array(FEATURE_DIM).fill(0), bias: 0, n: 0 }; store.set(uid, t); }
-  const p = tasteScore(t, x);
-  const g = y - p;
-  for (let i = 0; i < t.theta.length; i++) t.theta[i] += LR * (g * x[i] - L2 * t.theta[i]);
-  t.bias += LR * g;
+  if (!t) {
+    const A = Array.from({ length: D }, (_, i) => Array.from({ length: D }, (_, j) => (i === j ? PRIOR : 0)));
+    t = { A, b: new Array(D).fill(0), n: 0 };
+    store.set(uid, t);
+  }
+  for (let i = 0; i < D; i++) {
+    t.b[i] += y * x[i];
+    for (let j = 0; j < D; j++) t.A[i][j] += x[i] * x[j];
+  }
   t.n++;
 }
 
-// 대시보드용 — 학습 진행 상황 요약
 export function tasteStats() {
   let learned = 0, normSum = 0;
   for (const t of Array.from(store.values())) {
     if (t.n >= MIN_TASTE) {
       learned++;
-      normSum += Math.sqrt(dot(t.theta, t.theta));
+      const mu = posteriorMean(t);
+      normSum += Math.sqrt(dot(mu, mu));
     }
   }
   return {
-    modelVersion: "v1-taste",
-    dim: FEATURE_DIM,
+    modelVersion: "v3-bandit",
+    dim: D,
     users: store.size,
-    learnedUsers: learned, // 취향이 점수에 반영되는 유저(n>=MIN_TASTE)
+    learnedUsers: learned,
     avgThetaNorm: learned ? Number((normSum / learned).toFixed(3)) : null,
   };
 }

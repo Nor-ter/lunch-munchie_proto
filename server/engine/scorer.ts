@@ -9,14 +9,15 @@
 
 import type { Candidate, RecContext, ScoredItem } from "../../shared/engine.js";
 import { buildItemVector } from "./features.js";
-import { tasteScore, MIN_TASTE, type Taste } from "./taste.js";
+import { tasteFitFromTheta, MIN_TASTE } from "./taste.js";
 
 export interface SlateOptions {
   k?: number;    // 슬레이트 크기 (예선 카드 수)
   eps?: number;  // 탐색 비율 (0~1)
   tau?: number;  // softmax 온도
   seed?: number; // 재현용(테스트)
-  userTaste?: Taste | null; // v1 취향 벡터 (있고 충분히 학습됐으면 점수에 반영)
+  tasteTheta?: number[] | null; // v3 취향 벡터 (Thompson 샘플 또는 사후평균)
+  tasteN?: number; // 학습된 스와이프 수 (MIN_TASTE 게이팅)
   exposurePenalty?: (id: string) => number; // v1 단기 노출 피로 g(누적 노출) in [0,1)
   satiation?: (category: string | undefined) => number; // v2 재소비 갈망 in [-0.5,+0.5)
   chainFit?: (category: string | undefined) => number; // v2 음식 연쇄 P(next|prev) in [0,1]
@@ -44,7 +45,7 @@ function contextFit(c: Candidate, ctx: RecContext): number {
 }
 
 export function scoreCandidate(
-  c: Candidate, ctx: RecContext, pool: Candidate[], userTaste?: Taste | null, fatigue = 0, sat = 0, chain = 0,
+  c: Candidate, ctx: RecContext, pool: Candidate[], tasteTheta?: number[] | null, tasteN = 0, fatigue = 0, sat = 0, chain = 0,
 ): number {
   const ratings = pool.map((p) => p.rating ?? 0);
   const reviews = pool.map((p) => p.review_count ?? 0);
@@ -52,9 +53,9 @@ export function scoreCandidate(
   const vHi = Math.max(...reviews, 1);
   const reputation = 0.7 * norm(c.rating ?? 0, rLo, rHi) + 0.3 * norm(c.review_count ?? 0, 0, vHi);
   const cf = contextFit(c, ctx);
-  // v1: 충분히 학습된 취향이 있으면 tasteFit을 섞는다. 아니면 v0 가중(콜드스타트 보호).
-  const base = userTaste && userTaste.n >= MIN_TASTE
-    ? 0.4 * reputation + 0.3 * cf + 0.3 * tasteScore(userTaste, buildItemVector(c))
+  // v3: 충분히 학습된 취향(Thompson 샘플 theta)이 있으면 tasteFit을 섞는다. 아니면 v0 가중.
+  const base = tasteTheta && tasteN >= MIN_TASTE
+    ? 0.4 * reputation + 0.3 * cf + 0.3 * tasteFitFromTheta(tasteTheta, buildItemVector(c))
     : 0.6 * reputation + 0.4 * cf;
   // v1 노출 피로(−) + v2 재소비 갈망(±) + v2 음식 연쇄(직전 스톱 다음 적합 +)
   return base - W_FATIGUE * fatigue + W_SATIATION * sat + W_CHAIN * chain;
@@ -86,7 +87,7 @@ export function buildSlate(pool: Candidate[], ctx: RecContext, opts: SlateOption
   const sat = opts.satiation;
   const ch = opts.chainFit;
   const scores = pool.map((c) =>
-    scoreCandidate(c, ctx, pool, opts.userTaste, pen ? pen(c.id) : 0, sat ? sat(c.category) : 0, ch ? ch(c.category) : 0));
+    scoreCandidate(c, ctx, pool, opts.tasteTheta, opts.tasteN ?? 0, pen ? pen(c.id) : 0, sat ? sat(c.category) : 0, ch ? ch(c.category) : 0));
   const maxS = Math.max(...scores);
   const exps = scores.map((s) => Math.exp((s - maxS) / tau));
   const sumExp = exps.reduce((a, b) => a + b, 0);

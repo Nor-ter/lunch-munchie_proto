@@ -367,7 +367,7 @@ export default function MetricsPage() {
           <span className="text-[11px] text-[#6E6E6E]">엔진이 실제로 작동하나</span>
         </div>
         <div className="mb-3 p-2.5 rounded-lg bg-[#EAF7EC] text-[11px] text-[#2E6B36]">
-          <b>엔진 가동</b> — 취향 <code>{m.engine.modelVersion}</code>(학습 {m.engine.learnedUsers}/{m.engine.users}명) · 노출피로 {m.engine.exposureTracked}쌍 · satiation {m.engine.satiationCats}쌍 · 연쇄 {m.engine.chainObservations}건 · score = 평판+맥락+취향−노출피로±재소비+연쇄
+          <b>엔진 가동</b> — <code>{m.engine.modelVersion}</code> · Thompson 탐색(불확실성 기반) · 취향 학습 {m.engine.learnedUsers}/{m.engine.users}명 · 노출피로 {m.engine.exposureTracked}쌍 · satiation {m.engine.satiationCats}쌍 · 연쇄 {m.engine.chainObservations}건 · score = 평판+맥락+취향−노출피로±재소비+연쇄
         </div>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           {/* A. 노출 피로 곡선 */}
