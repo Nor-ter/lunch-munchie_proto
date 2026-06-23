@@ -46,6 +46,7 @@ interface Metrics {
   fatigue: Fatigue;
   quadrants: { quadrant: string; sessions: number }[];
   mechanism: Mechanism;
+  featureEffects: { key: string; group: string; effect: number | null; buckets: { value: string; rate: number; n: number }[] }[];
   byType: Record<string, number>;
   bySlate: Record<string, number>;
   byAction: Record<string, number>;
@@ -382,6 +383,46 @@ export default function MetricsPage() {
               <div className="text-[11px] text-[#9A9A9A]">멀티멤버 그룹 데이터 없음 (단일 유저 세션만)</div>
             )}
           </MCard>
+        </div>
+      </section>
+
+      {/* ── Tier 3: 맥락·아이템 feature 효과 (일반 분석) ── */}
+      <section className="mb-6">
+        <div className="flex items-baseline justify-between mb-2">
+          <h2 className="text-[14px] font-bold text-[#1A1A1A]">맥락·아이템 feature 효과 (Tier 3)</h2>
+          <span className="text-[11px] text-[#6E6E6E]">무엇이 결정을 움직이나</span>
+        </div>
+
+        <div className="mb-3 p-3 rounded-lg bg-[#FDF4E3] border border-[#F0D9A8]">
+          <div className="text-[12px] font-semibold text-[#C98A12]">⚠️ 상관 ≠ 인과</div>
+          <div className="text-[11px] text-[#7A6420] mt-0.5 leading-relaxed">
+            아래는 marginal 분해(상관)다. feature끼리 섞여 있어(예: 평점 → score → 상위 노출 → 포지션 편향) 진짜 효과는 모델(confound 통제)·실험(Phase 4)이 필요하다.
+            단일 값(버킷 1개)인 feature는 <b>표본이 다양해야</b> 측정 가능 — <b>날씨를 100% 수집해도 다양한 날씨가 쌓여야</b> 효과를 잰다.
+          </div>
+        </div>
+
+        <MCard title="feature 영향력 순위 — 수락률 변동폭 (최고 − 최저 버킷)">
+          {m.featureEffects.map((f) =>
+            f.effect != null ? (
+              <RateBar key={f.key} label={`${f.key} · ${f.group}`} value={f.effect} color="#3CBA44" />
+            ) : (
+              <div key={f.key} className="flex items-center gap-2 mb-1.5 opacity-60">
+                <div className="w-[112px] text-[11px] text-[#9A9A9A] shrink-0 truncate">{f.key} · {f.group}</div>
+                <div className="flex-1 text-[10px] text-[#9A9A9A]">측정불가 — 단일 값({f.buckets[0]?.value ?? '없음'}), 표본 다양성 필요</div>
+              </div>
+            )
+          )}
+        </MCard>
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-3">
+          {m.featureEffects.filter((f) => f.effect != null).map((f) => (
+            <MCard key={f.key} title={`${f.key} (${f.group}) · 변동폭 ${Math.round((f.effect ?? 0) * 100)}%p`}>
+              {f.buckets.slice(0, 6).map((b) => (
+                <RateBar key={b.value} label={b.value} value={b.rate} n={b.n} color="#3E719B" />
+              ))}
+              {f.buckets.length > 6 && <div className="text-[10px] text-[#9A9A9A] mt-0.5">외 {f.buckets.length - 6}개 버킷</div>}
+            </MCard>
+          ))}
         </div>
       </section>
 

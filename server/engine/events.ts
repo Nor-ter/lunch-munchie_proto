@@ -21,6 +21,16 @@ export function recordCatalogSize(n: number): void {
   if (n > catalogSize) catalogSize = n;
 }
 
+// 아이템 피처(카테고리·가격·평점) — feature 효과 분석에서 restaurant_id로 조인.
+type ItemFeat = { category?: string; price_level?: number; rating?: number };
+const itemFeatures = new Map<string, ItemFeat>();
+export function recordItemFeatures(
+  items: { id: string; category?: string | null; price_level?: number | null; rating?: number | null }[]
+): void {
+  for (const it of items)
+    if (it.id) itemFeatures.set(it.id, { category: it.category ?? undefined, price_level: it.price_level ?? undefined, rating: it.rating ?? undefined });
+}
+
 // 대시보드용 집계 (dev: 인메모리 버퍼 기준; 프로덕션은 rec_events 쿼리로 대체 예정)
 function inc(obj: Record<string, number>, key: unknown) {
   if (key === undefined || key === null || key === "") return;
@@ -377,6 +387,56 @@ export function getMetrics() {
 
   const mechanism = { exposureFatigue, discrimination, exploration, groupFairness };
 
+  // ── Tier 3: 맥락·아이템 feature 효과 (일반 분석) ──────────────────────
+  // "어떤 feature가 수락률을 얼마나 움직이나" — 수집된 모든 차원을 일반적으로 분해.
+  // 주의: marginal 분해는 상관까지. 진짜 효과(인과)는 confound 통제(모델)·실험(Phase4) 필요.
+  const slateCtx = new Map<string, Record<string, unknown>>();
+  for (const e of ev)
+    if (e.event_type === "IMPRESSION" && nonNull(e.slate_id) && e.context && typeof e.context === "object" && !slateCtx.has(String(e.slate_id)))
+      slateCtx.set(String(e.slate_id), e.context as Record<string, unknown>);
+
+  const companionBucket = (n: unknown) => (typeof n === "number" ? (n <= 1 ? "혼자" : n <= 3 ? "2-3명" : "4명+") : null);
+  const dietBucket = (d: unknown) => (Array.isArray(d) ? (d.length ? "제약있음" : "제약없음") : null);
+  const priceBucket = (p: unknown) => (typeof p === "number" && p > 0 ? "$".repeat(Math.min(4, p)) : null);
+  const ratingBucket = (r: unknown) => (typeof r === "number" ? (r >= 4.5 ? "4.5+" : r >= 4.0 ? "4.0–4.5" : r >= 3.5 ? "3.5–4.0" : "<3.5") : null);
+
+  type Dim = { key: string; group: string; get: (sw: Record<string, unknown>, c: Record<string, unknown> | undefined, f: ItemFeat | undefined) => string | null };
+  const dims: Dim[] = [
+    { key: "날씨", group: "맥락", get: (_s, c) => (c?.weather as string) ?? null },
+    { key: "시간대", group: "맥락", get: (_s, c) => (c?.time_of_day as string) ?? null },
+    { key: "요일", group: "맥락", get: (_s, c) => (c?.day_of_week as string) ?? null },
+    { key: "동행", group: "맥락", get: (_s, c) => companionBucket(c?.companions) },
+    { key: "diet", group: "맥락", get: (_s, c) => dietBucket(c?.diet) },
+    { key: "카테고리", group: "아이템", get: (_s, _c, f) => f?.category ?? null },
+    { key: "가격대", group: "아이템", get: (_s, _c, f) => priceBucket(f?.price_level) },
+    { key: "평점", group: "아이템", get: (_s, _c, f) => ratingBucket(f?.rating) },
+    { key: "A/B 변형", group: "실험", get: (s) => (s.variant as string) ?? null },
+  ];
+  const MIN_BUCKET_N = 5;
+  const swipesR1 = ev.filter((e) => e.event_type === "SWIPE" && (e.action === "LIKE" || e.action === "NOPE") && e.round === 1);
+  const featureEffects = dims
+    .map((dim) => {
+      const buckets = new Map<string, { like: number; n: number }>();
+      for (const sw of swipesR1) {
+        const c = nonNull(sw.slate_id) ? slateCtx.get(String(sw.slate_id)) : undefined;
+        const f = nonNull(sw.restaurant_id) ? itemFeatures.get(String(sw.restaurant_id)) : undefined;
+        const v = dim.get(sw, c, f);
+        if (v == null) continue;
+        const b = buckets.get(v) ?? { like: 0, n: 0 };
+        b.n++;
+        if (sw.action === "LIKE") b.like++;
+        buckets.set(v, b);
+      }
+      const arr = Array.from(buckets.entries())
+        .map(([value, b]) => ({ value, rate: b.n ? b.like / b.n : 0, n: b.n }))
+        .filter((x) => x.n >= MIN_BUCKET_N)
+        .sort((a, b) => b.rate - a.rate);
+      // 효과 = 수락률 변동폭(최고-최저 버킷). 버킷 1개뿐이면 측정 불가(표본 다양성 부족).
+      const effect = arr.length >= 2 ? arr[0].rate - arr[arr.length - 1].rate : null;
+      return { key: dim.key, group: dim.group, effect, buckets: arr };
+    })
+    .sort((a, b) => (b.effect ?? -1) - (a.effect ?? -1));
+
   const recent = ev.slice(-40).reverse().map((e) => ({
     ts: e.created_at instanceof Date ? (e.created_at as Date).toISOString() : String(e.created_at ?? ""),
     user_id: e.user_id ?? null,
@@ -395,6 +455,7 @@ export function getMetrics() {
     dataHealth,
     satisfaction, fatigue, quadrants,
     mechanism,
+    featureEffects,
     byType, bySlate, byAction, byVariant, byRound,
     swipes: { like, nope, acceptance: like + nope > 0 ? like / (like + nope) : null },
     duels: choose,

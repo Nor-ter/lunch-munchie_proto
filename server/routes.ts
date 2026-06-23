@@ -5,7 +5,7 @@ import { eq, and } from "drizzle-orm";
 import { nanoid } from "nanoid";
 import { MOCK_RESTAURANTS, MOCK_COURSES } from "./melbourneData.js";
 import { buildSlate } from "./engine/scorer.js";
-import { recordEvents, memEventCount, getMetrics, recordCatalogSize } from "./engine/events.js";
+import { recordEvents, memEventCount, getMetrics, recordCatalogSize, recordItemFeatures } from "./engine/events.js";
 import { enrichContext } from "./engine/context.js";
 import { ENGINE_MODEL_VERSION } from "../shared/engine.js";
 import type { Candidate, RecContext, RecEventInput } from "../shared/engine.js";
@@ -541,6 +541,7 @@ router.post("/recommend", async (req, res) => {
   const variant: string = body.variant ?? "control";
   const pool = await candidatePool();
   recordCatalogSize(pool.length); // 커버리지 분모(전체 카탈로그 크기) 추적
+  recordItemFeatures(pool.map((c) => ({ id: c.id, category: c.category, price_level: c.price_level, rating: c.rating }))); // feature 효과 분석용
   // 클라이언트가 사전 필터(카테고리 등)한 후보만 점수화하도록 범위 제한 (선택)
   const candidateIds: string[] | undefined = Array.isArray(body.candidate_ids) ? body.candidate_ids : undefined;
   const scoped = candidateIds && candidateIds.length
