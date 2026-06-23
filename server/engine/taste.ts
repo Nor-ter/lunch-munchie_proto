@@ -16,6 +16,7 @@ const PRIOR = 1.0; // 사전 정밀도 A0 = PRIOR*I → 콜드스타트 mu=0(중
 export interface Taste { A: number[][]; b: number[]; n: number }
 
 const store = new Map<string, Taste>();
+let explicitObs = 0; // 명시/강한 신호(저장·우승) 수 — 스와이프보다 가중
 
 const dot = (a: number[], x: number[]) => { let s = 0; for (let i = 0; i < D; i++) s += a[i] * x[i]; return s; };
 const sigmoid = (z: number) => 1 / (1 + Math.exp(-z));
@@ -74,8 +75,9 @@ export function sampleTheta(t: Taste): number[] {
 
 export const tasteFitFromTheta = (theta: number[], x: number[]) => sigmoid(dot(theta, x));
 
-// 베이지안 갱신: A += x x^T, b += y x.  y = LIKE?1:0
-export function updateTaste(userId: string, x: number[], y: number): void {
+// 베이지안 갱신: A += w·x x^T, b += w·y x.  y = LIKE?1:0.
+// weight: 신호 강도 (스와이프=1, 우승=2, 저장=3). 강한 라벨이 사후를 더 끌어당긴다.
+export function updateTaste(userId: string, x: number[], y: number, weight = 1): void {
   const uid = String(userId);
   let t = store.get(uid);
   if (!t) {
@@ -84,10 +86,11 @@ export function updateTaste(userId: string, x: number[], y: number): void {
     store.set(uid, t);
   }
   for (let i = 0; i < D; i++) {
-    t.b[i] += y * x[i];
-    for (let j = 0; j < D; j++) t.A[i][j] += x[i] * x[j];
+    t.b[i] += weight * y * x[i];
+    for (let j = 0; j < D; j++) t.A[i][j] += weight * x[i] * x[j];
   }
   t.n++;
+  if (weight > 1) explicitObs++;
 }
 
 export function tasteStats() {
@@ -105,5 +108,6 @@ export function tasteStats() {
     users: store.size,
     learnedUsers: learned,
     avgThetaNorm: learned ? Number((normSum / learned).toFixed(3)) : null,
+    explicitSignals: explicitObs,
   };
 }

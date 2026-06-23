@@ -538,13 +538,18 @@ router.post("/events", async (req, res) => {
     if (!e.user_id || !e.restaurant_id) continue;
     const feat = getItemFeatures(String(e.restaurant_id));
     if (!feat) continue;
+    const uid = String(e.user_id);
+    const vec = buildItemVector(feat);
     if (e.event_type === "SWIPE" && (e.action === "LIKE" || e.action === "NOPE")) {
-      updateTaste(String(e.user_id), buildItemVector(feat), e.action === "LIKE" ? 1 : 0);
+      updateTaste(uid, vec, e.action === "LIKE" ? 1 : 0); // 스와이프=약한 라벨
     } else if (e.event_type === "WINNER" && feat.category) {
+      updateTaste(uid, vec, 1, 2); // v4: 우승=강한 긍정(직접 선택)
       const ctx = e.context as { consumed_at?: number } | null | undefined;
       const ts = typeof ctx?.consumed_at === "number" ? ctx.consumed_at : Date.now();
-      recordConsumption(String(e.user_id), feat.category, ts); // v2 satiation
-      recordStop(String(e.user_id), feat.category, ts);        // v2 음식 연쇄
+      recordConsumption(uid, feat.category, ts); // v2 satiation
+      recordStop(uid, feat.category, ts);        // v2 음식 연쇄
+    } else if (e.event_type === "COURSE_SAVE") {
+      updateTaste(uid, vec, 1, 3); // v4: 저장=가장 강한 명시 신호
     }
   }
   const result = await recordEvents(events);
