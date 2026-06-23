@@ -176,11 +176,12 @@ export function getMetrics() {
   type SessAgg = {
     swipes: SwipeRec[]; winner: boolean; navigate: boolean; reroll: boolean;
     survey: string | null; winnerTs: number | null; firstTs: number | null; decisionMs: number | null; variant: string | null;
+    abandonedAt: number | null; // 명시 이탈 시 본 카드 수 (null=명시 이탈 없음)
   };
   const sessMap = new Map<string, SessAgg>();
   const getSess = (id: string) => {
     let o = sessMap.get(id);
-    if (!o) { o = { swipes: [], winner: false, navigate: false, reroll: false, survey: null, winnerTs: null, firstTs: null, decisionMs: null, variant: null }; sessMap.set(id, o); }
+    if (!o) { o = { swipes: [], winner: false, navigate: false, reroll: false, survey: null, winnerTs: null, firstTs: null, decisionMs: null, variant: null, abandonedAt: null }; sessMap.set(id, o); }
     return o;
   };
   for (const e of ev) {
@@ -205,14 +206,19 @@ export function getMetrics() {
       case "NAVIGATE": o.navigate = true; break;
       case "REROLL": o.reroll = true; break;
       case "SURVEY": o.survey = (e.action as string) ?? null; break; // POS|NEU|NEG
+      case "ABANDON": {
+        const c = e.context as Record<string, unknown> | null | undefined;
+        o.abandonedAt = c && typeof c.swipes_done === "number" ? (c.swipes_done as number) : 0;
+        break;
+      }
     }
   }
   // "시도된" 세션만 (스와이프가 있거나 우승에 도달) — 노출만 있고 안 한 건 제외
   const attempted = Array.from(sessMap.values()).filter((o) => o.swipes.length > 0 || o.winner);
 
   let satImplicit = 0, satConfirmed = 0, confirmable = 0;
-  let reachWinner = 0, noReroll = 0, navigated = 0, abandoned = 0, rerolledSess = 0;
-  const decisionTimes: number[] = [], swipeCounts: number[] = [];
+  let reachWinner = 0, noReroll = 0, navigated = 0, abandoned = 0, rerolledSess = 0, explicitAbandon = 0;
+  const decisionTimes: number[] = [], swipeCounts: number[] = [], abandonCards: number[] = [];
   let earlyNope = 0, earlyTot = 0, lateNope = 0, lateTot = 0;
   let earlyDwellSum = 0, earlyDwellN = 0, lateDwellSum = 0, lateDwellN = 0;
   const survey = { POS: 0, NEU: 0, NEG: 0 };
@@ -220,6 +226,7 @@ export function getMetrics() {
 
   for (const o of attempted) {
     if (o.winner) reachWinner++; else abandoned++;
+    if (o.abandonedAt != null) { explicitAbandon++; abandonCards.push(o.abandonedAt); } // 명시 이탈
     if (o.reroll) rerolledSess++; else noReroll++;
     if (o.navigate) navigated++;
     if (o.survey === "POS") survey.POS++; else if (o.survey === "NEU") survey.NEU++; else if (o.survey === "NEG") survey.NEG++;
@@ -272,7 +279,9 @@ export function getMetrics() {
     earlyDwellMs: earlyDwellN ? earlyDwellSum / earlyDwellN : null,
     lateDwellMs: lateDwellN ? lateDwellSum / lateDwellN : null,
     rerollRate: attempted.length ? rerolledSess / attempted.length : null,
-    abandonRate: attempted.length ? abandoned / attempted.length : null,
+    abandonRate: attempted.length ? abandoned / attempted.length : null, // 추론(우승 없음)
+    abandonExplicit: explicitAbandon, // 명시 이탈(ABANDON 이벤트) 건수
+    abandonAvgCards: abandonCards.length ? Number((abandonCards.reduce((a, b) => a + b, 0) / abandonCards.length).toFixed(1)) : null, // 평균 몇 장 보고 나갔나
   };
   const quadrants = Object.entries(quad).map(([quadrant, sessions]) => ({ quadrant, sessions }));
 

@@ -13,7 +13,7 @@ import { useApp, type Restaurant } from '@/contexts/AppContext';
 import { getFoodPhotos } from '@/lib/foodPhotos';
 import { useCourseShare } from '@/hooks/useCourseShare';
 import WinnerShareCard from '@/components/lunchie/WinnerShareCard';
-import { logSwipe, logWinner, logNavigate, logEvent } from '@/lib/eventLogger';
+import { logSwipe, logWinner, logNavigate, logEvent, flushEvents } from '@/lib/eventLogger';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -932,6 +932,28 @@ export default function QuickMatchPage() {
     }
   }, [currentIndex, targetRestaurants, addSwipe, total, currentSession]);
 
+  // ── 중도 이탈(ABANDON): 예선 중 나가면 "어디서 몇 장 봤는지" 명시 로깅 ──
+  const phaseRef = useRef(phase);
+  useEffect(() => { phaseRef.current = phase; }, [phase]);
+  const swipeCountRef = useRef(0);
+  useEffect(() => { swipeCountRef.current = swipeData.length; }, [swipeData]);
+  const abandonLoggedRef = useRef(false);
+  const logAbandon = useCallback((via: string) => {
+    if (abandonLoggedRef.current || phaseRef.current !== 'swipe') return; // 예선 중 이탈만 (결정 후엔 이탈 아님)
+    abandonLoggedRef.current = true;
+    logEvent({
+      event_type: 'ABANDON', user_id: profile.id,
+      session_id: currentSession?.id ?? null, slate_id: currentSession?.slateId ?? null, round: 1,
+      context: { phase: 'swipe', swipes_done: swipeCountRef.current, via },
+    });
+    flushEvents();
+  }, [profile.id, currentSession]);
+  useEffect(() => {
+    const onHide = () => logAbandon('pagehide'); // 탭 닫기/백그라운드
+    window.addEventListener('pagehide', onHide);
+    return () => { window.removeEventListener('pagehide', onHide); logAbandon('unmount'); }; // 라우트 이탈
+  }, [logAbandon]);
+
   const topPick = swipeData.find(s => s.action === 'like')?.restaurant || targetRestaurants[0];
 
   if (!currentSession) return null;
@@ -974,7 +996,7 @@ export default function QuickMatchPage() {
     <div className="min-h-dvh bg-[#FCF4EE] relative">
       {/* Header */}
       <div className="flex items-center justify-between px-5 pt-12 pb-3">
-        <button onClick={() => navigate('/session/lobby')}
+        <button onClick={() => { logAbandon('back'); navigate('/session/lobby'); }}
           className="w-10 h-10 rounded-full bg-white shadow-sm flex items-center justify-center active:scale-95 flex-shrink-0">
           <ArrowLeft size={18} color="#1A1A1A" />
         </button>

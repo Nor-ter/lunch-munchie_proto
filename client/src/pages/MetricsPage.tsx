@@ -32,6 +32,8 @@ interface Fatigue {
   lateDwellMs: number | null;
   rerollRate: number | null;
   abandonRate: number | null;
+  abandonExplicit: number;
+  abandonAvgCards: number | null;
 }
 interface Mechanism {
   exposureFatigue: { exposures: string; likeRate: number | null; n: number }[];
@@ -346,6 +348,10 @@ export default function MetricsPage() {
                     {m.fatigue.lateDwellMs < m.fatigue.earlyDwellMs ? '↓ 소진' : '↑ 유지'}
                   </span>
                 )}
+              </div>
+              <div>
+                중도이탈 — 추론 {pct(m.fatigue.abandonRate)} · <b>명시 {m.fatigue.abandonExplicit}건</b>
+                {m.fatigue.abandonAvgCards != null && <span> (예선 평균 {m.fatigue.abandonAvgCards}장 보고 나감)</span>}
               </div>
             </div>
           </div>

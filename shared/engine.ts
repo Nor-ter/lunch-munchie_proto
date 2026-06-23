@@ -12,6 +12,7 @@ export const EVENT_TYPES = [
   "COURSE_EDIT",// 추천 코스 수정 (연쇄 선호 신호)
   "REROLL",     // 다시하기 (불만족·피로 신호)
   "SURVEY",     // 회고 마이크로설문 (action: POS|NEU|NEG = 👍😐👎, 만족 정답)
+  "ABANDON",    // 중도 이탈 (결정 전 나감 · context: phase·swipes_done = 어디서 몇 장 보고)
 ] as const;
 export type EventType = (typeof EVENT_TYPES)[number];
 
@@ -65,7 +66,8 @@ export interface RecEventInput {
   model_version?: string | null;
   variant?: string | null;      // A/B 변형
   dwell_ms?: number | null;
-  context?: RecContext | null;
+  // 추천 맥락 또는 이벤트 메타(예: ABANDON의 phase·swipes_done, WINNER의 decision_time_ms)
+  context?: RecContext | Record<string, unknown> | null;
 }
 
 export const ENGINE_MODEL_VERSION = "v0-heuristic";
