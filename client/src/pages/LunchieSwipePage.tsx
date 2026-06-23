@@ -516,6 +516,14 @@ function FinalBattleResultScreen({
   onContinue: (winner?: any) => void;
 }) {
   const [selected, setSelected] = useState<1 | 2 | null>(null);
+  const { currentSession } = useApp();
+  const [finalSlateId] = useState(() => `final_${currentSession?.id ?? 'x'}_${Date.now()}`);
+  useEffect(() => {
+    // 결승 = 크기 2 슬레이트(듀얼). 두 후보를 노출로 기록 → CHOOSE 시 opponent 파생.
+    [finalist1, finalist2].forEach((f, i) => {
+      if (f) logEvent({ event_type: 'IMPRESSION', slate_id: finalSlateId, slate_type: 'FINAL', restaurant_id: f.id, position: i, round: 2, session_id: currentSession?.id ?? null });
+    });
+  }, [finalSlateId]);
 
   return (
     <motion.div
@@ -617,7 +625,11 @@ function FinalBattleResultScreen({
       {/* Continue */}
       <div className="px-5 py-5">
         <button
-          onClick={() => onContinue(selected === 1 ? finalist1 : selected === 2 ? finalist2 : undefined)}
+          onClick={() => {
+            const winner = selected === 1 ? finalist1 : selected === 2 ? finalist2 : undefined;
+            if (winner) logEvent({ event_type: 'SWIPE', action: 'CHOOSE', slate_id: finalSlateId, slate_type: 'FINAL', restaurant_id: winner.id, round: 2, session_id: currentSession?.id ?? null });
+            onContinue(winner);
+          }}
           disabled={selected === null}
           className="w-full py-4 rounded-2xl font-bold text-white text-[15px] active:scale-[0.98] shadow-xl transition-opacity disabled:opacity-40"
           style={{ background: '#F09D09' }}
