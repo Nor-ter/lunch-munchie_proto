@@ -18,9 +18,11 @@ export interface SlateOptions {
   seed?: number; // 재현용(테스트)
   userTaste?: Taste | null; // v1 취향 벡터 (있고 충분히 학습됐으면 점수에 반영)
   exposurePenalty?: (id: string) => number; // v1 단기 노출 피로 g(누적 노출) in [0,1)
+  satiation?: (category: string | undefined) => number; // v2 재소비 갈망 in [-0.5,+0.5)
 }
 
-const W_FATIGUE = 0.3; // -w6 노출 피로 가중
+const W_FATIGUE = 0.3; // -w6 단기 노출 피로 가중
+const W_SATIATION = 0.3; // ±w7 장기 재소비 갈망 가중
 
 function norm(x: number, lo: number, hi: number): number {
   if (hi <= lo) return 0;
@@ -40,7 +42,7 @@ function contextFit(c: Candidate, ctx: RecContext): number {
 }
 
 export function scoreCandidate(
-  c: Candidate, ctx: RecContext, pool: Candidate[], userTaste?: Taste | null, fatigue = 0,
+  c: Candidate, ctx: RecContext, pool: Candidate[], userTaste?: Taste | null, fatigue = 0, sat = 0,
 ): number {
   const ratings = pool.map((p) => p.rating ?? 0);
   const reviews = pool.map((p) => p.review_count ?? 0);
@@ -52,8 +54,8 @@ export function scoreCandidate(
   const base = userTaste && userTaste.n >= MIN_TASTE
     ? 0.4 * reputation + 0.3 * cf + 0.3 * tasteScore(userTaste, buildItemVector(c))
     : 0.6 * reputation + 0.4 * cf;
-  // v1: 단기 노출 피로 감점 (최근에 자주 본 카드일수록 ↓)
-  return base - W_FATIGUE * fatigue;
+  // v1 단기 노출 피로 감점(최근에 자주 본 카드 ↓) + v2 재소비 갈망(먹은 직후 ↓, 주기 부근 ↑)
+  return base - W_FATIGUE * fatigue + W_SATIATION * sat;
 }
 
 // 간단한 시드 RNG (테스트 재현용). seed 없으면 Math.random.
@@ -79,7 +81,8 @@ export function buildSlate(pool: Candidate[], ctx: RecContext, opts: SlateOption
   if (n === 0) return [];
 
   const pen = opts.exposurePenalty;
-  const scores = pool.map((c) => scoreCandidate(c, ctx, pool, opts.userTaste, pen ? pen(c.id) : 0));
+  const sat = opts.satiation;
+  const scores = pool.map((c) => scoreCandidate(c, ctx, pool, opts.userTaste, pen ? pen(c.id) : 0, sat ? sat(c.category) : 0));
   const maxS = Math.max(...scores);
   const exps = scores.map((s) => Math.exp((s - maxS) / tau));
   const sumExp = exps.reduce((a, b) => a + b, 0);

@@ -10,6 +10,7 @@ import { enrichContext } from "./engine/context.js";
 import { getTaste, updateTaste, MIN_TASTE } from "./engine/taste.js";
 import { buildItemVector } from "./engine/features.js";
 import { exposurePenalty, recordExposure } from "./engine/exposure.js";
+import { satiation as satiationScore, recordConsumption } from "./engine/satiation.js";
 import { ENGINE_MODEL_VERSION } from "../shared/engine.js";
 import type { Candidate, RecContext, RecEventInput } from "../shared/engine.js";
 import { normalizeDiet, isHardRestriction } from "../shared/const.js";
@@ -531,10 +532,17 @@ router.post("/events", async (req, res) => {
       : [];
   if (!events.length) return res.status(400).json({ error: "no events" });
   // v1 온라인 학습: 스와이프(암묵 라벨)마다 취향 벡터 theta_u를 즉시 SGD 갱신.
+  // v2 satiation: WINNER(=소비 프록시)로 (user,카테고리,시각) 소비 이력 누적.
   for (const e of events) {
-    if (e.event_type === "SWIPE" && (e.action === "LIKE" || e.action === "NOPE") && e.user_id && e.restaurant_id) {
-      const feat = getItemFeatures(String(e.restaurant_id));
-      if (feat) updateTaste(String(e.user_id), buildItemVector(feat), e.action === "LIKE" ? 1 : 0);
+    if (!e.user_id || !e.restaurant_id) continue;
+    const feat = getItemFeatures(String(e.restaurant_id));
+    if (!feat) continue;
+    if (e.event_type === "SWIPE" && (e.action === "LIKE" || e.action === "NOPE")) {
+      updateTaste(String(e.user_id), buildItemVector(feat), e.action === "LIKE" ? 1 : 0);
+    } else if (e.event_type === "WINNER" && feat.category) {
+      const ctx = e.context as { consumed_at?: number } | null | undefined;
+      const ts = typeof ctx?.consumed_at === "number" ? ctx.consumed_at : Date.now();
+      recordConsumption(String(e.user_id), feat.category, ts);
     }
   }
   const result = await recordEvents(events);
@@ -577,6 +585,7 @@ router.post("/recommend", async (req, res) => {
     : buildSlate(filtered, ctx, {
         k, eps: 0.15, userTaste: taste,
         exposurePenalty: (id) => exposurePenalty(body.user_id, id, now),
+        satiation: (cat) => satiationScore(body.user_id, cat, now),
       });
   // arm·학습 상태별 model_version (어떤 정책이 이 슬레이트를 만들었나)
   const mv = variant === "control"

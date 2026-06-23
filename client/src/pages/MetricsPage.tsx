@@ -38,6 +38,7 @@ interface Mechanism {
   discrimination: { n: number; buckets: { q: string; likeRate: number; n: number }[]; gap: number | null };
   exploration: { noveltyRate: number | null; distinctShown: number; catalogSize: number | null; coverage: number | null; propensityDist: { range: string; n: number }[] };
   groupFairness: { multiGroups: number; avgConsensus: number | null; unanimousRate: number | null; someoneUnhappyRate: number | null };
+  satiationCurve: { bucket: string; avg: number | null; n: number }[];
 }
 interface Metrics {
   total: number;
@@ -46,7 +47,7 @@ interface Metrics {
   fatigue: Fatigue;
   quadrants: { quadrant: string; sessions: number }[];
   mechanism: Mechanism;
-  engine: { modelVersion: string; dim: number; users: number; learnedUsers: number; avgThetaNorm: number | null; exposureTracked: number };
+  engine: { modelVersion: string; dim: number; users: number; learnedUsers: number; avgThetaNorm: number | null; exposureTracked: number; satiationUsers: number; satiationCats: number };
   featureEffects: { key: string; group: string; effect: number | null; buckets: { value: string; rate: number; n: number }[] }[];
   experiment: {
     arms: { arm: string; users: number; sessions: number; swipes: number; likeRate: number | null }[];
@@ -117,6 +118,24 @@ function RateBar({ label, value, n, color = '#3E719B' }: { label: string; value:
       </div>
       <div className="w-[70px] text-right text-[11px] tabular-nums shrink-0 text-[#1A1A1A]">
         {pct != null ? pct + '%' : '—'}{n != null && <span className="text-[#9A9A9A]"> n={n}</span>}
+      </div>
+    </div>
+  );
+}
+// satiation 중앙 기준 막대: 음(-)=포만(빨강, 왼쪽) / 양(+)=갈망(초록, 오른쪽). value in [-0.5,0.5]
+function SatBar({ label, value, n }: { label: string; value: number | null; n: number }) {
+  const v = value ?? 0;
+  const w = Math.min(50, Math.abs(v) * 100); // 0.5 -> 50% (반폭)
+  const pos = v >= 0;
+  return (
+    <div className="flex items-center gap-2 mb-1.5">
+      <div className="w-[52px] text-[11px] text-[#4A4A4A] shrink-0">{label}</div>
+      <div className="flex-1 h-[14px] bg-[#F1EFE8] rounded relative overflow-hidden">
+        <div className="absolute top-0 bottom-0 left-1/2 w-px bg-[#C9C2BA]" />
+        <div className="absolute top-0 bottom-0" style={{ background: pos ? '#3CBA44' : '#EB5053', left: pos ? '50%' : `${50 - w}%`, width: `${w}%` }} />
+      </div>
+      <div className="w-[78px] text-right text-[11px] tabular-nums shrink-0" style={{ color: value == null ? '#9A9A9A' : pos ? '#2E9E42' : '#D83A3D' }}>
+        {value != null ? (pos ? '+' : '') + value.toFixed(2) : '—'} <span className="text-[#9A9A9A]">n={n}</span>
       </div>
     </div>
   );
@@ -347,7 +366,7 @@ export default function MetricsPage() {
           <span className="text-[11px] text-[#6E6E6E]">엔진이 실제로 작동하나</span>
         </div>
         <div className="mb-3 p-2.5 rounded-lg bg-[#EAF7EC] text-[11px] text-[#2E6B36]">
-          <b>v1 가동</b> — 모델 <code>{m.engine.modelVersion}</code> · 취향 학습 유저 {m.engine.learnedUsers}/{m.engine.users}명 · θ {m.engine.dim}차원 · 평균 |θ| {m.engine.avgThetaNorm ?? '—'} · 노출피로 추적 {m.engine.exposureTracked}쌍 · 스와이프마다 온라인 SGD
+          <b>엔진 가동</b> — 취향 <code>{m.engine.modelVersion}</code>(학습 {m.engine.learnedUsers}/{m.engine.users}명·θ{m.engine.dim}d) · 노출피로 {m.engine.exposureTracked}쌍 · satiation {m.engine.satiationCats}개 (user,cat) · score = 평판+맥락+취향−노출피로±재소비
         </div>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           {/* A. 노출 피로 곡선 */}
@@ -355,6 +374,13 @@ export default function MetricsPage() {
             {m.mechanism.exposureFatigue.map((b) => (
               <RateBar key={b.exposures} label={b.exposures + '회 노출'} value={b.likeRate} n={b.n} color="#D85A30" />
             ))}
+          </MCard>
+          {/* A2. satiation 회복 곡선 (v2) */}
+          <MCard title="satiation 회복 곡선 (v2)" hint="먹은 직후 −(포만) → 시간 지나며 +(갈망). 재주문 주기 학습">
+            {m.mechanism.satiationCurve.map((b) => (
+              <SatBar key={b.bucket} label={b.bucket} value={b.avg} n={b.n} />
+            ))}
+            <div className="text-[10px] text-[#9A9A9A] mt-1">◀ 포만(억제) · 갈망(부스트) ▶ · 경과 = 마지막 소비 후</div>
           </MCard>
           {/* B. 분별력 (score → 선호 예측) */}
           <MCard title="분별력 — score 사분위 → LIKE율" hint={m.mechanism.discrimination.gap != null ? `gap ${Math.round(m.mechanism.discrimination.gap * 100)}%p (양수·클수록 score가 선호 예측)` : '표본 부족'}>
