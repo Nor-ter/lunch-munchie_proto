@@ -7,7 +7,7 @@ import { MOCK_RESTAURANTS, MOCK_COURSES } from "./melbourneData.js";
 import { buildSlate, buildControlSlate, assignVariant } from "./engine/scorer.js";
 import { recordEvents, memEventCount, getMetrics, recordCatalogSize, recordItemFeatures, getItemFeatures } from "./engine/events.js";
 import { enrichContext } from "./engine/context.js";
-import { getTaste, updateTaste, sampleTheta, MIN_TASTE } from "./engine/taste.js";
+import { getTaste, updateTaste, sampleTheta, tasteFitFromTheta, MIN_TASTE } from "./engine/taste.js";
 import { buildItemVector } from "./engine/features.js";
 import { exposurePenalty, recordExposure } from "./engine/exposure.js";
 import { satiation as satiationScore, recordConsumption } from "./engine/satiation.js";
@@ -581,21 +581,36 @@ router.post("/recommend", async (req, res) => {
   }
   // 처치가 실제로 다르다: control=랜덤 베이스라인, B=엔진(취향+노출피로+재소비+연쇄).
   const now = Date.now();
-  const taste = getTaste(body.user_id);
-  const tasteTheta = taste ? sampleTheta(taste) : null; // Thompson 샘플: 불확실하면 탐색
+  // 그룹 합의: member_ids 있으면 멤버 취향을 least-misery로 합성. 없으면 단일 유저.
+  const memberIds: string[] = Array.isArray(body.member_ids) && body.member_ids.length
+    ? body.member_ids.map(String)
+    : (body.user_id ? [String(body.user_id)] : []);
+  const memberThetas: number[][] = [];
+  for (const uid of memberIds) {
+    const t = getTaste(uid);
+    if (t && t.n >= MIN_TASTE) memberThetas.push(sampleTheta(t)); // 멤버별 Thompson 샘플
+  }
+  // least-misery: 후보별 멤버 tasteFit의 최소 (아무도 불행하지 않게). 학습된 멤버 없으면 콜드.
+  const tasteFit = (c: Candidate) => {
+    if (!memberThetas.length) return null;
+    const x = buildItemVector(c);
+    let m = Infinity;
+    for (const th of memberThetas) m = Math.min(m, tasteFitFromTheta(th, x));
+    return m;
+  };
   const prev = prevStop(body.user_id, now); // 같은 occasion 직전 스톱 (있으면 다음-스톱 가산)
   const slate = variant === "control"
     ? buildControlSlate(filtered, ctx, { k })
     : buildSlate(filtered, ctx, {
-        k, eps: 0.05, tasteTheta, tasteN: taste?.n ?? 0, // ε 축소: 탐색은 Thompson이 담당
+        k, eps: 0.05, tasteFit, // 탐색=Thompson, 그룹=least-misery
         exposurePenalty: (id) => exposurePenalty(body.user_id, id, now),
         satiation: (cat) => satiationScore(body.user_id, cat, now),
         chainFit: (cat) => chainFitFn(prev, cat),
       });
-  // arm·학습 상태별 model_version (어떤 정책이 이 슬레이트를 만들었나)
+  // arm·합성 방식별 model_version
   const mv = variant === "control"
     ? "control-random"
-    : taste && taste.n >= MIN_TASTE ? "v3-bandit" : ENGINE_MODEL_VERSION;
+    : memberThetas.length >= 2 ? "v3-group" : memberThetas.length === 1 ? "v3-bandit" : ENGINE_MODEL_VERSION;
   const slate_id = nanoid();
   const slate_type = (body.slate_type as "PRELIM" | "FINAL" | "NEXT_STOP" | "COURSE_FEED") ?? "PRELIM";
 

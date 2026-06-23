@@ -421,7 +421,7 @@ export default function MetricsPage() {
             })()}
           </MCard>
           {/* D. 그룹 공정성 (least-misery) */}
-          <MCard title="그룹 공정성 (least-misery)" hint={`멀티멤버 그룹 ${m.mechanism.groupFairness.multiGroups}개 — 우승을 모두가 좋아했나`}>
+          <MCard title="그룹 공정성 (least-misery)" hint={`v3b: 멤버 취향 min 합성으로 추천 · 멀티 그룹 ${m.mechanism.groupFairness.multiGroups}개 — 우승을 모두가 좋아했나`}>
             {m.mechanism.groupFairness.multiGroups > 0 ? (
               <div className="grid grid-cols-2 gap-2">
                 <MiniStat label="합의 평균" value={pct(m.mechanism.groupFairness.avgConsensus)} />
