@@ -10,6 +10,7 @@ import { assignVariant } from "./scorer.js";
 import { tasteStats } from "./taste.js";
 import { exposureStats } from "./exposure.js";
 import { satiationStats, satiationCurve } from "./satiation.js";
+import { chainStats, topTransitions } from "./chain.js";
 import { nanoid } from "nanoid";
 
 const MEM_CAP = 5000;
@@ -384,7 +385,7 @@ export function getMetrics() {
     someoneUnhappyRate: multiGroups ? someoneUnhappy / multiGroups : null,
   };
 
-  const mechanism = { exposureFatigue, discrimination, exploration, groupFairness, satiationCurve: satiationCurve() };
+  const mechanism = { exposureFatigue, discrimination, exploration, groupFairness, satiationCurve: satiationCurve(), chainTransitions: topTransitions() };
 
   // ── Tier 3: 맥락·아이템 feature 효과 (일반 분석) ──────────────────────
   // "어떤 feature가 수락률을 얼마나 움직이나" — 수집된 모든 차원을 일반적으로 분해.
@@ -543,7 +544,7 @@ export function getMetrics() {
     mechanism,
     featureEffects,
     experiment,
-    engine: { ...tasteStats(), ...exposureStats(), ...satiationStats() },
+    engine: { ...tasteStats(), ...exposureStats(), ...satiationStats(), ...chainStats() },
     byType, bySlate, byAction, byVariant, byRound,
     swipes: { like, nope, acceptance: like + nope > 0 ? like / (like + nope) : null },
     duels: choose,

@@ -39,6 +39,7 @@ interface Mechanism {
   exploration: { noveltyRate: number | null; distinctShown: number; catalogSize: number | null; coverage: number | null; propensityDist: { range: string; n: number }[] };
   groupFairness: { multiGroups: number; avgConsensus: number | null; unanimousRate: number | null; someoneUnhappyRate: number | null };
   satiationCurve: { bucket: string; avg: number | null; n: number }[];
+  chainTransitions: { from: string; to: string; count: number; p: number }[];
 }
 interface Metrics {
   total: number;
@@ -47,7 +48,7 @@ interface Metrics {
   fatigue: Fatigue;
   quadrants: { quadrant: string; sessions: number }[];
   mechanism: Mechanism;
-  engine: { modelVersion: string; dim: number; users: number; learnedUsers: number; avgThetaNorm: number | null; exposureTracked: number; satiationUsers: number; satiationCats: number };
+  engine: { modelVersion: string; dim: number; users: number; learnedUsers: number; avgThetaNorm: number | null; exposureTracked: number; satiationUsers: number; satiationCats: number; chainTransitions: number; chainObservations: number };
   featureEffects: { key: string; group: string; effect: number | null; buckets: { value: string; rate: number; n: number }[] }[];
   experiment: {
     arms: { arm: string; users: number; sessions: number; swipes: number; likeRate: number | null }[];
@@ -366,7 +367,7 @@ export default function MetricsPage() {
           <span className="text-[11px] text-[#6E6E6E]">엔진이 실제로 작동하나</span>
         </div>
         <div className="mb-3 p-2.5 rounded-lg bg-[#EAF7EC] text-[11px] text-[#2E6B36]">
-          <b>엔진 가동</b> — 취향 <code>{m.engine.modelVersion}</code>(학습 {m.engine.learnedUsers}/{m.engine.users}명·θ{m.engine.dim}d) · 노출피로 {m.engine.exposureTracked}쌍 · satiation {m.engine.satiationCats}개 (user,cat) · score = 평판+맥락+취향−노출피로±재소비
+          <b>엔진 가동</b> — 취향 <code>{m.engine.modelVersion}</code>(학습 {m.engine.learnedUsers}/{m.engine.users}명) · 노출피로 {m.engine.exposureTracked}쌍 · satiation {m.engine.satiationCats}쌍 · 연쇄 {m.engine.chainObservations}건 · score = 평판+맥락+취향−노출피로±재소비+연쇄
         </div>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           {/* A. 노출 피로 곡선 */}
@@ -381,6 +382,19 @@ export default function MetricsPage() {
               <SatBar key={b.bucket} label={b.bucket} value={b.avg} n={b.n} />
             ))}
             <div className="text-[10px] text-[#9A9A9A] mt-1">◀ 포만(억제) · 갈망(부스트) ▶ · 경과 = 마지막 소비 후</div>
+          </MCard>
+          {/* A3. 음식 연쇄 (Munchie 다음-스톱) */}
+          <MCard title="음식 연쇄 (Munchie) — 학습된 다음-스톱" hint="직전 스톱 다음에 뭐가 따라오나 P(next|prev). NEXT_STOP 추천 근거">
+            {m.mechanism.chainTransitions.length > 0 ? (
+              m.mechanism.chainTransitions.map((t) => (
+                <div key={t.from + '>' + t.to} className="flex items-center justify-between text-[11px] mb-1">
+                  <span className="text-[#1A1A1A]"><b>{t.from}</b> → {t.to}</span>
+                  <span className="tabular-nums text-[#6E6E6E]">{Math.round(t.p * 100)}% <span className="text-[#9A9A9A]">·{t.count}건</span></span>
+                </div>
+              ))
+            ) : (
+              <div className="text-[11px] text-[#9A9A9A]">아직 연쇄 데이터 없음 (occasion 시퀀스 필요)</div>
+            )}
           </MCard>
           {/* B. 분별력 (score → 선호 예측) */}
           <MCard title="분별력 — score 사분위 → LIKE율" hint={m.mechanism.discrimination.gap != null ? `gap ${Math.round(m.mechanism.discrimination.gap * 100)}%p (양수·클수록 score가 선호 예측)` : '표본 부족'}>

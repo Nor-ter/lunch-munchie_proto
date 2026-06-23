@@ -11,6 +11,7 @@ import { getTaste, updateTaste, MIN_TASTE } from "./engine/taste.js";
 import { buildItemVector } from "./engine/features.js";
 import { exposurePenalty, recordExposure } from "./engine/exposure.js";
 import { satiation as satiationScore, recordConsumption } from "./engine/satiation.js";
+import { recordStop, prevStop, chainFit as chainFitFn } from "./engine/chain.js";
 import { ENGINE_MODEL_VERSION } from "../shared/engine.js";
 import type { Candidate, RecContext, RecEventInput } from "../shared/engine.js";
 import { normalizeDiet, isHardRestriction } from "../shared/const.js";
@@ -542,7 +543,8 @@ router.post("/events", async (req, res) => {
     } else if (e.event_type === "WINNER" && feat.category) {
       const ctx = e.context as { consumed_at?: number } | null | undefined;
       const ts = typeof ctx?.consumed_at === "number" ? ctx.consumed_at : Date.now();
-      recordConsumption(String(e.user_id), feat.category, ts);
+      recordConsumption(String(e.user_id), feat.category, ts); // v2 satiation
+      recordStop(String(e.user_id), feat.category, ts);        // v2 음식 연쇄
     }
   }
   const result = await recordEvents(events);
@@ -577,15 +579,17 @@ router.post("/recommend", async (req, res) => {
       diet_relaxed = true;
     }
   }
-  // 처치가 실제로 다르다: control=랜덤 베이스라인, B=엔진 스코어러(v1 취향 + 노출 피로).
+  // 처치가 실제로 다르다: control=랜덤 베이스라인, B=엔진(취향+노출피로+재소비+연쇄).
   const now = Date.now();
   const taste = getTaste(body.user_id);
+  const prev = prevStop(body.user_id, now); // 같은 occasion 직전 스톱 (있으면 다음-스톱 가산)
   const slate = variant === "control"
     ? buildControlSlate(filtered, ctx, { k })
     : buildSlate(filtered, ctx, {
         k, eps: 0.15, userTaste: taste,
         exposurePenalty: (id) => exposurePenalty(body.user_id, id, now),
         satiation: (cat) => satiationScore(body.user_id, cat, now),
+        chainFit: (cat) => chainFitFn(prev, cat),
       });
   // arm·학습 상태별 model_version (어떤 정책이 이 슬레이트를 만들었나)
   const mv = variant === "control"
