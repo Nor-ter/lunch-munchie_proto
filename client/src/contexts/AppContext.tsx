@@ -458,7 +458,8 @@ async function buildDeck(
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         candidate_ids: base.map(r => r.id),
-        context: { diet: filters.dietary },
+        // 앱이 이미 아는 맥락은 클라가 실어 보낸다 (companions=인원수). 나머지는 서버가 보강.
+        context: { diet: filters.dietary, companions: filters.partySize },
         k: Math.min(base.length, 20),
         slate_type: 'PRELIM',
         user_id: userId,

@@ -6,6 +6,7 @@ import { nanoid } from "nanoid";
 import { MOCK_RESTAURANTS, MOCK_COURSES } from "./melbourneData.js";
 import { buildSlate } from "./engine/scorer.js";
 import { recordEvents, memEventCount, getMetrics } from "./engine/events.js";
+import { enrichContext } from "./engine/context.js";
 import { ENGINE_MODEL_VERSION } from "../shared/engine.js";
 import type { Candidate, RecContext, RecEventInput } from "../shared/engine.js";
 import { normalizeDiet, isHardRestriction } from "../shared/const.js";
@@ -533,7 +534,9 @@ router.post("/events", async (req, res) => {
 // 추천 슬레이트 + propensity 로깅. v0 휴리스틱 스코어러.
 router.post("/recommend", async (req, res) => {
   const body = req.body ?? {};
-  const ctx: RecContext = body.context ?? {};
+  // 맥락 보강(Phase 0b): 클라가 안 보낸 파생 가능 필드(시간대·요일·도시·날씨)를 서버에서 채움.
+  // 스코어링·IMPRESSION 로깅 모두 보강된 맥락을 쓴다.
+  const ctx: RecContext = await enrichContext(body.context ?? {});
   const k = typeof body.k === "number" ? body.k : 7;
   const variant: string = body.variant ?? "control";
   const pool = await candidatePool();

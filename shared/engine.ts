@@ -17,9 +17,11 @@ export type EventType = (typeof EVENT_TYPES)[number];
 // 추천 시점의 맥락 스냅샷 (스코어러 입력 + 이벤트 로그에 함께 저장)
 export interface RecContext {
   time_of_day?: "morning" | "lunch" | "afternoon" | "evening" | "late";
+  day_of_week?: string; // 요일 (서버 파생)
   weather?: "clear" | "rain" | "cold" | "hot";
   minutes_since_meal?: number;
   companions?: number; // 동행 인원 (1 = 혼자)
+  city?: string; // 도시 (lat/lng 또는 기본값에서 파생)
   lat?: number;
   lng?: number;
   diet?: string[];
