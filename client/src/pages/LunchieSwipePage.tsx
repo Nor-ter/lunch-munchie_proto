@@ -266,7 +266,7 @@ function formatRemainingTime(deadlineStr: string | null): string {
 
 function WinnerScreen({ selectedWinner, onReset }: { selectedWinner?: Restaurant | null; onReset: () => void }) {
   const [, navigate] = useLocation();
-  const { currentSession, restaurants } = useApp();
+  const { currentSession, restaurants, profile } = useApp();
   const { captureCard, downloadImage } = useCourseShare();
   const shareCardRef = useRef<HTMLDivElement>(null);
   const [showShare, setShowShare] = useState(false);
@@ -300,7 +300,7 @@ function WinnerScreen({ selectedWinner, onReset }: { selectedWinner?: Restaurant
   const winner = selectedWinner || restaurants.find(r => r.id === winnerId) || currentSession?.restaurants[0];
 
   useEffect(() => {
-    if (winner) logWinner(winner.id, { session_id: currentSession?.id ?? null, slate_id: currentSession?.slateId ?? null });
+    if (winner) logWinner(winner.id, { user_id: profile.id, session_id: currentSession?.id ?? null, slate_id: currentSession?.slateId ?? null });
   }, [winner?.id]);
 
   if (!winner) return null;
@@ -427,7 +427,7 @@ function WinnerScreen({ selectedWinner, onReset }: { selectedWinner?: Restaurant
               <Phone size={15} /> 예약하기
             </button>
             <button
-              onClick={() => { logNavigate(winner.id, { session_id: currentSession?.id ?? null }); navigate(`/lunchie/map?id=${winner.id}`); }}
+              onClick={() => { logNavigate(winner.id, { user_id: profile.id, session_id: currentSession?.id ?? null }); navigate(`/lunchie/map?id=${winner.id}`); }}
               className="flex-1 py-3 rounded-2xl font-bold text-white text-[14px] flex items-center justify-center gap-1.5 active:scale-[0.98] transition-all"
               style={{ background: '#EB5053' }}
             >
@@ -516,12 +516,12 @@ function FinalBattleResultScreen({
   onContinue: (winner?: any) => void;
 }) {
   const [selected, setSelected] = useState<1 | 2 | null>(null);
-  const { currentSession } = useApp();
+  const { currentSession, profile } = useApp();
   const [finalSlateId] = useState(() => `final_${currentSession?.id ?? 'x'}_${Date.now()}`);
   useEffect(() => {
     // 결승 = 크기 2 슬레이트(듀얼). 두 후보를 노출로 기록 → CHOOSE 시 opponent 파생.
     [finalist1, finalist2].forEach((f, i) => {
-      if (f) logEvent({ event_type: 'IMPRESSION', slate_id: finalSlateId, slate_type: 'FINAL', restaurant_id: f.id, position: i, round: 2, session_id: currentSession?.id ?? null });
+      if (f) logEvent({ event_type: 'IMPRESSION', user_id: profile.id, slate_id: finalSlateId, slate_type: 'FINAL', restaurant_id: f.id, position: i, round: 2, session_id: currentSession?.id ?? null });
     });
   }, [finalSlateId]);
 
@@ -838,7 +838,7 @@ type Phase = 'swipe' | 'decided' | 'results';
 
 export default function QuickMatchPage() {
   const [, navigate] = useLocation();
-  const { currentSession, addSwipe, swipeRecords } = useApp();
+  const { currentSession, addSwipe, swipeRecords, profile } = useApp();
   const [phase, setPhase] = useState<Phase>('swipe');
   const targetRestaurants = currentSession?.restaurants || [];
   const currentSessionSwipes = swipeRecords.filter(s => s.sessionId === currentSession?.id);
@@ -914,6 +914,7 @@ export default function QuickMatchPage() {
     addSwipe(restaurant.id, action === 'like' ? 'like' : 'skip');
     const meta = currentSession?.recMeta?.[restaurant.id];
     logSwipe(restaurant.id, action === 'like' ? 'LIKE' : 'NOPE', {
+      user_id: profile.id,
       session_id: currentSession?.id ?? null,
       slate_id: currentSession?.slateId ?? null,
       slate_type: 'PRELIM',
@@ -939,7 +940,7 @@ export default function QuickMatchPage() {
     return <WaitingOrDecidedScreen onContinue={(winner) => { if (winner) setSelectedWinner(winner); setPhase('results'); }} />;
   }
   if (phase === 'results') {
-    return <WinnerScreen selectedWinner={selectedWinner} onReset={() => { logEvent({ event_type: 'REROLL', session_id: currentSession?.id ?? null, slate_id: currentSession?.slateId ?? null }); setCurrentIndex(0); setSwipeData([]); setSelectedWinner(null); }} />;
+    return <WinnerScreen selectedWinner={selectedWinner} onReset={() => { logEvent({ event_type: 'REROLL', user_id: profile.id, session_id: currentSession?.id ?? null, slate_id: currentSession?.slateId ?? null }); setCurrentIndex(0); setSwipeData([]); setSelectedWinner(null); }} />;
   }
 
   // Countdown formatting for header badge

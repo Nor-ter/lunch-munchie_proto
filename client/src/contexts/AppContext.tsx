@@ -445,6 +445,7 @@ const AppContext = createContext<AppContextValue | null>(null);
 async function buildDeck(
   filters: GroupSession['filters'],
   allRestaurants: Restaurant[],
+  userId?: string,
 ): Promise<{ restaurants: Restaurant[]; slateId?: string; recMeta?: GroupSession['recMeta'] }> {
   const base = allRestaurants.filter(r =>
     (filters.categories.length === 0 || filters.categories.includes(r.category)) &&
@@ -460,6 +461,7 @@ async function buildDeck(
         context: { diet: filters.dietary },
         k: Math.min(base.length, 20),
         slate_type: 'PRELIM',
+        user_id: userId,
       }),
     });
     if (!res.ok) return { restaurants: base };
@@ -618,7 +620,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         });
         if (res.ok) {
           const data = await res.json();
-          const deck = await buildDeck(filters, restaurants);
+          const deck = await buildDeck(filters, restaurants, profile.id);
           const session: GroupSession = {
             id: data.session.id,
             name,
@@ -650,7 +652,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     }
 
     const session = buildLocalSession(name, filters, { ...profile, name: actualHostName, emoji: actualEmoji }, restaurants);
-    const deck = await buildDeck(filters, restaurants);
+    const deck = await buildDeck(filters, restaurants, profile.id);
     session.restaurants = deck.restaurants;
     session.slateId = deck.slateId;
     session.recMeta = deck.recMeta;
@@ -671,7 +673,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       radius: data.session.filter_distance,
       categories: data.session.filter_vibe || [],
     };
-    const deck = await buildDeck(sessFilters, restaurants);
+    const deck = await buildDeck(sessFilters, restaurants, profile.id);
     const session: GroupSession = {
       id: data.session.id,
       name: '점심 세션',
