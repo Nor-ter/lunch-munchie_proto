@@ -4,7 +4,7 @@ import { users, sessions, restaurants, swipes, courses, courseItems, sessionMemb
 import { eq, and } from "drizzle-orm";
 import { nanoid } from "nanoid";
 import { MOCK_RESTAURANTS, MOCK_COURSES } from "./melbourneData.js";
-import { buildSlate } from "./engine/scorer.js";
+import { buildSlate, buildControlSlate, assignVariant } from "./engine/scorer.js";
 import { recordEvents, memEventCount, getMetrics, recordCatalogSize, recordItemFeatures } from "./engine/events.js";
 import { enrichContext } from "./engine/context.js";
 import { ENGINE_MODEL_VERSION } from "../shared/engine.js";
@@ -538,7 +538,8 @@ router.post("/recommend", async (req, res) => {
   // 스코어링·IMPRESSION 로깅 모두 보강된 맥락을 쓴다.
   const ctx: RecContext = await enrichContext(body.context ?? {});
   const k = typeof body.k === "number" ? body.k : 7;
-  const variant: string = body.variant ?? "control";
+  // 진짜 A/B: 서버가 user_id로 결정적 배정 (body.variant는 테스트 오버라이드용).
+  const variant: string = body.variant ?? assignVariant(body.user_id);
   const pool = await candidatePool();
   recordCatalogSize(pool.length); // 커버리지 분모(전체 카탈로그 크기) 추적
   recordItemFeatures(pool.map((c) => ({ id: c.id, category: c.category, price_level: c.price_level, rating: c.rating }))); // feature 효과 분석용
@@ -558,7 +559,8 @@ router.post("/recommend", async (req, res) => {
       diet_relaxed = true;
     }
   }
-  const slate = buildSlate(filtered, ctx, { k, eps: 0.15 });
+  // 처치가 실제로 다르다: control=랜덤 베이스라인, B=엔진 스코어러.
+  const slate = variant === "control" ? buildControlSlate(filtered, ctx, { k }) : buildSlate(filtered, ctx, { k, eps: 0.15 });
   const slate_id = nanoid();
   const slate_type = (body.slate_type as "PRELIM" | "FINAL" | "NEXT_STOP" | "COURSE_FEED") ?? "PRELIM";
 

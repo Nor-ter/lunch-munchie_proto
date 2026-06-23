@@ -47,6 +47,14 @@ interface Metrics {
   quadrants: { quadrant: string; sessions: number }[];
   mechanism: Mechanism;
   featureEffects: { key: string; group: string; effect: number | null; buckets: { value: string; rate: number; n: number }[] }[];
+  experiment: {
+    arms: { arm: string; users: number; sessions: number; swipes: number; likeRate: number | null }[];
+    srm: { ok: boolean; p: number | null; control: number; B: number };
+    primary: { metric: string; delta: number | null; ciLo: number | null; ciHi: number | null; pValue: number | null; n1: number; n2: number };
+    guardrails: { decisionTimeControlMs: number | null; decisionTimeBMs: number | null; abandonControl: number | null; abandonB: number | null };
+    verdict: string;
+    verdictReason: string;
+  };
   byType: Record<string, number>;
   bySlate: Record<string, number>;
   byAction: Record<string, number>;
@@ -425,6 +433,71 @@ export default function MetricsPage() {
           ))}
         </div>
       </section>
+
+      {/* ── Tier 4: 진짜 A/B 실험 readout ── */}
+      {(() => {
+        const x = m.experiment;
+        const vColor = x.verdict === 'ship' ? { bg: '#EAF7EC', fg: '#2E9E42' } : x.verdict === '보류' ? { bg: '#FDF4E3', fg: '#C98A12' } : { bg: '#FBECEC', fg: '#D83A3D' };
+        const pp = (v: number | null) => (v != null ? (v > 0 ? '+' : '') + (Math.round(v * 1000) / 10) + '%p' : '—');
+        const sec2 = (ms: number | null) => (ms != null ? Math.round(ms / 1000) + 's' : '—');
+        const dtWorse = x.guardrails.decisionTimeControlMs != null && x.guardrails.decisionTimeBMs != null && x.guardrails.decisionTimeBMs > x.guardrails.decisionTimeControlMs * 1.2;
+        return (
+          <section className="mb-6">
+            <div className="flex items-baseline justify-between mb-2">
+              <h2 className="text-[14px] font-bold text-[#1A1A1A]">진짜 A/B — control(랜덤) vs B(엔진) (Tier 4)</h2>
+              <span className="text-[11px] text-[#6E6E6E]">우리가 더 나은가 (노이즈와 구분)</span>
+            </div>
+
+            <div className="rounded-xl p-4 mb-3" style={{ background: vColor.bg }}>
+              <span className="text-[18px] font-black" style={{ color: vColor.fg }}>판정: {x.verdict}</span>
+              <div className="text-[12px] mt-0.5" style={{ color: vColor.fg }}>{x.verdictReason}</div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-3 mb-3">
+              {x.arms.map((a) => (
+                <div key={a.arm} className="rounded-xl border border-[#E7E1DA] p-4">
+                  <div className="text-[12px] font-bold text-[#1A1A1A]">{a.arm}</div>
+                  <div className="text-[26px] font-black text-[#1A1A1A] leading-tight">{pct(a.likeRate)}</div>
+                  <div className="text-[10px] text-[#9A9A9A]">수락률 · 스와이프 {a.swipes}</div>
+                  <div className="text-[10px] text-[#9A9A9A]">배정 user {a.users} · 세션 {a.sessions}</div>
+                </div>
+              ))}
+            </div>
+
+            <MCard title="통계 판정 — 차이가 진짜인가">
+              <div className="space-y-1.5 text-[11px] text-[#1A1A1A]">
+                <div className="flex justify-between">
+                  <span className="text-[#6E6E6E]">SRM (배정 균형)</span>
+                  <span className="tabular-nums" style={{ color: x.srm.ok ? '#2E9E42' : '#D83A3D', fontWeight: 600 }}>
+                    {x.srm.ok ? '✓ 정상' : '⚠ 불균형'} · p={x.srm.p != null ? x.srm.p.toFixed(3) : '—'} · {x.srm.control}/{x.srm.B}
+                  </span>
+                </div>
+                <div className="flex justify-between border-t border-[#F1EFE8] pt-1.5">
+                  <span className="text-[#6E6E6E]">1차 {x.primary.metric}</span>
+                  <span className="tabular-nums font-semibold">
+                    Δ {pp(x.primary.delta)} · 95% CI [{pp(x.primary.ciLo)}, {pp(x.primary.ciHi)}] · p={x.primary.pValue != null ? x.primary.pValue.toFixed(3) : '—'}
+                  </span>
+                </div>
+                <div className="text-[10px] text-[#9A9A9A] pl-1">
+                  {x.primary.ciLo != null && x.primary.ciHi != null && x.primary.ciLo <= 0 && x.primary.ciHi >= 0
+                    ? '→ CI가 0을 포함 → 차이를 단정할 수 없음 (점추정만 보면 속는다)'
+                    : '→ CI가 0을 넘지 않음 → 방향이 유의함'}
+                </div>
+                <div className="flex justify-between border-t border-[#F1EFE8] pt-1.5">
+                  <span className="text-[#6E6E6E]">가드레일 · 결정시간</span>
+                  <span className="tabular-nums" style={{ color: dtWorse ? '#D83A3D' : '#2E9E42', fontWeight: 600 }}>
+                    control {sec2(x.guardrails.decisionTimeControlMs)} vs B {sec2(x.guardrails.decisionTimeBMs)} {dtWorse ? '⚠ 악화' : 'OK'}
+                  </span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-[#6E6E6E]">가드레일 · 이탈율</span>
+                  <span className="tabular-nums">control {pct(x.guardrails.abandonControl)} vs B {pct(x.guardrails.abandonB)}</span>
+                </div>
+              </div>
+            </MCard>
+          </section>
+        );
+      })()}
 
       <div className="grid grid-cols-3 sm:grid-cols-4 gap-2.5 mb-3">
         <Stat label="총 이벤트" value={String(m.total)} />

@@ -98,3 +98,40 @@ export function buildSlate(pool: Candidate[], ctx: RecContext, opts: SlateOption
     rank,
   }));
 }
+
+export type Variant = "control" | "B";
+
+// 진짜 A/B 결정적 배정: user_id 해시(FNV-1a) → 안정적 arm. 같은 유저는 항상 같은 arm.
+// (세션 단위로 흔들면 오염되므로 user 단위.) user_id 없으면 control.
+export function assignVariant(userId: string | null | undefined, treatmentShare = 0.5): Variant {
+  if (!userId) return "control";
+  let h = 2166136261 >>> 0;
+  for (let i = 0; i < userId.length; i++) { h ^= userId.charCodeAt(i); h = Math.imul(h, 16777619) >>> 0; }
+  return (h % 1000) / 1000 < treatmentShare ? "B" : "control";
+}
+
+/**
+ * control arm = 랜덤 베이스라인 ("엔진이 무작위보다 나은가").
+ * 점수는 로깅·분석용으로 계산하되, 선택은 균등 무작위 → 처치가 엔진과 실제로 다르다.
+ */
+export function buildControlSlate(pool: Candidate[], ctx: RecContext, opts: SlateOptions = {}): ScoredItem[] {
+  const k = Math.max(1, opts.k ?? 7);
+  const rand = rng(opts.seed);
+  const n = pool.length;
+  if (n === 0) return [];
+  const scores = pool.map((c) => scoreCandidate(c, ctx, pool));
+  const rem = pool.map((_, i) => i);
+  const chosen: number[] = [];
+  const take = Math.min(k, n);
+  for (let t = 0; t < take; t++) {
+    const pick = Math.floor(rand() * rem.length);
+    chosen.push(rem[pick]);
+    rem.splice(pick, 1);
+  }
+  return chosen.map((i, rank) => ({
+    id: pool[i].id,
+    score: Number(scores[i].toFixed(4)),       // 로깅용 (선택엔 미반영)
+    propensity: Number((take / n).toFixed(6)), // 균등 = k/n
+    rank,
+  }));
+}

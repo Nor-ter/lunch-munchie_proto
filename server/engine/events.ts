@@ -6,6 +6,7 @@
 import { db } from "../db.js";
 import { recEvents } from "../../shared/schema.js";
 import type { RecEventInput } from "../../shared/engine.js";
+import { assignVariant } from "./scorer.js";
 import { nanoid } from "nanoid";
 
 const MEM_CAP = 5000;
@@ -176,18 +177,19 @@ export function getMetrics() {
   type SwipeRec = { pos: number | null; like: boolean; dwell: number | null };
   type SessAgg = {
     swipes: SwipeRec[]; winner: boolean; navigate: boolean; reroll: boolean;
-    survey: string | null; winnerTs: number | null; firstTs: number | null; decisionMs: number | null;
+    survey: string | null; winnerTs: number | null; firstTs: number | null; decisionMs: number | null; variant: string | null;
   };
   const sessMap = new Map<string, SessAgg>();
   const getSess = (id: string) => {
     let o = sessMap.get(id);
-    if (!o) { o = { swipes: [], winner: false, navigate: false, reroll: false, survey: null, winnerTs: null, firstTs: null, decisionMs: null }; sessMap.set(id, o); }
+    if (!o) { o = { swipes: [], winner: false, navigate: false, reroll: false, survey: null, winnerTs: null, firstTs: null, decisionMs: null, variant: null }; sessMap.set(id, o); }
     return o;
   };
   for (const e of ev) {
     const sid = nonNull(e.session_id) ? String(e.session_id) : null;
     if (!sid) continue;
     const o = getSess(sid);
+    if (o.variant == null && nonNull(e.variant)) o.variant = String(e.variant);
     const t = e.created_at instanceof Date ? (e.created_at as Date).getTime() : new Date(String(e.created_at)).getTime();
     if (!isNaN(t) && (o.firstTs == null || t < o.firstTs)) o.firstTs = t;
     switch (e.event_type) {
@@ -437,6 +439,93 @@ export function getMetrics() {
     })
     .sort((a, b) => (b.effect ?? -1) - (a.effect ?? -1));
 
+  // ── Tier 4: 진짜 A/B 실험 readout ──────────────────────────────────
+  // 점추정 막대가 아니라 "판정" — 차이가 노이즈인지 구분(CI·유의성·가드레일·SRM).
+  const normalCdf = (z: number) => {
+    const t = 1 / (1 + 0.2316419 * Math.abs(z));
+    const d = 0.3989423 * Math.exp((-z * z) / 2);
+    const p = d * t * (0.3193815 + t * (-0.3565638 + t * (1.781478 + t * (-1.821256 + t * 1.330274))));
+    return z > 0 ? 1 - p : p;
+  };
+  // 배정(랜덤 단위=user, 결정적) — SRM·표본은 배정 기준. 그룹 오염과 무관하게 disjoint.
+  const userArm = new Map<string, string>();
+  for (const e of ev) if (nonNull(e.user_id)) { const u = String(e.user_id); if (!userArm.has(u)) userArm.set(u, assignVariant(u)); }
+  let u1 = 0, u2 = 0;
+  for (const a of Array.from(userArm.values())) { if (a === "control") u1++; else u2++; }
+  // 노출·결과는 served policy(e.variant) 기준 (슬레이트를 생성한 정책에 귀속)
+  const arm: Record<string, { sessions: Set<string>; like: number; nope: number }> = {
+    control: { sessions: new Set(), like: 0, nope: 0 },
+    B: { sessions: new Set(), like: 0, nope: 0 },
+  };
+  for (const e of ev) {
+    const v = e.variant === "B" ? "B" : e.variant === "control" ? "control" : null;
+    if (!v) continue;
+    const a = arm[v];
+    if (nonNull(e.session_id)) a.sessions.add(String(e.session_id));
+    if (e.event_type === "SWIPE" && e.action === "LIKE") a.like++;
+    else if (e.event_type === "SWIPE" && e.action === "NOPE") a.nope++;
+  }
+  const cA = arm.control, bA = arm.B;
+  const n1 = cA.like + cA.nope, n2 = bA.like + bA.nope;
+  const p1 = n1 ? cA.like / n1 : null, p2 = n2 ? bA.like / n2 : null;
+  let delta: number | null = null, ciLo: number | null = null, ciHi: number | null = null, pValue: number | null = null;
+  if (p1 != null && p2 != null && n1 > 0 && n2 > 0) {
+    delta = p2 - p1;
+    const se = Math.sqrt((p1 * (1 - p1)) / n1 + (p2 * (1 - p2)) / n2);
+    ciLo = delta - 1.96 * se; ciHi = delta + 1.96 * se;
+    const pPool = (cA.like + bA.like) / (n1 + n2);
+    const sePool = Math.sqrt(pPool * (1 - pPool) * (1 / n1 + 1 / n2));
+    const z = sePool > 0 ? delta / sePool : 0;
+    pValue = 2 * (1 - normalCdf(Math.abs(z)));
+  }
+  // SRM: 배정 단위(user) 50/50 기대 대비 카이제곱(df=1)
+  const uT = u1 + u2;
+  let srmP: number | null = null;
+  if (uT > 0) {
+    const exp = uT / 2;
+    const chi = (Math.pow(u1 - exp, 2) + Math.pow(u2 - exp, 2)) / exp;
+    srmP = 2 * (1 - normalCdf(Math.sqrt(chi)));
+  }
+  const srmOk = srmP == null || srmP > 0.01;
+  // 가드레일: 결정시간 중앙값 · 이탈율 (arm별, 세션 단위)
+  const armSess: Record<string, { dts: number[]; abandon: number; total: number }> = {
+    control: { dts: [], abandon: 0, total: 0 }, B: { dts: [], abandon: 0, total: 0 },
+  };
+  for (const o of attempted) {
+    const v = o.variant === "B" ? "B" : o.variant === "control" ? "control" : null;
+    if (!v) continue;
+    const a = armSess[v];
+    a.total++;
+    if (!o.winner) a.abandon++;
+    const dt = o.decisionMs ?? (o.winnerTs != null && o.firstTs != null ? o.winnerTs - o.firstTs : null);
+    if (dt != null) a.dts.push(dt);
+  }
+  const dtC = median(armSess.control.dts), dtB = median(armSess.B.dts);
+  // 판정: 무효(SRM) → 보류(표본부족·무의미) → ship/롤백
+  let verdict = "보류", verdictReason = "";
+  if (!srmOk) { verdict = "무효"; verdictReason = "SRM — 배정 불균형(실험 신뢰 불가)"; }
+  else if (pValue == null || n1 < 30 || n2 < 30) { verdict = "보류"; verdictReason = "표본 부족 (각 arm ≥30 스와이프 필요)"; }
+  else if (pValue < 0.05 && delta != null && delta > 0) {
+    const guardBreach = dtC != null && dtB != null && dtB > dtC * 1.2;
+    if (guardBreach) { verdict = "롤백"; verdictReason = "1차 개선이지만 가드레일(결정시간) 악화"; }
+    else { verdict = "ship"; verdictReason = "유의한 개선, 가드레일 통과"; }
+  } else if (pValue < 0.05 && delta != null && delta < 0) { verdict = "롤백"; verdictReason = "유의하게 악화"; }
+  else { verdict = "보류"; verdictReason = "유의하지 않음 (CI가 0 포함)"; }
+  const experiment = {
+    arms: [
+      { arm: "control(랜덤)", users: u1, sessions: cA.sessions.size, swipes: n1, likeRate: p1 },
+      { arm: "B(엔진)", users: u2, sessions: bA.sessions.size, swipes: n2, likeRate: p2 },
+    ],
+    srm: { ok: srmOk, p: srmP, control: u1, B: u2 },
+    primary: { metric: "수락률 (스와이프 단위)", delta, ciLo, ciHi, pValue, n1, n2 },
+    guardrails: {
+      decisionTimeControlMs: dtC, decisionTimeBMs: dtB,
+      abandonControl: armSess.control.total ? armSess.control.abandon / armSess.control.total : null,
+      abandonB: armSess.B.total ? armSess.B.abandon / armSess.B.total : null,
+    },
+    verdict, verdictReason,
+  };
+
   const recent = ev.slice(-40).reverse().map((e) => ({
     ts: e.created_at instanceof Date ? (e.created_at as Date).toISOString() : String(e.created_at ?? ""),
     user_id: e.user_id ?? null,
@@ -456,6 +545,7 @@ export function getMetrics() {
     satisfaction, fatigue, quadrants,
     mechanism,
     featureEffects,
+    experiment,
     byType, bySlate, byAction, byVariant, byRound,
     swipes: { like, nope, acceptance: like + nope > 0 ? like / (like + nope) : null },
     duels: choose,
