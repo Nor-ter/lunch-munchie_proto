@@ -887,34 +887,36 @@ export default function QuickMatchPage() {
     }
   }, [currentSession, navigate]);
 
-  // Expiry check
+  // Expiry check — 예선(swipe) 중에만 만료로 강제 전환. 결정/결과 단계에선 되돌리지 않음.
   useEffect(() => {
-    if (!currentSession?.deadline) return;
+    if (!currentSession?.deadline || phase !== 'swipe') return;
     const deadlineTime = new Date(currentSession.deadline).getTime();
-    
+
     const checkExpiry = () => {
       if (Date.now() > deadlineTime) {
         setPhase('decided');
       }
     };
-    
+
     checkExpiry();
     const timer = setInterval(checkExpiry, 1000);
     return () => clearInterval(timer);
-  }, [currentSession?.deadline]);
+  }, [currentSession?.deadline, phase]);
 
   const total = Math.min(targetRestaurants.length, 7); // 예선 = 엔진 top-7 (결정 플로우 ①)
   const visibleCards = targetRestaurants.slice(currentIndex, currentIndex + 3);
   const progress = Math.min(currentIndex + 1, total);
 
-  // Auto-transition to decided phase if all cards have been swiped
+  // Auto-transition to decided phase if all cards have been swiped — 예선(swipe) 중에만.
+  // 결정/결과 단계에선 절대 되돌리지 않는다 (안 그러면 듀얼→결과가 'decided'로 튕겨 무한루프).
   useEffect(() => {
+    if (phase !== 'swipe') return;
     const currentSessionSwipes = swipeRecords.filter(s => s.sessionId === currentSession?.id);
     const unswipedCount = targetRestaurants.filter(r => !currentSessionSwipes.some(s => s.restaurantId === r.id)).length;
     if (unswipedCount === 0 || currentIndex >= total) {
       setPhase('decided');
     }
-  }, [currentIndex, targetRestaurants, swipeRecords, total, currentSession?.id]);
+  }, [phase, currentIndex, targetRestaurants, swipeRecords, total, currentSession?.id]);
 
   useEffect(() => {
     if (showIntro) {
