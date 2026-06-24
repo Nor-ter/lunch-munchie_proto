@@ -853,6 +853,7 @@ export default function QuickMatchPage() {
   const [selectedWinner, setSelectedWinner] = useState<Restaurant | null>(null);
   // 미니 토너먼트 듀얼 상태 (3~4 좋아요: 준결승 → 결승). null=아직 미구성
   const [duel, setDuel] = useState<{ a: any; b: any; stage: 'mini' | 'final'; champion?: any } | null>(null);
+  const cardShownAtRef = useRef(Date.now()); // 현재 카드 노출 시각 → dwell 측정
   const [showIntro, setShowIntro] = useState(true);
   const [remainingMs, setRemainingMs] = useState(() => {
     if (!currentSession?.deadline) return 0;
@@ -911,6 +912,7 @@ export default function QuickMatchPage() {
       return () => clearTimeout(t);
     }
   }, [showIntro]);
+  useEffect(() => { if (!showIntro) cardShownAtRef.current = Date.now(); }, [showIntro]); // 인트로 끝 → 첫 카드 dwell 시작
 
   const handleAction = useCallback((action: SwipeAction) => {
     const restaurant = targetRestaurants[currentIndex];
@@ -918,6 +920,8 @@ export default function QuickMatchPage() {
 
     addSwipe(restaurant.id, action === 'like' ? 'like' : 'skip');
     const meta = currentSession?.recMeta?.[restaurant.id];
+    const dwell = Date.now() - cardShownAtRef.current; // 이 카드를 본 시간
+    cardShownAtRef.current = Date.now(); // 다음 카드 노출 시점 리셋
     logSwipe(restaurant.id, action === 'like' ? 'LIKE' : 'NOPE', {
       user_id: profile.id,
       session_id: currentSession?.id ?? null,
@@ -926,6 +930,7 @@ export default function QuickMatchPage() {
       round: 1,
       position: meta?.position ?? currentIndex,
       propensity: meta?.propensity ?? null,
+      dwell_ms: dwell,
       model_version: currentSession?.modelVersion ?? 'v0-heuristic',
     });
     setSwipeData(prev => [...prev, { restaurant, action }]);
