@@ -510,18 +510,21 @@ function FinalBattleResultScreen({
   finalist1,
   finalist2,
   onContinue,
+  stage = 'final',
 }: {
   finalist1: any;
   finalist2: any;
   onContinue: (winner?: any) => void;
+  stage?: 'mini' | 'final';
 }) {
   const [selected, setSelected] = useState<1 | 2 | null>(null);
   const { currentSession, profile } = useApp();
-  const [finalSlateId] = useState(() => `final_${currentSession?.id ?? 'x'}_${Date.now()}`);
+  const [finalSlateId] = useState(() => `${stage}_${currentSession?.id ?? 'x'}_${Date.now()}`);
+  const duelRound = stage === 'mini' ? 2 : 3; // 준결승=round2, 결승=round3 (예선=round1)
   useEffect(() => {
-    // 결승 = 크기 2 슬레이트(듀얼). 두 후보를 노출로 기록 → CHOOSE 시 opponent 파생.
+    // 듀얼 = 크기 2 슬레이트. 두 후보를 노출로 기록 → CHOOSE 시 opponent 파생(pairwise A>B).
     [finalist1, finalist2].forEach((f, i) => {
-      if (f) logEvent({ event_type: 'IMPRESSION', user_id: profile.id, slate_id: finalSlateId, slate_type: 'FINAL', restaurant_id: f.id, position: i, round: 2, session_id: currentSession?.id ?? null });
+      if (f) logEvent({ event_type: 'IMPRESSION', user_id: profile.id, slate_id: finalSlateId, slate_type: 'FINAL', restaurant_id: f.id, position: i, round: duelRound, session_id: currentSession?.id ?? null });
     });
   }, [finalSlateId]);
 
@@ -533,8 +536,8 @@ function FinalBattleResultScreen({
     >
       {/* Header */}
       <div className="px-5 pt-12 pb-4 text-center">
-        <p className="font-black text-white text-[22px]">결승전 🏆</p>
-        <p className="text-white/50 text-[13px] mt-1">모두의 투표로 결정된 최후의 2곳 · 마음에 드는 곳을 골라보세요</p>
+        <p className="font-black text-white text-[22px]">{stage === 'mini' ? '준결승 ⚔️' : '결승전 🏆'}</p>
+        <p className="text-white/50 text-[13px] mt-1">{stage === 'mini' ? '비슷하게 끌리는 곳 — 한 번 더 좁혀요' : '최후의 2곳 · 마음에 드는 곳을 골라보세요'}</p>
       </div>
 
       {/* Diagonal split layout */}
@@ -558,7 +561,7 @@ function FinalBattleResultScreen({
           )}
           <div className="absolute top-6 left-5 right-20 text-left">
             <span className="inline-block bg-[#FFD700] text-[#1A1A1A] text-[11px] font-black px-3 py-1 rounded-full mb-2">
-              🏆 1위 후보
+              {stage === 'mini' ? '후보 A' : '🏆 1위 후보'}
             </span>
             {selected === 1 && (
               <span className="inline-block bg-[#F09D09] text-white text-[11px] font-black px-3 py-1 rounded-full mb-2 ml-1.5">
@@ -587,7 +590,7 @@ function FinalBattleResultScreen({
           )}
           <div className="absolute bottom-6 right-5 left-20 text-right">
             <span className="inline-block bg-white/20 text-white text-[11px] font-black px-3 py-1 rounded-full mb-2">
-              2위 후보
+              {stage === 'mini' ? '후보 B' : '2위 후보'}
             </span>
             {selected === 2 && (
               <span className="inline-block bg-[#F09D09] text-white text-[11px] font-black px-3 py-1 rounded-full mb-2 mr-1.5">
@@ -627,7 +630,7 @@ function FinalBattleResultScreen({
         <button
           onClick={() => {
             const winner = selected === 1 ? finalist1 : selected === 2 ? finalist2 : undefined;
-            if (winner) logEvent({ event_type: 'SWIPE', action: 'CHOOSE', slate_id: finalSlateId, slate_type: 'FINAL', restaurant_id: winner.id, round: 2, session_id: currentSession?.id ?? null });
+            if (winner) logEvent({ event_type: 'SWIPE', action: 'CHOOSE', slate_id: finalSlateId, slate_type: 'FINAL', restaurant_id: winner.id, round: duelRound, session_id: currentSession?.id ?? null });
             onContinue(winner);
           }}
           disabled={selected === null}
@@ -848,6 +851,8 @@ export default function QuickMatchPage() {
   });
   const [swipeData, setSwipeData] = useState<{ restaurant: any; action: SwipeAction }[]>([]);
   const [selectedWinner, setSelectedWinner] = useState<Restaurant | null>(null);
+  // 미니 토너먼트 듀얼 상태 (3~4 좋아요: 준결승 → 결승). null=아직 미구성
+  const [duel, setDuel] = useState<{ a: any; b: any; stage: 'mini' | 'final'; champion?: any } | null>(null);
   const [showIntro, setShowIntro] = useState(true);
   const [remainingMs, setRemainingMs] = useState(() => {
     if (!currentSession?.deadline) return 0;
@@ -937,22 +942,42 @@ export default function QuickMatchPage() {
   useEffect(() => { phaseRef.current = phase; }, [phase]);
   const swipeCountRef = useRef(0);
   useEffect(() => { swipeCountRef.current = swipeData.length; }, [swipeData]);
+  const sessionRef = useRef(currentSession);
+  useEffect(() => { sessionRef.current = currentSession; }, [currentSession]);
   const abandonLoggedRef = useRef(false);
+  // 안정 콜백(deps 없음) — currentSession 변경에 재생성되지 않게 ref로 읽어, 클린업이 실제 언마운트 때만 동작.
   const logAbandon = useCallback((via: string) => {
-    if (abandonLoggedRef.current || phaseRef.current !== 'swipe') return; // 예선 중 이탈만 (결정 후엔 이탈 아님)
+    if (abandonLoggedRef.current || phaseRef.current !== 'swipe') return; // 예선 중 이탈만 (결정 후엔 이탈 아님), 1회
     abandonLoggedRef.current = true;
+    const sess = sessionRef.current;
     logEvent({
       event_type: 'ABANDON', user_id: profile.id,
-      session_id: currentSession?.id ?? null, slate_id: currentSession?.slateId ?? null, round: 1,
+      session_id: sess?.id ?? null, slate_id: sess?.slateId ?? null, round: 1,
       context: { phase: 'swipe', swipes_done: swipeCountRef.current, via },
     });
     flushEvents();
-  }, [profile.id, currentSession]);
+  }, [profile.id]);
   useEffect(() => {
     const onHide = () => logAbandon('pagehide'); // 탭 닫기/백그라운드
     window.addEventListener('pagehide', onHide);
-    return () => { window.removeEventListener('pagehide', onHide); logAbandon('unmount'); }; // 라우트 이탈
+    return () => { window.removeEventListener('pagehide', onHide); logAbandon('unmount'); }; // 실제 라우트 이탈 시만
   }, [logAbandon]);
+
+  // 솔로 결정 좁히기: 좋아요 수로 듀얼 구성 (이론 ③④). 그룹은 WaitingOrDecidedScreen이 처리.
+  useEffect(() => {
+    if (phase !== 'decided' || duel || selectedWinner) return;
+    const isSolo = (currentSession?.members?.length ?? 1) <= 1;
+    if (!isSolo) return;
+    const byEng = (list: any[]) => [...list].sort((a, b) => (currentSession?.recMeta?.[a.id]?.position ?? 999) - (currentSession?.recMeta?.[b.id]?.position ?? 999));
+    const liked = byEng(swipeData.filter(s => s.action === 'like').map(s => s.restaurant));
+    const L = liked.length;
+    if (L === 1) { setSelectedWinner(liked[0]); setPhase('results'); return; }           // 좋아요 1 → 바로 우승
+    if (L >= 3 && L <= 4) { setDuel({ a: liked[1], b: liked[2], stage: 'mini', champion: liked[0] }); return; } // 3~4 → 미니 토너먼트
+    if (L >= 2) { setDuel({ a: liked[0], b: liked[1], stage: 'final' }); return; }        // 2 또는 5+ → 엔진 top-2 결승
+    const fb = byEng(targetRestaurants.slice(0, total));                                   // 0 → 완화: 엔진 top-2
+    if (fb.length >= 2) setDuel({ a: fb[0], b: fb[1], stage: 'final' });
+    else { setSelectedWinner(fb[0] ?? null); setPhase('results'); }
+  }, [phase]);
 
   const topPick = swipeData.find(s => s.action === 'like')?.restaurant || targetRestaurants[0];
 
@@ -960,27 +985,22 @@ export default function QuickMatchPage() {
 
   const handleReset = () => {
     logEvent({ event_type: 'REROLL', user_id: profile.id, session_id: currentSession?.id ?? null, slate_id: currentSession?.slateId ?? null });
-    setCurrentIndex(0); setSwipeData([]); setSelectedWinner(null); setPhase('swipe');
+    setCurrentIndex(0); setSwipeData([]); setSelectedWinner(null); setDuel(null); setPhase('swipe');
+  };
+  // 듀얼 선택 → 미니면 챔피언(1위) vs 준결승 승자로 결승 진행, 결승이면 우승 확정.
+  const handleDuelChoice = (chosen?: any) => {
+    if (duel?.stage === 'mini' && chosen) setDuel({ a: duel.champion, b: chosen, stage: 'final' });
+    else { if (chosen) setSelectedWinner(chosen); setPhase('results'); }
   };
 
   if (phase === 'decided') {
-    const goResults = (winner?: any) => { if (winner) setSelectedWinner(winner); setPhase('results'); };
-    const byEngine = (list: any[]) =>
-      [...list].sort((a, b) => (currentSession?.recMeta?.[a.id]?.position ?? 999) - (currentSession?.recMeta?.[b.id]?.position ?? 999));
     const isSolo = (currentSession?.members?.length ?? 1) <= 1;
     if (isSolo) {
-      // 솔로(이론 §4): 좋아요 집합에서 로컬 즉시 분기 — /results 폴링/플래시 없음.
-      const liked = byEngine(swipeData.filter(s => s.action === 'like').map(s => s.restaurant));
-      if (liked.length >= 2) // ③ 좋아요 2+ → ④ score top-2 → ⑤ 결승 DUEL
-        return <FinalBattleResultScreen finalist1={liked[0]} finalist2={liked[1]} onContinue={goResults} />;
-      if (liked.length === 1) // 좋아요 1 → 결승 생략, 바로 우승
-        return <WinnerScreen selectedWinner={liked[0]} onReset={handleReset} />;
-      // 좋아요 0 → 완화: 엔진 top-2로 "이 중엔?" 결승 (막다른 길 방지)
-      const fb = byEngine(targetRestaurants.slice(0, total));
-      if (fb.length >= 2) return <FinalBattleResultScreen finalist1={fb[0]} finalist2={fb[1]} onContinue={goResults} />;
-      return <WinnerScreen selectedWinner={fb[0] ?? null} onReset={handleReset} />;
+      // 솔로: 좋아요 수로 구성된 듀얼(준결승→결승). 로컬 즉시 — /results 폴링/플래시 없음.
+      if (duel) return <FinalBattleResultScreen key={duel.stage + (duel.a?.id ?? '') + (duel.b?.id ?? '')} finalist1={duel.a} finalist2={duel.b} stage={duel.stage} onContinue={handleDuelChoice} />;
+      return null; // 효과가 듀얼/우승 구성 중
     }
-    return <WaitingOrDecidedScreen onContinue={goResults} />; // 그룹: 멤버 투표 폴링
+    return <WaitingOrDecidedScreen onContinue={(w) => { if (w) setSelectedWinner(w); setPhase('results'); }} />; // 그룹: 멤버 투표 폴링
   }
   if (phase === 'results') {
     return <WinnerScreen selectedWinner={selectedWinner} onReset={handleReset} />;
