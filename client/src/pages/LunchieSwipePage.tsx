@@ -510,11 +510,13 @@ function FinalBattleResultScreen({
   finalist1,
   finalist2,
   onContinue,
+  onRejectBoth,
   stage = 'final',
 }: {
   finalist1: any;
   finalist2: any;
   onContinue: (winner?: any) => void;
+  onRejectBoth?: () => void;
   stage?: 'mini' | 'final';
 }) {
   const [selected, setSelected] = useState<1 | 2 | null>(null);
@@ -639,6 +641,14 @@ function FinalBattleResultScreen({
         >
           {selected === null ? '음식점을 선택해주세요 👆' : '이 곳으로 결정! 🎉'}
         </button>
+        {onRejectBoth && (
+          <button
+            onClick={onRejectBoth}
+            className="w-full mt-2.5 py-3 rounded-2xl font-bold text-white/70 text-[13px] active:scale-[0.98] transition-all bg-white/10"
+          >
+            둘 다 별로 · 다른 곳 보기 🔄
+          </button>
+        )}
       </div>
     </motion.div>
   );
@@ -854,6 +864,7 @@ export default function QuickMatchPage() {
   // 미니 토너먼트 듀얼 상태 (3~4 좋아요: 준결승 → 결승). null=아직 미구성
   const [duel, setDuel] = useState<{ a: any; b: any; stage: 'mini' | 'final'; champion?: any } | null>(null);
   const cardShownAtRef = useRef(Date.now()); // 현재 카드 노출 시각 → dwell 측정
+  const rejectedRef = useRef<Set<string>>(new Set()); // 듀얼에서 "둘 다 별로"로 거절된 후보
   const [showIntro, setShowIntro] = useState(true);
   const [remainingMs, setRemainingMs] = useState(() => {
     if (!currentSession?.deadline) return 0;
@@ -990,6 +1001,7 @@ export default function QuickMatchPage() {
 
   const handleReset = () => {
     logEvent({ event_type: 'REROLL', user_id: profile.id, session_id: currentSession?.id ?? null, slate_id: currentSession?.slateId ?? null });
+    rejectedRef.current.clear();
     setCurrentIndex(0); setSwipeData([]); setSelectedWinner(null); setDuel(null); setPhase('swipe');
   };
   // 듀얼 선택 → 미니면 챔피언(1위) vs 준결승 승자로 결승 진행, 결승이면 우승 확정.
@@ -997,12 +1009,27 @@ export default function QuickMatchPage() {
     if (duel?.stage === 'mini' && chosen) setDuel({ a: duel.champion, b: chosen, stage: 'final' });
     else { if (chosen) setSelectedWinner(chosen); setPhase('results'); }
   };
+  // "둘 다 별로" → 두 후보 거절(NOPE FINAL = head-to-head 부정) → 남은 좋아요로 다른 듀얼, 없으면 새 추천.
+  const handleRejectBoth = () => {
+    if (!duel) return;
+    [duel.a, duel.b].forEach((f) => {
+      if (f?.id) {
+        logEvent({ event_type: 'SWIPE', action: 'NOPE', slate_id: currentSession?.slateId ?? null, slate_type: 'FINAL', restaurant_id: f.id, round: 2, user_id: profile.id, session_id: currentSession?.id ?? null });
+        rejectedRef.current.add(f.id);
+      }
+    });
+    const byEng = (list: any[]) => [...list].sort((x, y) => (currentSession?.recMeta?.[x.id]?.position ?? 999) - (currentSession?.recMeta?.[y.id]?.position ?? 999));
+    const remaining = byEng(swipeData.filter(s => s.action === 'like').map(s => s.restaurant).filter((r: any) => !rejectedRef.current.has(r.id)));
+    if (remaining.length >= 2) setDuel({ a: remaining[0], b: remaining[1], stage: 'final' });    // 다른 좋아요 쌍
+    else if (remaining.length === 1) { setSelectedWinner(remaining[0]); setPhase('results'); }    // 하나만 남음 → 우승
+    else handleReset();                                                                            // 다 거절 → 새 추천
+  };
 
   if (phase === 'decided') {
     const isSolo = (currentSession?.members?.length ?? 1) <= 1;
     if (isSolo) {
       // 솔로: 좋아요 수로 구성된 듀얼(준결승→결승). 로컬 즉시 — /results 폴링/플래시 없음.
-      if (duel) return <FinalBattleResultScreen key={duel.stage + (duel.a?.id ?? '') + (duel.b?.id ?? '')} finalist1={duel.a} finalist2={duel.b} stage={duel.stage} onContinue={handleDuelChoice} />;
+      if (duel) return <FinalBattleResultScreen key={duel.stage + (duel.a?.id ?? '') + (duel.b?.id ?? '')} finalist1={duel.a} finalist2={duel.b} stage={duel.stage} onContinue={handleDuelChoice} onRejectBoth={handleRejectBoth} />;
       return null; // 효과가 듀얼/우승 구성 중
     }
     return <WaitingOrDecidedScreen onContinue={(w) => { if (w) setSelectedWinner(w); setPhase('results'); }} />; // 그룹: 멤버 투표 폴링
