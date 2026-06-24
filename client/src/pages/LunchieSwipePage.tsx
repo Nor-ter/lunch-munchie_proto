@@ -630,7 +630,8 @@ function FinalBattleResultScreen({
         <button
           onClick={() => {
             const winner = selected === 1 ? finalist1 : selected === 2 ? finalist2 : undefined;
-            if (winner) logEvent({ event_type: 'SWIPE', action: 'CHOOSE', slate_id: finalSlateId, slate_type: 'FINAL', restaurant_id: winner.id, round: duelRound, session_id: currentSession?.id ?? null });
+            const opponent = selected === 1 ? finalist2 : finalist1; // 패자 → pairwise(A>B) 파생용
+            if (winner) logEvent({ event_type: 'SWIPE', action: 'CHOOSE', slate_id: finalSlateId, slate_type: 'FINAL', restaurant_id: winner.id, round: duelRound, session_id: currentSession?.id ?? null, context: { opponent_id: opponent?.id } });
             onContinue(winner);
           }}
           disabled={selected === null}

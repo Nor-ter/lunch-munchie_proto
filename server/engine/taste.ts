@@ -75,22 +75,39 @@ export function sampleTheta(t: Taste): number[] {
 
 export const tasteFitFromTheta = (theta: number[], x: number[]) => sigmoid(dot(theta, x));
 
-// 베이지안 갱신: A += w·x x^T, b += w·y x.  y = LIKE?1:0.
-// weight: 신호 강도 (스와이프=1, 우승=2, 저장=3). 강한 라벨이 사후를 더 끌어당긴다.
-export function updateTaste(userId: string, x: number[], y: number, weight = 1): void {
-  const uid = String(userId);
+function ensure(uid: string): Taste {
   let t = store.get(uid);
   if (!t) {
     const A = Array.from({ length: D }, (_, i) => Array.from({ length: D }, (_, j) => (i === j ? PRIOR : 0)));
     t = { A, b: new Array(D).fill(0), n: 0 };
     store.set(uid, t);
   }
+  return t;
+}
+
+// 베이지안 갱신: A += w·x x^T, b += w·y x.  y = LIKE?1:0.
+// weight: 신호 강도 (스와이프=1, 우승=2, 저장=3). 강한 라벨이 사후를 더 끌어당긴다.
+export function updateTaste(userId: string, x: number[], y: number, weight = 1): void {
+  const t = ensure(String(userId));
   for (let i = 0; i < D; i++) {
     t.b[i] += weight * y * x[i];
     for (let j = 0; j < D; j++) t.A[i][j] += weight * x[i] * x[j];
   }
   t.n++;
   if (weight > 1) explicitObs++;
+}
+
+// 듀얼 A>B pairwise (최고급 선호 신호): 차이 d=x_win−x_lose 를 "선호=1" 방향으로 학습.
+// θ·d>0 이 되도록 끌어당김 → score(승자)↑·score(패자)↓. 우승 pointwise(+)와 상보적.
+export function updatePairwise(userId: string, xWin: number[], xLose: number[], weight = 2): void {
+  const t = ensure(String(userId));
+  const d = xWin.map((v, i) => v - xLose[i]);
+  for (let i = 0; i < D; i++) {
+    t.b[i] += weight * d[i]; // y=1 (승자 선호)
+    for (let j = 0; j < D; j++) t.A[i][j] += weight * d[i] * d[j];
+  }
+  t.n++;
+  explicitObs++; // 듀얼 = 명시 신호
 }
 
 export function tasteStats() {
