@@ -10,6 +10,7 @@ Lunchie/Munchie 기획·엔진·프로세스 관련 PDF 산출물 모음.
 - [lunchie_engine_paper_outline.pdf](engine/lunchie_engine_paper_outline.pdf) — 논문 아웃라인 (문제정의 · 관련연구 · 방법 · 실험 · 기여)
 - [lunchie_prod_research_plan.pdf](engine/lunchie_prod_research_plan.pdf) — 실전 ↔ 논문 연결 계획 (이중 트랙 · A/B · 검증 · 성과)
 - [lunchie_engine_architecture.pdf](engine/lunchie_engine_architecture.pdf) — 아키텍처 설계 (온라인 서빙/피처 스토어/오프라인 학습 · 모듈형 서브스코어러 · 학습 메커니즘 · 로드맵). 생성 스크립트: [gen_engine_architecture.py](engine/gen_engine_architecture.py)
+- [lunchie_decision_flow.pdf](engine/lunchie_decision_flow.pdf) — 결정 플로우 v2 (통일: 엔진 top-2 듀얼 + "둘 다 별로" 탈출구 · 미니 토너먼트 제거 · 단계별 데이터→엔진 신호 · 듀얼 pairwise). 생성 스크립트: [gen_decision_flow_v2.py](engine/gen_decision_flow_v2.py)
 
 ## process — 팀 프로세스
 - [backlog_grooming_guide.pdf](process/backlog_grooming_guide.pdf) — 백로그 그루밍 도입 가이드
