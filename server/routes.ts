@@ -192,6 +192,12 @@ router.post("/sessions/:token/join", async (req: any, res: any) => {
       const existing = await db.select().from(sessionMembers).where(eq(sessionMembers.session_id, session.id));
       const isAlreadyJoined = existing.find(m => m.user_id === userId);
 
+      // 정원 제한: 새 참여자가 group_size를 넘기면 거부 (이미 들어온 사람은 갱신 허용)
+      const cap = (session as { group_size?: number }).group_size ?? 99;
+      if (!isAlreadyJoined && existing.length >= cap) {
+        return res.status(409).json({ error: "session_full", message: "정원이 찼어요", cap });
+      }
+
       if (!isAlreadyJoined) {
         await db.insert(sessionMembers).values({
           id: nanoid(),
@@ -220,6 +226,10 @@ router.post("/sessions/:token/join", async (req: any, res: any) => {
       existing.user_name = userName;
       existing.emoji = emoji;
     } else {
+      const cap = (mem.session as { group_size?: number }).group_size ?? 99;
+      if (mem.members.length >= cap) {
+        return res.status(409).json({ error: "session_full", message: "정원이 찼어요", cap });
+      }
       mem.members.push({
         id: nanoid(),
         session_id: mem.session.id,

@@ -7,7 +7,7 @@
 import { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useLocation } from 'wouter';
-import { ArrowLeft, Clock, SlidersHorizontal, Users, X } from 'lucide-react';
+import { ArrowLeft, Clock, SlidersHorizontal, Users, Minus, Plus, X } from 'lucide-react';
 import { useApp } from '@/contexts/AppContext';
 import { toast } from 'sonner';
 
@@ -149,7 +149,7 @@ export default function LunchieSettingsPage() {
             <p className="text-[13px] font-bold text-[#1A1A1A]">세션 설정</p>
           </div>
 
-          {/* 누구랑 — 혼자 vs 같이. 정확한 수는 멤버 리스트가 보여주므로, 추천을 맞추는 신호만. */}
+          {/* 누구랑 — 혼자 vs 같이(+정원). 추천은 솔로/그룹 이분으로, 정원은 참여 제한·이벤트 분석에 쓰임. */}
           <div className="bg-[#F5F5F5] rounded-xl p-3 mb-2">
             <p className="text-[11px] text-[#9B9B9B] mb-2">누구랑 먹어요?</p>
             <div className="flex gap-2">
@@ -158,7 +158,7 @@ export default function LunchieSettingsPage() {
                 return (
                   <button
                     key={label}
-                    onClick={() => setPartySize(size)}
+                    onClick={() => setPartySize(p => (size === 1 ? 1 : (p > 1 ? p : 4)))}
                     className="flex-1 py-2.5 rounded-xl font-bold text-[14px] active:scale-[0.98] transition-all"
                     style={{ background: active ? '#EB5053' : 'white', color: active ? 'white' : '#4A4A4A' }}
                   >
@@ -167,7 +167,28 @@ export default function LunchieSettingsPage() {
                 );
               })}
             </div>
-            <p className="text-[10px] text-[#B0B0B0] mt-1.5">{partySize > 1 ? '나눠먹기 좋은 곳 위주로 추천해요' : '혼밥하기 편한 곳 위주로 추천해요'}</p>
+            {partySize > 1 && (
+              <div className="flex items-center justify-center gap-4 mt-3">
+                <button
+                  onClick={() => setPartySize(p => Math.max(2, p - 1))}
+                  className="w-8 h-8 rounded-full bg-white shadow-sm flex items-center justify-center active:scale-90 disabled:opacity-40"
+                  disabled={partySize <= 2}
+                >
+                  <Minus size={14} color="#1A1A1A" />
+                </button>
+                <p className="font-black text-[17px] text-[#EB5053] w-16 text-center">{partySize}명 정원</p>
+                <button
+                  onClick={() => setPartySize(p => Math.min(12, p + 1))}
+                  className="w-8 h-8 rounded-full bg-white shadow-sm flex items-center justify-center active:scale-90 disabled:opacity-40"
+                  disabled={partySize >= 12}
+                >
+                  <Plus size={14} color="#1A1A1A" />
+                </button>
+              </div>
+            )}
+            <p className="text-[10px] text-[#B0B0B0] mt-1.5">
+              {partySize > 1 ? '나눠먹기 좋은 곳 위주 · 정원만큼 모이면 마감' : '혼밥하기 편한 곳 위주로 추천해요'}
+            </p>
           </div>
 
           {/* 반경 */}
