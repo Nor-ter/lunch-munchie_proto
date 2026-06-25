@@ -38,6 +38,14 @@ function contextFit(c: Candidate, ctx: RecContext): number {
   }
   if (ctx.weather === "hot" && /냉면|샐러드|디저트|음료|카페/.test(cat)) f += 0.15;
   if (ctx.time_of_day === "evening" && (c.price_level ?? 0) >= 3) f += 0.1; // 저녁 → 객단가 ↑ 허용
+  // 동행(companions): 혼자 vs 같이 → 적합한 식당이 다르다.
+  const n = typeof ctx.companions === "number" ? ctx.companions : 0;
+  if (n === 1) { // 혼자 → 혼밥 편하고 빠른 곳
+    if (/카페|베이커리|일식|라멘|스시|분식|비건|샐러드|디저트|브런치/.test(cat)) f += 0.15;
+    if (/파인다이닝|고기|스테이크|타파스/.test(cat)) f -= 0.1; // 혼자 가기 부담
+  } else if (n >= 4) { // 같이 → 나눠먹기·넓은 자리·예약
+    if (/한식|중식|고기|스테이크|파인다이닝|타파스|이탈리안/.test(cat)) f += 0.15;
+  }
   return Math.max(0, Math.min(1, f));
 }
 

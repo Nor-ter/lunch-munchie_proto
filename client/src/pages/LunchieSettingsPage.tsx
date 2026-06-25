@@ -7,7 +7,7 @@
 import { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useLocation } from 'wouter';
-import { ArrowLeft, Clock, SlidersHorizontal, Users, Minus, Plus, X } from 'lucide-react';
+import { ArrowLeft, Clock, SlidersHorizontal, Users, X } from 'lucide-react';
 import { useApp } from '@/contexts/AppContext';
 import { toast } from 'sonner';
 
@@ -149,26 +149,25 @@ export default function LunchieSettingsPage() {
             <p className="text-[13px] font-bold text-[#1A1A1A]">세션 설정</p>
           </div>
 
-          {/* 인원수 */}
+          {/* 누구랑 — 혼자 vs 같이. 정확한 수는 멤버 리스트가 보여주므로, 추천을 맞추는 신호만. */}
           <div className="bg-[#F5F5F5] rounded-xl p-3 mb-2">
-            <p className="text-[11px] text-[#9B9B9B] mb-2">인원수</p>
-            <div className="flex items-center gap-4">
-              <button
-                onClick={() => setPartySize(p => Math.max(1, p - 1))}
-                className="w-9 h-9 rounded-full bg-white shadow-sm flex items-center justify-center active:scale-90 disabled:opacity-40"
-                disabled={partySize <= 1}
-              >
-                <Minus size={16} color="#1A1A1A" />
-              </button>
-              <p className="font-black text-[20px] text-[#EB5053] w-14 text-center">{partySize === 1 ? '혼자' : `${partySize}명`}</p>
-              <button
-                onClick={() => setPartySize(p => Math.min(12, p + 1))}
-                className="w-9 h-9 rounded-full bg-white shadow-sm flex items-center justify-center active:scale-90 disabled:opacity-40"
-                disabled={partySize >= 12}
-              >
-                <Plus size={16} color="#1A1A1A" />
-              </button>
+            <p className="text-[11px] text-[#9B9B9B] mb-2">누구랑 먹어요?</p>
+            <div className="flex gap-2">
+              {([['혼자', 1, '🧍'], ['같이', 4, '👥']] as const).map(([label, size, icon]) => {
+                const active = size === 1 ? partySize === 1 : partySize > 1;
+                return (
+                  <button
+                    key={label}
+                    onClick={() => setPartySize(size)}
+                    className="flex-1 py-2.5 rounded-xl font-bold text-[14px] active:scale-[0.98] transition-all"
+                    style={{ background: active ? '#EB5053' : 'white', color: active ? 'white' : '#4A4A4A' }}
+                  >
+                    {icon} {label}
+                  </button>
+                );
+              })}
             </div>
+            <p className="text-[10px] text-[#B0B0B0] mt-1.5">{partySize > 1 ? '나눠먹기 좋은 곳 위주로 추천해요' : '혼밥하기 편한 곳 위주로 추천해요'}</p>
           </div>
 
           {/* 반경 */}
