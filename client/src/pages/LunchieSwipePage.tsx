@@ -7,7 +7,7 @@
 import { useState, useCallback, useEffect, useRef } from 'react';
 import { motion, useMotionValue, useTransform, AnimatePresence } from 'framer-motion';
 import { useLocation } from 'wouter';
-import { ArrowLeft, Heart, X, Star, MapPin, Clock, Phone, Navigation, Share2, Download, Link2, Home } from 'lucide-react';
+import { ArrowLeft, Heart, X, Star, MapPin, Clock, Phone, Navigation, Share2, Download, Link2, Home, Bookmark, RotateCcw } from 'lucide-react';
 import { toast } from 'sonner';
 import { useApp, type Restaurant } from '@/contexts/AppContext';
 import { getFoodPhotos } from '@/lib/foodPhotos';
@@ -271,6 +271,7 @@ function WinnerScreen({ selectedWinner, onReset }: { selectedWinner?: Restaurant
   const shareCardRef = useRef<HTMLDivElement>(null);
   const [showShare, setShowShare] = useState(false);
   const [isCapturing, setIsCapturing] = useState(false);
+  const [saved, setSaved] = useState(false);
   const [liveResults, setLiveResults] = useState<{
     results: { restaurantId: string; score: number; likeCount: number; dislikeCount: number }[];
   }>({ results: [] });
@@ -300,7 +301,11 @@ function WinnerScreen({ selectedWinner, onReset }: { selectedWinner?: Restaurant
   const winner = selectedWinner || restaurants.find(r => r.id === winnerId) || currentSession?.restaurants[0];
 
   useEffect(() => {
-    if (winner) logWinner(winner.id, { user_id: profile.id, session_id: currentSession?.id ?? null, slate_id: currentSession?.slateId ?? null });
+    if (winner) {
+      logWinner(winner.id, { user_id: profile.id, session_id: currentSession?.id ?? null, slate_id: currentSession?.slateId ?? null });
+      // 회고 대기: 다음 홈 진입 시 "어땠어요?" 설문 → 만족 정답(SURVEY) 수집
+      try { localStorage.setItem('lunchie_retro', JSON.stringify({ id: winner.id, name: winner.name, session: currentSession?.id ?? null, at: Date.now() })); } catch { /* noop */ }
+    }
   }, [winner?.id]);
 
   if (!winner) return null;
@@ -435,6 +440,23 @@ function WinnerScreen({ selectedWinner, onReset }: { selectedWinner?: Restaurant
             </button>
           </div>
 
+          {/* 저장(강한 취향 신호 COURSE_SAVE) · 다시 고르기(REROLL) */}
+          <div className="flex gap-2">
+            <button
+              onClick={() => { if (!saved) { logEvent({ event_type: 'COURSE_SAVE', user_id: profile.id, session_id: currentSession?.id ?? null, restaurant_id: winner.id }); setSaved(true); toast.success('저장했어요 🔖'); } }}
+              className="flex-1 py-3 rounded-2xl font-bold text-[14px] flex items-center justify-center gap-1.5 border active:scale-[0.98] transition-all"
+              style={{ borderColor: saved ? '#EB5053' : '#E5E5E5', color: saved ? '#EB5053' : '#4A4A4A', background: saved ? '#FFF5F5' : 'white' }}
+            >
+              <Bookmark size={15} fill={saved ? '#EB5053' : 'none'} /> {saved ? '저장됨' : '저장'}
+            </button>
+            <button
+              onClick={onReset}
+              className="flex-1 py-3 rounded-2xl font-bold text-[14px] flex items-center justify-center gap-1.5 border border-[#E5E5E5] text-[#4A4A4A] active:scale-[0.98] transition-all"
+            >
+              <RotateCcw size={15} /> 다시 고르기
+            </button>
+          </div>
+
           {/* Share Card Button */}
           <button
             onClick={() => setShowShare(true)}
@@ -455,7 +477,7 @@ function WinnerScreen({ selectedWinner, onReset }: { selectedWinner?: Restaurant
           <Link2 size={14} /> 주소 복사
         </button>
         <button
-          onClick={() => { onReset(); navigate('/'); }}
+          onClick={() => navigate('/')}
           className="flex-1 py-3 rounded-2xl font-bold text-[13px] flex items-center justify-center gap-1.5 bg-white border border-[#E5E5E5] text-[#4A4A4A] active:scale-[0.98] transition-all"
         >
           <Home size={14} /> 홈으로
@@ -521,6 +543,7 @@ function FinalBattleResultScreen({
   const { currentSession, profile } = useApp();
   const [finalSlateId] = useState(() => `final_${currentSession?.id ?? 'x'}_${Date.now()}`);
   const duelRound = 2; // 듀얼 = round 2 (예선=round 1)
+  const mountAtRef = useRef(Date.now()); // 듀얼 노출 시각 → 결정 시간(신뢰도) 측정
   useEffect(() => {
     // 듀얼 = 크기 2 슬레이트. 두 후보를 노출로 기록 → CHOOSE 시 opponent 파생(pairwise A>B).
     [finalist1, finalist2].forEach((f, i) => {
@@ -631,7 +654,7 @@ function FinalBattleResultScreen({
           onClick={() => {
             const winner = selected === 1 ? finalist1 : selected === 2 ? finalist2 : undefined;
             const opponent = selected === 1 ? finalist2 : finalist1; // 패자 → pairwise(A>B) 파생용
-            if (winner) logEvent({ event_type: 'SWIPE', action: 'CHOOSE', slate_id: finalSlateId, slate_type: 'FINAL', restaurant_id: winner.id, round: duelRound, session_id: currentSession?.id ?? null, context: { opponent_id: opponent?.id } });
+            if (winner) logEvent({ event_type: 'SWIPE', action: 'CHOOSE', user_id: profile.id, slate_id: finalSlateId, slate_type: 'FINAL', restaurant_id: winner.id, round: duelRound, session_id: currentSession?.id ?? null, context: { opponent_id: opponent?.id, decision_ms: Date.now() - mountAtRef.current } });
             onContinue(winner);
           }}
           disabled={selected === null}

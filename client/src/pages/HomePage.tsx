@@ -1,8 +1,45 @@
 import { motion } from "framer-motion";
 import { useLocation } from "wouter";
+import { useState, useEffect } from "react";
 import { Heart, X, ArrowRight, MapPin, Clock, Bookmark } from "lucide-react";
 import { useApp, Course, MOCK_RESTAURANTS } from "@/contexts/AppContext";
 import CourseMapOverlay from "@/components/CourseMapOverlay";
+import { logEvent } from "@/lib/eventLogger";
+import { toast } from "sonner";
+
+// 회고 마이크로설문: 지난 결정 식당의 만족(SURVEY=만족 정답). WINNER 시 localStorage에 대기 저장됨.
+function RetroSurveyCard() {
+  const { profile } = useApp();
+  const [retro, setRetro] = useState<{ id: string; name: string; session?: string | null; at: number } | null>(null);
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem("lunchie_retro");
+      if (raw) setRetro(JSON.parse(raw));
+    } catch { /* noop */ }
+  }, []);
+  if (!retro) return null;
+  const answer = (action: "POS" | "NEU" | "NEG" | null) => {
+    if (action) {
+      logEvent({ event_type: "SURVEY", action, user_id: profile.id, restaurant_id: retro.id, session_id: retro.session ?? null });
+      toast.success("피드백 고마워요! 🙌");
+    }
+    try { localStorage.removeItem("lunchie_retro"); } catch { /* noop */ }
+    setRetro(null);
+  };
+  return (
+    <div className="mx-6 mt-3 rounded-2xl bg-white p-4 shadow-sm border border-[#F0E8E0]">
+      <div className="flex items-start justify-between">
+        <p className="text-[13px] text-[#6E6E6E] leading-snug">최근 점심, <b className="text-[#1A1A1A]">{retro.name}</b> 어땠어요?</p>
+        <button onClick={() => answer(null)} className="text-[#B0B0B0] text-[13px] ml-2 leading-none">✕</button>
+      </div>
+      <div className="mt-3 flex gap-2">
+        <button onClick={() => answer("POS")} className="flex-1 py-2.5 rounded-xl bg-[#EAF7EC] text-[#2E9E42] font-bold text-[14px] active:scale-95 transition-transform">👍 좋았어요</button>
+        <button onClick={() => answer("NEU")} className="flex-1 py-2.5 rounded-xl bg-[#F1EFE8] text-[#6E6E6E] font-bold text-[14px] active:scale-95 transition-transform">😐 그냥</button>
+        <button onClick={() => answer("NEG")} className="flex-1 py-2.5 rounded-xl bg-[#FBECEC] text-[#D83A3D] font-bold text-[14px] active:scale-95 transition-transform">👎 별로</button>
+      </div>
+    </div>
+  );
+}
 
 const TAG_CLASS: Record<string, string> = {
   '데이트 코스': 'tag-date',
@@ -205,6 +242,9 @@ export default function HomePage() {
           모드를 선택해주세요.
         </p>
       </motion.div>
+
+      {/* 회고 설문 (지난 결정 만족도 — 만족 정답 수집) */}
+      <RetroSurveyCard />
 
       {/* Lunchie Mode */}
       <motion.div

@@ -7,7 +7,7 @@ import { MOCK_RESTAURANTS, MOCK_COURSES } from "./melbourneData.js";
 import { buildSlate, buildControlSlate, assignVariant } from "./engine/scorer.js";
 import { recordEvents, memEventCount, getMetrics, recordCatalogSize, recordItemFeatures, getItemFeatures } from "./engine/events.js";
 import { enrichContext } from "./engine/context.js";
-import { getTaste, updateTaste, updatePairwise, sampleTheta, tasteFitFromTheta, MIN_TASTE } from "./engine/taste.js";
+import { getTaste, updateTaste, updatePairwise, pairwiseWeight, sampleTheta, tasteFitFromTheta, MIN_TASTE } from "./engine/taste.js";
 import { buildItemVector } from "./engine/features.js";
 import { exposurePenalty, recordExposure } from "./engine/exposure.js";
 import { satiation as satiationScore, recordConsumption } from "./engine/satiation.js";
@@ -544,9 +544,10 @@ router.post("/events", async (req, res) => {
       updateTaste(uid, vec, e.action === "LIKE" ? 1 : 0); // 스와이프=약한 라벨 (둘 다 별로의 FINAL NOPE도 여기)
     } else if (e.event_type === "SWIPE" && e.action === "CHOOSE") {
       // 듀얼 A>B = 최고급 pairwise 신호 (결정 플로우 ⑤). opponent로 패자 파생해 pairwise 학습.
-      const c = e.context as { opponent_id?: string } | null | undefined;
+      // 신뢰도 가중: 빠르고 단호할수록 강하게(decision_ms).
+      const c = e.context as { opponent_id?: string; decision_ms?: number } | null | undefined;
       const oppFeat = c?.opponent_id ? getItemFeatures(String(c.opponent_id)) : undefined;
-      if (oppFeat) updatePairwise(uid, vec, buildItemVector(oppFeat));
+      if (oppFeat) updatePairwise(uid, vec, buildItemVector(oppFeat), pairwiseWeight(c?.decision_ms));
     } else if (e.event_type === "WINNER" && feat.category) {
       updateTaste(uid, vec, 1, 2); // v4: 우승=강한 긍정(직접 선택)
       const ctx = e.context as { consumed_at?: number } | null | undefined;

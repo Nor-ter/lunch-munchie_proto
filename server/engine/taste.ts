@@ -97,6 +97,13 @@ export function updateTaste(userId: string, x: number[], y: number, weight = 1):
   if (weight > 1) explicitObs++;
 }
 
+// 듀얼 신뢰도 가중: 빠르고 단호한 선택일수록 강한 신호, 망설일수록 약하게.
+// decision_ms(듀얼 노출→선택)로 [0.5, 3.0] 매핑. 8초 기준 지수 감쇠.
+export function pairwiseWeight(decisionMs?: number): number {
+  if (typeof decisionMs !== "number" || decisionMs <= 0) return 2; // 기본
+  return Math.max(0.5, Math.min(3.0, 3.0 * Math.exp(-decisionMs / 8000) + 0.5));
+}
+
 // 듀얼 A>B pairwise (최고급 선호 신호): 차이 d=x_win−x_lose 를 "선호=1" 방향으로 학습.
 // θ·d>0 이 되도록 끌어당김 → score(승자)↑·score(패자)↓. 우승 pointwise(+)와 상보적.
 export function updatePairwise(userId: string, xWin: number[], xLose: number[], weight = 2): void {
