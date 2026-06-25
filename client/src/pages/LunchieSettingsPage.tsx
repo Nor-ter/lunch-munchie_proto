@@ -154,13 +154,13 @@ export default function LunchieSettingsPage() {
             <p className="text-[11px] text-[#9B9B9B] mb-2">인원수</p>
             <div className="flex items-center gap-4">
               <button
-                onClick={() => setPartySize(p => Math.max(2, p - 1))}
+                onClick={() => setPartySize(p => Math.max(1, p - 1))}
                 className="w-9 h-9 rounded-full bg-white shadow-sm flex items-center justify-center active:scale-90 disabled:opacity-40"
-                disabled={partySize <= 2}
+                disabled={partySize <= 1}
               >
                 <Minus size={16} color="#1A1A1A" />
               </button>
-              <p className="font-black text-[20px] text-[#EB5053] w-12 text-center">{partySize}명</p>
+              <p className="font-black text-[20px] text-[#EB5053] w-14 text-center">{partySize === 1 ? '혼자' : `${partySize}명`}</p>
               <button
                 onClick={() => setPartySize(p => Math.min(12, p + 1))}
                 className="w-9 h-9 rounded-full bg-white shadow-sm flex items-center justify-center active:scale-90 disabled:opacity-40"
