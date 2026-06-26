@@ -41,6 +41,53 @@ function RetroSurveyCard() {
   );
 }
 
+// 하루 여정: 오늘 결정된 스톱 타임라인 + (사슬 열림 시) 다음-스톱 제안.
+function TodayJourneyCard() {
+  const { profile } = useApp();
+  const [, navigate] = useLocation();
+  const [data, setData] = useState<{
+    stops: { restaurant_id: string; category: string | null; satisfaction: string | null }[];
+    nextSuggestion: { intent: string; restaurant: { id: string; category?: string }; reason: string } | null;
+  } | null>(null);
+  useEffect(() => {
+    let on = true;
+    fetch(`/api/journey/today?userId=${encodeURIComponent(profile.id)}`)
+      .then((r) => r.json())
+      .then((d) => { if (on) setData(d); })
+      .catch(() => { /* 폴백: 카드 숨김 */ });
+    return () => { on = false; };
+  }, [profile.id]);
+  if (!data || data.stops.length === 0) return null; // 오늘 스톱 0개 → 숨김
+
+  const nameOf = (id: string) => MOCK_RESTAURANTS.find((r) => r.id === id)?.name ?? id;
+  const sat = (s: string | null) => (s === "POS" ? "👍" : s === "NEG" ? "👎" : s === "NEU" ? "😐" : "");
+  const intentLabel: Record<string, string> = { meal: "밥", cafe: "커피", dessert: "디저트" };
+
+  return (
+    <div className="mx-4 mb-4 rounded-2xl bg-white p-4 shadow-sm">
+      <p className="mb-3 text-[13px] font-bold text-[#1A1A1A]">오늘의 여정</p>
+      <div className="space-y-2">
+        {data.stops.map((s, i) => (
+          <div key={i} className="flex items-center gap-2 text-[13px]">
+            <span className="text-[#EB5053]">●</span>
+            <span className="font-semibold text-[#1A1A1A]">{nameOf(s.restaurant_id)}</span>
+            <span className="text-[#9B9B9B]">· {s.category ?? ""}</span>
+            <span>{sat(s.satisfaction)}</span>
+          </div>
+        ))}
+      </div>
+      {data.nextSuggestion && (
+        <button
+          onClick={() => navigate(`/lunchie/settings?intent=${data.nextSuggestion!.intent}`)}
+          className="mt-3 w-full rounded-xl border border-dashed border-[#EB5053] px-3 py-2.5 text-left text-[13px] font-bold text-[#EB5053] active:scale-[0.99]"
+        >
+          다음은 {intentLabel[data.nextSuggestion.intent] ?? data.nextSuggestion.intent}? →
+        </button>
+      )}
+    </div>
+  );
+}
+
 const TAG_CLASS: Record<string, string> = {
   '데이트 코스': 'tag-date',
   '맛집': 'tag-food',
@@ -245,6 +292,7 @@ export default function HomePage() {
 
       {/* 회고 설문 (지난 결정 만족도 — 만족 정답 수집) */}
       <RetroSurveyCard />
+      <TodayJourneyCard />
 
       {/* Lunchie Mode */}
       <motion.div

@@ -6,6 +6,7 @@
 
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import { normalizeDiet, isHardRestriction, type DietTag } from '@shared/const';
+import { intentForHour } from '@shared/intent';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -461,7 +462,7 @@ async function buildDeck(
       body: JSON.stringify({
         candidate_ids: base.map(r => r.id),
         // 앱이 이미 아는 맥락은 클라가 실어 보낸다 (companions=인원수). 나머지는 서버가 보강.
-        context: { diet: filters.dietary, companions: filters.partySize },
+        context: { diet: filters.dietary, companions: filters.partySize, intent: intentForHour(new Date().getHours()) },
         // 예선 = 엔진 추천 top-7 (결정 플로우 ①). 스와이프 덱 = 슬레이트와 1:1.
         k: 7,
         slate_type: 'PRELIM',
