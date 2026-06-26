@@ -611,3 +611,50 @@ export async function recordEvents(
     return { ok: true, count: rows.length, persisted: false };
   }
 }
+
+export interface JourneyStop {
+  restaurant_id: string;
+  category: string | null;
+  intent: string | null;
+  at: number;
+  satisfaction: "POS" | "NEU" | "NEG" | null;
+}
+
+// 순수 함수: 이벤트 배열에서 오늘·해당 유저의 WINNER 스톱을 시간순 추출 (+SURVEY 만족 조인).
+export function selectTodayStops(
+  events: Array<Record<string, unknown>>,
+  userId: string,
+  now: number,
+  getCategory: (id: string) => string | null,
+): JourneyStop[] {
+  const d = new Date(now); d.setHours(0, 0, 0, 0);
+  const t0 = d.getTime();
+  const sat = new Map<string, "POS" | "NEU" | "NEG">();
+  for (const e of events) {
+    if (e.event_type === "SURVEY" && e.user_id === userId && e.restaurant_id) {
+      const a = e.action as string;
+      if (a === "POS" || a === "NEU" || a === "NEG") sat.set(String(e.restaurant_id), a);
+    }
+  }
+  const stops: JourneyStop[] = [];
+  for (const e of events) {
+    if (e.event_type !== "WINNER" || e.user_id !== userId || !e.restaurant_id) continue;
+    const ca = e.created_at;
+    const at = ca instanceof Date ? ca.getTime() : Number(ca) || now;
+    if (at < t0) continue;
+    const rid = String(e.restaurant_id);
+    const ctx = (e.context ?? null) as { intent?: string } | null;
+    stops.push({ restaurant_id: rid, category: getCategory(rid), intent: ctx?.intent ?? null, at, satisfaction: sat.get(rid) ?? null });
+  }
+  return stops.sort((a, b) => a.at - b.at);
+}
+
+// memEvents 래퍼: 카테고리는 피처 스토어에서 해석.
+export function todayStops(userId: string, now = Date.now()): JourneyStop[] {
+  return selectTodayStops(
+    memEvents as Array<Record<string, unknown>>,
+    userId,
+    now,
+    (id) => getItemFeatures(id)?.category ?? null,
+  );
+}
