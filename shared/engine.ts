@@ -1,6 +1,8 @@
 // 런치 엔진 v0 — 공유 타입 (server + client 공용)
 // Phase 0: 로깅 + propensity 스캐폴딩의 계약(contract)을 한 곳에 모은다.
 
+import type { Intent } from "./intent.js";
+
 export const EVENT_TYPES = [
   "IMPRESSION", // 추천 카드 노출 (propensity 기록 대상)
   "SWIPE",      // like / nope
@@ -23,6 +25,7 @@ export interface RecContext {
   weather?: "clear" | "rain" | "cold" | "hot";
   minutes_since_meal?: number;
   companions?: number; // 동행 인원 (1 = 혼자)
+  intent?: Intent; // 하루 여정: 밥/카페/디저트 — recommend 카테고리 필터
   city?: string; // 도시 (lat/lng 또는 기본값에서 파생)
   lat?: number;
   lng?: number;
