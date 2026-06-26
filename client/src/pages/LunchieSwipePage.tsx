@@ -14,6 +14,7 @@ import { getFoodPhotos } from '@/lib/foodPhotos';
 import { useCourseShare } from '@/hooks/useCourseShare';
 import WinnerShareCard from '@/components/lunchie/WinnerShareCard';
 import { logSwipe, logWinner, logNavigate, logEvent, flushEvents } from '@/lib/eventLogger';
+import { intentForCategory } from '@shared/intent';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -302,7 +303,7 @@ function WinnerScreen({ selectedWinner, onReset }: { selectedWinner?: Restaurant
 
   useEffect(() => {
     if (winner) {
-      logWinner(winner.id, { user_id: profile.id, session_id: currentSession?.id ?? null, slate_id: currentSession?.slateId ?? null });
+      logWinner(winner.id, { user_id: profile.id, session_id: currentSession?.id ?? null, slate_id: currentSession?.slateId ?? null, context: { intent: intentForCategory(winner.category) ?? undefined } });
       // 회고 대기: 다음 홈 진입 시 "어땠어요?" 설문 → 만족 정답(SURVEY) 수집
       try { localStorage.setItem('lunchie_retro', JSON.stringify({ id: winner.id, name: winner.name, session: currentSession?.id ?? null, at: Date.now() })); } catch { /* noop */ }
     }
@@ -455,6 +456,13 @@ function WinnerScreen({ selectedWinner, onReset }: { selectedWinner?: Restaurant
             >
               <RotateCcw size={15} /> 다시 고르기
             </button>
+          </div>
+
+          {/* 하루 여정 씨앗 — 다음 스톱 '인지'만. 실제 결정은 이따 홈 '오늘의 여정'에서. */}
+          <div className="mt-3 rounded-xl px-3 py-2.5 text-[12px] leading-relaxed"
+               style={{ background: '#FFF3D6', color: '#8A5A0B' }}>
+            🌱 다 드시고 나서 — <b>커피·디저트</b>도 근처에 있어요.
+            <br />이따 홈 <b>'오늘의 여정'</b>에서 다음 코스를 골라요.
           </div>
 
           {/* Share Card Button */}
