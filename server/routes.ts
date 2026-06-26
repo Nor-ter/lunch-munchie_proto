@@ -16,6 +16,7 @@ import { ENGINE_MODEL_VERSION } from "../shared/engine.js";
 import type { Candidate, RecContext, RecEventInput } from "../shared/engine.js";
 import { normalizeDiet, isHardRestriction } from "../shared/const.js";
 import type { DietTag } from "../shared/const.js";
+import { categoriesForIntent } from "../shared/intent.js";
 
 const router = Router();
 
@@ -600,6 +601,14 @@ router.post("/recommend", async (req, res) => {
       diet_relaxed = true;
     }
   }
+  // 인텐트(밥/카페/디저트) 필터: 후보를 해당 카테고리군으로 제한. 모두 걸러지면 완화.
+  let intent_relaxed = false;
+  if (ctx.intent) {
+    const cats = new Set(categoriesForIntent(ctx.intent));
+    const byIntent = filtered.filter((c) => c.category != null && cats.has(c.category));
+    if (byIntent.length) filtered = byIntent;
+    else intent_relaxed = true;
+  }
   // 처치가 실제로 다르다: control=랜덤 베이스라인, B=엔진(취향+노출피로+재소비+연쇄).
   const now = Date.now();
   // 그룹 합의: member_ids 있으면 멤버 취향을 least-misery로 합성. 없으면 단일 유저.
@@ -656,7 +665,7 @@ router.post("/recommend", async (req, res) => {
   // 실제 보여준 카드만 노출 누적 (다음 추천의 단기 피로 패널티에 반영)
   for (const s of slate) recordExposure(body.user_id, s.id, now);
 
-  res.json({ slate, slate_id, slate_type, model_version: mv, variant, diet_relaxed });
+  res.json({ slate, slate_id, slate_type, model_version: mv, variant, diet_relaxed, intent_relaxed });
 });
 
 // 디버그: 인메모리 버퍼에 쌓인 이벤트 수 (DB 폴백 동작 확인용)
