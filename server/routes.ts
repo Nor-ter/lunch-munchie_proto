@@ -5,7 +5,7 @@ import { eq, and } from "drizzle-orm";
 import { nanoid } from "nanoid";
 import { MOCK_RESTAURANTS, MOCK_COURSES } from "./melbourneData.js";
 import { buildSlate, buildControlSlate, assignVariant } from "./engine/scorer.js";
-import { recordEvents, memEventCount, getMetrics, recordCatalogSize, recordItemFeatures, getItemFeatures } from "./engine/events.js";
+import { recordEvents, memEventCount, getMetrics, recordCatalogSize, recordItemFeatures, getItemFeatures, todayStops } from "./engine/events.js";
 import { enrichContext } from "./engine/context.js";
 import { getTaste, updateTaste, updatePairwise, pairwiseWeight, sampleTheta, tasteFitFromTheta, MIN_TASTE } from "./engine/taste.js";
 import { buildItemVector } from "./engine/features.js";
@@ -16,7 +16,7 @@ import { ENGINE_MODEL_VERSION } from "../shared/engine.js";
 import type { Candidate, RecContext, RecEventInput } from "../shared/engine.js";
 import { normalizeDiet, isHardRestriction } from "../shared/const.js";
 import type { DietTag } from "../shared/const.js";
-import { categoriesForIntent } from "../shared/intent.js";
+import { categoriesForIntent, intentForCategory } from "../shared/intent.js";
 
 const router = Router();
 
@@ -666,6 +666,36 @@ router.post("/recommend", async (req, res) => {
   for (const s of slate) recordExposure(body.user_id, s.id, now);
 
   res.json({ slate, slate_id, slate_type, model_version: mv, variant, diet_relaxed, intent_relaxed });
+});
+
+// 하루 여정: 오늘의 스톱 타임라인 + (사슬 열림 시) 다음-스톱 제안.
+router.get("/journey/today", async (req, res) => {
+  const userId = String(req.query.userId ?? "");
+  if (!userId) return res.json({ stops: [], nextSuggestion: null });
+  const now = Date.now();
+  const stops = todayStops(userId, now);
+  let nextSuggestion: { intent: string; restaurant: { id: string; category?: string }; reason: string } | null = null;
+  const prev = prevStop(userId, now); // 6h occasion 윈도우 내 직전 카테고리 (없으면 null = 사슬 닫힘)
+  if (prev) {
+    const pool = await candidatePool();
+    // 직전 카테고리 다음에 가장 잘 오는 카테고리 (chainFit 최대) → 인텐트
+    const cats = Array.from(new Set(pool.map((c) => c.category).filter(Boolean) as string[]));
+    let bestCat: string | null = null, bestP = 0;
+    for (const c of cats) {
+      const p = chainFitFn(prev, c);
+      if (p > bestP) { bestP = p; bestCat = c; }
+    }
+    const intent = intentForCategory(bestCat) ?? "cafe";
+    const visited = new Set(stops.map((s) => s.restaurant_id));
+    const wanted = new Set(categoriesForIntent(intent as "meal" | "cafe" | "dessert"));
+    const pick = pool
+      .filter((c) => c.category && wanted.has(c.category) && !visited.has(c.id))
+      .sort((a, b) => (b.rating ?? 0) - (a.rating ?? 0))[0];
+    if (pick) {
+      nextSuggestion = { intent, restaurant: { id: pick.id, category: pick.category }, reason: `${prev} 다음` };
+    }
+  }
+  res.json({ stops, nextSuggestion });
 });
 
 // 디버그: 인메모리 버퍼에 쌓인 이벤트 수 (DB 폴백 동작 확인용)
