@@ -673,7 +673,7 @@ router.get("/journey/today", async (req, res) => {
   const userId = String(req.query.userId ?? "");
   if (!userId) return res.json({ stops: [], nextSuggestion: null });
   const now = Date.now();
-  const stops = todayStops(userId, now);
+  const stops = await todayStops(userId, now);
   let nextSuggestion: { intent: string; restaurant: { id: string; category?: string }; reason: string } | null = null;
   const prev = prevStop(userId, now); // 6h occasion 윈도우 내 직전 카테고리 (없으면 null = 사슬 닫힘)
   if (prev) {

@@ -5,6 +5,7 @@
 
 import { db } from "../db.js";
 import { recEvents } from "../../shared/schema.js";
+import { eq, and, gte, inArray } from "drizzle-orm";
 import type { RecEventInput } from "../../shared/engine.js";
 import { assignVariant } from "./scorer.js";
 import { tasteStats } from "./taste.js";
@@ -649,12 +650,22 @@ export function selectTodayStops(
   return stops.sort((a, b) => a.at - b.at);
 }
 
-// memEvents 래퍼: 카테고리는 피처 스토어에서 해석.
-export function todayStops(userId: string, now = Date.now()): JourneyStop[] {
-  return selectTodayStops(
-    memEvents as Array<Record<string, unknown>>,
-    userId,
-    now,
-    (id) => getItemFeatures(id)?.category ?? null,
-  );
+// DB 우선, 실패 시 memEvents 폴백 (recordEvents와 동일한 이중 경로).
+// 이벤트가 DB에 영속되든 인메모리 버퍼에 쌓이든 오늘의 스톱을 일관되게 반환한다.
+// 카테고리는 피처 스토어에서 해석 (recommend가 채움; 없으면 null → 클라가 id로 해석).
+export async function todayStops(userId: string, now = Date.now()): Promise<JourneyStop[]> {
+  const d = new Date(now); d.setHours(0, 0, 0, 0);
+  const getCat = (id: string) => getItemFeatures(id)?.category ?? null;
+  try {
+    const rows = await db.select().from(recEvents).where(
+      and(
+        eq(recEvents.user_id, userId),
+        gte(recEvents.created_at, d),
+        inArray(recEvents.event_type, ["WINNER", "SURVEY"]),
+      ),
+    );
+    return selectTodayStops(rows as Array<Record<string, unknown>>, userId, now, getCat);
+  } catch {
+    return selectTodayStops(memEvents as Array<Record<string, unknown>>, userId, now, getCat);
+  }
 }
