@@ -6,3 +6,6 @@ dist/
 .project-config.json
 .manus-logs/
 .vercel
+
+# Superpowers brainstorm mockups
+.superpowers/
