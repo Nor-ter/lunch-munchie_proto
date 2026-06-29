@@ -12,6 +12,7 @@ import { buildItemVector } from "./engine/features.js";
 import { exposurePenalty, recordExposure } from "./engine/exposure.js";
 import { satiation as satiationScore, recordConsumption } from "./engine/satiation.js";
 import { recordStop, prevStop, chainFit as chainFitFn } from "./engine/chain.js";
+import { decideGroup } from "./engine/group.js";
 import { ENGINE_MODEL_VERSION } from "../shared/engine.js";
 import type { Candidate, RecContext, RecEventInput } from "../shared/engine.js";
 import { normalizeDiet, isHardRestriction } from "../shared/const.js";
@@ -310,32 +311,20 @@ function buildResultsPayload(
 
   const targetCount = Math.min(filteredRestaurants.length, 10);
 
+  // 예선(round1) / 결승 투표(round2) 분리
+  const r1 = sessionSwipes.filter(s => Number(s.round) === 1 || s.round == null);
+  const r2 = sessionSwipes.filter(s => Number(s.round) === 2);
+
   const completionMap: Record<string, number> = {};
-  sessionSwipes.forEach(s => {
+  r1.forEach(s => {
     completionMap[s.user_id] = (completionMap[s.user_id] || 0) + 1;
   });
 
   const completedMembers = members.filter(m => (completionMap[m.user_id] || 0) >= targetCount);
+  const isExpired = Date.now() > new Date(session.deadline_at).getTime();
 
-  const scoresMap: Record<string, { score: number, likeCount: number, dislikeCount: number }> = {};
-  sessionSwipes.forEach(s => {
-    if (!scoresMap[s.restaurant_id]) {
-      scoresMap[s.restaurant_id] = { score: 0, likeCount: 0, dislikeCount: 0 };
-    }
-    if (s.swipe_action === 'LIKE') {
-      scoresMap[s.restaurant_id].score += 14;
-      scoresMap[s.restaurant_id].likeCount += 1;
-    } else {
-      scoresMap[s.restaurant_id].dislikeCount += 1;
-    }
-  });
-
-  const results = Object.entries(scoresMap).map(([restaurantId, data]) => ({
-    restaurantId,
-    score: data.score,
-    likeCount: data.likeCount,
-    dislikeCount: data.dislikeCount
-  })).sort((a, b) => b.score - a.score);
+  // 그룹 결정: least-misery 집계 + (후보 ≥2면) top-2 결승 투표 상태기계
+  const decision = decideGroup(r1 as any, r2 as any, members.length, completedMembers.length, isExpired);
 
   const memberCompletion = members.map(m => ({
     id: m.user_id,
@@ -346,15 +335,18 @@ function buildResultsPayload(
     targetCount
   }));
 
-  const isExpired = Date.now() > new Date(session.deadline_at).getTime();
-
   return {
     completedCount: completedMembers.length,
     totalMembers: members.length,
     memberCompletion,
     isExpired,
     deadlineAt: session.deadline_at,
-    results
+    results: decision.results,
+    phase: decision.phase,           // PRELIM | FINAL | DONE
+    finalists: decision.finalists,   // 결승 후보 top-2
+    finalTally: decision.finalTally, // 결승 표수
+    finalVotedCount: decision.finalVotedCount,
+    winnerId: decision.winnerId,     // DONE일 때 우승
   };
 }
 
