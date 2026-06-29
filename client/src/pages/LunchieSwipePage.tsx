@@ -687,9 +687,10 @@ function FinalBattleResultScreen({
 
 // ─── Decided Screen ───────────────────────────────────────────────────────────
 
-function WaitingOrDecidedScreen({ onContinue }: { onContinue: (winner?: any) => void }) {
+function WaitingOrDecidedScreen({ onContinue, onReroll }: { onContinue: (winner?: any) => void; onReroll: (excludeIds: string[]) => void }) {
   const [, navigate] = useLocation();
   const { currentSession, restaurants, profile } = useApp();
+  const REJECT = '__reject__';
   const [liveResults, setLiveResults] = useState<{
     completedCount: number;
     totalMembers: number;
@@ -697,11 +698,14 @@ function WaitingOrDecidedScreen({ onContinue }: { onContinue: (winner?: any) => 
     results: { restaurantId: string; score: number; likeCount: number; dislikeCount: number }[];
     isExpired: boolean;
     deadlineAt: string | null;
-    phase?: 'PRELIM' | 'FINAL' | 'DONE';
+    phase?: 'PRELIM' | 'FINAL' | 'REROLL' | 'NO_CONSENSUS' | 'DONE';
     finalists?: { restaurantId: string; score: number; likeCount: number; dislikeCount: number }[];
     finalTally?: Record<string, number>;
     finalVotedCount?: number;
     winnerId?: string | null;
+    generation?: number;
+    rejectVotes?: number;
+    excludeIds?: string[];
   }>({
     completedCount: 1,
     totalMembers: currentSession?.members.length || 1,
@@ -717,15 +721,18 @@ function WaitingOrDecidedScreen({ onContinue }: { onContinue: (winner?: any) => 
   const [timeLeft, setTimeLeft] = useState('');
   const [voted, setVoted] = useState(false);
 
-  // 결승 한 표(round-2). 멤버당 1표로 서버가 중복 제거.
+  // 결승 한 표(round=2G). restaurantId가 REJECT면 "둘 다 별로". 멤버당 1표로 서버가 중복 제거.
   const castVote = async (restaurantId: string) => {
     setVoted(true);
+    const round = 2 * (liveResults.generation ?? 1);
+    const isReject = restaurantId === REJECT;
     try {
       await fetch('/api/swipes', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ id: `vote_${profile.id}_${restaurantId}_${Date.now()}`, session_id: currentSession?.id, user_id: profile.id, restaurant_id: restaurantId, round: 2, swipe_action: 'LIKE' }),
+        body: JSON.stringify({ id: `vote_${profile.id}_${restaurantId}_${Date.now()}`, session_id: currentSession?.id, user_id: profile.id, restaurant_id: restaurantId, round, swipe_action: 'LIKE' }),
       });
-      logEvent({ event_type: 'SWIPE', action: 'CHOOSE', slate_type: 'FINAL', restaurant_id: restaurantId, round: 2, user_id: profile.id, session_id: currentSession?.id ?? null });
+      // 신호: finalist 선택 = CHOOSE(pairwise), '둘 다 별로' = NOPE(명시 음성)
+      logEvent({ event_type: 'SWIPE', action: isReject ? 'NOPE' : 'CHOOSE', slate_type: 'FINAL', restaurant_id: restaurantId, round, user_id: profile.id, session_id: currentSession?.id ?? null });
     } catch { /* 표 전송 실패는 폴링으로 복구 */ }
   };
 
@@ -763,22 +770,68 @@ function WaitingOrDecidedScreen({ onContinue }: { onContinue: (winner?: any) => 
     return () => clearInterval(interval);
   }, [currentSession]);
 
-  // 그룹 결정은 서버가 조율한다 (PRELIM → FINAL 투표 → DONE). 뷰어별 로컬 결승 없음 = 모두 같은 우승.
+  // 합의 실패(NO_CONSENSUS) 1회 로깅 (음성 신호 G)
+  const noConsensusLoggedRef = useRef(false);
+  useEffect(() => {
+    if (liveResults.phase === 'NO_CONSENSUS' && !noConsensusLoggedRef.current) {
+      noConsensusLoggedRef.current = true;
+      logEvent({ event_type: 'NO_CONSENSUS', user_id: profile.id, session_id: currentSession?.id ?? null, context: { generation: liveResults.generation ?? 1 } });
+    }
+  }, [liveResults.phase]);
+
+  // 그룹 결정은 서버가 조율한다 (PRELIM → FINAL → DONE / REROLL / NO_CONSENSUS). 모두 같은 결과.
   const phase = liveResults.phase ?? 'PRELIM';
   const isAllCompleted = phase === 'DONE';
   const winner = restaurants.find(r => r.id === liveResults.winnerId) || currentSession?.restaurants[0];
   const finalistRs = (liveResults.finalists ?? [])
     .map(f => restaurants.find(r => r.id === f.restaurantId))
     .filter((r): r is Restaurant => !!r);
+  const serverGen = liveResults.generation ?? 1;
+  const myGen = currentSession?.generation ?? 1;
+  const needReroll = phase === 'REROLL' || serverGen > myGen; // '둘 다 별로' 다수 → 새 세대 재스와이프
 
-  // 결승 단계 + 아직 투표 안 함 → 한 표 화면 (1인 1표; 전원/마감 시 다수결, 동률은 예선 상위)
-  if (phase === 'FINAL' && !voted && finalistRs.length >= 2) {
+  // NO_CONSENSUS → 합의 실패 안내 (reroll 상한 초과)
+  if (phase === 'NO_CONSENSUS') {
+    return (
+      <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }}
+        className="min-h-dvh flex flex-col justify-between px-5 py-8"
+        style={{ background: 'linear-gradient(160deg, #4A4A4A 0%, #2a2a2a 100%)' }}>
+        <div className="flex-1 flex flex-col justify-center text-center">
+          <div className="text-6xl mb-3">🤷</div>
+          <h2 className="text-white font-black text-[24px] mb-2">합의가 어려웠어요</h2>
+          <p className="text-white/70 text-[13px] leading-relaxed">여러 번 골라봤지만 모두 마음에 드는 곳을 못 찾았어요.<br />다른 동네로 넓히거나 나중에 다시 시도해볼까요?</p>
+        </div>
+        <button onClick={() => navigate('/')}
+          className="w-full max-w-[340px] py-4 rounded-2xl font-bold text-[#4A4A4A] text-[15px] bg-white active:scale-[0.98] transition-all shadow-md mx-auto block">처음으로</button>
+      </motion.div>
+    );
+  }
+
+  // REROLL(또는 다른 멤버가 이미 다음 세대로) → 새로운 곳으로 다시 고르기
+  if (needReroll) {
+    return (
+      <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }}
+        className="min-h-dvh flex flex-col justify-between px-5 py-8"
+        style={{ background: 'linear-gradient(160deg, #2C3E50 0%, #1a252f 100%)' }}>
+        <div className="flex-1 flex flex-col justify-center text-center">
+          <div className="text-6xl mb-3">🔄</div>
+          <h2 className="text-white font-black text-[24px] mb-2">다른 곳으로 다시 골라요</h2>
+          <p className="text-white/70 text-[13px] leading-relaxed">‘둘 다 별로’가 많았어요.<br />방금 후보는 빼고 새로운 곳을 가져왔어요.</p>
+        </div>
+        <button onClick={() => onReroll(liveResults.excludeIds ?? [])}
+          className="w-full max-w-[340px] py-4 rounded-2xl font-bold text-white text-[15px] bg-[#EB5053] active:scale-[0.98] transition-all shadow-md mx-auto block">다시 고르기 시작 →</button>
+      </motion.div>
+    );
+  }
+
+  // 결승 투표 (3지선다: 후보 1~2곳 + '둘 다 별로'). 1인 1표; 전원/마감 시 다수결.
+  if (phase === 'FINAL' && !voted && finalistRs.length >= 1) {
     return (
       <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }}
         className="min-h-dvh flex flex-col justify-between px-5 py-8"
         style={{ background: 'linear-gradient(160deg, #2C3E50 0%, #1a252f 100%)' }}>
         <div className="flex-1 flex flex-col justify-center">
-          <h2 className="text-white font-black text-[24px] text-center mb-1">결승! 어디로 갈까요?</h2>
+          <h2 className="text-white font-black text-[24px] text-center mb-1">{finalistRs.length === 1 ? '여기 어때요?' : '결승! 어디로 갈까요?'}</h2>
           <p className="text-white/70 text-[12px] text-center mb-6">한 곳만 골라주세요 · 1인 1표</p>
           <div className="space-y-3 max-w-[360px] mx-auto w-full">
             {finalistRs.slice(0, 2).map(r => (
@@ -793,6 +846,10 @@ function WaitingOrDecidedScreen({ onContinue }: { onContinue: (winner?: any) => 
                 <span className="text-white/90 text-[13px] font-bold whitespace-nowrap">투표 →</span>
               </button>
             ))}
+            <button onClick={() => castVote(REJECT)}
+              className="w-full rounded-2xl border border-dashed border-white/40 py-3 text-white/80 text-[13px] font-bold active:scale-[0.98] transition-all">
+              둘 다 별로 · 다른 곳 보기 🔄
+            </button>
           </div>
         </div>
         <button onClick={() => navigate('/')}
@@ -922,7 +979,7 @@ type Phase = 'swipe' | 'decided' | 'results';
 
 export default function QuickMatchPage() {
   const [, navigate] = useLocation();
-  const { currentSession, addSwipe, swipeRecords, profile } = useApp();
+  const { currentSession, addSwipe, swipeRecords, profile, rerollSession } = useApp();
   const [phase, setPhase] = useState<Phase>('swipe');
   const targetRestaurants = currentSession?.restaurants || [];
   const currentSessionSwipes = swipeRecords.filter(s => s.sessionId === currentSession?.id);
@@ -1100,7 +1157,10 @@ export default function QuickMatchPage() {
       if (duel) return <FinalBattleResultScreen key={(duel.a?.id ?? '') + (duel.b?.id ?? '')} finalist1={duel.a} finalist2={duel.b} onContinue={handleDuelChoice} onRejectBoth={handleRejectBoth} />;
       return null; // 효과가 듀얼/우승 구성 중
     }
-    return <WaitingOrDecidedScreen onContinue={(w) => { if (w) setSelectedWinner(w); setPhase('results'); }} />; // 그룹: 멤버 투표 폴링
+    return <WaitingOrDecidedScreen
+      onContinue={(w) => { if (w) setSelectedWinner(w); setPhase('results'); }}
+      onReroll={async (excludeIds) => { await rerollSession(excludeIds); setSwipeData([]); setCurrentIndex(0); setSelectedWinner(null); setDuel(null); setPhase('swipe'); }}
+    />; // 그룹: 멤버 투표 폴링 + REROLL시 새 세대 재스와이프
   }
   if (phase === 'results') {
     return <WinnerScreen selectedWinner={selectedWinner} onReset={handleReset} />;

@@ -98,6 +98,8 @@ export interface GroupSession {
   recMeta?: Record<string, { propensity: number; position: number }>;
   /** 슬레이트를 만든 엔진 정책 버전 (스와이프 로깅의 model_version) */
   modelVersion?: string;
+  /** 그룹 결정 세대 (reroll마다 +1). 예선 swipe round = 2*gen-1. 미설정=1. */
+  generation?: number;
 }
 
 export interface SessionMember {
@@ -430,6 +432,8 @@ interface AppContextValue {
 
   swipeRecords: SwipeRecord[];
   addSwipe: (restaurantId: string, action: SwipeRecord['action']) => void;
+  /** 그룹 reroll: 거절·다수미움 제외한 fresh 덱으로 다음 세대 예선 시작 */
+  rerollSession: (excludeIds: string[]) => Promise<void>;
   likedRestaurantIds: string[];
 
   profile: UserProfile;
@@ -789,13 +793,29 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
           session_id: currentSession.id,
           user_id: profile.id,
           restaurant_id: restaurantId,
-          round: 1,
+          round: 2 * (currentSession.generation ?? 1) - 1, // 세대별 예선 라운드 (gen1=1, gen2=3, …)
           swipe_action: action === 'like' || action === 'save' ? 'LIKE' : 'DISLIKE',
           created_at: new Date(),
         }),
       }).catch(() => {});
     }
   }, [apiAvailable, currentSession, profile.id]);
+
+  // 그룹 reroll: 거절·다수미움(excludeIds) 뺀 fresh 풀로 새 덱 → 세대 +1. 멤버 각자 재스와이프.
+  const rerollSession = useCallback(async (excludeIds: string[]) => {
+    if (!currentSession) return;
+    const exclude = new Set(excludeIds);
+    const freshPool = restaurants.filter(r => !exclude.has(r.id));
+    const deck = await buildDeck(currentSession.filters, freshPool, profile.id);
+    setCurrentSession(prev => prev ? {
+      ...prev,
+      restaurants: deck.restaurants,
+      slateId: deck.slateId,
+      recMeta: deck.recMeta,
+      modelVersion: deck.modelVersion,
+      generation: (prev.generation ?? 1) + 1,
+    } : prev);
+  }, [currentSession, restaurants, profile.id]);
 
   const likedRestaurantIds = swipeRecords
     .filter(s => s.action === 'like' || s.action === 'save')
@@ -812,7 +832,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     <AppContext.Provider value={{
       courses, savedCourseIds, saveCourse, unsaveCourse, addCourse,
       currentSession, setCurrentSession, createSession, joinSession, fetchSession, toggleReady, startSession,
-      swipeRecords, addSwipe, likedRestaurantIds,
+      swipeRecords, addSwipe, rerollSession, likedRestaurantIds,
       profile, updateProfile,
       restaurants,
       getRestaurantById, getCourseById,

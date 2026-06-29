@@ -15,6 +15,7 @@ export const EVENT_TYPES = [
   "REROLL",     // 다시하기 (불만족·피로 신호)
   "SURVEY",     // 회고 마이크로설문 (action: POS|NEU|NEG = 👍😐👎, 만족 정답)
   "ABANDON",    // 중도 이탈 (결정 전 나감 · context: phase·swipes_done = 어디서 몇 장 보고)
+  "NO_CONSENSUS", // 그룹 합의 실패 (reroll 상한 초과 · 슬레이트 품질↓·탐색 필요 신호)
 ] as const;
 export type EventType = (typeof EVENT_TYPES)[number];
 
