@@ -61,6 +61,42 @@ def tbl(data, colw):
     return t
 
 
+AREA = ParagraphStyle("AREA", fontName=F, fontSize=8.8, textColor=INK, leading=11)
+STATUS_HEX = {"채택": "#2E6B36", "폐기": "#C2362F", "변경": "#8A5A0B", "보류": "#4A4A4A"}
+STATUS_BG = {"채택": HexColor("#E9F8ED"), "폐기": HexColor("#FBE3E1"),
+             "변경": HexColor("#FAEEDA"), "보류": HexColor("#ECEAF2")}
+
+
+def _skey(s):
+    return "보류" if s.startswith("보류") else s
+
+
+def idea_table(groups):
+    data = [[Paragraph("영역 / 아이디어", HEAD), Paragraph("상태", HEAD), Paragraph("이유 / 결과", HEAD)]]
+    cmds = [
+        ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+        ("LINEBELOW", (0, 0), (-1, -1), 0.4, LINE),
+        ("TOPPADDING", (0, 0), (-1, -1), 4), ("BOTTOMPADDING", (0, 0), (-1, -1), 4),
+        ("LEFTPADDING", (0, 0), (-1, -1), 6), ("RIGHTPADDING", (0, 0), (-1, -1), 6),
+        ("BACKGROUND", (0, 0), (-1, 0), BLUE),
+    ]
+    ri = 1
+    for area, items in groups:
+        data.append([Paragraph("<b>" + area + "</b>", AREA), "", ""])
+        cmds += [("SPAN", (0, ri), (-1, ri)), ("BACKGROUND", (0, ri), (-1, ri), HexColor("#EDEAF2"))]
+        ri += 1
+        for idea, status, reason in items:
+            sk = _skey(status)
+            itxt = ("<strike>" + idea + "</strike>") if sk == "폐기" else idea
+            stxt = '<b><font color="%s">%s</font></b>' % (STATUS_HEX[sk], status)
+            data.append([Paragraph(itxt, CELL), Paragraph(stxt, CELL), Paragraph(reason, CELL)])
+            cmds.append(("BACKGROUND", (1, ri), (1, ri), STATUS_BG[sk]))
+            ri += 1
+    t = Table(data, colWidths=[205, 58, 222])
+    t.setStyle(TableStyle(cmds))
+    return t
+
+
 class DetailedFlow(Flowable):
     """단계별 상세 플로우. step = (kind, title, detail, tag, tagkind).
        kind: core|new|seed|end|gap|lane. gap=식사 단절, lane=세션 라벨."""
@@ -218,7 +254,56 @@ story += [P("5. 어떤 효과가 있나", H2),
           ], [80, 405]),
           Spacer(1, 4),
           P("핵심: 새 기능을 많이 더한 게 아니라, 이미 학습 중이던 엔진에 '출구'를 내고 실제 행동(다 먹고 다시 켬)에 흐름을 맞춘 변경이다. "
-            "비용은 작고(UI 2곳 + 필드 1개), 데이터·리텐션 효과는 누적된다.", BODY),
+            "비용은 작고(UI 2곳 + 필드 1개), 데이터·리텐션 효과는 누적된다.", BODY)]
+
+idea_groups = [
+    ("결정 플로우 단순화 (예선·결승)", [
+        ("좋아요 수별 분기(준결승 브래킷, 2/3-4/5-7)", "폐기", "단일 top-2 듀얼로 통일 — 좋아요 1개든 7개든 같은 흐름"),
+        ("미니 토너먼트 (한 번 더 듀얼)", "폐기", "사실상 A/B 테스트·복잡 → 제거"),
+        ("결승 재실행 (같은 쌍 다시)", "폐기", "같은 걸 또 보여줌 → '둘 다 별로' 탈출구로 대체"),
+        ("뒤로가기 · 전부 다시 · 결승 셔플 버튼", "폐기", "선택 마비. 간결·통일 우선"),
+        ("'둘 다 별로 → 다른 곳' 탈출구", "채택", "양쪽 역치 미달 = 깨끗한 거절 신호"),
+        ("예선 10장 → 7장", "변경", "피로↓ · 슬레이트와 1:1"),
+        ("중도 이탈 추론 → 명시 ABANDON", "변경", "어디서 몇 장 보고 나갔는지 기록"),
+        ("CHOOSE 신뢰도 가중 (빠를수록 강한 신호)", "채택", "duel pairwise 신호 정밀화"),
+        ("회고 SURVEY · COURSE_SAVE · REROLL 의미정리", "채택", "만족 정답 · 강한 취향 · 다시하기 신호"),
+    ]),
+    ("하루 여정 — 어디에 사나", [
+        ("A. 홈 타임라인 (은은하게)", "채택", "여정의 척추"),
+        ("B. 우승화면에서 즉석 다음 결정", "변경", "'바로 결정 안 함' → 씨앗(인지)만으로"),
+        ("C. 전용 탭 코스 빌더 (계획형)", "보류 P2", "음식일기·코스 저장 화면"),
+        ("'오늘은 끝' 버튼", "폐기", "6시간 윈도우(prevStop)가 자동 종료"),
+        ("Push 알림 nudge ('1시간 뒤 디저트?')", "보류", "우선 pull. 데이터 쌓인 뒤 검토"),
+    ]),
+    ("음식일기 / 코스", [
+        ("자동 일기 + 골라서 코스 저장", "채택", "노력 0 회상 + 공유 (화면은 P2)"),
+        ("코스만 명시 저장", "폐기", "회상·만족·사슬 데이터가 약함"),
+    ]),
+    ("인텐트 (밥/카페/디저트/놀거리)", [
+        ("시간대 자동 추론 (첫 스톱)", "채택", "점심시간 → 밥"),
+        ("명시 인텐트 토글 (첫 스톱)", "보류", "Phase 1은 자동으로 충분"),
+        ("놀거리 일급 인텐트 (공원·복합문화공간)", "보류 P3", "데이터엔 있으나 후순위"),
+    ]),
+    ("인원수 / 그룹", [
+        ("혼자/같이 토글만", "변경", "하이브리드(같이일 때 정원)로"),
+        ("정원 입력 (같이일 때 스테퍼)", "채택", "참여 제한 + 인원별 분석"),
+        ("정원 참여 제한 (cap, 차면 거부)", "채택", "join이 group_size 도달 시 409"),
+        ("그룹 사슬 분리 학습 (회식 1차→2차)", "보류 P3", "솔로와 전이 패턴이 다름"),
+    ]),
+]
+
+story += [PageBreak(), P("6. 검토한 아이디어 전체 — 시행착오 로그", H2),
+          P("Lunchie의 존재 이유가 결정 피로 제거라, 기능을 <b>더하기보다 덜어내는</b> 쪽으로 갔다. "
+            "그래서 폐기·보류가 채택만큼 많다 — 그게 의도다. (채택 8 · 폐기 6 · 변경 4 · 보류 5)", BODY),
+          P("범례: <font color=\"#2E6B36\"><b>채택</b></font> 반영됨 · "
+            "<font color=\"#C2362F\"><b>폐기</b></font> 버림(취소선) · "
+            "<font color=\"#8A5A0B\"><b>변경</b></font> 형태 바꿔 채택 · "
+            "<font color=\"#4A4A4A\"><b>보류</b></font> Phase 2/3로 연기", CAP),
+          Spacer(1, 4), idea_table(idea_groups), Spacer(1, 4),
+          P("읽는 법: '미니 토너먼트'·'결승 재실행'·'끝 버튼' 같은 폐기 아이디어는 모두 '간결·통일' 또는 "
+            "'실제 행동과 일치'라는 같은 원칙에서 걸러졌다. 채택된 것은 신호를 깨끗하게 하거나(탈출구·신뢰도 가중) "
+            "엔진을 표면화하는(타임라인·다음-스톱) 쪽이다.", BODY),
+          Spacer(1, 4),
           P("관련 문서: 결정 플로우 v2(lunchie_decision_flow.pdf) · 하루 여정 Phase 1 플로우(lunchie_journey_flow.pdf) · "
             "설계 스펙·구현 계획(docs/superpowers).", CAP)]
 
