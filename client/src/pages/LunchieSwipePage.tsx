@@ -275,7 +275,8 @@ function WinnerScreen({ selectedWinner, onReset }: { selectedWinner?: Restaurant
   const [saved, setSaved] = useState(false);
   const [liveResults, setLiveResults] = useState<{
     results: { restaurantId: string; score: number; likeCount: number; dislikeCount: number }[];
-  }>({ results: [] });
+    winnerId?: string | null;
+  }>({ results: [], winnerId: null });
 
   // Poll server results to determine the winning restaurant (skipped once the user has picked one in the finals)
   useEffect(() => {
@@ -298,7 +299,7 @@ function WinnerScreen({ selectedWinner, onReset }: { selectedWinner?: Restaurant
     return () => clearInterval(interval);
   }, [currentSession, selectedWinner]);
 
-  const winnerId = liveResults.results[0]?.restaurantId;
+  const winnerId = liveResults.winnerId || liveResults.results[0]?.restaurantId;
   const winner = selectedWinner || restaurants.find(r => r.id === winnerId) || currentSession?.restaurants[0];
 
   useEffect(() => {
@@ -688,7 +689,7 @@ function FinalBattleResultScreen({
 
 function WaitingOrDecidedScreen({ onContinue }: { onContinue: (winner?: any) => void }) {
   const [, navigate] = useLocation();
-  const { currentSession, restaurants } = useApp();
+  const { currentSession, restaurants, profile } = useApp();
   const [liveResults, setLiveResults] = useState<{
     completedCount: number;
     totalMembers: number;
@@ -696,15 +697,37 @@ function WaitingOrDecidedScreen({ onContinue }: { onContinue: (winner?: any) => 
     results: { restaurantId: string; score: number; likeCount: number; dislikeCount: number }[];
     isExpired: boolean;
     deadlineAt: string | null;
+    phase?: 'PRELIM' | 'FINAL' | 'DONE';
+    finalists?: { restaurantId: string; score: number; likeCount: number; dislikeCount: number }[];
+    finalTally?: Record<string, number>;
+    finalVotedCount?: number;
+    winnerId?: string | null;
   }>({
     completedCount: 1,
     totalMembers: currentSession?.members.length || 1,
     memberCompletion: [],
     results: [],
     isExpired: false,
-    deadlineAt: currentSession?.deadline || null
+    deadlineAt: currentSession?.deadline || null,
+    phase: 'PRELIM',
+    finalists: [],
+    finalVotedCount: 0,
+    winnerId: null,
   });
   const [timeLeft, setTimeLeft] = useState('');
+  const [voted, setVoted] = useState(false);
+
+  // 결승 한 표(round-2). 멤버당 1표로 서버가 중복 제거.
+  const castVote = async (restaurantId: string) => {
+    setVoted(true);
+    try {
+      await fetch('/api/swipes', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: `vote_${profile.id}_${restaurantId}_${Date.now()}`, session_id: currentSession?.id, user_id: profile.id, restaurant_id: restaurantId, round: 2, swipe_action: 'LIKE' }),
+      });
+      logEvent({ event_type: 'SWIPE', action: 'CHOOSE', slate_type: 'FINAL', restaurant_id: restaurantId, round: 2, user_id: profile.id, session_id: currentSession?.id ?? null });
+    } catch { /* 표 전송 실패는 폴링으로 복구 */ }
+  };
 
   // Ticking effect for countdown
   useEffect(() => {
@@ -740,24 +763,42 @@ function WaitingOrDecidedScreen({ onContinue }: { onContinue: (winner?: any) => 
     return () => clearInterval(interval);
   }, [currentSession]);
 
-  const isAllCompleted = liveResults.completedCount >= liveResults.totalMembers || liveResults.isExpired;
+  // 그룹 결정은 서버가 조율한다 (PRELIM → FINAL 투표 → DONE). 뷰어별 로컬 결승 없음 = 모두 같은 우승.
+  const phase = liveResults.phase ?? 'PRELIM';
+  const isAllCompleted = phase === 'DONE';
+  const winner = restaurants.find(r => r.id === liveResults.winnerId) || currentSession?.restaurants[0];
+  const finalistRs = (liveResults.finalists ?? [])
+    .map(f => restaurants.find(r => r.id === f.restaurantId))
+    .filter((r): r is Restaurant => !!r);
 
-  // 결정 플로우 ③: 좋아요(투표) 받은 곳만 후보. 동점이면 엔진 순위(recMeta.position)로 tiebreak.
-  const likedResults = liveResults.results.filter(r => r.likeCount >= 1);
-  const ranked = [...likedResults].sort((a, b) => {
-    if (b.score !== a.score) return b.score - a.score; // 투표 많은 순
-    const pa = currentSession?.recMeta?.[a.restaurantId]?.position ?? 999;
-    const pb = currentSession?.recMeta?.[b.restaurantId]?.position ?? 999;
-    return pa - pb; // 동점 → 엔진 추천 순위 우선
-  });
-  const winnerId = ranked[0]?.restaurantId;
-  const runnerUpId = ranked[1]?.restaurantId;
-  const winner = restaurants.find(r => r.id === winnerId) || currentSession?.restaurants[0];
-  const runnerUp = restaurants.find(r => r.id === runnerUpId);
-
-  // ⑤ 좋아요 2+ → 결승 DUEL(A vs B). 1곳뿐이면 결정 화면에서 바로 우승으로.
-  if (isAllCompleted && winner && runnerUp) {
-    return <FinalBattleResultScreen finalist1={winner} finalist2={runnerUp} onContinue={onContinue} />;
+  // 결승 단계 + 아직 투표 안 함 → 한 표 화면 (1인 1표; 전원/마감 시 다수결, 동률은 예선 상위)
+  if (phase === 'FINAL' && !voted && finalistRs.length >= 2) {
+    return (
+      <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }}
+        className="min-h-dvh flex flex-col justify-between px-5 py-8"
+        style={{ background: 'linear-gradient(160deg, #2C3E50 0%, #1a252f 100%)' }}>
+        <div className="flex-1 flex flex-col justify-center">
+          <h2 className="text-white font-black text-[24px] text-center mb-1">결승! 어디로 갈까요?</h2>
+          <p className="text-white/70 text-[12px] text-center mb-6">한 곳만 골라주세요 · 1인 1표</p>
+          <div className="space-y-3 max-w-[360px] mx-auto w-full">
+            {finalistRs.slice(0, 2).map(r => (
+              <button key={r.id} onClick={() => castVote(r.id)}
+                className="w-full flex items-center gap-3 bg-white/10 border border-white/15 rounded-2xl p-3 active:scale-[0.98] transition-all">
+                <img src={r.image} alt="" className="w-14 h-14 rounded-xl object-cover" />
+                <div className="text-left flex-1 min-w-0">
+                  <span className="text-[9px] bg-white/20 text-white font-bold px-1.5 py-0.5 rounded-full">{r.category}</span>
+                  <p className="text-white font-black text-[15px] mt-0.5 truncate">{r.name}</p>
+                  <p className="text-white/60 text-[11px]">⭐ {r.rating} · {r.distance || '500m'}</p>
+                </div>
+                <span className="text-white/90 text-[13px] font-bold whitespace-nowrap">투표 →</span>
+              </button>
+            ))}
+          </div>
+        </div>
+        <button onClick={() => navigate('/')}
+          className="mt-6 text-white/60 hover:text-white text-[12px] active:scale-95 text-center mx-auto block">처음으로</button>
+      </motion.div>
+    );
   }
 
   return (
@@ -801,7 +842,7 @@ function WaitingOrDecidedScreen({ onContinue }: { onContinue: (winner?: any) => 
               </div>
             )}
             
-            <button onClick={onContinue}
+            <button onClick={() => onContinue(winner)}
               className="w-full max-w-[340px] py-4 rounded-2xl font-bold text-[#EB5053] text-[15px] bg-white active:scale-[0.98] transition-all shadow-md mx-auto block">
               결과 확인하기 🎉
             </button>
@@ -832,14 +873,14 @@ function WaitingOrDecidedScreen({ onContinue }: { onContinue: (winner?: any) => 
             {/* Progress Bar */}
             <div className="bg-white/10 backdrop-blur-md rounded-2xl p-4 max-w-[340px] mx-auto border border-white/10">
               <div className="flex justify-between items-center mb-2 text-white/95">
-                <span className="text-[12px] font-bold">투표 현황</span>
-                <span className="text-[13px] font-black">{liveResults.completedCount} / {liveResults.totalMembers} 명 완료</span>
+                <span className="text-[12px] font-bold">{phase === 'FINAL' ? '결승 투표' : '투표 현황'}</span>
+                <span className="text-[13px] font-black">{(phase === 'FINAL' ? (liveResults.finalVotedCount ?? 0) : liveResults.completedCount)} / {liveResults.totalMembers} 명 {phase === 'FINAL' ? '투표' : '완료'}</span>
               </div>
               <div className="w-full bg-white/20 h-2 rounded-full overflow-hidden">
-                <motion.div 
+                <motion.div
                   className="h-full rounded-full bg-[#EB5053]"
                   initial={{ width: 0 }}
-                  animate={{ width: `${(liveResults.completedCount / (liveResults.totalMembers || 1)) * 100}%` }}
+                  animate={{ width: `${((phase === 'FINAL' ? (liveResults.finalVotedCount ?? 0) : liveResults.completedCount) / (liveResults.totalMembers || 1)) * 100}%` }}
                   transition={{ duration: 0.4 }}
                 />
               </div>

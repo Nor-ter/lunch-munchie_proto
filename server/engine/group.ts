@@ -68,22 +68,23 @@ export function decideGroup(
     const winnerId = (finalists[0] ?? results[0])?.restaurantId ?? null;
     return { phase: "DONE", results, finalists, finalTally: {}, finalVotedCount: 0, winnerId };
   }
-  // 결승: 두 finalist에 대한 round2 LIKE만 유효표
+  // 결승: 두 finalist에 대한 round2 LIKE만 유효표. 멤버당 1표(마지막 표 우선)로 중복 제거.
   const fids = new Set(finalists.map((f) => f.restaurantId));
-  const tally: Record<string, number> = { [finalists[0].restaurantId]: 0, [finalists[1].restaurantId]: 0 };
-  const voters = new Set<string>();
+  const userVote = new Map<string, string>(); // user_id → restaurant_id
   for (const s of round2) {
-    if (s.swipe_action === "LIKE" && s.restaurant_id && fids.has(s.restaurant_id)) {
-      tally[s.restaurant_id] += 1;
-      if (s.user_id) voters.add(s.user_id);
+    if (s.swipe_action === "LIKE" && s.user_id && s.restaurant_id && fids.has(s.restaurant_id)) {
+      userVote.set(s.user_id, s.restaurant_id);
     }
   }
-  const finalDone = voters.size >= memberCount || isExpired;
+  const tally: Record<string, number> = { [finalists[0].restaurantId]: 0, [finalists[1].restaurantId]: 0 };
+  for (const rid of Array.from(userVote.values())) tally[rid] += 1;
+  const finalVoted = userVote.size;
+  const finalDone = finalVoted >= memberCount || isExpired;
   if (!finalDone) {
-    return { phase: "FINAL", results, finalists, finalTally: tally, finalVotedCount: voters.size, winnerId: null };
+    return { phase: "FINAL", results, finalists, finalTally: tally, finalVotedCount: finalVoted, winnerId: null };
   }
   // 우승: 표 많은 finalist, 동률이면 예선 상위(finalists[0])
   const [f0, f1] = finalists;
   const winnerId = tally[f0.restaurantId] >= tally[f1.restaurantId] ? f0.restaurantId : f1.restaurantId;
-  return { phase: "DONE", results, finalists, finalTally: tally, finalVotedCount: voters.size, winnerId };
+  return { phase: "DONE", results, finalists, finalTally: tally, finalVotedCount: finalVoted, winnerId };
 }
