@@ -153,12 +153,12 @@ class GroupDecision(Flowable):
         _box(c, 14, 174, 130, 28, "1위 확정 (결승 생략)", None, GRNF, GRNB, GRNT, GRNT)
         # 중앙 → 결승
         _arrow(c, cx, 234, cx, 202)
-        _box(c, 100, 170, 300, 32, "결승 · A / B / 둘 다 별로", "1인 1표  ·  [C 제안·검토중]", AMBF, AMBB, AMBT, AMBT)
+        _box(c, 100, 170, 300, 32, "결승 · A / B / 둘 다 별로", "1인 1표 (그룹 다수결)", AMBF, AMBB, AMBT, AMBT)
         # 결승 → 결과(표 다수) / reroll(둘 다 별로 최다)
         _arrow(c, 180, 170, 110, 130, "표 다수", col=GRNB, ltc=GRNT, lx=-48)
         _arrow(c, 320, 170, 388, 130, "'둘 다 별로' 최다", col=CRLB, ltc=CRLT, lx=4)
         _box(c, 20, 98, 200, 32, "표 많은 곳 우승", "동률 = 예선 상위(least-misery)", GRNF, GRNB, GRNT, GRNT)
-        _box(c, 280, 98, 200, 32, "reroll: 다음 2곳으로 새 결승", "[C 제안] 소진 시 1위 폴백", CRLF, CRLB, CRLT, CRLT)
+        _box(c, 280, 98, 200, 32, "reroll: 미움 빼고 새 후보 섞기", "상한 초과 → '합의 실패' 안내", CRLF, CRLB, CRLT, CRLT)
         # reroll 루프 → 후보 (점선)
         c.setStrokeColor(CRLB); c.setLineWidth(1); c.setDash(3, 2)
         c.line(480, 114, 490, 114); c.line(490, 114, 490, 249); c.line(490, 249, 370, 249)
@@ -192,9 +192,10 @@ story += [P("3. 그룹 결정 (하이브리드) — least-misery로 좁히고 �
             "'아무도 크게 싫어하지 않는' 안전한 top-2로 좁힌 뒤, 그 둘 중엔 다수결. 뷰어별 로컬 결승이 아니라 "
             "서버가 조율해 모두 같은 우승을 본다 (PRELIM → FINAL → DONE).", BODY),
           Spacer(1, 2), GroupDecision(), Spacer(1, 2),
-          P("[그림 3] 핵심 누락이자 원래 문제의 답인 '둘 다 별로'는 <b>결승 3지선다(A / B / 둘 다 별로) + 다수결 reroll</b>로 "
-            "푼다 — per-person이 아니라 그룹 다수결이라 수렴이 유지된다. 노랑·코랄의 [C 제안]은 아직 확정 전이며, "
-            "확정되면 코드를 이 모델에 맞춘다. 상세: docs/superpowers/specs/2026-06-27-group-decision-model.md", CAP)]
+          P("[그림 3] 원래 문제의 답인 '둘 다 별로'는 <b>결승 3지선다(A / B / 둘 다 별로) + 그룹 다수결 reroll</b>로 푼다 "
+            "— per-person이 아니라 그룹 다수결이라 수렴 유지. reroll은 거절·다수미움을 빼고 새 후보를 섞어 재스와이프하며, "
+            "상한 초과 시 '합의 실패'로 깔끔히 종료(1위 폴백 없음). 로직 확정 — 다음은 코드. "
+            "상세: docs/superpowers/specs/2026-06-27-group-decision-model.md", CAP)]
 
 out = os.path.join(os.path.dirname(__file__), "lunchie_decision_mechanics.pdf")
 SimpleDocTemplate(out, pagesize=A4, topMargin=18 * mm, bottomMargin=16 * mm,
