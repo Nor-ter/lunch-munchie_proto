@@ -404,6 +404,7 @@ interface AppContextValue {
   fetchSession: (token: string) => Promise<GroupSession>;
   toggleReady: (token: string, isReady: boolean) => Promise<GroupSession>;
   startSession: (token: string, deadlineMinutes?: number) => Promise<GroupSession>;
+  submitFinalPick: (restaurantId: string) => void;
 
   swipeRecords: SwipeRecord[];
   addSwipe: (restaurantId: string, action: SwipeRecord['action']) => void;
@@ -723,6 +724,26 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     }
   }, [apiAvailable, currentSession, profile.id]);
 
+  // 결승전(VS)에서 고른 식당을 round 2 스와이프로 서버에 남긴다.
+  // 같은 식당을 고른 멤버들을 결과 화면에서 서로 볼 수 있게 하기 위한 용도라
+  // 예선 통계(swipeRecords/profile)에는 영향을 주지 않는다.
+  const submitFinalPick = useCallback((restaurantId: string) => {
+    if (!apiAvailable || !currentSession) return;
+    fetch('/api/swipes', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        id: `swipe_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
+        session_id: currentSession.id,
+        user_id: profile.id,
+        restaurant_id: restaurantId,
+        round: 2,
+        swipe_action: 'LIKE',
+        created_at: new Date(),
+      }),
+    }).catch(() => {});
+  }, [apiAvailable, currentSession, profile.id]);
+
   const likedRestaurantIds = swipeRecords
     .filter(s => s.action === 'like' || s.action === 'save')
     .map(s => s.restaurantId);
@@ -737,7 +758,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   return (
     <AppContext.Provider value={{
       courses, savedCourseIds, saveCourse, unsaveCourse, addCourse,
-      currentSession, setCurrentSession, createSession, joinSession, fetchSession, toggleReady, startSession,
+      currentSession, setCurrentSession, createSession, joinSession, fetchSession, toggleReady, startSession, submitFinalPick,
       swipeRecords, addSwipe, likedRestaurantIds,
       profile, updateProfile,
       restaurants,

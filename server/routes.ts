@@ -287,15 +287,18 @@ function buildResultsPayload(
 
   const targetCount = Math.min(filteredRestaurants.length, 10);
 
+  // round 2는 예선 스와이프가 아니라 결승전(VS) 최종 선택이므로 완료/점수 집계에서 제외한다.
+  const qualifyingSwipes = sessionSwipes.filter(s => Number(s.round) !== 2);
+
   const completionMap: Record<string, number> = {};
-  sessionSwipes.forEach(s => {
+  qualifyingSwipes.forEach(s => {
     completionMap[s.user_id] = (completionMap[s.user_id] || 0) + 1;
   });
 
   const completedMembers = members.filter(m => (completionMap[m.user_id] || 0) >= targetCount);
 
   const scoresMap: Record<string, { score: number, likeCount: number, dislikeCount: number }> = {};
-  sessionSwipes.forEach(s => {
+  qualifyingSwipes.forEach(s => {
     if (!scoresMap[s.restaurant_id]) {
       scoresMap[s.restaurant_id] = { score: 0, likeCount: 0, dislikeCount: 0 };
     }
@@ -323,6 +326,31 @@ function buildResultsPayload(
     targetCount
   }));
 
+  // 결승전(round 2) 최종 선택을 식당별로 묶어서, 같은 곳을 고른 멤버들이 서로 보이게 한다.
+  // 한 유저가 여러 번 다시 골랐을 경우 가장 마지막 선택만 반영한다.
+  const memberByUserId: Record<string, Record<string, any>> = {};
+  members.forEach(m => { memberByUserId[m.user_id] = m; });
+
+  const finalPickSwipes = sessionSwipes
+    .filter(s => Number(s.round) === 2 && s.swipe_action === 'LIKE')
+    .sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
+
+  const latestPickByUser: Record<string, string> = {};
+  finalPickSwipes.forEach(s => { latestPickByUser[s.user_id] = s.restaurant_id; });
+
+  const finalPicksMap: Record<string, { id: string; name: string; emoji: string }[]> = {};
+  Object.entries(latestPickByUser).forEach(([userId, restaurantId]) => {
+    const m = memberByUserId[userId];
+    if (!m) return;
+    if (!finalPicksMap[restaurantId]) finalPicksMap[restaurantId] = [];
+    finalPicksMap[restaurantId].push({ id: m.user_id, name: m.user_name, emoji: m.emoji });
+  });
+
+  const finalPicks = Object.entries(finalPicksMap).map(([restaurantId, pickedMembers]) => ({
+    restaurantId,
+    members: pickedMembers,
+  }));
+
   const isExpired = Date.now() > new Date(session.deadline_at).getTime();
 
   return {
@@ -331,7 +359,8 @@ function buildResultsPayload(
     memberCompletion,
     isExpired,
     deadlineAt: session.deadline_at,
-    results
+    results,
+    finalPicks,
   };
 }
 

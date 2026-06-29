@@ -18,54 +18,77 @@ import WinnerShareCard from '@/components/lunchie/WinnerShareCard';
 
 type SwipeAction = 'like' | 'dislike';
 
-// 메뉴 사진을 정육면체 옆면처럼 옆으로 돌려서 전환하는 모션.
-// 나가는 면과 들어오는 면이 같은 변(큐브의 모서리)을 공유하는 축으로 함께 돌아가야
-// 두 사진이 한 박스의 이어진 옆면처럼 보인다 (서로 다른 변을 축으로 하면 따로 펄럭이는 것처럼 보임).
-// direction=1(다음): 오른쪽 모서리를 축으로 회전. direction=-1(이전): 왼쪽 모서리를 축으로 회전.
-// 회전하며 멀어질수록 밝기를 낮춰 큐브 옆면이 그늘에 들어가는 듯한 입체감을 더한다.
-// 또한 모서리(축)가 화면 정면을 지나는 회전 중간 시점에 카메라와 가장 가까워지므로,
-// scaleY를 1 → 크게 커짐 → 1로 두어 그 변의 길이가 늘어났다가 줄어드는 것처럼 보이게 하고,
-// 반대로 scaleX는 1 → 살짝 줄어듦 → 1로 두어 옆변(폭)이 좁아 보이게 해 두 변의 대비로
-// 정육면체가 모서리를 축으로 입체적으로 도는 느낌을 강조한다.
-const cubePhotoVariants = {
-  enter: (direction: number) => ({
-    rotateY: direction > 0 ? 90 : -90,
-    originX: direction > 0 ? 1 : 0,
-    filter: 'brightness(0.4)',
-    scaleX: 1,
-    scaleY: 1,
-  }),
-  center: (direction: number) => ({
-    rotateY: 0,
-    originX: direction > 0 ? 1 : 0,
-    filter: 'brightness(1)',
-    scaleX: [1, 0.9, 1],
-    scaleY: [1, 1.18, 1],
-    // originX는 같은 모서리를 유지해야 하는 고정 축이므로 트윈 없이 즉시 고정한다
-    // (다른 방향으로 탭이 바뀌어도 회전 중 축이 미끄러지지 않게).
-    transition: {
-      duration: 0.5,
-      ease: [0.45, 0, 0.2, 1] as const,
-      originX: { duration: 0 },
-      scaleX: { duration: 0.5, times: [0, 0.5, 1] },
-      scaleY: { duration: 0.5, times: [0, 0.5, 1] },
-    },
-  }),
-  exit: (direction: number) => ({
-    rotateY: direction > 0 ? -90 : 90,
-    originX: direction > 0 ? 1 : 0,
-    filter: 'brightness(0.4)',
-    scaleX: [1, 0.9, 1],
-    scaleY: [1, 1.18, 1],
-    transition: {
-      duration: 0.5,
-      ease: [0.45, 0, 0.2, 1] as const,
-      originX: { duration: 0 },
-      scaleX: { duration: 0.5, times: [0, 0.5, 1] },
-      scaleY: { duration: 0.5, times: [0, 0.5, 1] },
-    },
-  }),
-};
+// 큐브 회전 이징 — 참고 슬라이더의 cubic-bezier(0.5,-0.75,0.2,1.5)처럼 살짝 오버슈트하는 탄성감.
+const CUBE_EASE = [0.5, -0.4, 0.2, 1.4] as const;
+const CUBE_DURATION = 0.7;
+
+// 메뉴 사진들을 정육면체의 네 옆면(앞/우/뒤/좌)에 배치하고, 좌/우 탭 시 큐브를 Y축으로
+// 90도씩 굴려 다음/이전 메뉴를 보여주는 진짜 3D 큐브 슬라이더.
+// (참고 CSS 큐브 슬라이더: perspective + preserve-3d + 면마다 rotateY()·translateZ())
+//
+// step: 단조 증가/감소하는 정수(다음 +1, 이전 -1). 큐브는 rotateY(-90*step)로 회전.
+//   - 현재 사진 = photos[((step%n)+n)%n]
+//   - 정면 물리 면 = ((step%4)+4)%4  → 그 면에 현재 사진을 배정한다.
+//   - 90도 한 번 도는 동안 실제로 보이는 면은 "나가는 면 + 들어오는 면" 둘뿐이라
+//     네 면만으로 임의 개수의 사진을 끊김 없이 굴릴 수 있다.
+function MenuCube({ photos, step }: { photos: string[]; step: number }) {
+  const ref = useRef<HTMLDivElement>(null);
+  const [depth, setDepth] = useState(160);
+
+  // 활성 면이 프레임에 정확히 맞도록 translateZ 깊이를 컨테이너 폭의 절반으로 맞춘다.
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    const update = () => setDepth(el.clientWidth / 2);
+    update();
+    const ro = new ResizeObserver(update);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+
+  const n = photos.length || 1;
+  const photoIndex = ((step % n) + n) % n;
+  const front = ((step % 4) + 4) % 4;
+
+  // 앞으로 돌아오는 면에 현재 사진을 배정 (렌더에서 파생되는 캐시라 ref에 보관).
+  const facesRef = useRef<number[]>([0, 0, 0, 0]);
+  facesRef.current[front] = photoIndex;
+  const faces = facesRef.current;
+
+  return (
+    <div ref={ref} className="absolute inset-0 pointer-events-none" style={{ perspective: 1000 }}>
+      {/* 큐브 전체를 depth만큼 뒤로 당겨, 정면 면(translateZ(depth))이 화면 평면(z=0)에 오게 한다 */}
+      <div className="w-full h-full" style={{ transformStyle: 'preserve-3d', transform: `translateZ(-${depth}px)` }}>
+        <motion.div
+          className="w-full h-full relative"
+          style={{ transformStyle: 'preserve-3d' }}
+          animate={{ rotateY: -90 * step }}
+          transition={{ duration: CUBE_DURATION, ease: CUBE_EASE }}
+        >
+          {[0, 1, 2, 3].map(f => (
+            <div
+              key={f}
+              className="absolute inset-0 overflow-hidden"
+              style={{
+                transform: `rotateY(${90 * f}deg) translateZ(${depth}px)`,
+                backfaceVisibility: 'hidden',
+                WebkitBackfaceVisibility: 'hidden',
+              }}
+            >
+              <img src={photos[faces[f]]} alt="" className="w-full h-full object-cover" draggable={false} />
+              {/* 옆으로 돌아간 면일수록 그늘져 큐브의 입체감을 살린다 */}
+              <motion.div
+                className="absolute inset-0 bg-black"
+                animate={{ opacity: f === front ? 0 : 0.45 }}
+                transition={{ duration: CUBE_DURATION, ease: CUBE_EASE }}
+              />
+            </div>
+          ))}
+        </motion.div>
+      </div>
+    </div>
+  );
+}
 
 // 좋아요로 끌 때 사방으로 튀어 날아가는 빛 파티클 한 조각.
 // 같은 x 모션값을 공유하지만 입자마다 다른 방향/크기/회전으로 날아가야 하므로
@@ -112,8 +135,8 @@ function SwipeCard({
   total: number;
 }) {
   const [isRevealed, setIsRevealed] = useState(false);
-  const [photoIndex, setPhotoIndex] = useState(0);
-  const [photoDirection, setPhotoDirection] = useState(1);
+  // step: 메뉴 큐브 회전 단계(다음 +1 / 이전 -1, 단조). photoIndex는 여기서 파생한다.
+  const [step, setStep] = useState(0);
   const x = useMotionValue(0);
   const rotate = useTransform(x, [-220, 220], [-16, 16]);
   const likeOp = useTransform(x, [0, 70], [0, 1]);
@@ -129,6 +152,8 @@ function SwipeCard({
   const crackDark = useTransform(x, [-220, 0], [0.55, 1]);
   const crackFilter = useMotionTemplate`grayscale(${crackGray}) brightness(${crackDark})`;
   const foodPhotos = getFoodPhotos(restaurant.category);
+  const photoCount = foodPhotos.length || 1;
+  const photoIndex = ((step % photoCount) + photoCount) % photoCount;
 
   const handleDragEnd = useCallback((_: unknown, info: { offset: { x: number } }) => {
     if (info.offset.x > 90) onAction('like');
@@ -160,7 +185,7 @@ function SwipeCard({
       whileDrag={{ cursor: 'grabbing' }}
       onTap={() => {
         if (!isRevealed) {
-          setPhotoIndex(0);
+          setStep(0);
           setIsRevealed(true);
         }
       }}
@@ -386,40 +411,25 @@ function SwipeCard({
 
             {/* Single food photo with left/right tap navigation */}
             <div className="flex-1 px-5 pb-4 flex flex-col min-h-0">
-              <div className="rounded-2xl overflow-hidden relative flex-1" style={{ perspective: 1200 }}>
-                <AnimatePresence custom={photoDirection} initial={false}>
-                  <motion.img
-                    key={photoIndex}
-                    src={foodPhotos[photoIndex]}
-                    alt=""
-                    className="absolute inset-0 w-full h-full object-cover"
-                    draggable={false}
-                    custom={photoDirection}
-                    variants={cubePhotoVariants}
-                    initial="enter"
-                    animate="center"
-                    exit="exit"
-                    style={{ backfaceVisibility: 'hidden', WebkitBackfaceVisibility: 'hidden' }}
-                  />
-                </AnimatePresence>
+              <div className="rounded-2xl overflow-hidden relative flex-1">
+                {/* 3D 큐브 슬라이더 — 좌/우 탭 시 큐브가 Y축으로 90도씩 굴러간다 */}
+                <MenuCube photos={foodPhotos} step={step} />
 
-                {/* Left tap zone — previous photo */}
+                {/* Left tap zone — previous photo (큐브를 왼쪽으로 굴림) */}
                 <button
                   className="absolute inset-y-0 left-0 w-1/2"
                   onClick={(e) => {
                     e.stopPropagation();
-                    setPhotoDirection(-1);
-                    setPhotoIndex(i => (i - 1 + foodPhotos.length) % foodPhotos.length);
+                    setStep(s => s - 1);
                   }}
                   aria-label="이전 메뉴"
                 />
-                {/* Right tap zone — next photo */}
+                {/* Right tap zone — next photo (큐브를 오른쪽으로 굴림) */}
                 <button
                   className="absolute inset-y-0 right-0 w-1/2"
                   onClick={(e) => {
                     e.stopPropagation();
-                    setPhotoDirection(1);
-                    setPhotoIndex(i => (i + 1) % foodPhotos.length);
+                    setStep(s => s + 1);
                   }}
                   aria-label="다음 메뉴"
                 />
@@ -490,11 +500,13 @@ function WinnerScreen({ selectedWinner, onReset }: { selectedWinner?: Restaurant
   const [isCapturing, setIsCapturing] = useState(false);
   const [liveResults, setLiveResults] = useState<{
     results: { restaurantId: string; score: number; likeCount: number; dislikeCount: number }[];
-  }>({ results: [] });
+    finalPicks: { restaurantId: string; members: { id: string; name: string; emoji: string }[] }[];
+  }>({ results: [], finalPicks: [] });
 
-  // Poll server results to determine the winning restaurant (skipped once the user has picked one in the finals)
+  // 결과 화면에서 "같은 식당을 고른 멤버들"을 보여주려면, 내가 이미 결승전에서 골랐어도
+  // 다른 멤버들의 선택은 계속 들어오므로 selectedWinner와 무관하게 계속 폴링한다.
   useEffect(() => {
-    if (!currentSession || selectedWinner) return;
+    if (!currentSession) return;
 
     const fetchLiveResults = async () => {
       try {
@@ -511,7 +523,7 @@ function WinnerScreen({ selectedWinner, onReset }: { selectedWinner?: Restaurant
     fetchLiveResults();
     const interval = setInterval(fetchLiveResults, 3000);
     return () => clearInterval(interval);
-  }, [currentSession, selectedWinner]);
+  }, [currentSession]);
 
   const winnerId = liveResults.results[0]?.restaurantId;
   const winner = selectedWinner || restaurants.find(r => r.id === winnerId) || currentSession?.restaurants[0];
@@ -519,6 +531,13 @@ function WinnerScreen({ selectedWinner, onReset }: { selectedWinner?: Restaurant
   if (!winner) return null;
 
   const foodPhotos = getFoodPhotos(winner.category).slice(0, 4);
+
+  // 결승전에서 같은 식당을 고른 멤버들과, 다른 식당을 고른 멤버 그룹.
+  const myPickGroup = liveResults.finalPicks.find(p => p.restaurantId === winner.id);
+  const otherPickGroups = liveResults.finalPicks
+    .filter(p => p.restaurantId !== winner.id)
+    .map(p => ({ ...p, restaurant: restaurants.find(r => r.id === p.restaurantId) }))
+    .filter(p => p.restaurant);
 
   const handleCopyAddress = async () => {
     await navigator.clipboard.writeText(winner.address);
@@ -618,6 +637,40 @@ function WinnerScreen({ selectedWinner, onReset }: { selectedWinner?: Restaurant
 
           {/* Description */}
           <p className="text-[13px] text-[#4A4A4A] leading-relaxed">{winner.description}</p>
+
+          {/* 같은 식당을 고른 멤버들 — 결승전 최종 선택을 그룹으로 모아 보여준다 */}
+          {(myPickGroup?.members.length || otherPickGroups.length > 0) && (
+            <div className="rounded-2xl bg-[#FFF8F2] p-3.5 space-y-2.5">
+              {myPickGroup && myPickGroup.members.length > 0 && (
+                <div>
+                  <p className="text-[11px] font-bold text-[#EB5053] mb-1.5">
+                    🎉 여기서 만나요! {winner.name}을 고른 친구들
+                  </p>
+                  <div className="flex flex-wrap gap-1.5">
+                    {myPickGroup.members.map(m => (
+                      <span key={m.id} className="inline-flex items-center gap-1 bg-white text-[12px] font-semibold text-[#1A1A1A] px-2.5 py-1 rounded-full shadow-sm">
+                        <span>{m.emoji}</span>{m.name}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              )}
+              {otherPickGroups.map(group => (
+                <div key={group.restaurantId}>
+                  <p className="text-[11px] font-bold text-[#9B9B9B] mb-1.5">
+                    {group.restaurant!.name}을 고른 친구들
+                  </p>
+                  <div className="flex flex-wrap gap-1.5">
+                    {group.members.map(m => (
+                      <span key={m.id} className="inline-flex items-center gap-1 bg-white text-[12px] font-semibold text-[#4A4A4A] px-2.5 py-1 rounded-full shadow-sm">
+                        <span>{m.emoji}</span>{m.name}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
 
           {/* Menu Photos */}
           <div>
@@ -729,6 +782,7 @@ function FinalBattleResultScreen({
   onContinue: (winner?: any) => void;
 }) {
   const [selected, setSelected] = useState<1 | 2 | null>(null);
+  const { submitFinalPick } = useApp();
 
   return (
     <motion.div
@@ -744,29 +798,51 @@ function FinalBattleResultScreen({
 
       {/* Diagonal split layout */}
       <div className="flex-1 relative overflow-hidden">
-        {/* Finalist 1 — top-left triangle */}
-        <button
-          onClick={() => setSelected(1)}
+        {/* Finalist 1 — top-left triangle.
+            clipPath는 처음부터 4번째 점을 (100%,0)에 중복시켜 둔다 — 선택 시 그 점만
+            (100%,100%)로 움직이면 대각선 절단면이 스르륵 펼쳐지며 삼각형이 사각형(전체화면)으로
+            매끄럽게 모핑된다 (점 개수가 같아야 framer가 부드럽게 보간한다). */}
+        <motion.button
+          onClick={() => setSelected(prev => (prev === 1 ? null : 1))}
           className="absolute inset-0 text-left"
-          style={{ clipPath: 'polygon(0 0, 100% 0, 0 100%)' }}
+          animate={{
+            clipPath: selected === 1
+              ? 'polygon(0% 0%, 100% 0%, 100% 100%, 0% 100%)'
+              : 'polygon(0% 0%, 100% 0%, 100% 0%, 0% 100%)',
+          }}
+          transition={{ duration: 0.55, ease: [0.32, 0.72, 0, 1] }}
+          style={{ zIndex: selected === 1 ? 30 : selected === 2 ? 5 : 10 }}
         >
-          <img src={finalist1.image} alt={finalist1.name} className="w-full h-full object-cover" draggable={false} />
+          <motion.img
+            src={finalist1.image}
+            alt={finalist1.name}
+            className="w-full h-full object-cover"
+            draggable={false}
+            animate={selected === null ? { scale: [1, 1.07, 1] } : { scale: 1 }}
+            transition={selected === null
+              ? { duration: 2.6, repeat: Infinity, ease: 'easeInOut' }
+              : { duration: 0.4 }}
+          />
           <div className="absolute inset-0 bg-gradient-to-br from-black/30 via-black/45 to-black/70" />
           {selected !== null && (
-            <div
-              className="absolute inset-0 transition-opacity"
-              style={{ background: selected === 1 ? 'transparent' : 'rgba(0,0,0,0.55)' }}
+            <motion.div
+              className="absolute inset-0"
+              initial={{ opacity: selected === 1 ? 0 : 0.55 }}
+              animate={{ opacity: selected === 1 ? 0 : 1 }}
+              style={{ background: 'rgba(0,0,0,0.55)' }}
             />
           )}
           {selected === 1 && (
-            <div className="absolute inset-0 ring-4 ring-inset" style={{ boxShadow: 'inset 0 0 0 4px #F09D09' }} />
+            <motion.div
+              className="absolute inset-0 ring-4 ring-inset"
+              initial={{ boxShadow: 'inset 0 0 0 4px rgba(240,157,9,0)' }}
+              animate={{ boxShadow: 'inset 0 0 0 4px #F09D09' }}
+              transition={{ delay: 0.3, duration: 0.25 }}
+            />
           )}
           <div className="absolute top-6 left-5 right-20 text-left">
-            <span className="inline-block bg-[#FFD700] text-[#1A1A1A] text-[11px] font-black px-3 py-1 rounded-full mb-2">
-              🏆 1위 후보
-            </span>
             {selected === 1 && (
-              <span className="inline-block bg-[#F09D09] text-white text-[11px] font-black px-3 py-1 rounded-full mb-2 ml-1.5">
+              <span className="inline-block bg-[#F09D09] text-white text-[11px] font-black px-3 py-1 rounded-full mb-2">
                 ✓ 선택됨
               </span>
             )}
@@ -776,26 +852,63 @@ function FinalBattleResultScreen({
               <span className="text-white/85 text-[12px]">{finalist1.rating}</span>
               <span className="text-white/60 text-[11px]">{finalist1.distance}</span>
             </div>
+            {/* 선택 시 전체화면으로 펼쳐진 뒤 설명/태그를 보여줘 한 번 더 강조한다 */}
+            {selected === 1 && (
+              <motion.div
+                initial={{ opacity: 0, y: 8 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.4, duration: 0.35 }}
+                className="mt-3 max-w-[80%]"
+              >
+                <p className="text-white/75 text-[12px] leading-relaxed">{finalist1.description}</p>
+                <div className="flex gap-1.5 mt-2 flex-wrap">
+                  {(finalist1.tags || []).slice(0, 3).map((t: string) => (
+                    <span key={t} className="text-[10px] font-bold bg-white/20 text-white px-2.5 py-1 rounded-full">
+                      {t}
+                    </span>
+                  ))}
+                </div>
+              </motion.div>
+            )}
           </div>
-        </button>
+        </motion.button>
 
-        {/* Finalist 2 — bottom-right triangle */}
-        <button
-          onClick={() => setSelected(2)}
+        {/* Finalist 2 — bottom-right triangle. 같은 방식으로 마지막 점을 (100%,0)에 중복시켜 두고,
+            선택 시 그 점을 (0,0)으로 이동시켜 사각형으로 펼친다. */}
+        <motion.button
+          onClick={() => setSelected(prev => (prev === 2 ? null : 2))}
           className="absolute inset-0 text-right"
-          style={{ clipPath: 'polygon(100% 0, 100% 100%, 0 100%)', opacity: selected === 1 ? 0.4 : selected === 2 ? 1 : 0.55 }}
+          animate={{
+            clipPath: selected === 2
+              ? 'polygon(100% 0%, 100% 100%, 0% 100%, 0% 0%)'
+              : 'polygon(100% 0%, 100% 100%, 0% 100%, 100% 0%)',
+            opacity: selected === 1 ? 0 : 1,
+          }}
+          transition={{ duration: 0.55, ease: [0.32, 0.72, 0, 1] }}
+          style={{ zIndex: selected === 2 ? 30 : selected === 1 ? 5 : 10 }}
         >
-          <img src={finalist2.image} alt={finalist2.name} className="w-full h-full object-cover" draggable={false} />
+          <motion.img
+            src={finalist2.image}
+            alt={finalist2.name}
+            className="w-full h-full object-cover"
+            draggable={false}
+            animate={selected === null ? { scale: [1, 1.07, 1] } : { scale: 1 }}
+            transition={selected === null
+              ? { duration: 2.6, repeat: Infinity, ease: 'easeInOut', delay: 0.3 }
+              : { duration: 0.4 }}
+          />
           <div className="absolute inset-0 bg-gradient-to-br from-black/70 via-black/45 to-black/30" />
           {selected === 2 && (
-            <div className="absolute inset-0" style={{ boxShadow: 'inset 0 0 0 4px #F09D09' }} />
+            <motion.div
+              className="absolute inset-0"
+              initial={{ boxShadow: 'inset 0 0 0 4px rgba(240,157,9,0)' }}
+              animate={{ boxShadow: 'inset 0 0 0 4px #F09D09' }}
+              transition={{ delay: 0.3, duration: 0.25 }}
+            />
           )}
           <div className="absolute bottom-6 right-5 left-20 text-right">
-            <span className="inline-block bg-white/20 text-white text-[11px] font-black px-3 py-1 rounded-full mb-2">
-              2위 후보
-            </span>
             {selected === 2 && (
-              <span className="inline-block bg-[#F09D09] text-white text-[11px] font-black px-3 py-1 rounded-full mb-2 mr-1.5">
+              <span className="inline-block bg-[#F09D09] text-white text-[11px] font-black px-3 py-1 rounded-full mb-2">
                 ✓ 선택됨
               </span>
             )}
@@ -805,21 +918,46 @@ function FinalBattleResultScreen({
               <span className="text-white/85 text-[12px]">{finalist2.rating}</span>
               <span className="text-white/60 text-[11px]">{finalist2.distance}</span>
             </div>
+            {selected === 2 && (
+              <motion.div
+                initial={{ opacity: 0, y: -8 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.4, duration: 0.35 }}
+                className="mt-3 max-w-[80%] ml-auto"
+              >
+                <p className="text-white/75 text-[12px] leading-relaxed">{finalist2.description}</p>
+                <div className="flex gap-1.5 mt-2 flex-wrap justify-end">
+                  {(finalist2.tags || []).slice(0, 3).map((t: string) => (
+                    <span key={t} className="text-[10px] font-bold bg-white/20 text-white px-2.5 py-1 rounded-full">
+                      {t}
+                    </span>
+                  ))}
+                </div>
+              </motion.div>
+            )}
           </div>
-        </button>
+        </motion.button>
 
-        {/* Diagonal divider line */}
-        <div className="absolute inset-0 pointer-events-none z-10">
+        {/* Diagonal divider line — 선택되면 함께 사라진다 */}
+        <motion.div
+          className="absolute inset-0 pointer-events-none z-10"
+          animate={{ opacity: selected === null ? 1 : 0 }}
+          transition={{ duration: 0.3 }}
+        >
           <svg className="w-full h-full" preserveAspectRatio="none" viewBox="0 0 100 100">
             <line x1="100" y1="0" x2="0" y2="100" stroke="rgba(255,255,255,0.35)" strokeWidth="0.6" />
           </svg>
-        </div>
+        </motion.div>
 
-        {/* VS badge center */}
+        {/* VS badge center — 선택되면 사라진다 */}
         <motion.div
           className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-20 pointer-events-none"
-          animate={{ scale: [1, 1.12, 1] }}
-          transition={{ duration: 1.4, repeat: Infinity, ease: 'easeInOut' }}
+          animate={selected === null
+            ? { scale: [1, 1.12, 1], opacity: 1 }
+            : { scale: 0.6, opacity: 0 }}
+          transition={selected === null
+            ? { duration: 1.4, repeat: Infinity, ease: 'easeInOut' }
+            : { duration: 0.25 }}
         >
           <div className="w-14 h-14 rounded-full bg-[#F09D09] border-[3px] border-white flex items-center justify-center shadow-2xl">
             <span className="font-black text-white text-[15px]">VS</span>
@@ -830,7 +968,12 @@ function FinalBattleResultScreen({
       {/* Continue */}
       <div className="px-5 py-5">
         <button
-          onClick={() => onContinue(selected === 1 ? finalist1 : selected === 2 ? finalist2 : undefined)}
+          onClick={() => {
+            const winner = selected === 1 ? finalist1 : selected === 2 ? finalist2 : undefined;
+            // 같은 식당을 고른 멤버들이 결과 화면에서 서로 보이도록 서버에 최종 선택을 남긴다.
+            if (winner) submitFinalPick(winner.id);
+            onContinue(winner);
+          }}
           disabled={selected === null}
           className="w-full py-4 rounded-2xl font-bold text-white text-[15px] active:scale-[0.98] shadow-xl transition-opacity disabled:opacity-40"
           style={{ background: '#F09D09' }}

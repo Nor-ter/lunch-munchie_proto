@@ -96,7 +96,9 @@ export default function SessionLobbyPage() {
           {showQR ? <ChevronUp size={16} color="#9B9B9B" /> : <ChevronDown size={16} color="#9B9B9B" />}
         </button>
 
-        <AnimatePresence>
+        {/* initial={false} — 페이지 슬라이딩과 별개로 펼침 모션이 한 번 더 겹쳐 보이는 것을 막는다.
+            (showQR가 기본 true라 마운트 시 펼침 애니메이션이 자동 재생되던 문제) */}
+        <AnimatePresence initial={false}>
           {showQR && (
             <motion.div
               initial={{ opacity: 0, height: 0 }}
@@ -132,7 +134,7 @@ export default function SessionLobbyPage() {
           {showMembers ? <ChevronUp size={16} color="#9B9B9B" /> : <ChevronDown size={16} color="#9B9B9B" />}
         </button>
 
-        <AnimatePresence>
+        <AnimatePresence initial={false}>
           {showMembers && (
             <motion.div
               initial={{ opacity: 0, height: 0 }}

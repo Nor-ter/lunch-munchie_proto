@@ -1,4 +1,4 @@
-import { type ReactNode, useRef } from "react";
+import { type ReactNode, type ReactElement, cloneElement, isValidElement, useRef } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { useLocation } from "wouter";
 
@@ -10,6 +10,7 @@ function usePrevious<T>(value: T): T | undefined {
   return state.current.prev;
 }
 
+// 슬라이드 방향: +1 = 앞으로(오른쪽에서 들어옴), -1 = 뒤로(왼쪽에서 들어옴), 0 = 전환 없음
 function getSlideDirection(from: string | undefined, to: string): number {
   if (from === "/" && to === "/lunchie/settings") return 1;
   if (from === "/lunchie/settings" && to === "/") return -1;
@@ -21,21 +22,26 @@ function getSlideDirection(from: string | undefined, to: string): number {
 }
 
 const slideEase = [0.32, 0.72, 0, 1] as const;
+const DURATION = 0.42;
 
+// 들어오는 면은 화면 밖에서 0으로, 나가는 면은 반대쪽으로 살짝(패럴랙스) 밀려나며 동시에 진행된다.
+// 핵심: enter/exit를 항상 정의하고 방향은 AnimatePresence의 custom(현재 전환 방향)으로 구동한다.
+//  - 이렇게 해야 "직전 화면이 슬라이드 없이 마운트됐다는 이유로 exit가 빠지는" 버그가 사라진다.
+// direction===0 (Lunchie 체인 밖)은 이동 없이 즉시 교체 → 기존 동작 유지.
 const variants = {
-  initial: (direction: number) => ({
-    x: direction > 0 ? "100%" : "-28%",
+  enter: (direction: number) => ({
+    x: direction > 0 ? "100%" : direction < 0 ? "-100%" : 0,
     zIndex: 2,
   }),
-  animate: {
+  center: (direction: number) => ({
     x: 0,
     zIndex: 2,
-    transition: { type: "tween" as const, ease: slideEase, duration: 0.42 },
-  },
+    transition: { type: "tween" as const, ease: slideEase, duration: direction === 0 ? 0 : DURATION },
+  }),
   exit: (direction: number) => ({
-    x: direction > 0 ? "-28%" : "100%",
+    x: direction > 0 ? "-30%" : direction < 0 ? "100%" : 0,
     zIndex: 1,
-    transition: { type: "tween" as const, ease: slideEase, duration: 0.42 },
+    transition: { type: "tween" as const, ease: slideEase, duration: direction === 0 ? 0 : DURATION },
   }),
 };
 
@@ -47,7 +53,13 @@ export default function SlideTransitionRoutes({ children }: SlideTransitionRoute
   const [location] = useLocation();
   const previousLocation = usePrevious(location);
   const direction = getSlideDirection(previousLocation, location);
-  const slide = direction !== 0;
+
+  // 각 레이어의 <Switch>를 자기 레이어의 location으로 고정한다.
+  // 그래야 나가는(이전) 레이어가 현재 location을 따라가 새 페이지를 보여주는
+  // wouter+AnimatePresence 특유의 "두 레이어가 같은 화면" 문제가 생기지 않는다.
+  const frozen = isValidElement(children)
+    ? cloneElement(children as ReactElement<{ location?: string }>, { location })
+    : children;
 
   return (
     <div className="relative min-h-dvh overflow-x-hidden">
@@ -56,18 +68,19 @@ export default function SlideTransitionRoutes({ children }: SlideTransitionRoute
           key={location}
           custom={direction}
           variants={variants}
-          initial={slide ? "initial" : false}
-          animate="animate"
-          exit={slide ? "exit" : undefined}
-          className="min-h-dvh w-full"
+          initial="enter"
+          animate="center"
+          exit="exit"
+          className="w-full"
           style={{
-            position: slide ? "absolute" : "relative",
-            inset: slide ? 0 : undefined,
+            position: "absolute",
+            inset: 0,
+            overflowY: "auto",
             background: "#FCF4EE",
-            willChange: slide ? "transform" : undefined,
+            willChange: "transform",
           }}
         >
-          {children}
+          {frozen}
         </motion.div>
       </AnimatePresence>
     </div>
