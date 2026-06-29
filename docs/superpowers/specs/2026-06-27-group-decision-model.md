@@ -97,11 +97,13 @@
 | A 하이브리드 spine (least-misery 집계 + top-2 투표) | ✅ 구현 (`group.ts` `rankResultsLeastMisery`/`decideGroup`) |
 | 결승 A/B 1인1표 + 멤버당 1표 dedup | ✅ 구현 |
 | PRELIM→FINAL→DONE 상태기계 | ✅ 구현 (`buildResultsPayload`) |
-| **C "둘 다 별로" 3지선다 + reroll** | 🔴 **미구현 (가장 큰 누락)** |
-| B 들러리 필터(과반 미움 후보 배제) + 후보0·1 분기(확인 투표) | 🟡 미구현 (지금은 좋아요≥1·후보<2면 바로 1위) |
-| D 호스트 '지금 진행' | 🟡 미구현 |
-| E 결정적 tiebreak(예선) | 🟡 부분 (score→likeCount, 엔진순위 미반영) |
-| G 음성 신호 로깅(둘 다 별로·별로·reroll 제외·NO_CONSENSUS) | 🔴 미구현 (A/B CHOOSE만 로깅됨) |
+| **C "둘 다 별로" 3지선다 + reroll** | ✅ 구현 (Stage 1 `decideGroup` · 2 route 세대 · 3 클라 3지선다/REROLL/합의실패) |
+| B 들러리 필터(과반 미움 후보 배제) + 후보0·1 분기(확인 투표) | ✅ 구현 (`decideGroup`) |
+| D 호스트 '지금 진행' | 🟡 **미구현 (남은 항목)** — 완료 조건은 전원/마감만 |
+| E 결정적 tiebreak(예선) | ✅ 구현 (score→좋아요→id) |
+| G 음성 신호 로깅(둘 다 별로·reroll·NO_CONSENSUS) | ✅ 구현 (둘 다 별로=NOPE·NO_CONSENSUS 이벤트) |
+
+> 검증 수준: 로직=단위 16건 · 클라=tsc/빌드/번들/무회귀. 2인 실시간 reroll 코디네이션은 환경 DB(간헐 차단)로 라이브 미검증.
 
 ## 로직 확정 — 다음은 코드
 
