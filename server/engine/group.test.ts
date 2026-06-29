@@ -1,9 +1,10 @@
 import { describe, it, expect } from "vitest";
-import { rankResultsLeastMisery, decideGroup, SwipeRow } from "./group";
+import { rankResultsLeastMisery, decideGroup, REJECT_ID, SwipeRow } from "./group";
 
 const like = (rid: string, uid: string): SwipeRow => ({ restaurant_id: rid, swipe_action: "LIKE", round: 1, user_id: uid });
 const nope = (rid: string, uid: string): SwipeRow => ({ restaurant_id: rid, swipe_action: "DISLIKE", round: 1, user_id: uid });
 const vote = (rid: string, uid: string): SwipeRow => ({ restaurant_id: rid, swipe_action: "LIKE", round: 2, user_id: uid });
+const reject = (uid: string): SwipeRow => ({ restaurant_id: REJECT_ID, swipe_action: "LIKE", round: 2, user_id: uid });
 
 describe("rankResultsLeastMisery", () => {
   it("싫어요 적은 곳이 우선 (인기보다 least-misery)", () => {
@@ -67,5 +68,49 @@ describe("decideGroup", () => {
     const d = decideGroup(r1, r2, 3, 3, false);
     expect(d.phase).toBe("DONE");
     expect(d.winnerId).toBe("A");
+  });
+
+  it("B 들러리 필터 — 과반이 싫어한 곳은 후보 제외", () => {
+    // 3명. A: 3 좋아요. B: 1 좋아요·2 싫어요(과반 미움) → 들러리 배제 → 후보 1곳(A) 만장일치.
+    const r1 = [like("A", "u0"), like("A", "u1"), like("A", "u2"), like("B", "u0"), nope("B", "u1"), nope("B", "u2")];
+    const d = decideGroup(r1, [], 3, 3, false);
+    expect(d.phase).toBe("DONE"); // A 만장일치
+    expect(d.winnerId).toBe("A");
+    expect(d.finalists.map((f) => f.restaurantId)).toEqual(["A"]);
+  });
+
+  it("후보 1곳 비만장일치 → 확인 투표(FINAL), '둘 다 별로' 최다 → REROLL", () => {
+    // A: 2명 좋아요·1명 싫어요(과반 미움 아님, 들러리 통과). 만장일치 아님 → 확인 투표.
+    const r1 = [like("A", "u0"), like("A", "u1"), nope("A", "u2")];
+    const mid = decideGroup(r1, [], 3, 3, false);
+    expect(mid.phase).toBe("FINAL");
+    expect(mid.finalists.map((f) => f.restaurantId)).toEqual(["A"]);
+    // 전원 '둘 다 별로' → REROLL, 제외에 A 포함
+    const r2 = [reject("u0"), reject("u1"), reject("u2")];
+    const d = decideGroup(r1, r2, 3, 3, false);
+    expect(d.phase).toBe("REROLL");
+    expect(d.rejectVotes).toBe(3);
+    expect(d.excludeIds).toContain("A");
+  });
+
+  it("'둘 다 별로' 단독 최다 → REROLL (거절 finalists 제외)", () => {
+    const r1 = [like("A", "u0"), like("A", "u1"), like("B", "u0"), like("B", "u1")];
+    const r2 = [reject("u0"), reject("u1")]; // 둘 다 별로 2 vs A0 B0
+    const d = decideGroup(r1, r2, 2, 2, false);
+    expect(d.phase).toBe("REROLL");
+    expect(d.excludeIds.sort()).toEqual(["A", "B"]);
+  });
+
+  it("세대 ≥ cap 에서 '둘 다 별로' 최다 → NO_CONSENSUS", () => {
+    const r1 = [like("A", "u0"), like("A", "u1"), like("B", "u0"), like("B", "u1")];
+    const r2 = [reject("u0"), reject("u1")];
+    const d = decideGroup(r1, r2, 2, 2, false, 3, 3); // generation 3, cap 3
+    expect(d.phase).toBe("NO_CONSENSUS");
+  });
+
+  it("후보 0 (아무도 안 좋아함) → REROLL", () => {
+    const r1 = [nope("A", "u0"), nope("B", "u1")];
+    const d = decideGroup(r1, [], 2, 2, false);
+    expect(d.phase).toBe("REROLL");
   });
 });
