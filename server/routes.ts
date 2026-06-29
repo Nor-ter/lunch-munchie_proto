@@ -311,9 +311,15 @@ function buildResultsPayload(
 
   const targetCount = Math.min(filteredRestaurants.length, 10);
 
-  // 예선(round1) / 결승 투표(round2) 분리
-  const r1 = sessionSwipes.filter(s => Number(s.round) === 1 || s.round == null);
-  const r2 = sessionSwipes.filter(s => Number(s.round) === 2);
+  // 세대(generation) = round 인코딩: 예선=2G-1, 결승=2G. reroll마다 세대+1.
+  // 현재 세대 = 최대 round 기준. 새 세대 swipe가 없으면 G=1로 기존과 동일.
+  const REROLL_CAP = 3;
+  const maxRound = sessionSwipes.reduce((m, s) => Math.max(m, Number(s.round) || 1), 1);
+  const generation = Math.max(1, Math.ceil(maxRound / 2));
+  const prelimRound = 2 * generation - 1;
+  const finalRound = 2 * generation;
+  const r1 = sessionSwipes.filter(s => (Number(s.round) || 1) === prelimRound);
+  const r2 = sessionSwipes.filter(s => Number(s.round) === finalRound);
 
   const completionMap: Record<string, number> = {};
   r1.forEach(s => {
@@ -323,8 +329,8 @@ function buildResultsPayload(
   const completedMembers = members.filter(m => (completionMap[m.user_id] || 0) >= targetCount);
   const isExpired = Date.now() > new Date(session.deadline_at).getTime();
 
-  // 그룹 결정: least-misery 집계 + (후보 ≥2면) top-2 결승 투표 상태기계
-  const decision = decideGroup(r1 as any, r2 as any, members.length, completedMembers.length, isExpired);
+  // 그룹 결정 상태기계: least-misery 집계 + 3지선다 결승 + reroll/합의실패 (현재 세대 기준)
+  const decision = decideGroup(r1 as any, r2 as any, members.length, completedMembers.length, isExpired, generation, REROLL_CAP);
 
   const memberCompletion = members.map(m => ({
     id: m.user_id,
@@ -341,11 +347,15 @@ function buildResultsPayload(
     memberCompletion,
     isExpired,
     deadlineAt: session.deadline_at,
+    generation,                      // 현재 세대 (클라가 swipe round 계산: 예선 2G-1·결승 2G)
+    rerollCap: REROLL_CAP,
     results: decision.results,
-    phase: decision.phase,           // PRELIM | FINAL | DONE
-    finalists: decision.finalists,   // 결승 후보 top-2
-    finalTally: decision.finalTally, // 결승 표수
+    phase: decision.phase,           // PRELIM | FINAL | REROLL | NO_CONSENSUS | DONE
+    finalists: decision.finalists,   // 결승 후보 1~2곳
+    finalTally: decision.finalTally, // 결승 표수(+REJECT)
     finalVotedCount: decision.finalVotedCount,
+    rejectVotes: decision.rejectVotes,
+    excludeIds: decision.excludeIds, // REROLL 시 다음 세대에서 뺄 곳(거절+다수미움)
     winnerId: decision.winnerId,     // DONE일 때 우승
   };
 }
