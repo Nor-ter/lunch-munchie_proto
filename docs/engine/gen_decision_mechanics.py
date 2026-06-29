@@ -135,9 +135,41 @@ class Reentry(Flowable):
         c.lines([(cx + 130, 293, cx + 136, 296), (cx + 130, 293, cx + 136, 290)])
 
 
+class GroupDecision(Flowable):
+    """그룹 결정 (하이브리드): 예선 → least-misery top-2 → 결승 3지선다 → 확정/reroll. C는 제안."""
+    def __init__(self, w=500, h=322):
+        super().__init__(); self.w, self.h = w, h
+
+    def wrap(self, *a):
+        return self.w, self.h
+
+    def draw(self):
+        c = self.canv; cx = 250
+        _box(c, 150, 286, 200, 28, "예선 (각자 LIKE / DISLIKE)", None, BOXF, BOXB, INK, SUB)
+        _arrow(c, cx, 286, cx, 266, "전원 / 호스트 / 마감", lx=6)
+        _box(c, 130, 234, 240, 30, "least-misery top-2 후보", "싫어요 적은 순 → 좋아요 많은 순", BOXF, BOXB, INK, SUB)
+        # 후보<2 → 1위 확정 (좌측 분기)
+        _arrow(c, 150, 234, 90, 204, "후보<2", col=GRNB, ltc=GRNT, lx=-46)
+        _box(c, 14, 174, 130, 28, "1위 확정 (결승 생략)", None, GRNF, GRNB, GRNT, GRNT)
+        # 중앙 → 결승
+        _arrow(c, cx, 234, cx, 202)
+        _box(c, 100, 170, 300, 32, "결승 · A / B / 둘 다 별로", "1인 1표  ·  [C 제안·검토중]", AMBF, AMBB, AMBT, AMBT)
+        # 결승 → 결과(표 다수) / reroll(둘 다 별로 최다)
+        _arrow(c, 180, 170, 110, 130, "표 다수", col=GRNB, ltc=GRNT, lx=-48)
+        _arrow(c, 320, 170, 388, 130, "'둘 다 별로' 최다", col=CRLB, ltc=CRLT, lx=4)
+        _box(c, 20, 98, 200, 32, "표 많은 곳 우승", "동률 = 예선 상위(least-misery)", GRNF, GRNB, GRNT, GRNT)
+        _box(c, 280, 98, 200, 32, "reroll: 다음 2곳으로 새 결승", "[C 제안] 소진 시 1위 폴백", CRLF, CRLB, CRLT, CRLT)
+        # reroll 루프 → 후보 (점선)
+        c.setStrokeColor(CRLB); c.setLineWidth(1); c.setDash(3, 2)
+        c.line(480, 114, 490, 114); c.line(490, 114, 490, 249); c.line(490, 249, 370, 249)
+        c.setDash(); c.setFillColor(CRLB)
+        c.lines([(370, 249, 376, 252), (370, 249, 376, 246)])
+        c.setFillColor(CRLT); c.setFont(F, 7.2); c.drawString(444, 180, "반복")
+
+
 story = []
-story += [P("결정 메커니즘 상세 — '둘 다 별로' & 재진입", H1),
-          P("두 흐름의 내부 동작 다이어그램 · 2026-06-27", SUBT)]
+story += [P("결정 메커니즘 상세 — '둘 다 별로' · 재진입 · 그룹 결정", H1),
+          P("내부 동작 다이어그램 · 2026-06-27", SUBT)]
 
 story += [P("1. '둘 다 별로' 탈출구 — 어떻게 작동하나", H2),
           P("결승 듀얼에서 둘 다 마음에 안 들면, 같은 결승을 다시 하거나 예선으로 돌아가지 않는다. "
@@ -154,6 +186,15 @@ story += [P("2. 재진입 '다음-스톱 제안' — 스와이프 맞다", H2),
           P("[그림 2] 점선 박스 안(예선·듀얼·우승)이 기존과 100% 동일한 스와이프 플로우다. 그래서 '다음 결정'이라는 "
             "한 박스가 생소했던 것 — 그 안에 예선 스와이프가 들어 있었다. (*현재 후보 필터는 탭한 인텐트가 아니라 "
             "시간대 기본값을 쓴다 — 탭 인텐트 관통은 Phase 1.5 후속 배선.)", CAP)]
+
+story += [P("3. 그룹 결정 (하이브리드) — least-misery로 좁히고 → 투표", H2),
+          P("솔로는 개인 듀얼이지만, 그룹은 합의로 정한다. 목적함수는 <b>하이브리드</b>: least-misery로 "
+            "'아무도 크게 싫어하지 않는' 안전한 top-2로 좁힌 뒤, 그 둘 중엔 다수결. 뷰어별 로컬 결승이 아니라 "
+            "서버가 조율해 모두 같은 우승을 본다 (PRELIM → FINAL → DONE).", BODY),
+          Spacer(1, 2), GroupDecision(), Spacer(1, 2),
+          P("[그림 3] 핵심 누락이자 원래 문제의 답인 '둘 다 별로'는 <b>결승 3지선다(A / B / 둘 다 별로) + 다수결 reroll</b>로 "
+            "푼다 — per-person이 아니라 그룹 다수결이라 수렴이 유지된다. 노랑·코랄의 [C 제안]은 아직 확정 전이며, "
+            "확정되면 코드를 이 모델에 맞춘다. 상세: docs/superpowers/specs/2026-06-27-group-decision-model.md", CAP)]
 
 out = os.path.join(os.path.dirname(__file__), "lunchie_decision_mechanics.pdf")
 SimpleDocTemplate(out, pagesize=A4, topMargin=18 * mm, bottomMargin=16 * mm,
