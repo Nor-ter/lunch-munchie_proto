@@ -22,7 +22,7 @@ async function startServer() {
 
   app.get("*", (_req, res) => {
     res.sendFile(path.join(staticPath, "index.html"), (err) => {
-      if (err) {
+      if (err && !res.headersSent) {
         res.status(404).send("Not found");
       }
     });

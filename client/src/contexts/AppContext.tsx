@@ -5,8 +5,25 @@
  */
 
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
+import { normalizeDiet, isHardRestriction, type DietTag } from '@shared/const';
+import { intentForHour } from '@shared/intent';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
+
+// diet 하드 제약 매칭: 필터('비건')와 식당 태그('비건 옵션')를 enum으로 정규화해 비교.
+const SEAFOOD_RE = /해산물|seafood|스시|sushi|초밥|회|sashimi|오마카세|omakase/i;
+function matchesDiet(category: string, restaurantDietary: string[], filterDietary: string[]): boolean {
+  const required: DietTag[] = [];
+  for (const raw of filterDietary || []) {
+    const n = normalizeDiet(raw);
+    if (n && isHardRestriction(n)) required.push(n);
+  }
+  if (required.length === 0) return true;
+  const offered = (restaurantDietary || []).map(normalizeDiet);
+  return required.every((tag) =>
+    tag === 'NO_SEAFOOD' ? !SEAFOOD_RE.test(category) : offered.includes(tag),
+  );
+}
 
 export type TagType = '데이트 코스' | '맛집' | '카페' | '전시/문화' | '액티비티' | '혼자 여행' | '맛집 투어' | '가성비';
 
@@ -75,6 +92,14 @@ export interface GroupSession {
   status: 'waiting' | 'voting' | 'completed';
   restaurants: Restaurant[];
   results: { restaurantId: string; score: number }[];
+  /** 런치 엔진 추천 슬레이트 식별자 (로깅 propensity 승계용) */
+  slateId?: string;
+  /** restaurant_id → {추천 propensity, 노출 position} (스와이프 로깅에 사용) */
+  recMeta?: Record<string, { propensity: number; position: number }>;
+  /** 슬레이트를 만든 엔진 정책 버전 (스와이프 로깅의 model_version) */
+  modelVersion?: string;
+  /** 그룹 결정 세대 (reroll마다 +1). 예선 swipe round = 2*gen-1. 미설정=1. */
+  generation?: number;
 }
 
 export interface SessionMember {
@@ -404,10 +429,11 @@ interface AppContextValue {
   fetchSession: (token: string) => Promise<GroupSession>;
   toggleReady: (token: string, isReady: boolean) => Promise<GroupSession>;
   startSession: (token: string, deadlineMinutes?: number) => Promise<GroupSession>;
-  submitFinalPick: (restaurantId: string) => void;
 
   swipeRecords: SwipeRecord[];
   addSwipe: (restaurantId: string, action: SwipeRecord['action']) => void;
+  /** 그룹 reroll: 거절·다수미움 제외한 fresh 덱으로 다음 세대 예선 시작 */
+  rerollSession: (excludeIds: string[]) => Promise<void>;
   likedRestaurantIds: string[];
 
   profile: UserProfile;
@@ -421,6 +447,47 @@ interface AppContextValue {
 }
 
 const AppContext = createContext<AppContextValue | null>(null);
+
+// 런치 엔진 추천으로 덱을 정렬 + propensity 메타 부착. 실패 시 필터 순서 그대로(폴백).
+async function buildDeck(
+  filters: GroupSession['filters'],
+  allRestaurants: Restaurant[],
+  userId?: string,
+): Promise<{ restaurants: Restaurant[]; slateId?: string; recMeta?: GroupSession['recMeta']; modelVersion?: string }> {
+  const base = allRestaurants.filter(r =>
+    (filters.categories.length === 0 || filters.categories.includes(r.category)) &&
+    matchesDiet(r.category, r.dietary, filters.dietary),
+  );
+  if (base.length === 0) return { restaurants: base };
+  try {
+    const res = await fetch('/api/recommend', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        candidate_ids: base.map(r => r.id),
+        // 앱이 이미 아는 맥락은 클라가 실어 보낸다 (companions=인원수). 나머지는 서버가 보강.
+        context: { diet: filters.dietary, companions: filters.partySize, intent: intentForHour(new Date().getHours()) },
+        // 예선 = 엔진 추천 top-7 (결정 플로우 ①). 스와이프 덱 = 슬레이트와 1:1.
+        k: 7,
+        slate_type: 'PRELIM',
+        user_id: userId,
+      }),
+    });
+    if (!res.ok) return { restaurants: base };
+    const data = await res.json();
+    const meta: GroupSession['recMeta'] = {};
+    const slate: Restaurant[] = [];
+    for (const s of data.slate as { id: string; propensity: number; rank: number }[]) {
+      meta![s.id] = { propensity: s.propensity, position: s.rank };
+      const r = base.find(x => x.id === s.id);
+      if (r) slate.push(r);
+    }
+    // 덱 = 슬레이트(top-7)만. 노출(IMPRESSION)·스와이프가 정확히 일치한다.
+    return { restaurants: slate.length ? slate : base, slateId: data.slate_id, recMeta: meta, modelVersion: data.model_version };
+  } catch {
+    return { restaurants: base };
+  }
+}
 
 function buildLocalSession(
   name: string,
@@ -445,7 +512,8 @@ function buildLocalSession(
     deadline: null,
     status: 'waiting',
     restaurants: restaurants.filter(r =>
-      filters.categories.length === 0 || filters.categories.includes(r.category),
+      (filters.categories.length === 0 || filters.categories.includes(r.category)) &&
+      matchesDiet(r.category, r.dietary, filters.dietary),
     ),
     results: [],
   };
@@ -558,6 +626,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         });
         if (res.ok) {
           const data = await res.json();
+          const deck = await buildDeck(filters, restaurants, profile.id);
           const session: GroupSession = {
             id: data.session.id,
             name,
@@ -575,9 +644,10 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
             deadline: null, // 마감 타이머는 투표 시작 시점에 적용
             deadlineMinutes,
             status: 'waiting',
-            restaurants: restaurants.filter(r =>
-              filters.categories.length === 0 || filters.categories.includes(r.category),
-            ),
+            restaurants: deck.restaurants,
+            slateId: deck.slateId,
+            recMeta: deck.recMeta,
+            modelVersion: deck.modelVersion,
             results: [],
           };
           setCurrentSession(session);
@@ -589,6 +659,11 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     }
 
     const session = buildLocalSession(name, filters, { ...profile, name: actualHostName, emoji: actualEmoji }, restaurants);
+    const deck = await buildDeck(filters, restaurants, profile.id);
+    session.restaurants = deck.restaurants;
+    session.slateId = deck.slateId;
+    session.recMeta = deck.recMeta;
+    session.modelVersion = deck.modelVersion;
     session.deadlineMinutes = deadlineMinutes;
     setCurrentSession(session);
     return session;
@@ -599,6 +674,14 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     if (!res.ok) throw new Error('Session not found');
     const data = await res.json();
     const status = (data.session.status as string).toLowerCase() as GroupSession['status'];
+    const sessFilters = {
+      partySize: data.session.group_size,
+      dietary: data.session.filter_dietary || [],
+      budget: data.session.filter_budget,
+      radius: data.session.filter_distance,
+      categories: data.session.filter_vibe || [],
+    };
+    const deck = await buildDeck(sessFilters, restaurants, profile.id);
     const session: GroupSession = {
       id: data.session.id,
       name: '점심 세션',
@@ -612,20 +695,14 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         preferences: [],
         ready: m.is_ready,
       })),
-      filters: {
-        partySize: data.session.group_size,
-        dietary: data.session.filter_dietary || [],
-        budget: data.session.filter_budget,
-        radius: data.session.filter_distance,
-        categories: data.session.filter_vibe || [],
-      },
+      filters: sessFilters,
       // 대기 중에는 마감 미적용 — 투표 시작 시점에 서버가 deadline_at을 갱신한다
       deadline: status === 'waiting' ? null : data.session.deadline_at,
       status,
-      restaurants: restaurants.filter(r =>
-        (data.session.filter_vibe || []).length === 0 ||
-        (data.session.filter_vibe || []).includes(r.category),
-      ),
+      restaurants: deck.restaurants,
+      slateId: deck.slateId,
+      recMeta: deck.recMeta,
+      modelVersion: deck.modelVersion,
       results: [],
     };
     // 서버 응답에는 없는 로컬 정보(세션 이름, 마감 타이밍 설정)는 유지한다
@@ -716,7 +793,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
           session_id: currentSession.id,
           user_id: profile.id,
           restaurant_id: restaurantId,
-          round: 1,
+          round: 2 * (currentSession.generation ?? 1) - 1, // 세대별 예선 라운드 (gen1=1, gen2=3, …)
           swipe_action: action === 'like' || action === 'save' ? 'LIKE' : 'DISLIKE',
           created_at: new Date(),
         }),
@@ -724,25 +801,21 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     }
   }, [apiAvailable, currentSession, profile.id]);
 
-  // 결승전(VS)에서 고른 식당을 round 2 스와이프로 서버에 남긴다.
-  // 같은 식당을 고른 멤버들을 결과 화면에서 서로 볼 수 있게 하기 위한 용도라
-  // 예선 통계(swipeRecords/profile)에는 영향을 주지 않는다.
-  const submitFinalPick = useCallback((restaurantId: string) => {
-    if (!apiAvailable || !currentSession) return;
-    fetch('/api/swipes', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        id: `swipe_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
-        session_id: currentSession.id,
-        user_id: profile.id,
-        restaurant_id: restaurantId,
-        round: 2,
-        swipe_action: 'LIKE',
-        created_at: new Date(),
-      }),
-    }).catch(() => {});
-  }, [apiAvailable, currentSession, profile.id]);
+  // 그룹 reroll: 거절·다수미움(excludeIds) 뺀 fresh 풀로 새 덱 → 세대 +1. 멤버 각자 재스와이프.
+  const rerollSession = useCallback(async (excludeIds: string[]) => {
+    if (!currentSession) return;
+    const exclude = new Set(excludeIds);
+    const freshPool = restaurants.filter(r => !exclude.has(r.id));
+    const deck = await buildDeck(currentSession.filters, freshPool, profile.id);
+    setCurrentSession(prev => prev ? {
+      ...prev,
+      restaurants: deck.restaurants,
+      slateId: deck.slateId,
+      recMeta: deck.recMeta,
+      modelVersion: deck.modelVersion,
+      generation: (prev.generation ?? 1) + 1,
+    } : prev);
+  }, [currentSession, restaurants, profile.id]);
 
   const likedRestaurantIds = swipeRecords
     .filter(s => s.action === 'like' || s.action === 'save')
@@ -758,8 +831,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   return (
     <AppContext.Provider value={{
       courses, savedCourseIds, saveCourse, unsaveCourse, addCourse,
-      currentSession, setCurrentSession, createSession, joinSession, fetchSession, toggleReady, startSession, submitFinalPick,
-      swipeRecords, addSwipe, likedRestaurantIds,
+      currentSession, setCurrentSession, createSession, joinSession, fetchSession, toggleReady, startSession,
+      swipeRecords, addSwipe, rerollSession, likedRestaurantIds,
       profile, updateProfile,
       restaurants,
       getRestaurantById, getCourseById,

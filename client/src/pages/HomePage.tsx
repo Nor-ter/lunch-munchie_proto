@@ -1,9 +1,93 @@
 import { motion } from "framer-motion";
 import { useLocation } from "wouter";
+import { useState, useEffect } from "react";
 import { Heart, X, ArrowRight, MapPin, Clock, Bookmark } from "lucide-react";
 import { useApp, Course, MOCK_RESTAURANTS } from "@/contexts/AppContext";
 import CourseMapOverlay from "@/components/CourseMapOverlay";
 import { getCourseTagStyle } from "@/constants/courseTheme";
+import { logEvent } from "@/lib/eventLogger";
+import { toast } from "sonner";
+
+// 회고 마이크로설문: 지난 결정 식당의 만족(SURVEY=만족 정답). WINNER 시 localStorage에 대기 저장됨.
+function RetroSurveyCard() {
+  const { profile } = useApp();
+  const [retro, setRetro] = useState<{ id: string; name: string; session?: string | null; at: number } | null>(null);
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem("lunchie_retro");
+      if (raw) setRetro(JSON.parse(raw));
+    } catch { /* noop */ }
+  }, []);
+  if (!retro) return null;
+  const answer = (action: "POS" | "NEU" | "NEG" | null) => {
+    if (action) {
+      logEvent({ event_type: "SURVEY", action, user_id: profile.id, restaurant_id: retro.id, session_id: retro.session ?? null });
+      toast.success("피드백 고마워요! 🙌");
+    }
+    try { localStorage.removeItem("lunchie_retro"); } catch { /* noop */ }
+    setRetro(null);
+  };
+  return (
+    <div className="mx-6 mt-3 rounded-2xl bg-white p-4 shadow-sm border border-[#F0E8E0]">
+      <div className="flex items-start justify-between">
+        <p className="text-[13px] text-[#6E6E6E] leading-snug">최근 점심, <b className="text-[#1A1A1A]">{retro.name}</b> 어땠어요?</p>
+        <button onClick={() => answer(null)} className="text-[#B0B0B0] text-[13px] ml-2 leading-none">✕</button>
+      </div>
+      <div className="mt-3 flex gap-2">
+        <button onClick={() => answer("POS")} className="flex-1 py-2.5 rounded-xl bg-[#EAF7EC] text-[#2E9E42] font-bold text-[14px] active:scale-95 transition-transform">👍 좋았어요</button>
+        <button onClick={() => answer("NEU")} className="flex-1 py-2.5 rounded-xl bg-[#F1EFE8] text-[#6E6E6E] font-bold text-[14px] active:scale-95 transition-transform">😐 그냥</button>
+        <button onClick={() => answer("NEG")} className="flex-1 py-2.5 rounded-xl bg-[#FBECEC] text-[#D83A3D] font-bold text-[14px] active:scale-95 transition-transform">👎 별로</button>
+      </div>
+    </div>
+  );
+}
+
+// 하루 여정: 오늘 결정된 스톱 타임라인 + (사슬 열림 시) 다음-스톱 제안.
+function TodayJourneyCard() {
+  const { profile } = useApp();
+  const [, navigate] = useLocation();
+  const [data, setData] = useState<{
+    stops: { restaurant_id: string; category: string | null; satisfaction: string | null }[];
+    nextSuggestion: { intent: string; restaurant: { id: string; category?: string }; reason: string } | null;
+  } | null>(null);
+  useEffect(() => {
+    let on = true;
+    fetch(`/api/journey/today?userId=${encodeURIComponent(profile.id)}`)
+      .then((r) => r.json())
+      .then((d) => { if (on) setData(d); })
+      .catch(() => { /* 폴백: 카드 숨김 */ });
+    return () => { on = false; };
+  }, [profile.id]);
+  if (!data || data.stops.length === 0) return null; // 오늘 스톱 0개 → 숨김
+
+  const nameOf = (id: string) => MOCK_RESTAURANTS.find((r) => r.id === id)?.name ?? id;
+  const sat = (s: string | null) => (s === "POS" ? "👍" : s === "NEG" ? "👎" : s === "NEU" ? "😐" : "");
+  const intentLabel: Record<string, string> = { meal: "밥", cafe: "커피", dessert: "디저트" };
+
+  return (
+    <div className="mx-4 mb-4 rounded-2xl bg-white p-4 shadow-sm">
+      <p className="mb-3 text-[13px] font-bold text-[#1A1A1A]">오늘의 여정</p>
+      <div className="space-y-2">
+        {data.stops.map((s, i) => (
+          <div key={i} className="flex items-center gap-2 text-[13px]">
+            <span className="text-[#EB5053]">●</span>
+            <span className="font-semibold text-[#1A1A1A]">{nameOf(s.restaurant_id)}</span>
+            <span className="text-[#9B9B9B]">· {s.category ?? ""}</span>
+            <span>{sat(s.satisfaction)}</span>
+          </div>
+        ))}
+      </div>
+      {data.nextSuggestion && (
+        <button
+          onClick={() => navigate(`/lunchie/settings?intent=${data.nextSuggestion!.intent}`)}
+          className="mt-3 w-full rounded-xl border border-dashed border-[#EB5053] px-3 py-2.5 text-left text-[13px] font-bold text-[#EB5053] active:scale-[0.99]"
+        >
+          다음은 {intentLabel[data.nextSuggestion.intent] ?? data.nextSuggestion.intent}? →
+        </button>
+      )}
+    </div>
+  );
+}
 
 function MunchieCourseCard({ course }: { course: Course }) {
   const [, navigate] = useLocation();
@@ -157,6 +241,10 @@ export default function HomePage() {
           모드를 선택해주세요.
         </p>
       </motion.div>
+
+      {/* 회고 설문 (지난 결정 만족도 — 만족 정답 수집) */}
+      <RetroSurveyCard />
+      <TodayJourneyCard />
 
       {/* Lunchie Mode */}
       <motion.div

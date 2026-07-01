@@ -7,12 +7,14 @@
 import { useState, useCallback, useEffect, useRef } from 'react';
 import { motion, useMotionValue, useTransform, useMotionTemplate, AnimatePresence, type MotionValue } from 'framer-motion';
 import { useLocation } from 'wouter';
-import { ArrowLeft, Heart, X, Star, MapPin, Clock, Phone, Navigation, Share2, Download, Link2, Home } from 'lucide-react';
+import { ArrowLeft, Heart, X, Star, MapPin, Clock, Phone, Navigation, Share2, Download, Link2, Home, Bookmark, RotateCcw } from 'lucide-react';
 import { toast } from 'sonner';
 import { useApp, type Restaurant } from '@/contexts/AppContext';
 import { getFoodPhotos } from '@/lib/foodPhotos';
 import { useCourseShare } from '@/hooks/useCourseShare';
 import WinnerShareCard from '@/components/lunchie/WinnerShareCard';
+import { logSwipe, logWinner, logNavigate, logEvent, flushEvents } from '@/lib/eventLogger';
+import { intentForCategory } from '@shared/intent';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -493,15 +495,16 @@ function formatRemainingTime(deadlineStr: string | null): string {
 
 function WinnerScreen({ selectedWinner, onReset }: { selectedWinner?: Restaurant | null; onReset: () => void }) {
   const [, navigate] = useLocation();
-  const { currentSession, restaurants } = useApp();
+  const { currentSession, restaurants, profile } = useApp();
   const { captureCard, downloadImage } = useCourseShare();
   const shareCardRef = useRef<HTMLDivElement>(null);
   const [showShare, setShowShare] = useState(false);
   const [isCapturing, setIsCapturing] = useState(false);
+  const [saved, setSaved] = useState(false);
   const [liveResults, setLiveResults] = useState<{
     results: { restaurantId: string; score: number; likeCount: number; dislikeCount: number }[];
-    finalPicks: { restaurantId: string; members: { id: string; name: string; emoji: string }[] }[];
-  }>({ results: [], finalPicks: [] });
+    winnerId?: string | null;
+  }>({ results: [], winnerId: null });
 
   // 결과 화면에서 "같은 식당을 고른 멤버들"을 보여주려면, 내가 이미 결승전에서 골랐어도
   // 다른 멤버들의 선택은 계속 들어오므로 selectedWinner와 무관하게 계속 폴링한다.
@@ -525,19 +528,20 @@ function WinnerScreen({ selectedWinner, onReset }: { selectedWinner?: Restaurant
     return () => clearInterval(interval);
   }, [currentSession]);
 
-  const winnerId = liveResults.results[0]?.restaurantId;
+  const winnerId = liveResults.winnerId || liveResults.results[0]?.restaurantId;
   const winner = selectedWinner || restaurants.find(r => r.id === winnerId) || currentSession?.restaurants[0];
+
+  useEffect(() => {
+    if (winner) {
+      logWinner(winner.id, { user_id: profile.id, session_id: currentSession?.id ?? null, slate_id: currentSession?.slateId ?? null, context: { intent: intentForCategory(winner.category) ?? undefined } });
+      // 회고 대기: 다음 홈 진입 시 "어땠어요?" 설문 → 만족 정답(SURVEY) 수집
+      try { localStorage.setItem('lunchie_retro', JSON.stringify({ id: winner.id, name: winner.name, session: currentSession?.id ?? null, at: Date.now() })); } catch { /* noop */ }
+    }
+  }, [winner?.id]);
 
   if (!winner) return null;
 
   const foodPhotos = getFoodPhotos(winner.category).slice(0, 4);
-
-  // 결승전에서 같은 식당을 고른 멤버들과, 다른 식당을 고른 멤버 그룹.
-  const myPickGroup = liveResults.finalPicks.find(p => p.restaurantId === winner.id);
-  const otherPickGroups = liveResults.finalPicks
-    .filter(p => p.restaurantId !== winner.id)
-    .map(p => ({ ...p, restaurant: restaurants.find(r => r.id === p.restaurantId) }))
-    .filter(p => p.restaurant);
 
   const handleCopyAddress = async () => {
     await navigator.clipboard.writeText(winner.address);
@@ -638,40 +642,6 @@ function WinnerScreen({ selectedWinner, onReset }: { selectedWinner?: Restaurant
           {/* Description */}
           <p className="text-[13px] text-[#4A4A4A] leading-relaxed">{winner.description}</p>
 
-          {/* 같은 식당을 고른 멤버들 — 결승전 최종 선택을 그룹으로 모아 보여준다 */}
-          {(myPickGroup?.members.length || otherPickGroups.length > 0) && (
-            <div className="rounded-2xl bg-[#FFF8F2] p-3.5 space-y-2.5">
-              {myPickGroup && myPickGroup.members.length > 0 && (
-                <div>
-                  <p className="text-[11px] font-bold text-[#EB5053] mb-1.5">
-                    🎉 여기서 만나요! {winner.name}을 고른 친구들
-                  </p>
-                  <div className="flex flex-wrap gap-1.5">
-                    {myPickGroup.members.map(m => (
-                      <span key={m.id} className="inline-flex items-center gap-1 bg-white text-[12px] font-semibold text-[#1A1A1A] px-2.5 py-1 rounded-full shadow-sm">
-                        <span>{m.emoji}</span>{m.name}
-                      </span>
-                    ))}
-                  </div>
-                </div>
-              )}
-              {otherPickGroups.map(group => (
-                <div key={group.restaurantId}>
-                  <p className="text-[11px] font-bold text-[#9B9B9B] mb-1.5">
-                    {group.restaurant!.name}을 고른 친구들
-                  </p>
-                  <div className="flex flex-wrap gap-1.5">
-                    {group.members.map(m => (
-                      <span key={m.id} className="inline-flex items-center gap-1 bg-white text-[12px] font-semibold text-[#4A4A4A] px-2.5 py-1 rounded-full shadow-sm">
-                        <span>{m.emoji}</span>{m.name}
-                      </span>
-                    ))}
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-
           {/* Menu Photos */}
           <div>
             <p className="text-[12px] font-bold text-[#9B9B9B] mb-2">메뉴 사진</p>
@@ -693,12 +663,36 @@ function WinnerScreen({ selectedWinner, onReset }: { selectedWinner?: Restaurant
               <Phone size={15} /> 예약하기
             </button>
             <button
-              onClick={() => navigate(`/lunchie/map?id=${winner.id}`)}
+              onClick={() => { logNavigate(winner.id, { user_id: profile.id, session_id: currentSession?.id ?? null }); navigate(`/lunchie/map?id=${winner.id}`); }}
               className="flex-1 py-3 rounded-2xl font-bold text-white text-[14px] flex items-center justify-center gap-1.5 active:scale-[0.98] transition-all"
               style={{ background: '#EB5053' }}
             >
               <Navigation size={15} /> 길찾기
             </button>
+          </div>
+
+          {/* 저장(강한 취향 신호 COURSE_SAVE) · 다시 고르기(REROLL) */}
+          <div className="flex gap-2">
+            <button
+              onClick={() => { if (!saved) { logEvent({ event_type: 'COURSE_SAVE', user_id: profile.id, session_id: currentSession?.id ?? null, restaurant_id: winner.id }); setSaved(true); toast.success('저장했어요 🔖'); } }}
+              className="flex-1 py-3 rounded-2xl font-bold text-[14px] flex items-center justify-center gap-1.5 border active:scale-[0.98] transition-all"
+              style={{ borderColor: saved ? '#EB5053' : '#E5E5E5', color: saved ? '#EB5053' : '#4A4A4A', background: saved ? '#FFF5F5' : 'white' }}
+            >
+              <Bookmark size={15} fill={saved ? '#EB5053' : 'none'} /> {saved ? '저장됨' : '저장'}
+            </button>
+            <button
+              onClick={onReset}
+              className="flex-1 py-3 rounded-2xl font-bold text-[14px] flex items-center justify-center gap-1.5 border border-[#E5E5E5] text-[#4A4A4A] active:scale-[0.98] transition-all"
+            >
+              <RotateCcw size={15} /> 다시 고르기
+            </button>
+          </div>
+
+          {/* 하루 여정 씨앗 — 다음 스톱 '인지'만. 실제 결정은 이따 홈 '오늘의 여정'에서. */}
+          <div className="mt-3 rounded-xl px-3 py-2.5 text-[12px] leading-relaxed"
+               style={{ background: '#FFF3D6', color: '#8A5A0B' }}>
+            🌱 다 드시고 나서 — <b>커피·디저트</b>도 근처에 있어요.
+            <br />이따 홈 <b>'오늘의 여정'</b>에서 다음 코스를 골라요.
           </div>
 
           {/* Share Card Button */}
@@ -721,7 +715,7 @@ function WinnerScreen({ selectedWinner, onReset }: { selectedWinner?: Restaurant
           <Link2 size={14} /> 주소 복사
         </button>
         <button
-          onClick={() => { onReset(); navigate('/'); }}
+          onClick={() => navigate('/')}
           className="flex-1 py-3 rounded-2xl font-bold text-[13px] flex items-center justify-center gap-1.5 bg-white border border-[#E5E5E5] text-[#4A4A4A] active:scale-[0.98] transition-all"
         >
           <Home size={14} /> 홈으로
@@ -776,13 +770,24 @@ function FinalBattleResultScreen({
   finalist1,
   finalist2,
   onContinue,
+  onRejectBoth,
 }: {
   finalist1: any;
   finalist2: any;
   onContinue: (winner?: any) => void;
+  onRejectBoth?: () => void;
 }) {
   const [selected, setSelected] = useState<1 | 2 | null>(null);
-  const { submitFinalPick } = useApp();
+  const { currentSession, profile } = useApp();
+  const [finalSlateId] = useState(() => `final_${currentSession?.id ?? 'x'}_${Date.now()}`);
+  const duelRound = 2; // 듀얼 = round 2 (예선=round 1)
+  const mountAtRef = useRef(Date.now()); // 듀얼 노출 시각 → 결정 시간(신뢰도) 측정
+  useEffect(() => {
+    // 듀얼 = 크기 2 슬레이트. 두 후보를 노출로 기록 → CHOOSE 시 opponent 파생(pairwise A>B).
+    [finalist1, finalist2].forEach((f, i) => {
+      if (f) logEvent({ event_type: 'IMPRESSION', user_id: profile.id, slate_id: finalSlateId, slate_type: 'FINAL', restaurant_id: f.id, position: i, round: duelRound, session_id: currentSession?.id ?? null });
+    });
+  }, [finalSlateId]);
 
   return (
     <motion.div
@@ -793,7 +798,7 @@ function FinalBattleResultScreen({
       {/* Header */}
       <div className="px-5 pt-12 pb-4 text-center">
         <p className="font-black text-white text-[22px]">결승전 🏆</p>
-        <p className="text-white/50 text-[13px] mt-1">모두의 투표로 결정된 최후의 2곳 · 마음에 드는 곳을 골라보세요</p>
+        <p className="text-white/50 text-[13px] mt-1">엔진 추천 top 2 · 마음에 드는 곳을, 둘 다 별로면 아래에서 다른 곳</p>
       </div>
 
       {/* Diagonal split layout */}
@@ -970,8 +975,8 @@ function FinalBattleResultScreen({
         <button
           onClick={() => {
             const winner = selected === 1 ? finalist1 : selected === 2 ? finalist2 : undefined;
-            // 같은 식당을 고른 멤버들이 결과 화면에서 서로 보이도록 서버에 최종 선택을 남긴다.
-            if (winner) submitFinalPick(winner.id);
+            const opponent = selected === 1 ? finalist2 : finalist1; // 패자 → pairwise(A>B) 파생용
+            if (winner) logEvent({ event_type: 'SWIPE', action: 'CHOOSE', user_id: profile.id, slate_id: finalSlateId, slate_type: 'FINAL', restaurant_id: winner.id, round: duelRound, session_id: currentSession?.id ?? null, context: { opponent_id: opponent?.id, decision_ms: Date.now() - mountAtRef.current } });
             onContinue(winner);
           }}
           disabled={selected === null}
@@ -980,6 +985,14 @@ function FinalBattleResultScreen({
         >
           {selected === null ? '음식점을 선택해주세요 👆' : '이 곳으로 결정! 🎉'}
         </button>
+        {onRejectBoth && (
+          <button
+            onClick={onRejectBoth}
+            className="w-full mt-2.5 py-3 rounded-2xl font-bold text-white/70 text-[13px] active:scale-[0.98] transition-all bg-white/10"
+          >
+            둘 다 별로 · 다른 곳 보기 🔄
+          </button>
+        )}
       </div>
     </motion.div>
   );
@@ -987,9 +1000,10 @@ function FinalBattleResultScreen({
 
 // ─── Decided Screen ───────────────────────────────────────────────────────────
 
-function WaitingOrDecidedScreen({ onContinue }: { onContinue: (winner?: any) => void }) {
+function WaitingOrDecidedScreen({ onContinue, onReroll }: { onContinue: (winner?: any) => void; onReroll: (excludeIds: string[]) => void }) {
   const [, navigate] = useLocation();
-  const { currentSession, restaurants } = useApp();
+  const { currentSession, restaurants, profile } = useApp();
+  const REJECT = '__reject__';
   const [liveResults, setLiveResults] = useState<{
     completedCount: number;
     totalMembers: number;
@@ -997,15 +1011,43 @@ function WaitingOrDecidedScreen({ onContinue }: { onContinue: (winner?: any) => 
     results: { restaurantId: string; score: number; likeCount: number; dislikeCount: number }[];
     isExpired: boolean;
     deadlineAt: string | null;
+    phase?: 'PRELIM' | 'FINAL' | 'REROLL' | 'NO_CONSENSUS' | 'DONE';
+    finalists?: { restaurantId: string; score: number; likeCount: number; dislikeCount: number }[];
+    finalTally?: Record<string, number>;
+    finalVotedCount?: number;
+    winnerId?: string | null;
+    generation?: number;
+    rejectVotes?: number;
+    excludeIds?: string[];
   }>({
     completedCount: 1,
     totalMembers: currentSession?.members.length || 1,
     memberCompletion: [],
     results: [],
     isExpired: false,
-    deadlineAt: currentSession?.deadline || null
+    deadlineAt: currentSession?.deadline || null,
+    phase: 'PRELIM',
+    finalists: [],
+    finalVotedCount: 0,
+    winnerId: null,
   });
   const [timeLeft, setTimeLeft] = useState('');
+  const [voted, setVoted] = useState(false);
+
+  // 결승 한 표(round=2G). restaurantId가 REJECT면 "둘 다 별로". 멤버당 1표로 서버가 중복 제거.
+  const castVote = async (restaurantId: string) => {
+    setVoted(true);
+    const round = 2 * (liveResults.generation ?? 1);
+    const isReject = restaurantId === REJECT;
+    try {
+      await fetch('/api/swipes', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: `vote_${profile.id}_${restaurantId}_${Date.now()}`, session_id: currentSession?.id, user_id: profile.id, restaurant_id: restaurantId, round, swipe_action: 'LIKE' }),
+      });
+      // 신호: finalist 선택 = CHOOSE(pairwise), '둘 다 별로' = NOPE(명시 음성)
+      logEvent({ event_type: 'SWIPE', action: isReject ? 'NOPE' : 'CHOOSE', slate_type: 'FINAL', restaurant_id: restaurantId, round, user_id: profile.id, session_id: currentSession?.id ?? null });
+    } catch { /* 표 전송 실패는 폴링으로 복구 */ }
+  };
 
   // Ticking effect for countdown
   useEffect(() => {
@@ -1041,17 +1083,92 @@ function WaitingOrDecidedScreen({ onContinue }: { onContinue: (winner?: any) => 
     return () => clearInterval(interval);
   }, [currentSession]);
 
-  const isAllCompleted = liveResults.completedCount >= liveResults.totalMembers || liveResults.isExpired;
+  // 합의 실패(NO_CONSENSUS) 1회 로깅 (음성 신호 G)
+  const noConsensusLoggedRef = useRef(false);
+  useEffect(() => {
+    if (liveResults.phase === 'NO_CONSENSUS' && !noConsensusLoggedRef.current) {
+      noConsensusLoggedRef.current = true;
+      logEvent({ event_type: 'NO_CONSENSUS', user_id: profile.id, session_id: currentSession?.id ?? null, context: { generation: liveResults.generation ?? 1 } });
+    }
+  }, [liveResults.phase]);
 
-  // Find group winner + runner-up (top 2 in results, looked up in restaurants list)
-  const winnerId = liveResults.results[0]?.restaurantId;
-  const runnerUpId = liveResults.results[1]?.restaurantId;
-  const winner = restaurants.find(r => r.id === winnerId) || currentSession?.restaurants[0];
-  const runnerUp = restaurants.find(r => r.id === runnerUpId);
+  // 그룹 결정은 서버가 조율한다 (PRELIM → FINAL → DONE / REROLL / NO_CONSENSUS). 모두 같은 결과.
+  const phase = liveResults.phase ?? 'PRELIM';
+  const isAllCompleted = phase === 'DONE';
+  const winner = restaurants.find(r => r.id === liveResults.winnerId) || currentSession?.restaurants[0];
+  const finalistRs = (liveResults.finalists ?? [])
+    .map(f => restaurants.find(r => r.id === f.restaurantId))
+    .filter((r): r is Restaurant => !!r);
+  const serverGen = liveResults.generation ?? 1;
+  const myGen = currentSession?.generation ?? 1;
+  const needReroll = phase === 'REROLL' || serverGen > myGen; // '둘 다 별로' 다수 → 새 세대 재스와이프
 
-  // 최종 음식점 두 곳이 모두 정해졌으면 결승전(VS) 화면으로 결과를 보여준다.
-  if (isAllCompleted && winner && runnerUp) {
-    return <FinalBattleResultScreen finalist1={winner} finalist2={runnerUp} onContinue={onContinue} />;
+  // NO_CONSENSUS → 합의 실패 안내 (reroll 상한 초과)
+  if (phase === 'NO_CONSENSUS') {
+    return (
+      <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }}
+        className="min-h-dvh flex flex-col justify-between px-5 py-8"
+        style={{ background: 'linear-gradient(160deg, #4A4A4A 0%, #2a2a2a 100%)' }}>
+        <div className="flex-1 flex flex-col justify-center text-center">
+          <div className="text-6xl mb-3">🤷</div>
+          <h2 className="text-white font-black text-[24px] mb-2">합의가 어려웠어요</h2>
+          <p className="text-white/70 text-[13px] leading-relaxed">여러 번 골라봤지만 모두 마음에 드는 곳을 못 찾았어요.<br />다른 동네로 넓히거나 나중에 다시 시도해볼까요?</p>
+        </div>
+        <button onClick={() => navigate('/')}
+          className="w-full max-w-[340px] py-4 rounded-2xl font-bold text-[#4A4A4A] text-[15px] bg-white active:scale-[0.98] transition-all shadow-md mx-auto block">처음으로</button>
+      </motion.div>
+    );
+  }
+
+  // REROLL(또는 다른 멤버가 이미 다음 세대로) → 새로운 곳으로 다시 고르기
+  if (needReroll) {
+    return (
+      <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }}
+        className="min-h-dvh flex flex-col justify-between px-5 py-8"
+        style={{ background: 'linear-gradient(160deg, #2C3E50 0%, #1a252f 100%)' }}>
+        <div className="flex-1 flex flex-col justify-center text-center">
+          <div className="text-6xl mb-3">🔄</div>
+          <h2 className="text-white font-black text-[24px] mb-2">다른 곳으로 다시 골라요</h2>
+          <p className="text-white/70 text-[13px] leading-relaxed">‘둘 다 별로’가 많았어요.<br />방금 후보는 빼고 새로운 곳을 가져왔어요.</p>
+        </div>
+        <button onClick={() => onReroll(liveResults.excludeIds ?? [])}
+          className="w-full max-w-[340px] py-4 rounded-2xl font-bold text-white text-[15px] bg-[#EB5053] active:scale-[0.98] transition-all shadow-md mx-auto block">다시 고르기 시작 →</button>
+      </motion.div>
+    );
+  }
+
+  // 결승 투표 (3지선다: 후보 1~2곳 + '둘 다 별로'). 1인 1표; 전원/마감 시 다수결.
+  if (phase === 'FINAL' && !voted && finalistRs.length >= 1) {
+    return (
+      <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }}
+        className="min-h-dvh flex flex-col justify-between px-5 py-8"
+        style={{ background: 'linear-gradient(160deg, #2C3E50 0%, #1a252f 100%)' }}>
+        <div className="flex-1 flex flex-col justify-center">
+          <h2 className="text-white font-black text-[24px] text-center mb-1">{finalistRs.length === 1 ? '여기 어때요?' : '결승! 어디로 갈까요?'}</h2>
+          <p className="text-white/70 text-[12px] text-center mb-6">한 곳만 골라주세요 · 1인 1표</p>
+          <div className="space-y-3 max-w-[360px] mx-auto w-full">
+            {finalistRs.slice(0, 2).map(r => (
+              <button key={r.id} onClick={() => castVote(r.id)}
+                className="w-full flex items-center gap-3 bg-white/10 border border-white/15 rounded-2xl p-3 active:scale-[0.98] transition-all">
+                <img src={r.image} alt="" className="w-14 h-14 rounded-xl object-cover" />
+                <div className="text-left flex-1 min-w-0">
+                  <span className="text-[9px] bg-white/20 text-white font-bold px-1.5 py-0.5 rounded-full">{r.category}</span>
+                  <p className="text-white font-black text-[15px] mt-0.5 truncate">{r.name}</p>
+                  <p className="text-white/60 text-[11px]">⭐ {r.rating} · {r.distance || '500m'}</p>
+                </div>
+                <span className="text-white/90 text-[13px] font-bold whitespace-nowrap">투표 →</span>
+              </button>
+            ))}
+            <button onClick={() => castVote(REJECT)}
+              className="w-full rounded-2xl border border-dashed border-white/40 py-3 text-white/80 text-[13px] font-bold active:scale-[0.98] transition-all">
+              둘 다 별로 · 다른 곳 보기 🔄
+            </button>
+          </div>
+        </div>
+        <button onClick={() => navigate('/')}
+          className="mt-6 text-white/60 hover:text-white text-[12px] active:scale-95 text-center mx-auto block">처음으로</button>
+      </motion.div>
+    );
   }
 
   return (
@@ -1095,7 +1212,7 @@ function WaitingOrDecidedScreen({ onContinue }: { onContinue: (winner?: any) => 
               </div>
             )}
             
-            <button onClick={onContinue}
+            <button onClick={() => onContinue(winner)}
               className="w-full max-w-[340px] py-4 rounded-2xl font-bold text-[#EB5053] text-[15px] bg-white active:scale-[0.98] transition-all shadow-md mx-auto block">
               결과 확인하기 🎉
             </button>
@@ -1126,14 +1243,14 @@ function WaitingOrDecidedScreen({ onContinue }: { onContinue: (winner?: any) => 
             {/* Progress Bar */}
             <div className="bg-white/10 backdrop-blur-md rounded-2xl p-4 max-w-[340px] mx-auto border border-white/10">
               <div className="flex justify-between items-center mb-2 text-white/95">
-                <span className="text-[12px] font-bold">투표 현황</span>
-                <span className="text-[13px] font-black">{liveResults.completedCount} / {liveResults.totalMembers} 명 완료</span>
+                <span className="text-[12px] font-bold">{phase === 'FINAL' ? '결승 투표' : '투표 현황'}</span>
+                <span className="text-[13px] font-black">{(phase === 'FINAL' ? (liveResults.finalVotedCount ?? 0) : liveResults.completedCount)} / {liveResults.totalMembers} 명 {phase === 'FINAL' ? '투표' : '완료'}</span>
               </div>
               <div className="w-full bg-white/20 h-2 rounded-full overflow-hidden">
-                <motion.div 
+                <motion.div
                   className="h-full rounded-full bg-[#EB5053]"
                   initial={{ width: 0 }}
-                  animate={{ width: `${(liveResults.completedCount / (liveResults.totalMembers || 1)) * 100}%` }}
+                  animate={{ width: `${((phase === 'FINAL' ? (liveResults.finalVotedCount ?? 0) : liveResults.completedCount) / (liveResults.totalMembers || 1)) * 100}%` }}
                   transition={{ duration: 0.4 }}
                 />
               </div>
@@ -1175,7 +1292,7 @@ type Phase = 'swipe' | 'decided' | 'results';
 
 export default function QuickMatchPage() {
   const [, navigate] = useLocation();
-  const { currentSession, addSwipe, swipeRecords } = useApp();
+  const { currentSession, addSwipe, swipeRecords, profile, rerollSession } = useApp();
   const [phase, setPhase] = useState<Phase>('swipe');
   const targetRestaurants = currentSession?.restaurants || [];
   const currentSessionSwipes = swipeRecords.filter(s => s.sessionId === currentSession?.id);
@@ -1185,6 +1302,10 @@ export default function QuickMatchPage() {
   });
   const [swipeData, setSwipeData] = useState<{ restaurant: any; action: SwipeAction }[]>([]);
   const [selectedWinner, setSelectedWinner] = useState<Restaurant | null>(null);
+  // 듀얼 상태: 엔진 top-2 비교. "둘 다 별로"면 다음 후보 쌍으로. null=아직 미구성
+  const [duel, setDuel] = useState<{ a: any; b: any } | null>(null);
+  const cardShownAtRef = useRef(Date.now()); // 현재 카드 노출 시각 → dwell 측정
+  const rejectedRef = useRef<Set<string>>(new Set()); // 듀얼에서 "둘 다 별로"로 거절된 후보
   const [showIntro, setShowIntro] = useState(true);
   const [remainingMs, setRemainingMs] = useState(() => {
     if (!currentSession?.deadline) return 0;
@@ -1208,34 +1329,36 @@ export default function QuickMatchPage() {
     }
   }, [currentSession, navigate]);
 
-  // Expiry check
+  // Expiry check — 예선(swipe) 중에만 만료로 강제 전환. 결정/결과 단계에선 되돌리지 않음.
   useEffect(() => {
-    if (!currentSession?.deadline) return;
+    if (!currentSession?.deadline || phase !== 'swipe') return;
     const deadlineTime = new Date(currentSession.deadline).getTime();
-    
+
     const checkExpiry = () => {
       if (Date.now() > deadlineTime) {
         setPhase('decided');
       }
     };
-    
+
     checkExpiry();
     const timer = setInterval(checkExpiry, 1000);
     return () => clearInterval(timer);
-  }, [currentSession?.deadline]);
+  }, [currentSession?.deadline, phase]);
 
-  const total = Math.min(targetRestaurants.length, 10);
+  const total = Math.min(targetRestaurants.length, 7); // 예선 = 엔진 top-7 (결정 플로우 ①)
   const visibleCards = targetRestaurants.slice(currentIndex, currentIndex + 3);
   const progress = Math.min(currentIndex + 1, total);
 
-  // Auto-transition to decided phase if all cards have been swiped
+  // Auto-transition to decided phase if all cards have been swiped — 예선(swipe) 중에만.
+  // 결정/결과 단계에선 절대 되돌리지 않는다 (안 그러면 듀얼→결과가 'decided'로 튕겨 무한루프).
   useEffect(() => {
+    if (phase !== 'swipe') return;
     const currentSessionSwipes = swipeRecords.filter(s => s.sessionId === currentSession?.id);
     const unswipedCount = targetRestaurants.filter(r => !currentSessionSwipes.some(s => s.restaurantId === r.id)).length;
     if (unswipedCount === 0 || currentIndex >= total) {
       setPhase('decided');
     }
-  }, [currentIndex, targetRestaurants, swipeRecords, total, currentSession?.id]);
+  }, [phase, currentIndex, targetRestaurants, swipeRecords, total, currentSession?.id]);
 
   useEffect(() => {
     if (showIntro) {
@@ -1243,12 +1366,27 @@ export default function QuickMatchPage() {
       return () => clearTimeout(t);
     }
   }, [showIntro]);
+  useEffect(() => { if (!showIntro) cardShownAtRef.current = Date.now(); }, [showIntro]); // 인트로 끝 → 첫 카드 dwell 시작
 
   const handleAction = useCallback((action: SwipeAction) => {
     const restaurant = targetRestaurants[currentIndex];
     if (!restaurant) return;
 
     addSwipe(restaurant.id, action === 'like' ? 'like' : 'skip');
+    const meta = currentSession?.recMeta?.[restaurant.id];
+    const dwell = Date.now() - cardShownAtRef.current; // 이 카드를 본 시간
+    cardShownAtRef.current = Date.now(); // 다음 카드 노출 시점 리셋
+    logSwipe(restaurant.id, action === 'like' ? 'LIKE' : 'NOPE', {
+      user_id: profile.id,
+      session_id: currentSession?.id ?? null,
+      slate_id: currentSession?.slateId ?? null,
+      slate_type: 'PRELIM',
+      round: 1,
+      position: meta?.position ?? currentIndex,
+      propensity: meta?.propensity ?? null,
+      dwell_ms: dwell,
+      model_version: currentSession?.modelVersion ?? 'v0-heuristic',
+    });
     setSwipeData(prev => [...prev, { restaurant, action }]);
 
     if (currentIndex + 1 >= total) {
@@ -1256,17 +1394,89 @@ export default function QuickMatchPage() {
     } else {
       setCurrentIndex(i => i + 1);
     }
-  }, [currentIndex, targetRestaurants, addSwipe, total]);
+  }, [currentIndex, targetRestaurants, addSwipe, total, currentSession]);
+
+  // ── 중도 이탈(ABANDON): 예선 중 나가면 "어디서 몇 장 봤는지" 명시 로깅 ──
+  const phaseRef = useRef(phase);
+  useEffect(() => { phaseRef.current = phase; }, [phase]);
+  const swipeCountRef = useRef(0);
+  useEffect(() => { swipeCountRef.current = swipeData.length; }, [swipeData]);
+  const sessionRef = useRef(currentSession);
+  useEffect(() => { sessionRef.current = currentSession; }, [currentSession]);
+  const abandonLoggedRef = useRef(false);
+  // 안정 콜백(deps 없음) — currentSession 변경에 재생성되지 않게 ref로 읽어, 클린업이 실제 언마운트 때만 동작.
+  const logAbandon = useCallback((via: string) => {
+    if (abandonLoggedRef.current || phaseRef.current !== 'swipe') return; // 예선 중 이탈만 (결정 후엔 이탈 아님), 1회
+    abandonLoggedRef.current = true;
+    const sess = sessionRef.current;
+    logEvent({
+      event_type: 'ABANDON', user_id: profile.id,
+      session_id: sess?.id ?? null, slate_id: sess?.slateId ?? null, round: 1,
+      context: { phase: 'swipe', swipes_done: swipeCountRef.current, via },
+    });
+    flushEvents();
+  }, [profile.id]);
+  useEffect(() => {
+    const onHide = () => logAbandon('pagehide'); // 탭 닫기/백그라운드
+    window.addEventListener('pagehide', onHide);
+    return () => { window.removeEventListener('pagehide', onHide); logAbandon('unmount'); }; // 실제 라우트 이탈 시만
+  }, [logAbandon]);
+
+  // 솔로 결정(통일): 엔진 top-2 듀얼 1번 (이론 권장). 둘 다 별로면 다음 후보로 (handleRejectBoth).
+  // 분기 없음 — 좋아요 1개든 7개든 같은 모델. 그룹은 WaitingOrDecidedScreen이 처리.
+  useEffect(() => {
+    if (phase !== 'decided' || duel || selectedWinner) return;
+    const isSolo = (currentSession?.members?.length ?? 1) <= 1;
+    if (!isSolo) return;
+    const byEng = (list: any[]) => [...list].sort((a, b) => (currentSession?.recMeta?.[a.id]?.position ?? 999) - (currentSession?.recMeta?.[b.id]?.position ?? 999));
+    const liked = byEng(swipeData.filter(s => s.action === 'like').map(s => s.restaurant));
+    const pool = liked.length >= 1 ? liked : byEng(targetRestaurants.slice(0, total)); // 좋아요 없으면 엔진 top으로 완화
+    if (pool.length === 1) { setSelectedWinner(pool[0]); setPhase('results'); }          // 후보 1 → 바로 우승
+    else if (pool.length >= 2) setDuel({ a: pool[0], b: pool[1] });                       // 엔진 top-2 듀얼
+    else { setSelectedWinner(null); setPhase('results'); }                                // 후보 없음(예외)
+  }, [phase]);
 
   const topPick = swipeData.find(s => s.action === 'like')?.restaurant || targetRestaurants[0];
 
   if (!currentSession) return null;
 
+  const handleReset = () => {
+    logEvent({ event_type: 'REROLL', user_id: profile.id, session_id: currentSession?.id ?? null, slate_id: currentSession?.slateId ?? null });
+    rejectedRef.current.clear();
+    setCurrentIndex(0); setSwipeData([]); setSelectedWinner(null); setDuel(null); setPhase('swipe');
+  };
+  // 듀얼 선택 → 우승 확정 (1번 비교, 이론 권장).
+  const handleDuelChoice = (chosen?: any) => { if (chosen) setSelectedWinner(chosen); setPhase('results'); };
+  // "둘 다 별로" → 두 후보 거절(NOPE FINAL = head-to-head 부정) → 남은 좋아요로 다른 듀얼, 없으면 새 추천.
+  const handleRejectBoth = () => {
+    if (!duel) return;
+    [duel.a, duel.b].forEach((f) => {
+      if (f?.id) {
+        logEvent({ event_type: 'SWIPE', action: 'NOPE', slate_id: currentSession?.slateId ?? null, slate_type: 'FINAL', restaurant_id: f.id, round: 2, user_id: profile.id, session_id: currentSession?.id ?? null });
+        rejectedRef.current.add(f.id);
+      }
+    });
+    const byEng = (list: any[]) => [...list].sort((x, y) => (currentSession?.recMeta?.[x.id]?.position ?? 999) - (currentSession?.recMeta?.[y.id]?.position ?? 999));
+    const remaining = byEng(swipeData.filter(s => s.action === 'like').map(s => s.restaurant).filter((r: any) => !rejectedRef.current.has(r.id)));
+    if (remaining.length >= 2) setDuel({ a: remaining[0], b: remaining[1] });                     // 다른 좋아요 쌍
+    else if (remaining.length === 1) { setSelectedWinner(remaining[0]); setPhase('results'); }    // 하나만 남음 → 우승
+    else handleReset();                                                                            // 다 거절 → 새 추천
+  };
+
   if (phase === 'decided') {
-    return <WaitingOrDecidedScreen onContinue={(winner) => { if (winner) setSelectedWinner(winner); setPhase('results'); }} />;
+    const isSolo = (currentSession?.members?.length ?? 1) <= 1;
+    if (isSolo) {
+      // 솔로: 좋아요 수로 구성된 듀얼(준결승→결승). 로컬 즉시 — /results 폴링/플래시 없음.
+      if (duel) return <FinalBattleResultScreen key={(duel.a?.id ?? '') + (duel.b?.id ?? '')} finalist1={duel.a} finalist2={duel.b} onContinue={handleDuelChoice} onRejectBoth={handleRejectBoth} />;
+      return null; // 효과가 듀얼/우승 구성 중
+    }
+    return <WaitingOrDecidedScreen
+      onContinue={(w) => { if (w) setSelectedWinner(w); setPhase('results'); }}
+      onReroll={async (excludeIds) => { await rerollSession(excludeIds); setSwipeData([]); setCurrentIndex(0); setSelectedWinner(null); setDuel(null); setPhase('swipe'); }}
+    />; // 그룹: 멤버 투표 폴링 + REROLL시 새 세대 재스와이프
   }
   if (phase === 'results') {
-    return <WinnerScreen selectedWinner={selectedWinner} onReset={() => { setCurrentIndex(0); setSwipeData([]); setSelectedWinner(null); }} />;
+    return <WinnerScreen selectedWinner={selectedWinner} onReset={handleReset} />;
   }
 
   // Countdown formatting for header badge
@@ -1279,7 +1489,7 @@ export default function QuickMatchPage() {
     <div className="min-h-dvh bg-[#FCF4EE] relative">
       {/* Header */}
       <div className="flex items-center justify-between px-5 pt-12 pb-3">
-        <button onClick={() => navigate('/session/lobby')}
+        <button onClick={() => { logAbandon('back'); navigate('/session/lobby'); }}
           className="w-10 h-10 rounded-full bg-white shadow-sm flex items-center justify-center active:scale-95 flex-shrink-0">
           <ArrowLeft size={18} color="#1A1A1A" />
         </button>
