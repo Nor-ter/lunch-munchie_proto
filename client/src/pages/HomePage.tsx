@@ -1,85 +1,68 @@
 import { motion } from "framer-motion";
 import { useLocation } from "wouter";
-import { Heart, X, ArrowRight } from "lucide-react";
+import { Heart, X, ArrowRight, MapPin, Clock, Bookmark } from "lucide-react";
 import { useApp, Course, MOCK_RESTAURANTS } from "@/contexts/AppContext";
+import CourseMapOverlay from "@/components/CourseMapOverlay";
 
-function RouteIllustration({ seed = 0 }: { seed?: number }) {
-  const paths = [
-    "M 33 22 C 14 51, 50 59, 75 62 C 108 67, 109 30, 85 26 C 58 23, 93 93, 48 83 C 18 77, 23 108, 24 111",
-    "M 103 16 C 76 16, 84 52, 97 66 C 120 90, 70 103, 58 78 C 46 53, 25 48, 30 17",
-    "M 32 32 C 80 19, 111 45, 113 81 C 116 113, 71 111, 76 83 C 79 62, 44 65, 26 80 C 7 96, 20 119, 55 106",
-    "M 31 37 C 13 65, 44 83, 74 70 C 117 51, 116 99, 83 105 C 50 111, 27 110, 28 85",
-  ];
+const TAG_CLASS: Record<string, string> = {
+  '데이트 코스': 'tag-date',
+  '맛집': 'tag-food',
+  '카페': 'tag-cafe',
+  '전시/문화': 'tag-culture',
+  '액티비티': 'tag-activity',
+  '혼자 여행': 'tag-hash',
+  '맛집 투어': 'tag-food',
+  '가성비': 'tag-activity',
+};
 
-  const p = seed % paths.length;
-
-  return (
-    <svg viewBox="0 0 132 132" className="h-full w-full" fill="none">
-      <path
-        d={paths[p]}
-        stroke="#6B5554"
-        strokeWidth="5"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-      <path
-        d={paths[p]}
-        stroke="#FBF7EE"
-        strokeWidth="1.3"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-        strokeDasharray="1 8"
-      />
-    </svg>
-  );
-}
-
-const BADGES = ["HOT", "MZ", "NEW", "HOT"];
-
-function MunchieCourseCard({ course, idx }: { course: Course; idx: number }) {
+function MunchieCourseCard({ course }: { course: Course }) {
   const [, navigate] = useLocation();
+  const { savedCourseIds, saveCourse, unsaveCourse } = useApp();
+  const isSaved = savedCourseIds.includes(course.id);
 
   return (
     <motion.div
+      className="lm-card overflow-hidden cursor-pointer"
+      whileTap={{ scale: 0.98 }}
       onClick={() => navigate(`/course/${course.id}?from=explore`)}
-      className="flex cursor-pointer overflow-hidden"
-      style={{
-        background: "#FFE9A8",
-        borderRadius: 22,
-        height: 156,
-        boxShadow: "4px 5px 0 rgba(255, 213, 103, 0.55)",
-      }}
-      whileTap={{ scale: 0.97 }}
     >
-      <div className="flex flex-1 flex-col justify-between py-[38px] pl-[14px] pr-2">
-        <div>
-          <span
-            className="inline-flex h-[21px] items-center rounded-[6px] px-2 py-[3px] text-[13px] font-black text-black"
-            style={{ background: "#FFD47A" }}
-          >
-            {BADGES[idx % BADGES.length]}
-          </span>
-          <p className="mt-[6px] text-[15px] font-bold leading-none text-black">
-            {course.title}
-          </p>
-          <div className="mt-[7px] flex flex-wrap gap-1.5">
-            {course.hashtags.slice(0, 2).map((h) => (
-              <span key={h} className="text-[11px] leading-none text-black">
-                {h}
-              </span>
-            ))}
-          </div>
-        </div>
-        <div className="flex items-center gap-[5px]">
-          <Heart size={10} color="#4B342F" strokeWidth={1.6} />
-          <span className="text-[9px] leading-none text-black">{course.savedCount}</span>
+      <div className="relative h-40">
+        <img src={course.heroImage} alt={course.title} className="w-full h-full object-cover" />
+        <CourseMapOverlay course={course} />
+        <div className="absolute inset-0 bg-gradient-to-t from-black/50 to-transparent" />
+        <button
+          onClick={e => { e.stopPropagation(); isSaved ? unsaveCourse(course.id) : saveCourse(course.id); }}
+          className="absolute top-3 right-3 w-8 h-8 rounded-full bg-white/80 flex items-center justify-center"
+        >
+          <Bookmark size={14} fill={isSaved ? '#EB5053' : 'none'} stroke={isSaved ? '#EB5053' : '#4A4A4A'} />
+        </button>
+        <div className="absolute bottom-3 left-3 flex gap-1.5 flex-wrap">
+          {course.tags.slice(0, 2).map(tag => (
+            <span key={tag} className={`tag ${TAG_CLASS[tag] || 'tag-hash'}`}>{tag}</span>
+          ))}
         </div>
       </div>
-      <div
-        className="mr-[12px] mt-[12px] flex h-[132px] w-[132px] flex-shrink-0 items-center justify-center"
-        style={{ background: "#FFF9ED", borderRadius: 14 }}
-      >
-        <RouteIllustration seed={idx} />
+      <div className="p-4">
+        <h3 className="font-bold text-[15px] text-[#1A1A1A] mb-1">{course.title}</h3>
+        <div className="flex gap-1.5 flex-wrap mb-2">
+          {course.hashtags.slice(0, 3).map(h => (
+            <span key={h} className="tag tag-hash">{h}</span>
+          ))}
+        </div>
+        <div className="flex items-center gap-3 text-[#9B9B9B]">
+          <span className="flex items-center gap-1 text-[12px]">
+            <MapPin size={11} /> {course.metadata.distance}km
+          </span>
+          <span className="flex items-center gap-1 text-[12px]">
+            <Clock size={11} /> {Math.floor(course.metadata.duration / 60)}시간
+          </span>
+          <span className="flex items-center gap-1 text-[12px]">
+            📍 {course.metadata.placeCount}개 장소
+          </span>
+          <span className="flex items-center gap-1 text-[12px] ml-auto">
+            <Bookmark size={11} /> {course.savedCount}
+          </span>
+        </div>
       </div>
     </motion.div>
   );
@@ -270,8 +253,8 @@ export default function HomePage() {
         </p>
 
         <div className="space-y-[36px]">
-          {courses.slice(0, 4).map((course, idx) => (
-            <MunchieCourseCard key={course.id} course={course} idx={idx} />
+          {courses.slice(0, 4).map((course) => (
+            <MunchieCourseCard key={course.id} course={course} />
           ))}
         </div>
 
