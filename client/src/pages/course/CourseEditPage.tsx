@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, useMemo } from 'react';
 import { useParams, useLocation, useSearch } from 'wouter';
 import { useApp } from '@/contexts/AppContext';
 import { motion } from 'framer-motion';
@@ -23,6 +23,8 @@ import { CSS } from '@dnd-kit/utilities';
 import { CourseMap } from '@/components/course/CourseMap';
 import { MOCK_COURSE } from '@/data/mockCourse';
 import { CoursePlace } from '@/types/course';
+import { getCourseSequenceColor } from '@/constants/courseTheme';
+import { getCoursePlacesFromStops } from '@/lib/courseMapSync';
 
 // ── SortableItem ──────────────────────────────────────────────────────────────
 
@@ -35,6 +37,7 @@ function SortableItem({
   index: number;
   onRemove: (id: string) => void;
 }) {
+  const color = getCourseSequenceColor(index);
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } =
     useSortable({ id: place.id });
 
@@ -54,7 +57,10 @@ function SortableItem({
         <GripVertical size={18} />
       </button>
 
-      <div className="w-6 h-6 rounded-full bg-[#1A1A1A] text-white text-xs flex items-center justify-center shrink-0">
+      <div
+        className="w-6 h-6 rounded-full text-white text-xs flex items-center justify-center shrink-0"
+        style={{ background: color.base }}
+      >
         {index + 1}
       </div>
 
@@ -85,9 +91,13 @@ function SortableItem({
   );
 }
 
-function useFromExplore(): boolean {
+function useEditorFrom(): 'explore' | 'saved' {
   const search = useSearch();
-  return new URLSearchParams(search).get('from') === 'explore';
+  return new URLSearchParams(search).get('from') === 'saved' ? 'saved' : 'explore';
+}
+
+function normalizeHashtags(tags: string[]) {
+  return tags.map((tag) => tag.replace(/^#/, ''));
 }
 
 // ── CourseEditPage ────────────────────────────────────────────────────────────
@@ -96,24 +106,40 @@ export default function CourseEditPage() {
   const { id } = useParams<{ id: string }>();
   const isNew = id === 'new';
   const [, navigate] = useLocation();
-  const fromExplore = useFromExplore();
-  const { saveCourse } = useApp();
+  const editorFrom = useEditorFrom();
+  const { saveCourse, getCourseById, getRestaurantById } = useApp();
+  const appCourse = !isNew && id ? getCourseById(id) : undefined;
+  const syncedPlaces = useMemo(
+    () => (appCourse ? getCoursePlacesFromStops(appCourse, getRestaurantById) : []),
+    [appCourse, getRestaurantById],
+  );
+  const initialTitle = isNew ? '' : appCourse?.title ?? MOCK_COURSE.title;
+  const initialHashtags = isNew
+    ? []
+    : normalizeHashtags(appCourse?.hashtags ?? MOCK_COURSE.hashtags);
+  const initialPlaces = isNew
+    ? []
+    : appCourse && syncedPlaces.length > 0
+      ? syncedPlaces
+      : MOCK_COURSE.places.map((p) => ({ ...p }));
 
   const goBack = () => {
     if (isNew) {
-      navigate('/saved');
-    } else if (fromExplore && id) {
-      navigate(`/course/${id}?from=explore`);
-    } else {
-      navigate(-1 as never);
+      navigate('/saved', { replace: true });
+      return;
     }
+
+    if (!id) {
+      navigate('/explore', { replace: true });
+      return;
+    }
+
+    navigate(`/course/${id}?from=${editorFrom}`, { replace: true });
   };
 
-  const [title, setTitle] = useState(isNew ? '' : MOCK_COURSE.title);
-  const [hashtags, setHashtags] = useState<string[]>(isNew ? [] : [...MOCK_COURSE.hashtags]);
-  const [places, setPlaces] = useState<CoursePlace[]>(
-    isNew ? [] : MOCK_COURSE.places.map((p) => ({ ...p }))
-  );
+  const [title, setTitle] = useState(initialTitle);
+  const [hashtags, setHashtags] = useState<string[]>(initialHashtags);
+  const [places, setPlaces] = useState<CoursePlace[]>(initialPlaces);
 
   const handleSave = () => {
     if (!isNew && id) saveCourse(id);
@@ -127,6 +153,12 @@ export default function CourseEditPage() {
   useEffect(() => {
     if (isAddingTag) tagInputRef.current?.focus();
   }, [isAddingTag]);
+
+  useEffect(() => {
+    setTitle(initialTitle);
+    setHashtags(initialHashtags);
+    setPlaces(initialPlaces);
+  }, [id, initialTitle, appCourse, syncedPlaces]);
 
   const commitTag = () => {
     const trimmed = newTag.trim().replace(/^#/, '');
@@ -176,7 +208,7 @@ export default function CourseEditPage() {
         <span className="flex-1 text-center font-semibold">{isNew ? '새 코스 만들기' : '코스 편집'}</span>
         <button
           onClick={handleSave}
-          className="bg-[#EB5053] text-white text-sm px-4 py-1.5 rounded-lg"
+          className="bg-[#E85053] text-white text-sm px-4 py-1.5 rounded-lg"
         >
           {isNew ? '만들기' : '저장'}
         </button>
@@ -217,7 +249,7 @@ export default function CourseEditPage() {
                 onChange={(e) => setNewTag(e.target.value)}
                 onKeyDown={(e) => e.key === 'Enter' && commitTag()}
                 onBlur={commitTag}
-                className="border border-[#EB5053] rounded-full px-3 py-1 text-sm outline-none w-24"
+                className="border border-[#E85053] rounded-full px-3 py-1 text-sm outline-none w-24"
                 placeholder="#태그"
               />
             ) : (
@@ -235,7 +267,7 @@ export default function CourseEditPage() {
         <div>
           <div className="flex items-center justify-between mb-1.5">
             <span className="text-xs text-gray-400">지도 · 현재 코스</span>
-            <button className="text-xs text-[#EB5053]">+ 근처 식당 추가</button>
+            <button className="text-xs text-[#E85053]">+ 근처 식당 추가</button>
           </div>
           <CourseMap
             places={places}
@@ -294,14 +326,14 @@ export default function CourseEditPage() {
         {isNew ? (
           <button
             onClick={handleSave}
-            className="flex-1 bg-[#EB5053] text-white rounded-xl h-11 text-sm font-medium"
+            className="flex-1 bg-[#E85053] text-white rounded-xl h-11 text-sm font-medium"
           >
             코스 만들기
           </button>
         ) : (
           <button
-            onClick={() => navigate(`/course/${id}/share?from=edit`)}
-            className="flex-1 bg-[#EB5053] text-white rounded-xl h-11 text-sm font-medium"
+            onClick={() => navigate(`/course/${id}/share?from=edit&editorFrom=${editorFrom}`)}
+            className="flex-1 bg-[#E85053] text-white rounded-xl h-11 text-sm font-medium"
           >
             코스 공유
           </button>

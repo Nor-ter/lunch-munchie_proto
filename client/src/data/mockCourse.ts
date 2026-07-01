@@ -1,6 +1,7 @@
 import type { Course } from '@/types/course';
+import { COURSE_COLOR_PALETTE } from '@/constants/courseTheme';
 
-const STOP_COLORS = ['#FF6B35', '#4CAF50', '#2196F3', '#9C27B0', '#E91E63'];
+const STOP_COLORS = COURSE_COLOR_PALETTE.map((color) => color.base);
 
 /** 성수동 맛집 투어 — c1 share page showcase data */
 export const COURSE_C1: Course = {

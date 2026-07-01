@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useParams, useLocation, useSearch } from 'wouter';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Heart, Bookmark, Share2, ChevronLeft, Star, X, GripVertical } from 'lucide-react';
@@ -21,8 +21,10 @@ import {
 import { CSS } from '@dnd-kit/utilities';
 import { CourseMap } from '@/components/course/CourseMap';
 import { useApp } from '@/contexts/AppContext';
-import { getCourseById } from '@/data/mockCourse';
+import { getCourseById as getMockCourseById } from '@/data/mockCourse';
 import { CoursePlace } from '@/types/course';
+import { COURSE_THEME, getCourseSequenceColor } from '@/constants/courseTheme';
+import { getCoursePlacesFromStops } from '@/lib/courseMapSync';
 
 type FromMode = 'explore' | 'saved';
 
@@ -30,6 +32,10 @@ function useFrom(): FromMode {
   const search = useSearch();
   const params = new URLSearchParams(search);
   return params.get('from') === 'saved' ? 'saved' : 'explore';
+}
+
+function normalizeHashtags(tags: string[]) {
+  return tags.map((tag) => tag.replace(/^#/, ''));
 }
 
 // ── PlaceItem ─────────────────────────────────────────────────────────────────
@@ -47,6 +53,7 @@ function PlaceItem({
   isEditing: boolean;
   onRemove?: (id: string) => void;
 }) {
+  const color = getCourseSequenceColor(index);
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id: place.id,
     disabled: !isEditing,
@@ -59,11 +66,17 @@ function PlaceItem({
       className={`flex gap-3 ${isDragging ? 'opacity-50' : ''}`}
     >
       <div className="flex flex-col items-center">
-        <div className="w-7 h-7 rounded-full bg-[#1A1A1A] text-white text-xs flex items-center justify-center shrink-0">
+        <div
+          className="w-7 h-7 rounded-full text-white text-xs flex items-center justify-center shrink-0"
+          style={{ background: color.base }}
+        >
           {index + 1}
         </div>
         {!isLast && (
-          <div className="flex-1 border-l-2 border-dashed border-gray-200 ml-[1px] my-1" />
+          <div
+            className="flex-1 border-l-2 border-dashed ml-[1px] my-1"
+            style={{ borderColor: color.lighter }}
+          />
         )}
       </div>
 
@@ -125,7 +138,13 @@ export default function CourseDetailPage() {
   const [, navigate] = useLocation();
   const from = useFrom();
   const fromSaved = from === 'saved';
-  const { savedCourseIds, saveCourse, unsaveCourse } = useApp();
+  const {
+    savedCourseIds,
+    saveCourse,
+    unsaveCourse,
+    getCourseById: getAppCourseById,
+    getRestaurantById,
+  } = useApp();
   const isBookmarked = id ? savedCourseIds.includes(id) : false;
 
   const toggleBookmark = () => {
@@ -134,12 +153,27 @@ export default function CourseDetailPage() {
     else saveCourse(id);
   };
 
-  const courseData = getCourseById(id);
+  const appCourse = id ? getAppCourseById(id) : undefined;
+  const courseData = getMockCourseById(id);
+  const syncedPlaces = useMemo(
+    () => (appCourse ? getCoursePlacesFromStops(appCourse, getRestaurantById) : []),
+    [appCourse, getRestaurantById],
+  );
+  const initialTitle = appCourse?.title ?? courseData.title;
+  const initialHashtags = normalizeHashtags(appCourse?.hashtags ?? courseData.hashtags);
+  const initialPlaces = appCourse && syncedPlaces.length > 0
+    ? syncedPlaces
+    : courseData.places.map(p => ({ ...p }));
+  const distanceKm = appCourse?.metadata.distance ?? courseData.distanceKm;
+  const durationLabel = appCourse
+    ? `${Math.floor(appCourse.metadata.duration / 60)}h`
+    : `${courseData.durationHours}h`;
+  const saveCount = appCourse?.savedCount ?? courseData.saveCount;
 
   // Local editable state (only used in saved mode)
-  const [title, setTitle] = useState(courseData.title);
-  const [hashtags, setHashtags] = useState<string[]>([...courseData.hashtags]);
-  const [places, setPlaces] = useState<CoursePlace[]>(courseData.places.map(p => ({ ...p })));
+  const [title, setTitle] = useState(initialTitle);
+  const [hashtags, setHashtags] = useState<string[]>(initialHashtags);
+  const [places, setPlaces] = useState<CoursePlace[]>(initialPlaces);
   const [isEditing, setIsEditing] = useState(false);
   const [newTag, setNewTag] = useState('');
   const [isAddingTag, setIsAddingTag] = useState(false);
@@ -150,6 +184,13 @@ export default function CourseDetailPage() {
   useEffect(() => {
     if (isEditing) titleInputRef.current?.focus();
   }, [isEditing]);
+
+  useEffect(() => {
+    if (isEditing) return;
+    setTitle(initialTitle);
+    setHashtags(initialHashtags);
+    setPlaces(initialPlaces);
+  }, [id, isEditing, initialTitle, appCourse, syncedPlaces]);
 
   useEffect(() => {
     if (isAddingTag) tagInputRef.current?.focus();
@@ -218,8 +259,8 @@ export default function CourseDetailPage() {
             >
               <Bookmark
                 size={18}
-                fill={isBookmarked ? '#EB5053' : 'none'}
-                stroke={isBookmarked ? '#EB5053' : 'currentColor'}
+                fill={isBookmarked ? '#E85053' : 'none'}
+                stroke={isBookmarked ? '#E85053' : 'currentColor'}
               />
             </button>
           )}
@@ -234,7 +275,7 @@ export default function CourseDetailPage() {
             <div className="flex items-center gap-1.5">
               <span className="font-medium text-sm">{courseData.authorHandle}</span>
               {courseData.authorBadge && (
-                <span className="bg-[#EB5053] text-white text-xs px-2 py-0.5 rounded-full">
+                <span className="bg-[#E85053] text-white text-xs px-2 py-0.5 rounded-full">
                   {courseData.authorBadge}
                 </span>
               )}
@@ -285,7 +326,7 @@ export default function CourseDetailPage() {
                   onChange={e => setNewTag(e.target.value)}
                   onKeyDown={e => e.key === 'Enter' && commitTag()}
                   onBlur={commitTag}
-                  className="border border-[#EB5053] rounded-full px-2.5 py-0.5 text-xs outline-none w-20"
+                  className="border border-[#E85053] rounded-full px-2.5 py-0.5 text-xs outline-none w-20"
                   placeholder="#태그"
                 />
               ) : (
@@ -347,10 +388,10 @@ export default function CourseDetailPage() {
       {/* Stats bar */}
       <div className="mx-4 mb-4 border border-gray-100 rounded-xl grid grid-cols-4">
         {[
-          { value: `${courseData.distanceKm}km`, label: '거리' },
-          { value: `${courseData.durationHours}h`, label: '소요' },
+          { value: `${distanceKm}km`, label: '거리' },
+          { value: durationLabel, label: '소요' },
           { value: `${places.length}`, label: '장소' },
-          { value: `${courseData.saveCount.toLocaleString()}`, label: '저장' },
+          { value: `${saveCount.toLocaleString()}`, label: '저장' },
         ].map((stat, i, arr) => (
           <div
             key={stat.label}
@@ -395,7 +436,7 @@ export default function CourseDetailPage() {
             </button>
             <button
               onClick={() => navigate(`/course/${id}/share${fromSaved ? '?from=saved' : ''}`)}
-              className="flex-1 bg-[#EB5053] text-white rounded-xl h-11 text-sm font-medium"
+              className="flex-1 bg-[#E85053] text-white rounded-xl h-11 text-sm font-medium"
             >
               공유하기
             </button>
@@ -411,13 +452,14 @@ export default function CourseDetailPage() {
             >
               <Bookmark
                 size={20}
-                fill={isBookmarked ? '#EB5053' : 'none'}
-                stroke={isBookmarked ? '#EB5053' : 'currentColor'}
+                fill={isBookmarked ? '#E85053' : 'none'}
+                stroke={isBookmarked ? '#E85053' : 'currentColor'}
               />
             </button>
             <button
               onClick={() => navigate(`/course/${id}/edit?from=explore`)}
-              className="flex-1 bg-[#1A1A1A] text-white rounded-xl h-11 text-sm font-medium"
+              className="flex-1 text-white rounded-xl h-11 text-sm font-medium"
+              style={{ backgroundColor: COURSE_THEME.primary }}
             >
               복사해서 편집
             </button>
