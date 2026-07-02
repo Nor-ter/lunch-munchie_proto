@@ -343,18 +343,25 @@ function buildResultsPayload(
   // 그룹 결정 상태기계: least-misery 집계 + 3지선다 결승 + reroll/합의실패 (현재 세대 기준)
   const decision = decideGroup(r1 as any, r2 as any, members.length, completedMembers.length, isExpired, generation, REROLL_CAP);
 
+  // 결승 투표 여부(라운드=finalRound의 LIKE, 후보든 '둘 다 별로'든 한 표 던지면 투표 완료).
+  const finalVoters = new Set(r2.filter(s => s.swipe_action === 'LIKE').map(s => s.user_id));
+
+  // memberCompletion.completed는 "지금 단계에서 할 일을 끝냈는가"를 뜻한다. 예선 중엔 예선 완료,
+  // 결승 단계(FINAL)에선 결승 투표 완료로 바뀌어야 한다 — 안 그러면 예선을 끝낸 멤버는 아직
+  // 결승 투표 전인데도 대기 화면에 계속 "완료 ✅"로 표시된다.
   const memberCompletion = members.map(m => {
     const cnt = completionMap[m.user_id] || 0;
-    const done = isMemberDone(m.user_id);
+    const prelimDone = isMemberDone(m.user_id);
     // 덱이 targetCount보다 작았던 멤버는 실제 스와이프 수를 분모로 보여준다 (예: 4/4)
-    const memberTarget = done ? Math.min(cnt, targetCount) || targetCount : targetCount;
+    const memberTarget = prelimDone ? Math.min(cnt, targetCount) || targetCount : targetCount;
+    const inFinalStage = decision.phase === 'FINAL';
     return {
       id: m.user_id,
       name: m.user_name,
       emoji: m.emoji,
-      completed: done,
-      swipeCount: Math.min(cnt, memberTarget),
-      targetCount: memberTarget,
+      completed: inFinalStage ? finalVoters.has(m.user_id) : prelimDone,
+      swipeCount: inFinalStage ? (finalVoters.has(m.user_id) ? 1 : 0) : Math.min(cnt, memberTarget),
+      targetCount: inFinalStage ? 1 : memberTarget,
     };
   });
 

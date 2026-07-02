@@ -1303,10 +1303,31 @@ function WaitingOrDecidedScreen({ onContinue, onReroll }: { onContinue: (winner?
 
 type Phase = 'swipe' | 'decided' | 'results';
 
+// 결과 화면(WinnerScreen)은 로컬 phase state로만 도달하는데, "길찾기" 등으로 다른 라우트에 갔다가
+// 뒤로 가면 이 페이지 컴포넌트가 통째로 언마운트→리마운트되며 phase가 'swipe'로 초기화된다.
+// 그러면 이미 끝난 세션인데도 처음부터 다시 예선→결정 단계를 타면서 결과 대신 대기 화면이 뜬다.
+// 우승이 정해지면 세션 id와 함께 winnerId를 저장해두고, 마운트 시 그 저장값으로 phase를 바로
+// 'results'로 복원해 이 문제를 막는다.
+const WINNER_STORAGE_KEY = 'lunchie_current_winner';
+
+function loadPersistedWinnerId(sessionId: string | undefined): string | null {
+  if (!sessionId) return null;
+  try {
+    const raw = localStorage.getItem(WINNER_STORAGE_KEY);
+    if (!raw) return null;
+    const saved = JSON.parse(raw);
+    return saved.sessionId === sessionId ? (saved.winnerId ?? null) : null;
+  } catch {
+    return null;
+  }
+}
+
 export default function QuickMatchPage() {
   const [, navigate] = useLocation();
-  const { currentSession, addSwipe, swipeRecords, profile, rerollSession } = useApp();
-  const [phase, setPhase] = useState<Phase>('swipe');
+  const { currentSession, addSwipe, swipeRecords, profile, rerollSession, restaurants } = useApp();
+  const [phase, setPhase] = useState<Phase>(() =>
+    loadPersistedWinnerId(currentSession?.id) ? 'results' : 'swipe'
+  );
   const targetRestaurants = currentSession?.restaurants || [];
   const currentSessionSwipes = swipeRecords.filter(s => s.sessionId === currentSession?.id);
   const [currentIndex, setCurrentIndex] = useState(() => {
@@ -1314,7 +1335,11 @@ export default function QuickMatchPage() {
     return initialIndex === -1 ? 0 : initialIndex;
   });
   const [swipeData, setSwipeData] = useState<{ restaurant: any; action: SwipeAction }[]>([]);
-  const [selectedWinner, setSelectedWinner] = useState<Restaurant | null>(null);
+  const [selectedWinner, setSelectedWinner] = useState<Restaurant | null>(() => {
+    const winnerId = loadPersistedWinnerId(currentSession?.id);
+    if (!winnerId) return null;
+    return restaurants.find(r => r.id === winnerId) ?? targetRestaurants.find(r => r.id === winnerId) ?? null;
+  });
   // 듀얼 상태: 엔진 top-2 비교. "둘 다 별로"면 다음 후보 쌍으로. null=아직 미구성
   const [duel, setDuel] = useState<{ a: any; b: any } | null>(null);
   const cardShownAtRef = useRef(Date.now()); // 현재 카드 노출 시각 → dwell 측정
@@ -1324,6 +1349,20 @@ export default function QuickMatchPage() {
     if (!currentSession?.deadline) return 0;
     return Math.max(0, new Date(currentSession.deadline).getTime() - Date.now());
   });
+
+  const clearPersistedWinner = useCallback(() => {
+    try { localStorage.removeItem(WINNER_STORAGE_KEY); } catch { /* noop */ }
+  }, []);
+  // 우승 확정 시 결과 화면으로 전환 + localStorage에 남겨서, 다른 라우트(길찾기 등) 이동 후
+  // 뒤로 왔을 때 이 페이지가 리마운트돼도 예선/대기 화면 대신 바로 결과로 복원되게 한다.
+  const finalizeWinner = useCallback((winner: Restaurant | null) => {
+    setSelectedWinner(winner);
+    if (winner && currentSession) {
+      try { localStorage.setItem(WINNER_STORAGE_KEY, JSON.stringify({ sessionId: currentSession.id, winnerId: winner.id })); }
+      catch { /* noop */ }
+    }
+    setPhase('results');
+  }, [currentSession]);
 
   // Countdown ticker for the header badge
   useEffect(() => {
@@ -1470,9 +1509,9 @@ export default function QuickMatchPage() {
     const byEng = (list: any[]) => [...list].sort((a, b) => (currentSession?.recMeta?.[a.id]?.position ?? 999) - (currentSession?.recMeta?.[b.id]?.position ?? 999));
     const liked = byEng(swipeData.filter(s => s.action === 'like').map(s => s.restaurant));
     const pool = liked.length >= 1 ? liked : byEng(targetRestaurants.slice(0, total)); // 좋아요 없으면 엔진 top으로 완화
-    if (pool.length === 1) { setSelectedWinner(pool[0]); setPhase('results'); }          // 후보 1 → 바로 우승
+    if (pool.length === 1) finalizeWinner(pool[0]);                                        // 후보 1 → 바로 우승
     else if (pool.length >= 2) setDuel({ a: pool[0], b: pool[1] });                       // 엔진 top-2 듀얼
-    else { setSelectedWinner(null); setPhase('results'); }                                // 후보 없음(예외)
+    else finalizeWinner(null);                                                             // 후보 없음(예외)
   }, [phase]);
 
   const topPick = swipeData.find(s => s.action === 'like')?.restaurant || targetRestaurants[0];
@@ -1482,10 +1521,11 @@ export default function QuickMatchPage() {
   const handleReset = () => {
     logEvent({ event_type: 'REROLL', user_id: profile.id, session_id: currentSession?.id ?? null, slate_id: currentSession?.slateId ?? null });
     rejectedRef.current.clear();
+    clearPersistedWinner();
     setCurrentIndex(0); setSwipeData([]); setSelectedWinner(null); setDuel(null); setPhase('swipe');
   };
   // 듀얼 선택 → 우승 확정 (1번 비교, 이론 권장).
-  const handleDuelChoice = (chosen?: any) => { if (chosen) setSelectedWinner(chosen); setPhase('results'); };
+  const handleDuelChoice = (chosen?: any) => finalizeWinner(chosen ?? null);
   // "둘 다 별로" → 두 후보 거절(NOPE FINAL = head-to-head 부정) → 남은 좋아요로 다른 듀얼, 없으면 새 추천.
   const handleRejectBoth = () => {
     if (!duel) return;
@@ -1498,7 +1538,7 @@ export default function QuickMatchPage() {
     const byEng = (list: any[]) => [...list].sort((x, y) => (currentSession?.recMeta?.[x.id]?.position ?? 999) - (currentSession?.recMeta?.[y.id]?.position ?? 999));
     const remaining = byEng(swipeData.filter(s => s.action === 'like').map(s => s.restaurant).filter((r: any) => !rejectedRef.current.has(r.id)));
     if (remaining.length >= 2) setDuel({ a: remaining[0], b: remaining[1] });                     // 다른 좋아요 쌍
-    else if (remaining.length === 1) { setSelectedWinner(remaining[0]); setPhase('results'); }    // 하나만 남음 → 우승
+    else if (remaining.length === 1) finalizeWinner(remaining[0]);                                // 하나만 남음 → 우승
     else handleReset();                                                                            // 다 거절 → 새 추천
   };
 
@@ -1510,8 +1550,8 @@ export default function QuickMatchPage() {
       return null; // 효과가 듀얼/우승 구성 중
     }
     return <WaitingOrDecidedScreen
-      onContinue={(w) => { if (w) setSelectedWinner(w); setPhase('results'); }}
-      onReroll={async (excludeIds) => { await rerollSession(excludeIds); setSwipeData([]); setCurrentIndex(0); setSelectedWinner(null); setDuel(null); setPhase('swipe'); }}
+      onContinue={(w) => finalizeWinner(w ?? null)}
+      onReroll={async (excludeIds) => { clearPersistedWinner(); await rerollSession(excludeIds); setSwipeData([]); setCurrentIndex(0); setSelectedWinner(null); setDuel(null); setPhase('swipe'); }}
     />; // 그룹: 멤버 투표 폴링 + REROLL시 새 세대 재스와이프
   }
   if (phase === 'results') {
