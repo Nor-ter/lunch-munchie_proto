@@ -321,7 +321,13 @@ function buildResultsPayload(
   const generation = Math.max(1, Math.ceil(maxRound / 2));
   const prelimRound = 2 * generation - 1;
   const finalRound = 2 * generation;
-  const r1 = sessionSwipes.filter(s => (Number(s.round) || 1) === prelimRound);
+  // 예선 덱은 추천엔진이 식단·시간대 인텐트까지 걸러 targetCount보다 작을 수 있다(예: 4장).
+  // 서버는 멤버별 실제 덱 크기를 재현할 수 없으므로, 덱을 다 소진한 클라가 보내는
+  // PRELIM_DONE_ID sentinel(결승의 __reject__와 같은 패턴)을 완료 신호로 함께 인정한다.
+  const PRELIM_DONE_ID = "__prelim_done__";
+  const r1All = sessionSwipes.filter(s => (Number(s.round) || 1) === prelimRound);
+  const doneUsers = new Set(r1All.filter(s => s.restaurant_id === PRELIM_DONE_ID).map(s => s.user_id));
+  const r1 = r1All.filter(s => s.restaurant_id !== PRELIM_DONE_ID); // 집계에서 sentinel 제외 (안 빼면 가짜 결승 후보가 된다)
   const r2 = sessionSwipes.filter(s => Number(s.round) === finalRound);
 
   const completionMap: Record<string, number> = {};
@@ -329,20 +335,28 @@ function buildResultsPayload(
     completionMap[s.user_id] = (completionMap[s.user_id] || 0) + 1;
   });
 
-  const completedMembers = members.filter(m => (completionMap[m.user_id] || 0) >= targetCount);
+  const isMemberDone = (userId: string) =>
+    (completionMap[userId] || 0) >= targetCount || doneUsers.has(userId);
+  const completedMembers = members.filter(m => isMemberDone(m.user_id));
   const isExpired = Date.now() > new Date(session.deadline_at).getTime();
 
   // 그룹 결정 상태기계: least-misery 집계 + 3지선다 결승 + reroll/합의실패 (현재 세대 기준)
   const decision = decideGroup(r1 as any, r2 as any, members.length, completedMembers.length, isExpired, generation, REROLL_CAP);
 
-  const memberCompletion = members.map(m => ({
-    id: m.user_id,
-    name: m.user_name,
-    emoji: m.emoji,
-    completed: (completionMap[m.user_id] || 0) >= targetCount,
-    swipeCount: Math.min(completionMap[m.user_id] || 0, targetCount),
-    targetCount
-  }));
+  const memberCompletion = members.map(m => {
+    const cnt = completionMap[m.user_id] || 0;
+    const done = isMemberDone(m.user_id);
+    // 덱이 targetCount보다 작았던 멤버는 실제 스와이프 수를 분모로 보여준다 (예: 4/4)
+    const memberTarget = done ? Math.min(cnt, targetCount) || targetCount : targetCount;
+    return {
+      id: m.user_id,
+      name: m.user_name,
+      emoji: m.emoji,
+      completed: done,
+      swipeCount: Math.min(cnt, memberTarget),
+      targetCount: memberTarget,
+    };
+  });
 
   return {
     completedCount: completedMembers.length,

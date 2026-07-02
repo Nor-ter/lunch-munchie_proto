@@ -1349,6 +1349,30 @@ export default function QuickMatchPage() {
   const visibleCards = targetRestaurants.slice(currentIndex, currentIndex + 3);
   const progress = Math.min(currentIndex + 1, total);
 
+  // 예선 덱 소진 신호: 추천엔진이 식단·시간대 인텐트까지 걸러 덱이 서버 targetCount(7)보다 작을 수
+  // 있다(예: 4장). 서버는 멤버별 실제 덱 크기를 모르므로, 덱을 다 소진했을 때 sentinel 스와이프
+  // (__prelim_done__, 결승의 __reject__와 같은 패턴)를 현재 예선 라운드로 남겨 완료를 알린다.
+  const prelimDoneSentRef = useRef(0); // 마지막으로 완료 신호를 보낸 세대 (세대별 1회)
+  const markPrelimDone = useCallback(() => {
+    if (!currentSession) return;
+    const gen = currentSession.generation ?? 1;
+    if (prelimDoneSentRef.current === gen) return;
+    prelimDoneSentRef.current = gen;
+    fetch('/api/swipes', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        id: `done_${profile.id}_${gen}_${Date.now()}`,
+        session_id: currentSession.id,
+        user_id: profile.id,
+        restaurant_id: '__prelim_done__',
+        round: 2 * gen - 1,
+        swipe_action: 'LIKE',
+        created_at: new Date(),
+      }),
+    }).catch(() => { /* 실패해도 스와이프 수 기준 완료 판정으로 폴백 */ });
+  }, [currentSession, profile.id]);
+
   // Auto-transition to decided phase if all cards have been swiped — 예선(swipe) 중에만.
   // 결정/결과 단계에선 절대 되돌리지 않는다 (안 그러면 듀얼→결과가 'decided'로 튕겨 무한루프).
   useEffect(() => {
@@ -1356,9 +1380,10 @@ export default function QuickMatchPage() {
     const currentSessionSwipes = swipeRecords.filter(s => s.sessionId === currentSession?.id);
     const unswipedCount = targetRestaurants.filter(r => !currentSessionSwipes.some(s => s.restaurantId === r.id)).length;
     if (unswipedCount === 0 || currentIndex >= total) {
+      markPrelimDone();
       setPhase('decided');
     }
-  }, [phase, currentIndex, targetRestaurants, swipeRecords, total, currentSession?.id]);
+  }, [phase, currentIndex, targetRestaurants, swipeRecords, total, currentSession?.id, markPrelimDone]);
 
   useEffect(() => {
     if (showIntro) {
@@ -1390,11 +1415,12 @@ export default function QuickMatchPage() {
     setSwipeData(prev => [...prev, { restaurant, action }]);
 
     if (currentIndex + 1 >= total) {
+      markPrelimDone(); // 덱 소진 = 예선 완료 신호 (덱이 targetCount보다 작아도 서버가 완료로 인정)
       setPhase('decided');
     } else {
       setCurrentIndex(i => i + 1);
     }
-  }, [currentIndex, targetRestaurants, addSwipe, total, currentSession]);
+  }, [currentIndex, targetRestaurants, addSwipe, total, currentSession, markPrelimDone]);
 
   // ── 중도 이탈(ABANDON): 예선 중 나가면 "어디서 몇 장 봤는지" 명시 로깅 ──
   const phaseRef = useRef(phase);
