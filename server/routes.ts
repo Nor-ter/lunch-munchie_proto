@@ -139,7 +139,8 @@ router.post("/sessions/create", async (req: any, res: any) => {
       filter_min_rating: 0,
       filter_dietary: filterDietary || [],
       filter_vibe: filterCategories || [],
-      swipe_limit: 10,
+      // 예선 덱 상한 = 추천엔진 슬레이트 크기(k=7, buildDeck 참고).
+      swipe_limit: 7,
       created_at: new Date()
     };
 
@@ -309,7 +310,9 @@ function buildResultsPayload(
     filterVibe.length === 0 || filterVibe.includes(r.category)
   );
 
-  const targetCount = Math.min(filteredRestaurants.length, 10);
+  // 예선 덱 크기 = session.swipe_limit(추천엔진 슬레이트 상한, k=7). 클라는 이보다 많이 스와이프하지
+  // 않으므로 여기서 다른 상한을 쓰면 멤버가 영원히 "완료" 판정을 못 받아 결과 화면으로 못 넘어간다.
+  const targetCount = Math.min(filteredRestaurants.length, session.swipe_limit || 7);
 
   // 세대(generation) = round 인코딩: 예선=2G-1, 결승=2G. reroll마다 세대+1.
   // 현재 세대 = 최대 round 기준. 새 세대 swipe가 없으면 G=1로 기존과 동일.
