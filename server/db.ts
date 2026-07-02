@@ -17,7 +17,7 @@ if (!connectionString) {
 // 않고 빠르게 멜버른 샘플 데이터 폴백으로 넘어가도록 한다.
 const client = postgres(connectionString || "", {
   prepare: false,
-  connect_timeout: 5,
+  connect_timeout: 2,
 });
 
 export const db = drizzle(client, { schema });

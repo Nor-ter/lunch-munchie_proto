@@ -606,7 +606,11 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     const actualHostName = hostName || profile.name;
     const actualEmoji = emoji || profile.emoji;
 
-    if (apiAvailable) {
+    // 항상 서버 등록을 먼저 시도한다. apiAvailable로 게이트하면 안 되는 이유:
+    // apiAvailable은 부팅 시 /api/restaurants·courses 응답 후에야 true가 되는데,
+    // (DB 타임아웃 등으로) 그 전에 세션을 만들면 서버는 모르는 로컬 전용 세션이 되어
+    // 초대 링크를 받은 다른 유저가 전부 "유효하지 않은 세션"(404)을 보게 된다.
+    {
       try {
         const res = await fetch('/api/sessions/create', {
           method: 'POST',
@@ -667,7 +671,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     session.deadlineMinutes = deadlineMinutes;
     setCurrentSession(session);
     return session;
-  }, [apiAvailable, profile, restaurants]);
+  }, [profile, restaurants]);
 
   const fetchSession = useCallback(async (token: string): Promise<GroupSession> => {
     const res = await fetch(`/api/sessions/${token}`);
