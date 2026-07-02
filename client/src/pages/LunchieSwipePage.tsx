@@ -1138,16 +1138,29 @@ function WaitingOrDecidedScreen({ onContinue, onReroll }: { onContinue: (winner?
   }
 
   // 결승 투표 (3지선다: 후보 1~2곳 + '둘 다 별로'). 1인 1표; 전원/마감 시 다수결.
-  if (phase === 'FINAL' && !voted && finalistRs.length >= 1) {
+  // 후보 2곳 → merge2_v1의 대각선 분할 듀얼 화면(FinalBattleResultScreen) 재사용, 투표는 castVote로 서버에 반영.
+  if (phase === 'FINAL' && !voted && finalistRs.length === 2) {
+    return (
+      <FinalBattleResultScreen
+        finalist1={finalistRs[0]}
+        finalist2={finalistRs[1]}
+        onContinue={(winner) => castVote(winner ? winner.id : REJECT)}
+        onRejectBoth={() => castVote(REJECT)}
+      />
+    );
+  }
+
+  // 후보 1곳(만장일치 확인 투표) — 듀얼 화면을 쓸 수 없으니 단일 선택 UI.
+  if (phase === 'FINAL' && !voted && finalistRs.length === 1) {
     return (
       <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }}
         className="min-h-dvh flex flex-col justify-between px-5 py-8"
         style={{ background: 'linear-gradient(160deg, #2C3E50 0%, #1a252f 100%)' }}>
         <div className="flex-1 flex flex-col justify-center">
-          <h2 className="text-white font-black text-[24px] text-center mb-1">{finalistRs.length === 1 ? '여기 어때요?' : '결승! 어디로 갈까요?'}</h2>
+          <h2 className="text-white font-black text-[24px] text-center mb-1">여기 어때요?</h2>
           <p className="text-white/70 text-[12px] text-center mb-6">한 곳만 골라주세요 · 1인 1표</p>
           <div className="space-y-3 max-w-[360px] mx-auto w-full">
-            {finalistRs.slice(0, 2).map(r => (
+            {finalistRs.map(r => (
               <button key={r.id} onClick={() => castVote(r.id)}
                 className="w-full flex items-center gap-3 bg-white/10 border border-white/15 rounded-2xl p-3 active:scale-[0.98] transition-all">
                 <img src={r.image} alt="" className="w-14 h-14 rounded-xl object-cover" />
