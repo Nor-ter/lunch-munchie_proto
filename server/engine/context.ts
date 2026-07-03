@@ -45,7 +45,7 @@ async function fetchWeather(lat: number, lng: number): Promise<NonNullable<RecCo
   try {
     const url = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lng}&current=weather_code,temperature_2m`;
     const ctrl = new AbortController();
-    const timer = setTimeout(() => ctrl.abort(), 1500);
+    const timer = setTimeout(() => ctrl.abort(), 1000);
     const r = await fetch(url, { signal: ctrl.signal });
     clearTimeout(timer);
     if (!r.ok) return weatherCache?.value ?? null;

@@ -1000,7 +1000,7 @@ function FinalBattleResultScreen({
 
 // ─── Decided Screen ───────────────────────────────────────────────────────────
 
-function WaitingOrDecidedScreen({ onContinue, onReroll }: { onContinue: (winner?: any) => void; onReroll: (excludeIds: string[]) => void }) {
+function WaitingOrDecidedScreen({ onContinue, onReroll }: { onContinue: (winner?: any, finalists?: any[]) => void; onReroll: (excludeIds: string[]) => void }) {
   const [, navigate] = useLocation();
   const { currentSession, restaurants, profile } = useApp();
   const REJECT = '__reject__';
@@ -1225,7 +1225,7 @@ function WaitingOrDecidedScreen({ onContinue, onReroll }: { onContinue: (winner?
               </div>
             )}
             
-            <button onClick={() => onContinue(winner)}
+            <button onClick={() => onContinue(winner, finalistRs)}
               className="w-full max-w-[340px] py-4 rounded-2xl font-bold text-[#EB5053] text-[15px] bg-white active:scale-[0.98] transition-all shadow-md mx-auto block">
               결과 확인하기 🎉
             </button>
@@ -1324,7 +1324,7 @@ function loadPersistedWinnerId(sessionId: string | undefined): string | null {
 
 export default function QuickMatchPage() {
   const [, navigate] = useLocation();
-  const { currentSession, addSwipe, swipeRecords, profile, rerollSession, restaurants } = useApp();
+  const { currentSession, addSwipe, swipeRecords, profile, rerollSession, restaurants, clearSessionSwipes } = useApp();
   const [phase, setPhase] = useState<Phase>(() =>
     loadPersistedWinnerId(currentSession?.id) ? 'results' : 'swipe'
   );
@@ -1342,6 +1342,11 @@ export default function QuickMatchPage() {
   });
   // 듀얼 상태: 엔진 top-2 비교. "둘 다 별로"면 다음 후보 쌍으로. null=아직 미구성
   const [duel, setDuel] = useState<{ a: any; b: any } | null>(null);
+  // 그룹 결승 후보 — "다시 고르기"를 결승전으로 되돌릴 때(예선 재스와이프 없이) 재사용한다.
+  const [lastFinalists, setLastFinalists] = useState<any[]>([]);
+  // "다시 고르기"로 결승전(대각선) 화면을 다시 보는 중. 솔로·그룹 모두 로컬 듀얼 화면을 강제한다
+  // (그룹은 서버가 이미 DONE이라, 이 플래그 없이 decided로 가면 결과 화면이 다시 뜬다).
+  const [revisitFinals, setRevisitFinals] = useState(false);
   const cardShownAtRef = useRef(Date.now()); // 현재 카드 노출 시각 → dwell 측정
   const rejectedRef = useRef<Set<string>>(new Set()); // 듀얼에서 "둘 다 별로"로 거절된 후보
   const [showIntro, setShowIntro] = useState(true);
@@ -1356,6 +1361,7 @@ export default function QuickMatchPage() {
   // 우승 확정 시 결과 화면으로 전환 + localStorage에 남겨서, 다른 라우트(길찾기 등) 이동 후
   // 뒤로 왔을 때 이 페이지가 리마운트돼도 예선/대기 화면 대신 바로 결과로 복원되게 한다.
   const finalizeWinner = useCallback((winner: Restaurant | null) => {
+    setRevisitFinals(false);
     setSelectedWinner(winner);
     if (winner && currentSession) {
       try { localStorage.setItem(WINNER_STORAGE_KEY, JSON.stringify({ sessionId: currentSession.id, winnerId: winner.id })); }
@@ -1401,9 +1407,32 @@ export default function QuickMatchPage() {
   const visibleCards = targetRestaurants.slice(currentIndex, currentIndex + 3);
   const progress = Math.min(currentIndex + 1, total);
 
-  // 예선 덱 소진 신호: 추천엔진이 식단·시간대 인텐트까지 걸러 덱이 서버 targetCount(7)보다 작을 수
-  // 있다(예: 4장). 서버는 멤버별 실제 덱 크기를 모르므로, 덱을 다 소진했을 때 sentinel 스와이프
-  // (__prelim_done__, 결승의 __reject__와 같은 패턴)를 현재 예선 라운드로 남겨 완료를 알린다.
+  // 덱 크기 신호: 추천엔진이 식단·시간대 인텐트까지 걸러 덱이 서버 기본 상한(7)보다 작을 수 있다
+  // (예: 4장). 서버는 멤버별 실제 덱 크기를 모르므로, 스와이프 시작 시점에 sentinel 스와이프로
+  // 내 덱 크기를 알려준다 — 안 하면 "다른 유저 기다리는 중" 화면에서 진행률이 x/7로 잘못 보인다.
+  const deckSizeSentRef = useRef(0); // 마지막으로 덱 크기를 보낸 세대 (세대별 1회)
+  useEffect(() => {
+    if (!currentSession || total <= 0) return;
+    const gen = currentSession.generation ?? 1;
+    if (deckSizeSentRef.current === gen) return;
+    deckSizeSentRef.current = gen;
+    fetch('/api/swipes', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        id: `deck_${profile.id}_${gen}_${Date.now()}`,
+        session_id: currentSession.id,
+        user_id: profile.id,
+        restaurant_id: `__deck_size__:${total}`,
+        round: 2 * gen - 1,
+        swipe_action: 'LIKE',
+        created_at: new Date(),
+      }),
+    }).catch(() => { /* 실패해도 서버는 완료 시점에 스와이프 수로 폴백 추정 */ });
+  }, [currentSession, total, profile.id]);
+
+  // 예선 덱 소진 신호: 덱을 다 소진했을 때 sentinel 스와이프(__prelim_done__, 결승의 __reject__와
+  // 같은 패턴)를 현재 예선 라운드로 남겨 완료를 알린다.
   const prelimDoneSentRef = useRef(0); // 마지막으로 완료 신호를 보낸 세대 (세대별 1회)
   const markPrelimDone = useCallback(() => {
     if (!currentSession) return;
@@ -1522,7 +1551,27 @@ export default function QuickMatchPage() {
     logEvent({ event_type: 'REROLL', user_id: profile.id, session_id: currentSession?.id ?? null, slate_id: currentSession?.slateId ?? null });
     rejectedRef.current.clear();
     clearPersistedWinner();
+    // 로컬 스와이프 기록도 지워야 한다 — 안 지우면 "예선 자동완료" 감지(unswipedCount===0)가
+    // 즉시 다시 걸려 카드 대신 곧바로 결정/결과 화면으로 튕긴다.
+    if (currentSession) clearSessionSwipes(currentSession.id);
+    prelimDoneSentRef.current = 0;
+    setRevisitFinals(false);
     setCurrentIndex(0); setSwipeData([]); setSelectedWinner(null); setDuel(null); setPhase('swipe');
+  };
+  // 결과 화면의 "다시 고르기": 예선부터 다시 스와이프하지 않고 방금 봤던 결승전(대각선 듀얼)의
+  // "선택 전" 상태로 되돌린다. revisitFinals 플래그로 솔로·그룹 모두 로컬 듀얼 화면을 강제한다
+  // (그룹은 서버가 이미 DONE이라, 플래그 없이 decided로 가면 결과 화면이 다시 뜬다).
+  const handleBackToFinals = () => {
+    clearPersistedWinner();
+    const revivedDuel = duel ?? (lastFinalists.length >= 2 ? { a: lastFinalists[0], b: lastFinalists[1] } : null);
+    if (revivedDuel) {
+      setSelectedWinner(null);
+      setDuel(revivedDuel);
+      setRevisitFinals(true);
+      setPhase('decided');
+      return;
+    }
+    handleReset();
   };
   // 듀얼 선택 → 우승 확정 (1번 비교, 이론 권장).
   const handleDuelChoice = (chosen?: any) => finalizeWinner(chosen ?? null);
@@ -1544,18 +1593,24 @@ export default function QuickMatchPage() {
 
   if (phase === 'decided') {
     const isSolo = (currentSession?.members?.length ?? 1) <= 1;
+    // "다시 고르기"로 돌아온 경우: 솔로·그룹 무관하게 로컬 듀얼(대각선, 선택 전) 화면을 보여준다.
+    // 서버 폴링(WaitingOrDecidedScreen)을 타면 그룹은 이미 DONE이라 결과가 다시 뜨므로 여기서 가로챈다.
+    // "둘 다 별로"(onRejectBoth)는 재선택 맥락에선 정의가 애매해 숨긴다(버튼 미표시).
+    if (revisitFinals && duel) {
+      return <FinalBattleResultScreen key={'revisit_' + (duel.a?.id ?? '') + (duel.b?.id ?? '')} finalist1={duel.a} finalist2={duel.b} onContinue={(winner) => finalizeWinner(winner ?? null)} />;
+    }
     if (isSolo) {
       // 솔로: 좋아요 수로 구성된 듀얼(준결승→결승). 로컬 즉시 — /results 폴링/플래시 없음.
       if (duel) return <FinalBattleResultScreen key={(duel.a?.id ?? '') + (duel.b?.id ?? '')} finalist1={duel.a} finalist2={duel.b} onContinue={handleDuelChoice} onRejectBoth={handleRejectBoth} />;
       return null; // 효과가 듀얼/우승 구성 중
     }
     return <WaitingOrDecidedScreen
-      onContinue={(w) => finalizeWinner(w ?? null)}
+      onContinue={(w, finalists) => { if (finalists && finalists.length >= 2) setLastFinalists(finalists); finalizeWinner(w ?? null); }}
       onReroll={async (excludeIds) => { clearPersistedWinner(); await rerollSession(excludeIds); setSwipeData([]); setCurrentIndex(0); setSelectedWinner(null); setDuel(null); setPhase('swipe'); }}
     />; // 그룹: 멤버 투표 폴링 + REROLL시 새 세대 재스와이프
   }
   if (phase === 'results') {
-    return <WinnerScreen selectedWinner={selectedWinner} onReset={handleReset} />;
+    return <WinnerScreen selectedWinner={selectedWinner} onReset={handleBackToFinals} />;
   }
 
   // Countdown formatting for header badge

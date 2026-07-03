@@ -3,7 +3,7 @@
 // routes.ts의 세션/식당 폴백과 동일한 취지: Supabase가 일시정지/차단돼도
 // 로깅이 앱을 막지 않도록 한다. 인메모리 버퍼는 개발/장애 시 임시 보관용.
 
-import { db } from "../db.js";
+import { db, tryDb } from "../db.js";
 import { recEvents } from "../../shared/schema.js";
 import { eq, and, gte, inArray } from "drizzle-orm";
 import type { RecEventInput } from "../../shared/engine.js";
@@ -600,17 +600,14 @@ export async function recordEvents(
 ): Promise<{ ok: boolean; count: number; persisted: boolean }> {
   if (!events?.length) return { ok: true, count: 0, persisted: false };
   const rows = events.map(toRow);
-  try {
-    await db.insert(recEvents).values(rows);
-    return { ok: true, count: rows.length, persisted: true };
-  } catch (err) {
-    console.error("DB unavailable for rec_events, buffering in memory:", (err as Error)?.message);
-    for (const r of rows) {
-      memEvents.push(r);
-      if (memEvents.length > MEM_CAP) memEvents.shift();
-    }
-    return { ok: true, count: rows.length, persisted: false };
+  const r = await tryDb(() => db.insert(recEvents).values(rows));
+  if (r.ok) return { ok: true, count: rows.length, persisted: true };
+  // DB 다운(또는 서킷 오픈) → 인메모리 버퍼로 폴백
+  for (const row of rows) {
+    memEvents.push(row);
+    if (memEvents.length > MEM_CAP) memEvents.shift();
   }
+  return { ok: true, count: rows.length, persisted: false };
 }
 
 export interface JourneyStop {
@@ -656,16 +653,15 @@ export function selectTodayStops(
 export async function todayStops(userId: string, now = Date.now()): Promise<JourneyStop[]> {
   const d = new Date(now); d.setHours(0, 0, 0, 0);
   const getCat = (id: string) => getItemFeatures(id)?.category ?? null;
-  try {
-    const rows = await db.select().from(recEvents).where(
+  const r = await tryDb(() =>
+    db.select().from(recEvents).where(
       and(
         eq(recEvents.user_id, userId),
         gte(recEvents.created_at, d),
         inArray(recEvents.event_type, ["WINNER", "SURVEY"]),
       ),
-    );
-    return selectTodayStops(rows as Array<Record<string, unknown>>, userId, now, getCat);
-  } catch {
-    return selectTodayStops(memEvents as Array<Record<string, unknown>>, userId, now, getCat);
-  }
+    ),
+  );
+  const rows = r.ok ? r.value : memEvents;
+  return selectTodayStops(rows as Array<Record<string, unknown>>, userId, now, getCat);
 }

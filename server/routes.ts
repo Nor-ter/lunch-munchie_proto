@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { db } from "./db.js";
+import { db, tryDb, withDb } from "./db.js";
 import { users, sessions, restaurants, swipes, courses, courseItems, sessionMembers } from "../shared/schema.js";
 import { eq, and } from "drizzle-orm";
 import { nanoid } from "nanoid";
@@ -154,14 +154,16 @@ router.post("/sessions/create", async (req: any, res: any) => {
       created_at: new Date()
     };
 
-    try {
-      await db.insert(sessions).values(newSession as any);
-      await db.insert(sessionMembers).values(newMember);
-    } catch (dbErr) {
-      // DB 불가 → 메모리 폴백 (같은 서버를 보는 모든 유저가 공유)
-      console.error("DB unavailable, creating session in memory:", (dbErr as Error)?.message);
-      memSessions.set(token, { session: newSession, members: [newMember], swipes: [] });
-    }
+    await withDb(
+      async () => {
+        await db.insert(sessions).values(newSession as any);
+        await db.insert(sessionMembers).values(newMember);
+      },
+      () => {
+        // DB 불가 → 메모리 폴백 (같은 서버를 보는 모든 유저가 공유)
+        memSessions.set(token, { session: newSession, members: [newMember], swipes: [] });
+      },
+    );
 
     res.status(201).json({ session: newSession, token });
   } catch (err) {
@@ -172,15 +174,14 @@ router.post("/sessions/create", async (req: any, res: any) => {
 
 router.get("/sessions/:token", async (req: any, res: any) => {
   const token = req.params.token;
-  try {
+  const r = await tryDb(async () => {
     const [session] = await db.select().from(sessions).where(eq(sessions.share_token, token));
-    if (session) {
-      const members = await db.select().from(sessionMembers).where(eq(sessionMembers.session_id, session.id));
-      return res.json({ session, members });
-    }
-  } catch (err) {
-    console.error("DB unavailable for fetch, trying memory:", (err as Error)?.message);
-  }
+    if (!session) return null;
+    const members = await db.select().from(sessionMembers).where(eq(sessionMembers.session_id, session.id));
+    return { session, members };
+  });
+  if (r.ok && r.value) return res.json(r.value);
+  // DB 다운이거나, DB엔 없지만 메모리(다운 중 생성된 세션)에 있을 수 있다.
   const mem = memByToken(token);
   if (mem) return res.json({ session: mem.session, members: mem.members });
   res.status(404).json({ error: "Session not found" });
@@ -189,38 +190,40 @@ router.get("/sessions/:token", async (req: any, res: any) => {
 router.post("/sessions/:token/join", async (req: any, res: any) => {
   const token = req.params.token;
   const { userId, userName, emoji } = req.body;
-  try {
+  const r = await tryDb(async () => {
     const [session] = await db.select().from(sessions).where(eq(sessions.share_token, token));
-    if (session) {
-      const existing = await db.select().from(sessionMembers).where(eq(sessionMembers.session_id, session.id));
-      const isAlreadyJoined = existing.find(m => m.user_id === userId);
+    if (!session) return { found: false as const };
+    const existing = await db.select().from(sessionMembers).where(eq(sessionMembers.session_id, session.id));
+    const isAlreadyJoined = existing.find(m => m.user_id === userId);
 
-      // 정원 제한: 새 참여자가 group_size를 넘기면 거부 (이미 들어온 사람은 갱신 허용)
-      const cap = (session as { group_size?: number }).group_size ?? 99;
-      if (!isAlreadyJoined && existing.length >= cap) {
-        return res.status(409).json({ error: "session_full", message: "정원이 찼어요", cap });
-      }
-
-      if (!isAlreadyJoined) {
-        await db.insert(sessionMembers).values({
-          id: nanoid(),
-          session_id: session.id,
-          user_id: userId,
-          user_name: userName,
-          emoji: emoji,
-          is_ready: false,
-          created_at: new Date()
-        });
-      } else {
-        await db.update(sessionMembers)
-          .set({ user_name: userName, emoji: emoji })
-          .where(and(eq(sessionMembers.user_id, userId), eq(sessionMembers.session_id, session.id)));
-      }
-
-      return res.status(200).json({ success: true });
+    // 정원 제한: 새 참여자가 group_size를 넘기면 거부 (이미 들어온 사람은 갱신 허용)
+    const cap = (session as { group_size?: number }).group_size ?? 99;
+    if (!isAlreadyJoined && existing.length >= cap) {
+      return { found: true as const, full: true as const, cap };
     }
-  } catch (err) {
-    console.error("DB unavailable for join, trying memory:", (err as Error)?.message);
+
+    if (!isAlreadyJoined) {
+      await db.insert(sessionMembers).values({
+        id: nanoid(),
+        session_id: session.id,
+        user_id: userId,
+        user_name: userName,
+        emoji: emoji,
+        is_ready: false,
+        created_at: new Date()
+      });
+    } else {
+      await db.update(sessionMembers)
+        .set({ user_name: userName, emoji: emoji })
+        .where(and(eq(sessionMembers.user_id, userId), eq(sessionMembers.session_id, session.id)));
+    }
+    return { found: true as const, full: false as const };
+  });
+  if (r.ok && r.value.found) {
+    if (r.value.full) {
+      return res.status(409).json({ error: "session_full", message: "정원이 찼어요", cap: r.value.cap });
+    }
+    return res.status(200).json({ success: true });
   }
   const mem = memByToken(token);
   if (mem) {
@@ -251,17 +254,15 @@ router.post("/sessions/:token/join", async (req: any, res: any) => {
 router.post("/sessions/:token/ready", async (req: any, res: any) => {
   const token = req.params.token;
   const { userId, isReady } = req.body;
-  try {
+  const r = await tryDb(async () => {
     const [session] = await db.select().from(sessions).where(eq(sessions.share_token, token));
-    if (session) {
-      await db.update(sessionMembers)
-        .set({ is_ready: isReady })
-        .where(and(eq(sessionMembers.user_id, userId), eq(sessionMembers.session_id, session.id)));
-      return res.status(200).json({ success: true });
-    }
-  } catch (err) {
-    console.error("DB unavailable for ready, trying memory:", (err as Error)?.message);
-  }
+    if (!session) return false;
+    await db.update(sessionMembers)
+      .set({ is_ready: isReady })
+      .where(and(eq(sessionMembers.user_id, userId), eq(sessionMembers.session_id, session.id)));
+    return true;
+  });
+  if (r.ok && r.value) return res.status(200).json({ success: true });
   const mem = memByToken(token);
   if (mem) {
     const member = mem.members.find(m => m.user_id === userId);
@@ -279,17 +280,15 @@ router.post("/sessions/:token/status", async (req: any, res: any) => {
   if (deadlineMinutes) {
     patch.deadline_at = new Date(Date.now() + 1000 * 60 * Number(deadlineMinutes));
   }
-  try {
+  const r = await tryDb(async () => {
     const [session] = await db.select().from(sessions).where(eq(sessions.share_token, token));
-    if (session) {
-      await db.update(sessions)
-        .set(patch)
-        .where(eq(sessions.share_token, token));
-      return res.status(200).json({ success: true });
-    }
-  } catch (err) {
-    console.error("DB unavailable for status, trying memory:", (err as Error)?.message);
-  }
+    if (!session) return false;
+    await db.update(sessions)
+      .set(patch)
+      .where(eq(sessions.share_token, token));
+    return true;
+  });
+  if (r.ok && r.value) return res.status(200).json({ success: true });
   const mem = memByToken(token);
   if (mem) {
     Object.assign(mem.session, patch);
@@ -322,12 +321,21 @@ function buildResultsPayload(
   const prelimRound = 2 * generation - 1;
   const finalRound = 2 * generation;
   // 예선 덱은 추천엔진이 식단·시간대 인텐트까지 걸러 targetCount보다 작을 수 있다(예: 4장).
-  // 서버는 멤버별 실제 덱 크기를 재현할 수 없으므로, 덱을 다 소진한 클라가 보내는
-  // PRELIM_DONE_ID sentinel(결승의 __reject__와 같은 패턴)을 완료 신호로 함께 인정한다.
+  // 서버는 멤버별 실제 덱 크기를 재현할 수 없으므로, 클라가 스와이프를 시작하자마자 보내는
+  // DECK_SIZE sentinel로 자기 덱 크기를 알리고, 다 소진하면 PRELIM_DONE_ID로 완료를 알린다.
   const PRELIM_DONE_ID = "__prelim_done__";
+  const DECK_SIZE_PREFIX = "__deck_size__:";
   const r1All = sessionSwipes.filter(s => (Number(s.round) || 1) === prelimRound);
   const doneUsers = new Set(r1All.filter(s => s.restaurant_id === PRELIM_DONE_ID).map(s => s.user_id));
-  const r1 = r1All.filter(s => s.restaurant_id !== PRELIM_DONE_ID); // 집계에서 sentinel 제외 (안 빼면 가짜 결승 후보가 된다)
+  const deckSizeByUser: Record<string, number> = {};
+  r1All.forEach(s => {
+    if (typeof s.restaurant_id === 'string' && s.restaurant_id.startsWith(DECK_SIZE_PREFIX)) {
+      const n = Number(s.restaurant_id.slice(DECK_SIZE_PREFIX.length));
+      if (Number.isFinite(n) && n > 0) deckSizeByUser[s.user_id] = n;
+    }
+  });
+  // 집계에서 sentinel 전부 제외 (안 빼면 가짜 결승 후보가 된다)
+  const r1 = r1All.filter(s => s.restaurant_id !== PRELIM_DONE_ID && !(typeof s.restaurant_id === 'string' && s.restaurant_id.startsWith(DECK_SIZE_PREFIX)));
   const r2 = sessionSwipes.filter(s => Number(s.round) === finalRound);
 
   const completionMap: Record<string, number> = {};
@@ -335,8 +343,10 @@ function buildResultsPayload(
     completionMap[s.user_id] = (completionMap[s.user_id] || 0) + 1;
   });
 
+  // 멤버별 실제 목표치 — 클라가 알려온 자기 덱 크기가 있으면 그걸, 없으면(아직 미도착) 서버 추정치.
+  const memberTargetOf = (userId: string) => deckSizeByUser[userId] ?? targetCount;
   const isMemberDone = (userId: string) =>
-    (completionMap[userId] || 0) >= targetCount || doneUsers.has(userId);
+    (completionMap[userId] || 0) >= memberTargetOf(userId) || doneUsers.has(userId);
   const completedMembers = members.filter(m => isMemberDone(m.user_id));
   const isExpired = Date.now() > new Date(session.deadline_at).getTime();
 
@@ -352,8 +362,8 @@ function buildResultsPayload(
   const memberCompletion = members.map(m => {
     const cnt = completionMap[m.user_id] || 0;
     const prelimDone = isMemberDone(m.user_id);
-    // 덱이 targetCount보다 작았던 멤버는 실제 스와이프 수를 분모로 보여준다 (예: 4/4)
-    const memberTarget = prelimDone ? Math.min(cnt, targetCount) || targetCount : targetCount;
+    // 클라가 알려온 실제 덱 크기를 분모로 쓴다 (예: 4장이면 진행 중에도 x/4로 표시).
+    const memberTarget = memberTargetOf(m.user_id);
     const inFinalStage = decision.phase === 'FINAL';
     return {
       id: m.user_id,
@@ -386,26 +396,23 @@ function buildResultsPayload(
 
 router.get("/sessions/:token/results", async (req: any, res: any) => {
   const token = req.params.token;
-  try {
+  const r = await tryDb(async () => {
     const [session] = await db.select().from(sessions).where(eq(sessions.share_token, token));
-    if (session) {
-      const members = await db.select().from(sessionMembers).where(eq(sessionMembers.session_id, session.id));
-      const sessionSwipes = await db.select().from(swipes).where(eq(swipes.session_id, session.id));
-      const allRestaurants = await db.select().from(restaurants);
+    if (!session) return null;
+    const members = await db.select().from(sessionMembers).where(eq(sessionMembers.session_id, session.id));
+    const sessionSwipes = await db.select().from(swipes).where(eq(swipes.session_id, session.id));
+    const allRestaurants = await db.select().from(restaurants);
 
-      const payload = buildResultsPayload(session, members, sessionSwipes, allRestaurants);
+    const payload = buildResultsPayload(session, members, sessionSwipes, allRestaurants);
 
-      if (payload.isExpired && session.status !== 'COMPLETED') {
-        await db.update(sessions)
-          .set({ status: 'COMPLETED' })
-          .where(eq(sessions.id, session.id));
-      }
-
-      return res.json(payload);
+    if (payload.isExpired && session.status !== 'COMPLETED') {
+      await db.update(sessions)
+        .set({ status: 'COMPLETED' })
+        .where(eq(sessions.id, session.id));
     }
-  } catch (err) {
-    console.error("DB unavailable for results, trying memory:", (err as Error)?.message);
-  }
+    return payload;
+  });
+  if (r.ok && r.value) return res.json(r.value);
   const mem = memByToken(token);
   if (mem) {
     const payload = buildResultsPayload(mem.session, mem.members, mem.swipes, MOCK_RESTAURANTS);
@@ -419,9 +426,9 @@ router.get("/sessions/:token/results", async (req: any, res: any) => {
 
 // Restaurants
 router.get("/restaurants", async (req: any, res: any) => {
-  try {
-    const allRestaurants = await db.select().from(restaurants);
-    const formatted = allRestaurants.map(r => ({
+  const dbRes = await tryDb(() => db.select().from(restaurants));
+  if (dbRes.ok) {
+    const formatted = dbRes.value.map(r => ({
       id: r.id,
       name: r.name,
       category: r.category,
@@ -439,19 +446,20 @@ router.get("/restaurants", async (req: any, res: any) => {
       description: r.short_description
     }));
     // DB가 비어 있으면(시드 전) 멜버른 샘플 데이터로 폴백.
-    res.json(formatted.length > 0 ? formatted : mockRestaurantsResponse());
-  } catch (err) {
-    console.error("Falling back to mock restaurants:", (err as Error)?.message);
-    res.json(mockRestaurantsResponse());
+    return res.json(formatted.length > 0 ? formatted : mockRestaurantsResponse());
   }
+  res.json(mockRestaurantsResponse());
 });
 
 // Courses
 router.get("/courses", async (req: any, res: any) => {
-  try {
+  const dbRes = await tryDb(async () => {
     const allCourses = await db.select().from(courses);
     const allCourseItems = await db.select().from(courseItems);
-    
+    return { allCourses, allCourseItems };
+  });
+  if (dbRes.ok) {
+    const { allCourses, allCourseItems } = dbRes.value;
     const formattedCourses = allCourses.map(c => {
       const stops = allCourseItems.filter(ci => ci.course_id === c.id).map(ci => ({
         placeId: ci.restaurant_id,
@@ -481,11 +489,9 @@ router.get("/courses", async (req: any, res: any) => {
         savedCount: c.saves_count
       };
     });
-    res.json(formattedCourses.length > 0 ? formattedCourses : mockCoursesResponse());
-  } catch (err) {
-    console.error("Falling back to mock courses:", (err as Error)?.message);
-    res.json(mockCoursesResponse());
+    return res.json(formattedCourses.length > 0 ? formattedCourses : mockCoursesResponse());
   }
+  res.json(mockCoursesResponse());
 });
 
 // Swipes
@@ -500,12 +506,8 @@ router.post("/swipes", async (req: any, res: any) => {
     swipe_action,
     created_at: created_at ? new Date(created_at) : new Date()
   };
-  try {
-    await db.insert(swipes).values(row);
-    return res.status(201).json({ success: true });
-  } catch (err) {
-    console.error("DB unavailable for swipe, trying memory:", (err as Error)?.message);
-  }
+  const r = await tryDb(() => db.insert(swipes).values(row));
+  if (r.ok) return res.status(201).json({ success: true });
   const mem = memBySessionId(session_id);
   if (mem) {
     mem.swipes.push(row);
@@ -517,8 +519,8 @@ router.post("/swipes", async (req: any, res: any) => {
 // ── 런치 엔진 v0 — 로깅 / 추천 (Phase 0) ─────────────────────────────────────
 // 후보 풀: DB 우선, 실패 시 멜버른 mock 폴백.
 async function candidatePool(): Promise<Candidate[]> {
-  try {
-    const rows = await db
+  const dbRes = await tryDb(() =>
+    db
       .select({
         id: restaurants.id,
         rating: restaurants.rating,
@@ -527,11 +529,9 @@ async function candidatePool(): Promise<Candidate[]> {
         category: restaurants.category,
         dietary_options: restaurants.dietary_options,
       })
-      .from(restaurants);
-    if (rows.length) return rows as Candidate[];
-  } catch (err) {
-    console.error("DB unavailable for candidates, using mock:", (err as Error)?.message);
-  }
+      .from(restaurants),
+  );
+  if (dbRes.ok && dbRes.value.length) return dbRes.value as Candidate[];
   return MOCK_RESTAURANTS.map((r) => ({
     id: r.id,
     rating: r.rating,

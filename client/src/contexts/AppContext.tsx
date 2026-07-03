@@ -432,6 +432,8 @@ interface AppContextValue {
 
   swipeRecords: SwipeRecord[];
   addSwipe: (restaurantId: string, action: SwipeRecord['action']) => void;
+  /** 세션의 로컬 스와이프 기록을 지운다 — "다시 고르기"로 카드를 처음부터 다시 보여주기 위한 용도 */
+  clearSessionSwipes: (sessionId: string) => void;
   /** 그룹 reroll: 거절·다수미움 제외한 fresh 덱으로 다음 세대 예선 시작 */
   rerollSession: (excludeIds: string[]) => Promise<void>;
   likedRestaurantIds: string[];
@@ -805,6 +807,12 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     }
   }, [apiAvailable, currentSession, profile.id]);
 
+  // "다시 고르기": 로컬 스와이프 기록을 지워야 카드가 처음부터 다시 나온다.
+  // 안 지우면 예선 자동완료 감지(unswipedCount===0)가 즉시 다시 걸려 결정 화면으로 튕긴다.
+  const clearSessionSwipes = useCallback((sessionId: string) => {
+    setSwipeRecords(prev => prev.filter(s => s.sessionId !== sessionId));
+  }, []);
+
   // 그룹 reroll: 거절·다수미움(excludeIds) 뺀 fresh 풀로 새 덱 → 세대 +1. 멤버 각자 재스와이프.
   const rerollSession = useCallback(async (excludeIds: string[]) => {
     if (!currentSession) return;
@@ -836,7 +844,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     <AppContext.Provider value={{
       courses, savedCourseIds, saveCourse, unsaveCourse, addCourse,
       currentSession, setCurrentSession, createSession, joinSession, fetchSession, toggleReady, startSession,
-      swipeRecords, addSwipe, rerollSession, likedRestaurantIds,
+      swipeRecords, addSwipe, clearSessionSwipes, rerollSession, likedRestaurantIds,
       profile, updateProfile,
       restaurants,
       getRestaurantById, getCourseById,
