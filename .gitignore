@@ -9,3 +9,7 @@ dist/
 
 # Superpowers brainstorm mockups
 .superpowers/
+
+# 암호화된 자격증명 — 저장소에 넣지 않음
+env.enc
+*.enc
