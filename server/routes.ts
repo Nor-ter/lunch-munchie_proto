@@ -31,6 +31,8 @@ interface MemStore {
   swipes: Record<string, any>[];
 }
 const memSessions = new Map<string, MemStore>(); // key: share_token
+// 호스트 '지금 진행'(D): 강제 완료된 단계 `${session.id}:${round}` 집합 (서버 메모리).
+const forcedSteps = new Set<string>();
 
 function memByToken(token: string): MemStore | undefined {
   return memSessions.get(token);
@@ -324,6 +326,21 @@ router.post("/sessions/:token/status", async (req: any, res: any) => {
   res.status(404).json({ error: "Session not found" });
 });
 
+// 호스트 '지금 진행'(D) — 현재 단계(round)를 강제 완료 처리. 호스트만.
+router.post("/sessions/:token/force", async (req: any, res: any) => {
+  const { userId, round } = req.body;
+  let session: Record<string, any> | null = null;
+  try {
+    const [s] = await db.select().from(sessions).where(eq(sessions.share_token, req.params.token));
+    if (s) session = s;
+  } catch { /* mem 폴백 */ }
+  if (!session) { const mem = memByToken(req.params.token); if (mem) session = mem.session; }
+  if (!session) return res.status(404).json({ error: "Session not found" });
+  if (session.host_user_id !== userId) return res.status(403).json({ error: "host_only" });
+  forcedSteps.add(`${session.id}:${Number(round)}`);
+  return res.json({ success: true });
+});
+
 // 세션 결과 집계 — DB/메모리 공용 (rows는 컬럼명 기반 객체)
 function buildResultsPayload(
   session: Record<string, any>,
@@ -356,8 +373,12 @@ function buildResultsPayload(
   const completedMembers = members.filter(m => (completionMap[m.user_id] || 0) >= targetCount);
   const isExpired = Date.now() > new Date(session.deadline_at).getTime();
 
+  // D: 호스트 '지금 진행'으로 현재 예선/결승 단계 강제 완료됐나
+  const forcePrelim = forcedSteps.has(`${session.id}:${prelimRound}`);
+  const forceFinal = forcedSteps.has(`${session.id}:${finalRound}`);
+
   // 그룹 결정 상태기계: least-misery 집계 + 3지선다 결승 + reroll/합의실패 (현재 세대 기준)
-  const decision = decideGroup(r1 as any, r2 as any, members.length, completedMembers.length, isExpired, generation, REROLL_CAP);
+  const decision = decideGroup(r1 as any, r2 as any, members.length, completedMembers.length, isExpired, generation, REROLL_CAP, forcePrelim, forceFinal);
 
   const memberCompletion = members.map(m => ({
     id: m.user_id,

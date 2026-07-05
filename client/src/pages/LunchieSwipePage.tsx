@@ -967,8 +967,26 @@ function WaitingOrDecidedScreen({ onContinue, onReroll }: { onContinue: (winner?
         )}
       </div>
 
+      {/* D: 호스트 '지금 진행' — 대기 중일 때만, 호스트에게만 */}
+      {!isAllCompleted && currentSession?.hostId === profile.id && (
+        <button
+          onClick={async () => {
+            const gen = liveResults.generation ?? 1;
+            const round = phase === 'FINAL' ? 2 * gen : 2 * gen - 1;
+            try {
+              await fetch(`/api/sessions/${currentSession.inviteCode}/force`, {
+                method: 'POST', headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ userId: profile.id, round }),
+              });
+            } catch { /* 폴링으로 복구 */ }
+          }}
+          className="mb-3 w-full max-w-[340px] py-3 rounded-2xl font-bold text-white text-[14px] bg-white/15 border border-white/25 active:scale-[0.98] transition-all mx-auto block">
+          ⏭ 기다리지 말고 지금 진행 (호스트)
+        </button>
+      )}
+
       <button onClick={() => navigate('/')}
-        className="mt-6 text-white/60 hover:text-white text-[12px] active:scale-95 text-center mx-auto block">
+        className="mt-1 text-white/60 hover:text-white text-[12px] active:scale-95 text-center mx-auto block">
         처음으로
       </button>
     </motion.div>
