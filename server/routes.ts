@@ -17,7 +17,7 @@ import { ENGINE_MODEL_VERSION } from "../shared/engine.js";
 import type { Candidate, RecContext, RecEventInput } from "../shared/engine.js";
 import { normalizeDiet, isHardRestriction } from "../shared/const.js";
 import type { DietTag } from "../shared/const.js";
-import { categoriesForIntent, intentForCategory } from "../shared/intent.js";
+import { intentForCategory } from "../shared/intent.js";
 
 const router = Router();
 
@@ -606,8 +606,7 @@ router.post("/recommend", async (req, res) => {
   // 인텐트(밥/카페/디저트) 필터: 후보를 해당 카테고리군으로 제한. 모두 걸러지면 완화.
   let intent_relaxed = false;
   if (ctx.intent) {
-    const cats = new Set(categoriesForIntent(ctx.intent));
-    const byIntent = filtered.filter((c) => c.category != null && cats.has(c.category));
+    const byIntent = filtered.filter((c) => intentForCategory(c.category) === ctx.intent);
     if (byIntent.length) filtered = byIntent;
     else intent_relaxed = true;
   }
@@ -689,9 +688,8 @@ router.get("/journey/today", async (req, res) => {
     }
     const intent = intentForCategory(bestCat) ?? "cafe";
     const visited = new Set(stops.map((s) => s.restaurant_id));
-    const wanted = new Set(categoriesForIntent(intent as "meal" | "cafe" | "dessert"));
     const pick = pool
-      .filter((c) => c.category && wanted.has(c.category) && !visited.has(c.id))
+      .filter((c) => intentForCategory(c.category) === intent && !visited.has(c.id))
       .sort((a, b) => (b.rating ?? 0) - (a.rating ?? 0))[0];
     if (pick) {
       nextSuggestion = { intent, restaurant: { id: pick.id, category: pick.category }, reason: `${prev} 다음` };
