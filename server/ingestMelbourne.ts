@@ -15,9 +15,10 @@ const BBOX = [-37.835, 144.940, -37.795, 144.990] as const;
 const OVERPASS = "https://overpass-api.de/api/interpreter";
 
 const query = `
-[out:json][timeout:90];
+[out:json][timeout:120];
 (
-  nwr["amenity"~"^(restaurant|cafe|fast_food)$"](${BBOX.join(",")});
+  nwr["amenity"~"^(restaurant|cafe|fast_food|ice_cream)$"](${BBOX.join(",")});
+  nwr["shop"~"^(bakery|pastry|confectionery)$"](${BBOX.join(",")});
 );
 out center tags;`;
 
@@ -26,6 +27,10 @@ const cap = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
 function toCategory(t: Record<string, string>): string {
   if (t.amenity === "cafe") return "Cafe";
   if (t.amenity === "fast_food") return "Fast Food";
+  if (t.amenity === "ice_cream") return "Ice Cream";
+  if (t.shop === "bakery") return "Bakery";
+  if (t.shop === "pastry") return "Pastry";
+  if (t.shop === "confectionery") return "Confectionery";
   const c = (t.cuisine || "").split(";")[0].trim();
   if (c) return c.split("_").map(cap).join(" "); // korean → Korean, coffee_shop → Coffee Shop
   return "Restaurant";
