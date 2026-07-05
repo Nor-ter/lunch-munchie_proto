@@ -13,6 +13,7 @@ import { useApp, type Restaurant } from '@/contexts/AppContext';
 import { getFoodPhotos } from '@/lib/foodPhotos';
 import { useCourseShare } from '@/hooks/useCourseShare';
 import WinnerShareCard from '@/components/lunchie/WinnerShareCard';
+import FoodImage from '@/components/FoodImage';
 import { logSwipe, logWinner, logNavigate, logEvent, flushEvents } from '@/lib/eventLogger';
 import { intentForCategory } from '@shared/intent';
 
@@ -82,11 +83,12 @@ function SwipeCard({
     >
       {/* Restaurant photo */}
       <div className="w-full h-full relative cursor-grab">
-        <img
-          src={restaurant.image}
-          alt={restaurant.name}
+        <FoodImage
+          src={restaurant.image || foodPhotos[0]}
+          name={restaurant.name}
+          category={restaurant.category}
           className="w-full h-full object-cover"
-          draggable={false}
+          emojiClass="text-[96px]"
         />
         <div className="absolute inset-0 bg-gradient-to-t from-black/75 via-black/10 to-transparent" />
 
@@ -366,7 +368,7 @@ function WinnerScreen({ selectedWinner, onReset }: { selectedWinner?: Restaurant
     >
       {/* Hero */}
       <div className="relative w-full" style={{ aspectRatio: '4/3' }}>
-        <img src={winner.image} alt={winner.name} className="w-full h-full object-cover" />
+        <FoodImage src={winner.image || getFoodPhotos(winner.category)[0]} name={winner.name} category={winner.category} className="w-full h-full object-cover" emojiClass="text-[80px]" />
         <div className="absolute inset-0 bg-gradient-to-t from-black/75 via-black/15 to-transparent" />
         <div className="absolute inset-x-0 bottom-0 px-5 pb-5 text-center">
           <div className="text-[40px] leading-none mb-1">🏆</div>
@@ -580,7 +582,7 @@ function FinalBattleResultScreen({
           className="absolute inset-0 text-left"
           style={{ clipPath: 'polygon(0 0, 100% 0, 0 100%)' }}
         >
-          <img src={finalist1.image} alt={finalist1.name} className="w-full h-full object-cover" draggable={false} />
+          <FoodImage src={finalist1.image || getFoodPhotos(finalist1.category)[0]} name={finalist1.name} category={finalist1.category} className="w-full h-full object-cover" emojiClass="text-[72px]" />
           <div className="absolute inset-0 bg-gradient-to-br from-black/30 via-black/45 to-black/70" />
           {selected !== null && (
             <div
@@ -615,7 +617,7 @@ function FinalBattleResultScreen({
           className="absolute inset-0 text-right"
           style={{ clipPath: 'polygon(100% 0, 100% 100%, 0 100%)', opacity: selected === 1 ? 0.4 : selected === 2 ? 1 : 0.55 }}
         >
-          <img src={finalist2.image} alt={finalist2.name} className="w-full h-full object-cover" draggable={false} />
+          <FoodImage src={finalist2.image || getFoodPhotos(finalist2.category)[0]} name={finalist2.name} category={finalist2.category} className="w-full h-full object-cover" emojiClass="text-[72px]" />
           <div className="absolute inset-0 bg-gradient-to-br from-black/70 via-black/45 to-black/30" />
           {selected === 2 && (
             <div className="absolute inset-0" style={{ boxShadow: 'inset 0 0 0 4px #F09D09' }} />

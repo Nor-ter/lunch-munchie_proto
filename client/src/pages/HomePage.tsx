@@ -391,6 +391,11 @@ export default function HomePage() {
         >
           코스 더보기 <ArrowRight size={20} strokeWidth={2.5} />
         </motion.button>
+
+        {/* 데이터 출처 표기 (ODbL 의무) */}
+        <p className="mt-[28px] text-center text-[11px] text-[#B0B0B0]">
+          식당 데이터 © <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noreferrer" className="underline">OpenStreetMap</a> contributors
+        </p>
       </motion.div>
     </motion.div>
   );
