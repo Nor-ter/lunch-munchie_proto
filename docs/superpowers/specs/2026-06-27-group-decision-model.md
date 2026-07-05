@@ -99,7 +99,7 @@
 | PRELIM→FINAL→DONE 상태기계 | ✅ 구현 (`buildResultsPayload`) |
 | **C "둘 다 별로" 3지선다 + reroll** | ✅ 구현 (Stage 1 `decideGroup` · 2 route 세대 · 3 클라 3지선다/REROLL/합의실패) |
 | B 들러리 필터(과반 미움 후보 배제) + 후보0·1 분기(확인 투표) | ✅ 구현 (`decideGroup`) |
-| D 호스트 '지금 진행' | 🟡 **미구현 (남은 항목)** — 완료 조건은 전원/마감만 |
+| D 호스트 '지금 진행' | ✅ 구현 (`decideGroup` forcePrelim/forceFinal · POST /force 호스트만 · 대기화면 버튼) |
 | E 결정적 tiebreak(예선) | ✅ 구현 (score→좋아요→id) |
 | G 음성 신호 로깅(둘 다 별로·reroll·NO_CONSENSUS) | ✅ 구현 (둘 다 별로=NOPE·NO_CONSENSUS 이벤트) |
 
