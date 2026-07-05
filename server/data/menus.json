@@ -1,0 +1,66 @@
+[
+  {
+    "id": "osm_node_328112497",
+    "name": "Stagger Lee's",
+    "url": "https://staggerlees.com.au/",
+    "ok": true,
+    "format": "html",
+    "items": []
+  },
+  {
+    "id": "osm_node_331166210",
+    "name": "Heartattack and Vine",
+    "url": "https://www.heartattackandvine.com.au/",
+    "ok": true,
+    "format": "html",
+    "items": []
+  },
+  {
+    "id": "osm_node_368394229",
+    "name": "Vegie Bar",
+    "url": "https://www.vegiebar.com.au",
+    "ok": true,
+    "format": "html",
+    "items": []
+  },
+  {
+    "id": "osm_node_379894336",
+    "name": "Hungry Jack's",
+    "url": "https://www.hungryjacks.com.au/",
+    "ok": true,
+    "format": "html",
+    "items": []
+  },
+  {
+    "id": "osm_node_379996075",
+    "name": "Wise Guys Pizza 'n' Pasta",
+    "url": "https://www.wiseguyspizza.com.au/",
+    "ok": true,
+    "format": "html",
+    "items": []
+  },
+  {
+    "id": "osm_node_396951893",
+    "name": "Nando's",
+    "url": "https://www.nandos.com.au/",
+    "ok": true,
+    "format": "html",
+    "items": []
+  },
+  {
+    "id": "osm_node_441172500",
+    "name": "Puzzle Coffee",
+    "url": "https://degani.com.au/locations/southern-cross-station/",
+    "ok": false,
+    "error": "HTTP 404",
+    "items": []
+  },
+  {
+    "id": "osm_node_457302467",
+    "name": "Cafe Commercio",
+    "url": "https://cafecommercio.com.au/",
+    "ok": false,
+    "error": "fetch failed",
+    "items": []
+  }
+]
