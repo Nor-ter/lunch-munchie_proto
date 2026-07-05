@@ -43,9 +43,36 @@ function memBySessionId(id: string): MemStore | undefined {
   return found;
 }
 
+// 인제스트된 멜번 OSM 데이터(server/data/melbourne_osm.json)가 있으면 폴백으로 우선 사용.
+// 없으면 기존 하드코딩 mock. (DB 적재 전에도 실데이터로 앱이 돈다 — © OpenStreetMap contributors)
+import { readFileSync, existsSync } from "node:fs";
+import { join, dirname } from "node:path";
+import { fileURLToPath } from "node:url";
+const __osmPath = join(dirname(fileURLToPath(import.meta.url)), "data", "melbourne_osm.json");
+let __osmCache: Record<string, any>[] | null | undefined; // undefined=미시도, null=없음
+function osmRestaurants(): Record<string, any>[] | null {
+  if (__osmCache !== undefined) return __osmCache;
+  try {
+    __osmCache = existsSync(__osmPath) ? JSON.parse(readFileSync(__osmPath, "utf8")) : null;
+    if (__osmCache) console.log(`[data] 멜번 OSM 폴백 로드: ${__osmCache.length}곳`);
+  } catch { __osmCache = null; }
+  return __osmCache ?? null;
+}
+
 // DB 연결이 불가능할 때(예: Supabase 일시정지/포트 차단) 코스맵 프로토타입이
 // 그대로 동작하도록, 멜버른 샘플 데이터를 API 응답 형태로 변환하는 폴백 헬퍼.
 function mockRestaurantsResponse() {
+  const osm = osmRestaurants();
+  if (osm) {
+    return osm.map(r => ({
+      id: r.id, name: r.name, category: r.category,
+      tags: r.tags || [], rating: r.rating, reviewCount: r.review_count,
+      distance: "", address: r.address, image: (r.photos && r.photos[0]) || "",
+      lat: r.latitude, lng: r.longitude, priceRange: r.price_level,
+      openHours: r.business_hours, dietary: r.dietary_options || [],
+      description: r.short_description,
+    }));
+  }
   return MOCK_RESTAURANTS.map(r => ({
     id: r.id,
     name: r.name,
@@ -507,6 +534,14 @@ async function candidatePool(): Promise<Candidate[]> {
     if (rows.length) return rows as Candidate[];
   } catch (err) {
     console.error("DB unavailable for candidates, using mock:", (err as Error)?.message);
+  }
+  const osm = osmRestaurants();
+  if (osm) {
+    return osm.map((r) => ({
+      id: r.id, rating: r.rating, review_count: r.review_count,
+      price_level: r.price_level, category: r.category,
+      dietary_options: r.dietary_options,
+    })) as Candidate[];
   }
   return MOCK_RESTAURANTS.map((r) => ({
     id: r.id,
