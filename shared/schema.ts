@@ -28,6 +28,7 @@ export const restaurants = pgTable("restaurants", {
   menu_items: jsonb("menu_items").$type<{name: string, price: number}[]>(),
   phone_number: text("phone_number"),
   business_hours: text("business_hours"),
+  website: text("website"), // 공식 웹사이트 (메뉴 스크랩 소스)
 });
 
 export const courses = pgTable("courses", {
