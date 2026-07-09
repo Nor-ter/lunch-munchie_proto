@@ -55,6 +55,31 @@ function htmlToText(html: string): string {
   return (ld ? `[STRUCTURED DATA]\n${ld}\n\n[PAGE TEXT]\n` : "") + body;
 }
 
+// LLM 응답에서 첫 균형 잡힌 {…} 만 추출 — 앞뒤 프롤로그·코드펜스·설명 무시.
+// (문자열 리터럴 안의 중괄호/따옴표는 세지 않음.)
+export function firstJsonObject(text: string): string {
+  const start = text.indexOf("{");
+  if (start === -1) return text.trim();
+  let depth = 0, inStr = false, esc = false;
+  for (let i = start; i < text.length; i++) {
+    const c = text[i];
+    if (inStr) {
+      if (esc) esc = false;
+      else if (c === "\\") esc = true;
+      else if (c === '"') inStr = false;
+    } else if (c === '"') inStr = true;
+    else if (c === "{") depth++;
+    else if (c === "}" && --depth === 0) return text.slice(start, i + 1);
+  }
+  return text.slice(start); // 불균형 — 그대로(파싱 시 에러로 드러남)
+}
+
+// 응답 텍스트 → MenuItem[] (파싱 분리 = 테스트 가능)
+export function parseMenuResponse(text: string): MenuItem[] {
+  const parsed = JSON.parse(firstJsonObject(text)) as { items?: MenuItem[] };
+  return (parsed.items ?? []).filter((i) => i && typeof i.name === "string");
+}
+
 async function callClaude(content: unknown[], apiKey: string): Promise<MenuItem[]> {
   const res = await fetch("https://api.anthropic.com/v1/messages", {
     method: "POST",
@@ -67,10 +92,7 @@ async function callClaude(content: unknown[], apiKey: string): Promise<MenuItem[
   });
   if (!res.ok) throw new Error(`Anthropic ${res.status}: ${(await res.text()).slice(0, 200)}`);
   const data = (await res.json()) as { content?: { text?: string }[] };
-  const text = data.content?.[0]?.text ?? "";
-  const json = text.replace(/^```(json)?/i, "").replace(/```$/, "").trim();
-  const parsed = JSON.parse(json) as { items?: MenuItem[] };
-  return (parsed.items ?? []).filter((i) => i && typeof i.name === "string");
+  return parseMenuResponse(data.content?.[0]?.text ?? "");
 }
 
 export async function extractMenu(url: string, opts: { dryRun?: boolean } = {}): Promise<ExtractResult> {
