@@ -1,6 +1,6 @@
 // 메뉴 추출 — 식당 website URL → { name, price }[] (menu_items)
-// HTML/PDF/이미지 자동 감지 → Claude(비전)로 추출. 의존성 0 (native fetch).
-// 키 없으면 dryRun: fetch+포맷감지+robots까지만 확인.
+// HTML/이미지 자동 감지 → NVIDIA NIM(OpenAI 호환)으로 추출. 의존성 0 (native fetch).
+// 키(NVIDIA_API_KEY) 없으면 dryRun: fetch+포맷감지+robots까지만 확인.
 //
 // 단일 테스트:  npx tsx server/menu/extractMenu.ts <url>
 import "dotenv/config";
@@ -11,12 +11,16 @@ export interface ExtractResult {
   ok: boolean;
   format?: "html" | "pdf" | "image" | "other";
   items: MenuItem[];
+  image?: string; // 대표 사진(og:image 등, LLM 미사용) — 없으면 undefined
   note?: string;
   error?: string;
 }
 
 const UA = "lunchie-munchie-menu/0.1 (+contact: dev)";
-const MODEL = process.env.MENU_MODEL || "claude-haiku-4-5-20251001"; // 저비용 추출
+// NVIDIA NIM (OpenAI 호환). 텍스트/비전 모델 분리 — env로 교체 가능.
+const NIM_URL = "https://integrate.api.nvidia.com/v1/chat/completions";
+const TEXT_MODEL = process.env.MENU_MODEL || "meta/llama-3.3-70b-instruct";
+const VISION_MODEL = process.env.MENU_VISION_MODEL || "meta/llama-3.2-90b-vision-instruct";
 const PROMPT =
   "You extract a restaurant menu from the given content (web page text, PDF, or image). " +
   "Return ONLY JSON: {\"items\":[{\"name\":\"Dish name\",\"price\":12.5}]}. " +
@@ -80,19 +84,41 @@ export function parseMenuResponse(text: string): MenuItem[] {
   return (parsed.items ?? []).filter((i) => i && typeof i.name === "string");
 }
 
-async function callClaude(content: unknown[], apiKey: string): Promise<MenuItem[]> {
-  const res = await fetch("https://api.anthropic.com/v1/messages", {
+// NVIDIA NIM 호출 (OpenAI 호환 /chat/completions). content = OpenAI content 블록 배열.
+async function callLLM(content: unknown[], model: string, apiKey: string): Promise<MenuItem[]> {
+  const res = await fetch(NIM_URL, {
     method: "POST",
     headers: {
-      "x-api-key": apiKey,
-      "anthropic-version": "2023-06-01",
+      "Authorization": `Bearer ${apiKey}`,
       "content-type": "application/json",
+      "accept": "application/json",
     },
-    body: JSON.stringify({ model: MODEL, max_tokens: 8000, messages: [{ role: "user", content }] }),
+    body: JSON.stringify({ model, max_tokens: 8000, temperature: 0, messages: [{ role: "user", content }] }),
   });
-  if (!res.ok) throw new Error(`Anthropic ${res.status}: ${(await res.text()).slice(0, 200)}`);
-  const data = (await res.json()) as { content?: { text?: string }[] };
-  return parseMenuResponse(data.content?.[0]?.text ?? "");
+  if (!res.ok) throw new Error(`NIM ${res.status}: ${(await res.text()).slice(0, 200)}`);
+  const data = (await res.json()) as { choices?: { message?: { content?: string } }[] };
+  return parseMenuResponse(data.choices?.[0]?.message?.content ?? "");
+}
+
+// HTML <meta> 태그에서 대표 이미지 URL 추출 (og:image 우선, twitter:image 폴백). LLM 미사용.
+const META_TAG_RE = /<meta\b[^>]*>/gi;
+const IMAGE_KEYS = ["og:image:secure_url", "og:image", "twitter:image", "twitter:image:src"];
+export function extractOgImage(html: string, baseUrl: string): string | null {
+  const found: Record<string, string> = {};
+  for (const m of Array.from(html.matchAll(META_TAG_RE))) {
+    const tag = m[0];
+    const keyM = tag.match(/(?:property|name)=["']([^"']+)["']/i);
+    const contentM = tag.match(/content=["']([^"']*)["']/i);
+    if (!keyM || !contentM || !contentM[1]) continue;
+    const key = keyM[1].toLowerCase();
+    if (IMAGE_KEYS.includes(key) && !found[key]) found[key] = contentM[1];
+  }
+  for (const key of IMAGE_KEYS) {
+    if (found[key]) {
+      try { return new URL(found[key], baseUrl).href; } catch { return null; }
+    }
+  }
+  return null;
 }
 
 // 홈페이지 HTML에서 '메뉴 페이지' 링크 하나를 골라 절대 URL로 반환(없으면 null).
@@ -121,38 +147,40 @@ export function findMenuLink(html: string, baseUrl: string): string | null {
 }
 
 // URL 하나를 가져와 포맷 감지 + 추출. rawHtml은 링크 추적에 재사용.
+// image(og:image)는 dryRun 여부와 무관하게 항상 시도 — LLM 콜 없는 메타태그 파싱이라 공짜.
 async function fetchAndExtract(
   url: string, apiKey: string | undefined, dryRun: boolean,
-): Promise<{ ok: boolean; format?: ExtractResult["format"]; items: MenuItem[]; rawHtml?: string; error?: string; note?: string }> {
+): Promise<{ ok: boolean; format?: ExtractResult["format"]; items: MenuItem[]; image?: string; rawHtml?: string; error?: string; note?: string }> {
   const res = await fetch(url, { headers: { "User-Agent": UA }, redirect: "follow", signal: AbortSignal.timeout(20000) });
   if (!res.ok) return { ok: false, items: [], error: `HTTP ${res.status}` };
   const ct = (res.headers.get("content-type") || "").toLowerCase();
 
-  let format: ExtractResult["format"], content: unknown[], rawHtml: string | undefined;
+  let format: ExtractResult["format"], content: unknown[], model: string, rawHtml: string | undefined, image: string | undefined;
   if (ct.includes("pdf") || url.toLowerCase().endsWith(".pdf")) {
-    format = "pdf";
-    const b64 = Buffer.from(await res.arrayBuffer()).toString("base64");
-    content = [{ type: "text", text: PROMPT }, { type: "document", source: { type: "base64", media_type: "application/pdf", data: b64 } }];
+    // NVIDIA NIM(OpenAI 호환)은 PDF 문서 입력을 안 받음 → 이미지 변환 필요(미구현). 스킵.
+    return { ok: true, format: "pdf", items: [], note: "PDF 메뉴는 현재 미지원(NVIDIA 비전은 이미지만)" };
   } else if (ct.startsWith("image/")) {
-    format = "image";
+    format = "image"; model = VISION_MODEL;
     const b64 = Buffer.from(await res.arrayBuffer()).toString("base64");
-    content = [{ type: "text", text: PROMPT }, { type: "image", source: { type: "base64", media_type: ct.split(";")[0], data: b64 } }];
+    const dataUri = `data:${ct.split(";")[0]};base64,${b64}`;
+    content = [{ type: "text", text: PROMPT }, { type: "image_url", image_url: { url: dataUri } }];
   } else {
-    format = "html";
+    format = "html"; model = TEXT_MODEL;
     rawHtml = await res.text();
+    image = extractOgImage(rawHtml, url) ?? undefined;
     const text = htmlToText(rawHtml).slice(0, 20000); // LLM 입력 상한
     content = [{ type: "text", text: `${PROMPT}\n\n---CONTENT---\n${text}` }];
   }
 
   if (dryRun) {
     const preview = format === "html" ? String((content[0] as { text: string }).text).slice(-300) : "(binary)";
-    return { ok: true, format, items: [], rawHtml, note: `dryRun — ${format} 감지, LLM 호출 스킵. preview: …${preview}` };
+    return { ok: true, format, items: [], image, rawHtml, note: `dryRun — ${format} 감지, LLM 호출 스킵. preview: …${preview}` };
   }
-  return { ok: true, format, items: await callClaude(content, apiKey!), rawHtml };
+  return { ok: true, format, items: await callLLM(content, model, apiKey!), image, rawHtml };
 }
 
 export async function extractMenu(url: string, opts: { dryRun?: boolean } = {}): Promise<ExtractResult> {
-  const apiKey = process.env.ANTHROPIC_API_KEY;
+  const apiKey = process.env.NVIDIA_API_KEY;
   const dryRun = opts.dryRun ?? !apiKey; // 키 없으면 자동 dry-run
   try {
     if (!(await robotsAllowed(url))) return { url, ok: false, items: [], error: "robots.txt 차단" };
@@ -166,11 +194,11 @@ export async function extractMenu(url: string, opts: { dryRun?: boolean } = {}):
       if (menuUrl && menuUrl !== url && (await robotsAllowed(menuUrl))) {
         const r2 = await fetchAndExtract(menuUrl, apiKey, dryRun);
         if (r2.ok && r2.items.length > 0) {
-          return { url, ok: true, format: r2.format, items: r2.items, note: `menu link: ${menuUrl}` };
+          return { url, ok: true, format: r2.format, items: r2.items, image: r.image ?? r2.image, note: `menu link: ${menuUrl}` };
         }
       }
     }
-    return { url, ok: true, format: r.format, items: r.items, note: r.note };
+    return { url, ok: true, format: r.format, items: r.items, image: r.image, note: r.note };
   } catch (e) {
     return { url, ok: false, items: [], error: (e as Error).message };
   }

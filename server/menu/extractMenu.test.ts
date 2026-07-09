@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { firstJsonObject, parseMenuResponse, findMenuLink } from "./extractMenu";
+import { firstJsonObject, parseMenuResponse, findMenuLink, extractOgImage } from "./extractMenu";
 
 describe("firstJsonObject", () => {
   it("깔끔한 JSON은 그대로", () => {
@@ -77,5 +77,42 @@ describe("findMenuLink", () => {
 
   it("메뉴 관련 링크 없으면 null", () => {
     expect(findMenuLink('<a href="/about">About</a><a href="/contact">Contact</a>', base)).toBe(null);
+  });
+});
+
+describe("extractOgImage", () => {
+  const base = "https://www.example.com.au/";
+
+  it("og:image 절대 URL 그대로", () => {
+    const html = '<meta property="og:image" content="https://cdn.example.com/hero.jpg">';
+    expect(extractOgImage(html, base)).toBe("https://cdn.example.com/hero.jpg");
+  });
+
+  it("og:image 상대 URL → 절대 URL", () => {
+    const html = '<meta property="og:image" content="/images/hero.jpg">';
+    expect(extractOgImage(html, base)).toBe("https://www.example.com.au/images/hero.jpg");
+  });
+
+  it("og:image 없으면 twitter:image 폴백", () => {
+    const html = '<meta name="twitter:image" content="/tw.jpg">';
+    expect(extractOgImage(html, base)).toBe("https://www.example.com.au/tw.jpg");
+  });
+
+  it("og:image:secure_url 이 og:image보다 우선", () => {
+    const html = '<meta property="og:image" content="/insecure.jpg"><meta property="og:image:secure_url" content="/secure.jpg">';
+    expect(extractOgImage(html, base)).toBe("https://www.example.com.au/secure.jpg");
+  });
+
+  it("속성 순서(content가 property보다 먼저)여도 인식", () => {
+    const html = '<meta content="/hero.jpg" property="og:image">';
+    expect(extractOgImage(html, base)).toBe("https://www.example.com.au/hero.jpg");
+  });
+
+  it("이미지 메타 없으면 null", () => {
+    expect(extractOgImage('<meta name="description" content="A great cafe">', base)).toBe(null);
+  });
+
+  it("content 비어있으면 무시하고 null", () => {
+    expect(extractOgImage('<meta property="og:image" content="">', base)).toBe(null);
   });
 });
