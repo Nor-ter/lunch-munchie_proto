@@ -7,7 +7,7 @@
 import { readFileSync, writeFileSync } from "node:fs";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
-import { extractMenu } from "./extractMenu.js";
+import { extractMenu, closeBrowser } from "./extractMenu.js";
 
 const dir = join(dirname(fileURLToPath(import.meta.url)), "..", "data");
 const N = Number(process.argv[2]) || 10;
@@ -23,23 +23,25 @@ async function main() {
   console.log(`대상 ${targets.length}곳 (website 보유) · ${dryRun ? "DRY-RUN (키 없음)" : "실제 추출"} · 모델 ${process.env.MENU_MODEL || "meta/llama-3.3-70b-instruct"}\n`);
 
   const out: unknown[] = [];
-  let okFetch = 0, withMenu = 0, withImage = 0;
+  let okFetch = 0, withMenu = 0, withImage = 0, dishPhotos = 0;
   for (let i = 0; i < targets.length; i++) {
     const r = targets[i];
     const res = await extractMenu(r.website!);
     if (res.ok) okFetch++;
     if (res.items.length) withMenu++;
     if (res.image) withImage++;
+    const itemPhotos = res.items.filter((it) => it.image).length;
+    dishPhotos += itemPhotos;
     out.push({ id: r.id, name: r.name, url: r.website, ok: res.ok, format: res.format, error: res.error, items: res.items, image: res.image });
-    const tag = res.error ? `(${res.error})` : [res.items.length ? `${res.items.length}개 메뉴` : "", res.image ? "🖼" : ""].filter(Boolean).join(" ");
+    const tag = res.error ? `(${res.error})` : [res.items.length ? `${res.items.length}개 메뉴` : "", itemPhotos ? `📷${itemPhotos}` : "", res.image ? "🖼" : ""].filter(Boolean).join(" ");
     console.log(`  [${i + 1}/${targets.length}] ${res.ok ? "✅" : "❌"} ${res.format ?? "-"}\t${r.name}  ${tag}`);
     if (i < targets.length - 1) await sleep(DELAY_MS);
   }
 
   const outPath = join(dir, "menus.json");
   writeFileSync(outPath, JSON.stringify(out, null, 2));
-  console.log(`\n결과: fetch 성공 ${okFetch}/${targets.length} · 메뉴 추출 ${withMenu} · 이미지 ${withImage} → ${outPath}`);
+  console.log(`\n결과: fetch 성공 ${okFetch}/${targets.length} · 메뉴 추출 ${withMenu} · 대표사진 ${withImage} · 요리사진 ${dishPhotos} → ${outPath}`);
   if (dryRun) console.log("※ DRY-RUN — LLM 미호출. NVIDIA_API_KEY 설정 후 재실행하면 실제 menu_items가 채워집니다.");
 }
 
-main().catch((e) => { console.error("실패:", e.message); process.exit(1); });
+main().catch((e) => { console.error("실패:", e.message); process.exit(1); }).finally(closeBrowser);

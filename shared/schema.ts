@@ -25,7 +25,7 @@ export const restaurants = pgTable("restaurants", {
   tags: jsonb("tags").$type<string[]>(),
   dietary_options: jsonb("dietary_options").$type<string[]>(),
   photos: jsonb("photos").$type<string[]>(),
-  menu_items: jsonb("menu_items").$type<{name: string, price: number | null}[]>(), // price: 가격 미표기 메뉴는 null (extractMenu)
+  menu_items: jsonb("menu_items").$type<{name: string, price: number | null, image?: string, dietary?: string[]}[]>(), // price: 가격 미표기 메뉴는 null · image/dietary: 있을 때만(extractMenu)
   phone_number: text("phone_number"),
   business_hours: text("business_hours"),
   website: text("website"), // 공식 웹사이트 (메뉴 스크랩 소스)

@@ -5,7 +5,7 @@
 // 단일 테스트:  npx tsx server/menu/extractMenu.ts <url>
 import "dotenv/config";
 
-export interface MenuItem { name: string; price: number | null }
+export interface MenuItem { name: string; price: number | null; image?: string }
 export interface ExtractResult {
   url: string;
   ok: boolean;
@@ -33,8 +33,8 @@ async function robotsAllowed(url: string): Promise<boolean> {
   try {
     const u = new URL(url);
     const res = await fetch(`${u.origin}/robots.txt`, { headers: { "User-Agent": UA }, signal: AbortSignal.timeout(8000) });
+    const txt = await res.text(); // ok 여부와 무관하게 항상 바디 소비 — 안 하면 undici가 커넥션을 안 놓아 이후 같은 origin 요청이 간헐적으로 실패함
     if (!res.ok) return true; // robots 없으면 허용
-    const txt = await res.text();
     // 매우 단순한 파서: User-agent: * 블록의 Disallow 접두사만 확인
     let inStar = false, disallows: string[] = [];
     for (const line of txt.split("\n").map((l) => l.trim())) {
@@ -84,20 +84,35 @@ export function parseMenuResponse(text: string): MenuItem[] {
   return (parsed.items ?? []).filter((i) => i && typeof i.name === "string");
 }
 
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
 // NVIDIA NIM 호출 (OpenAI 호환 /chat/completions). content = OpenAI content 블록 배열.
-async function callLLM(content: unknown[], model: string, apiKey: string): Promise<MenuItem[]> {
-  const res = await fetch(NIM_URL, {
-    method: "POST",
-    headers: {
-      "Authorization": `Bearer ${apiKey}`,
-      "content-type": "application/json",
-      "accept": "application/json",
-    },
-    body: JSON.stringify({ model, max_tokens: 8000, temperature: 0, messages: [{ role: "user", content }] }),
-  });
-  if (!res.ok) throw new Error(`NIM ${res.status}: ${(await res.text()).slice(0, 200)}`);
-  const data = (await res.json()) as { choices?: { message?: { content?: string } }[] };
-  return parseMenuResponse(data.choices?.[0]?.message?.content ?? "");
+// 무료 티어는 동시요청 한도(16)가 있어 503 ResourceExhausted·응답 지연(헤더 타임아웃)이 잦음 — backoff 재시도.
+async function callLLM(content: unknown[], model: string, apiKey: string, retries = 4): Promise<MenuItem[]> {
+  for (let attempt = 0; ; attempt++) {
+    try {
+      const res = await fetch(NIM_URL, {
+        method: "POST",
+        headers: {
+          "Authorization": `Bearer ${apiKey}`,
+          "content-type": "application/json",
+          "accept": "application/json",
+        },
+        body: JSON.stringify({ model, max_tokens: 8000, temperature: 0, messages: [{ role: "user", content }] }),
+      });
+      if (res.ok) {
+        const data = (await res.json()) as { choices?: { message?: { content?: string } }[] };
+        return parseMenuResponse(data.choices?.[0]?.message?.content ?? "");
+      }
+      const body = await res.text();
+      if (res.status === 503 && attempt < retries) { await sleep(3000 * (attempt + 1)); continue; }
+      throw new Error(`NIM ${res.status}: ${body.slice(0, 200)}`);
+    } catch (e) {
+      // 네트워크/타임아웃(예: UND_ERR_HEADERS_TIMEOUT — NIM 무료 티어 과부하)도 재시도 대상
+      if (attempt < retries && (e as Error).message?.includes("NIM ") === false) { await sleep(3000 * (attempt + 1)); continue; }
+      throw e;
+    }
+  }
 }
 
 // HTML <meta> 태그에서 대표 이미지 URL 추출 (og:image 우선, twitter:image 폴백). LLM 미사용.
@@ -119,6 +134,55 @@ export function extractOgImage(html: string, baseUrl: string): string | null {
     }
   }
   return null;
+}
+
+// HTML의 <img alt="..." src="..."> 를 파싱해 요리 이름과 alt 텍스트를 대조,
+// 매칭되면 해당 항목에 image(절대 URL)를 채워 반환. LLM 미사용(순수 문자열 매칭).
+// 실제 사례(Grill'd): item "Superbuns" ↔ alt "Superbuns - high protein, low carb".
+const IMG_TAG_RE = /<img\b[^>]*>/gi;
+const norm = (s: string) => s.toLowerCase().replace(/[^a-z0-9\s]/g, " ").replace(/\s+/g, " ").trim();
+function parseImgTags(html: string): { alt: string; src: string }[] {
+  const out: { alt: string; src: string }[] = [];
+  for (const m of Array.from(html.matchAll(IMG_TAG_RE))) {
+    const tag = m[0];
+    const altM = tag.match(/\balt=["']([^"']*)["']/i);
+    const srcM = tag.match(/\bsrc=["']([^"']*)["']/i);
+    if (altM?.[1]?.trim() && srcM?.[1]?.trim()) out.push({ alt: altM[1].trim(), src: srcM[1].trim() });
+  }
+  return out;
+}
+export function matchItemImages(items: MenuItem[], html: string, baseUrl: string): MenuItem[] {
+  const imgs = parseImgTags(html).map((img) => ({ ...img, altNorm: norm(img.alt) })).filter((img) => img.altNorm.length >= 3);
+  return items.map((item) => {
+    const name = norm(item.name);
+    if (name.length < 3) return item;
+    const hit = imgs.find((img) => img.altNorm.includes(name) || name.includes(img.altNorm));
+    if (!hit) return item;
+    try { return { ...item, image: new URL(hit.src, baseUrl).href }; } catch { return item; }
+  });
+}
+
+// 헤드리스 브라우저(JS 렌더링) — 정적 fetch로는 안 보이는 SPA 메뉴/사진 대응. 3티어 폴백에서만 사용(비쌈).
+let _browser: import("playwright").Browser | null = null;
+async function getBrowser() {
+  if (!_browser) {
+    const { chromium } = await import("playwright");
+    _browser = await chromium.launch();
+  }
+  return _browser;
+}
+export async function closeBrowser(): Promise<void> {
+  if (_browser) { await _browser.close(); _browser = null; }
+}
+async function renderWithBrowser(url: string): Promise<string | null> {
+  try {
+    const browser = await getBrowser();
+    const page = await browser.newPage({ userAgent: UA });
+    try {
+      await page.goto(url, { waitUntil: "networkidle", timeout: 20000 });
+      return await page.content();
+    } finally { await page.close(); }
+  } catch { return null; }
 }
 
 // 홈페이지 HTML에서 '메뉴 페이지' 링크 하나를 골라 절대 URL로 반환(없으면 null).
@@ -179,6 +243,14 @@ async function fetchAndExtract(
   return { ok: true, format, items: await callLLM(content, model, apiKey!), image, rawHtml };
 }
 
+// 렌더된(post-JS) HTML에서 바로 추출 — tier 3(헤드리스 브라우저) 전용, fetch 재사용 없음.
+async function extractFromRenderedHtml(html: string, url: string, apiKey: string): Promise<{ items: MenuItem[]; image?: string }> {
+  const image = extractOgImage(html, url) ?? undefined;
+  const text = htmlToText(html).slice(0, 20000);
+  const content = [{ type: "text", text: `${PROMPT}\n\n---CONTENT---\n${text}` }];
+  return { items: await callLLM(content, TEXT_MODEL, apiKey), image };
+}
+
 export async function extractMenu(url: string, opts: { dryRun?: boolean } = {}): Promise<ExtractResult> {
   const apiKey = process.env.NVIDIA_API_KEY;
   const dryRun = opts.dryRun ?? !apiKey; // 키 없으면 자동 dry-run
@@ -187,19 +259,41 @@ export async function extractMenu(url: string, opts: { dryRun?: boolean } = {}):
 
     const r = await fetchAndExtract(url, apiKey, dryRun);
     if (!r.ok) return { url, ok: false, items: [], error: r.error };
+    if (dryRun) return { url, ok: true, format: r.format, items: r.items, image: r.image, note: r.note };
 
-    // 홈에서 0개 & HTML이면 메뉴 페이지 링크를 1회 추적 (JS 렌더 아닌 '메뉴 별도 페이지' 케이스 회수)
-    if (!dryRun && r.items.length === 0 && r.rawHtml) {
-      const menuUrl = findMenuLink(r.rawHtml, url);
-      if (menuUrl && menuUrl !== url && (await robotsAllowed(menuUrl))) {
-        const r2 = await fetchAndExtract(menuUrl, apiKey, dryRun);
-        if (r2.ok && r2.items.length > 0) {
-          return { url, ok: true, format: r2.format, items: r2.items, image: r.image ?? r2.image, note: `menu link: ${menuUrl}` };
-        }
+    if (r.items.length > 0) {
+      const items = r.rawHtml ? matchItemImages(r.items, r.rawHtml, url) : r.items;
+      return { url, ok: true, format: r.format, items, image: r.image, note: r.note };
+    }
+
+    // tier 2: 홈에서 0개 & HTML이면 메뉴 페이지 링크를 1회 추적 (메뉴가 별도 페이지인 케이스)
+    let menuUrl: string | null = null;
+    if (r.rawHtml) {
+      const candidate = findMenuLink(r.rawHtml, url);
+      if (candidate && candidate !== url && (await robotsAllowed(candidate))) menuUrl = candidate;
+    }
+    if (menuUrl) {
+      const r2 = await fetchAndExtract(menuUrl, apiKey, dryRun);
+      if (r2.ok && r2.items.length > 0) {
+        const items = r2.rawHtml ? matchItemImages(r2.items, r2.rawHtml, menuUrl) : r2.items;
+        return { url, ok: true, format: r2.format, items, image: r.image ?? r2.image, note: `menu link: ${menuUrl}` };
       }
     }
+
+    // tier 3: 여전히 0개 → 헤드리스 브라우저로 JS 렌더링 후 재시도 (SPA 대응)
+    const renderUrl = menuUrl ?? url;
+    const rendered = await renderWithBrowser(renderUrl);
+    if (rendered) {
+      const r3 = await extractFromRenderedHtml(rendered, renderUrl, apiKey!);
+      if (r3.items.length > 0) {
+        const items = matchItemImages(r3.items, rendered, renderUrl);
+        return { url, ok: true, format: "html", items, image: r.image ?? r3.image, note: `rendered: ${renderUrl}` };
+      }
+    }
+
     return { url, ok: true, format: r.format, items: r.items, image: r.image, note: r.note };
   } catch (e) {
+    if (process.env.MENU_DEBUG) console.error("[DEBUG]", e, (e as any)?.cause);
     return { url, ok: false, items: [], error: (e as Error).message };
   }
 }
@@ -208,5 +302,5 @@ export async function extractMenu(url: string, opts: { dryRun?: boolean } = {}):
 if (import.meta.url === `file://${process.argv[1]}`) {
   const url = process.argv[2];
   if (!url) { console.error("사용: npx tsx server/menu/extractMenu.ts <url>"); process.exit(1); }
-  extractMenu(url).then((r) => console.log(JSON.stringify(r, null, 2)));
+  extractMenu(url).then((r) => console.log(JSON.stringify(r, null, 2))).finally(closeBrowser);
 }

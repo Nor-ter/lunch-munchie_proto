@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { firstJsonObject, parseMenuResponse, findMenuLink, extractOgImage } from "./extractMenu";
+import { firstJsonObject, parseMenuResponse, findMenuLink, extractOgImage, matchItemImages } from "./extractMenu";
 
 describe("firstJsonObject", () => {
   it("깔끔한 JSON은 그대로", () => {
@@ -114,5 +114,56 @@ describe("extractOgImage", () => {
 
   it("content 비어있으면 무시하고 null", () => {
     expect(extractOgImage('<meta property="og:image" content="">', base)).toBe(null);
+  });
+});
+
+describe("matchItemImages", () => {
+  const base = "https://www.grilld.com.au/";
+
+  it("실제 Grill'd 케이스 — alt가 요리명을 포함(부가설명 붙음)", () => {
+    const html = '<img src="/img/superbuns.jpg" alt="Superbuns - high protein, low carb">';
+    const items = [{ name: "Superbuns", price: null }];
+    expect(matchItemImages(items, html, base)).toEqual([
+      { name: "Superbuns", price: null, image: "https://www.grilld.com.au/img/superbuns.jpg" },
+    ]);
+  });
+
+  it("정확히 일치", () => {
+    const html = '<img alt="Superbuns" src="/superbuns.jpg">'; // 속성 순서 반대
+    const items = [{ name: "Superbuns", price: 14.9 }];
+    expect(matchItemImages(items, html, base)[0].image).toBe("https://www.grilld.com.au/superbuns.jpg");
+  });
+
+  it("요리명이 alt보다 길고 alt를 포함하는 경우도 매칭", () => {
+    const html = '<img src="/x.jpg" alt="Bulgogi">';
+    const items = [{ name: "Wagyu Bulgogi Bowl", price: 20 }];
+    expect(matchItemImages(items, html, base)[0].image).toBe("https://www.grilld.com.au/x.jpg");
+  });
+
+  it("매칭되는 이미지 없으면 image 필드 없이 그대로", () => {
+    const html = '<img src="/logo.jpg" alt="Grill\'d Logo">';
+    const items = [{ name: "Superbuns", price: null }];
+    expect(matchItemImages(items, html, base)).toEqual([{ name: "Superbuns", price: null }]);
+  });
+
+  it("너무 짧은 이름(2자 이하)은 오탐 방지로 매칭 스킵", () => {
+    const html = '<img src="/x.jpg" alt="Ox">';
+    const items = [{ name: "Ox", price: 2 }];
+    expect(matchItemImages(items, html, base)[0].image).toBeUndefined();
+  });
+
+  it("alt 없는 img는 무시", () => {
+    const html = '<img src="/x.jpg">';
+    const items = [{ name: "Superbuns", price: null }];
+    expect(matchItemImages(items, html, base)[0].image).toBeUndefined();
+  });
+
+  it("여러 항목 각각 다른 이미지에 매칭", () => {
+    const html = '<img src="/a.jpg" alt="Superbuns"><img src="/b.jpg" alt="Loaded Fries">';
+    const items = [{ name: "Superbuns", price: null }, { name: "Loaded Fries", price: 8 }, { name: "Plain Water", price: 0 }];
+    const result = matchItemImages(items, html, base);
+    expect(result[0].image).toBe("https://www.grilld.com.au/a.jpg");
+    expect(result[1].image).toBe("https://www.grilld.com.au/b.jpg");
+    expect(result[2].image).toBeUndefined();
   });
 });
