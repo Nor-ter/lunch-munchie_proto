@@ -88,11 +88,67 @@ async function callClaude(content: unknown[], apiKey: string): Promise<MenuItem[
       "anthropic-version": "2023-06-01",
       "content-type": "application/json",
     },
-    body: JSON.stringify({ model: MODEL, max_tokens: 2000, messages: [{ role: "user", content }] }),
+    body: JSON.stringify({ model: MODEL, max_tokens: 8000, messages: [{ role: "user", content }] }),
   });
   if (!res.ok) throw new Error(`Anthropic ${res.status}: ${(await res.text()).slice(0, 200)}`);
   const data = (await res.json()) as { content?: { text?: string }[] };
   return parseMenuResponse(data.content?.[0]?.text ?? "");
+}
+
+// 홈페이지 HTML에서 '메뉴 페이지' 링크 하나를 골라 절대 URL로 반환(없으면 null).
+// href/링크텍스트를 키워드로 점수화: menu > our-food/food > dining/eat > drinks.
+// 앵커(#)·mailto·tel·js·같은 페이지는 제외. 타 도메인 허용(Flower Drum: 메뉴가 별도 도메인).
+const A_TAG_RE = /<a\b[^>]*?href=["']([^"'#][^"']*)["'][^>]*>([\s\S]*?)<\/a>/gi;
+export function findMenuLink(html: string, baseUrl: string): string | null {
+  const score = (s: string) =>
+    /(^|[^a-z])menus?([^a-z]|$)/i.test(s) ? 3 :
+    /our-?food|\/food|food-?menu/i.test(s) ? 2 :
+    /dining|eat|what-?s-?on/i.test(s) ? 1 :
+    /drinks?|beverage|wine|cocktail/i.test(s) ? 1 : 0;
+  const bare = (u: string) => u.split("#")[0];
+  let best: { url: string; sc: number } | null = null;
+  for (const m of Array.from(html.matchAll(A_TAG_RE))) {
+    const href = m[1].trim();
+    if (/^(mailto:|tel:|javascript:)/i.test(href)) continue;
+    const sc = Math.max(score(href), score(m[2].replace(/<[^>]+>/g, " ")));
+    if (sc === 0) continue;
+    let abs: string;
+    try { abs = new URL(href, baseUrl).href; } catch { continue; }
+    if (bare(abs) === bare(baseUrl)) continue; // 같은 페이지(앵커 등)
+    if (!best || sc > best.sc) best = { url: bare(abs), sc };
+  }
+  return best?.url ?? null;
+}
+
+// URL 하나를 가져와 포맷 감지 + 추출. rawHtml은 링크 추적에 재사용.
+async function fetchAndExtract(
+  url: string, apiKey: string | undefined, dryRun: boolean,
+): Promise<{ ok: boolean; format?: ExtractResult["format"]; items: MenuItem[]; rawHtml?: string; error?: string; note?: string }> {
+  const res = await fetch(url, { headers: { "User-Agent": UA }, redirect: "follow", signal: AbortSignal.timeout(20000) });
+  if (!res.ok) return { ok: false, items: [], error: `HTTP ${res.status}` };
+  const ct = (res.headers.get("content-type") || "").toLowerCase();
+
+  let format: ExtractResult["format"], content: unknown[], rawHtml: string | undefined;
+  if (ct.includes("pdf") || url.toLowerCase().endsWith(".pdf")) {
+    format = "pdf";
+    const b64 = Buffer.from(await res.arrayBuffer()).toString("base64");
+    content = [{ type: "text", text: PROMPT }, { type: "document", source: { type: "base64", media_type: "application/pdf", data: b64 } }];
+  } else if (ct.startsWith("image/")) {
+    format = "image";
+    const b64 = Buffer.from(await res.arrayBuffer()).toString("base64");
+    content = [{ type: "text", text: PROMPT }, { type: "image", source: { type: "base64", media_type: ct.split(";")[0], data: b64 } }];
+  } else {
+    format = "html";
+    rawHtml = await res.text();
+    const text = htmlToText(rawHtml).slice(0, 20000); // LLM 입력 상한
+    content = [{ type: "text", text: `${PROMPT}\n\n---CONTENT---\n${text}` }];
+  }
+
+  if (dryRun) {
+    const preview = format === "html" ? String((content[0] as { text: string }).text).slice(-300) : "(binary)";
+    return { ok: true, format, items: [], rawHtml, note: `dryRun — ${format} 감지, LLM 호출 스킵. preview: …${preview}` };
+  }
+  return { ok: true, format, items: await callClaude(content, apiKey!), rawHtml };
 }
 
 export async function extractMenu(url: string, opts: { dryRun?: boolean } = {}): Promise<ExtractResult> {
@@ -101,31 +157,20 @@ export async function extractMenu(url: string, opts: { dryRun?: boolean } = {}):
   try {
     if (!(await robotsAllowed(url))) return { url, ok: false, items: [], error: "robots.txt 차단" };
 
-    const res = await fetch(url, { headers: { "User-Agent": UA }, redirect: "follow", signal: AbortSignal.timeout(20000) });
-    if (!res.ok) return { url, ok: false, items: [], error: `HTTP ${res.status}` };
-    const ct = (res.headers.get("content-type") || "").toLowerCase();
+    const r = await fetchAndExtract(url, apiKey, dryRun);
+    if (!r.ok) return { url, ok: false, items: [], error: r.error };
 
-    let format: ExtractResult["format"], content: unknown[];
-    if (ct.includes("pdf") || url.toLowerCase().endsWith(".pdf")) {
-      format = "pdf";
-      const b64 = Buffer.from(await res.arrayBuffer()).toString("base64");
-      content = [{ type: "text", text: PROMPT }, { type: "document", source: { type: "base64", media_type: "application/pdf", data: b64 } }];
-    } else if (ct.startsWith("image/")) {
-      format = "image";
-      const b64 = Buffer.from(await res.arrayBuffer()).toString("base64");
-      content = [{ type: "text", text: PROMPT }, { type: "image", source: { type: "base64", media_type: ct.split(";")[0], data: b64 } }];
-    } else {
-      format = "html";
-      const text = htmlToText(await res.text()).slice(0, 20000); // LLM 입력 상한
-      content = [{ type: "text", text: `${PROMPT}\n\n---CONTENT---\n${text}` }];
+    // 홈에서 0개 & HTML이면 메뉴 페이지 링크를 1회 추적 (JS 렌더 아닌 '메뉴 별도 페이지' 케이스 회수)
+    if (!dryRun && r.items.length === 0 && r.rawHtml) {
+      const menuUrl = findMenuLink(r.rawHtml, url);
+      if (menuUrl && menuUrl !== url && (await robotsAllowed(menuUrl))) {
+        const r2 = await fetchAndExtract(menuUrl, apiKey, dryRun);
+        if (r2.ok && r2.items.length > 0) {
+          return { url, ok: true, format: r2.format, items: r2.items, note: `menu link: ${menuUrl}` };
+        }
+      }
     }
-
-    if (dryRun) {
-      const preview = format === "html" ? String((content[0] as { text: string }).text).slice(-300) : "(binary)";
-      return { url, ok: true, format, items: [], note: `dryRun — ${format} 감지, LLM 호출 스킵. preview: …${preview}` };
-    }
-    const items = await callClaude(content, apiKey!);
-    return { url, ok: true, format, items };
+    return { url, ok: true, format: r.format, items: r.items, note: r.note };
   } catch (e) {
     return { url, ok: false, items: [], error: (e as Error).message };
   }

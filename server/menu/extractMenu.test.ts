@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { firstJsonObject, parseMenuResponse } from "./extractMenu";
+import { firstJsonObject, parseMenuResponse, findMenuLink } from "./extractMenu";
 
 describe("firstJsonObject", () => {
   it("깔끔한 JSON은 그대로", () => {
@@ -45,5 +45,37 @@ describe("parseMenuResponse", () => {
 
   it("메뉴 없음 → 빈 배열", () => {
     expect(parseMenuResponse('{"items":[]}')).toEqual([]);
+  });
+});
+
+describe("findMenuLink", () => {
+  const base = "http://www.flower-drum.com/";
+
+  it("타 도메인 메뉴 링크도 잡음 (실제 Flower Drum 케이스)", () => {
+    const html = '<nav><a href="/about">About</a><a href="https://flowerdrum.melbourne/our-food/">Our Food</a></nav>';
+    expect(findMenuLink(html, base)).toBe("https://flowerdrum.melbourne/our-food/");
+  });
+
+  it("상대 href → 절대 URL", () => {
+    expect(findMenuLink('<a href="/menu">Menu</a>', base)).toBe("http://www.flower-drum.com/menu");
+  });
+
+  it("링크 텍스트가 Menu 여도 잡음", () => {
+    const html = '<a href="/food-page">Our Menu</a>';
+    expect(findMenuLink(html, base)).toBe("http://www.flower-drum.com/food-page");
+  });
+
+  it("menu 를 drinks 보다 우선", () => {
+    const html = '<a href="/drinks">Drinks</a><a href="/menu">Menu</a>';
+    expect(findMenuLink(html, base)).toBe("http://www.flower-drum.com/menu");
+  });
+
+  it("#앵커·mailto·같은 페이지는 무시", () => {
+    const html = '<a href="#menu">Menu</a><a href="mailto:x@y.com?menu">Mail</a><a href="/">Home</a>';
+    expect(findMenuLink(html, base)).toBe(null);
+  });
+
+  it("메뉴 관련 링크 없으면 null", () => {
+    expect(findMenuLink('<a href="/about">About</a><a href="/contact">Contact</a>', base)).toBe(null);
   });
 });
