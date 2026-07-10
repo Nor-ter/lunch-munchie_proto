@@ -1,7 +1,7 @@
 import { Router } from "express";
 import { db } from "./db.js";
 import { users, sessions, restaurants, swipes, courses, courseItems, sessionMembers } from "../shared/schema.js";
-import { eq, and } from "drizzle-orm";
+import { eq, and, inArray } from "drizzle-orm";
 import { nanoid } from "nanoid";
 import { MOCK_RESTAURANTS, MOCK_COURSES } from "./melbourneData.js";
 import { buildSlate, buildControlSlate, assignVariant } from "./engine/scorer.js";
@@ -17,7 +17,7 @@ import { ENGINE_MODEL_VERSION } from "../shared/engine.js";
 import type { Candidate, RecContext, RecEventInput } from "../shared/engine.js";
 import { normalizeDiet, isHardRestriction } from "../shared/const.js";
 import type { DietTag } from "../shared/const.js";
-import { intentForCategory } from "../shared/intent.js";
+import { intentForCategory, intentForHour } from "../shared/intent.js";
 
 const router = Router();
 
@@ -95,6 +95,20 @@ function mockRestaurantsResponse() {
     dietary: r.dietary_options || [],
     description: r.short_description,
   }));
+}
+
+// 여정 타임라인 표시용 — id → name (DB 우선, 실패 시 OSM 폴백). 대상 id만 조회(전체 스캔 X).
+async function restaurantNames(ids: string[]): Promise<Map<string, string>> {
+  const uniq = Array.from(new Set(ids));
+  if (!uniq.length) return new Map();
+  try {
+    const rows = await db.select({ id: restaurants.id, name: restaurants.name }).from(restaurants).where(inArray(restaurants.id, uniq));
+    if (rows.length) return new Map(rows.map((r) => [r.id, r.name]));
+  } catch { /* DB 불가 → 폴백 */ }
+  const osm = osmRestaurants();
+  const pool = osm ?? MOCK_RESTAURANTS;
+  const idSet = new Set(uniq);
+  return new Map(pool.filter((r) => idSet.has(r.id)).map((r) => [r.id, r.name as string]));
 }
 
 function mockCoursesResponse() {
@@ -735,8 +749,10 @@ router.get("/journey/today", async (req, res) => {
   const userId = String(req.query.userId ?? "");
   if (!userId) return res.json({ stops: [], nextSuggestion: null });
   const now = Date.now();
-  const stops = await todayStops(userId, now);
-  let nextSuggestion: { intent: string; restaurant: { id: string; category?: string }; reason: string } | null = null;
+  const stopsRaw = await todayStops(userId, now);
+  const nameMap = await restaurantNames(stopsRaw.map((s) => s.restaurant_id));
+  const stops = stopsRaw.map((s) => ({ ...s, name: nameMap.get(s.restaurant_id) ?? s.restaurant_id }));
+  let nextSuggestion: { intent: string; restaurant: { id: string; name: string; category?: string }; reason: string } | null = null;
   const prev = prevStop(userId, now); // 6h occasion 윈도우 내 직전 카테고리 (없으면 null = 사슬 닫힘)
   if (prev) {
     const pool = await candidatePool();
@@ -747,13 +763,15 @@ router.get("/journey/today", async (req, res) => {
       const p = chainFitFn(prev, c);
       if (p > bestP) { bestP = p; bestCat = c; }
     }
-    const intent = intentForCategory(bestCat) ?? "cafe";
+    // 신호 없으면(bestCat null) 시간대 기반으로 — "cafe" 하드코딩 폴백은 버그였음(항상 카페만 제안됨)
+    const intent = bestCat ? (intentForCategory(bestCat) ?? intentForHour(new Date(now).getHours())) : intentForHour(new Date(now).getHours());
     const visited = new Set(stops.map((s) => s.restaurant_id));
     const pick = pool
       .filter((c) => intentForCategory(c.category) === intent && !visited.has(c.id))
       .sort((a, b) => (b.rating ?? 0) - (a.rating ?? 0))[0];
     if (pick) {
-      nextSuggestion = { intent, restaurant: { id: pick.id, category: pick.category }, reason: `${prev} 다음` };
+      const pickName = (await restaurantNames([pick.id])).get(pick.id) ?? pick.id;
+      nextSuggestion = { intent, restaurant: { id: pick.id, name: pickName, category: pick.category }, reason: `${prev} 다음` };
     }
   }
   res.json({ stops, nextSuggestion });

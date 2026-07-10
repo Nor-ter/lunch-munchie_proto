@@ -758,6 +758,7 @@ function WaitingOrDecidedScreen({ onContinue, onReroll }: { onContinue: (winner?
     finalVotedCount?: number;
     winnerId?: string | null;
     generation?: number;
+    rerollCap?: number;
     rejectVotes?: number;
     excludeIds?: string[];
   }>({
@@ -863,6 +864,28 @@ function WaitingOrDecidedScreen({ onContinue, onReroll }: { onContinue: (winner?
 
   // REROLL(또는 다른 멤버가 이미 다음 세대로) → 새로운 곳으로 다시 고르기
   if (needReroll) {
+    const rerollCap = liveResults.rerollCap ?? 3;
+    // 이번이 마지막 재시도(다음에 또 실패하면 자동으로 "합의 실패") → 조용히 진행하지 말고 먼저 물어봄.
+    const isLastChance = serverGen === rerollCap - 1;
+    if (isLastChance) {
+      return (
+        <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }}
+          className="min-h-dvh flex flex-col justify-between px-5 py-8"
+          style={{ background: 'linear-gradient(160deg, #2C3E50 0%, #1a252f 100%)' }}>
+          <div className="flex-1 flex flex-col justify-center text-center">
+            <div className="text-6xl mb-3">🤔</div>
+            <h2 className="text-white font-black text-[24px] mb-2">두 번 다 아쉬웠네요</h2>
+            <p className="text-white/70 text-[13px] leading-relaxed">한 번 더 시도하면 마지막 기회예요.<br />여기서 처음부터 다시 시작할 수도 있어요.</p>
+          </div>
+          <div className="space-y-2">
+            <button onClick={() => onReroll(liveResults.excludeIds ?? [])}
+              className="w-full max-w-[340px] py-4 rounded-2xl font-bold text-white text-[15px] bg-[#EB5053] active:scale-[0.98] transition-all shadow-md mx-auto block">마지막으로 한 번 더 →</button>
+            <button onClick={() => navigate('/')}
+              className="w-full max-w-[340px] py-4 rounded-2xl font-bold text-white/80 text-[14px] bg-white/10 active:scale-[0.98] transition-all mx-auto block">처음부터 다시 시작</button>
+          </div>
+        </motion.div>
+      );
+    }
     return (
       <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }}
         className="min-h-dvh flex flex-col justify-between px-5 py-8"

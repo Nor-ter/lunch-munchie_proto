@@ -46,8 +46,8 @@ function TodayJourneyCard() {
   const { profile } = useApp();
   const [, navigate] = useLocation();
   const [data, setData] = useState<{
-    stops: { restaurant_id: string; category: string | null; satisfaction: string | null }[];
-    nextSuggestion: { intent: string; restaurant: { id: string; category?: string }; reason: string } | null;
+    stops: { restaurant_id: string; name: string; category: string | null; intent: string | null; at: number; satisfaction: string | null }[];
+    nextSuggestion: { intent: string; restaurant: { id: string; name: string; category?: string }; reason: string } | null;
   } | null>(null);
   useEffect(() => {
     let on = true;
@@ -59,20 +59,31 @@ function TodayJourneyCard() {
   }, [profile.id]);
   if (!data || data.stops.length === 0) return null; // 오늘 스톱 0개 → 숨김
 
-  const nameOf = (id: string) => MOCK_RESTAURANTS.find((r) => r.id === id)?.name ?? id;
   const sat = (s: string | null) => (s === "POS" ? "👍" : s === "NEG" ? "👎" : s === "NEU" ? "😐" : "");
   const intentLabel: Record<string, string> = { meal: "밥", cafe: "커피", dessert: "디저트" };
+  const timeOf = (at: number) => new Date(at).toLocaleTimeString("ko-KR", { hour: "numeric", minute: "2-digit" });
 
   return (
     <div className="mx-4 mb-4 rounded-2xl bg-white p-4 shadow-sm">
       <p className="mb-3 text-[13px] font-bold text-[#1A1A1A]">오늘의 여정</p>
-      <div className="space-y-2">
+      <div className="space-y-2.5">
         {data.stops.map((s, i) => (
-          <div key={i} className="flex items-center gap-2 text-[13px]">
-            <span className="text-[#EB5053]">●</span>
-            <span className="font-semibold text-[#1A1A1A]">{nameOf(s.restaurant_id)}</span>
-            <span className="text-[#9B9B9B]">· {s.category ?? ""}</span>
-            <span>{sat(s.satisfaction)}</span>
+          <div key={i} className="flex items-start gap-2 text-[13px]">
+            <span className="text-[#EB5053] mt-0.5">●</span>
+            <div className="min-w-0 flex-1">
+              <div className="flex items-center gap-1.5 flex-wrap">
+                <span className="font-semibold text-[#1A1A1A]">{s.name}</span>
+                {s.intent && (
+                  <span className="text-[10px] font-bold bg-[#FFF5F5] text-[#EB5053] px-1.5 py-0.5 rounded-full">
+                    {intentLabel[s.intent] ?? s.intent}
+                  </span>
+                )}
+                <span>{sat(s.satisfaction)}</span>
+              </div>
+              <p className="text-[11px] text-[#9B9B9B] mt-0.5">
+                {s.category ?? ""}{s.category ? " · " : ""}{timeOf(s.at)}
+              </p>
+            </div>
           </div>
         ))}
       </div>
@@ -81,7 +92,7 @@ function TodayJourneyCard() {
           onClick={() => navigate(`/lunchie/settings?intent=${data.nextSuggestion!.intent}`)}
           className="mt-3 w-full rounded-xl border border-dashed border-[#EB5053] px-3 py-2.5 text-left text-[13px] font-bold text-[#EB5053] active:scale-[0.99]"
         >
-          다음은 {intentLabel[data.nextSuggestion.intent] ?? data.nextSuggestion.intent}? →
+          다음은 {intentLabel[data.nextSuggestion.intent] ?? data.nextSuggestion.intent}? ({data.nextSuggestion.restaurant.name}) →
         </button>
       )}
     </div>

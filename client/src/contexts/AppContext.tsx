@@ -4,9 +4,9 @@
  * Manages: courses, restaurants, sessions, profile, swipe data
  */
 
-import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
 import { normalizeDiet, isHardRestriction, type DietTag } from '@shared/const';
-import { intentForHour } from '@shared/intent';
+import { intentForHour, type Intent } from '@shared/intent';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -94,6 +94,8 @@ export interface GroupSession {
     budget: 1 | 2 | 3 | 4;
     radius: number;
     categories: string[];
+    /** 명시적으로 고른 밥/카페/디저트. 없으면(undefined) 시간대로 자동 판정. */
+    intent?: Intent;
   };
   deadline: string | null;
   /** 마감 타이밍(분) — 투표 시작 시점에 deadline으로 변환 적용 */
@@ -475,7 +477,7 @@ async function buildDeck(
       body: JSON.stringify({
         candidate_ids: base.map(r => r.id),
         // 앱이 이미 아는 맥락은 클라가 실어 보낸다 (companions=인원수). 나머지는 서버가 보강.
-        context: { diet: filters.dietary, companions: filters.partySize, intent: intentForHour(new Date().getHours()) },
+        context: { diet: filters.dietary, companions: filters.partySize, intent: filters.intent ?? intentForHour(new Date().getHours()) },
         // 예선 = 엔진 추천 top-7 (결정 플로우 ①). 스와이프 덱 = 슬레이트와 1:1.
         k: 7,
         slate_type: 'PRELIM',
@@ -547,6 +549,10 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     try { const s = localStorage.getItem('lm_session'); return s ? JSON.parse(s) : null; }
     catch { return null; }
   });
+  // fetchSession(폴링)이 서버 필드만으로 filters를 재구성해 intent를 잃어버리는 걸 막기 위한 최신값 스냅샷.
+  // (서버 sessions 테이블에 intent 컬럼이 없어 서버 왕복으로는 못 지킴 — 클라 로컬로 보존.)
+  const currentSessionRef = useRef(currentSession);
+  useEffect(() => { currentSessionRef.current = currentSession; }, [currentSession]);
 
   const [swipeRecords, setSwipeRecords] = useState<SwipeRecord[]>(() => {
     try { const s = localStorage.getItem('lm_swipes'); return s ? JSON.parse(s) : []; }
@@ -683,12 +689,15 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     if (!res.ok) throw new Error('Session not found');
     const data = await res.json();
     const status = (data.session.status as string).toLowerCase() as GroupSession['status'];
+    // 서버 sessions 테이블에 intent 컬럼이 없어 서버 응답엔 안 실려옴 — 직전 로컬 세션의 intent를 승계.
+    const prevIntent = currentSessionRef.current?.inviteCode === token ? currentSessionRef.current.filters.intent : undefined;
     const sessFilters = {
       partySize: data.session.group_size,
       dietary: data.session.filter_dietary || [],
       budget: data.session.filter_budget,
       radius: data.session.filter_distance,
       categories: data.session.filter_vibe || [],
+      intent: prevIntent,
     };
     const deck = await buildDeck(sessFilters, restaurants, profile.id);
     const session: GroupSession = {
