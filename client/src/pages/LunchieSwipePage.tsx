@@ -1197,6 +1197,11 @@ export default function QuickMatchPage() {
   const [duel, setDuel] = useState<{ a: any; b: any } | null>(null);
   const cardShownAtRef = useRef(Date.now()); // 현재 카드 노출 시각 → dwell 측정
   const rejectedRef = useRef<Set<string>>(new Set()); // 듀얼에서 "둘 다 별로"로 거절된 후보
+  // 솔로 "다 거절 → 새 추천" 라운드 카운트. 그룹의 generation/REROLL_CAP(3)과 동일한 규칙:
+  // 1라운드는 조용히 재추천, 2라운드는 마지막 기회를 물어보고, 3라운드째도 다 거절이면 포기 안내.
+  const rejectRoundRef = useRef(1);
+  const SOLO_REROLL_CAP = 3;
+  const [rerollPrompt, setRerollPrompt] = useState<'none' | 'lastChance' | 'exhausted'>('none');
   const [showIntro, setShowIntro] = useState(true);
   const [remainingMs, setRemainingMs] = useState(() => {
     if (!currentSession?.deadline) return 0;
@@ -1355,12 +1360,54 @@ export default function QuickMatchPage() {
     const remaining = byEng(swipeData.filter(s => s.action === 'like').map(s => s.restaurant).filter((r: any) => !rejectedRef.current.has(r.id)));
     if (remaining.length >= 2) setDuel({ a: remaining[0], b: remaining[1] });                     // 다른 좋아요 쌍
     else if (remaining.length === 1) setDuel({ a: remaining[0], b: null });                       // 하나만 남음 → 확인 화면(자동 확정 X)
-    else handleReset();                                                                            // 다 거절 → 새 추천
+    else {
+      // 다 거절 → 새 추천. 그룹과 동일하게 마지막 라운드 직전엔 물어보고, 상한 도달하면 포기 안내.
+      const nextRound = rejectRoundRef.current + 1;
+      if (rejectRoundRef.current >= SOLO_REROLL_CAP) setRerollPrompt('exhausted');
+      else if (nextRound >= SOLO_REROLL_CAP) setRerollPrompt('lastChance');
+      else { rejectRoundRef.current = nextRound; handleReset(); }
+    }
   };
 
   if (phase === 'decided') {
     const isSolo = (currentSession?.members?.length ?? 1) <= 1;
     if (isSolo) {
+      // 마지막 기회 안내 — 그룹의 REROLL "isLastChance" 화면과 동일한 안내 메시지·버튼.
+      if (rerollPrompt === 'lastChance') {
+        return (
+          <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }}
+            className="min-h-dvh flex flex-col justify-between px-5 py-8"
+            style={{ background: 'linear-gradient(160deg, #2C3E50 0%, #1a252f 100%)' }}>
+            <div className="flex-1 flex flex-col justify-center text-center">
+              <div className="text-6xl mb-3">🤔</div>
+              <h2 className="text-white font-black text-[24px] mb-2">계속 별로였네요</h2>
+              <p className="text-white/70 text-[13px] leading-relaxed">한 번 더 시도하면 마지막 기회예요.<br />여기서 처음부터 다시 시작할 수도 있어요.</p>
+            </div>
+            <div className="space-y-2">
+              <button onClick={() => { rejectRoundRef.current += 1; setRerollPrompt('none'); handleReset(); }}
+                className="w-full max-w-[340px] py-4 rounded-2xl font-bold text-white text-[15px] bg-[#EB5053] active:scale-[0.98] transition-all shadow-md mx-auto block">마지막으로 한 번 더 →</button>
+              <button onClick={() => navigate('/')}
+                className="w-full max-w-[340px] py-4 rounded-2xl font-bold text-white/80 text-[14px] bg-white/10 active:scale-[0.98] transition-all mx-auto block">처음부터 다시 시작</button>
+            </div>
+          </motion.div>
+        );
+      }
+      // 상한 도달 — 그룹의 NO_CONSENSUS 화면과 동일한 포기 안내(자동 재추천 없음).
+      if (rerollPrompt === 'exhausted') {
+        return (
+          <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }}
+            className="min-h-dvh flex flex-col justify-between px-5 py-8"
+            style={{ background: 'linear-gradient(160deg, #4A4A4A 0%, #2a2a2a 100%)' }}>
+            <div className="flex-1 flex flex-col justify-center text-center">
+              <div className="text-6xl mb-3">🤷</div>
+              <h2 className="text-white font-black text-[24px] mb-2">마음에 드는 곳을 못 찾았어요</h2>
+              <p className="text-white/70 text-[13px] leading-relaxed">여러 번 골라봤지만 계속 별로였어요.<br />다른 동네로 넓히거나 나중에 다시 시도해볼까요?</p>
+            </div>
+            <button onClick={() => navigate('/')}
+              className="w-full max-w-[340px] py-4 rounded-2xl font-bold text-[#4A4A4A] text-[15px] bg-white active:scale-[0.98] transition-all shadow-md mx-auto block">처음으로</button>
+          </motion.div>
+        );
+      }
       // 솔로: 좋아요 수로 구성된 듀얼(준결승→결승). 로컬 즉시 — /results 폴링/플래시 없음.
       if (duel) return <FinalBattleResultScreen key={(duel.a?.id ?? '') + (duel.b?.id ?? '')} finalist1={duel.a} finalist2={duel.b} onContinue={handleDuelChoice} onRejectBoth={handleRejectBoth} />;
       return null; // 효과가 듀얼/우승 구성 중
