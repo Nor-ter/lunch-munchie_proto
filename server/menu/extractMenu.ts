@@ -5,7 +5,7 @@
 // 단일 테스트:  npx tsx server/menu/extractMenu.ts <url>
 import "dotenv/config";
 
-export interface MenuItem { name: string; price: number | null; image?: string }
+export interface MenuItem { name: string; price: number | null; image?: string; dietary?: string[]; category?: string; description?: string }
 export interface ExtractResult {
   url: string;
   ok: boolean;

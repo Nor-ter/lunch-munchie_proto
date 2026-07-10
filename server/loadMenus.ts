@@ -13,8 +13,8 @@ const args = process.argv.slice(2);
 const useDb = args.includes("--db");
 const inPath = args.find((a) => !a.startsWith("--")) || join(here, "data", "menus.json");
 
-interface MenuRow { id: string; name?: string; items?: { name: string; price: number | null; image?: string; dietary?: string[] }[]; image?: string }
-interface Update { id: string; menu_items?: { name: string; price: number | null; image?: string; dietary?: string[] }[]; photos?: string[] }
+interface MenuRow { id: string; name?: string; items?: { name: string; price: number | null; image?: string; dietary?: string[]; category?: string; description?: string }[]; image?: string }
+interface Update { id: string; menu_items?: { name: string; price: number | null; image?: string; dietary?: string[]; category?: string; description?: string }[]; photos?: string[] }
 
 async function main() {
   const rows: MenuRow[] = JSON.parse(readFileSync(inPath, "utf8"));

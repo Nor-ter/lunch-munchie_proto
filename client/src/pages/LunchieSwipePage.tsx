@@ -9,17 +9,30 @@ import { motion, useMotionValue, useTransform, AnimatePresence } from 'framer-mo
 import { useLocation } from 'wouter';
 import { ArrowLeft, Heart, X, Star, MapPin, Clock, Phone, Navigation, Share2, Download, Link2, Home, Bookmark, RotateCcw } from 'lucide-react';
 import { toast } from 'sonner';
-import { useApp, type Restaurant } from '@/contexts/AppContext';
+import { useApp, type Restaurant, type MenuItem } from '@/contexts/AppContext';
 import { getFoodPhotos } from '@/lib/foodPhotos';
 import { useCourseShare } from '@/hooks/useCourseShare';
 import WinnerShareCard from '@/components/lunchie/WinnerShareCard';
 import FoodImage from '@/components/FoodImage';
+import MenuItemDetail from '@/components/MenuItemDetail';
 import { logSwipe, logWinner, logNavigate, logEvent, flushEvents } from '@/lib/eventLogger';
 import { intentForCategory } from '@shared/intent';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 type SwipeAction = 'like' | 'dislike';
+
+// 소스 메뉴판의 섹션 구조 그대로 유지 — 등장 순서대로 그룹핑(알파벳 재정렬 X).
+function groupByCategory(items: MenuItem[]): [string, MenuItem[]][] {
+  const order: string[] = [];
+  const map = new Map<string, MenuItem[]>();
+  for (const it of items) {
+    const key = it.category || '메뉴';
+    if (!map.has(key)) { map.set(key, []); order.push(key); }
+    map.get(key)!.push(it);
+  }
+  return order.map((k) => [k, map.get(k)!]);
+}
 
 // ─── Swipe Card ───────────────────────────────────────────────────────────────
 
@@ -40,6 +53,7 @@ function SwipeCard({
 }) {
   const [isRevealed, setIsRevealed] = useState(false);
   const [photoIndex, setPhotoIndex] = useState(0);
+  const [detailItem, setDetailItem] = useState<MenuItem | null>(null);
   const x = useMotionValue(0);
   const rotate = useTransform(x, [-220, 220], [-16, 16]);
   const likeOp = useTransform(x, [0, 70], [0, 1]);
@@ -187,31 +201,43 @@ function SwipeCard({
             </div>
 
             {restaurant.menuItems && restaurant.menuItems.length > 0 ? (
-              /* 실제 메뉴리스트 — 항목별 사진·가격·dietary 태그 */
+              /* 실제 메뉴리스트 — 소스 카테고리 구조로 섹션 나눔, 탭하면 상세 화면 */
               <div className="flex-1 px-5 pb-4 flex flex-col min-h-0">
                 <div className="flex-1 overflow-y-auto -mx-1 px-1">
-                  {restaurant.menuItems.map((item: import('@/contexts/AppContext').MenuItem, idx: number) => (
-                    <div key={idx} className="flex items-center gap-3 py-2.5 border-b border-white/10 last:border-b-0">
-                      {item.image ? (
-                        <img src={item.image} alt="" className="w-11 h-11 rounded-lg object-cover flex-shrink-0 bg-white/10" />
-                      ) : (
-                        <div className="w-11 h-11 rounded-lg bg-white/10 flex-shrink-0" />
-                      )}
-                      <div className="min-w-0 flex-1">
-                        <p className="text-white text-[13.5px] font-semibold truncate">{item.name}</p>
-                        {item.dietary && item.dietary.length > 0 && (
-                          <div className="flex gap-1 mt-1 flex-wrap">
-                            {item.dietary.map((d: string) => (
-                              <span key={d} className="text-[9px] font-bold bg-[#3CBA44]/25 text-[#7ee08a] px-1.5 py-0.5 rounded-full">
-                                {d}
-                              </span>
-                            ))}
+                  {groupByCategory(restaurant.menuItems).map(([cat, items]) => (
+                    <div key={cat} className="mb-1">
+                      <p className="text-[10px] font-bold text-white/40 uppercase tracking-wide pt-3 pb-1.5">{cat}</p>
+                      {items.map((item, idx) => (
+                        <button
+                          key={idx}
+                          onClick={(e) => { e.stopPropagation(); setDetailItem(item); }}
+                          className="w-full flex items-center gap-3 py-2.5 border-b border-white/10 last:border-b-0 text-left active:bg-white/5"
+                        >
+                          {item.image ? (
+                            <img src={item.image} alt="" className="w-11 h-11 rounded-lg object-cover flex-shrink-0 bg-white/10" />
+                          ) : (
+                            <div className="w-11 h-11 rounded-lg bg-white/10 flex-shrink-0" />
+                          )}
+                          <div className="min-w-0 flex-1">
+                            <p className="text-white text-[13.5px] font-semibold truncate">{item.name}</p>
+                            {item.description && (
+                              <p className="text-white/45 text-[11px] truncate mt-0.5">{item.description}</p>
+                            )}
+                            {item.dietary && item.dietary.length > 0 && (
+                              <div className="flex gap-1 mt-1 flex-wrap">
+                                {item.dietary.map((d: string) => (
+                                  <span key={d} className="text-[9px] font-bold bg-[#3CBA44]/25 text-[#7ee08a] px-1.5 py-0.5 rounded-full">
+                                    {d}
+                                  </span>
+                                ))}
+                              </div>
+                            )}
                           </div>
-                        )}
-                      </div>
-                      <span className="text-white/90 text-[13px] font-bold flex-shrink-0 tabular-nums">
-                        {item.price != null ? `$${item.price}` : ''}
-                      </span>
+                          <span className="text-white/90 text-[13px] font-bold flex-shrink-0 tabular-nums">
+                            {item.price != null ? `$${item.price}` : ''}
+                          </span>
+                        </button>
+                      ))}
                     </div>
                   ))}
                 </div>
@@ -260,6 +286,13 @@ function SwipeCard({
           </motion.div>
         )}
       </AnimatePresence>
+
+      <MenuItemDetail
+        item={detailItem}
+        fallbackImage={restaurant.image || foodPhotos[0]}
+        restaurantCategory={restaurant.category}
+        onClose={() => setDetailItem(null)}
+      />
     </motion.div>
   );
 }
@@ -297,6 +330,7 @@ function WinnerScreen({ selectedWinner, onReset }: { selectedWinner?: Restaurant
   const [showShare, setShowShare] = useState(false);
   const [isCapturing, setIsCapturing] = useState(false);
   const [saved, setSaved] = useState(false);
+  const [detailItem, setDetailItem] = useState<MenuItem | null>(null);
   const [liveResults, setLiveResults] = useState<{
     results: { restaurantId: string; score: number; likeCount: number; dislikeCount: number }[];
     winnerId?: string | null;
@@ -437,31 +471,43 @@ function WinnerScreen({ selectedWinner, onReset }: { selectedWinner?: Restaurant
           {/* Description */}
           <p className="text-[13px] text-[#4A4A4A] leading-relaxed">{winner.description}</p>
 
-          {/* Menu — 실제 메뉴리스트 있으면 우선, 없으면 사진 그리드 폴백 */}
+          {/* Menu — 실제 메뉴리스트(소스 카테고리 구조) 있으면 우선, 없으면 사진 그리드 폴백 */}
           {winner.menuItems && winner.menuItems.length > 0 ? (
             <div>
               <p className="text-[12px] font-bold text-[#9B9B9B] mb-2">메뉴 ({winner.menuItems.length})</p>
-              <div className="max-h-[260px] overflow-y-auto rounded-2xl border border-[#EFEFEF]">
-                {winner.menuItems.map((item, i) => (
-                  <div key={i} className="flex items-center gap-3 px-3 py-2.5 border-b border-[#F0F0F0] last:border-b-0">
-                    {item.image ? (
-                      <img src={item.image} alt="" className="w-10 h-10 rounded-lg object-cover flex-shrink-0 bg-[#F5F5F5]" />
-                    ) : (
-                      <div className="w-10 h-10 rounded-lg bg-[#F5F5F5] flex-shrink-0" />
-                    )}
-                    <div className="min-w-0 flex-1">
-                      <p className="text-[13px] font-semibold text-[#2A2A2A] truncate">{item.name}</p>
-                      {item.dietary && item.dietary.length > 0 && (
-                        <div className="flex gap-1 mt-0.5 flex-wrap">
-                          {item.dietary.map((d) => (
-                            <span key={d} className="text-[9px] font-bold bg-[#E8F5E9] text-[#3CBA44] px-1.5 py-0.5 rounded-full">{d}</span>
-                          ))}
+              <div className="max-h-[320px] overflow-y-auto rounded-2xl border border-[#EFEFEF]">
+                {groupByCategory(winner.menuItems).map(([cat, items]) => (
+                  <div key={cat}>
+                    <p className="text-[10px] font-bold text-[#B0B0B0] uppercase tracking-wide px-3 pt-3 pb-1 bg-[#FAFAFA]">{cat}</p>
+                    {items.map((item, i) => (
+                      <button
+                        key={i}
+                        onClick={() => setDetailItem(item)}
+                        className="w-full flex items-center gap-3 px-3 py-2.5 border-b border-[#F0F0F0] last:border-b-0 text-left active:bg-[#FAFAFA]"
+                      >
+                        {item.image ? (
+                          <img src={item.image} alt="" className="w-10 h-10 rounded-lg object-cover flex-shrink-0 bg-[#F5F5F5]" />
+                        ) : (
+                          <div className="w-10 h-10 rounded-lg bg-[#F5F5F5] flex-shrink-0" />
+                        )}
+                        <div className="min-w-0 flex-1">
+                          <p className="text-[13px] font-semibold text-[#2A2A2A] truncate">{item.name}</p>
+                          {item.description && (
+                            <p className="text-[11px] text-[#9B9B9B] truncate mt-0.5">{item.description}</p>
+                          )}
+                          {item.dietary && item.dietary.length > 0 && (
+                            <div className="flex gap-1 mt-0.5 flex-wrap">
+                              {item.dietary.map((d) => (
+                                <span key={d} className="text-[9px] font-bold bg-[#E8F5E9] text-[#3CBA44] px-1.5 py-0.5 rounded-full">{d}</span>
+                              ))}
+                            </div>
+                          )}
                         </div>
-                      )}
-                    </div>
-                    <span className="text-[12.5px] font-bold text-[#4A4A4A] flex-shrink-0 tabular-nums">
-                      {item.price != null ? `$${item.price}` : ''}
-                    </span>
+                        <span className="text-[12.5px] font-bold text-[#4A4A4A] flex-shrink-0 tabular-nums">
+                          {item.price != null ? `$${item.price}` : ''}
+                        </span>
+                      </button>
+                    ))}
                   </div>
                 ))}
               </div>
@@ -585,6 +631,13 @@ function WinnerScreen({ selectedWinner, onReset }: { selectedWinner?: Restaurant
           </motion.div>
         )}
       </AnimatePresence>
+
+      <MenuItemDetail
+        item={detailItem}
+        fallbackImage={winner.image}
+        restaurantCategory={winner.category}
+        onClose={() => setDetailItem(null)}
+      />
     </motion.div>
   );
 }

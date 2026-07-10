@@ -32,6 +32,10 @@ export interface MenuItem {
   price: number | null;
   image?: string;
   dietary?: string[];
+  /** 소스 메뉴판의 섹션 헤더 그대로(예: "Mains", "Pizzas"). 없으면 미분류. */
+  category?: string;
+  /** 재료/상세 설명 (소스에 있을 때만) */
+  description?: string;
 }
 
 export interface Restaurant {
