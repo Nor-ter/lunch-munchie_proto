@@ -1279,9 +1279,13 @@ export default function QuickMatchPage() {
 
   if (!currentSession) return null;
 
-  const handleReset = () => {
+  // 새 추천으로 재시작. 같은 덱(targetRestaurants)은 이미 swipeRecords에 다 기록돼 있어서,
+  // rerollSession으로 새 덱을 먼저 받아온 뒤에 phase를 'swipe'로 돌려야 한다 — 순서를 바꾸면
+  // "전부 스와이프 완료" 감지 effect(위)가 옛 덱 그대로 즉시 'decided'로 되돌려 무한 루프가 난다.
+  const handleReset = async () => {
     logEvent({ event_type: 'REROLL', user_id: profile.id, session_id: currentSession?.id ?? null, slate_id: currentSession?.slateId ?? null });
     rejectedRef.current.clear();
+    await rerollSession(targetRestaurants.map(r => r.id));
     setCurrentIndex(0); setSwipeData([]); setSelectedWinner(null); setDuel(null); setPhase('swipe');
   };
   // 듀얼 선택 → 우승 확정 (1번 비교, 이론 권장).
