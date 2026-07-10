@@ -53,7 +53,7 @@ function SwipeCard({
 }) {
   const [isRevealed, setIsRevealed] = useState(false);
   const [photoIndex, setPhotoIndex] = useState(0);
-  const [detailItem, setDetailItem] = useState<MenuItem | null>(null);
+  const [detailIndex, setDetailIndex] = useState<number | null>(null);
   const x = useMotionValue(0);
   const rotate = useTransform(x, [-220, 220], [-16, 16]);
   const likeOp = useTransform(x, [0, 70], [0, 1]);
@@ -210,7 +210,7 @@ function SwipeCard({
                       {items.map((item, idx) => (
                         <button
                           key={idx}
-                          onClick={(e) => { e.stopPropagation(); setDetailItem(item); }}
+                          onClick={(e) => { e.stopPropagation(); setDetailIndex(restaurant.menuItems.indexOf(item)); }}
                           className="w-full flex items-center gap-3 py-2.5 border-b border-white/10 last:border-b-0 text-left active:bg-white/5"
                         >
                           {item.image ? (
@@ -288,10 +288,12 @@ function SwipeCard({
       </AnimatePresence>
 
       <MenuItemDetail
-        item={detailItem}
+        items={restaurant.menuItems || []}
+        index={detailIndex}
         fallbackImage={restaurant.image || foodPhotos[0]}
         restaurantCategory={restaurant.category}
-        onClose={() => setDetailItem(null)}
+        onClose={() => setDetailIndex(null)}
+        onIndexChange={setDetailIndex}
       />
     </motion.div>
   );
@@ -330,7 +332,7 @@ function WinnerScreen({ selectedWinner, onReset }: { selectedWinner?: Restaurant
   const [showShare, setShowShare] = useState(false);
   const [isCapturing, setIsCapturing] = useState(false);
   const [saved, setSaved] = useState(false);
-  const [detailItem, setDetailItem] = useState<MenuItem | null>(null);
+  const [detailIndex, setDetailIndex] = useState<number | null>(null);
   const [liveResults, setLiveResults] = useState<{
     results: { restaurantId: string; score: number; likeCount: number; dislikeCount: number }[];
     winnerId?: string | null;
@@ -482,7 +484,7 @@ function WinnerScreen({ selectedWinner, onReset }: { selectedWinner?: Restaurant
                     {items.map((item, i) => (
                       <button
                         key={i}
-                        onClick={() => setDetailItem(item)}
+                        onClick={() => setDetailIndex(winner.menuItems!.indexOf(item))}
                         className="w-full flex items-center gap-3 px-3 py-2.5 border-b border-[#F0F0F0] last:border-b-0 text-left active:bg-[#FAFAFA]"
                       >
                         {item.image ? (
@@ -633,10 +635,12 @@ function WinnerScreen({ selectedWinner, onReset }: { selectedWinner?: Restaurant
       </AnimatePresence>
 
       <MenuItemDetail
-        item={detailItem}
+        items={winner.menuItems || []}
+        index={detailIndex}
         fallbackImage={winner.image}
         restaurantCategory={winner.category}
-        onClose={() => setDetailItem(null)}
+        onClose={() => setDetailIndex(null)}
+        onIndexChange={setDetailIndex}
       />
     </motion.div>
   );

@@ -1,101 +1,126 @@
 import { motion } from "framer-motion";
 import { useLocation } from "wouter";
 import { useState, useEffect } from "react";
-import { Heart, X, ArrowRight, MapPin, Clock, Bookmark } from "lucide-react";
-import { useApp, Course, MOCK_RESTAURANTS } from "@/contexts/AppContext";
+import { ArrowRight, MapPin, Clock, Bookmark } from "lucide-react";
+import { useApp, Course } from "@/contexts/AppContext";
 import CourseMapOverlay from "@/components/CourseMapOverlay";
 import { logEvent } from "@/lib/eventLogger";
 import { toast } from "sonner";
 
-// 회고 마이크로설문: 지난 결정 식당의 만족(SURVEY=만족 정답). WINNER 시 localStorage에 대기 저장됨.
-function RetroSurveyCard() {
-  const { profile } = useApp();
-  const [retro, setRetro] = useState<{ id: string; name: string; session?: string | null; at: number } | null>(null);
-  useEffect(() => {
-    try {
-      const raw = localStorage.getItem("lunchie_retro");
-      if (raw) setRetro(JSON.parse(raw));
-    } catch { /* noop */ }
-  }, []);
-  if (!retro) return null;
-  const answer = (action: "POS" | "NEU" | "NEG" | null) => {
-    if (action) {
-      logEvent({ event_type: "SURVEY", action, user_id: profile.id, restaurant_id: retro.id, session_id: retro.session ?? null });
-      toast.success("피드백 고마워요! 🙌");
-    }
-    try { localStorage.removeItem("lunchie_retro"); } catch { /* noop */ }
-    setRetro(null);
-  };
+type JourneyStop = { restaurant_id: string; name: string; category: string | null; intent: string | null; at: number; satisfaction: "POS" | "NEU" | "NEG" | null };
+
+const INTENT_LABEL: Record<string, string> = { meal: "밥", cafe: "음료", dessert: "디저트" };
+const INTENT_ICON: Record<string, string> = { meal: "🍚", cafe: "☕", dessert: "🍰" };
+const INTENT_ORDER: ("meal" | "cafe" | "dessert")[] = ["meal", "cafe", "dessert"];
+
+// 한 스톱의 만족도 — 상시 탭해서 남기거나 바꿀 수 있음(한 번 답하면 끝나는 팝업이 아님).
+function FeedbackRow({ stop, onAnswer, defaultOpen }: { stop: JourneyStop; onAnswer: (a: "POS" | "NEU" | "NEG") => void; defaultOpen?: boolean }) {
+  const [open, setOpen] = useState(!!defaultOpen);
+  const sat = stop.satisfaction;
+  const emoji = sat === "POS" ? "👍" : sat === "NEG" ? "👎" : sat === "NEU" ? "😐" : null;
+
+  if (!open) {
+    return (
+      <button onClick={() => setOpen(true)} className="flex-shrink-0 text-[15px] leading-none active:scale-90">
+        {emoji ?? <span className="text-[10px] font-bold text-[#EB5053] bg-[#FFF5F5] px-2 py-1 rounded-full whitespace-nowrap">평가하기</span>}
+      </button>
+    );
+  }
   return (
-    <div className="mx-6 mt-3 rounded-2xl bg-white p-4 shadow-sm border border-[#F0E8E0]">
-      <div className="flex items-start justify-between">
-        <p className="text-[13px] text-[#6E6E6E] leading-snug">최근 점심, <b className="text-[#1A1A1A]">{retro.name}</b> 어땠어요?</p>
-        <button onClick={() => answer(null)} className="text-[#B0B0B0] text-[13px] ml-2 leading-none">✕</button>
-      </div>
-      <div className="mt-3 flex gap-2">
-        <button onClick={() => answer("POS")} className="flex-1 py-2.5 rounded-xl bg-[#EAF7EC] text-[#2E9E42] font-bold text-[14px] active:scale-95 transition-transform">👍 좋았어요</button>
-        <button onClick={() => answer("NEU")} className="flex-1 py-2.5 rounded-xl bg-[#F1EFE8] text-[#6E6E6E] font-bold text-[14px] active:scale-95 transition-transform">😐 그냥</button>
-        <button onClick={() => answer("NEG")} className="flex-1 py-2.5 rounded-xl bg-[#FBECEC] text-[#D83A3D] font-bold text-[14px] active:scale-95 transition-transform">👎 별로</button>
-      </div>
+    <div className="w-full mt-1.5 flex gap-1.5">
+      {([["POS", "👍 좋았어요", "#EAF7EC", "#2E9E42"], ["NEU", "😐 그냥", "#F1EFE8", "#6E6E6E"], ["NEG", "👎 별로", "#FBECEC", "#D83A3D"]] as const).map(([a, label, bg, fg]) => (
+        <button
+          key={a}
+          onClick={() => { onAnswer(a); setOpen(false); }}
+          className="flex-1 py-1.5 rounded-lg font-bold text-[11px] active:scale-95 transition-transform"
+          style={{ background: bg, color: fg }}
+        >
+          {label}
+        </button>
+      ))}
     </div>
   );
 }
 
-// 하루 여정: 오늘 결정된 스톱 타임라인 + (사슬 열림 시) 다음-스톱 제안.
-function TodayJourneyCard() {
+// 통합 여정 카드 — "오늘의 여정"(스톱 타임라인+상시 피드백) + Lunchie Mode 진입점(카테고리 아이콘).
+// 여정 없으면 "시작해보세요", 있으면 "다음 여정은?"으로 안내문이 바뀐다.
+function JourneyCard() {
   const { profile } = useApp();
   const [, navigate] = useLocation();
-  const [data, setData] = useState<{
-    stops: { restaurant_id: string; name: string; category: string | null; intent: string | null; at: number; satisfaction: string | null }[];
-    nextSuggestion: { intent: string; restaurant: { id: string; name: string; category?: string }; reason: string } | null;
-  } | null>(null);
+  const [stops, setStops] = useState<JourneyStop[] | null>(null);
   useEffect(() => {
     let on = true;
     fetch(`/api/journey/today?userId=${encodeURIComponent(profile.id)}`)
       .then((r) => r.json())
-      .then((d) => { if (on) setData(d); })
-      .catch(() => { /* 폴백: 카드 숨김 */ });
+      .then((d) => { if (on) setStops(d.stops ?? []); })
+      .catch(() => { if (on) setStops([]); });
     return () => { on = false; };
   }, [profile.id]);
-  if (!data || data.stops.length === 0) return null; // 오늘 스톱 0개 → 숨김
 
-  const sat = (s: string | null) => (s === "POS" ? "👍" : s === "NEG" ? "👎" : s === "NEU" ? "😐" : "");
-  const intentLabel: Record<string, string> = { meal: "밥", cafe: "커피", dessert: "디저트" };
-  const timeOf = (at: number) => new Date(at).toLocaleTimeString("ko-KR", { hour: "numeric", minute: "2-digit" });
+  const timeOf = (at: number) => new Date(at).toLocaleString("ko-KR", { month: "long", day: "numeric", hour: "numeric", minute: "2-digit" });
+  const answer = (stop: JourneyStop, action: "POS" | "NEU" | "NEG") => {
+    logEvent({ event_type: "SURVEY", action, user_id: profile.id, restaurant_id: stop.restaurant_id, session_id: null });
+    setStops((prev) => prev?.map((s) => (s.restaurant_id === stop.restaurant_id && s.at === stop.at ? { ...s, satisfaction: action } : s)) ?? prev);
+    toast.success("피드백 고마워요! 🙌");
+  };
+
+  const hasStops = !!stops && stops.length > 0;
 
   return (
-    <div className="mx-4 mb-4 rounded-2xl bg-white p-4 shadow-sm">
-      <p className="mb-3 text-[13px] font-bold text-[#1A1A1A]">오늘의 여정</p>
-      <div className="space-y-2.5">
-        {data.stops.map((s, i) => (
-          <div key={i} className="flex items-start gap-2 text-[13px]">
-            <span className="text-[#EB5053] mt-0.5">●</span>
-            <div className="min-w-0 flex-1">
-              <div className="flex items-center gap-1.5 flex-wrap">
-                <span className="font-semibold text-[#1A1A1A]">{s.name}</span>
-                {s.intent && (
-                  <span className="text-[10px] font-bold bg-[#FFF5F5] text-[#EB5053] px-1.5 py-0.5 rounded-full">
-                    {intentLabel[s.intent] ?? s.intent}
-                  </span>
-                )}
-                <span>{sat(s.satisfaction)}</span>
+    <motion.div
+      className="mx-4 mb-4 rounded-3xl overflow-hidden"
+      style={{ background: "white", boxShadow: "0 2px 12px rgba(0,0,0,0.05)" }}
+    >
+      <div className="p-4">
+        <p className="text-[13px] font-bold text-[#1A1A1A] mb-1">오늘의 여정</p>
+
+        {stops === null ? null : hasStops ? (
+          <div className="space-y-1 mt-2">
+            {stops.map((s, i) => (
+              <div key={i} className="flex flex-wrap items-center gap-2 text-[13px] py-1.5 border-b border-[#F5F0EC] last:border-b-0">
+                <span className="text-[#EB5053]">●</span>
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-center gap-1.5 flex-wrap">
+                    <span className="font-semibold text-[#1A1A1A]">{s.name}</span>
+                    {s.intent && (
+                      <span className="text-[10px] font-bold bg-[#FFF5F5] text-[#EB5053] px-1.5 py-0.5 rounded-full">
+                        {INTENT_LABEL[s.intent] ?? s.intent}
+                      </span>
+                    )}
+                  </div>
+                  <p className="text-[11px] text-[#9B9B9B] mt-0.5">
+                    {s.category ?? ""}{s.category ? " · " : ""}{timeOf(s.at)}
+                  </p>
+                </div>
+                <FeedbackRow stop={s} onAnswer={(a) => answer(s, a)} defaultOpen={i === stops.length - 1 && !s.satisfaction} />
               </div>
-              <p className="text-[11px] text-[#9B9B9B] mt-0.5">
-                {s.category ?? ""}{s.category ? " · " : ""}{timeOf(s.at)}
-              </p>
-            </div>
+            ))}
           </div>
-        ))}
+        ) : (
+          <p className="text-[13px] text-[#9B9B9B] mt-1 mb-1">오늘의 여정을 시작해보세요</p>
+        )}
       </div>
-      {data.nextSuggestion && (
-        <button
-          onClick={() => navigate(`/lunchie/settings?intent=${data.nextSuggestion!.intent}`)}
-          className="mt-3 w-full rounded-xl border border-dashed border-[#EB5053] px-3 py-2.5 text-left text-[13px] font-bold text-[#EB5053] active:scale-[0.99]"
-        >
-          다음은 {intentLabel[data.nextSuggestion.intent] ?? data.nextSuggestion.intent}? ({data.nextSuggestion.restaurant.name}) →
-        </button>
-      )}
-    </div>
+
+      {/* Lunchie Mode 진입점 — 카테고리 아이콘으로 바로 시작 */}
+      <div className="px-4 pb-4">
+        {hasStops && <p className="text-[12px] font-bold text-[#1A1A1A] mb-2">다음 여정은?</p>}
+        <div className="flex gap-2">
+          {INTENT_ORDER.map((intent) => (
+            <motion.button
+              key={intent}
+              whileTap={{ scale: 0.95 }}
+              onClick={() => navigate(`/lunchie/settings?intent=${intent}`)}
+              className="flex-1 flex flex-col items-center gap-1 py-3 rounded-2xl"
+              style={{ background: "linear-gradient(180deg, #FB4448 0%, #F47F80 100%)" }}
+            >
+              <span className="text-[22px] leading-none">{INTENT_ICON[intent]}</span>
+              <span className="text-[11px] font-bold text-white">{INTENT_LABEL[intent]}</span>
+            </motion.button>
+          ))}
+        </div>
+        <p className="text-[10px] text-[#B0B0B0] mt-2 text-center">그룹과 함께 스와이프로 빠르게 골라요 · Quick Match</p>
+      </div>
+    </motion.div>
   );
 }
 
@@ -196,43 +221,6 @@ function MunchieCourseCard({ course }: { course: Course }) {
   );
 }
 
-function StackedCards() {
-  return (
-    <div className="relative h-[96px] w-[128px] flex-shrink-0">
-      {MOCK_RESTAURANTS.slice(0, 3).map((r, i) => (
-        <div
-          key={r.id}
-          className="absolute overflow-hidden bg-white shadow-md"
-          style={{
-            width: 63,
-            height: 87,
-            right: 3 + i * 24,
-            bottom: 5 + i * 8,
-            zIndex: 3 - i,
-            borderRadius: 3,
-          }}
-        >
-          <img
-            src={r.image}
-            alt=""
-            className="h-[38px] w-full object-cover"
-            draggable={false}
-          />
-          <div className="p-[4px]">
-            <div className="mb-[3px] h-[4px] w-[36px] rounded-full bg-[#2A2A2A]" />
-            <div className="mb-[2px] h-[3px] w-[48px] rounded-full bg-[#E8E0D9]" />
-            <div className="mb-[7px] h-[3px] w-[39px] rounded-full bg-[#E8E0D9]" />
-            <div className="flex gap-[3px]">
-              <span className="h-[8px] w-[20px] rounded-full bg-[#F4A040]" />
-              <span className="h-[8px] w-[17px] rounded-full bg-[#EF4B4E]" />
-            </div>
-          </div>
-        </div>
-      ))}
-    </div>
-  );
-}
-
 const stagger = {
   hidden: { opacity: 0 },
   visible: { opacity: 1, transition: { staggerChildren: 0.08 } },
@@ -302,62 +290,8 @@ export default function HomePage() {
       </motion.div>
 
       {/* 회고 설문 (지난 결정 만족도 — 만족 정답 수집) */}
-      <RetroSurveyCard />
-      <TodayJourneyCard />
-
-      {/* Lunchie Mode */}
-      <motion.div
-        variants={fadeUp}
-        className="mt-[31px]"
-        style={{
-          paddingLeft: "clamp(24px, 10.2vw, 41px)",
-          paddingRight: "clamp(24px, 10.2vw, 41px)",
-        }}
-      >
-        <p className="mb-[15px] text-[20px] font-black leading-none text-black" style={{ paddingLeft: 20 }}>
-          Lunchie Mode
-        </p>
-
-        <motion.button
-          onClick={() => navigate("/lunchie/settings")}
-          className="w-full overflow-hidden text-left"
-          style={{
-            height: 156,
-            borderRadius: 27,
-            background: "linear-gradient(180deg, #FB4448 0%, #F47F80 100%)",
-            boxShadow: "5px 6px 0 rgba(240, 91, 83, 0.22)",
-          }}
-          whileTap={{ scale: 0.97 }}
-        >
-          <div className="flex h-full items-center justify-between gap-1 pl-[13px] pr-[18px] pt-[16px]">
-            <div className="flex-1">
-              <p
-                className="text-white leading-none"
-                style={{
-                  fontFamily: "'Baloo 2', 'Pretendard Variable', 'Pretendard', cursive",
-                  fontWeight: 700,
-                  fontSize: 24,
-                }}
-              >
-                Quick Match
-              </p>
-              <p className="mt-[8px] text-[11px] leading-[1.2] text-white/90">
-                그룹 멤버들과 함께 음식 카드를
-                <br />
-                스와이프로 빠르게 메뉴를 결정해요.
-              </p>
-              <div className="mt-[8px] flex gap-[7px]">
-                <span className="flex h-[15px] items-center gap-[3px] rounded-full bg-white/20 px-[8px] text-[9px] font-medium leading-none text-black">
-                  <X size={9} strokeWidth={3} /> 싫어요
-                </span>
-                <span className="flex h-[15px] items-center gap-[3px] rounded-full bg-white/20 px-[8px] text-[9px] font-medium leading-none text-black">
-                  <Heart size={8} fill="white" strokeWidth={0} /> 좋아요
-                </span>
-              </div>
-            </div>
-            <StackedCards />
-          </div>
-        </motion.button>
+      <motion.div variants={fadeUp}>
+        <JourneyCard />
       </motion.div>
 
       {/* Munchie Mode */}
