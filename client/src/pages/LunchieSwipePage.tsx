@@ -186,54 +186,76 @@ function SwipeCard({
               </button>
             </div>
 
-            {/* Single food photo with left/right tap navigation */}
-            <div className="flex-1 px-5 pb-4 flex flex-col min-h-0">
-              <div className="rounded-2xl overflow-hidden relative flex-1">
-                <img src={foodPhotos[photoIndex]} alt="" className="w-full h-full object-cover" draggable={false} />
-
-                {/* Left tap zone — previous photo */}
-                <button
-                  className="absolute inset-y-0 left-0 w-1/2"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    setPhotoIndex(i => (i - 1 + foodPhotos.length) % foodPhotos.length);
-                  }}
-                  aria-label="이전 메뉴"
-                />
-                {/* Right tap zone — next photo */}
-                <button
-                  className="absolute inset-y-0 right-0 w-1/2"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    setPhotoIndex(i => (i + 1) % foodPhotos.length);
-                  }}
-                  aria-label="다음 메뉴"
-                />
-
-                {/* dot indicator */}
-                <div className="absolute top-3 left-1/2 -translate-x-1/2 flex gap-1.5 pointer-events-none">
-                  {foodPhotos.map((_, j) => (
-                    <div key={j} className="w-1.5 h-1.5 rounded-full"
-                      style={{ background: j === photoIndex ? 'white' : 'rgba(255,255,255,0.4)' }} />
+            {restaurant.menuItems && restaurant.menuItems.length > 0 ? (
+              /* 실제 메뉴리스트 — 항목별 사진·가격·dietary 태그 */
+              <div className="flex-1 px-5 pb-4 flex flex-col min-h-0">
+                <div className="flex-1 overflow-y-auto -mx-1 px-1">
+                  {restaurant.menuItems.map((item: import('@/contexts/AppContext').MenuItem, idx: number) => (
+                    <div key={idx} className="flex items-center gap-3 py-2.5 border-b border-white/10 last:border-b-0">
+                      {item.image ? (
+                        <img src={item.image} alt="" className="w-11 h-11 rounded-lg object-cover flex-shrink-0 bg-white/10" />
+                      ) : (
+                        <div className="w-11 h-11 rounded-lg bg-white/10 flex-shrink-0" />
+                      )}
+                      <div className="min-w-0 flex-1">
+                        <p className="text-white text-[13.5px] font-semibold truncate">{item.name}</p>
+                        {item.dietary && item.dietary.length > 0 && (
+                          <div className="flex gap-1 mt-1 flex-wrap">
+                            {item.dietary.map((d: string) => (
+                              <span key={d} className="text-[9px] font-bold bg-[#3CBA44]/25 text-[#7ee08a] px-1.5 py-0.5 rounded-full">
+                                {d}
+                              </span>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                      <span className="text-white/90 text-[13px] font-bold flex-shrink-0 tabular-nums">
+                        {item.price != null ? `$${item.price}` : ''}
+                      </span>
+                    </div>
                   ))}
                 </div>
               </div>
-              <div className="pt-3 flex-shrink-0">
-                <p className="font-bold text-[16px] text-white">메뉴 {photoIndex + 1}</p>
-                <p className="text-[12px] text-white/50 mt-0.5">{restaurant.description}</p>
-                <div className="flex gap-1.5 mt-2 flex-wrap">
-                  {(restaurant.tags || []).map((t: string) => (
-                    <span key={t} className="text-[11px] font-semibold bg-white/15 text-white/90 px-2.5 py-1 rounded-full">
-                      {t}
-                    </span>
-                  ))}
+            ) : (
+              /* 실 데이터 없을 때 폴백 — 스톡 사진 캐러셀 */
+              <div className="flex-1 px-5 pb-4 flex flex-col min-h-0">
+                <div className="rounded-2xl overflow-hidden relative flex-1">
+                  <img src={foodPhotos[photoIndex]} alt="" className="w-full h-full object-cover" draggable={false} />
+                  <button
+                    className="absolute inset-y-0 left-0 w-1/2"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setPhotoIndex(i => (i - 1 + foodPhotos.length) % foodPhotos.length);
+                    }}
+                    aria-label="이전 메뉴"
+                  />
+                  <button
+                    className="absolute inset-y-0 right-0 w-1/2"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setPhotoIndex(i => (i + 1) % foodPhotos.length);
+                    }}
+                    aria-label="다음 메뉴"
+                  />
+                  <div className="absolute top-3 left-1/2 -translate-x-1/2 flex gap-1.5 pointer-events-none">
+                    {foodPhotos.map((_, j) => (
+                      <div key={j} className="w-1.5 h-1.5 rounded-full"
+                        style={{ background: j === photoIndex ? 'white' : 'rgba(255,255,255,0.4)' }} />
+                    ))}
+                  </div>
+                </div>
+                <div className="pt-3 flex-shrink-0">
+                  <p className="font-bold text-[16px] text-white">메뉴 {photoIndex + 1}</p>
+                  <p className="text-[12px] text-white/50 mt-0.5">{restaurant.description}</p>
                 </div>
               </div>
-            </div>
+            )}
 
             {/* hint */}
             <div className="text-center pb-2 flex-shrink-0">
-              <p className="text-white/40 text-[11px]">← 이전 / 다음 메뉴 → · ✕ 눌러서 닫기</p>
+              <p className="text-white/40 text-[11px]">
+                {restaurant.menuItems && restaurant.menuItems.length > 0 ? `메뉴 ${restaurant.menuItems.length}개` : '← 이전 / 다음 메뉴 →'} · ✕ 눌러서 닫기
+              </p>
             </div>
           </motion.div>
         )}
@@ -415,17 +437,47 @@ function WinnerScreen({ selectedWinner, onReset }: { selectedWinner?: Restaurant
           {/* Description */}
           <p className="text-[13px] text-[#4A4A4A] leading-relaxed">{winner.description}</p>
 
-          {/* Menu Photos */}
-          <div>
-            <p className="text-[12px] font-bold text-[#9B9B9B] mb-2">메뉴 사진</p>
-            <div className="grid grid-cols-4 gap-2">
-              {foodPhotos.map((url, i) => (
-                <div key={i} className="aspect-square rounded-xl overflow-hidden bg-[#F5F5F5]">
-                  <img src={url} alt="" className="w-full h-full object-cover" />
-                </div>
-              ))}
+          {/* Menu — 실제 메뉴리스트 있으면 우선, 없으면 사진 그리드 폴백 */}
+          {winner.menuItems && winner.menuItems.length > 0 ? (
+            <div>
+              <p className="text-[12px] font-bold text-[#9B9B9B] mb-2">메뉴 ({winner.menuItems.length})</p>
+              <div className="max-h-[260px] overflow-y-auto rounded-2xl border border-[#EFEFEF]">
+                {winner.menuItems.map((item, i) => (
+                  <div key={i} className="flex items-center gap-3 px-3 py-2.5 border-b border-[#F0F0F0] last:border-b-0">
+                    {item.image ? (
+                      <img src={item.image} alt="" className="w-10 h-10 rounded-lg object-cover flex-shrink-0 bg-[#F5F5F5]" />
+                    ) : (
+                      <div className="w-10 h-10 rounded-lg bg-[#F5F5F5] flex-shrink-0" />
+                    )}
+                    <div className="min-w-0 flex-1">
+                      <p className="text-[13px] font-semibold text-[#2A2A2A] truncate">{item.name}</p>
+                      {item.dietary && item.dietary.length > 0 && (
+                        <div className="flex gap-1 mt-0.5 flex-wrap">
+                          {item.dietary.map((d) => (
+                            <span key={d} className="text-[9px] font-bold bg-[#E8F5E9] text-[#3CBA44] px-1.5 py-0.5 rounded-full">{d}</span>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                    <span className="text-[12.5px] font-bold text-[#4A4A4A] flex-shrink-0 tabular-nums">
+                      {item.price != null ? `$${item.price}` : ''}
+                    </span>
+                  </div>
+                ))}
+              </div>
             </div>
-          </div>
+          ) : (
+            <div>
+              <p className="text-[12px] font-bold text-[#9B9B9B] mb-2">메뉴 사진</p>
+              <div className="grid grid-cols-4 gap-2">
+                {foodPhotos.map((url, i) => (
+                  <div key={i} className="aspect-square rounded-xl overflow-hidden bg-[#F5F5F5]">
+                    <img src={url} alt="" className="w-full h-full object-cover" />
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
 
           {/* Action Buttons */}
           <div className="flex gap-2 pt-1">

@@ -27,6 +27,13 @@ function matchesDiet(category: string, restaurantDietary: string[], filterDietar
 
 export type TagType = '데이트 코스' | '맛집' | '카페' | '전시/문화' | '액티비티' | '혼자 여행' | '맛집 투어' | '가성비';
 
+export interface MenuItem {
+  name: string;
+  price: number | null;
+  image?: string;
+  dietary?: string[];
+}
+
 export interface Restaurant {
   id: string;
   name: string;
@@ -37,6 +44,8 @@ export interface Restaurant {
   distance: string;
   address: string;
   image: string;
+  photos?: string[];
+  menuItems?: MenuItem[];
   lat: number;
   lng: number;
   priceRange: 1 | 2 | 3 | 4;
