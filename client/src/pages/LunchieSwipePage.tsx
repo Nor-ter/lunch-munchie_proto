@@ -655,7 +655,7 @@ function FinalBattleResultScreen({
   onRejectBoth,
 }: {
   finalist1: any;
-  finalist2: any;
+  finalist2: any | null;
   onContinue: (winner?: any) => void;
   onRejectBoth?: () => void;
 }) {
@@ -670,6 +670,58 @@ function FinalBattleResultScreen({
       if (f) logEvent({ event_type: 'IMPRESSION', user_id: profile.id, slate_id: finalSlateId, slate_type: 'FINAL', restaurant_id: f.id, position: i, round: duelRound, session_id: currentSession?.id ?? null });
     });
   }, [finalSlateId]);
+
+  // 후보가 하나뿐(마지막 남은 좋아요) — 그룹의 "여기 어때요?" 1인 투표 화면과 동일한 확인 단계.
+  // 자동 확정하지 않고, 별로면 handleReset(새 추천)으로 보낸다.
+  if (!finalist2) {
+    return (
+      <motion.div
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        className="min-h-dvh flex flex-col bg-[#1A1A1A]"
+      >
+        <div className="px-5 pt-12 pb-4 text-center">
+          <p className="font-black text-white text-[22px]">여기 어때요? 🤔</p>
+          <p className="text-white/50 text-[13px] mt-1">좋아요 중 마지막 후보예요 · 별로면 새로 추천받아요</p>
+        </div>
+        <div className="flex-1 flex items-center justify-center px-5">
+          <div className="w-full max-w-[360px] rounded-3xl overflow-hidden relative" style={{ aspectRatio: '4/5' }}>
+            <FoodImage src={finalist1.image || getFoodPhotos(finalist1.category)[0]} name={finalist1.name} category={finalist1.category} className="w-full h-full object-cover" emojiClass="text-[88px]" />
+            <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/10 to-transparent" />
+            <div className="absolute bottom-5 left-5 right-5">
+              <span className="inline-block bg-[#FFD700] text-[#1A1A1A] text-[11px] font-black px-3 py-1 rounded-full mb-2">🏆 유일한 후보</span>
+              <p className="text-white font-black text-[22px] leading-tight">{finalist1.name}</p>
+              <div className="flex items-center gap-2 mt-1.5">
+                <Star size={13} fill="#FFD700" color="#FFD700" />
+                <span className="text-white/85 text-[13px]">{finalist1.rating}</span>
+                <span className="text-white/60 text-[12px]">{finalist1.distance}</span>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div className="px-5 py-5">
+          <button
+            onClick={() => {
+              logEvent({ event_type: 'SWIPE', action: 'CHOOSE', user_id: profile.id, slate_id: finalSlateId, slate_type: 'FINAL', restaurant_id: finalist1.id, round: duelRound, session_id: currentSession?.id ?? null, context: { decision_ms: Date.now() - mountAtRef.current } });
+              onContinue(finalist1);
+            }}
+            className="w-full py-4 rounded-2xl font-bold text-white text-[15px] active:scale-[0.98] shadow-xl transition-opacity"
+            style={{ background: '#F09D09' }}
+          >
+            이 곳으로 결정! 🎉
+          </button>
+          {onRejectBoth && (
+            <button
+              onClick={onRejectBoth}
+              className="w-full mt-2.5 py-3 rounded-2xl font-bold text-white/70 text-[13px] active:scale-[0.98] transition-all bg-white/10"
+            >
+              별로예요 · 새로 추천받기 🔄
+            </button>
+          )}
+        </div>
+      </motion.div>
+    );
+  }
 
   return (
     <motion.div
@@ -1270,7 +1322,7 @@ export default function QuickMatchPage() {
     const byEng = (list: any[]) => [...list].sort((a, b) => (currentSession?.recMeta?.[a.id]?.position ?? 999) - (currentSession?.recMeta?.[b.id]?.position ?? 999));
     const liked = byEng(swipeData.filter(s => s.action === 'like').map(s => s.restaurant));
     const pool = liked.length >= 1 ? liked : byEng(targetRestaurants.slice(0, total)); // 좋아요 없으면 엔진 top으로 완화
-    if (pool.length === 1) { setSelectedWinner(pool[0]); setPhase('results'); }          // 후보 1 → 바로 우승
+    if (pool.length === 1) setDuel({ a: pool[0], b: null });                            // 후보 1 → 확인 화면(자동 확정 X)
     else if (pool.length >= 2) setDuel({ a: pool[0], b: pool[1] });                       // 엔진 top-2 듀얼
     else { setSelectedWinner(null); setPhase('results'); }                                // 후보 없음(예외)
   }, [phase]);
@@ -1302,7 +1354,7 @@ export default function QuickMatchPage() {
     const byEng = (list: any[]) => [...list].sort((x, y) => (currentSession?.recMeta?.[x.id]?.position ?? 999) - (currentSession?.recMeta?.[y.id]?.position ?? 999));
     const remaining = byEng(swipeData.filter(s => s.action === 'like').map(s => s.restaurant).filter((r: any) => !rejectedRef.current.has(r.id)));
     if (remaining.length >= 2) setDuel({ a: remaining[0], b: remaining[1] });                     // 다른 좋아요 쌍
-    else if (remaining.length === 1) { setSelectedWinner(remaining[0]); setPhase('results'); }    // 하나만 남음 → 우승
+    else if (remaining.length === 1) setDuel({ a: remaining[0], b: null });                       // 하나만 남음 → 확인 화면(자동 확정 X)
     else handleReset();                                                                            // 다 거절 → 새 추천
   };
 
