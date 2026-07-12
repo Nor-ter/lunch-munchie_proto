@@ -1,7 +1,8 @@
-import { motion } from "framer-motion";
+import { AnimatePresence, motion } from "framer-motion";
 import { useLocation } from "wouter";
 import { useState, useEffect } from "react";
-import { Heart, X, ArrowRight, MapPin, Clock, Star } from "lucide-react";
+import { createPortal } from "react-dom";
+import { Heart, X, ArrowRight, MapPin, Clock, Star, Lightbulb } from "lucide-react";
 import { useApp, Course, MOCK_RESTAURANTS, isFeedCommentHidden } from "@/contexts/AppContext";
 import { getCourseSequenceColor } from "@/constants/courseTheme";
 import { MUNCHIE_SKINS } from "@/constants/skins";
@@ -14,81 +15,177 @@ import { useRotatingFeedback } from "@/hooks/useRotatingFeedback";
 // 회고 마이크로설문: 지난 결정 식당의 만족(SURVEY=만족 정답). WINNER 시 localStorage에 대기 저장됨.
 function RetroSurveyCard() {
   const { profile } = useApp();
-  const [retro, setRetro] = useState<{ id: string; name: string; session?: string | null; at: number } | null>(null);
-  useEffect(() => {
-    try {
-      const raw = localStorage.getItem("lunchie_retro");
-      if (raw) setRetro(JSON.parse(raw));
-    } catch { /* noop */ }
-  }, []);
-  if (!retro) return null;
-  const answer = (action: "POS" | "NEU" | "NEG" | null) => {
-    if (action) {
-      logEvent({ event_type: "SURVEY", action, user_id: profile.id, restaurant_id: retro.id, session_id: retro.session ?? null });
-      toast.success("피드백 고마워요! 🙌");
-    }
-    try { localStorage.removeItem("lunchie_retro"); } catch { /* noop */ }
-    setRetro(null);
-  };
-  return (
-    <div className="mx-6 mt-3 rounded-2xl bg-white p-4 shadow-sm border border-[#F0E8E0]">
-      <div className="flex items-start justify-between">
-        <p className="text-[13px] text-[#6E6E6E] leading-snug">최근 점심, <b className="text-[#1A1A1A]">{retro.name}</b> 어땠어요?</p>
-        <button onClick={() => answer(null)} className="text-[#B0B0B0] text-[13px] ml-2 leading-none">✕</button>
-      </div>
-      <div className="mt-3 flex gap-2">
-        <button onClick={() => answer("POS")} className="flex-1 py-2.5 rounded-xl bg-[#EAF7EC] text-[#2E9E42] font-bold text-[14px] active:scale-95 transition-transform">👍 좋았어요</button>
-        <button onClick={() => answer("NEU")} className="flex-1 py-2.5 rounded-xl bg-[#F1EFE8] text-[#6E6E6E] font-bold text-[14px] active:scale-95 transition-transform">😐 그냥</button>
-        <button onClick={() => answer("NEG")} className="flex-1 py-2.5 rounded-xl bg-[#FBECEC] text-[#D83A3D] font-bold text-[14px] active:scale-95 transition-transform">👎 별로</button>
-      </div>
-    </div>
-  );
-}
-
-// 하루 여정: 오늘 결정된 스톱 타임라인 + (사슬 열림 시) 다음-스톱 제안.
-function TodayJourneyCard() {
-  const { profile } = useApp();
   const [, navigate] = useLocation();
-  const [data, setData] = useState<{
+  const [retro, setRetro] = useState<{ id: string; name: string; session?: string | null; at: number } | null>(null);
+  const [journey, setJourney] = useState<{
     stops: { restaurant_id: string; category: string | null; satisfaction: string | null }[];
     nextSuggestion: { intent: string; restaurant: { id: string; category?: string }; reason: string } | null;
   } | null>(null);
+  const [history, setHistory] = useState<Array<{
+    restaurant_id: string;
+    category: string | null;
+    satisfaction: string | null;
+    at: number;
+  }>>([]);
+  const [open, setOpen] = useState(false);
+  const [lit, setLit] = useState(false);
+  const [dismissed, setDismissed] = useState(false);
   useEffect(() => {
-    let on = true;
+    try {
+      const raw = localStorage.getItem("lunchie_retro");
+      if (raw) {
+        setRetro(JSON.parse(raw));
+        setLit(true);
+      }
+    } catch { /* noop */ }
+  }, []);
+  useEffect(() => {
+    let active = true;
     fetch(`/api/journey/today?userId=${encodeURIComponent(profile.id)}`)
-      .then((r) => r.json())
-      .then((d) => { if (on) setData(d); })
-      .catch(() => { /* 폴백: 카드 숨김 */ });
-    return () => { on = false; };
+      .then(response => response.json())
+      .then(data => {
+        if (!active) return;
+        setJourney(data);
+        if (data?.stops?.length > 0 && !dismissed) setLit(true);
+      })
+      .catch(() => { /* 여정이 없으면 리뷰 알림만 유지 */ });
+    return () => { active = false; };
+  }, [dismissed, profile.id]);
+
+  useEffect(() => {
+    let active = true;
+    fetch(`/api/journey/history?userId=${encodeURIComponent(profile.id)}&limit=5`)
+      .then(response => response.json())
+      .then(data => { if (active) setHistory(Array.isArray(data?.stops) ? data.stops.slice(0, 5) : []); })
+      .catch(() => { /* 히스토리 조회 실패 시 오늘의 여정으로 폴백 */ });
+    return () => { active = false; };
   }, [profile.id]);
-  if (!data || data.stops.length === 0) return null; // 오늘 스톱 0개 → 숨김
 
-  const nameOf = (id: string) => MOCK_RESTAURANTS.find((r) => r.id === id)?.name ?? id;
-  const sat = (s: string | null) => (s === "POS" ? "👍" : s === "NEG" ? "👎" : s === "NEU" ? "😐" : "");
+  const hasJourney = !!journey?.stops?.length;
+  const historyStops = history.length > 0 ? history : (journey?.stops ?? []);
+
+  const dismiss = () => {
+    try { localStorage.removeItem("lunchie_retro"); } catch { /* noop */ }
+    setRetro(null);
+    setOpen(false);
+    setLit(false);
+    setDismissed(true);
+  };
+
+  const answer = (action: "POS" | "NEU" | "NEG" | null) => {
+    if (action && retro) {
+      logEvent({ event_type: "SURVEY", action, user_id: profile.id, restaurant_id: retro.id, session_id: retro.session ?? null });
+      toast.success("피드백 고마워요! 🙌");
+    }
+    dismiss();
+  };
+  const nameOf = (id: string) => MOCK_RESTAURANTS.find(restaurant => restaurant.id === id)?.name ?? id;
+  const satisfaction = (value: string | null) => value === "POS" ? "👍" : value === "NEG" ? "👎" : value === "NEU" ? "😐" : "";
+  const historyDate = (at?: number) => {
+    if (!at) return "오늘";
+    const date = new Date(at);
+    return `${date.getMonth() + 1}.${date.getDate()}`;
+  };
   const intentLabel: Record<string, string> = { meal: "밥", cafe: "커피", dessert: "디저트" };
+  return createPortal(
+    <>
+      <motion.button
+        type="button"
+        onClick={() => open ? dismiss() : setOpen(true)}
+        aria-label={open ? "여정 알림 닫기" : "여정 알림 열기"}
+        aria-expanded={open}
+        className="fixed right-[max(20px,calc((100vw-440px)/2+20px))] top-14 z-[60] flex h-12 w-12 items-center justify-center rounded-full border bg-white shadow-lg"
+        style={{ borderColor: lit ? '#FFD75A' : '#E5DDD6', color: lit ? '#F4B400' : '#B8AFA6' }}
+        animate={lit ? { scale: [1, 1.08, 1], boxShadow: ['0 4px 14px rgba(244,180,0,0.2)', '0 4px 24px rgba(244,180,0,0.55)', '0 4px 14px rgba(244,180,0,0.2)'] } : { scale: 1 }}
+        transition={{ duration: 1.6, repeat: lit ? Infinity : 0 }}
+      >
+        <Lightbulb size={23} fill={lit ? '#FFD75A' : 'none'} />
+        {lit && <span className="absolute right-0.5 top-0.5 h-2.5 w-2.5 rounded-full bg-[#EB5053] ring-2 ring-white" />}
+      </motion.button>
 
-  return (
-    <div className="mx-4 mb-4 rounded-2xl bg-white p-4 shadow-sm">
-      <p className="mb-3 text-[13px] font-bold text-[#1A1A1A]">오늘의 여정</p>
-      <div className="space-y-2">
-        {data.stops.map((s, i) => (
-          <div key={i} className="flex items-center gap-2 text-[13px]">
-            <span className="text-[#EB5053]">●</span>
-            <span className="font-semibold text-[#1A1A1A]">{nameOf(s.restaurant_id)}</span>
-            <span className="text-[#9B9B9B]">· {s.category ?? ""}</span>
-            <span>{sat(s.satisfaction)}</span>
-          </div>
-        ))}
-      </div>
-      {data.nextSuggestion && (
-        <button
-          onClick={() => navigate(`/lunchie/settings?intent=${data.nextSuggestion!.intent}`)}
-          className="mt-3 w-full rounded-xl border border-dashed border-[#EB5053] px-3 py-2.5 text-left text-[13px] font-bold text-[#EB5053] active:scale-[0.99]"
-        >
-          다음은 {intentLabel[data.nextSuggestion.intent] ?? data.nextSuggestion.intent}? →
-        </button>
-      )}
-    </div>
+      <AnimatePresence>
+        {open && (
+          <motion.div
+            className="fixed inset-0 z-50 flex items-center justify-center bg-black/65 px-5"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.1, ease: 'easeOut' }}
+            onClick={() => answer(null)}
+          >
+            <motion.div
+              role="dialog"
+              aria-modal="true"
+              aria-label="최근 점심 리뷰"
+              initial={{ opacity: 0, scale: 0.98, y: 4 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.99, y: 2 }}
+              transition={{ duration: 0.12, ease: 'easeOut' }}
+              onClick={event => event.stopPropagation()}
+              className="w-full max-w-[390px] rounded-[26px] bg-white p-5 shadow-2xl"
+            >
+              <div className="flex items-start gap-3">
+                <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-[#FFF7D6] text-[#F4B400]">
+                  <Lightbulb size={23} fill="#FFD75A" />
+                </div>
+                <div className="min-w-0 flex-1">
+                  <p className="font-bold text-[16px] text-[#1A1A1A]">Lunchie 알림</p>
+                  <p className="mt-1 text-[12px] leading-snug text-[#6E6E6E]">리뷰와 최근 여정 5개를 확인해보세요</p>
+                </div>
+                <button onClick={dismiss} aria-label="알림 닫기" className="flex h-8 w-8 items-center justify-center rounded-full bg-[#F5F2EF] text-[#8A817A]">
+                  <X size={16} />
+                </button>
+              </div>
+
+              {retro && (
+                <div className="mt-5 rounded-2xl border border-[#F0E8E0] p-4">
+                  <p className="text-[13px] leading-snug text-[#6E6E6E]">최근 점심, <b className="text-[#1A1A1A]">{retro.name}</b> 어땠어요?</p>
+                  <div className="mt-3 flex gap-2">
+                    <button onClick={() => answer("POS")} className="flex-1 rounded-xl bg-[#EAF7EC] py-3 text-[12px] font-bold text-[#2E9E42] active:scale-95">👍 좋았어요</button>
+                    <button onClick={() => answer("NEU")} className="flex-1 rounded-xl bg-[#F1EFE8] py-3 text-[12px] font-bold text-[#6E6E6E] active:scale-95">😐 그냥</button>
+                    <button onClick={() => answer("NEG")} className="flex-1 rounded-xl bg-[#FBECEC] py-3 text-[12px] font-bold text-[#D83A3D] active:scale-95">👎 별로</button>
+                  </div>
+                </div>
+              )}
+
+              <div className="mt-4 rounded-2xl border border-[#F0E8E0] p-4">
+                  <div className="mb-3 flex items-center justify-between">
+                    <p className="text-[13px] font-bold text-[#1A1A1A]">최근 여정</p>
+                    <span className="text-[10px] text-[#9B9B9B]">최대 5개</span>
+                  </div>
+                  <div className="space-y-2">
+                    {historyStops.map((stop, index) => (
+                      <div key={`${stop.restaurant_id}-${index}`} className="flex items-center gap-2 text-[13px]">
+                        <span className="text-[#EB5053]">●</span>
+                        <span className="min-w-0 flex-1 truncate font-semibold text-[#1A1A1A]">{nameOf(stop.restaurant_id)}</span>
+                        <span className="shrink-0 text-[#9B9B9B]">· {stop.category ?? ""}</span>
+                        <span>{satisfaction(stop.satisfaction)}</span>
+                        <span className="shrink-0 text-[10px] text-[#B0A8A1]">{historyDate('at' in stop && typeof stop.at === 'number' ? stop.at : undefined)}</span>
+                      </div>
+                    ))}
+                    {historyStops.length === 0 && (
+                      <p className="py-3 text-center text-[12px] text-[#9B9B9B]">아직 저장된 여정이 없어요</p>
+                    )}
+                  </div>
+                  {journey?.nextSuggestion && (
+                    <button
+                      onClick={() => {
+                        const intent = journey.nextSuggestion!.intent;
+                        dismiss();
+                        navigate(`/lunchie/settings?intent=${intent}`);
+                      }}
+                      className="mt-4 w-full rounded-xl border border-dashed border-[#EB5053] px-3 py-3 text-left text-[13px] font-bold text-[#EB5053] active:scale-[0.99]"
+                    >
+                      다음은 {intentLabel[journey.nextSuggestion.intent] ?? journey.nextSuggestion.intent}? →
+                    </button>
+                  )}
+                </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </>,
+    document.body,
   );
 }
 
@@ -322,7 +419,6 @@ export default function HomePage() {
 
       {/* 회고 설문 (지난 결정 만족도 — 만족 정답 수집) */}
       <RetroSurveyCard />
-      <TodayJourneyCard />
 
       {/* Lunchie Mode */}
       <motion.div

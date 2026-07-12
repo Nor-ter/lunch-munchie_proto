@@ -1,53 +1,40 @@
-import { useRef, useState, useCallback } from 'react';
+import { forwardRef, useCallback, useEffect, useImperativeHandle, useRef, useState } from 'react';
 import { useParams, useLocation, useSearch } from 'wouter';
 import { motion } from 'framer-motion';
 import {
   ChevronLeft,
   Instagram,
-  MessageCircle,
   Download,
   Share2,
-  Send,
-  AtSign,
-  Music2,
+  Plus,
+  RotateCw,
+  X,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { getCourseById } from '@/data/mockCourse';
-import { useApp } from '@/contexts/AppContext';
 import { useCourseShare } from '@/hooks/useCourseShare';
-import FoodCourseStoryTemplate from '@/components/share/templates/FoodCourseStoryTemplate';
-import StravaDarkTemplate from '@/components/share/templates/StravaDarkTemplate';
-import StravaMinimalTemplate from '@/components/share/templates/StravaMinimalTemplate';
-import FoodCourseDarkTemplate from '@/components/share/templates/FoodCourseDarkTemplate';
-import CdCaseTemplate from '@/components/share/templates/scrapbook/CdCaseTemplate';
-import LunchTrayTemplate from '@/components/share/templates/scrapbook/LunchTrayTemplate';
-import TicketTemplate from '@/components/share/templates/scrapbook/TicketTemplate';
-import ReceiptTemplate from '@/components/share/templates/scrapbook/ReceiptTemplate';
-import { paletteFromSkin } from '@/components/share/templates/scrapbook/scrapTheme';
+import type { Course } from '@/types/course';
+import { fileToResizedDataUrl } from '@/lib/imageUtils';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
-type Platform =
-  | 'ig-story'
-  | 'ig-feed'
-  | 'kakao'
-  | 'threads'
-  | 'tiktok'
-  | 'message'
-  | 'save';
+type Platform = 'ig-story' | 'app-link' | 'save';
 
-const TEMPLATES = [
-  // 스크랩북 스킨 시리즈 (Sample Scrapbook Design Templates)
-  { name: '포토카드 케이스', desc: '스크랩북 스킨 · CD 케이스', aspect: '9:16' },
-  { name: '먼치트레이', desc: '스크랩북 스킨 · What I ate today', aspect: '9:16' },
-  { name: '캡처링 모먼츠', desc: '스크랩북 스킨 · 빈티지 티켓', aspect: '9:16' },
-  { name: '먼치 영수증', desc: '스크랩북 스킨 · 레트로 영수증', aspect: '9:16' },
-  // 기존 템플릿
-  { name: '푸드 코스', desc: '지도 + 일정', aspect: '9:16' },
-  { name: '스트라바', desc: '오렌지 루트 + 통계', aspect: '9:16' },
-  { name: '미니멀', desc: '루트만', aspect: '9:16' },
-  { name: '다크 스토리', desc: '풀스크린 지도', aspect: '9:16' },
+const templateNames = [
+  '네컷 베이직', '네컷 컬러', '네컷 무드',
+  '로드맵 체리', '로드맵 포토', '로드맵 피크닉', '로드맵 빈티지', '로드맵 컬러',
+  '런치 트레이 레드', '런치 트레이 블루', '런치 트레이 피크닉',
+  'CD 핑크', 'CD 컬러', 'CD 스크랩',
+  '영수증 모노', '영수증 빈티지', '영수증 컬러',
+  '티켓 클래식', '티켓 로맨틱',
 ] as const;
+
+const TEMPLATES = templateNames.map((name, index) => ({
+  name,
+  desc: 'ZIP 디자인 · 사진 위치 편집 가능',
+  aspect: '9:16',
+  background: `/templates/munchie-share/template-${String(index + 1).padStart(2, '0')}.jpg`,
+}));
 
 const PLATFORMS: {
   id: Platform;
@@ -55,31 +42,19 @@ const PLATFORMS: {
   Icon: React.FC<{ size?: number; className?: string }>;
 }[] = [
   { id: 'ig-story', label: 'IG 스토리', Icon: Instagram },
-  { id: 'ig-feed', label: 'IG 피드', Icon: Share2 },
-  { id: 'kakao', label: '카카오톡', Icon: Send },
-  { id: 'threads', label: '스레드', Icon: AtSign },
-  { id: 'tiktok', label: '틱톡', Icon: Music2 },
-  { id: 'message', label: '메시지', Icon: MessageCircle },
-  { id: 'save', label: '갤러리', Icon: Download },
+  { id: 'app-link', label: '앱 링크', Icon: Share2 },
+  { id: 'save', label: '이미지 저장', Icon: Download },
 ];
 
 const PLATFORM_LABELS: Record<Platform, string> = {
   'ig-story': '스토리에 공유',
-  'ig-feed': '피드에 공유',
-  kakao: '카카오톡으로 보내기',
-  threads: '스레드에 공유',
-  tiktok: '틱톡에 공유',
-  message: '메시지로 보내기',
+  'app-link': '앱 링크 공유하기',
   save: '이미지 저장',
 };
 
 const PLATFORM_TOAST: Record<Platform, string> = {
   'ig-story': '이미지가 저장되었습니다. Instagram 스토리에 업로드해주세요!',
-  'ig-feed': '이미지가 저장되었습니다. Instagram 피드에 업로드해주세요!',
-  kakao: '이미지가 저장되었습니다. 카카오톡에서 사진을 보내주세요!',
-  threads: '이미지가 저장되었습니다. Threads에 업로드해주세요!',
-  tiktok: '이미지가 저장되었습니다. TikTok에 업로드해주세요!',
-  message: '이미지가 저장되었습니다. 메시지 앱에서 공유해주세요!',
+  'app-link': '코스 앱 링크가 복사되었습니다!',
   save: '갤러리에 저장되었습니다!',
 };
 
@@ -113,6 +88,255 @@ function TemplateSlide({
   );
 }
 
+const DEFAULT_PHOTO_POSITIONS = [
+  { left: 34, top: 112, rotate: -5 },
+  { left: 166, top: 118, rotate: 5 },
+  { left: 44, top: 250, rotate: 3 },
+  { left: 164, top: 258, rotate: -4 },
+  { left: 100, top: 370, rotate: 2 },
+];
+
+function captureSafeImageUrl(source: string) {
+  if (source.startsWith('data:') || source.startsWith('/') || source.startsWith('blob:')) return source;
+  return `/api/image-proxy?url=${encodeURIComponent(source)}`;
+}
+
+function EditablePhoto({
+  src,
+  index,
+  canvasRef,
+  onRemove,
+  onAdd,
+}: {
+  src: string;
+  index: number;
+  canvasRef: React.RefObject<HTMLDivElement | null>;
+  onRemove: () => void;
+  onAdd: (file: File) => void;
+}) {
+  const position = DEFAULT_PHOTO_POSITIONS[index];
+  const [scale, setScale] = useState(1);
+  const [rotation, setRotation] = useState(position.rotate);
+  const photoRef = useRef<HTMLDivElement>(null);
+  const pointers = useRef(new Map<number, { x: number; y: number }>());
+  const previousDistance = useRef<number | null>(null);
+  const rotationGesture = useRef<{ pointerId: number; startAngle: number; startRotation: number } | null>(null);
+  const [controlsVisible, setControlsVisible] = useState(false);
+
+  useEffect(() => {
+    const hideControlsOutside = (event: PointerEvent) => {
+      if (!photoRef.current?.contains(event.target as Node)) setControlsVisible(false);
+    };
+    document.addEventListener('pointerdown', hideControlsOutside, true);
+    return () => document.removeEventListener('pointerdown', hideControlsOutside, true);
+  }, []);
+
+  const distance = () => {
+    const points = Array.from(pointers.current.values());
+    if (points.length < 2) return null;
+    return Math.hypot(points[0].x - points[1].x, points[0].y - points[1].y);
+  };
+
+  const onPointerDown = (event: React.PointerEvent<HTMLDivElement>) => {
+    setControlsVisible(true);
+    pointers.current.set(event.pointerId, { x: event.clientX, y: event.clientY });
+    event.currentTarget.setPointerCapture(event.pointerId);
+    previousDistance.current = distance();
+  };
+
+  const onPointerMove = (event: React.PointerEvent<HTMLDivElement>) => {
+    if (!pointers.current.has(event.pointerId)) return;
+    pointers.current.set(event.pointerId, { x: event.clientX, y: event.clientY });
+    const nextDistance = distance();
+    if (nextDistance && previousDistance.current) {
+      const ratio = nextDistance / previousDistance.current;
+      setScale(current => Math.max(0.55, Math.min(2.5, current * ratio)));
+      previousDistance.current = nextDistance;
+    }
+  };
+
+  const onPointerUp = (event: React.PointerEvent<HTMLDivElement>) => {
+    pointers.current.delete(event.pointerId);
+    previousDistance.current = distance();
+  };
+
+  const startRotation = (event: React.PointerEvent<HTMLButtonElement>) => {
+    event.preventDefault();
+    event.stopPropagation();
+    const rect = photoRef.current?.getBoundingClientRect();
+    if (!rect) return;
+    const centerX = rect.left + rect.width / 2;
+    const centerY = rect.top + rect.height / 2;
+    rotationGesture.current = {
+      pointerId: event.pointerId,
+      startAngle: Math.atan2(event.clientY - centerY, event.clientX - centerX) * 180 / Math.PI,
+      startRotation: rotation,
+    };
+    event.currentTarget.setPointerCapture(event.pointerId);
+  };
+
+  const moveRotation = (event: React.PointerEvent<HTMLButtonElement>) => {
+    const gesture = rotationGesture.current;
+    const rect = photoRef.current?.getBoundingClientRect();
+    if (!gesture || gesture.pointerId !== event.pointerId || !rect) return;
+    event.preventDefault();
+    event.stopPropagation();
+    const centerX = rect.left + rect.width / 2;
+    const centerY = rect.top + rect.height / 2;
+    const angle = Math.atan2(event.clientY - centerY, event.clientX - centerX) * 180 / Math.PI;
+    setRotation(gesture.startRotation + angle - gesture.startAngle);
+  };
+
+  const endRotation = (event: React.PointerEvent<HTMLButtonElement>) => {
+    if (rotationGesture.current?.pointerId === event.pointerId) rotationGesture.current = null;
+    event.stopPropagation();
+  };
+
+  return (
+    <motion.div
+      ref={photoRef}
+      drag
+      dragConstraints={canvasRef}
+      dragMomentum={false}
+      dragElastic={0}
+      whileDrag={{ zIndex: 30, boxShadow: '0 10px 24px rgba(0,0,0,0.28)' }}
+      onPointerDown={onPointerDown}
+      onPointerMove={onPointerMove}
+      onPointerUp={onPointerUp}
+      onPointerCancel={onPointerUp}
+      onPointerLeave={event => {
+        if (event.pointerType === 'mouse' && !rotationGesture.current) setControlsVisible(false);
+      }}
+      onWheel={event => {
+        event.preventDefault();
+        setScale(current => Math.max(0.55, Math.min(2.5, current + (event.deltaY < 0 ? 0.1 : -0.1))));
+      }}
+      className="group absolute h-[92px] w-[78px] cursor-grab active:cursor-grabbing"
+      style={{ left: position.left, top: position.top, rotate: rotation, touchAction: 'none' }}
+    >
+      <div
+        className="h-full w-full overflow-hidden rounded-[3px] border-[5px] border-white bg-white shadow-lg"
+        style={{ transform: `scale(${scale})`, transformOrigin: 'center' }}
+      >
+        <img src={captureSafeImageUrl(src)} alt="" className="h-full w-full object-cover" draggable={false} />
+      </div>
+      <div data-share-editor-control className={`absolute -left-2.5 -right-2.5 -top-2.5 z-40 flex items-center justify-between transition-opacity group-hover:opacity-100 ${controlsVisible ? 'opacity-100' : 'opacity-0'}`}>
+        <label
+          className="flex h-7 w-7 cursor-pointer items-center justify-center rounded-full border-2 border-white bg-[#35B85A] text-white shadow-md"
+          aria-label="사진 추가"
+          onPointerDown={event => event.stopPropagation()}
+          onClick={event => event.stopPropagation()}
+        >
+          <Plus size={16} strokeWidth={3} />
+          <input
+            type="file"
+            accept="image/*"
+            className="hidden"
+            onChange={event => {
+              const file = event.target.files?.[0];
+              event.target.value = '';
+              if (file) onAdd(file);
+            }}
+          />
+        </label>
+        <button
+          type="button"
+          onPointerDown={event => event.stopPropagation()}
+          onClick={event => { event.stopPropagation(); onRemove(); }}
+          className="flex h-7 w-7 items-center justify-center rounded-full border-2 border-white bg-[#EB5053] text-white shadow-md"
+          aria-label="사진 삭제"
+        >
+          <X size={15} strokeWidth={3} />
+        </button>
+      </div>
+      <button
+        type="button"
+        data-share-editor-control
+        onPointerDown={startRotation}
+        onPointerMove={moveRotation}
+        onPointerUp={endRotation}
+        onPointerCancel={endRotation}
+        className={`absolute -bottom-3 -right-3 z-40 flex h-8 w-8 touch-none items-center justify-center rounded-full border-2 border-white bg-[#4778E8] text-white shadow-md transition-opacity group-hover:opacity-100 ${controlsVisible ? 'opacity-100' : 'opacity-0'}`}
+        aria-label="사진 회전"
+      >
+        <RotateCw size={16} strokeWidth={2.7} />
+      </button>
+    </motion.div>
+  );
+}
+
+/** ZIP 디자인 배경 위에서 코스 사진을 자유롭게 드래그하는 9:16 공유 캔버스. */
+const EditableZipTemplate = forwardRef<HTMLDivElement, {
+  course: Course;
+  background: string;
+  editable: boolean;
+}>(({ course, background, editable }, forwardedRef) => {
+  const canvasRef = useRef<HTMLDivElement>(null);
+  useImperativeHandle(forwardedRef, () => canvasRef.current as HTMLDivElement);
+  const [photos, setPhotos] = useState(() => course.places
+    .map(place => place.imageUrl)
+    .filter((url): url is string => !!url)
+    .slice(0, 5)
+    .map((src, index) => ({ id: `initial-${index}`, src })));
+
+  const addPhoto = async (file: File) => {
+    if (photos.length >= 5) {
+      toast.info('사진은 최대 5개까지 추가할 수 있어요');
+      return;
+    }
+    try {
+      const src = await fileToResizedDataUrl(file, 900, 0.8);
+      setPhotos(previous => [...previous, { id: `upload-${Date.now()}`, src }]);
+      toast.success('사진을 추가했어요');
+    } catch {
+      toast.error('사진을 불러오지 못했어요');
+    }
+  };
+
+  return (
+    <div
+      ref={canvasRef}
+      className="relative h-[516px] w-[290px] overflow-hidden bg-[#F4EEE9]"
+      style={{ touchAction: 'none' }}
+    >
+      <img src={background} alt="" className="absolute inset-0 h-full w-full object-cover" draggable={false} />
+      {editable && photos.map((photo, index) => (
+        <EditablePhoto
+          key={photo.id}
+          src={photo.src}
+          index={index}
+          canvasRef={canvasRef}
+          onRemove={() => setPhotos(previous => previous.filter(item => item.id !== photo.id))}
+          onAdd={addPhoto}
+        />
+      ))}
+      {editable && photos.length === 0 && (
+        <label data-share-editor-control className="absolute left-1/2 top-1/2 z-30 flex -translate-x-1/2 -translate-y-1/2 cursor-pointer flex-col items-center gap-2 rounded-2xl border-2 border-dashed border-[#35B85A] bg-white/90 px-6 py-5 text-[#239845] shadow-lg">
+          <span className="flex h-10 w-10 items-center justify-center rounded-full bg-[#35B85A] text-white">
+            <Plus size={22} strokeWidth={3} />
+          </span>
+          <span className="text-[12px] font-bold">사진 추가</span>
+          <input
+            type="file"
+            accept="image/*"
+            className="hidden"
+            onChange={event => {
+              const file = event.target.files?.[0];
+              event.target.value = '';
+              if (file) addPhoto(file);
+            }}
+          />
+        </label>
+      )}
+      <div className="pointer-events-none absolute bottom-4 left-1/2 max-w-[240px] -translate-x-1/2 rounded-full bg-white/80 px-3 py-1 text-center text-[10px] font-bold text-[#3B2A22] backdrop-blur-sm">
+        {course.title}
+      </div>
+    </div>
+  );
+});
+
+EditableZipTemplate.displayName = 'EditableZipTemplate';
+
 // ── CourseSharePage ───────────────────────────────────────────────────────────
 
 function useShareNavigation() {
@@ -144,10 +368,22 @@ export default function CourseSharePage() {
   };
 
   const course = getCourseById(id);
-  const { saveImageToDevice } = useCourseShare();
-  // 코스에 입힌 먼치 스킨이 있으면 스크랩북 템플릿 색감도 따라간다
-  const { courseSkins } = useApp();
-  const scrapPalette = id ? paletteFromSkin(courseSkins[id]) : undefined;
+  const [customPhotos] = useState<Array<string | null>>(() => {
+    if (!id) return [];
+    try {
+      const saved = localStorage.getItem(`lm_course_share_photos_${id}`);
+      return saved ? JSON.parse(saved) : [];
+    } catch {
+      return [];
+    }
+  });
+  const shareCourse: Course = customPhotos.length > 0
+    ? {
+        ...course,
+        places: course.places.map((place, index) => customPhotos[index] ? { ...place, imageUrl: customPhotos[index]! } : place),
+      }
+    : course;
+  const { saveImageToDevice, copyLink } = useCourseShare();
 
   const [selectedTemplate, setSelectedTemplate] = useState(0);
   const [selectedPlatform, setSelectedPlatform] = useState<Platform>('ig-story');
@@ -170,6 +406,21 @@ export default function CourseSharePage() {
   }, []);
 
   const handleShare = async () => {
+    if (selectedPlatform === 'app-link') {
+      try {
+        const url = `${window.location.origin}/course/${course.id}`;
+        if (navigator.share) {
+          await navigator.share({ title: course.title, text: 'Lunchie Munchie 코스를 확인해보세요!', url });
+          toast.success('앱 링크를 공유했어요!');
+        } else {
+          await copyLink(course.id);
+          toast.success(PLATFORM_TOAST['app-link']);
+        }
+      } catch {
+        // 사용자가 네이티브 공유 시트를 닫은 경우에도 화면은 그대로 유지한다.
+      }
+      return;
+    }
     const el = cardRefs.current[selectedTemplate];
     if (!el) return;
     setIsCapturing(true);
@@ -210,7 +461,7 @@ export default function CourseSharePage() {
           <ChevronLeft size={22} />
         </button>
         <div className="flex-1 text-center">
-          <p className="font-semibold text-[15px]">코스맵 공유하기</p>
+          <p className="font-semibold text-[15px]">Munchie 템플릿 에디터 / 공유하기</p>
           <p className="text-[11px] text-gray-400 mt-0.5">{course.title}</p>
         </div>
         <div className="w-9" />
@@ -229,30 +480,16 @@ export default function CourseSharePage() {
             scrollbarWidth: 'none',
           }}
         >
-          <TemplateSlide selected={selectedTemplate === 0}>
-            <CdCaseTemplate ref={setCardRef(0)} course={course} palette={scrapPalette} />
-          </TemplateSlide>
-          <TemplateSlide selected={selectedTemplate === 1}>
-            <LunchTrayTemplate ref={setCardRef(1)} course={course} palette={scrapPalette} />
-          </TemplateSlide>
-          <TemplateSlide selected={selectedTemplate === 2}>
-            <TicketTemplate ref={setCardRef(2)} course={course} palette={scrapPalette} />
-          </TemplateSlide>
-          <TemplateSlide selected={selectedTemplate === 3}>
-            <ReceiptTemplate ref={setCardRef(3)} course={course} palette={scrapPalette} />
-          </TemplateSlide>
-          <TemplateSlide selected={selectedTemplate === 4}>
-            <FoodCourseStoryTemplate ref={setCardRef(4)} course={course} />
-          </TemplateSlide>
-          <TemplateSlide selected={selectedTemplate === 5}>
-            <StravaDarkTemplate ref={setCardRef(5)} course={course} />
-          </TemplateSlide>
-          <TemplateSlide selected={selectedTemplate === 6}>
-            <StravaMinimalTemplate ref={setCardRef(6)} course={course} />
-          </TemplateSlide>
-          <TemplateSlide selected={selectedTemplate === 7}>
-            <FoodCourseDarkTemplate ref={setCardRef(7)} course={course} />
-          </TemplateSlide>
+          {TEMPLATES.map((template, index) => (
+            <TemplateSlide key={template.background} selected={selectedTemplate === index}>
+              <EditableZipTemplate
+                ref={setCardRef(index)}
+                course={shareCourse}
+                background={template.background}
+                editable={selectedTemplate === index}
+              />
+            </TemplateSlide>
+          ))}
         </div>
       </div>
 
@@ -264,6 +501,7 @@ export default function CourseSharePage() {
         <p className="text-xs text-gray-400 mt-1">
           {TEMPLATES[selectedTemplate].aspect} · {TEMPLATES[selectedTemplate].desc}
         </p>
+        <p className="mt-2 text-[11px] font-medium text-[#EB5053]">사진을 드래그·핀치하고 파란 아이콘으로 회전하세요</p>
       </div>
 
       {/* Dots */}

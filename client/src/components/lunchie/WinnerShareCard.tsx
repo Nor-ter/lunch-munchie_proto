@@ -1,5 +1,4 @@
 import { forwardRef } from 'react';
-import { LunchieLogo } from '@/components/brand/LunchieLogo';
 import { getFoodPhotos } from '@/lib/foodPhotos';
 import type { Restaurant } from '@/contexts/AppContext';
 
@@ -23,7 +22,18 @@ const WinnerShareCard = forwardRef<HTMLDivElement, WinnerShareCardProps>(({ rest
         fontFamily: "'Baloo 2', 'Pretendard Variable', 'Pretendard', cursive",
       }}
     >
-      <LunchieLogo showWordmark size={28} wordmarkClassName="text-[15px] font-black" />
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
+        <img
+          src="/assets/lunchie-brand-mark.png"
+          alt=""
+          style={{ width: 30, height: 30, objectFit: 'contain', display: 'block', flexShrink: 0 }}
+        />
+        <img
+          src="/assets/lunchie-wordmark.png"
+          alt="Lunchie Munchie"
+          style={{ width: 112, height: 'auto', objectFit: 'contain', display: 'block' }}
+        />
+      </div>
       <p style={{ fontSize: 12, color: '#1A1A1A', fontWeight: 700, margin: '8px 0 12px' }}>
         🏆 오늘의 점심 당첨!
       </p>

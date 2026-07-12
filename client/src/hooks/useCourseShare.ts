@@ -23,6 +23,25 @@ export function useCourseShare() {
   const captureCard = async (ref: RefObject<HTMLDivElement | null>): Promise<string> => {
     if (!ref.current) throw new Error('ref is null');
 
+    // 배경·코스 사진이 모두 로드된 뒤 캡처해야 빈 이미지나 저장 실패가 발생하지 않는다.
+    const images = Array.from(ref.current.querySelectorAll('img'));
+    await Promise.all(images.map(async image => {
+      if (image.complete && image.naturalWidth > 0) return;
+      if (image.complete) throw new Error(`image load failed: ${image.src}`);
+      try {
+        await image.decode();
+      } catch {
+        if (image.complete) {
+          if (image.naturalWidth > 0) return;
+          throw new Error(`image load failed: ${image.src}`);
+        }
+        await new Promise<void>((resolve, reject) => {
+          image.addEventListener('load', () => resolve(), { once: true });
+          image.addEventListener('error', () => reject(new Error(`image load failed: ${image.src}`)), { once: true });
+        });
+      }
+    }));
+
     return toPng(ref.current, {
       pixelRatio: 2,
       cacheBust: true,
@@ -32,6 +51,7 @@ export function useCourseShare() {
         if (node instanceof HTMLElement) {
           if (node.getAttribute('data-sonner-toaster') != null) return false;
           if (node.getAttribute('data-radix-popper-content-wrapper') != null) return false;
+          if (node.getAttribute('data-share-editor-control') != null) return false;
         }
         return true;
       },

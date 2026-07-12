@@ -5,7 +5,7 @@ import { eq, and } from "drizzle-orm";
 import { nanoid } from "nanoid";
 import { MOCK_RESTAURANTS, MOCK_COURSES } from "./melbourneData.js";
 import { buildSlate, buildControlSlate, assignVariant } from "./engine/scorer.js";
-import { recordEvents, memEventCount, getMetrics, recordCatalogSize, recordItemFeatures, getItemFeatures, todayStops } from "./engine/events.js";
+import { recordEvents, memEventCount, getMetrics, recordCatalogSize, recordItemFeatures, getItemFeatures, todayStops, recentStops } from "./engine/events.js";
 import { enrichContext } from "./engine/context.js";
 import { getTaste, updateTaste, updatePairwise, pairwiseWeight, sampleTheta, tasteFitFromTheta, MIN_TASTE } from "./engine/taste.js";
 import { buildItemVector } from "./engine/features.js";
@@ -20,6 +20,27 @@ import type { DietTag } from "../shared/const.js";
 import { categoriesForIntent, intentForCategory } from "../shared/intent.js";
 
 const router = Router();
+
+// 공유 이미지 캡처용 동일 출처 프록시. 앱에서 사용하는 HTTPS 이미지 호스트만 허용한다.
+router.get("/image-proxy", async (req, res) => {
+  try {
+    const source = new URL(String(req.query.url ?? ""));
+    const allowed = source.protocol === "https:" && (
+      source.hostname === "images.unsplash.com" ||
+      source.hostname.endsWith(".cloudfront.net")
+    );
+    if (!allowed) return res.status(400).send("Unsupported image host");
+
+    const response = await fetch(source, { headers: { Accept: "image/*" } });
+    if (!response.ok) return res.status(502).send("Image fetch failed");
+    const contentType = response.headers.get("content-type") ?? "image/jpeg";
+    res.setHeader("Content-Type", contentType);
+    res.setHeader("Cache-Control", "public, max-age=86400");
+    res.send(Buffer.from(await response.arrayBuffer()));
+  } catch {
+    res.status(400).send("Invalid image URL");
+  }
+});
 
 // ── In-memory fallback session store ─────────────────────────────────────────
 // DB(Supabase)가 일시정지/차단된 경우에도 세션 생성→초대→참여→투표 플로우가
@@ -695,7 +716,7 @@ router.post("/recommend", async (req, res) => {
 });
 
 // 하루 여정: 오늘의 스톱 타임라인 + (사슬 열림 시) 다음-스톱 제안.
-router.get("/journey/today", async (req, res) => {
+  router.get("/journey/today", async (req, res) => {
   const userId = String(req.query.userId ?? "");
   if (!userId) return res.json({ stops: [], nextSuggestion: null });
   const now = Date.now();
@@ -721,8 +742,17 @@ router.get("/journey/today", async (req, res) => {
       nextSuggestion = { intent, restaurant: { id: pick.id, category: pick.category }, reason: `${prev} 다음` };
     }
   }
-  res.json({ stops, nextSuggestion });
-});
+    res.json({ stops, nextSuggestion });
+  });
+
+  // 전구 알림에서 언제든 확인하는 최근 여정 히스토리 (최신순, 최대 5개).
+  router.get("/journey/history", async (req, res) => {
+    const userId = String(req.query.userId ?? "");
+    if (!userId) return res.json({ stops: [] });
+    const requested = Number(req.query.limit ?? 5);
+    const limit = Number.isFinite(requested) ? Math.max(1, Math.min(Math.floor(requested), 5)) : 5;
+    res.json({ stops: await recentStops(userId, limit) });
+  });
 
 // 디버그: 인메모리 버퍼에 쌓인 이벤트 수 (DB 폴백 동작 확인용)
 router.get("/events/_debug", (_req, res) => {

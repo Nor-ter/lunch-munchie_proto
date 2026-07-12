@@ -2,7 +2,7 @@ import { useState, useRef, useEffect, useMemo } from 'react';
 import { useParams, useLocation, useSearch } from 'wouter';
 import { useApp, type Course, type Restaurant } from '@/contexts/AppContext';
 import { motion, AnimatePresence } from 'framer-motion';
-import { ChevronLeft, ChevronRight, X, GripVertical, Plus, MapPin, Search, Check } from 'lucide-react';
+import { Camera, ChevronLeft, ChevronRight, X, GripVertical, Plus, MapPin, Search, Check } from 'lucide-react';
 import { toast } from 'sonner';
 import {
   DndContext,
@@ -29,6 +29,7 @@ import { getCoursePlacesFromStops, getCourseMapPoints } from '@/lib/courseMapSyn
 import { getSkinById } from '@/constants/skins';
 import SkinFrame from '@/components/munchie/SkinFrame';
 import RestaurantDetailSheet from '@/components/munchie/RestaurantDetailSheet';
+import { fileToResizedDataUrl } from '@/lib/imageUtils';
 
 const MAX_PLACES = 4;
 
@@ -143,6 +144,7 @@ function SortableItem({
   onSelect,
   onOpenDetail,
   hasDetail = false,
+  onChangePhoto,
 }: {
   place: CoursePlace;
   index: number;
@@ -153,6 +155,7 @@ function SortableItem({
   /** 왼쪽으로 밀거나 화살표 탭 시 식당 상세(후기 모아보기) 열기 */
   onOpenDetail?: (id: string) => void;
   hasDetail?: boolean;
+  onChangePhoto: (id: string, file: File) => void;
 }) {
   const color = getCourseSequenceColor(index);
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } =
@@ -198,16 +201,26 @@ function SortableItem({
           {index + 1}
         </div>
 
-        {place.imageUrl ? (
-          <img
-            src={place.imageUrl}
-            alt={place.name}
-            className="w-12 h-12 rounded-lg object-cover shrink-0"
-            draggable={false}
+        <label
+          className="group relative h-12 w-12 shrink-0 cursor-pointer overflow-hidden rounded-lg bg-gray-100"
+          onClick={event => event.stopPropagation()}
+          aria-label={`${place.name} 사진 변경`}
+        >
+          {place.imageUrl && <img src={place.imageUrl} alt={place.name} className="h-full w-full object-cover" draggable={false} />}
+          <span className="absolute inset-0 flex items-center justify-center bg-black/25 text-white opacity-0 transition-opacity group-hover:opacity-100 group-active:opacity-100">
+            <Camera size={17} />
+          </span>
+          <input
+            type="file"
+            accept="image/*"
+            className="hidden"
+            onChange={event => {
+              const file = event.target.files?.[0];
+              event.target.value = '';
+              if (file) onChangePhoto(place.id, file);
+            }}
           />
-        ) : (
-          <div className="w-12 h-12 rounded-lg bg-gray-100 shrink-0" />
-        )}
+        </label>
 
         <div className="flex flex-col min-w-0 flex-1">
           <span className="text-sm font-medium truncate">{place.name}</span>
@@ -259,6 +272,16 @@ function normalizeHashtags(tags: string[]) {
   return tags.map((tag) => tag.replace(/^#/, ''));
 }
 
+function withSavedSharePhotos(courseId: string | undefined, places: CoursePlace[]) {
+  if (!courseId) return places;
+  try {
+    const saved = JSON.parse(localStorage.getItem(`lm_course_share_photos_${courseId}`) ?? '[]') as Array<string | null>;
+    return places.map((place, index) => saved[index] ? { ...place, imageUrl: saved[index]! } : place);
+  } catch {
+    return places;
+  }
+}
+
 // ── CourseEditPage ────────────────────────────────────────────────────────────
 
 export default function CourseEditPage() {
@@ -300,7 +323,7 @@ export default function CourseEditPage() {
 
   const [title, setTitle] = useState(initialTitle);
   const [hashtags, setHashtags] = useState<string[]>(initialHashtags);
-  const [places, setPlaces] = useState<CoursePlace[]>(initialPlaces);
+  const [places, setPlaces] = useState<CoursePlace[]>(() => withSavedSharePhotos(id, initialPlaces));
   const [showPicker, setShowPicker] = useState(false);
   // 장소 행: 터치 → 하이라이트, 밀기 → 식당 상세(후기 모아보기) 슬라이드
   const [selectedPlaceId, setSelectedPlaceId] = useState<string | null>(null);
@@ -379,7 +402,7 @@ export default function CourseEditPage() {
   useEffect(() => {
     setTitle(initialTitle);
     setHashtags(initialHashtags);
-    setPlaces(initialPlaces);
+    setPlaces(withSavedSharePhotos(id, initialPlaces));
   }, [id, initialTitle, appCourse, syncedPlaces]);
 
   const commitTag = () => {
@@ -397,6 +420,30 @@ export default function CourseEditPage() {
 
   const removePlace = (placeId: string) => {
     setPlaces((prev) => withRecalculatedCoords(prev.filter((p) => p.id !== placeId), getRestaurantById));
+  };
+
+  const changePlacePhoto = async (placeId: string, file: File) => {
+    try {
+      const imageUrl = await fileToResizedDataUrl(file, 900, 0.8);
+      setPlaces(previous => {
+        const next = previous.map(place => place.id === placeId ? { ...place, imageUrl } : place);
+        if (id) {
+          try { localStorage.setItem(`lm_course_share_photos_${id}`, JSON.stringify(next.map(place => place.imageUrl ?? null))); }
+          catch { /* 저장 용량 초과 시 현재 편집 세션에서는 그대로 사용 */ }
+        }
+        return next;
+      });
+      toast.success('사진을 변경했어요');
+    } catch {
+      toast.error('사진을 불러오지 못했어요');
+    }
+  };
+
+  const openShare = () => {
+    if (!id) return;
+    try { localStorage.setItem(`lm_course_share_photos_${id}`, JSON.stringify(places.map(place => place.imageUrl ?? null))); }
+    catch { /* 현재 상태로 공유 화면 이동 */ }
+    navigate(`/course/${id}/share?from=edit&editorFrom=${editorFrom}`);
   };
 
   const sensors = useSensors(
@@ -529,6 +576,7 @@ export default function CourseEditPage() {
                   selected={selectedPlaceId === place.id}
                   onSelect={(pid) => setSelectedPlaceId((prev) => (prev === pid ? null : pid))}
                   onOpenDetail={(pid) => setDetailPlaceId(pid)}
+                  onChangePhoto={changePlacePhoto}
                 />
               ))}
             </SortableContext>
@@ -584,7 +632,7 @@ export default function CourseEditPage() {
           </button>
         ) : (
           <button
-            onClick={() => navigate(`/course/${id}/share?from=edit&editorFrom=${editorFrom}`)}
+            onClick={openShare}
             className="flex-1 bg-[#E85053] text-white rounded-xl h-11 text-sm font-medium"
           >
             코스 공유

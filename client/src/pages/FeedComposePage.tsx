@@ -1,6 +1,6 @@
 /**
  * Munchie Feed 작성 흐름
- * ① 코스 선택 → ② 사진/한줄평 작성 → ③ 게시 완료
+ * ① 코스 선택 → ② 사진/한줄평 작성 → ③ 미리보기 → ④ 게시 완료
  * (피드 카드는 기본 테마 고정 — 스킨 선택 단계 없음)
  */
 import { useMemo, useRef, useState } from 'react';
@@ -12,7 +12,7 @@ import { useApp, type Course, type FeedPost } from '@/contexts/AppContext';
 import FeedPostCard from '@/components/munchie/FeedPostCard';
 import { fileToResizedDataUrl } from '@/lib/imageUtils';
 
-const STEP_TITLES = ['코스 선택', '사진/한줄평 작성', '게시 완료'];
+const STEP_TITLES = ['코스 선택', '사진/한줄평 작성', '미리보기', '게시 완료'];
 
 function CourseSelectItem({ course, selected, onSelect }: { course: Course; selected: boolean; onSelect: () => void }) {
   return (
@@ -59,6 +59,25 @@ export default function FeedComposePage() {
 
   const course = courseId ? courses.find(c => c.id === courseId) : undefined;
 
+  const previewPost = useMemo<FeedPost | null>(() => {
+    if (!courseId || !course || photos.length === 0 || !caption.trim()) return null;
+    return {
+      id: 'feed-preview',
+      authorId: profile.id,
+      authorName: profile.name,
+      authorEmoji: profile.emoji,
+      courseId,
+      photos,
+      caption: caption.trim(),
+      skinId: 'default',
+      likes: 0,
+      saves: 0,
+      comments: [],
+      createdAt: new Date().toISOString(),
+      tags: course.tags,
+    };
+  }, [caption, course, courseId, photos, profile]);
+
   // 사진 후보: 선택한 코스의 스팟 이미지 + 직접 업로드
   const photoChoices = useMemo(() => {
     const stopImages = course
@@ -87,31 +106,32 @@ export default function FeedComposePage() {
 
   const canNext =
     step === 0 ? !!courseId :
-    step === 1 ? photos.length > 0 && caption.trim().length > 0 : true;
+    step === 1 ? photos.length > 0 && caption.trim().length > 0 :
+    step === 2 ? !!previewPost : true;
 
   const goNext = () => {
     if (!canNext) return;
-    if (step === 1) {
-      // 게시 — 피드 카드는 기본 테마 고정
+    if (step === 2 && previewPost) {
+      // 미리보기에서 확정한 시점에만 실제 피드에 게시한다.
       const post = addFeedPost({
-        authorId: profile.id,
-        authorName: profile.name,
-        authorEmoji: profile.emoji,
-        courseId: courseId!,
-        photos,
-        caption: caption.trim(),
-        skinId: 'default',
-        tags: course?.tags ?? [],
+        authorId: previewPost.authorId,
+        authorName: previewPost.authorName,
+        authorEmoji: previewPost.authorEmoji,
+        courseId: previewPost.courseId,
+        photos: previewPost.photos,
+        caption: previewPost.caption,
+        skinId: previewPost.skinId,
+        tags: previewPost.tags,
       });
       setPublished(post);
-      setStep(2);
+      setStep(3);
       return;
     }
     setStep(s => s + 1);
   };
 
   const goBack = () => {
-    if (step === 0 || step === 2) navigate('/feed');
+    if (step === 0 || step === 3) navigate('/feed');
     else setStep(s => s - 1);
   };
 
@@ -121,7 +141,7 @@ export default function FeedComposePage() {
       <div className="sticky top-0 z-20 bg-[#FCF4EE]/95 backdrop-blur px-4 pt-10 pb-3">
         <div className="flex items-center justify-between">
           <button onClick={goBack} className="w-9 h-9 bg-white rounded-full shadow flex items-center justify-center">
-            {step === 2 ? <X size={18} /> : <ChevronLeft size={20} />}
+            {step === 3 ? <X size={18} /> : <ChevronLeft size={20} />}
           </button>
           <p className="font-bold text-[16px] text-[#1A1A1A]">{STEP_TITLES[step]}</p>
           <span className="w-9" />
@@ -207,8 +227,19 @@ export default function FeedComposePage() {
             </div>
           )}
 
-          {/* ③ 게시 완료 */}
-          {step === 2 && published && (
+          {/* ③ 실제 게시 전 미리보기 */}
+          {step === 2 && previewPost && (
+            <div>
+              <div className="mb-4 px-1 text-center">
+                <p className="font-bold text-[17px] text-[#1A1A1A]">이대로 게시할까요?</p>
+                <p className="mt-1 text-[12px] text-[#9B9B9B]">사진과 한줄평을 확인한 뒤 게시해주세요</p>
+              </div>
+              <FeedPostCard post={previewPost} interactive={false} />
+            </div>
+          )}
+
+          {/* ④ 게시 완료 */}
+          {step === 3 && published && (
             <div>
               <div className="text-center mb-5">
                 <motion.div
@@ -238,8 +269,27 @@ export default function FeedComposePage() {
             className="w-full h-[52px] rounded-2xl text-white font-bold text-[15px] shadow-lg transition-colors"
             style={{ background: canNext ? '#EB5053' : '#E5CFC5' }}
           >
-            {step === 1 ? '게시하기' : '다음'}
+            {step === 1 ? '미리보기' : '다음'}
           </motion.button>
+        ) : step === 2 ? (
+          <div className="flex gap-2.5">
+            <motion.button
+              whileTap={{ scale: 0.97 }}
+              onClick={() => setStep(1)}
+              className="h-[52px] flex-1 rounded-2xl border bg-white font-bold text-[15px]"
+              style={{ borderColor: '#E8D8CF', color: '#6E5B50' }}
+            >
+              수정하기
+            </motion.button>
+            <motion.button
+              whileTap={{ scale: 0.97 }}
+              onClick={goNext}
+              className="h-[52px] flex-[1.5] rounded-2xl text-white font-bold text-[15px] shadow-lg"
+              style={{ background: '#EB5053' }}
+            >
+              게시하기
+            </motion.button>
+          </div>
         ) : (
           <motion.button
             whileTap={{ scale: 0.97 }}

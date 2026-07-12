@@ -1611,20 +1611,34 @@ export default function QuickMatchPage() {
             transition={{ duration: 0.3 }}
           >
             <div className="flex flex-col items-center">
-              <div className="mb-3 flex h-[182px] w-[200px] flex-shrink-0 items-center justify-center overflow-hidden">
-                <img
-                  src="/assets/lunchie-quick-match-jump.gif"
-                  alt="포크와 숟가락을 든 런먼이가 점프하는 모습"
-                  className="h-auto w-full object-contain"
-                  draggable={false}
-                />
-              </div>
+              <motion.div
+                className="mb-5 flex items-center gap-3"
+                animate={{ y: [0, -10, 0], rotate: [0, -1.2, 1.2, 0] }}
+                transition={{ duration: 2.2, repeat: Infinity, ease: 'easeInOut' }}
+              >
+                <img src="/assets/lunchie-brand-mark.png" alt="" className="h-16 w-16 object-contain" draggable={false} />
+                <img src="/assets/lunchie-wordmark.png" alt="Lunchie Munchie" className="h-auto w-[168px] object-contain" draggable={false} />
+              </motion.div>
               <p className="font-black text-white text-[22px]">예선전 시작! 🍽️</p>
             </div>
             <p className="text-white/60 text-[14px] mt-2">카드를 좌우로 스와이프 해보세요</p>
+            <div className="mt-5 w-56">
+              <div className="mb-2 flex items-center justify-between text-[11px] text-white/55">
+                <span>추천 카드를 준비하고 있어요</span>
+                <span>약 3초</span>
+              </div>
+              <div className="h-2 overflow-hidden rounded-full bg-white/15">
+                <motion.div
+                  className="h-full origin-left rounded-full bg-[#EB5053]"
+                  initial={{ scaleX: 0 }}
+                  animate={{ scaleX: 1 }}
+                  transition={{ duration: 2.8, ease: 'linear' }}
+                />
+              </div>
+            </div>
 
             {/* Swipe gesture demo card */}
-            <div className="relative w-36 h-48 mt-8 flex items-center justify-center">
+            <div className="relative w-36 h-48 mt-6 flex items-center justify-center">
               <motion.div
                 className="absolute w-32 h-44 rounded-2xl shadow-2xl flex items-center justify-center text-6xl overflow-hidden"
                 style={{ background: '#FFF1E0' }}

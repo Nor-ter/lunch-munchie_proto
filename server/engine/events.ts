@@ -669,3 +669,51 @@ export async function todayStops(userId: string, now = Date.now()): Promise<Jour
     return selectTodayStops(memEvents as Array<Record<string, unknown>>, userId, now, getCat);
   }
 }
+
+// 사용자의 전체 WINNER 기록 중 최신 여정을 제한 개수만큼 반환한다.
+export function selectRecentStops(
+  events: Array<Record<string, unknown>>,
+  userId: string,
+  limit: number,
+  getCategory: (id: string) => string | null,
+): JourneyStop[] {
+  const sat = new Map<string, "POS" | "NEU" | "NEG">();
+  for (const event of events) {
+    if (event.event_type === "SURVEY" && event.user_id === userId && event.restaurant_id) {
+      const action = event.action as string;
+      if (action === "POS" || action === "NEU" || action === "NEG") sat.set(String(event.restaurant_id), action);
+    }
+  }
+
+  return events
+    .filter(event => event.event_type === "WINNER" && event.user_id === userId && event.restaurant_id)
+    .map(event => {
+      const restaurantId = String(event.restaurant_id);
+      const createdAt = event.created_at;
+      const context = (event.context ?? null) as { intent?: string } | null;
+      return {
+        restaurant_id: restaurantId,
+        category: getCategory(restaurantId),
+        intent: context?.intent ?? null,
+        at: createdAt instanceof Date ? createdAt.getTime() : Number(createdAt) || 0,
+        satisfaction: sat.get(restaurantId) ?? null,
+      } satisfies JourneyStop;
+    })
+    .sort((a, b) => b.at - a.at)
+    .slice(0, Math.max(1, Math.min(limit, 5)));
+}
+
+export async function recentStops(userId: string, limit = 5): Promise<JourneyStop[]> {
+  const getCat = (id: string) => getItemFeatures(id)?.category ?? null;
+  try {
+    const rows = await db.select().from(recEvents).where(
+      and(
+        eq(recEvents.user_id, userId),
+        inArray(recEvents.event_type, ["WINNER", "SURVEY"]),
+      ),
+    );
+    return selectRecentStops(rows as Array<Record<string, unknown>>, userId, limit, getCat);
+  } catch {
+    return selectRecentStops(memEvents as Array<Record<string, unknown>>, userId, limit, getCat);
+  }
+}
