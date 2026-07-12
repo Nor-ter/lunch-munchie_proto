@@ -1,107 +1,319 @@
-# 🍱 Lunchie Munchie — Unified Prototype (merge1)
+# 🍱 Lunchie Munchie — Unified Prototype
 
-> **오늘 어떻게 먹을까요?** 모드를 선택해주세요
+> 오늘 무엇을 먹을지 빠르게 결정하고, 맛집 코스를 만들고 공유하는 통합 프로토타입
 
 [![React](https://img.shields.io/badge/React-19-61DAFB?logo=react)](https://react.dev)
-[![TypeScript](https://img.shields.io/badge/TypeScript-5.6-3178C6?logo=typescript)](https://typescriptlang.org)
-[![Vite](https://img.shields.io/badge/Vite-7-646CFF?logo=vite)](https://vitejs.dev)
-[![Expo](https://img.shields.io/badge/Expo-Mobile-000020?logo=expo)](https://expo.dev)
+[![TypeScript](https://img.shields.io/badge/TypeScript-5.6-3178C6?logo=typescript)](https://www.typescriptlang.org/)
+[![Vite](https://img.shields.io/badge/Vite-7-646CFF?logo=vite)](https://vite.dev/)
+[![Express](https://img.shields.io/badge/Express-4-000000?logo=express)](https://expressjs.com/)
+[![Vitest](https://img.shields.io/badge/Vitest-2-6E9F18?logo=vitest)](https://vitest.dev/)
 
-## 🚀 Live Demo
+## 현재 상태
 
-[lunch-munchie-proto.manus.space](https://lunch-munchie-proto.manus.space)
+- 기준 브랜치: `tl_branch`
+- 최신 기능 커밋: `d99f883a` (`2026-07-13`)
+- 개발 단계: 웹 중심 통합 프로토타입
+- 검증 상태: TypeScript 검사, 테스트 16개, 프로덕션 빌드 통과
+- 데이터 모드: PostgreSQL 연결 또는 mock/in-memory 폴백
+- 주요 미완료 사항: 실제 운영 DB·인증·배포 환경 검증, UI 전체 E2E 테스트, 번들 최적화
 
-## 📱 Two Modes
+## 제품 구성
 
-### ⚡ Lunchie Mode (Quick Match) — `sj_branch` + `hi_branch`
+Lunchie Munchie는 두 가지 핵심 경험을 하나의 앱으로 제공합니다.
 
-그룹 멤버들과 함께 음식 카드를 스와이프로 빠르게 메뉴를 결정해요.
+| 모드 | 목적 | 주요 흐름 |
+|---|---|---|
+| **Lunchie Mode** | 혼자 또는 그룹이 빠르게 식당 결정 | 설정 → 초대/참여 → 스와이프 → 그룹 결정 → 결과/길찾기 |
+| **Munchie Mode** | 맛집 코스 탐색·제작·공유 | 피드 → 코스 상세 → 편집 → 템플릿/스킨 적용 → 저장·공유 |
 
-**예선전 → 결승전 → 우승자** 토너먼트 플로우.
+## 주요 기능
 
-- 초대 링크 생성·공유, 마감 타이밍(5/10/15분)
-- 예선전 9:12 카드 스와이프, 메뉴 사진 탭 패널
-- 결승전 Top 2 대각선 VS 구도
-- 우승자 — 구글 길찾기·예약·인스타 스토리 공유 (1080×1920)
-- 세션 API (`data-jp`) — DB 기반 필터링·스와이프 집계
+### Lunchie Mode — Quick Match
 
-### 🗺️ Munchie Mode (Tour) — `hi_branch` + `data-jp`
+- 솔로 및 그룹 세션 생성
+- 초대 링크·토큰을 통한 세션 참여
+- 참여 인원 제한, 준비 상태, 마감 시간 관리
+- 식단, 예산, 거리, 카테고리 등 추천 조건 설정
+- 음식점 카드 스와이프와 체류시간(`dwell_ms`) 이벤트 수집
+- 실제 덱 크기를 반영한 예선 완료 판정
+- 추천 엔진 Top 2 기반 대각선 듀얼 결승 UI
+- `둘 다 별로 · 다른 곳` 탈출구와 재추천
+- 그룹 least-misery 집계와 Top 2 결승 투표
+- 3지선다, `REROLL`, `NO_CONSENSUS` 합의 실패 처리
+- 결과 화면, Google 길찾기, 결과 공유
+- 길찾기 후 복귀해도 우승 결과 유지
+- 초대 세션 API timeout 조정 및 세션 안정성 개선
 
-맞춤형 코스를 추천받고 친구들과 투어를 즐겨요.
+### 추천 엔진 및 결정 모델
 
-- 코스 피드 + 태그 필터 + **코스맵 오버레이** (`data-jp`)
-- 코스 상세·에디터 (드래그 정렬) · Strava 스타일 공유 12종 (`hi_branch`)
-- 코스 스톱 순서 기반 지도 좌표 동기화 + 단계별 컬러 라인/마커
-- 코스 태그별 공통 컬러 팔레트 적용 (피드·홈·탐색 필터)
-- Expo 모바일 앱 — NativeWind 에디터 + IG 공유 (`mobile/`)
+- 맥락 기반 추천 컨텍스트와 인텐트→카테고리 필터
+- 아이템 피처와 사용자 취향 벡터 기반 스코어링
+- 단기 노출 피로도와 재소비 포만감/갈망 모델
+- 음식 연쇄 및 occasion 시퀀스 반영
+- Contextual Bandit과 Thompson Sampling
+- 그룹 least-misery 취향 합성
+- 듀얼 선택을 pairwise 고신뢰 선호 신호로 학습
+- `CHOOSE`, `SURVEY`, `COURSE_SAVE`, `REROLL`, `ABANDON`, `WINNER` 이벤트 지원
+- 결정적 A/B 배정, feature 효과 분석, 엔진 메커니즘 및 데이터 신뢰성 지표
 
-## 🛠️ Tech Stack
+### 오늘의 여정
 
-| Layer | 현재 (merge1) | 목표 ([TECH_STACK_REQUIREMENTS.md](./TECH_STACK_REQUIREMENTS.md)) |
-|-------|---------------|-------------------------------------------------------------------|
-| Web | React 19 + Vite 7 | `apps/web` Next.js (랜딩 전용) |
-| Mobile | Expo + NativeWind (`mobile/`) | `apps/mobile` (메인 앱) |
-| API | Express + Drizzle + Postgres | Supabase |
-| State | React Context + localStorage | Zustand + TanStack Query |
-| Animation | Framer Motion | Reanimated 3 |
-| Map | Leaflet (웹) | Mapbox (앱) |
-| Share | html-to-image | react-native-view-shot + Skia |
+- 우승 결과를 오늘의 여정 시작점으로 저장
+- `GET /api/journey/today`에서 오늘의 스톱과 다음 스톱 제안 제공
+- DB 우선 조회 후 메모리 이벤트 폴백
+- 홈 화면의 `오늘의 여정` 카드
+- 추천 시간대에 맞는 기본 인텐트와 카테고리 추천
 
-## 📚 Docs
+### Munchie Feed
 
-- [Prototype Evaluation Summary](./docs/Prototype-Evaluation-Summary.md) — 2026-05-23 미팅 합의
-- [Feature Spec](./docs/SPEC.md) — 통합 기능 명세
-- [Wireframe Structure](./wireframe_structure.md) — UX 플로우
-- [Tech Stack Requirements](./TECH_STACK_REQUIREMENTS.md) — 단일 기준 문서
+- Munchie 전용 피드와 게시물 작성 화면
+- 코스맵·작성자·식당 정보가 포함된 피드 카드
+- Foodie Buddy 프로필 표현
+- 식당 상세 바텀시트
+- 코스 템플릿 카드와 스킨 프레임
+- 홈·탐색·저장·프로필 화면 간 통합 내비게이션
 
-## 🏃 Getting Started
+### 코스맵 탐색·편집
+
+- 코스 목록, 상세 정보, 장소 및 경로 표시
+- 코스 스톱 순서 기반 지도 좌표·경로 동기화
+- 단계별 컬러 라인과 마커, 흰색 외곽선
+- 태그별 공통 컬러 팔레트
+- 드래그 앤 드롭 순서 변경
+- 장소 추가·삭제와 시간 편집
+- 기존 코스를 복사해 편집
+- 저장한 코스와 생성한 코스를 프로필·저장 화면에 연결
+- 명시적 경로 이동으로 상세→편집→공유 간 뒤로가기 안정화
+
+### 공유 템플릿 및 커스터마이징
+
+- 코스 공유 이미지 생성
+- CD 케이스, 티켓, 영수증, 런치 트레이 스크랩북 템플릿
+- 템플릿 미리보기 이미지 제공
+- 코스맵 템플릿 선택
+- 스킨 선택·적용 및 공유 화면 반영
+- `html-to-image`/`html2canvas` 기반 이미지 출력
+
+### 분석 화면
+
+- `/metrics` 엔진·제품 지표 대시보드
+- 데이터 신뢰성, 만족도, 피로도, feature 효과, A/B readout
+- 이벤트 디버그 및 집계 API
+
+## 화면 경로
+
+| 경로 | 화면 |
+|---|---|
+| `/` | 홈 및 모드 진입 |
+| `/onboarding` | 온보딩 |
+| `/feed` | Munchie 피드 |
+| `/feed/new` | 피드 게시물 작성 |
+| `/course/:id` | 코스 상세 |
+| `/course/:id/edit` | 코스 편집 |
+| `/course/:id/share` | 코스 공유 |
+| `/courses/:id/navigate` | 코스 길찾기 |
+| `/saved` | 저장한 코스 |
+| `/profile` | 프로필·생성 코스 |
+| `/lunchie/settings` | Lunchie 조건 설정 |
+| `/session/lobby` | 세션 대기실 |
+| `/join/:token` | 초대 세션 참여 |
+| `/lunchie/swipe` | 스와이프 및 그룹 결정 |
+| `/lunchie/results` | 결정 결과 |
+| `/lunchie/map` | 결과 지도 |
+| `/metrics` | 지표 대시보드 |
+
+## API
+
+모든 엔드포인트는 `/api` 아래에 등록됩니다.
+
+| Method | Path | 설명 |
+|---|---|---|
+| `GET` | `/users` | 사용자 조회 |
+| `POST` | `/users` | 사용자 생성 |
+| `POST` | `/sessions/create` | Lunchie 세션 생성 |
+| `GET` | `/sessions/:token` | 세션 조회 |
+| `POST` | `/sessions/:token/join` | 세션 참여 |
+| `POST` | `/sessions/:token/ready` | 준비 상태 변경 |
+| `POST` | `/sessions/:token/status` | 세션 상태 변경 및 그룹 결정 진행 |
+| `GET` | `/sessions/:token/results` | 스와이프·투표 결과 조회 |
+| `GET` | `/restaurants` | 조건별 음식점 조회 |
+| `GET` | `/courses` | 코스와 스톱 조회 |
+| `POST` | `/swipes` | 스와이프 기록 |
+| `POST` | `/events` | 행동·추천 이벤트 기록 |
+| `POST` | `/recommend` | 엔진 추천 요청 |
+| `GET` | `/journey/today` | 오늘의 스톱과 다음 스톱 제안 |
+| `GET` | `/events/_debug` | 개발용 이벤트 조회 |
+| `GET` | `/metrics` | 엔진·제품 지표 집계 |
+
+## 데이터 구조
+
+`shared/schema.ts`의 Drizzle/Zod 모델을 클라이언트와 서버가 함께 사용합니다.
+
+- 사용자: `users`
+- 음식점: `restaurants`
+- 코스: `courses`, `course_items`
+- Lunchie 세션: `sessions`, `session_members`, `swipes`
+- 추천·분석: 컨텍스트, 노출, 선택, 결과 이벤트
+
+`DATABASE_URL`이 있으면 PostgreSQL을 사용합니다. 일부 개발 흐름은 DB가 없어도 mock 데이터나 메모리 이벤트로 동작하지만, 영속성과 전체 API 동작을 검증하려면 DB 연결이 필요합니다.
+
+## 기술 스택
+
+| 영역 | 기술 |
+|---|---|
+| Web | React 19, TypeScript 5.6, Vite 7 |
+| Routing | Wouter |
+| UI/Motion | Tailwind CSS, Radix UI, Framer Motion |
+| Forms/Validation | React Hook Form, Zod |
+| Course editor | dnd-kit |
+| Map | Leaflet, React Leaflet, Google Maps 연동 |
+| Share | html-to-image, html2canvas, QRCode |
+| API | Express, TypeScript |
+| Data | Drizzle ORM, PostgreSQL |
+| Test | Vitest, TypeScript compiler |
+| Mobile prototype | Expo, NativeWind (`mobile/`) |
+
+## 시작하기
+
+### 요구사항
+
+- Node.js 22 권장
+- Corepack
+- pnpm 10.4.1 (`package.json`의 `packageManager` 기준)
+
+### 설치 및 실행
 
 ```bash
+corepack enable
 pnpm install
-pnpm dev          # Vite :5173 + API :3000
-pnpm dev:client   # 프론트만 (mock 폴백)
-pnpm seed         # DB 시드 (DATABASE_URL 필요)
+pnpm dev
 ```
 
-`.env`에 `DATABASE_URL` 설정 시 API 모드, 미설정 시 mock 데이터로 동작.
+기본 개발 명령은 Vite 클라이언트와 Express 서버를 동시에 실행합니다.
 
-## 🌿 Branch Integration (merge1)
+```bash
+pnpm dev:client   # 클라이언트만 실행
+pnpm dev:server   # API 서버만 실행
+pnpm seed         # DB 시드
+pnpm preview      # 프로덕션 빌드 미리보기
+```
 
-| 브랜치 | 담당 기능 | 통합 내용 |
-|--------|-----------|-----------|
-| `sj_branch` | Lunchie 토너먼트 스와이프 | `QuickMatchPage.tsx` 풀 플로우 |
-| `hi_branch` | 코스 에디터·IG 공유·모바일 | `course/*`, `mobile/`, 공유 템플릿 |
-| `data-jp` | 스키마·필터링·API | `shared/schema.ts`, `server/routes.ts` |
+### 환경 변수
 
-## 📝 Changelog
+루트에 `.env`를 만들고 필요한 값을 설정합니다.
 
-### v6 — 코스맵 피드 UI·내비게이션 개선 (sj_branch)
-- 메인 헤더의 심볼 로고를 제거하고 `Lunchie Munchie` 워드마크를 중앙 정렬
-- 하단 프로필 탭을 `client/public/assets/Logo 003 3.png` 원본 에셋으로 교체하고, 기본 탭 아이콘은 30×30px·프로필 아이콘은 40×40px로 조정
-- `getCurvedCourseSegments` 공용 경로 생성기를 추가해 메인 랜딩, Munchie 피드, 코스맵 뷰어, 코스맵 에디터의 동일 코스를 곡선 경로로 동기화
-- 코스맵의 흰색 외곽선·단계별 기존 컬러·중앙 점선·노드 크기를 `courseTheme` 디자인 토큰으로 통합
-- 코스맵 뷰어의 `복사해서 편집` 버튼을 에디터의 `코스 공유` 버튼과 동일한 컬러로 통일
-- 공유 → 에디터 → 코스맵 뷰어 뒤로가기 과정에서 출발 경로를 유지하고, 404를 만들던 숫자형 `navigate(-1)` 호출을 안전한 명시적 경로 이동으로 교체
+```dotenv
+DATABASE_URL=postgresql://USER:PASSWORD@HOST:PORT/DATABASE
+VITE_FRONTEND_FORGE_API_KEY=
+```
 
-### v5 — 코스맵·태그 컬러 동기화 (sj_branch)
-- `courseMapSync` 유틸 추가: 코스 스톱 순서 정렬, 레스토랑 좌표 → 지도 포인트 변환, 상세·편집용 `CoursePlace` 생성
-- 코스 피드/홈/탐색 카드의 코스맵 오버레이를 실제 코스 스톱 데이터와 동기화
-- 지도 경로와 마커에 단계별 컬러 팔레트 적용, 흰색 외곽선으로 이미지 위 가독성 개선
-- 코스 태그 컬러 스타일을 `courseTheme`로 통합하고 필터/카드 태그 UI에 공통 적용
-- 코스 상세·편집 페이지가 AppContext 코스 데이터를 우선 사용하도록 개선하고 mock 데이터는 폴백으로 유지
+- `DATABASE_URL`: PostgreSQL/Drizzle 연결에 필요
+- `VITE_FRONTEND_FORGE_API_KEY`: Google Maps 프록시 연동을 사용할 때 선택적으로 설정
+- 실제 키와 `.env` 파일은 Git에 커밋하지 않습니다.
 
-### v4 — 전 브랜치 통합 (merge1)
-- `hi_branch` + `sj_branch` + `data-jp` 기능 단일 브랜치 통합
-- Drizzle/Postgres API 레이어 + mock 폴백 하이브리드 AppContext
-- 코스 피드 코스맵 오버레이 추가
-- Prototype Evaluation Summary → MD spec 정리
-- TECH_STACK_REQUIREMENTS.md 프로젝트 반영
+## 검증
 
-### v3 — sj_branch & tl_branch 병합
-- Lunchie Mode 토너먼트 플로우 + 디자인 리뉴얼
+```bash
+pnpm check     # TypeScript 타입 검사
+pnpm test      # Vitest 테스트
+pnpm build     # 클라이언트 + 서버 프로덕션 빌드
+```
 
-### v2 — Lunchie Mode 풀 플로우
-- 예선전/결승전/우승자, IG 스토리 공유, 구글 연동
+2026-07-13 현재 검증 결과:
 
-### v1 — Web Prototype 초기 구축
-- Quick Match / Tour Mode 2-모드 기본 구조
+- TypeScript 검사 통과
+- 테스트 파일 3개 통과
+- 테스트 16개 통과
+- Vite 클라이언트 및 Express 서버 빌드 성공
+- 클라이언트 메인 JS 번들 약 1.69 MB로 코드 분할 최적화 필요
+
+## 프로젝트 구조
+
+```text
+client/                 React 웹 앱
+  public/templates/     코스 공유 템플릿 이미지
+  src/components/       공통·Munchie·공유 컴포넌트
+  src/pages/            페이지 및 Lunchie/Munchie 흐름
+server/                 Express API와 추천 엔진
+  engine/               추천·그룹 결정·이벤트·스코어링
+shared/                 공통 스키마, 엔진 타입, 인텐트
+mobile/                 Expo 모바일 프로토타입
+docs/                   제품·엔진·프로세스 문서와 산출물
+```
+
+## 업데이트 내역
+
+### 2026-07-13 — Munchie 피드 및 코스맵 커스터마이징
+
+- Munchie 피드와 새 게시물 작성 화면 추가
+- 피드 카드, Foodie Buddy, 식당 상세 시트 추가
+- 코스맵 템플릿 카드·스킨 프레임·스킨 선택기 추가
+- CD, 티켓, 영수증, 런치 트레이 공유 템플릿 추가
+- 홈, 탐색, 저장, 프로필, 코스 상세·편집·공유 화면 통합 개선
+- 이미지 처리 유틸리티와 템플릿·크리에이터·스킨 상수 추가
+
+### 2026-07-02 — 세션·결승 플로우 안정화
+
+- 초대 세션 API timeout 조정
+- 결승 대기 화면 완료 배지 오류 수정
+- 길찾기에서 돌아올 때 결과가 유실되던 문제 수정
+- 그룹 결승전 대각선 듀얼 애니메이션 복원
+- 덱이 목표 카드 수보다 적을 때 예선이 끝나지 않던 문제 수정
+- 실제 덱 크기와 `targetCount` 불일치로 결과 화면에 진입하지 못하던 문제 수정
+
+### 2026-06-29 — 그룹 결정 모델
+
+- least-misery 집계와 Top 2 그룹 결승 투표
+- 3지선다 그룹 결정 UI
+- 세대(`generation`) 기반 결정 라우팅
+- 미움 후보를 제외한 `REROLL` 재스와이프
+- 합의 실패(`NO_CONSENSUS`) 처리
+- 그룹 결정 모델·데이터 수집·워크플로우 문서화
+
+### 2026-06-26 — 오늘의 여정 및 추천 인텐트
+
+- 인텐트↔카테고리 매핑과 추천 필터
+- 오늘의 스톱 추출 및 `/api/journey/today`
+- 우승 결과를 오늘의 여정 이벤트로 연결
+- 홈 `오늘의 여정` 카드
+- Vitest 설정과 엔진 단위 테스트 추가
+
+### 2026-06-23~25 — 추천 엔진·계측 고도화
+
+- 취향, 피로도, 포만감, 음식 연쇄 서브스코어러
+- Contextual Bandit과 Thompson Sampling
+- 그룹 취향 합성과 듀얼 pairwise 학습
+- 명시적 신호 및 cross-city 전이
+- 데이터 신뢰성부터 A/B readout까지 단계별 메트릭 대시보드
+- 솔로/그룹 인원 설정, 참여 제한, 추천 맥락 반영
+- 결승 무한루프와 중도 이탈 오탐 수정
+
+### 이전 통합 업데이트
+
+- Lunchie 예선→결승→우승 전체 스와이프 플로우
+- 세션 생성·초대·참여·준비·결과 집계 API
+- 코스 피드, 상세, 드래그 편집, 지도 경로 동기화
+- 코스 태그 및 단계별 지도 컬러 통합
+- 공유 이미지 템플릿과 Expo 모바일 프로토타입
+- React Context 기반 API/mock 하이브리드 데이터 계층
+
+## 알려진 제한사항
+
+- 운영 환경 DB와 인증·권한 모델은 추가 검증이 필요합니다.
+- 자동 테스트는 추천 인텐트, 그룹 결정, 이벤트 중심이며 UI E2E 범위는 아직 없습니다.
+- 클라이언트 번들이 500 kB 권장 크기를 초과하므로 dynamic import와 manual chunk 분리가 필요합니다.
+- 일부 기능은 mock/in-memory 폴백에 의존하므로 서버 재시작 시 데이터가 유지되지 않을 수 있습니다.
+- 랜딩 페이지 일부 디자인은 실험 단계입니다.
+
+## 문서
+
+- [통합 기능 명세](./docs/SPEC.md)
+- [프로토타입 평가 요약](./docs/Prototype-Evaluation-Summary.md)
+- [기획·엔진 산출물 목록](./docs/DELIVERABLES.md)
+- [기술 스택 요구사항](./TECH_STACK_REQUIREMENTS.md)
+- [와이어프레임 구조](./wireframe_structure.md)
+- [데이터 구조 구현 계획](./1-implementation_plan.md)
+- [데이터 마이그레이션 계획](./2-migration_plan.md)
+- [DB 계획](./3-DB_plan.md)
+- [코스맵 오버레이 계획](./4-overlay_map_plan.md)
+- [업데이트 와이어프레임](./5-update_wireframe.md)
