@@ -11,7 +11,8 @@ import { AppProvider } from "./contexts/AppContext";
 import TabBar from "./components/TabBar";
 import OnboardingPage from "./pages/OnboardingPage";
 import HomePage from "./pages/HomePage";
-import ExplorePage from "./pages/ExplorePage";
+import MunchieFeedPage from "./pages/MunchieFeedPage";
+import FeedComposePage from "./pages/FeedComposePage";
 import CourseNavigatePage from "./pages/CourseNavigatePage";
 import NewCourseDetailPage from "./pages/course/CourseDetailPage";
 import CourseEditPage from "./pages/course/CourseEditPage";
@@ -30,7 +31,7 @@ import TourModePage from "./pages/TourModePage";
 import SlideTransitionRoutes from "./components/SlideTransitionRoutes";
 import MetricsPage from "./pages/MetricsPage";
 
-const NO_TABBAR = ['/onboarding', '/tour-mode', '/course/', '/lunchie', '/session', '/join'];
+const NO_TABBAR = ['/onboarding', '/tour-mode', '/course/', '/lunchie', '/session', '/join', '/feed/new'];
 
 function CoursesRedirect() {
   const params = useParams<{ id: string }>();
@@ -47,7 +48,10 @@ function AppShell() {
           <Switch>
             <Route path="/onboarding" component={OnboardingPage} />
             <Route path="/" component={HomePage} />
-            <Route path="/explore" component={ExplorePage} />
+            {/* 기존 먼치모드(코스 탐색)는 Munchie Feed로 통합 */}
+            <Route path="/explore">{() => <Redirect to="/feed" />}</Route>
+            <Route path="/feed" component={MunchieFeedPage} />
+            <Route path="/feed/new" component={FeedComposePage} />
             <Route path="/courses/:id/navigate" component={CourseNavigatePage} />
             <Route path="/courses/:id" component={CoursesRedirect} />
             <Route path="/course/:id/edit" component={CourseEditPage} />

@@ -88,7 +88,7 @@ function FaceIcon({ active }: { active: boolean }) {
 
 const TABS = [
   { path: "/", label: "홈", Icon: HomeIcon },
-  { path: "/explore", label: "지도", Icon: MapIcon },
+  { path: "/feed", label: "먼치", Icon: MapIcon },
   { path: "/lunchie/settings", label: "런치", Icon: LightningIcon },
   { path: "/saved", label: "저장", Icon: BookmarkIcon },
   { path: "/profile", label: "프로필", Icon: FaceIcon },

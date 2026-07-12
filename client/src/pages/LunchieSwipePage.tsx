@@ -495,12 +495,11 @@ function formatRemainingTime(deadlineStr: string | null): string {
 
 function WinnerScreen({ selectedWinner, onReset }: { selectedWinner?: Restaurant | null; onReset: () => void }) {
   const [, navigate] = useLocation();
-  const { currentSession, restaurants, profile } = useApp();
+  const { currentSession, restaurants, profile, savedRestaurantIds, saveRestaurant } = useApp();
   const { captureCard, downloadImage } = useCourseShare();
   const shareCardRef = useRef<HTMLDivElement>(null);
   const [showShare, setShowShare] = useState(false);
   const [isCapturing, setIsCapturing] = useState(false);
-  const [saved, setSaved] = useState(false);
   const [liveResults, setLiveResults] = useState<{
     results: { restaurantId: string; score: number; likeCount: number; dislikeCount: number }[];
     winnerId?: string | null;
@@ -674,11 +673,21 @@ function WinnerScreen({ selectedWinner, onReset }: { selectedWinner?: Restaurant
           {/* 저장(강한 취향 신호 COURSE_SAVE) · 다시 고르기(REROLL) */}
           <div className="flex gap-2">
             <button
-              onClick={() => { if (!saved) { logEvent({ event_type: 'COURSE_SAVE', user_id: profile.id, session_id: currentSession?.id ?? null, restaurant_id: winner.id }); setSaved(true); toast.success('저장했어요 🔖'); } }}
+              onClick={() => {
+                const alreadySaved = savedRestaurantIds.includes(winner.id);
+                if (!alreadySaved) {
+                  saveRestaurant(winner.id);
+                  logEvent({ event_type: 'COURSE_SAVE', user_id: profile.id, session_id: currentSession?.id ?? null, restaurant_id: winner.id });
+                  toast.success('저장했어요! 저장 목록에서 볼 수 있어요 🔖');
+                }
+              }}
               className="flex-1 py-3 rounded-2xl font-bold text-[14px] flex items-center justify-center gap-1.5 border active:scale-[0.98] transition-all"
-              style={{ borderColor: saved ? '#EB5053' : '#E5E5E5', color: saved ? '#EB5053' : '#4A4A4A', background: saved ? '#FFF5F5' : 'white' }}
+              style={savedRestaurantIds.includes(winner.id)
+                ? { borderColor: '#EB5053', color: '#EB5053', background: '#FFF5F5' }
+                : { borderColor: '#E5E5E5', color: '#4A4A4A', background: 'white' }}
             >
-              <Bookmark size={15} fill={saved ? '#EB5053' : 'none'} /> {saved ? '저장됨' : '저장'}
+              <Bookmark size={15} fill={savedRestaurantIds.includes(winner.id) ? '#EB5053' : 'none'} />
+              {savedRestaurantIds.includes(winner.id) ? '저장됨' : '저장'}
             </button>
             <button
               onClick={onReset}

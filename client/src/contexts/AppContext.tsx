@@ -115,12 +115,18 @@ export interface UserProfile {
   id: string;
   name: string;
   emoji: string;
+  /** 업로드한 프로필 사진(data URL) — 있으면 emoji 대신 이 사진을 아바타로 보여준다 */
+  avatarPhoto?: string;
   dietary: string[];
   categoryPrefs: { category: string; score: number; rank: number }[];
   totalSwipes: number;
   totalLikes: number;
   joinedAt: string;
   isLoggedIn?: boolean;
+  /** 프로필 다마고치 — 커스텀 푸디 캐릭터 이모지 */
+  foodieChar?: string;
+  /** 푸디 캐릭터 방 스킨 (먼치 스킨 id) */
+  foodieSkin?: string;
 }
 
 export interface SwipeRecord {
@@ -128,6 +134,34 @@ export interface SwipeRecord {
   action: 'like' | 'save' | 'skip';
   timestamp: string;
   sessionId?: string;
+}
+
+/** 피드 댓글 — hidden은 게시물 작성자가 숨김 처리한 것 (메인 피드에서 일괄 미노출) */
+export interface FeedComment {
+  id: string;
+  authorName: string;
+  authorEmoji: string;
+  text: string;
+  createdAt: string;
+  hidden?: boolean;
+}
+
+/** Munchie Feed 게시물 — 코스에 사진+한줄평+템플릿 스킨을 입힌 정성 기록 */
+export interface FeedPost {
+  id: string;
+  /** 작성자 기기 ID — 내 게시물 판별(수정/삭제/댓글 숨김 권한) */
+  authorId?: string;
+  authorName: string;
+  authorEmoji: string;
+  courseId: string;
+  photos: string[];
+  caption: string;
+  skinId: string;
+  likes: number;
+  saves: number;
+  comments: FeedComment[];
+  createdAt: string;
+  tags: TagType[];
 }
 
 // ─── Mock Data ────────────────────────────────────────────────────────────────
@@ -375,6 +409,71 @@ export const MOCK_COURSES: Course[] = [
   },
 ];
 
+export const MOCK_FEED_POSTS: FeedPost[] = [
+  {
+    id: 'f1',
+    authorName: '지민',
+    authorEmoji: '😊',
+    courseId: 'c1',
+    photos: [
+      'https://images.unsplash.com/photo-1554118811-1e0d58224f24?w=800&q=80',
+      'https://d2xsxph8kpxj0f.cloudfront.net/310519663322273601/2bdpbPnYmCuK9PccZ3SWKc/lm-course-seongsu-hGTsaQPMJotuBpuyBnE5dN.webp',
+      'https://images.unsplash.com/photo-1509440159596-0249088772ff?w=800&q=80',
+    ],
+    caption: '성수 골목을 다 걸었다. 카페부터 공원까지 완벽한 하루~! 추천 💕',
+    skinId: 'pink-picnic',
+    likes: 23,
+    saves: 18,
+    comments: [
+      { id: 'cm1', authorName: '제니', authorEmoji: '🐳', text: '코스 순서까지 완벽해요! 바로 저장했습니다 👍', createdAt: '2026-07-09T13:00:00.000Z' },
+      { id: 'cm2', authorName: '민수', authorEmoji: '🍜', text: '2번 카페 웨이팅 심한가요?', createdAt: '2026-07-09T14:10:00.000Z' },
+      { id: 'cm3', authorName: '익명123', authorEmoji: '😈', text: '광고글 티난다ㅋ 노잼 코스', createdAt: '2026-07-09T15:22:00.000Z' },
+    ],
+    createdAt: '2026-07-09T12:30:00.000Z',
+    tags: ['데이트 코스', '카페'],
+  },
+  {
+    id: 'f2',
+    authorName: '제니',
+    authorEmoji: '🐳',
+    courseId: 'c2',
+    photos: [
+      'https://d2xsxph8kpxj0f.cloudfront.net/310519663322273601/2bdpbPnYmCuK9PccZ3SWKc/lm-course-hannam-EMhDLXHPSYVSTV5cbEekLC.webp',
+      'https://d2xsxph8kpxj0f.cloudfront.net/310519663322273601/2bdpbPnYmCuK9PccZ3SWKc/lm-course-bukchon-ATNXaSXg79mMDT2jnbpMuD.webp',
+    ],
+    caption: '주말 브런치는 역시 한남. 에그베네딕트가 진리 😋',
+    skinId: 'vintage-frame',
+    likes: 41,
+    saves: 27,
+    comments: [
+      { id: 'cm4', authorName: '지민', authorEmoji: '😊', text: '빈티지 스킨 너무 잘 어울려요 🎞️', createdAt: '2026-07-08T12:00:00.000Z' },
+      { id: 'cm5', authorName: '수아', authorEmoji: '🥐', text: '다음 주말에 그대로 따라가볼게요!', createdAt: '2026-07-08T15:30:00.000Z' },
+    ],
+    createdAt: '2026-07-08T11:00:00.000Z',
+    tags: ['맛집', '혼자 여행'],
+  },
+  {
+    id: 'f3',
+    authorName: '민수',
+    authorEmoji: '🍜',
+    courseId: 'c4',
+    photos: [
+      'https://d2xsxph8kpxj0f.cloudfront.net/310519663322273601/2bdpbPnYmCuK9PccZ3SWKc/lm-course-yeonnam-eiXe5dfjEAvbX6RscXaFtr.webp',
+      'https://images.unsplash.com/photo-1569050467447-ce54b3bbc37d?w=800&q=80',
+      'https://images.unsplash.com/photo-1579871494447-9811cf80d66c?w=800&q=80',
+    ],
+    caption: '연남동 맛집 3연타… 배 터질 뻔했지만 후회는 없다!',
+    skinId: 'blue-note',
+    likes: 15,
+    saves: 9,
+    comments: [
+      { id: 'cm6', authorName: '제니', authorEmoji: '🐳', text: '마라탕 국물 진하죠 ㅠㅠ 최고', createdAt: '2026-07-07T14:00:00.000Z' },
+    ],
+    createdAt: '2026-07-07T13:20:00.000Z',
+    tags: ['맛집', '맛집 투어'],
+  },
+];
+
 const THEMES = [
   { id: 'date', label: '데이트 코스', emoji: '💕', color: '#EB5053', tag: '데이트 코스' as TagType },
   { id: 'solo', label: '혼자 여유 코스', emoji: '☕', color: '#D94447', tag: '혼자 여행' as TagType },
@@ -436,8 +535,30 @@ interface AppContextValue {
   rerollSession: (excludeIds: string[]) => Promise<void>;
   likedRestaurantIds: string[];
 
+  /** Lunchie Mode(Quick Match) 결과에서 "저장"한 맛집 — 저장 목록 페이지에 노출 */
+  savedRestaurantIds: string[];
+  saveRestaurant: (restaurantId: string) => void;
+  unsaveRestaurant: (restaurantId: string) => void;
+
   profile: UserProfile;
   updateProfile: (updates: Partial<UserProfile>) => void;
+
+  /** Munchie Feed */
+  feedPosts: FeedPost[];
+  addFeedPost: (post: Omit<FeedPost, 'id' | 'likes' | 'saves' | 'comments' | 'createdAt'>) => FeedPost;
+  updateFeedPost: (postId: string, updates: Partial<Pick<FeedPost, 'caption' | 'skinId' | 'photos'>>) => void;
+  deleteFeedPost: (postId: string) => void;
+  likedFeedIds: string[];
+  toggleFeedLike: (postId: string) => void;
+  addFeedComment: (postId: string, text: string) => void;
+  /** 내 게시물의 악성 댓글 숨김 토글 — 메인 피드에 일괄 반영 */
+  toggleCommentHidden: (postId: string, commentId: string) => void;
+  /** 게시물이 내 것인지 (수정/삭제/댓글 숨김 권한) */
+  isMyPost: (post: FeedPost) => boolean;
+
+  /** 코스맵 템플릿 스킨 (courseId → skinId) */
+  courseSkins: Record<string, string>;
+  setCourseSkin: (courseId: string, skinId: string | null) => void;
 
   restaurants: Restaurant[];
   getRestaurantById: (id: string) => Restaurant | undefined;
@@ -544,6 +665,33 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     catch { return []; }
   });
 
+  const [savedRestaurantIds, setSavedRestaurantIds] = useState<string[]>(() => {
+    try { const s = localStorage.getItem('lm_saved_restaurants'); return s ? JSON.parse(s) : []; }
+    catch { return []; }
+  });
+
+  const [feedPosts, setFeedPosts] = useState<FeedPost[]>(() => {
+    // v2: comments가 배열로 바뀌면서 키를 올렸다. 구버전(lm_feed) 데이터는 버리고 재시드.
+    try {
+      const s = localStorage.getItem('lm_feed_v2');
+      if (s) {
+        const parsed = JSON.parse(s) as FeedPost[];
+        return parsed.map(p => ({ ...p, comments: Array.isArray(p.comments) ? p.comments : [] }));
+      }
+    } catch { /* fall through */ }
+    return MOCK_FEED_POSTS;
+  });
+
+  const [likedFeedIds, setLikedFeedIds] = useState<string[]>(() => {
+    try { const s = localStorage.getItem('lm_feed_likes'); return s ? JSON.parse(s) : []; }
+    catch { return []; }
+  });
+
+  const [courseSkins, setCourseSkins] = useState<Record<string, string>>(() => {
+    try { const s = localStorage.getItem('lm_course_skins'); return s ? JSON.parse(s) : {}; }
+    catch { return {}; }
+  });
+
   const [profile, setProfile] = useState<UserProfile>(() => {
     try {
       const s = localStorage.getItem('lm_profile');
@@ -582,7 +730,14 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     else localStorage.removeItem('lm_session');
   }, [currentSession]);
   useEffect(() => { localStorage.setItem('lm_swipes', JSON.stringify(swipeRecords)); }, [swipeRecords]);
+  useEffect(() => { localStorage.setItem('lm_saved_restaurants', JSON.stringify(savedRestaurantIds)); }, [savedRestaurantIds]);
   useEffect(() => { localStorage.setItem('lm_profile', JSON.stringify(profile)); }, [profile]);
+  useEffect(() => {
+    // 업로드 사진(data URL)이 크면 quota 초과가 날 수 있다 — 실패해도 앱은 계속 동작.
+    try { localStorage.setItem('lm_feed_v2', JSON.stringify(feedPosts)); } catch { /* noop */ }
+  }, [feedPosts]);
+  useEffect(() => { localStorage.setItem('lm_feed_likes', JSON.stringify(likedFeedIds)); }, [likedFeedIds]);
+  useEffect(() => { localStorage.setItem('lm_course_skins', JSON.stringify(courseSkins)); }, [courseSkins]);
 
   const saveCourse = useCallback((id: string) => {
     setSavedCourseIds(prev => prev.includes(id) ? prev : [...prev, id]);
@@ -594,6 +749,73 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
   const addCourse = useCallback((course: Course) => {
     setCourses(prev => [course, ...prev]);
+  }, []);
+
+  const addFeedPost = useCallback((post: Omit<FeedPost, 'id' | 'likes' | 'saves' | 'comments' | 'createdAt'>) => {
+    const full: FeedPost = {
+      ...post,
+      id: `f_${Date.now()}`,
+      likes: 0,
+      saves: 0,
+      comments: [],
+      createdAt: new Date().toISOString(),
+    };
+    setFeedPosts(prev => [full, ...prev]);
+    return full;
+  }, []);
+
+  const updateFeedPost = useCallback((postId: string, updates: Partial<Pick<FeedPost, 'caption' | 'skinId' | 'photos'>>) => {
+    setFeedPosts(posts => posts.map(p => p.id === postId ? { ...p, ...updates } : p));
+  }, []);
+
+  const deleteFeedPost = useCallback((postId: string) => {
+    setFeedPosts(posts => posts.filter(p => p.id !== postId));
+  }, []);
+
+  const toggleCommentHidden = useCallback((postId: string, commentId: string) => {
+    setFeedPosts(posts => posts.map(p =>
+      p.id === postId
+        ? { ...p, comments: p.comments.map(c => c.id === commentId ? { ...c, hidden: !c.hidden } : c) }
+        : p,
+    ));
+  }, []);
+
+  const toggleFeedLike = useCallback((postId: string) => {
+    setLikedFeedIds(prev => {
+      const liked = prev.includes(postId);
+      setFeedPosts(posts => posts.map(p =>
+        p.id === postId ? { ...p, likes: Math.max(0, p.likes + (liked ? -1 : 1)) } : p,
+      ));
+      return liked ? prev.filter(i => i !== postId) : [...prev, postId];
+    });
+  }, []);
+
+  const addFeedComment = useCallback((postId: string, text: string) => {
+    const comment: FeedComment = {
+      id: `cm_${Date.now()}`,
+      authorName: profile.name,
+      authorEmoji: profile.emoji,
+      text,
+      createdAt: new Date().toISOString(),
+    };
+    setFeedPosts(posts => posts.map(p =>
+      p.id === postId ? { ...p, comments: [...p.comments, comment] } : p,
+    ));
+  }, [profile.name, profile.emoji]);
+
+  // 프로토타입: 기기 ID 일치 또는 (목업 시드용) 프로필 이름 일치를 내 게시물로 본다
+  const isMyPost = useCallback((post: FeedPost) =>
+    post.authorId === profile.id || post.authorName === profile.name,
+  [profile.id, profile.name]);
+
+  const setCourseSkin = useCallback((courseId: string, skinId: string | null) => {
+    setCourseSkins(prev => {
+      if (!skinId) {
+        const { [courseId]: _removed, ...rest } = prev;
+        return rest;
+      }
+      return { ...prev, [courseId]: skinId };
+    });
   }, []);
 
   const createSession = useCallback(async (
@@ -825,6 +1047,14 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     .filter(s => s.action === 'like' || s.action === 'save')
     .map(s => s.restaurantId);
 
+  const saveRestaurant = useCallback((id: string) => {
+    setSavedRestaurantIds(prev => prev.includes(id) ? prev : [...prev, id]);
+  }, []);
+
+  const unsaveRestaurant = useCallback((id: string) => {
+    setSavedRestaurantIds(prev => prev.filter(i => i !== id));
+  }, []);
+
   const updateProfile = useCallback((updates: Partial<UserProfile>) => {
     setProfile(prev => ({ ...prev, ...updates }));
   }, []);
@@ -837,7 +1067,11 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       courses, savedCourseIds, saveCourse, unsaveCourse, addCourse,
       currentSession, setCurrentSession, createSession, joinSession, fetchSession, toggleReady, startSession,
       swipeRecords, addSwipe, rerollSession, likedRestaurantIds,
+      savedRestaurantIds, saveRestaurant, unsaveRestaurant,
       profile, updateProfile,
+      feedPosts, addFeedPost, updateFeedPost, deleteFeedPost,
+      likedFeedIds, toggleFeedLike, addFeedComment, toggleCommentHidden, isMyPost,
+      courseSkins, setCourseSkin,
       restaurants,
       getRestaurantById, getCourseById,
       isLoading, apiAvailable,

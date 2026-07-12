@@ -75,12 +75,17 @@ export default function SlideTransitionRoutes({ children }: SlideTransitionRoute
           style={{
             position: "absolute",
             inset: 0,
-            overflowY: "auto",
             background: "#FCF4EE",
             willChange: "transform",
           }}
         >
-          {frozen}
+          {/* 스크롤은 여기 안쪽 레이어에서만 일어나야 한다.
+              motion.div(transform 보유)가 곧 스크롤 컨테이너이면, 그 안의
+              position:fixed 요소(FAB 등)의 containing block이 이 motion.div가 되어
+              뷰포트에 고정되지 못하고 페이지 스크롤을 따라 같이 움직여버린다. */}
+          <div style={{ position: "absolute", inset: 0, overflowY: "auto" }}>
+            {frozen}
+          </div>
         </motion.div>
       </AnimatePresence>
     </div>

@@ -1,10 +1,12 @@
 import { motion } from "framer-motion";
 import { useLocation } from "wouter";
 import { useState, useEffect } from "react";
-import { Heart, X, ArrowRight, MapPin, Clock, Bookmark } from "lucide-react";
+import { Heart, X, ArrowRight, MapPin, Clock, Star } from "lucide-react";
 import { useApp, Course, MOCK_RESTAURANTS } from "@/contexts/AppContext";
-import CourseMapOverlay from "@/components/CourseMapOverlay";
-import { getCourseTagStyle } from "@/constants/courseTheme";
+import { getCourseSequenceColor } from "@/constants/courseTheme";
+import { MUNCHIE_SKINS } from "@/constants/skins";
+import { getCreatorName } from "@/constants/creators";
+import SkinFrame from "@/components/munchie/SkinFrame";
 import { logEvent } from "@/lib/eventLogger";
 import { toast } from "sonner";
 
@@ -89,57 +91,121 @@ function TodayJourneyCard() {
   );
 }
 
-function MunchieCourseCard({ course }: { course: Course }) {
+/** 스크랩북 스킨을 입힌 코스 카드 — 홈 Munchie Mode 좌우 스와이프 캐러셀용 */
+function SkinCourseCard({ course, skinIndex }: { course: Course; skinIndex: number }) {
   const [, navigate] = useLocation();
-  const { savedCourseIds, saveCourse, unsaveCourse } = useApp();
-  const isSaved = savedCourseIds.includes(course.id);
+  const { getRestaurantById, feedPosts } = useApp();
+  const skin = MUNCHIE_SKINS[skinIndex % 4]; // 핑크/옐로우/빈티지/블루 순환
+
+  const stopRestaurants = course.stops
+    .map(s => getRestaurantById(s.placeId))
+    .filter((r): r is NonNullable<typeof r> => !!r);
+  const rating = stopRestaurants.length
+    ? (stopRestaurants.reduce((sum, r) => sum + r.rating, 0) / stopRestaurants.length).toFixed(1)
+    : '4.5';
+  const collagePhotos = [course.heroImage, ...stopRestaurants.map(r => r.image)].slice(0, 2);
+  // 이 코스로 작성된 가장 최근 피드의 한줄평
+  const latestCaption = feedPosts
+    .filter(p => p.courseId === course.id)
+    .sort((a, b) => b.createdAt.localeCompare(a.createdAt))[0]?.caption;
 
   return (
     <motion.div
-      className="lm-card overflow-hidden cursor-pointer"
-      whileTap={{ scale: 0.98 }}
-      onClick={() => navigate(`/course/${course.id}?from=explore`)}
+      className="w-[236px] flex-shrink-0 snap-center cursor-pointer"
+      whileTap={{ scale: 0.97 }}
+      onClick={() => navigate(`/course/${course.id}?from=feed`)}
     >
-      <div className="relative h-40">
-        <img src={course.heroImage} alt={course.title} className="w-full h-full object-cover" />
-        <CourseMapOverlay course={course} />
-        <div className="absolute inset-0 z-10 bg-gradient-to-t from-black/50 to-transparent" />
-        <button
-          onClick={e => { e.stopPropagation(); isSaved ? unsaveCourse(course.id) : saveCourse(course.id); }}
-          className="absolute top-3 right-3 z-30 w-8 h-8 rounded-full bg-white/80 flex items-center justify-center"
-        >
-          <Bookmark size={14} fill={isSaved ? '#E85053' : 'none'} stroke={isSaved ? '#E85053' : '#4A4A4A'} />
-        </button>
-        <div className="absolute bottom-3 left-3 z-30 flex gap-1.5 flex-wrap">
-          {course.tags.slice(0, 2).map(tag => (
-            <span key={tag} className="tag" style={getCourseTagStyle(tag)}>
-              {tag}
+      <SkinFrame skin={skin} radius={22} padding={9}>
+        <div className="px-3 pt-3 pb-3.5">
+          {/* 폴라로이드 콜라주 */}
+          <div className="relative h-[118px]">
+            {collagePhotos.map((src, i) => (
+              <div
+                key={i}
+                className="absolute bg-white p-[5px] pb-[14px] shadow-md"
+                style={{
+                  width: 118,
+                  left: i === 0 ? 6 : 84,
+                  top: i === 0 ? 2 : 10,
+                  transform: `rotate(${i === 0 ? -4 : 5}deg)`,
+                  zIndex: i === 0 ? 1 : 2,
+                  borderRadius: 4,
+                }}
+              >
+                <img src={src} alt="" className="h-[80px] w-full object-cover" draggable={false} />
+              </div>
+            ))}
+          </div>
+
+          {/* 제목 + 평점 */}
+          <div className="mt-2 flex items-center gap-1.5">
+            <h3
+              className="font-bold text-[14px] leading-tight truncate"
+              style={{ color: skin.text, fontFamily: skin.titleFont }}
+            >
+              {course.title}
+            </h3>
+            <span className="flex items-center gap-0.5 text-[11px] font-bold shrink-0" style={{ color: skin.accent }}>
+              <Star size={10} fill="currentColor" /> {rating}
             </span>
-          ))}
+          </div>
+
+          {/* 스탯 */}
+          <div className="mt-1.5 flex items-center gap-2.5 text-[10px]" style={{ color: skin.sub }}>
+            <span>◎ {course.metadata.placeCount} Stops</span>
+            <span className="flex items-center gap-0.5"><Clock size={9} /> {Math.floor(course.metadata.duration / 60)}h</span>
+            <span className="flex items-center gap-0.5"><MapPin size={9} /> {course.metadata.distance}km</span>
+          </div>
+
+          {/* 한줄평 (이 코스로 남긴 최근 피드) */}
+          {latestCaption && (
+            <p
+              className="mt-2 rounded-lg px-2 py-1.5 text-[10.5px] leading-snug line-clamp-2"
+              style={{ background: `${skin.accent}12`, color: skin.text }}
+            >
+              💬 {latestCaption}
+            </p>
+          )}
+
+          {/* 스팟 번호 서클 */}
+          <div className="mt-2.5 flex items-center">
+            {stopRestaurants.slice(0, 4).map((r, i) => {
+              const color = getCourseSequenceColor(i);
+              return (
+                <div key={`${r.id}-${i}`} className="flex items-center">
+                  <div className="relative">
+                    <div className="w-9 h-9 rounded-full overflow-hidden border-2" style={{ borderColor: color.base }}>
+                      <img src={r.image} alt="" className="w-full h-full object-cover" draggable={false} />
+                    </div>
+                    <span
+                      className="absolute -top-1 -left-1 w-[15px] h-[15px] rounded-full text-white text-[9px] font-bold flex items-center justify-center"
+                      style={{ background: color.base }}
+                    >
+                      {i + 1}
+                    </span>
+                  </div>
+                  {i < Math.min(stopRestaurants.length, 4) - 1 && (
+                    <span className="w-3 border-t-2 border-dotted" style={{ borderColor: color.lighter }} />
+                  )}
+                </div>
+              );
+            })}
+          </div>
+
+          {/* 작성자 */}
+          <div className="mt-2.5 flex items-center gap-1.5">
+            <div className="w-6 h-6 rounded-full flex items-center justify-center text-[12px]" style={{ background: `${skin.accent}1A` }}>
+              🙂
+            </div>
+            <span className="text-[10px] font-semibold" style={{ color: skin.text }}>
+              {getCreatorName(course.creatorId)}
+            </span>
+            <span className="text-[10px]" style={{ color: skin.sub }}>
+              팔로워 2,380명
+            </span>
+          </div>
         </div>
-      </div>
-      <div className="p-4">
-        <h3 className="font-bold text-[15px] text-[#1A1A1A] mb-1">{course.title}</h3>
-        <div className="flex gap-1.5 flex-wrap mb-2">
-          {course.hashtags.slice(0, 3).map(h => (
-            <span key={h} className="tag tag-hash">{h}</span>
-          ))}
-        </div>
-        <div className="flex items-center gap-3 text-[#9B9B9B]">
-          <span className="flex items-center gap-1 text-[12px]">
-            <MapPin size={11} /> {course.metadata.distance}km
-          </span>
-          <span className="flex items-center gap-1 text-[12px]">
-            <Clock size={11} /> {Math.floor(course.metadata.duration / 60)}시간
-          </span>
-          <span className="flex items-center gap-1 text-[12px]">
-            📍 {course.metadata.placeCount}개 장소
-          </span>
-          <span className="flex items-center gap-1 text-[12px] ml-auto">
-            <Bookmark size={11} /> {course.savedCount}
-          </span>
-        </div>
-      </div>
+      </SkinFrame>
     </motion.div>
   );
 }
@@ -229,16 +295,16 @@ export default function HomePage() {
           </span>
         </div>
 
-        <h1 className="text-[30px] font-bold leading-[1.2] text-black" style={{ paddingLeft: 20 }}>
-          오늘 어떻게
+        <h1 className="text-[28px] font-bold leading-[1.25] text-black" style={{ paddingLeft: 20 }}>
+          스크랩으로 기록하고,
           <br />
-          먹을까요?
+          함께 나누는 맛집 코스
         </h1>
         <p
           className="mt-[13px] text-[11px] leading-none"
           style={{ color: "#6E6A67", paddingLeft: 20 }}
         >
-          모드를 선택해주세요.
+          코스를 발견하고, 스킨을 입혀 추억을 공유해요.
         </p>
       </motion.div>
 
@@ -315,7 +381,7 @@ export default function HomePage() {
             Munchie Mode
           </p>
           <button
-            onClick={() => navigate("/explore")}
+            onClick={() => navigate("/feed")}
             className="flex items-center gap-[6px] text-[16px] font-bold leading-none text-black active:opacity-60"
           >
             더보기 <ArrowRight size={20} strokeWidth={2.4} />
@@ -324,26 +390,27 @@ export default function HomePage() {
         <p className="mb-[12px] text-[10px] leading-none text-black" style={{ paddingLeft: 20 }}>
           이번주 사람들이 많이 저장한 코스
         </p>
+      </motion.div>
 
-        <div className="space-y-[36px]">
-          {courses.slice(0, 4).map((course) => (
-            <MunchieCourseCard key={course.id} course={course} />
+      {/* 스킨 카드 캐러셀 — 좌우 스와이프 */}
+      <motion.div variants={fadeUp}>
+        <div
+          className="flex gap-4 overflow-x-auto snap-x snap-mandatory scrollbar-hide pt-3 pb-4"
+          style={{
+            paddingLeft: "clamp(24px, 10.2vw, 41px)",
+            paddingRight: "clamp(24px, 10.2vw, 41px)",
+            scrollbarWidth: "none",
+          }}
+        >
+          {courses.slice(0, 4).map((course, i) => (
+            <SkinCourseCard key={course.id} course={course} skinIndex={i} />
           ))}
         </div>
-
-        <motion.button
-          onClick={() => navigate("/explore")}
-          className="mt-[24px] flex h-[54px] w-full items-center justify-center gap-[8px] text-[16px] font-bold text-black"
-          style={{
-            background: "#FFE39B",
-            borderRadius: 20,
-            boxShadow: "4px 5px 0 rgba(255, 213, 103, 0.5)",
-          }}
-          whileTap={{ scale: 0.97 }}
-        >
-          코스 더보기 <ArrowRight size={20} strokeWidth={2.5} />
-        </motion.button>
+        <p className="text-center text-[11px] font-medium" style={{ color: "#C7A69A" }}>
+          ← 좌우 스와이프 →
+        </p>
       </motion.div>
+
     </motion.div>
   );
 }

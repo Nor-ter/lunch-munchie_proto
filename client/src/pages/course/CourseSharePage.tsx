@@ -13,11 +13,17 @@ import {
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { getCourseById } from '@/data/mockCourse';
+import { useApp } from '@/contexts/AppContext';
 import { useCourseShare } from '@/hooks/useCourseShare';
 import FoodCourseStoryTemplate from '@/components/share/templates/FoodCourseStoryTemplate';
 import StravaDarkTemplate from '@/components/share/templates/StravaDarkTemplate';
 import StravaMinimalTemplate from '@/components/share/templates/StravaMinimalTemplate';
 import FoodCourseDarkTemplate from '@/components/share/templates/FoodCourseDarkTemplate';
+import CdCaseTemplate from '@/components/share/templates/scrapbook/CdCaseTemplate';
+import LunchTrayTemplate from '@/components/share/templates/scrapbook/LunchTrayTemplate';
+import TicketTemplate from '@/components/share/templates/scrapbook/TicketTemplate';
+import ReceiptTemplate from '@/components/share/templates/scrapbook/ReceiptTemplate';
+import { paletteFromSkin } from '@/components/share/templates/scrapbook/scrapTheme';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -31,6 +37,12 @@ type Platform =
   | 'save';
 
 const TEMPLATES = [
+  // 스크랩북 스킨 시리즈 (Sample Scrapbook Design Templates)
+  { name: '포토카드 케이스', desc: '스크랩북 스킨 · CD 케이스', aspect: '9:16' },
+  { name: '먼치트레이', desc: '스크랩북 스킨 · What I ate today', aspect: '9:16' },
+  { name: '캡처링 모먼츠', desc: '스크랩북 스킨 · 빈티지 티켓', aspect: '9:16' },
+  { name: '먼치 영수증', desc: '스크랩북 스킨 · 레트로 영수증', aspect: '9:16' },
+  // 기존 템플릿
   { name: '푸드 코스', desc: '지도 + 일정', aspect: '9:16' },
   { name: '스트라바', desc: '오렌지 루트 + 통계', aspect: '9:16' },
   { name: '미니멀', desc: '루트만', aspect: '9:16' },
@@ -133,6 +145,9 @@ export default function CourseSharePage() {
 
   const course = getCourseById(id);
   const { saveImageToDevice } = useCourseShare();
+  // 코스에 입힌 먼치 스킨이 있으면 스크랩북 템플릿 색감도 따라간다
+  const { courseSkins } = useApp();
+  const scrapPalette = id ? paletteFromSkin(courseSkins[id]) : undefined;
 
   const [selectedTemplate, setSelectedTemplate] = useState(0);
   const [selectedPlatform, setSelectedPlatform] = useState<Platform>('ig-story');
@@ -215,16 +230,28 @@ export default function CourseSharePage() {
           }}
         >
           <TemplateSlide selected={selectedTemplate === 0}>
-            <FoodCourseStoryTemplate ref={setCardRef(0)} course={course} />
+            <CdCaseTemplate ref={setCardRef(0)} course={course} palette={scrapPalette} />
           </TemplateSlide>
           <TemplateSlide selected={selectedTemplate === 1}>
-            <StravaDarkTemplate ref={setCardRef(1)} course={course} />
+            <LunchTrayTemplate ref={setCardRef(1)} course={course} palette={scrapPalette} />
           </TemplateSlide>
           <TemplateSlide selected={selectedTemplate === 2}>
-            <StravaMinimalTemplate ref={setCardRef(2)} course={course} />
+            <TicketTemplate ref={setCardRef(2)} course={course} palette={scrapPalette} />
           </TemplateSlide>
           <TemplateSlide selected={selectedTemplate === 3}>
-            <FoodCourseDarkTemplate ref={setCardRef(3)} course={course} />
+            <ReceiptTemplate ref={setCardRef(3)} course={course} palette={scrapPalette} />
+          </TemplateSlide>
+          <TemplateSlide selected={selectedTemplate === 4}>
+            <FoodCourseStoryTemplate ref={setCardRef(4)} course={course} />
+          </TemplateSlide>
+          <TemplateSlide selected={selectedTemplate === 5}>
+            <StravaDarkTemplate ref={setCardRef(5)} course={course} />
+          </TemplateSlide>
+          <TemplateSlide selected={selectedTemplate === 6}>
+            <StravaMinimalTemplate ref={setCardRef(6)} course={course} />
+          </TemplateSlide>
+          <TemplateSlide selected={selectedTemplate === 7}>
+            <FoodCourseDarkTemplate ref={setCardRef(7)} course={course} />
           </TemplateSlide>
         </div>
       </div>

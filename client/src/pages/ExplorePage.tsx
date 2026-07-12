@@ -6,7 +6,7 @@
 import { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useLocation } from 'wouter';
-import { MapPin, Clock, Bookmark, Star, SlidersHorizontal } from 'lucide-react';
+import { MapPin, Clock, Bookmark, Star, SlidersHorizontal, Plus, BookOpen } from 'lucide-react';
 import { useApp, Course, TagType } from '@/contexts/AppContext';
 import CourseMapOverlay from '@/components/CourseMapOverlay';
 import { getCourseTagStyle } from '@/constants/courseTheme';
@@ -106,9 +106,18 @@ export default function ExplorePage() {
             </div>
             <p className="text-[12px] mt-0.5" style={{ color: '#9B9B9B' }}>코스를 탐색해보아요</p>
           </div>
-          <button className="w-10 h-10 rounded-full bg-[#F5F5F5] flex items-center justify-center">
-            <SlidersHorizontal size={18} color="#4A4A4A" />
-          </button>
+          <div className="flex gap-2">
+            <button
+              onClick={() => navigate('/feed')}
+              aria-label="Munchie Feed"
+              className="w-10 h-10 rounded-full bg-[#FDE1E1] flex items-center justify-center"
+            >
+              <BookOpen size={18} color="#E85053" />
+            </button>
+            <button className="w-10 h-10 rounded-full bg-[#F5F5F5] flex items-center justify-center">
+              <SlidersHorizontal size={18} color="#4A4A4A" />
+            </button>
+          </div>
         </div>
 
         {/* Filter chips */}
@@ -158,15 +167,16 @@ export default function ExplorePage() {
       {/* Create Course FAB */}
       <motion.button
         onClick={() => navigate('/lunchie/settings')}
-        className="fixed bottom-24 right-4 w-14 h-14 rounded-full shadow-xl flex items-center justify-center z-40 text-white font-bold text-2xl"
-        style={{ background: '#E85053' }}
-        whileHover={{ scale: 1.1 }}
-        whileTap={{ scale: 0.9 }}
+        className="fixed bottom-24 right-4 flex items-center gap-2 px-4 h-12 rounded-full shadow-xl text-white font-bold text-[13px] z-40"
+        style={{ background: '#EB5053' }}
+        whileHover={{ scale: 1.05 }}
+        whileTap={{ scale: 0.95 }}
         initial={{ scale: 0 }}
         animate={{ scale: 1 }}
-        transition={{ type: 'spring', stiffness: 300, damping: 20, delay: 0.3 }}
+        transition={{ type: 'spring', stiffness: 300, damping: 20, delay: 0.2 }}
       >
-        +
+        <Plus size={18} />
+        새 코스 만들기
       </motion.button>
     </div>
   );

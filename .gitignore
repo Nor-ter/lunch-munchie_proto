@@ -10,3 +10,9 @@ dist/
 
 # Superpowers brainstorm mockups
 .superpowers/
+
+# Local AI assistant settings
+.claude/settings.local.json
+
+# Local prototype workspace (separate Git repository)
+Prototype/
