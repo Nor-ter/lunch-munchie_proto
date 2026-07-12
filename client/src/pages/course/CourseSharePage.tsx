@@ -1,4 +1,4 @@
-import { forwardRef, useCallback, useEffect, useImperativeHandle, useRef, useState } from 'react';
+import { forwardRef, useCallback, useEffect, useImperativeHandle, useMemo, useRef, useState } from 'react';
 import { useParams, useLocation, useSearch } from 'wouter';
 import { motion } from 'framer-motion';
 import {
@@ -11,10 +11,12 @@ import {
   X,
 } from 'lucide-react';
 import { toast } from 'sonner';
-import { getCourseById } from '@/data/mockCourse';
+import { getCourseById as getMockCourseById } from '@/data/mockCourse';
 import { useCourseShare } from '@/hooks/useCourseShare';
 import type { Course } from '@/types/course';
 import { fileToResizedDataUrl } from '@/lib/imageUtils';
+import { useApp } from '@/contexts/AppContext';
+import { getCoursePlacesFromStops } from '@/lib/courseMapSync';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -343,7 +345,7 @@ function useShareNavigation() {
   const search = useSearch();
   const params = new URLSearchParams(search);
   const from = params.get('from');
-  const shareFrom = from === 'saved' || from === 'edit' ? from : null;
+  const shareFrom = from === 'saved' || from === 'edit' || from === 'create' ? from : null;
   const editorFrom = params.get('editorFrom') === 'saved' ? 'saved' : 'explore';
   return { shareFrom, editorFrom } as const;
 }
@@ -352,6 +354,7 @@ export default function CourseSharePage() {
   const { id } = useParams<{ id: string }>();
   const [, navigate] = useLocation();
   const { shareFrom, editorFrom } = useShareNavigation();
+  const { getCourseById: getAppCourseById, getRestaurantById, profile } = useApp();
 
   const goBack = () => {
     if (!id) {
@@ -360,14 +363,35 @@ export default function CourseSharePage() {
     }
     if (shareFrom === 'saved') {
       navigate(`/course/${id}?from=saved`, { replace: true });
-    } else if (shareFrom === 'edit') {
+    } else if (shareFrom === 'edit' || shareFrom === 'create') {
       navigate(`/course/${id}/edit?from=${editorFrom}`, { replace: true });
     } else {
       navigate(`/course/${id}?from=explore`, { replace: true });
     }
   };
 
-  const course = getCourseById(id);
+  const appCourse = id ? getAppCourseById(id) : undefined;
+  const syncedPlaces = useMemo(
+    () => appCourse ? getCoursePlacesFromStops(appCourse, getRestaurantById) : [],
+    [appCourse, getRestaurantById],
+  );
+  const fallbackCourse = getMockCourseById(id);
+  const course: Course = appCourse
+    ? {
+        id: appCourse.id,
+        authorHandle: profile.name,
+        followerCount: '',
+        title: appCourse.title,
+        subtitle: appCourse.description,
+        region: appCourse.region,
+        date: appCourse.createdAt,
+        hashtags: appCourse.hashtags,
+        distanceKm: appCourse.metadata.distance,
+        durationHours: Math.round((appCourse.metadata.duration / 60) * 10) / 10,
+        saveCount: appCourse.savedCount,
+        places: syncedPlaces,
+      }
+    : fallbackCourse;
   const [customPhotos] = useState<Array<string | null>>(() => {
     if (!id) return [];
     try {
@@ -446,6 +470,11 @@ export default function CourseSharePage() {
     } finally {
       setIsCapturing(false);
     }
+  };
+
+  const finishTemplate = () => {
+    toast.success('템플릿을 완성했어요!');
+    navigate('/feed?tab=template', { replace: true });
   };
 
   return (
@@ -581,13 +610,21 @@ export default function CourseSharePage() {
           })}
         </div>
 
-        <button
-          onClick={handleShare}
-          disabled={isCapturing}
-          className="w-full mt-5 bg-[#1A1A1A] text-white rounded-2xl h-12 text-sm font-semibold disabled:opacity-60 active:scale-[0.98] transition-transform"
-        >
-          {isCapturing ? '저장 중...' : PLATFORM_LABELS[selectedPlatform]}
-        </button>
+        <div className="mt-5 grid grid-cols-2 gap-3">
+          <button
+            onClick={handleShare}
+            disabled={isCapturing}
+            className="bg-[#EB5053] text-white rounded-2xl h-12 px-2 text-[13px] font-semibold disabled:opacity-60 active:scale-[0.98] transition-transform"
+          >
+            {isCapturing ? '저장 중...' : PLATFORM_LABELS[selectedPlatform]}
+          </button>
+          <button
+            onClick={finishTemplate}
+            className="bg-[#EB5053] text-white rounded-2xl h-12 px-2 text-[13px] font-semibold active:scale-[0.98] transition-transform"
+          >
+            템플릿 완성 및 홈으로
+          </button>
+        </div>
       </div>
     </motion.div>
   );

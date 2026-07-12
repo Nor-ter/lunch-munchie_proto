@@ -376,8 +376,14 @@ export default function CourseEditPage() {
     };
 
     addCourse(newCourse);
-    toast.success('코스를 만들었어요! 🎉');
-    navigate(`/course/${newId}?from=explore`, { replace: true });
+    try {
+      localStorage.setItem(
+        `lm_course_share_photos_${newId}`,
+        JSON.stringify(places.map(place => place.imageUrl ?? null)),
+      );
+    } catch { /* 현재 사진 상태로 공유 화면을 계속 진행 */ }
+    toast.success('코스를 만들었어요. 템플릿을 완성해보세요! 🎉');
+    navigate(`/course/${newId}/share?from=create`, { replace: true });
   };
 
   const addPlace = (r: Restaurant) => {
@@ -628,7 +634,7 @@ export default function CourseEditPage() {
             onClick={handleSave}
             className="flex-1 bg-[#E85053] text-white rounded-xl h-11 text-sm font-medium"
           >
-            코스 만들기
+            코스 공유하기
           </button>
         ) : (
           <button
