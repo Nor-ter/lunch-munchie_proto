@@ -131,7 +131,7 @@ export default function FeedComposePage() {
   };
 
   const goBack = () => {
-    if (step === 0 || step === 3) navigate('/feed');
+    if (step === 0 || step === 3) navigate('/feed?tab=feed');
     else setStep(s => s - 1);
   };
 
@@ -293,7 +293,7 @@ export default function FeedComposePage() {
         ) : (
           <motion.button
             whileTap={{ scale: 0.97 }}
-            onClick={() => navigate('/feed')}
+            onClick={() => navigate('/feed?tab=feed')}
             className="w-full h-[52px] rounded-2xl text-white font-bold text-[15px] shadow-lg"
             style={{ background: '#EB5053' }}
           >

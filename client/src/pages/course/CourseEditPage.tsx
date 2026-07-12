@@ -309,7 +309,7 @@ export default function CourseEditPage() {
 
   const goBack = () => {
     if (isNew) {
-      navigate('/feed', { replace: true });
+      navigate('/feed?tab=template', { replace: true });
       return;
     }
 
