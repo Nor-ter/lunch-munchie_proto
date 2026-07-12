@@ -70,23 +70,29 @@ export const COURSE_COLOR_PALETTE = [
 export type CoursePaletteColor = (typeof COURSE_COLOR_PALETTE)[number];
 
 export const COURSE_TAG_ORDER = [
-  '데이트 코스',
   '맛집',
+  '데이트코스',
+  '혼밥',
   '카페',
-  '전시/문화',
-  '액티비티',
+  '펍나이트',
+  '브런치',
+  '디저트',
+  '가성비',
 ] as const;
 
 const COURSE_TAG_COLOR_MAP: Record<string, CoursePaletteColor> = COURSE_TAG_ORDER.reduce(
   (acc, tag, index) => {
-    acc[tag] = COURSE_COLOR_PALETTE[index]!;
+    acc[tag] = COURSE_COLOR_PALETTE[index % COURSE_COLOR_PALETTE.length]!;
     return acc;
   },
   {} as Record<string, CoursePaletteColor>
 );
 
+COURSE_TAG_COLOR_MAP['데이트 코스'] = COURSE_TAG_COLOR_MAP['데이트코스']!;
+COURSE_TAG_COLOR_MAP['혼자 여행'] = COURSE_TAG_COLOR_MAP['혼밥']!;
+COURSE_TAG_COLOR_MAP['전시/문화'] = COURSE_TAG_COLOR_MAP['데이트코스']!;
+COURSE_TAG_COLOR_MAP['액티비티'] = COURSE_TAG_COLOR_MAP['데이트코스']!;
 COURSE_TAG_COLOR_MAP['맛집 투어'] = COURSE_TAG_COLOR_MAP['맛집']!;
-COURSE_TAG_COLOR_MAP['가성비'] = COURSE_TAG_COLOR_MAP['액티비티']!;
 
 export function getCourseSequenceColor(index: number): CoursePaletteColor {
   return COURSE_COLOR_PALETTE[index % COURSE_COLOR_PALETTE.length]!;

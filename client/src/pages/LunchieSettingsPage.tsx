@@ -9,6 +9,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { useLocation } from 'wouter';
 import { ArrowLeft, Clock, SlidersHorizontal, Users, Minus, Plus, X } from 'lucide-react';
 import { useApp } from '@/contexts/AppContext';
+import { FOOD_TAGS } from '@/constants/foodTags';
 import { toast } from 'sonner';
 
 // ─── Filter constants (sj_branch parity) ──────────────────────────────────────
@@ -26,7 +27,7 @@ const DETAIL_OPTIONS: Record<string, string[]> = {
   '거리': ['500m 이내', '1km 이내', '3km 이내', '5km 이내'],
   '예산': ['₩', '₩₩', '₩₩₩', '₩₩₩₩'],
   '카드수': ['5장', '7장', '10장', '15장'],
-  '취향': ['카페', '맛집', '데이트 코스', '혼자 여행', '전시/문화', '가성비'],
+  '취향': [...FOOD_TAGS],
   '평점': ['4.0 이상', '4.5 이상', '4.8 이상'],
 };
 

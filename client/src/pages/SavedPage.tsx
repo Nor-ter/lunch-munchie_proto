@@ -9,17 +9,10 @@ import { useLocation } from 'wouter';
 import { MapPin, Bookmark, Star, Zap, Map as MapIcon } from 'lucide-react';
 import { useApp, TagType } from '@/contexts/AppContext';
 import { getCourseTagStyle } from '@/constants/courseTheme';
+import { FOOD_FILTER_TAGS, hasFoodTag } from '@/constants/foodTags';
 import TemplateCoursemapCard from '@/components/munchie/TemplateCoursemapCard';
 
 type Tab = 'coursemaps' | 'restaurants';
-
-const COURSE_FILTER_TAGS: { label: string; value: TagType | 'all' }[] = [
-  { label: '전체', value: 'all' },
-  { label: '데이트 코스', value: '데이트 코스' },
-  { label: '맛집', value: '맛집' },
-  { label: '카페', value: '카페' },
-  { label: '혼자 여행', value: '혼자 여행' },
-];
 
 function RestaurantSavedCard({
   restaurantId,
@@ -90,7 +83,7 @@ export default function SavedPage() {
   const savedCourses = courses.filter(c => savedCourseIds.includes(c.id));
   const filteredCourses = activeFilter === 'all'
     ? savedCourses
-    : savedCourses.filter(c => c.tags.includes(activeFilter as TagType));
+    : savedCourses.filter(c => hasFoodTag(c.tags, activeFilter as TagType));
 
   return (
     <div className="min-h-dvh bg-[#FCF4EE] pb-24">
@@ -137,7 +130,7 @@ export default function SavedPage() {
         {/* Munchie 템플릿 필터 */}
         {tab === 'coursemaps' && (
           <div className="flex gap-2 overflow-x-auto pb-1 pt-3 scrollbar-hide -mx-5 px-5">
-            {COURSE_FILTER_TAGS.map(f => (
+            {FOOD_FILTER_TAGS.map(f => (
               <button
                 key={f.value}
                 onClick={() => setActiveFilter(f.value)}

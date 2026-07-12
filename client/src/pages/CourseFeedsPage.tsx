@@ -10,16 +10,7 @@ import { MapPin, Clock, Bookmark, Star, SlidersHorizontal } from 'lucide-react';
 import { useApp, Course, TagType } from '@/contexts/AppContext';
 import CourseMapOverlay from '@/components/CourseMapOverlay';
 import { getCourseTagStyle } from '@/constants/courseTheme';
-
-const FILTER_TAGS: { label: string; value: TagType | 'all' }[] = [
-  { label: '전체', value: 'all' },
-  { label: '데이트 코스', value: '데이트 코스' },
-  { label: '맛집', value: '맛집' },
-  { label: '카페', value: '카페' },
-  { label: '혼자 여행', value: '혼자 여행' },
-  { label: '전시/문화', value: '전시/문화' },
-  { label: '액티비티', value: '액티비티' },
-];
+import { FOOD_FILTER_TAGS, hasFoodTag } from '@/constants/foodTags';
 
 function CourseListCard({ course, onTap }: { course: Course; onTap: () => void }) {
   const { savedCourseIds, saveCourse, unsaveCourse } = useApp();
@@ -86,7 +77,7 @@ export default function ExplorePage() {
 
   const filtered = activeFilter === 'all'
     ? courses
-    : courses.filter(c => c.tags.includes(activeFilter as TagType));
+    : courses.filter(c => hasFoodTag(c.tags, activeFilter as TagType));
 
   return (
     <div className="min-h-dvh bg-[#FCF4EE]">
@@ -101,7 +92,7 @@ export default function ExplorePage() {
 
         {/* Filter chips */}
         <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-hide -mx-5 px-5">
-          {FILTER_TAGS.map(f => (
+          {FOOD_FILTER_TAGS.map(f => (
             <button
               key={f.value}
               onClick={() => setActiveFilter(f.value)}

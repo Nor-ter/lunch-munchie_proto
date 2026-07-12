@@ -9,17 +9,9 @@ import { useLocation, useSearch } from 'wouter';
 import { SlidersHorizontal, PenLine, Plus } from 'lucide-react';
 import { useApp, TagType } from '@/contexts/AppContext';
 import { getCourseTagStyle } from '@/constants/courseTheme';
+import { FOOD_FILTER_TAGS, hasFoodTag } from '@/constants/foodTags';
 import FeedPostCard from '@/components/munchie/FeedPostCard';
 import TemplateCoursemapCard from '@/components/munchie/TemplateCoursemapCard';
-
-const FILTER_TAGS: { label: string; value: TagType | 'all' }[] = [
-  { label: '전체', value: 'all' },
-  { label: '데이트 코스', value: '데이트 코스' },
-  { label: '맛집', value: '맛집' },
-  { label: '카페', value: '카페' },
-  { label: '혼자 여행', value: '혼자 여행' },
-  { label: '전시/문화', value: '전시/문화' },
-];
 
 export default function MunchieFeedPage() {
   const [, navigate] = useLocation();
@@ -32,11 +24,11 @@ export default function MunchieFeedPage() {
 
   const filtered = activeFilter === 'all'
     ? feedPosts
-    : feedPosts.filter(p => p.tags.includes(activeFilter as TagType));
+    : feedPosts.filter(p => hasFoodTag(p.tags, activeFilter as TagType));
 
   const filteredCourses = activeFilter === 'all'
     ? courses
-    : courses.filter(c => c.tags.includes(activeFilter as TagType));
+    : courses.filter(c => hasFoodTag(c.tags, activeFilter as TagType));
 
   const changeView = (nextView: 'feed' | 'maps') => {
     setView(nextView);
@@ -83,7 +75,7 @@ export default function MunchieFeedPage() {
 
         {/* Filter chips */}
         <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-hide -mx-5 px-5">
-          {FILTER_TAGS.map(f => (
+          {FOOD_FILTER_TAGS.map(f => (
             <button
               key={f.value}
               onClick={() => setActiveFilter(f.value)}

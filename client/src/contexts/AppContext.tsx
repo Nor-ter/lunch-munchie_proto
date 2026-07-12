@@ -7,6 +7,8 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import { normalizeDiet, isHardRestriction, type DietTag } from '@shared/const';
 import { intentForHour } from '@shared/intent';
+import { normalizeFoodTag, type TagType } from '@/constants/foodTags';
+export type { TagType } from '@/constants/foodTags';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -24,8 +26,6 @@ function matchesDiet(category: string, restaurantDietary: string[], filterDietar
     tag === 'NO_SEAFOOD' ? !SEAFOOD_RE.test(category) : offered.includes(tag),
   );
 }
-
-export type TagType = '데이트 코스' | '맛집' | '카페' | '전시/문화' | '액티비티' | '혼자 여행' | '맛집 투어' | '가성비';
 
 export interface Restaurant {
   id: string;
@@ -175,7 +175,7 @@ export interface FeedPost {
 export const MOCK_RESTAURANTS: Restaurant[] = [
   {
     id: 'r1', name: '카페 레이아웃', category: '카페',
-    tags: ['데이트 코스', '카페'], rating: 4.8, reviewCount: 2341,
+    tags: ['데이트코스', '카페'], rating: 4.8, reviewCount: 2341,
     distance: '350m', address: '서울 성동구 성수이로7길 26',
     image: 'https://images.unsplash.com/photo-1554118811-1e0d58224f24?w=600&q=80',
     lat: 37.5447, lng: 127.0561, priceRange: 2, openHours: '09:00–22:00',
@@ -183,7 +183,7 @@ export const MOCK_RESTAURANTS: Restaurant[] = [
   },
   {
     id: 'r2', name: '성수연방', category: '복합문화공간',
-    tags: ['데이트 코스', '전시/문화'], rating: 4.6, reviewCount: 1892,
+    tags: ['데이트코스', '디저트'], rating: 4.6, reviewCount: 1892,
     distance: '520m', address: '서울 성동구 연무장5가길 7',
     image: 'https://d2xsxph8kpxj0f.cloudfront.net/310519663322273601/2bdpbPnYmCuK9PccZ3SWKc/lm-course-seongsu-hGTsaQPMJotuBpuyBnE5dN.webp',
     lat: 37.5441, lng: 127.0571, priceRange: 2, openHours: '11:00–21:00',
@@ -191,7 +191,7 @@ export const MOCK_RESTAURANTS: Restaurant[] = [
   },
   {
     id: 'r3', name: '어니언 성수', category: '베이커리',
-    tags: ['카페', '데이트 코스'], rating: 4.9, reviewCount: 5621,
+    tags: ['카페', '디저트'], rating: 4.9, reviewCount: 5621,
     distance: '680m', address: '서울 성동구 아차산로9길 8',
     image: 'https://images.unsplash.com/photo-1509440159596-0249088772ff?w=600&q=80',
     lat: 37.5451, lng: 127.0551, priceRange: 2, openHours: '08:00–22:00',
@@ -199,7 +199,7 @@ export const MOCK_RESTAURANTS: Restaurant[] = [
   },
   {
     id: 'r4', name: '대림창고', category: '레스토랑',
-    tags: ['데이트 코스', '맛집'], rating: 4.7, reviewCount: 3201,
+    tags: ['데이트코스', '맛집'], rating: 4.7, reviewCount: 3201,
     distance: '900m', address: '서울 성동구 성수이로 78',
     image: 'https://images.unsplash.com/photo-1414235077428-338989a2e8c0?w=600&q=80',
     lat: 37.5438, lng: 127.0581, priceRange: 3, openHours: '11:30–22:00',
@@ -207,7 +207,7 @@ export const MOCK_RESTAURANTS: Restaurant[] = [
   },
   {
     id: 'r5', name: '서울숲 피크닉', category: '공원',
-    tags: ['액티비티', '데이트 코스'], rating: 4.5, reviewCount: 8901,
+    tags: ['펍나이트', '데이트코스'], rating: 4.5, reviewCount: 8901,
     distance: '1.2km', address: '서울 성동구 뚝섬로 273',
     image: 'https://images.unsplash.com/photo-1519331379826-f10be5486c6f?w=600&q=80',
     lat: 37.5445, lng: 127.0611, priceRange: 1, openHours: '06:00–22:00',
@@ -215,7 +215,7 @@ export const MOCK_RESTAURANTS: Restaurant[] = [
   },
   {
     id: 'r6', name: '한남 브런치 클럽', category: '브런치',
-    tags: ['맛집', '혼자 여행'], rating: 4.6, reviewCount: 1234,
+    tags: ['맛집', '혼밥'], rating: 4.6, reviewCount: 1234,
     distance: '2.1km', address: '서울 용산구 이태원로 240',
     image: 'https://d2xsxph8kpxj0f.cloudfront.net/310519663322273601/2bdpbPnYmCuK9PccZ3SWKc/lm-course-hannam-EMhDLXHPSYVSTV5cbEekLC.webp',
     lat: 37.5349, lng: 126.9990, priceRange: 3, openHours: '10:00–21:00',
@@ -223,7 +223,7 @@ export const MOCK_RESTAURANTS: Restaurant[] = [
   },
   {
     id: 'r7', name: '북촌 한옥 찻집', category: '전통찻집',
-    tags: ['전시/문화', '혼자 여행'], rating: 4.8, reviewCount: 2109,
+    tags: ['브런치', '혼밥'], rating: 4.8, reviewCount: 2109,
     distance: '3.5km', address: '서울 종로구 계동길 37',
     image: 'https://d2xsxph8kpxj0f.cloudfront.net/310519663322273601/2bdpbPnYmCuK9PccZ3SWKc/lm-course-bukchon-ATNXaSXg79mMDT2jnbpMuD.webp',
     lat: 37.5825, lng: 126.9844, priceRange: 2, openHours: '10:00–20:00',
@@ -247,7 +247,7 @@ export const MOCK_RESTAURANTS: Restaurant[] = [
   },
   {
     id: 'r10', name: '스시 오마카세 료', category: '일식',
-    tags: ['맛집', '데이트 코스'], rating: 4.9, reviewCount: 891,
+    tags: ['맛집', '데이트코스'], rating: 4.9, reviewCount: 891,
     distance: '2.8km', address: '서울 마포구 연남동 228-15',
     image: 'https://images.unsplash.com/photo-1579871494447-9811cf80d66c?w=600&q=80',
     lat: 37.5614, lng: 126.9237, priceRange: 4, openHours: '12:00–22:00',
@@ -263,7 +263,7 @@ export const MOCK_RESTAURANTS: Restaurant[] = [
   },
   {
     id: 'r12', name: '비건 테이블', category: '비건',
-    tags: ['맛집', '혼자 여행'], rating: 4.7, reviewCount: 1043,
+    tags: ['맛집', '혼밥'], rating: 4.7, reviewCount: 1043,
     distance: '760m', address: '서울 성동구 연무장길 18',
     image: 'https://images.unsplash.com/photo-1512621776951-a57141f2eefd?w=600&q=80',
     lat: 37.5432, lng: 127.0566, priceRange: 3, openHours: '11:30–21:00',
@@ -287,7 +287,7 @@ export const MOCK_RESTAURANTS: Restaurant[] = [
   },
   {
     id: 'r15', name: '그릴 스테이크 하우스', category: '스테이크',
-    tags: ['맛집', '데이트 코스'], rating: 4.8, reviewCount: 1567,
+    tags: ['맛집', '데이트코스'], rating: 4.8, reviewCount: 1567,
     distance: '2.3km', address: '서울 용산구 이태원로 200',
     image: 'https://images.unsplash.com/photo-1546833999-b9f581a1996d?w=600&q=80',
     lat: 37.5340, lng: 126.9945, priceRange: 4, openHours: '17:00–23:00',
@@ -303,7 +303,7 @@ export const MOCK_RESTAURANTS: Restaurant[] = [
   },
   {
     id: 'r17', name: '샐러드 보울', category: '샐러드',
-    tags: ['혼자 여행', '가성비'], rating: 4.1, reviewCount: 980,
+    tags: ['혼밥', '가성비'], rating: 4.1, reviewCount: 980,
     distance: '310m', address: '서울 성동구 성수이로 99',
     image: 'https://images.unsplash.com/photo-1512852939750-1305098529bf?w=600&q=80',
     lat: 37.5450, lng: 127.0560, priceRange: 2, openHours: '09:00–20:00',
@@ -319,7 +319,7 @@ export const MOCK_RESTAURANTS: Restaurant[] = [
   },
   {
     id: 'r19', name: '피자 나폴리', category: '이탈리안',
-    tags: ['맛집', '데이트 코스'], rating: 4.5, reviewCount: 2670,
+    tags: ['맛집', '데이트코스'], rating: 4.5, reviewCount: 2670,
     distance: '1.5km', address: '서울 마포구 연남로 30',
     image: 'https://images.unsplash.com/photo-1513104890138-7c749659a591?w=600&q=80',
     lat: 37.5620, lng: 126.9230, priceRange: 3, openHours: '11:30–22:30',
@@ -327,7 +327,7 @@ export const MOCK_RESTAURANTS: Restaurant[] = [
   },
   {
     id: 'r20', name: '디저트 카페 슈가', category: '카페',
-    tags: ['카페', '데이트 코스'], rating: 4.7, reviewCount: 3340,
+    tags: ['카페', '디저트'], rating: 4.7, reviewCount: 3340,
     distance: '450m', address: '서울 성동구 서울숲길 42',
     image: 'https://images.unsplash.com/photo-1551024601-bec78aea704b?w=600&q=80',
     lat: 37.5446, lng: 127.0573, priceRange: 2, openHours: '11:00–22:00',
@@ -341,7 +341,7 @@ export const MOCK_COURSES: Course[] = [
     title: '성수동 감성 데이트 코스',
     description: '감성 가득한 성수동에서 특별한 하루를 보내세요.',
     heroImage: 'https://d2xsxph8kpxj0f.cloudfront.net/310519663322273601/2bdpbPnYmCuK9PccZ3SWKc/lm-course-seongsu-hGTsaQPMJotuBpuyBnE5dN.webp',
-    tags: ['데이트 코스', '카페'],
+    tags: ['데이트코스', '카페'],
     hashtags: ['#데이트', '#카페', '#분위기', '#성수핫플'],
     region: '성수동',
     metadata: { distance: 3.2, duration: 300, placeCount: 5 },
@@ -362,7 +362,7 @@ export const MOCK_COURSES: Course[] = [
     title: '한남동 브런치 코스',
     description: '여유로운 주말 브런치를 즐기는 한남동 코스.',
     heroImage: 'https://d2xsxph8kpxj0f.cloudfront.net/310519663322273601/2bdpbPnYmCuK9PccZ3SWKc/lm-course-hannam-EMhDLXHPSYVSTV5cbEekLC.webp',
-    tags: ['맛집', '혼자 여행'],
+    tags: ['브런치', '혼밥'],
     hashtags: ['#브런치', '#한남', '#주말'],
     region: '한남동',
     metadata: { distance: 2.7, duration: 240, placeCount: 4 },
@@ -381,7 +381,7 @@ export const MOCK_COURSES: Course[] = [
     title: '북촌 한옥 감성 코스',
     description: '전통과 현대가 공존하는 북촌의 아름다운 코스.',
     heroImage: 'https://d2xsxph8kpxj0f.cloudfront.net/310519663322273601/2bdpbPnYmCuK9PccZ3SWKc/lm-course-bukchon-ATNXaSXg79mMDT2jnbpMuD.webp',
-    tags: ['전시/문화', '혼자 여행'],
+    tags: ['카페', '디저트'],
     hashtags: ['#북촌', '#한옥', '#전통', '#감성'],
     region: '북촌',
     metadata: { distance: 2.1, duration: 180, placeCount: 3 },
@@ -399,7 +399,7 @@ export const MOCK_COURSES: Course[] = [
     title: '연남동 맛집 투어',
     description: '연남동 골목 구석구석 숨어있는 맛집 탐방.',
     heroImage: 'https://d2xsxph8kpxj0f.cloudfront.net/310519663322273601/2bdpbPnYmCuK9PccZ3SWKc/lm-course-yeonnam-eiXe5dfjEAvbX6RscXaFtr.webp',
-    tags: ['맛집', '맛집 투어'],
+    tags: ['맛집', '펍나이트'],
     hashtags: ['#연남동', '#맛집', '#투어'],
     region: '연남동',
     metadata: { distance: 3.8, duration: 360, placeCount: 5 },
@@ -436,7 +436,7 @@ export const MOCK_FEED_POSTS: FeedPost[] = [
       { id: 'cm3', authorName: '익명123', authorEmoji: '😈', text: '광고글 티난다ㅋ 노잼 코스', createdAt: '2026-07-09T15:22:00.000Z' },
     ],
     createdAt: '2026-07-09T12:30:00.000Z',
-    tags: ['데이트 코스', '카페'],
+    tags: ['데이트코스', '카페'],
   },
   {
     id: 'f2',
@@ -456,7 +456,7 @@ export const MOCK_FEED_POSTS: FeedPost[] = [
       { id: 'cm5', authorName: '수아', authorEmoji: '🥐', text: '다음 주말에 그대로 따라가볼게요!', createdAt: '2026-07-08T15:30:00.000Z' },
     ],
     createdAt: '2026-07-08T11:00:00.000Z',
-    tags: ['맛집', '혼자 여행'],
+    tags: ['브런치', '혼밥'],
   },
   {
     id: 'f3',
@@ -476,15 +476,15 @@ export const MOCK_FEED_POSTS: FeedPost[] = [
       { id: 'cm6', authorName: '제니', authorEmoji: '🐳', text: '마라탕 국물 진하죠 ㅠㅠ 최고', createdAt: '2026-07-07T14:00:00.000Z' },
     ],
     createdAt: '2026-07-07T13:20:00.000Z',
-    tags: ['맛집', '맛집 투어'],
+    tags: ['맛집', '펍나이트'],
   },
 ];
 
 const THEMES = [
-  { id: 'date', label: '데이트 코스', emoji: '💕', color: '#EB5053', tag: '데이트 코스' as TagType },
-  { id: 'solo', label: '혼자 여유 코스', emoji: '☕', color: '#D94447', tag: '혼자 여행' as TagType },
+  { id: 'date', label: '데이트코스', emoji: '💕', color: '#EB5053', tag: '데이트코스' as TagType },
+  { id: 'solo', label: '혼밥 코스', emoji: '🍚', color: '#D94447', tag: '혼밥' as TagType },
   { id: 'budget', label: '가성비 맛집', emoji: '💰', color: '#3CBA44', tag: '가성비' as TagType },
-  { id: 'special', label: '특별한 날', emoji: '🎁', color: '#3E719B', tag: '전시/문화' as TagType },
+  { id: 'special', label: '펍나이트', emoji: '🍸', color: '#3E719B', tag: '펍나이트' as TagType },
 ];
 
 export { THEMES };
@@ -648,7 +648,14 @@ function buildLocalSession(
 
 export function AppProvider({ children }: { children: React.ReactNode }) {
   const [courses, setCourses] = useState<Course[]>(() => {
-    try { const s = localStorage.getItem('lm_courses'); return s ? JSON.parse(s) : MOCK_COURSES; }
+    try {
+      const s = localStorage.getItem('lm_courses');
+      const stored = s ? JSON.parse(s) as Course[] : MOCK_COURSES;
+      return stored.map(course => ({
+        ...course,
+        tags: course.tags.map(tag => normalizeFoodTag(tag)),
+      }));
+    }
     catch { return MOCK_COURSES; }
   });
 
@@ -682,7 +689,11 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       const s = localStorage.getItem('lm_feed_v2');
       if (s) {
         const parsed = JSON.parse(s) as FeedPost[];
-        return parsed.map(p => ({ ...p, comments: Array.isArray(p.comments) ? p.comments : [] }));
+        return parsed.map(p => ({
+          ...p,
+          tags: p.tags.map(tag => normalizeFoodTag(tag)),
+          comments: Array.isArray(p.comments) ? p.comments : [],
+        }));
       }
     } catch { /* fall through */ }
     return MOCK_FEED_POSTS;
@@ -721,8 +732,18 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       fetch('/api/courses').then(r => (r.ok ? r.json() : Promise.reject())),
     ])
       .then(([resData, courseData]) => {
-        if (Array.isArray(resData) && resData.length > 0) setRestaurants(resData);
-        if (Array.isArray(courseData) && courseData.length > 0) setCourses(courseData);
+        if (Array.isArray(resData) && resData.length > 0) {
+          setRestaurants(resData.map((restaurant: Restaurant) => ({
+            ...restaurant,
+            tags: restaurant.tags.map(tag => normalizeFoodTag(tag)),
+          })));
+        }
+        if (Array.isArray(courseData) && courseData.length > 0) {
+          setCourses(courseData.map((course: Course) => ({
+            ...course,
+            tags: course.tags.map(tag => normalizeFoodTag(tag)),
+          })));
+        }
         setApiAvailable(true);
       })
       .catch(() => setApiAvailable(false))

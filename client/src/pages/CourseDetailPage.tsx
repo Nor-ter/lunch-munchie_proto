@@ -13,9 +13,9 @@ import CourseMapOverlay from '@/components/CourseMapOverlay';
 import { toast } from 'sonner';
 
 const TAG_CLASS: Record<string, string> = {
-  '데이트 코스': 'tag-date', '맛집': 'tag-food', '카페': 'tag-cafe',
-  '전시/문화': 'tag-culture', '액티비티': 'tag-activity',
-  '혼자 여행': 'tag-hash', '맛집 투어': 'tag-food', '가성비': 'tag-activity',
+  '맛집': 'tag-food', '데이트코스': 'tag-date', '혼밥': 'tag-hash',
+  '카페': 'tag-cafe', '펍나이트': 'tag-date', '브런치': 'tag-food',
+  '디저트': 'tag-cafe', '가성비': 'tag-activity',
 };
 
 export default function CourseDetailPage() {
