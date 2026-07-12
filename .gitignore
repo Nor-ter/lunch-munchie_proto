@@ -10,3 +10,8 @@ dist/
 
 # Superpowers brainstorm mockups
 .superpowers/
+supabase/functions/.env.local
+env.enc
+
+# Apple Sign In AuthKey (login-workflow.md §5.2) — never commit
+*.p8

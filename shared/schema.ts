@@ -28,6 +28,19 @@ export const restaurants = pgTable("restaurants", {
   menu_items: jsonb("menu_items").$type<{name: string, price: number}[]>(),
   phone_number: text("phone_number"),
   business_hours: text("business_hours"),
+  // ── Google 브릿지 컬럼 (Phase 0 · additive) — supabase/migrations/20260705000000 과 동기화 ──
+  google_place_id: text("google_place_id").unique(), // Google place_id (중복제거/refresh 키). nullable.
+  synced_at: timestamp("synced_at", { withTimezone: true }), // 마지막 Google 동기화 시각 (TTL 판정)
+  source: text("source").notNull().default("seed"), // 'seed' | 'google'
+});
+
+// 팔로우 기능 Phase 1 · follow-feature-workflow.md §1.1 — remote_schema.sql 과 1:1 동기화.
+// FK 없음(프로젝트 전역 원칙 §3.4 계승) — 무결성은 앱 책임, 목록은 2쿼리 클라이언트 조인.
+export const userFollows = pgTable("user_follows", {
+  id: text("id").primaryKey(),
+  follower_id: text("follower_id").notNull(),
+  following_id: text("following_id").notNull(),
+  created_at: timestamp("created_at").notNull(),
 });
 
 export const courses = pgTable("courses", {
@@ -127,6 +140,10 @@ export const recEvents = pgTable("rec_events", {
 export const UserSchema = createSelectSchema(users);
 export const InsertUserSchema = createInsertSchema(users);
 export type User = z.infer<typeof UserSchema>;
+
+export const UserFollowSchema = createSelectSchema(userFollows);
+export const InsertUserFollowSchema = createInsertSchema(userFollows);
+export type UserFollow = z.infer<typeof UserFollowSchema>;
 
 export const RestaurantSchema = createSelectSchema(restaurants);
 export const InsertRestaurantSchema = createInsertSchema(restaurants);
