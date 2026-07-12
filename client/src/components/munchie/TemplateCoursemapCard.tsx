@@ -18,7 +18,7 @@ export default function TemplateCoursemapCard({
   course: Course;
   /** 템플릿 순환용 인덱스 */
   index?: number;
-  from?: 'feed' | 'profile' | 'saved';
+  from?: 'feed' | 'template' | 'profile' | 'saved';
   showAuthor?: boolean;
 }) {
   const [, navigate] = useLocation();

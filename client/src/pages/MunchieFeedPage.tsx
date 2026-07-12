@@ -5,7 +5,7 @@
 import { useState } from 'react';
 import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import { useLocation } from 'wouter';
+import { useLocation, useSearch } from 'wouter';
 import { SlidersHorizontal, PenLine, Plus } from 'lucide-react';
 import { useApp, TagType } from '@/contexts/AppContext';
 import { getCourseTagStyle } from '@/constants/courseTheme';
@@ -23,9 +23,12 @@ const FILTER_TAGS: { label: string; value: TagType | 'all' }[] = [
 
 export default function MunchieFeedPage() {
   const [, navigate] = useLocation();
+  const search = useSearch();
   const { feedPosts, courses } = useApp();
   const [activeFilter, setActiveFilter] = useState<TagType | 'all'>('all');
-  const [view, setView] = useState<'feed' | 'maps'>('feed');
+  const [view, setView] = useState<'feed' | 'maps'>(() =>
+    new URLSearchParams(search).get('tab') === 'template' ? 'maps' : 'feed'
+  );
 
   const filtered = activeFilter === 'all'
     ? feedPosts
@@ -34,6 +37,11 @@ export default function MunchieFeedPage() {
   const filteredCourses = activeFilter === 'all'
     ? courses
     : courses.filter(c => c.tags.includes(activeFilter as TagType));
+
+  const changeView = (nextView: 'feed' | 'maps') => {
+    setView(nextView);
+    navigate(`/feed?tab=${nextView === 'maps' ? 'template' : 'feed'}`, { replace: true });
+  };
 
   return (
     <div className="min-h-dvh bg-[#FCF4EE]">
@@ -56,7 +64,7 @@ export default function MunchieFeedPage() {
           {([['feed', 'Munchie Feed'], ['maps', 'Munchie Template']] as const).map(([key, label]) => (
             <button
               key={key}
-              onClick={() => setView(key)}
+              onClick={() => changeView(key)}
               className="relative flex-1 h-9 rounded-full text-[13px] font-bold transition-colors"
               style={{ color: view === key ? '#FFFFFF' : '#8A7A6C' }}
             >
@@ -122,7 +130,7 @@ export default function MunchieFeedPage() {
         <div className="px-4 py-5">
           <div className="grid grid-cols-3 gap-x-2.5 gap-y-5">
             {filteredCourses.map((course, i) => (
-              <TemplateCoursemapCard key={course.id} course={course} index={i} from="feed" />
+              <TemplateCoursemapCard key={course.id} course={course} index={i} from="template" />
             ))}
           </div>
           {filteredCourses.length === 0 && (

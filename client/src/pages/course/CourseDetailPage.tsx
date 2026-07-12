@@ -30,20 +30,21 @@ import SkinFrame from '@/components/munchie/SkinFrame';
 import SkinPicker from '@/components/munchie/SkinPicker';
 import RestaurantDetailSheet from '@/components/munchie/RestaurantDetailSheet';
 
-type FromMode = 'explore' | 'saved' | 'feed' | 'profile';
+type FromMode = 'explore' | 'saved' | 'feed' | 'template' | 'profile';
 
 function useFrom(): FromMode {
   const search = useSearch();
   const params = new URLSearchParams(search);
   const from = params.get('from');
-  if (from === 'saved' || from === 'feed' || from === 'profile') return from;
+  if (from === 'saved' || from === 'feed' || from === 'template' || from === 'profile') return from;
   return 'explore';
 }
 
 const BACK_PATH: Record<FromMode, string> = {
   saved: '/saved',
   profile: '/profile',
-  feed: '/feed',
+  feed: '/feed?tab=feed',
+  template: '/feed?tab=template',
   explore: '/feed', // 먼치모드 통합 — 구 explore 진입도 피드로 복귀
 };
 
