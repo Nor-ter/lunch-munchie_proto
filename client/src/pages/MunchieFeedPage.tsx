@@ -3,6 +3,7 @@
  * 피드 탭: 사진+한줄평 정성 기록 (Credit) / 코스맵 탭: 스크랩북 코스맵 탐색 (Core Product)
  */
 import { useState } from 'react';
+import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useLocation } from 'wouter';
 import { SlidersHorizontal, PenLine, Plus } from 'lucide-react';
@@ -42,7 +43,7 @@ export default function MunchieFeedPage() {
           <div>
             <h1 className="font-bold text-[26px] text-[#1A1A1A]">Munchie Mode</h1>
             <p className="text-[12px] mt-0.5 text-[#9B9B9B]">
-              {view === 'feed' ? '사진과 한줄평으로 남기는 정성 기록' : '스크랩북 코스맵을 탐색해보아요'}
+              {view === 'feed' ? '사진과 한줄평으로 남기는 정성 기록' : '스크랩북 템플릿을 탐색해보아요'}
             </p>
           </div>
           <button className="w-10 h-10 rounded-full bg-[#F5F5F5] flex items-center justify-center">
@@ -52,7 +53,7 @@ export default function MunchieFeedPage() {
 
         {/* 피드 / 코스맵 세그먼트 (먼치모드 통합) */}
         <div className="mb-3 flex rounded-full bg-[#F5F0EA] p-1">
-          {([['feed', 'Munchie Feed'], ['maps', '코스맵']] as const).map(([key, label]) => (
+          {([['feed', 'Munchie Feed'], ['maps', 'Munchie Template']] as const).map(([key, label]) => (
             <button
               key={key}
               onClick={() => setView(key)}
@@ -135,19 +136,25 @@ export default function MunchieFeedPage() {
       )}
 
       {/* FAB — 피드 탭: 피드 작성 / 코스맵 탭: 새 코스 만들기 */}
-      <motion.button
-        onClick={() => navigate(view === 'feed' ? '/feed/new' : '/course/new/edit')}
-        className="fixed bottom-24 right-4 flex items-center gap-2 px-4 h-12 rounded-full shadow-xl text-white font-bold text-[13px] z-40"
-        style={{ background: '#EB5053' }}
-        whileHover={{ scale: 1.05 }}
-        whileTap={{ scale: 0.95 }}
-        initial={{ scale: 0 }}
-        animate={{ scale: 1 }}
-        transition={{ type: 'spring', stiffness: 300, damping: 20, delay: 0.2 }}
-      >
-        {view === 'feed' ? <PenLine size={16} /> : <Plus size={16} />}
-        {view === 'feed' ? '피드 작성' : '새 코스 만들기'}
-      </motion.button>
+      {createPortal(
+        <motion.button
+          onClick={() => navigate(view === 'feed' ? '/feed/new' : '/course/new/edit')}
+          className="fixed bottom-24 flex items-center gap-2 px-4 h-12 rounded-full shadow-xl text-white font-bold text-[13px] z-40"
+          style={{
+            background: '#EB5053',
+            right: 'max(1rem, calc((100vw - min(100vw, 480px)) / 2 + 1rem))',
+          }}
+          whileHover={{ scale: 1.05 }}
+          whileTap={{ scale: 0.95 }}
+          initial={{ scale: 0 }}
+          animate={{ scale: 1 }}
+          transition={{ type: 'spring', stiffness: 300, damping: 20, delay: 0.2 }}
+        >
+          {view === 'feed' ? <PenLine size={16} /> : <Plus size={16} />}
+          {view === 'feed' ? '피드 작성' : '새 코스 만들기'}
+        </motion.button>,
+        document.body,
+      )}
     </div>
   );
 }

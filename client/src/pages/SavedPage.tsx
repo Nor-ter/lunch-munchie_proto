@@ -104,7 +104,7 @@ export default function SavedPage() {
         {/* 모드 세그먼트 */}
         <div className="flex rounded-full bg-[#F5F0EA] p-1">
           {([
-            ['coursemaps', 'Munchie 코스맵', MapIcon, savedCourses.length],
+            ['coursemaps', 'Munchie 템플릿', MapIcon, savedCourses.length],
             ['restaurants', 'Lunchie 런치픽', Zap, savedRestaurantIds.length],
           ] as const).map(([key, label, Icon, count]) => (
             <button
@@ -134,7 +134,7 @@ export default function SavedPage() {
           ))}
         </div>
 
-        {/* Munchie 코스맵 필터 */}
+        {/* Munchie 템플릿 필터 */}
         {tab === 'coursemaps' && (
           <div className="flex gap-2 overflow-x-auto pb-1 pt-3 scrollbar-hide -mx-5 px-5">
             {COURSE_FILTER_TAGS.map(f => (
@@ -155,7 +155,7 @@ export default function SavedPage() {
         )}
       </div>
 
-      {/* ── Munchie 코스맵 탭 ─────────────────────────────────────────────── */}
+      {/* ── Munchie 템플릿 탭 ─────────────────────────────────────────────── */}
       {tab === 'coursemaps' && (
         <div className="px-5">
           {filteredCourses.length > 0 ? (

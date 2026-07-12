@@ -195,6 +195,19 @@ export default function SessionLobbyPage() {
           스와이핑 시작하기!
         </motion.button>
       )}
+
+      {/* 원본 프레임에서 캐릭터만 추출한 런먼이 GIF */}
+      <div
+        className="relative mt-4 h-[250px] overflow-hidden"
+        aria-label="런먼이가 점프하며 투표 시작을 기다리는 중"
+      >
+        <img
+          src="/assets/lunchie-quick-match-jump.gif"
+          alt="포크와 숟가락을 든 런먼이 캐릭터가 반복해서 점프하는 모습"
+          className="pointer-events-none absolute left-1/2 top-1 h-auto w-[270px] max-w-none -translate-x-1/2 select-none mix-blend-multiply"
+          draggable={false}
+        />
+      </div>
     </div>
   );
 }

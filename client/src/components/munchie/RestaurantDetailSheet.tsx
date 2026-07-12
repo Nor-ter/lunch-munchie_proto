@@ -1,6 +1,6 @@
 import { motion } from 'framer-motion';
 import { ChevronLeft, Star, MapPin, Clock, Heart, MessageCircle } from 'lucide-react';
-import { useApp } from '@/contexts/AppContext';
+import { useApp, isFeedCommentHidden } from '@/contexts/AppContext';
 import { getFoodPhotos } from '@/lib/foodPhotos';
 
 function timeAgo(iso: string) {
@@ -125,7 +125,7 @@ export default function RestaurantDetailSheet({
           <div className="space-y-3">
             {relatedPosts.map(post => {
               const course = getCourseById(post.courseId);
-              const visibleComments = post.comments.filter(c => !c.hidden);
+              const visibleComments = post.comments.filter(c => !isFeedCommentHidden(c));
               return (
                 <div key={post.id} className="rounded-2xl bg-white border border-[#F0E8E0] p-3">
                   <div className="flex items-center gap-2">

@@ -146,6 +146,12 @@ export interface FeedComment {
   hidden?: boolean;
 }
 
+/** 과거 로컬 저장 데이터의 문자열/숫자 값까지 포함해 숨김 상태를 일관되게 판정한다. */
+export function isFeedCommentHidden(comment: FeedComment) {
+  const hidden = comment.hidden as unknown;
+  return hidden === true || hidden === 'true' || hidden === 1 || hidden === '1';
+}
+
 /** Munchie Feed 게시물 — 코스에 사진+한줄평+템플릿 스킨을 입힌 정성 기록 */
 export interface FeedPost {
   id: string;
@@ -775,7 +781,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const toggleCommentHidden = useCallback((postId: string, commentId: string) => {
     setFeedPosts(posts => posts.map(p =>
       p.id === postId
-        ? { ...p, comments: p.comments.map(c => c.id === commentId ? { ...c, hidden: !c.hidden } : c) }
+        ? { ...p, comments: p.comments.map(c => c.id === commentId ? { ...c, hidden: !isFeedCommentHidden(c) } : c) }
         : p,
     ));
   }, []);

@@ -11,7 +11,7 @@ import {
   Menu, Heart, Clock, MessageCircle, Pencil, Trash2, EyeOff, Eye, ChevronDown, ChevronUp, X, Camera, Upload,
 } from 'lucide-react';
 import { toast } from 'sonner';
-import { useApp, type FeedPost } from '@/contexts/AppContext';
+import { useApp, isFeedCommentHidden, type FeedPost } from '@/contexts/AppContext';
 import { fileToResizedDataUrl } from '@/lib/imageUtils';
 import TemplateCoursemapCard from '@/components/munchie/TemplateCoursemapCard';
 import SkinPicker from '@/components/munchie/SkinPicker';
@@ -46,7 +46,7 @@ function MyFeedItem({
   const { getCourseById, deleteFeedPost, toggleCommentHidden } = useApp();
   const [showComments, setShowComments] = useState(false);
   const course = getCourseById(post.courseId);
-  const visibleCount = post.comments.filter(c => !c.hidden).length;
+  const visibleCount = post.comments.filter(c => !isFeedCommentHidden(c)).length;
   const hiddenCount = post.comments.length - visibleCount;
 
   const handleDelete = () => {
@@ -265,8 +265,8 @@ export default function ProfilePage() {
         </div>
         <div className="mt-4 grid grid-cols-3">
           {[
-            { value: 128, label: '팔로잉' },
             { value: 2380, label: '팔로워' },
+            { value: 128, label: '팔로잉' },
             { value: totalLikes, label: '좋아요' },
           ].map((s, i, arr) => (
             <div key={s.label} className={`text-center ${i < arr.length - 1 ? 'border-r border-[#EBC5B8]' : ''}`}>
@@ -277,10 +277,10 @@ export default function ProfilePage() {
         </div>
       </div>
 
-      {/* 나의 코스맵 */}
+      {/* 나의 템플릿 */}
       <div className="px-4 mt-7">
         <div className="flex items-center justify-between mb-3">
-          <h2 className="font-black text-[18px] text-[#1A1A1A]">나의 코스맵 {sortedCourses.length}</h2>
+          <h2 className="font-black text-[18px] text-[#1A1A1A]">나의 템플릿 {sortedCourses.length}</h2>
           <div className="flex gap-1.5">
             {([['likes', '좋아요 순', Heart], ['recent', '최신 순', Clock]] as const).map(([key, label, Icon]) => (
               <button
@@ -304,7 +304,11 @@ export default function ProfilePage() {
         >
           <div
             className="grid grid-flow-col gap-x-2.5 gap-y-4"
-            style={{ gridTemplateRows: 'repeat(2, auto)', gridAutoColumns: '112px' }}
+            style={{
+              gridTemplateRows: 'repeat(2, auto)',
+              // 3개 열은 완전히 보여주고, 다음 열은 스와이프 힌트로 살짝 노출한다.
+              gridAutoColumns: 'calc((min(100vw, 480px) - 45px) / 3)',
+            }}
           >
             {sortedCourses.map((course, i) => (
               <div key={course.id} style={{ scrollSnapAlign: 'start' }}>

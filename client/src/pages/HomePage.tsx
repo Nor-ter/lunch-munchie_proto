@@ -2,13 +2,14 @@ import { motion } from "framer-motion";
 import { useLocation } from "wouter";
 import { useState, useEffect } from "react";
 import { Heart, X, ArrowRight, MapPin, Clock, Star } from "lucide-react";
-import { useApp, Course, MOCK_RESTAURANTS } from "@/contexts/AppContext";
+import { useApp, Course, MOCK_RESTAURANTS, isFeedCommentHidden } from "@/contexts/AppContext";
 import { getCourseSequenceColor } from "@/constants/courseTheme";
 import { MUNCHIE_SKINS } from "@/constants/skins";
 import { getCreatorName } from "@/constants/creators";
 import SkinFrame from "@/components/munchie/SkinFrame";
 import { logEvent } from "@/lib/eventLogger";
 import { toast } from "sonner";
+import { useRotatingFeedback } from "@/hooks/useRotatingFeedback";
 
 // 회고 마이크로설문: 지난 결정 식당의 만족(SURVEY=만족 정답). WINNER 시 localStorage에 대기 저장됨.
 function RetroSurveyCard() {
@@ -104,10 +105,18 @@ function SkinCourseCard({ course, skinIndex }: { course: Course; skinIndex: numb
     ? (stopRestaurants.reduce((sum, r) => sum + r.rating, 0) / stopRestaurants.length).toFixed(1)
     : '4.5';
   const collagePhotos = [course.heroImage, ...stopRestaurants.map(r => r.image)].slice(0, 2);
-  // 이 코스로 작성된 가장 최근 피드의 한줄평
-  const latestCaption = feedPosts
+  // 작성자의 한줄평 다음, 인기 피드의 답글을 최신순으로 순환한다.
+  const coursePosts = feedPosts
     .filter(p => p.courseId === course.id)
-    .sort((a, b) => b.createdAt.localeCompare(a.createdAt))[0]?.caption;
+    .sort((a, b) => (b.likes + b.saves) - (a.likes + a.saves) || b.createdAt.localeCompare(a.createdAt));
+  const latestCaption = [...coursePosts].sort((a, b) => b.createdAt.localeCompare(a.createdAt))[0]?.caption;
+  const rotatingFeedback = useRotatingFeedback([
+    ...(latestCaption ? [latestCaption] : []),
+    ...coursePosts.flatMap(post => post.comments
+      .filter(comment => !isFeedCommentHidden(comment))
+      .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
+      .map(comment => comment.text)),
+  ]);
 
   return (
     <motion.div
@@ -158,13 +167,16 @@ function SkinCourseCard({ course, skinIndex }: { course: Course; skinIndex: numb
           </div>
 
           {/* 한줄평 (이 코스로 남긴 최근 피드) */}
-          {latestCaption && (
-            <p
-              className="mt-2 rounded-lg px-2 py-1.5 text-[10.5px] leading-snug line-clamp-2"
+          {rotatingFeedback && (
+            <motion.p
+              key={rotatingFeedback}
+              initial={{ opacity: 0, y: 3 }}
+              animate={{ opacity: 1, y: 0 }}
+              className="mt-2 flex h-[42px] items-center overflow-hidden rounded-lg px-2 py-1.5 text-[10.5px] leading-snug"
               style={{ background: `${skin.accent}12`, color: skin.text }}
             >
-              💬 {latestCaption}
-            </p>
+              <span className="line-clamp-2">💬 {rotatingFeedback}</span>
+            </motion.p>
           )}
 
           {/* 스팟 번호 서클 */}
@@ -406,9 +418,6 @@ export default function HomePage() {
             <SkinCourseCard key={course.id} course={course} skinIndex={i} />
           ))}
         </div>
-        <p className="text-center text-[11px] font-medium" style={{ color: "#C7A69A" }}>
-          ← 좌우 스와이프 →
-        </p>
       </motion.div>
 
     </motion.div>

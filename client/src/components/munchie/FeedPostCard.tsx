@@ -1,9 +1,9 @@
 import { useRef, useState } from 'react';
 import { useLocation } from 'wouter';
 import { motion } from 'framer-motion';
-import { Heart, Bookmark, MessageCircle, Share2, Map, Send, MoreHorizontal, MapPin, Clock, EyeOff } from 'lucide-react';
+import { Heart, Bookmark, MessageCircle, Share2, Map, Send, MoreHorizontal, EyeOff } from 'lucide-react';
 import { toast } from 'sonner';
-import { useApp, type FeedPost } from '@/contexts/AppContext';
+import { useApp, isFeedCommentHidden, type FeedPost } from '@/contexts/AppContext';
 import { getCourseSequenceColor } from '@/constants/courseTheme';
 
 function timeAgo(iso: string) {
@@ -35,7 +35,7 @@ export default function FeedPostCard({
   const courseSaved = savedCourseIds.includes(post.courseId);
   const mine = isMyPost(post);
   // 숨김 처리된 댓글은 피드 어디서든 노출되지 않는다 (프로필에서 숨김 → 일괄 적용)
-  const visibleComments = post.comments.filter(c => !c.hidden);
+  const visibleComments = post.comments.filter(c => !isFeedCommentHidden(c));
 
   const [photoIdx, setPhotoIdx] = useState(0);
   const [comment, setComment] = useState('');
@@ -121,23 +121,25 @@ export default function FeedPostCard({
       </div>
 
       {/* Caption */}
-      <p className="px-4 pt-3 text-[14px] leading-relaxed" style={{ color: '#1A1A1A' }}>
-        {post.caption}
-      </p>
-
-      {/* Course link + stats */}
-      {course && (
-        <button onClick={goCourse} className="w-full px-4 pt-2 text-left active:opacity-70">
-          <p className="text-[12px] font-semibold flex items-center gap-1" style={{ color: '#E85053' }}>
-            <MapPin size={12} /> 코스 · {course.title} ›
-          </p>
-          <div className="mt-1.5 flex items-center gap-3 text-[11px]" style={{ color: '#9B9B9B' }}>
-            <span className="flex items-center gap-1"><MapPin size={10} /> {course.metadata.distance}km</span>
-            <span className="flex items-center gap-1"><Clock size={10} /> {Math.floor(course.metadata.duration / 60)}h</span>
-            <span>📍 {course.metadata.placeCount} spots</span>
-          </div>
-        </button>
-      )}
+      <div className="relative mx-4 mt-3 h-[82px] overflow-hidden rounded-2xl bg-[#FFF7F4] px-7 py-4">
+        <span
+          aria-hidden="true"
+          className="absolute left-2.5 top-0 font-serif text-[38px] leading-none"
+          style={{ color: '#EB5053' }}
+        >
+          “
+        </span>
+        <p className="line-clamp-2 text-[14px] font-medium italic leading-relaxed" style={{ color: '#3B2A22' }}>
+          {post.caption}
+        </p>
+        <span
+          aria-hidden="true"
+          className="absolute bottom-[-8px] right-2.5 font-serif text-[38px] leading-none"
+          style={{ color: '#F3A5A7' }}
+        >
+          ”
+        </span>
+      </div>
 
       {/* Mini course timeline */}
       {stops.length > 0 && (

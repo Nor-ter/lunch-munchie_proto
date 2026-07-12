@@ -1611,11 +1611,12 @@ export default function QuickMatchPage() {
             transition={{ duration: 0.3 }}
           >
             <div className="flex flex-col items-center">
-              <div className="flex h-[72px] w-[72px] flex-shrink-0 items-center justify-center overflow-hidden mb-3">
+              <div className="mb-3 flex h-[182px] w-[200px] flex-shrink-0 items-center justify-center overflow-hidden">
                 <img
-                  src="/Logo 004.png"
-                  alt="Lunchie Munchie Logo"
-                  className="h-full w-full object-contain"
+                  src="/assets/lunchie-quick-match-jump.gif"
+                  alt="포크와 숟가락을 든 런먼이가 점프하는 모습"
+                  className="h-auto w-full object-contain"
+                  draggable={false}
                 />
               </div>
               <p className="font-black text-white text-[22px]">예선전 시작! 🍽️</p>
