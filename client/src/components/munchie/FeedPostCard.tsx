@@ -89,15 +89,17 @@ export default function FeedPostCard({
         <div
           ref={scrollRef}
           onScroll={handleScroll}
-          className="flex overflow-x-auto snap-x snap-mandatory scrollbar-hide"
-          style={{ scrollbarWidth: 'none' }}
+          role="region"
+          aria-label={`피드 사진 ${post.photos.length}장, 좌우로 넘겨보기`}
+          className="flex touch-pan-x snap-x snap-mandatory overflow-x-auto overscroll-x-contain scroll-smooth scrollbar-hide"
+          style={{ scrollbarWidth: 'none', WebkitOverflowScrolling: 'touch', touchAction: 'pan-x', overscrollBehaviorX: 'contain' }}
         >
           {post.photos.map((src, i) => (
             <img
               key={i}
               src={src}
-              alt=""
-              className="w-full h-[260px] object-cover shrink-0 snap-center"
+              alt={`피드 사진 ${i + 1}`}
+              className="pointer-events-none h-[260px] w-full shrink-0 snap-center select-none object-cover"
               draggable={false}
             />
           ))}

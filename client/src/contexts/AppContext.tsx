@@ -520,6 +520,10 @@ interface AppContextValue {
   saveCourse: (courseId: string) => void;
   unsaveCourse: (courseId: string) => void;
   addCourse: (course: Course) => void;
+  updateCourse: (courseId: string, updates: Partial<Course>) => void;
+  /** 프로필의 나의 템플릿에서만 숨긴 코스 ID — 원본 코스와 피드는 유지한다. */
+  hiddenTemplateCourseIds: string[];
+  deleteProfileTemplate: (courseId: string) => void;
 
   currentSession: GroupSession | null;
   setCurrentSession: (s: GroupSession | null) => void;
@@ -552,7 +556,7 @@ interface AppContextValue {
   /** Munchie Feed */
   feedPosts: FeedPost[];
   addFeedPost: (post: Omit<FeedPost, 'id' | 'likes' | 'saves' | 'comments' | 'createdAt'>) => FeedPost;
-  updateFeedPost: (postId: string, updates: Partial<Pick<FeedPost, 'caption' | 'skinId' | 'photos'>>) => void;
+  updateFeedPost: (postId: string, updates: Partial<Pick<FeedPost, 'courseId' | 'caption' | 'skinId' | 'photos' | 'tags'>>) => void;
   deleteFeedPost: (postId: string) => void;
   likedFeedIds: string[];
   toggleFeedLike: (postId: string) => void;
@@ -668,6 +672,11 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     catch { return ['c1']; }
   });
 
+  const [hiddenTemplateCourseIds, setHiddenTemplateCourseIds] = useState<string[]>(() => {
+    try { const s = localStorage.getItem('lm_hidden_profile_templates'); return s ? JSON.parse(s) : []; }
+    catch { return []; }
+  });
+
   const [currentSession, setCurrentSession] = useState<GroupSession | null>(() => {
     try { const s = localStorage.getItem('lm_session'); return s ? JSON.parse(s) : null; }
     catch { return null; }
@@ -752,6 +761,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
   useEffect(() => { localStorage.setItem('lm_courses', JSON.stringify(courses)); }, [courses]);
   useEffect(() => { localStorage.setItem('lm_saved', JSON.stringify(savedCourseIds)); }, [savedCourseIds]);
+  useEffect(() => { localStorage.setItem('lm_hidden_profile_templates', JSON.stringify(hiddenTemplateCourseIds)); }, [hiddenTemplateCourseIds]);
   useEffect(() => {
     if (currentSession) localStorage.setItem('lm_session', JSON.stringify(currentSession));
     else localStorage.removeItem('lm_session');
@@ -778,6 +788,14 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     setCourses(prev => [course, ...prev]);
   }, []);
 
+  const updateCourse = useCallback((courseId: string, updates: Partial<Course>) => {
+    setCourses(previous => previous.map(course => course.id === courseId ? { ...course, ...updates } : course));
+  }, []);
+
+  const deleteProfileTemplate = useCallback((courseId: string) => {
+    setHiddenTemplateCourseIds(previous => previous.includes(courseId) ? previous : [...previous, courseId]);
+  }, []);
+
   const addFeedPost = useCallback((post: Omit<FeedPost, 'id' | 'likes' | 'saves' | 'comments' | 'createdAt'>) => {
     const full: FeedPost = {
       ...post,
@@ -791,7 +809,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     return full;
   }, []);
 
-  const updateFeedPost = useCallback((postId: string, updates: Partial<Pick<FeedPost, 'caption' | 'skinId' | 'photos'>>) => {
+  const updateFeedPost = useCallback((postId: string, updates: Partial<Pick<FeedPost, 'courseId' | 'caption' | 'skinId' | 'photos' | 'tags'>>) => {
     setFeedPosts(posts => posts.map(p => p.id === postId ? { ...p, ...updates } : p));
   }, []);
 
@@ -1091,7 +1109,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
   return (
     <AppContext.Provider value={{
-      courses, savedCourseIds, saveCourse, unsaveCourse, addCourse,
+      courses, savedCourseIds, saveCourse, unsaveCourse, addCourse, updateCourse,
+      hiddenTemplateCourseIds, deleteProfileTemplate,
       currentSession, setCurrentSession, createSession, joinSession, fetchSession, toggleReady, startSession,
       swipeRecords, addSwipe, rerollSession, likedRestaurantIds,
       savedRestaurantIds, saveRestaurant, unsaveRestaurant,

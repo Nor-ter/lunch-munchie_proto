@@ -263,9 +263,10 @@ function SortableItem({
   );
 }
 
-function useEditorFrom(): 'explore' | 'saved' {
+function useEditorFrom(): 'explore' | 'saved' | 'profile' {
   const search = useSearch();
-  return new URLSearchParams(search).get('from') === 'saved' ? 'saved' : 'explore';
+  const from = new URLSearchParams(search).get('from');
+  return from === 'saved' || from === 'profile' ? from : 'explore';
 }
 
 function normalizeHashtags(tags: string[]) {
@@ -289,7 +290,7 @@ export default function CourseEditPage() {
   const isNew = id === 'new';
   const [, navigate] = useLocation();
   const editorFrom = useEditorFrom();
-  const { saveCourse, addCourse, getCourseById, getRestaurantById, profile, courseSkins } = useApp();
+  const { saveCourse, addCourse, updateCourse, getCourseById, getRestaurantById, profile, courseSkins } = useApp();
   const appCourse = !isNew && id ? getCourseById(id) : undefined;
   // 복사해서 편집으로 가져온 코스의 스킨 느낌을 에디터에서도 유지한다
   const skin = !isNew && id ? getSkinById(courseSkins[id]) : undefined;
@@ -318,6 +319,10 @@ export default function CourseEditPage() {
       return;
     }
 
+    if (editorFrom === 'profile') {
+      navigate('/profile', { replace: true });
+      return;
+    }
     navigate(`/course/${id}?from=${editorFrom}`, { replace: true });
   };
 
@@ -331,8 +336,36 @@ export default function CourseEditPage() {
 
   const handleSave = () => {
     if (!isNew) {
-      if (id) saveCourse(id);
-      navigate('/saved');
+      if (!id || !appCourse) return;
+      if (!title.trim()) {
+        toast.error('코스 제목을 입력해주세요');
+        return;
+      }
+      if (places.length === 0) {
+        toast.error('장소를 1곳 이상 추가해주세요');
+        return;
+      }
+      updateCourse(id, {
+        title: title.trim(),
+        hashtags,
+        heroImage: places[0]?.imageUrl ?? appCourse.heroImage,
+        metadata: { ...appCourse.metadata, placeCount: places.length },
+        stops: places.map((place, index) => {
+          const previous = appCourse.stops.find(stop => stop.placeId === place.id);
+          return {
+            placeId: place.id,
+            order: index + 1,
+            startTime: previous?.startTime ?? '',
+            endTime: previous?.endTime ?? '',
+            isBookmarked: previous?.isBookmarked ?? false,
+          };
+        }),
+      });
+      try { localStorage.setItem(`lm_course_share_photos_${id}`, JSON.stringify(places.map(place => place.imageUrl ?? null))); }
+      catch { /* 수정 내용 자체는 계속 저장한다. */ }
+      saveCourse(id);
+      toast.success('코스를 수정했어요');
+      navigate(editorFrom === 'profile' ? '/profile' : '/saved');
       return;
     }
 

@@ -38,9 +38,11 @@ function Avatar({ photo, emoji, size }: { photo?: string; emoji: string; size: n
 
 function MyFeedItem({
   post,
+  onOpen,
   onEdit,
 }: {
   post: FeedPost;
+  onOpen: (post: FeedPost) => void;
   onEdit: (post: FeedPost) => void;
 }) {
   const { getCourseById, deleteFeedPost, toggleCommentHidden } = useApp();
@@ -58,8 +60,8 @@ function MyFeedItem({
 
   return (
     <div className="rounded-2xl bg-white border border-[#F0E8E0] overflow-hidden">
-      {/* 터치해서 들어가면 바로 수정 */}
-      <div className="flex gap-3 p-3 cursor-pointer active:bg-[#FAF4EE]" onClick={() => onEdit(post)}>
+      {/* 카드 본문은 큰 피드 상세, 수정은 아래의 명시적 액션으로 분리한다. */}
+      <div className="flex gap-3 p-3 cursor-pointer active:bg-[#FAF4EE]" onClick={() => onOpen(post)}>
         <img src={post.photos[0]} alt="" className="w-16 h-16 rounded-xl object-cover shrink-0" />
         <div className="min-w-0 flex-1">
           <p className="text-[13px] font-semibold text-[#1A1A1A] line-clamp-2 leading-snug">{post.caption}</p>
@@ -145,7 +147,7 @@ function MyFeedItem({
 
 export default function ProfilePage() {
   const [, navigate] = useLocation();
-  const { profile, updateProfile, courses, feedPosts, isMyPost, updateFeedPost } = useApp();
+  const { profile, updateProfile, courses, hiddenTemplateCourseIds, feedPosts, isMyPost } = useApp();
 
   const [sort, setSort] = useState<SortMode>('likes');
   const [settingsOpen, setSettingsOpen] = useState(false);
@@ -154,33 +156,17 @@ export default function ProfilePage() {
   const [editName, setEditName] = useState(profile.name);
   const avatarFileRef = useRef<HTMLInputElement>(null);
 
-  // 피드 수정 시트 (한줄평만 수정 — 피드 카드는 기본 테마 고정)
-  const [editingPost, setEditingPost] = useState<FeedPost | null>(null);
-  const [editCaption, setEditCaption] = useState('');
-
   const myPosts = useMemo(() => feedPosts.filter(isMyPost), [feedPosts, isMyPost]);
   const totalLikes = myPosts.reduce((sum, p) => sum + p.likes, 0);
   // 성장점수: 코스맵 + 피드가 쌓일수록 푸디 캐릭터가 진화한다
   const foodieScore = courses.length + myPosts.length;
 
   const sortedCourses = useMemo(() => {
-    const list = [...courses];
+    const list = courses.filter(course => !hiddenTemplateCourseIds.includes(course.id));
     if (sort === 'likes') list.sort((a, b) => b.savedCount - a.savedCount);
     else list.sort((a, b) => b.createdAt.localeCompare(a.createdAt));
     return list;
-  }, [courses, sort]);
-
-  const openEdit = (post: FeedPost) => {
-    setEditingPost(post);
-    setEditCaption(post.caption);
-  };
-
-  const saveEdit = () => {
-    if (!editingPost) return;
-    updateFeedPost(editingPost.id, { caption: editCaption.trim() || editingPost.caption });
-    setEditingPost(null);
-    toast.success('피드를 수정했어요 ✅');
-  };
+  }, [courses, hiddenTemplateCourseIds, sort]);
 
   const saveSettings = () => {
     updateProfile({ name: editName });
@@ -310,9 +296,9 @@ export default function ProfilePage() {
               gridAutoColumns: 'calc((min(100vw, 480px) - 45px) / 3)',
             }}
           >
-            {sortedCourses.map((course, i) => (
+            {sortedCourses.map((course) => (
               <div key={course.id} style={{ scrollSnapAlign: 'start' }}>
-                <TemplateCoursemapCard course={course} index={i} from="profile" />
+                <TemplateCoursemapCard course={course} index={courses.findIndex(item => item.id === course.id)} from="profile" />
               </div>
             ))}
           </div>
@@ -336,48 +322,16 @@ export default function ProfilePage() {
         ) : (
           <div className="space-y-3">
             {myPosts.map(post => (
-              <MyFeedItem key={post.id} post={post} onEdit={openEdit} />
+              <MyFeedItem
+                key={post.id}
+                post={post}
+                onOpen={(item) => navigate(`/feed/${item.id}?from=profile`)}
+                onEdit={(item) => navigate(`/feed/${item.id}/edit?from=profile`)}
+              />
             ))}
           </div>
         )}
       </div>
-
-      {/* 피드 수정 시트 */}
-      <AnimatePresence>
-        {editingPost && (
-          <>
-            <motion.div
-              className="fixed inset-0 bg-black/40 z-50"
-              initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-              onClick={() => setEditingPost(null)}
-            />
-            <motion.div
-              className="fixed bottom-0 left-0 right-0 mx-auto w-full max-w-[430px] bg-white rounded-t-3xl z-50 px-5 pt-4 pb-8 max-h-[80dvh] overflow-y-auto"
-              initial={{ y: '100%' }} animate={{ y: 0 }} exit={{ y: '100%' }}
-              transition={{ type: 'tween', ease: [0.32, 0.72, 0, 1], duration: 0.3 }}
-            >
-              <div className="mx-auto mb-4 h-1 w-10 rounded-full bg-gray-200" />
-              <div className="mb-4 flex items-center justify-between">
-                <p className="font-bold text-[16px]">피드 수정</p>
-                <button onClick={() => setEditingPost(null)}><X size={18} className="text-gray-400" /></button>
-              </div>
-              <p className="mb-1.5 text-[12px] font-semibold text-[#9B9B9B]">한줄평</p>
-              <textarea
-                value={editCaption}
-                onChange={e => setEditCaption(e.target.value)}
-                rows={3}
-                className="w-full rounded-2xl bg-[#FAF6F1] border border-[#F0E8E0] p-4 text-[14px] outline-none focus:border-[#E85053] resize-none"
-              />
-              <button
-                onClick={saveEdit}
-                className="mt-5 w-full h-12 rounded-2xl bg-[#E85053] text-white font-bold text-[14px]"
-              >
-                저장하기
-              </button>
-            </motion.div>
-          </>
-        )}
-      </AnimatePresence>
 
       {/* 푸디 캐릭터 커스텀 시트 */}
       <AnimatePresence>

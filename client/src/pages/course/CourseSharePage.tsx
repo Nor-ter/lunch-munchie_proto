@@ -17,26 +17,11 @@ import type { Course } from '@/types/course';
 import { fileToResizedDataUrl } from '@/lib/imageUtils';
 import { useApp } from '@/contexts/AppContext';
 import { getCoursePlacesFromStops } from '@/lib/courseMapSync';
+import { SHARE_TEMPLATES } from '@/constants/shareTemplates';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
 type Platform = 'ig-story' | 'app-link' | 'save';
-
-const templateNames = [
-  '네컷 베이직', '네컷 컬러', '네컷 무드',
-  '로드맵 체리', '로드맵 포토', '로드맵 피크닉', '로드맵 빈티지', '로드맵 컬러',
-  '런치 트레이 레드', '런치 트레이 블루', '런치 트레이 피크닉',
-  'CD 핑크', 'CD 컬러', 'CD 스크랩',
-  '영수증 모노', '영수증 빈티지', '영수증 컬러',
-  '티켓 클래식', '티켓 로맨틱',
-] as const;
-
-const TEMPLATES = templateNames.map((name, index) => ({
-  name,
-  desc: 'ZIP 디자인 · 사진 위치 편집 가능',
-  aspect: '9:16',
-  background: `/templates/munchie-share/template-${String(index + 1).padStart(2, '0')}.jpg`,
-}));
 
 const PLATFORMS: {
   id: Platform;
@@ -61,7 +46,7 @@ const PLATFORM_TOAST: Record<Platform, string> = {
 };
 
 const CARD_WIDTH = 290;
-const TEMPLATE_COUNT = TEMPLATES.length;
+const TEMPLATE_COUNT = SHARE_TEMPLATES.length;
 
 // ── Template carousel item ────────────────────────────────────────────────────
 
@@ -346,7 +331,8 @@ function useShareNavigation() {
   const params = new URLSearchParams(search);
   const from = params.get('from');
   const shareFrom = from === 'saved' || from === 'edit' || from === 'create' ? from : null;
-  const editorFrom = params.get('editorFrom') === 'saved' ? 'saved' : 'explore';
+  const rawEditorFrom = params.get('editorFrom');
+  const editorFrom = rawEditorFrom === 'saved' || rawEditorFrom === 'profile' ? rawEditorFrom : 'explore';
   return { shareFrom, editorFrom } as const;
 }
 
@@ -449,7 +435,7 @@ export default function CourseSharePage() {
     if (!el) return;
     setIsCapturing(true);
     try {
-      const slug = TEMPLATES[selectedTemplate].name.replace(/\s/g, '-');
+      const slug = SHARE_TEMPLATES[selectedTemplate].name.replace(/\s/g, '-');
       const filename = `lunchie-${course.id}-${slug}.png`;
       const method = await saveImageToDevice(
         { current: el },
@@ -509,7 +495,7 @@ export default function CourseSharePage() {
             scrollbarWidth: 'none',
           }}
         >
-          {TEMPLATES.map((template, index) => (
+          {SHARE_TEMPLATES.map((template, index) => (
             <TemplateSlide key={template.background} selected={selectedTemplate === index}>
               <EditableZipTemplate
                 ref={setCardRef(index)}
@@ -525,17 +511,17 @@ export default function CourseSharePage() {
       {/* Template info */}
       <div className="text-center px-4">
         <p className="text-[15px] font-bold text-[#1A1A1A]">
-          {TEMPLATES[selectedTemplate].name}
+          {SHARE_TEMPLATES[selectedTemplate].name}
         </p>
         <p className="text-xs text-gray-400 mt-1">
-          {TEMPLATES[selectedTemplate].aspect} · {TEMPLATES[selectedTemplate].desc}
+          {SHARE_TEMPLATES[selectedTemplate].aspect} · {SHARE_TEMPLATES[selectedTemplate].desc}
         </p>
         <p className="mt-2 text-[11px] font-medium text-[#EB5053]">사진을 드래그·핀치하고 파란 아이콘으로 회전하세요</p>
       </div>
 
       {/* Dots */}
       <div className="flex justify-center gap-1.5 mt-3">
-        {TEMPLATES.map((_, i) => (
+        {SHARE_TEMPLATES.map((_, i) => (
           <button
             key={i}
             onClick={() => {

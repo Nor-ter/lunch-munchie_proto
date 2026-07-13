@@ -13,6 +13,8 @@ import OnboardingPage from "./pages/OnboardingPage";
 import HomePage from "./pages/HomePage";
 import MunchieFeedPage from "./pages/MunchieFeedPage";
 import FeedComposePage from "./pages/FeedComposePage";
+import FeedDetailPage from "./pages/FeedDetailPage";
+import FeedEditPage from "./pages/FeedEditPage";
 import CourseNavigatePage from "./pages/CourseNavigatePage";
 import NewCourseDetailPage from "./pages/course/CourseDetailPage";
 import CourseEditPage from "./pages/course/CourseEditPage";
@@ -30,8 +32,11 @@ import TourMapPage from "./pages/TourMapPage";
 import TourModePage from "./pages/TourModePage";
 import SlideTransitionRoutes from "./components/SlideTransitionRoutes";
 import MetricsPage from "./pages/MetricsPage";
+import TemplateDetailPage from "./pages/TemplateDetailPage";
+import TemplatesBrowsePage from "./pages/TemplatesBrowsePage";
+import CourseFeedsPage from "./pages/course/CourseFeedsPage";
 
-const NO_TABBAR = ['/onboarding', '/tour-mode', '/course/', '/lunchie', '/session', '/join', '/feed/new'];
+const NO_TABBAR = ['/onboarding', '/tour-mode', '/course/', '/template/', '/templates', '/lunchie', '/session', '/join', '/feed/'];
 
 function CoursesRedirect() {
   const params = useParams<{ id: string }>();
@@ -52,10 +57,15 @@ function AppShell() {
             <Route path="/explore">{() => <Redirect to="/feed" />}</Route>
             <Route path="/feed" component={MunchieFeedPage} />
             <Route path="/feed/new" component={FeedComposePage} />
+            <Route path="/feed/:id/edit" component={FeedEditPage} />
+            <Route path="/feed/:id" component={FeedDetailPage} />
+            <Route path="/templates" component={TemplatesBrowsePage} />
+            <Route path="/template/:templateId" component={TemplateDetailPage} />
             <Route path="/courses/:id/navigate" component={CourseNavigatePage} />
             <Route path="/courses/:id" component={CoursesRedirect} />
             <Route path="/course/:id/edit" component={CourseEditPage} />
             <Route path="/course/:id/share" component={CourseSharePage} />
+            <Route path="/course/:id/feeds" component={CourseFeedsPage} />
             <Route path="/course/:id" component={NewCourseDetailPage} />
             <Route path="/saved" component={SavedPage} />
             <Route path="/profile" component={ProfilePage} />

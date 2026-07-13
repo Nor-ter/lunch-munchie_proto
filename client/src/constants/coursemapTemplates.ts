@@ -19,6 +19,8 @@ export interface CoursemapTemplate {
   id: string;
   name: string;
   image: string;
+  description: string;
+  bestFor: string;
   slots: TemplateSlot[];
   /** 원본에 박혀 있는 "코스맵 이름/날짜" 플레이스홀더를 덮는 라벨 스티커 위치 */
   label?: {
@@ -37,6 +39,8 @@ export const COURSEMAP_TEMPLATES: CoursemapTemplate[] = [
     id: 'fourcut',
     name: '네컷',
     image: '/templates/fourcut-01.jpg',
+    description: '하루의 인상적인 장면을 네 장의 사진으로 또렷하게 기록하는 포토 프레임이에요.',
+    bestFor: '데이트 · 카페 투어 · 하루 기록',
     slots: [
       { left: 10.6, top: 22.1, width: 34.8, height: 30.3 },
       { left: 54.0, top: 22.1, width: 34.8, height: 30.3 },
@@ -48,6 +52,8 @@ export const COURSEMAP_TEMPLATES: CoursemapTemplate[] = [
     id: 'roadmap',
     name: '로드맵',
     image: '/templates/roadmap-01.jpg',
+    description: '장소를 따라 움직이는 코스의 흐름을 한눈에 보여주는 여행 지도 스타일이에요.',
+    bestFor: '동네 산책 · 미식 투어 · 여행 코스',
     slots: [
       { left: 35.9, top: 19.2, width: 14.3, height: 8.0 },
       { left: 64.2, top: 26.7, width: 14.3, height: 8.0 },
@@ -60,6 +66,8 @@ export const COURSEMAP_TEMPLATES: CoursemapTemplate[] = [
     id: 'tray',
     name: '먼치트레이',
     image: '/templates/tray-01.jpg',
+    description: '다양한 메뉴와 장소를 한 상 가득 차려낸 듯 보여주는 런치 트레이 디자인이에요.',
+    bestFor: '맛집 투어 · 메뉴 모음 · 여러 스팟',
     slots: [
       { left: 11.5, top: 38.8, width: 20.5, height: 14.7, radius: '16%' },
       { left: 37.0, top: 38.5, width: 26.0, height: 15.2, radius: '14%' },
@@ -73,6 +81,8 @@ export const COURSEMAP_TEMPLATES: CoursemapTemplate[] = [
     id: 'cd',
     name: '씨디 케이스',
     image: '/templates/cd-01.jpg',
+    description: '좋아하는 장소를 플레이리스트처럼 모아두는 레트로 앨범 커버 스타일이에요.',
+    bestFor: '감성 코스 · 야간 투어 · 취향 기록',
     slots: [
       { left: 43.5, top: 29.8, width: 21.5, height: 8.8 },
       { left: 17.1, top: 38.8, width: 24.1, height: 12.8, rotate: -2 },
@@ -85,6 +95,8 @@ export const COURSEMAP_TEMPLATES: CoursemapTemplate[] = [
     id: 'ticket',
     name: '티켓',
     image: '/templates/ticket-01.jpg',
+    description: '다녀온 하루를 오래 간직할 수 있는 한 장의 기념 티켓으로 만드는 디자인이에요.',
+    bestFor: '특별한 날 · 여행 · 데이트 코스',
     slots: [
       { left: 39.8, top: 32.0, width: 34.3, height: 12.5, radius: '50%', rotate: -2 },
       { left: 38.9, top: 44.6, width: 34.3, height: 11.5, radius: '50%', rotate: -2 },
@@ -97,4 +109,8 @@ export const COURSEMAP_TEMPLATES: CoursemapTemplate[] = [
 
 export function getTemplateByIndex(index: number): CoursemapTemplate {
   return COURSEMAP_TEMPLATES[index % COURSEMAP_TEMPLATES.length]!;
+}
+
+export function getTemplateById(id?: string): CoursemapTemplate | undefined {
+  return COURSEMAP_TEMPLATES.find((template) => template.id === id);
 }
