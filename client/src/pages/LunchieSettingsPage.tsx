@@ -6,11 +6,19 @@
 
 import { useState, type ReactNode, type CSSProperties } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { useLocation } from 'wouter';
+import { useLocation, useSearch } from 'wouter';
 import { ArrowLeft, Clock, SlidersHorizontal, Users, Minus, Plus, X } from 'lucide-react';
 import { useApp } from '@/contexts/AppContext';
 import { FOOD_TAGS } from '@/constants/foodTags';
 import { toast } from 'sonner';
+import type { Intent } from '@shared/intent';
+
+const INTENT_OPTIONS: { value: Intent | null; label: string; icon: string }[] = [
+  { value: null, label: '자동', icon: '🕐' },
+  { value: 'meal', label: '밥', icon: '🍚' },
+  { value: 'cafe', label: '카페', icon: '☕' },
+  { value: 'dessert', label: '디저트', icon: '🍰' },
+];
 
 // ─── Filter constants (sj_branch parity) ──────────────────────────────────────
 
@@ -131,11 +139,17 @@ function ActionButton({
 
 export default function LunchieSettingsPage() {
   const [, navigate] = useLocation();
+  const search = useSearch();
   const { createSession, restaurants, profile } = useApp();
+
+  // "다음 여정" 카드 탭 시 ?intent=cafe 로 넘어옴 — 초기 선택값으로 반영.
+  const urlIntent = new URLSearchParams(search).get('intent');
+  const initialIntent: Intent | null = urlIntent === 'meal' || urlIntent === 'cafe' || urlIntent === 'dessert' ? urlIntent : null;
 
   const [deadlineMin, setDeadlineMin] = useState(10);
   const [partySize, setPartySize] = useState(4);
   const [radius, setRadius] = useState(1000);
+  const [intent, setIntent] = useState<Intent | null>(initialIntent);
   const [activeFilters, setActiveFilters] = useState<string[]>(['취향', '평점']);
   const [details, setDetails] = useState<Record<string, string[]>>({
     '취향': ['맛집'],
@@ -174,7 +188,7 @@ export default function LunchieSettingsPage() {
 
       const session = await createSession(
         sessionName,
-        { partySize, dietary, budget, radius, categories },
+        { partySize, dietary, budget, radius, categories, intent: intent ?? undefined },
         hostName,
         profile.emoji,
         deadlineMin,
@@ -236,26 +250,64 @@ export default function LunchieSettingsPage() {
             <p className="text-[13px] font-bold text-[#1A1A1A]">세션 설정</p>
           </div>
 
-          {/* 인원수 */}
+          {/* 누구랑 — 혼자 vs 같이(+정원) */}
           <div className="bg-[#F5F5F5] rounded-xl p-3 mb-2">
-            <p className="text-[11px] text-[#9B9B9B] mb-2">인원수</p>
-            <div className="flex items-center gap-4">
-              <IconButton
-                onClick={() => setPartySize(p => Math.max(2, p - 1))}
-                className="w-9 h-9 rounded-full bg-white shadow-sm flex items-center justify-center disabled:opacity-40"
-                disabled={partySize <= 2}
-              >
-                <Minus size={16} color="#1A1A1A" />
-              </IconButton>
-              <p className="font-black text-[20px] text-[#EB5053] w-12 text-center">{partySize}명</p>
-              <IconButton
-                onClick={() => setPartySize(p => Math.min(12, p + 1))}
-                className="w-9 h-9 rounded-full bg-white shadow-sm flex items-center justify-center disabled:opacity-40"
-                disabled={partySize >= 12}
-              >
-                <Plus size={16} color="#1A1A1A" />
-              </IconButton>
+            <p className="text-[11px] text-[#9B9B9B] mb-2">누구랑 먹어요?</p>
+            <div className="flex gap-2">
+              {([['혼자', 1, '🧍'], ['같이', 4, '👥']] as const).map(([label, size, icon]) => (
+                <ChipButton
+                  key={label}
+                  selected={size === 1 ? partySize === 1 : partySize > 1}
+                  onClick={() => setPartySize(previous => (size === 1 ? 1 : (previous > 1 ? previous : 4)))}
+                  unselectedBg="#FFFFFF"
+                  className="flex-1 py-2.5 rounded-xl font-bold text-[14px]"
+                >
+                  {icon} {label}
+                </ChipButton>
+              ))}
             </div>
+            {partySize > 1 && (
+              <div className="flex items-center justify-center gap-4 mt-3">
+                <IconButton
+                  onClick={() => setPartySize(previous => Math.max(2, previous - 1))}
+                  className="w-8 h-8 rounded-full bg-white shadow-sm flex items-center justify-center disabled:opacity-40"
+                  disabled={partySize <= 2}
+                >
+                  <Minus size={14} color="#1A1A1A" />
+                </IconButton>
+                <p className="font-black text-[17px] text-[#EB5053] w-16 text-center">{partySize}명 정원</p>
+                <IconButton
+                  onClick={() => setPartySize(previous => Math.min(12, previous + 1))}
+                  className="w-8 h-8 rounded-full bg-white shadow-sm flex items-center justify-center disabled:opacity-40"
+                  disabled={partySize >= 12}
+                >
+                  <Plus size={14} color="#1A1A1A" />
+                </IconButton>
+              </div>
+            )}
+            <p className="text-[10px] text-[#B0B0B0] mt-1.5">
+              {partySize > 1 ? '나눠먹기 좋은 곳 위주 · 정원만큼 모이면 마감' : '혼밥하기 편한 곳 위주로 추천해요'}
+            </p>
+          </div>
+
+          {/* 무엇을 먹을까요 — 명시적 밥/카페/디저트 선택. 안 고르면 시간대로 자동 판정. */}
+          <div className="bg-[#F5F5F5] rounded-xl p-3 mb-2">
+            <p className="text-[11px] text-[#9B9B9B] mb-2">무엇을 먹을까요?</p>
+            <div className="flex gap-1.5">
+              {INTENT_OPTIONS.map(({ value, label, icon }) => (
+                <button
+                  key={label}
+                  onClick={() => setIntent(value)}
+                  className="flex-1 py-2.5 rounded-xl font-bold text-[13px] active:scale-[0.98] transition-all"
+                  style={{ background: intent === value ? '#EB5053' : 'white', color: intent === value ? 'white' : '#4A4A4A' }}
+                >
+                  {icon} {label}
+                </button>
+              ))}
+            </div>
+            {intent === null && (
+              <p className="text-[10px] text-[#B0B0B0] mt-1.5">지금 시간대({new Date().getHours()}시)에 맞춰 자동으로 골라요</p>
+            )}
           </div>
 
           {/* 반경 */}

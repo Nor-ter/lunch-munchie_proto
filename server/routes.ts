@@ -1,7 +1,7 @@
 import { Router } from "express";
 import { db, tryDb, withDb } from "./db.js";
 import { users, sessions, restaurants, swipes, courses, courseItems, sessionMembers } from "../shared/schema.js";
-import { eq, and } from "drizzle-orm";
+import { eq, and, inArray } from "drizzle-orm";
 import { nanoid } from "nanoid";
 import { MOCK_RESTAURANTS, MOCK_COURSES } from "./melbourneData.js";
 import { buildSlate, buildControlSlate, assignVariant } from "./engine/scorer.js";
@@ -17,7 +17,7 @@ import { ENGINE_MODEL_VERSION } from "../shared/engine.js";
 import type { Candidate, RecContext, RecEventInput } from "../shared/engine.js";
 import { normalizeDiet, isHardRestriction } from "../shared/const.js";
 import type { DietTag } from "../shared/const.js";
-import { categoriesForIntent, intentForCategory } from "../shared/intent.js";
+import { intentForCategory, intentForHour } from "../shared/intent.js";
 
 const router = Router();
 
@@ -52,6 +52,8 @@ interface MemStore {
   swipes: Record<string, any>[];
 }
 const memSessions = new Map<string, MemStore>(); // key: share_token
+// 호스트 '지금 진행'(D): 강제 완료된 단계 `${session.id}:${round}` 집합 (서버 메모리).
+const forcedSteps = new Set<string>();
 
 function memByToken(token: string): MemStore | undefined {
   return memSessions.get(token);
@@ -64,9 +66,37 @@ function memBySessionId(id: string): MemStore | undefined {
   return found;
 }
 
+// 인제스트된 멜번 OSM 데이터(server/data/melbourne_osm.json)가 있으면 폴백으로 우선 사용.
+// 없으면 기존 하드코딩 mock. (DB 적재 전에도 실데이터로 앱이 돈다 — © OpenStreetMap contributors)
+import { readFileSync, existsSync } from "node:fs";
+import { join, dirname } from "node:path";
+import { fileURLToPath } from "node:url";
+const __osmPath = join(dirname(fileURLToPath(import.meta.url)), "data", "melbourne_osm.json");
+let __osmCache: Record<string, any>[] | null | undefined; // undefined=미시도, null=없음
+function osmRestaurants(): Record<string, any>[] | null {
+  if (__osmCache !== undefined) return __osmCache;
+  try {
+    __osmCache = existsSync(__osmPath) ? JSON.parse(readFileSync(__osmPath, "utf8")) : null;
+    if (__osmCache) console.log(`[data] 멜번 OSM 폴백 로드: ${__osmCache.length}곳`);
+  } catch { __osmCache = null; }
+  return __osmCache ?? null;
+}
+
 // DB 연결이 불가능할 때(예: Supabase 일시정지/포트 차단) 코스맵 프로토타입이
 // 그대로 동작하도록, 멜버른 샘플 데이터를 API 응답 형태로 변환하는 폴백 헬퍼.
 function mockRestaurantsResponse() {
+  const osm = osmRestaurants();
+  if (osm) {
+    return osm.map(r => ({
+      id: r.id, name: r.name, category: r.category,
+      tags: r.tags || [], rating: r.rating, reviewCount: r.review_count,
+      distance: "", address: r.address, image: (r.photos && r.photos[0]) || "",
+      photos: r.photos || [], menuItems: r.menu_items || [],
+      lat: r.latitude, lng: r.longitude, priceRange: r.price_level,
+      openHours: r.business_hours, dietary: r.dietary_options || [],
+      description: r.short_description,
+    }));
+  }
   return MOCK_RESTAURANTS.map(r => ({
     id: r.id,
     name: r.name,
@@ -77,6 +107,8 @@ function mockRestaurantsResponse() {
     distance: "500m",
     address: r.address,
     image: (r.photos && r.photos.length > 0) ? r.photos[0] : "",
+    photos: r.photos || [],
+    menuItems: r.menu_items || [],
     lat: r.latitude,
     lng: r.longitude,
     priceRange: r.price_level,
@@ -84,6 +116,20 @@ function mockRestaurantsResponse() {
     dietary: r.dietary_options || [],
     description: r.short_description,
   }));
+}
+
+// 여정 타임라인 표시용 — id → name (DB 우선, 실패 시 OSM 폴백). 대상 id만 조회(전체 스캔 X).
+async function restaurantNames(ids: string[]): Promise<Map<string, string>> {
+  const uniq = Array.from(new Set(ids));
+  if (!uniq.length) return new Map();
+  try {
+    const rows = await db.select({ id: restaurants.id, name: restaurants.name }).from(restaurants).where(inArray(restaurants.id, uniq));
+    if (rows.length) return new Map(rows.map((r) => [r.id, r.name]));
+  } catch { /* DB 불가 → 폴백 */ }
+  const osm = osmRestaurants();
+  const pool = osm ?? MOCK_RESTAURANTS;
+  const idSet = new Set(uniq);
+  return new Map(pool.filter((r) => idSet.has(r.id)).map((r) => [r.id, r.name as string]));
 }
 
 function mockCoursesResponse() {
@@ -318,6 +364,21 @@ router.post("/sessions/:token/status", async (req: any, res: any) => {
   res.status(404).json({ error: "Session not found" });
 });
 
+// 호스트 '지금 진행'(D) — 현재 단계(round)를 강제 완료 처리. 호스트만.
+router.post("/sessions/:token/force", async (req: any, res: any) => {
+  const { userId, round } = req.body;
+  let session: Record<string, any> | null = null;
+  try {
+    const [s] = await db.select().from(sessions).where(eq(sessions.share_token, req.params.token));
+    if (s) session = s;
+  } catch { /* mem 폴백 */ }
+  if (!session) { const mem = memByToken(req.params.token); if (mem) session = mem.session; }
+  if (!session) return res.status(404).json({ error: "Session not found" });
+  if (session.host_user_id !== userId) return res.status(403).json({ error: "host_only" });
+  forcedSteps.add(`${session.id}:${Number(round)}`);
+  return res.json({ success: true });
+});
+
 // 세션 결과 집계 — DB/메모리 공용 (rows는 컬럼명 기반 객체)
 function buildResultsPayload(
   session: Record<string, any>,
@@ -371,8 +432,12 @@ function buildResultsPayload(
   const completedMembers = members.filter(m => isMemberDone(m.user_id));
   const isExpired = Date.now() > new Date(session.deadline_at).getTime();
 
+  // D: 호스트 '지금 진행'으로 현재 예선/결승 단계 강제 완료됐나
+  const forcePrelim = forcedSteps.has(`${session.id}:${prelimRound}`);
+  const forceFinal = forcedSteps.has(`${session.id}:${finalRound}`);
+
   // 그룹 결정 상태기계: least-misery 집계 + 3지선다 결승 + reroll/합의실패 (현재 세대 기준)
-  const decision = decideGroup(r1 as any, r2 as any, members.length, completedMembers.length, isExpired, generation, REROLL_CAP);
+  const decision = decideGroup(r1 as any, r2 as any, members.length, completedMembers.length, isExpired, generation, REROLL_CAP, forcePrelim, forceFinal);
 
   // 결승 투표 여부(라운드=finalRound의 LIKE, 후보든 '둘 다 별로'든 한 표 던지면 투표 완료).
   const finalVoters = new Set(r2.filter(s => s.swipe_action === 'LIKE').map(s => s.user_id));
@@ -459,6 +524,8 @@ router.get("/restaurants", async (req: any, res: any) => {
       distance: "500m", // Mock distance
       address: r.address,
       image: (r.photos && r.photos.length > 0) ? r.photos[0] : "",
+      photos: r.photos || [],
+      menuItems: r.menu_items || [],
       lat: r.latitude,
       lng: r.longitude,
       priceRange: r.price_level,
@@ -553,6 +620,15 @@ async function candidatePool(): Promise<Candidate[]> {
       .from(restaurants),
   );
   if (dbRes.ok && dbRes.value.length) return dbRes.value as Candidate[];
+  // DB 불가/빈 결과 → OSM(멜버른) 폴백 → 그래도 없으면 MOCK (폴백 체인)
+  const osm = osmRestaurants();
+  if (osm) {
+    return osm.map((r) => ({
+      id: r.id, rating: r.rating, review_count: r.review_count,
+      price_level: r.price_level, category: r.category,
+      dietary_options: r.dietary_options,
+    })) as Candidate[];
+  }
   return MOCK_RESTAURANTS.map((r) => ({
     id: r.id,
     rating: r.rating,
@@ -651,8 +727,7 @@ router.post("/recommend", async (req, res) => {
   // 인텐트(밥/카페/디저트) 필터: 후보를 해당 카테고리군으로 제한. 모두 걸러지면 완화.
   let intent_relaxed = false;
   if (ctx.intent) {
-    const cats = new Set(categoriesForIntent(ctx.intent));
-    const byIntent = filtered.filter((c) => c.category != null && cats.has(c.category));
+    const byIntent = filtered.filter((c) => intentForCategory(c.category) === ctx.intent);
     if (byIntent.length) filtered = byIntent;
     else intent_relaxed = true;
   }
@@ -720,8 +795,10 @@ router.post("/recommend", async (req, res) => {
   const userId = String(req.query.userId ?? "");
   if (!userId) return res.json({ stops: [], nextSuggestion: null });
   const now = Date.now();
-  const stops = await todayStops(userId, now);
-  let nextSuggestion: { intent: string; restaurant: { id: string; category?: string }; reason: string } | null = null;
+  const stopsRaw = await todayStops(userId, now);
+  const nameMap = await restaurantNames(stopsRaw.map((s) => s.restaurant_id));
+  const stops = stopsRaw.map((s) => ({ ...s, name: nameMap.get(s.restaurant_id) ?? s.restaurant_id }));
+  let nextSuggestion: { intent: string; restaurant: { id: string; name: string; category?: string }; reason: string } | null = null;
   const prev = prevStop(userId, now); // 6h occasion 윈도우 내 직전 카테고리 (없으면 null = 사슬 닫힘)
   if (prev) {
     const pool = await candidatePool();
@@ -732,14 +809,15 @@ router.post("/recommend", async (req, res) => {
       const p = chainFitFn(prev, c);
       if (p > bestP) { bestP = p; bestCat = c; }
     }
-    const intent = intentForCategory(bestCat) ?? "cafe";
+    // 신호 없으면(bestCat null) 시간대 기반으로 — "cafe" 하드코딩 폴백은 버그였음(항상 카페만 제안됨)
+    const intent = bestCat ? (intentForCategory(bestCat) ?? intentForHour(new Date(now).getHours())) : intentForHour(new Date(now).getHours());
     const visited = new Set(stops.map((s) => s.restaurant_id));
-    const wanted = new Set(categoriesForIntent(intent as "meal" | "cafe" | "dessert"));
     const pick = pool
-      .filter((c) => c.category && wanted.has(c.category) && !visited.has(c.id))
+      .filter((c) => intentForCategory(c.category) === intent && !visited.has(c.id))
       .sort((a, b) => (b.rating ?? 0) - (a.rating ?? 0))[0];
     if (pick) {
-      nextSuggestion = { intent, restaurant: { id: pick.id, category: pick.category }, reason: `${prev} 다음` };
+      const pickName = (await restaurantNames([pick.id])).get(pick.id) ?? pick.id;
+      nextSuggestion = { intent, restaurant: { id: pick.id, name: pickName, category: pick.category }, reason: `${prev} 다음` };
     }
   }
     res.json({ stops, nextSuggestion });

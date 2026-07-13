@@ -17,8 +17,10 @@ dist/
 # Local prototype workspace (separate Git repository)
 Prototype/
 
+# 암호화된 자격증명 — 저장소에 넣지 않음
 supabase/functions/.env.local
 env.enc
+*.enc
 
 # Apple Sign In AuthKey (login-workflow.md §5.2) — never commit
 *.p8
