@@ -16,3 +16,9 @@ dist/
 
 # Local prototype workspace (separate Git repository)
 Prototype/
+
+supabase/functions/.env.local
+env.enc
+
+# Apple Sign In AuthKey (login-workflow.md §5.2) — never commit
+*.p8
