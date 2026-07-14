@@ -1,7 +1,8 @@
 import { useLocation } from 'wouter';
 import { motion } from 'framer-motion';
-import { Heart } from 'lucide-react';
-import { type Course } from '@/contexts/AppContext';
+import { Bookmark, Heart, MessageCircle } from 'lucide-react';
+import { toast } from 'sonner';
+import { type Course, useApp } from '@/contexts/AppContext';
 import { getTemplateByIndex } from '@/constants/coursemapTemplates';
 import { getCreatorName } from '@/constants/creators';
 import TemplateArtwork from '@/components/munchie/TemplateArtwork';
@@ -23,7 +24,10 @@ export default function TemplateCoursemapCard({
   showAuthor?: boolean;
 }) {
   const [, navigate] = useLocation();
+  const { savedCourseIds, saveCourse, unsaveCourse, feedPosts } = useApp();
   const template = getTemplateByIndex(index);
+  const isSaved = savedCourseIds.includes(course.id);
+  const relatedFeedCount = feedPosts.filter(post => post.courseId === course.id).length;
 
   const handleOpen = () => {
     if (from === 'template' || from === 'profile' || from === 'saved') {
@@ -34,21 +38,50 @@ export default function TemplateCoursemapCard({
     navigate(`/course/${course.id}?from=${from}`);
   };
 
+  const toggleSave = () => {
+    isSaved ? unsaveCourse(course.id) : saveCourse(course.id);
+    toast.success(isSaved ? '저장을 해제했어요' : '코스를 저장했어요');
+  };
+
   return (
-    <motion.button
+    <motion.article
       whileTap={{ scale: 0.96 }}
-      onClick={handleOpen}
       className="text-left w-full"
     >
-      <TemplateArtwork course={course} template={template} className="rounded-xl shadow-sm" />
+      <button type="button" onClick={handleOpen} className="block w-full text-left">
+        <TemplateArtwork course={course} template={template} className="rounded-xl shadow-sm" />
+      </button>
 
       {/* 카드 하단 정보 */}
-      <p className="mt-1.5 px-0.5 text-center text-[11px] font-bold leading-tight line-clamp-2 text-[#3B2A22]">
+      <button
+        type="button"
+        onClick={handleOpen}
+        className="mt-1.5 block w-full px-0.5 text-center text-[11px] font-bold leading-tight line-clamp-2 text-[#3B2A22]"
+      >
         {course.title}
-      </p>
-      <p className="mt-0.5 flex items-center justify-center gap-1 text-[10px] text-[#B09A8C]">
-        <Heart size={9} fill="currentColor" /> {course.savedCount} · {course.metadata.placeCount} 스팟
-      </p>
+      </button>
+      <div className="mt-0.5 flex items-center justify-center gap-2 text-[10px] text-[#B09A8C]">
+        <button type="button" onClick={handleOpen} className="flex items-center gap-1">
+          <Heart size={9} fill="currentColor" /> {course.savedCount}
+        </button>
+        <button
+          type="button"
+          onClick={() => navigate(`/course/${course.id}/feeds?from=${from}`)}
+          aria-label={`${course.title} 피드 보기`}
+          className="flex items-center gap-1"
+        >
+          <MessageCircle size={9} /> {relatedFeedCount}
+        </button>
+        <button
+          type="button"
+          onClick={toggleSave}
+          aria-label={isSaved ? `${course.title} 저장 해제` : `${course.title} 저장`}
+          className="flex items-center gap-1"
+          style={{ color: isSaved ? '#E85053' : undefined }}
+        >
+          <Bookmark size={9} fill={isSaved ? 'currentColor' : 'none'} /> 저장
+        </button>
+      </div>
       {showAuthor && (
         <p className="mt-1 flex items-center justify-center">
           <span className="rounded-full bg-[#FDE1E1] px-1.5 py-0.5 text-[9px] font-bold text-[#E85053]">
@@ -56,6 +89,6 @@ export default function TemplateCoursemapCard({
           </span>
         </p>
       )}
-    </motion.button>
+    </motion.article>
   );
 }

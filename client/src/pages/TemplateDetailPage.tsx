@@ -1,9 +1,9 @@
 import { useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { useLocation, useParams, useSearch } from 'wouter';
-import { ChevronDown, ChevronLeft, ChevronRight, Clock3, MapPin, Pencil, Star, Trash2 } from 'lucide-react';
+import { Bookmark, ChevronDown, ChevronLeft, ChevronRight, Clock3, MapPin, MessageCircle, Pencil, Star, Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
-import { useApp, type Restaurant } from '@/contexts/AppContext';
+import { isFeedCommentHidden, useApp, type Restaurant } from '@/contexts/AppContext';
 import { getTemplateById } from '@/constants/coursemapTemplates';
 import TemplateArtwork from '@/components/munchie/TemplateArtwork';
 import TemplateInfoSheet from '@/components/munchie/TemplateInfoSheet';
@@ -16,13 +16,22 @@ export default function TemplateDetailPage() {
   const [infoOpen, setInfoOpen] = useState(false);
   const [selectedRestaurantId, setSelectedRestaurantId] = useState<string | null>(null);
   const [detailRestaurantId, setDetailRestaurantId] = useState<string | null>(null);
-  const { getCourseById, getRestaurantById, deleteProfileTemplate } = useApp();
+  const {
+    getCourseById,
+    getRestaurantById,
+    deleteProfileTemplate,
+    feedPosts,
+    savedCourseIds,
+    saveCourse,
+    unsaveCourse,
+  } = useApp();
   const searchParams = new URLSearchParams(search);
   const courseId = searchParams.get('course') ?? undefined;
   const source = searchParams.get('from') === 'profile' ? 'profile' : 'feed';
   const backPath = source === 'profile' ? '/profile' : '/feed?tab=template';
   const template = getTemplateById(templateId);
   const course = courseId ? getCourseById(courseId) : undefined;
+  const isSaved = course ? savedCourseIds.includes(course.id) : false;
 
   const editTemplate = () => {
     if (!course || !template) return;
@@ -35,6 +44,12 @@ export default function TemplateDetailPage() {
     deleteProfileTemplate(course.id);
     toast.success('나의 템플릿에서 삭제했어요');
     navigate('/profile', { replace: true });
+  };
+
+  const toggleSave = () => {
+    if (!course) return;
+    isSaved ? unsaveCourse(course.id) : saveCourse(course.id);
+    toast.success(isSaved ? '저장을 해제했어요' : '코스를 저장했어요');
   };
 
   if (!template || !course) {
@@ -56,6 +71,11 @@ export default function TemplateDetailPage() {
   const restaurants = course.stops
     .map((stop) => ({ stop, restaurant: getRestaurantById(stop.placeId) }))
     .filter((item): item is typeof item & { restaurant: Restaurant } => !!item.restaurant);
+  const relatedPosts = feedPosts.filter(post => post.courseId === course.id);
+  const recentComments = relatedPosts
+    .flatMap(post => post.comments.filter(comment => !isFeedCommentHidden(comment)))
+    .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
+    .slice(0, 2);
 
   return (
     <motion.main
@@ -200,10 +220,41 @@ export default function TemplateDetailPage() {
         </div>
       </section>
 
-      <div className="fixed bottom-0 left-1/2 z-40 w-full max-w-[430px] -translate-x-1/2 border-t border-[#F0E6DF] bg-white/95 px-5 pb-[calc(1rem+env(safe-area-inset-bottom))] pt-3 backdrop-blur">
+      <section className="px-5 pt-5">
+        <button
+          type="button"
+          onClick={() => navigate(`/course/${course.id}/feeds?from=template-detail&template=${template.id}${source === 'profile' ? '&templateFrom=profile' : ''}`)}
+          className="flex w-full items-center gap-3 rounded-2xl border border-[#F2D8D3] bg-white p-3.5 text-left shadow-[0_4px_16px_rgba(91,57,42,0.06)] active:scale-[0.99]"
+        >
+          <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-[#FDE1E1] text-[#D94447]">
+            <MessageCircle size={18} />
+          </span>
+          <span className="min-w-0 flex-1">
+            <span className="block text-[14px] font-black text-[#3B2A22]">이 코스로 만든 피드</span>
+            <span className="mt-0.5 block text-[11px] text-[#9D887C]">
+              {relatedPosts.length > 0 ? `피드 ${relatedPosts.length}개 · 댓글 ${recentComments.length}개` : '아직 올라온 피드가 없어요'}
+            </span>
+            {recentComments.length > 0 && (
+              <span className="mt-1 block truncate text-[11px] text-[#6C574C]">
+                “{recentComments[0]?.text}”
+              </span>
+            )}
+          </span>
+          <ChevronRight size={18} color="#B09A8C" />
+        </button>
+      </section>
+
+      <div className="fixed bottom-0 left-1/2 z-40 flex w-full max-w-[430px] -translate-x-1/2 gap-2 border-t border-[#F0E6DF] bg-white/95 px-5 pb-[calc(1rem+env(safe-area-inset-bottom))] pt-3 backdrop-blur">
+        <button
+          onClick={toggleSave}
+          aria-label={isSaved ? '코스 저장 해제' : '코스 저장'}
+          className="flex h-13 w-14 shrink-0 items-center justify-center rounded-2xl border border-[#F0C8C8] text-[#E85053] active:scale-[0.99]"
+        >
+          <Bookmark size={19} fill={isSaved ? 'currentColor' : 'none'} />
+        </button>
         <button
           onClick={() => navigate(`/course/${course.id}?from=template-detail&template=${template.id}${source === 'profile' ? '&templateFrom=profile' : ''}`)}
-          className="flex h-13 w-full items-center justify-center gap-2 rounded-2xl bg-[#E85053] text-[15px] font-bold text-white shadow-[0_8px_20px_rgba(232,80,83,0.25)] active:scale-[0.99]"
+          className="flex h-13 flex-1 items-center justify-center gap-2 rounded-2xl bg-[#E85053] text-[15px] font-bold text-white shadow-[0_8px_20px_rgba(232,80,83,0.25)] active:scale-[0.99]"
         >
           상세 코스 보기 <ChevronRight size={18} />
         </button>

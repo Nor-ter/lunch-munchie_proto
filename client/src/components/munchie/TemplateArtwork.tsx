@@ -7,11 +7,13 @@ export default function TemplateArtwork({
   template,
   className = '',
   eager = false,
+  showLabel = true,
 }: {
   course: Course;
   template: CoursemapTemplate;
   className?: string;
   eager?: boolean;
+  showLabel?: boolean;
 }) {
   const { getRestaurantById } = useApp();
   const photos = [
@@ -56,7 +58,7 @@ export default function TemplateArtwork({
           />
         </div>
       ))}
-      {template.label && (
+      {showLabel && template.label && (
         <div
           className="absolute flex flex-col items-center justify-center px-1 text-center"
           style={{
