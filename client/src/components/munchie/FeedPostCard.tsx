@@ -4,7 +4,10 @@ import { motion } from 'framer-motion';
 import { Bookmark, Share2, Map, Send, MoreHorizontal, EyeOff } from 'lucide-react';
 import { toast } from 'sonner';
 import { useApp, isFeedCommentHidden, type FeedPost } from '@/contexts/AppContext';
+import { getCourseSequenceColor } from '@/constants/courseTheme';
 import { getTemplateByIndex } from '@/constants/coursemapTemplates';
+import { getCourseById as getMockCourseById } from '@/data/mockCourse';
+import { getCoursePlacesFromStops } from '@/lib/courseMapSync';
 import TemplateArtwork from '@/components/munchie/TemplateArtwork';
 
 function timeAgo(iso: string) {
@@ -26,7 +29,7 @@ export default function FeedPostCard({
 }) {
   const [, navigate] = useLocation();
   const {
-    courses, getCourseById,
+    courses, getCourseById, getRestaurantById,
     addFeedComment, toggleCommentHidden, isMyPost,
     savedCourseIds, saveCourse, unsaveCourse,
   } = useApp();
@@ -70,6 +73,10 @@ export default function FeedPostCard({
   const courseIndex = course ? courses.findIndex(item => item.id === course.id) : -1;
   const template = course ? getTemplateByIndex(Math.max(courseIndex, 0)) : null;
   const hasTemplateSlide = !!(course && template);
+  const syncedPlaces = course ? getCoursePlacesFromStops(course, getRestaurantById) : [];
+  const courseMapPlaces = syncedPlaces.length > 0
+    ? syncedPlaces
+    : getMockCourseById(post.courseId).places;
   const photoPairs = post.photos.reduce<string[][]>((pairs, src, index) => {
     if (index % 2 === 0) pairs.push([src]);
     else pairs[pairs.length - 1]?.push(src);
@@ -156,12 +163,63 @@ export default function FeedPostCard({
           </motion.button>
         </div>
 
+        <div className="rounded-2xl bg-[#FFF7F4] px-2 py-2">
+          <div className="space-y-1">
+            {courseMapPlaces.slice(0, 3).map((place, index, visibleItems) => {
+              const color = getCourseSequenceColor(index);
+              const isLast = index === visibleItems.length - 1;
+              return (
+                <div key={place.id} className="flex min-w-0 gap-2">
+                  <div className="flex shrink-0 flex-col items-center">
+                    <span
+                      className="flex h-5 w-5 items-center justify-center rounded-full text-[10px] font-black text-white"
+                      style={{ background: color.base }}
+                    >
+                      {index + 1}
+                    </span>
+                    {!isLast && (
+                      <span
+                        className="my-0.5 h-7 border-l border-dashed"
+                        style={{ borderColor: color.lighter }}
+                        aria-hidden="true"
+                      />
+                    )}
+                  </div>
+                  {place.imageUrl ? (
+                    <img
+                      src={place.imageUrl}
+                      alt=""
+                      className="h-8 w-8 shrink-0 rounded-lg object-cover"
+                      draggable={false}
+                    />
+                  ) : (
+                    <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-white text-[9px] font-bold text-[#3B2A22]">
+                      {place.name.slice(0, 2)}
+                    </div>
+                  )}
+                  <p className="min-w-0 flex-1 truncate pt-1 text-[10.5px] font-black leading-tight text-[#3B2A22]">
+                    {place.name}
+                  </p>
+                </div>
+              );
+            })}
+            {courseMapPlaces.length === 0 && (
+              <p className="text-[10.5px] font-semibold text-[#9B9B9B]">식당 정보가 없어요</p>
+            )}
+          </div>
+          {courseMapPlaces.length > 3 && (
+            <p className="mt-1 text-center text-[9px] font-bold text-[#B09A8C]">
+              +{courseMapPlaces.length - 3}곳 더
+            </p>
+          )}
+        </div>
+
     </div>
   );
 
   return (
     <div className="rounded-[26px] bg-white border border-[#F0E8E0] shadow-sm overflow-hidden">
-      <div className="mx-3 mt-3 grid min-h-[280px] grid-cols-[48%_52%] overflow-hidden rounded-2xl">
+      <div className="mx-3 mt-3 grid min-h-[280px] grid-cols-[55%_45%] overflow-hidden rounded-2xl">
         <div
           className="relative min-h-[280px] overflow-hidden"
           role="button"
