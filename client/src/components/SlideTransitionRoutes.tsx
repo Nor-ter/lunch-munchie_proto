@@ -1,5 +1,5 @@
 import { type ReactNode, type ReactElement, cloneElement, isValidElement, useRef } from "react";
-import { AnimatePresence, motion } from "framer-motion";
+import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import { useLocation } from "wouter";
 
 function usePrevious<T>(value: T): T | undefined {
@@ -52,7 +52,8 @@ type SlideTransitionRoutesProps = {
 export default function SlideTransitionRoutes({ children }: SlideTransitionRoutesProps) {
   const [location] = useLocation();
   const previousLocation = usePrevious(location);
-  const direction = getSlideDirection(previousLocation, location);
+  const shouldReduceMotion = useReducedMotion();
+  const direction = shouldReduceMotion ? 0 : getSlideDirection(previousLocation, location);
 
   // 각 레이어의 <Switch>를 자기 레이어의 location으로 고정한다.
   // 그래야 나가는(이전) 레이어가 현재 location을 따라가 새 페이지를 보여주는
@@ -68,15 +69,15 @@ export default function SlideTransitionRoutes({ children }: SlideTransitionRoute
           key={location}
           custom={direction}
           variants={variants}
-          initial="enter"
+          initial={shouldReduceMotion ? false : "enter"}
           animate="center"
           exit="exit"
           className="w-full"
           style={{
             position: "absolute",
             inset: 0,
-            background: "#FCF4EE",
-            willChange: "transform",
+            background: "var(--lm-bg)",
+            willChange: shouldReduceMotion ? "auto" : "transform",
           }}
         >
           {/* 스크롤은 여기 안쪽 레이어에서만 일어나야 한다.

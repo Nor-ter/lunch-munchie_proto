@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { type CSSProperties } from 'react';
 import { motion } from 'framer-motion';
 import { Sparkles } from 'lucide-react';
 import { getSkinById, MUNCHIE_SKINS, type MunchieSkin } from '@/constants/skins';
@@ -49,6 +49,25 @@ export function foodieLevel(score: number): { level: FoodieLevel; index: number;
 }
 
 const BUBBLES = ['냠냠 😋', '오늘 뭐 먹지?', '코스맵 더 줘!', '맛집 가고 싶다…', '먹부림 최고 🍴'];
+
+export type FoodieBuddyUiState = 'idle' | 'foodAvailable';
+
+export interface FoodieBuddyProps {
+  /** 기존 성장점수. Phase 1A의 새 음식 fixture와는 별개로 기존 레벨 표시에만 사용한다. */
+  score: number;
+  char?: string;
+  skinId?: string;
+  /** 기존 사용처 호환용 꾸미기 콜백 */
+  onCustomize: () => void;
+  /** 표시 전용 UI 상태. 생략하면 기존과 같은 idle 상태다. */
+  uiState?: FoodieBuddyUiState;
+  /** 아직 확인하지 않은 음식 수. localStorage/AppContext에 저장하지 않는다. */
+  unseenFoodCount?: number;
+  /** Phase 1A에서는 호출부를 연결하지 않고, 이후 런치박스 UI를 위한 경계만 제공한다. */
+  onLunchboxOpen?: () => void;
+  /** 별도 방 진입 동작이 생기기 전에는 기존 onCustomize로 폴백한다. */
+  onFoodieRoomOpen?: () => void;
+}
 
 /**
  * 캐릭터 이모지 위에 얹는 얼굴 — 픽사/토이스토리풍으로 눈에 흰자+반짝이는 하이라이트,
@@ -215,35 +234,52 @@ export default function FoodieBuddy({
   char,
   skinId,
   onCustomize,
-}: {
-  /** 성장점수 = 나의 코스맵 수 + 나의 피드 수 */
-  score: number;
-  char?: string;
-  skinId?: string;
-  onCustomize: () => void;
-}) {
+  uiState = 'idle',
+  unseenFoodCount = 0,
+  onLunchboxOpen,
+  onFoodieRoomOpen,
+}: FoodieBuddyProps) {
   const skin: MunchieSkin = getSkinById(skinId) ?? MUNCHIE_SKINS[0];
   const { level, index, next, progress } = foodieLevel(score);
   const isEgg = index === 0;
   const isMax = index === LEVELS.length - 1;
   const face = isEgg ? '🥚' : (char ?? '🍙');
-  // 말풍선은 점수 기반으로 고정 선택 (리렌더마다 안 바뀌게)
-  const bubble = BUBBLES[score % BUBBLES.length];
+  const normalizedUnseenCount = Number.isFinite(unseenFoodCount)
+    ? Math.max(0, Math.floor(unseenFoodCount))
+    : 0;
+  const isFoodAvailable = uiState === 'foodAvailable';
+  const unseenCountLabel = normalizedUnseenCount > 9 ? '9+' : String(normalizedUnseenCount);
+  // idle 말풍선은 점수 기반으로 고정 선택(리렌더마다 안 바뀌게), 새 음식 상태만 한 줄 안내로 교체한다.
+  const bubble = isFoodAvailable
+    ? normalizedUnseenCount > 0
+      ? `새 음식 ${unseenCountLabel}개 도착! 🍱`
+      : '새 음식이 도착했어! 🍱'
+    : BUBBLES[score % BUBBLES.length];
+  const openFoodieRoom = onFoodieRoomOpen ?? onCustomize;
 
   return (
-    <button onClick={onCustomize} className="block w-full text-left" aria-label="푸디 캐릭터 커스텀">
+    <div className="block w-full text-left">
       <div
         className="relative rounded-3xl overflow-hidden"
         style={{ height: 110, background: skin.frame, boxShadow: skin.frameShadow }}
       >
+        {/* 기존 배너 전체 탭 동작을 유지하되, 런치박스는 별도 버튼으로 분리한다. */}
+        <button
+          type="button"
+          onClick={openFoodieRoom}
+          className="absolute inset-0 z-0 rounded-3xl bg-transparent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset"
+          style={{ '--tw-ring-color': skin.accent } as CSSProperties}
+          aria-label="푸디 캐릭터 커스텀"
+        />
+
         {/* 방 바닥 */}
         <div
-          className="absolute bottom-0 left-0 right-0"
+          className="pointer-events-none absolute bottom-0 left-0 right-0"
           style={{ height: 26, background: 'rgba(255,255,255,0.55)', borderTop: `1.5px dashed ${skin.accent}55` }}
         />
 
         {/* 레벨 배지 + 진화 게이지 */}
-        <div className="absolute top-2 left-2.5 z-10">
+        <div className="pointer-events-none absolute top-2 left-2.5 z-10">
           <span
             className="rounded-full px-2 py-0.5 text-[9px] font-black"
             style={{ background: 'rgba(255,255,255,0.9)', color: skin.accent }}
@@ -266,11 +302,42 @@ export default function FoodieBuddy({
 
         {/* 커스텀 힌트 */}
         <span
-          className="absolute top-2 right-2.5 z-10 rounded-full px-2 py-0.5 text-[9px] font-bold"
+          className="pointer-events-none absolute top-2 right-2.5 z-10 rounded-full px-2 py-0.5 text-[9px] font-bold"
           style={{ background: 'rgba(255,255,255,0.85)', color: skin.sub }}
         >
           🎨 탭해서 꾸미기
         </span>
+
+        {/* 런치박스 자리 — Phase 1A는 표시와 unseen badge만 제공하고 Sheet는 열지 않는다. */}
+        <motion.button
+          type="button"
+          onClick={(event) => {
+            event.stopPropagation();
+            onLunchboxOpen?.();
+          }}
+          disabled={!onLunchboxOpen}
+          className="absolute bottom-2 right-3 z-20 flex h-10 w-12 items-center justify-center rounded-2xl border border-white/70 bg-white/90 text-[23px] shadow-sm disabled:cursor-default"
+          initial={{ y: 0 }}
+          animate={{ y: isFoodAvailable ? -2 : 0 }}
+          transition={isFoodAvailable
+            ? { repeat: Infinity, repeatType: 'reverse', duration: 1.15, ease: 'easeInOut' }
+            : { duration: 0.2 }}
+          aria-label={isFoodAvailable && normalizedUnseenCount > 0
+            ? `새 음식 ${normalizedUnseenCount}개가 있는 런치박스`
+            : '런치박스'}
+        >
+          <span aria-hidden="true">🍱</span>
+          {isFoodAvailable && normalizedUnseenCount > 0 && (
+            <motion.span
+              className="absolute -right-1 -top-1 flex h-5 min-w-5 items-center justify-center rounded-full border-2 border-white bg-[#EB5053] px-1 text-[9px] font-black leading-none text-white shadow-sm"
+              initial={{ scale: 0.9 }}
+              animate={{ scale: 1.05 }}
+              transition={{ repeat: Infinity, repeatType: 'reverse', duration: 0.75, ease: 'easeInOut' }}
+            >
+              {unseenCountLabel}
+            </motion.span>
+          )}
+        </motion.button>
 
         {/* 캐릭터 (좌우 배회 + 바운스)
             주의: 이 프로젝트 환경에서 배열 키프레임([a,b,c]) + repeat:Infinity 조합은 첫 프레임에
@@ -278,7 +345,7 @@ export default function FoodieBuddy({
             repeatType:'reverse' 방식으로 우회한다. */}
         <motion.div
           key={`wander-${level.wander}`}
-          className="absolute left-1/2 z-10"
+          className="pointer-events-none absolute left-1/2 z-10"
           style={{ bottom: 16, marginLeft: -level.size / 2 }}
           initial={{ x: level.wander > 0 ? -level.wander : 0 }}
           animate={{ x: level.wander > 0 ? level.wander : 0 }}
@@ -296,7 +363,7 @@ export default function FoodieBuddy({
             transition={{ repeat: Infinity, repeatType: 'reverse', duration: level.bounce / 2, ease: 'easeInOut' }}
           >
             {/* 말풍선 */}
-            {!isEgg && (
+            {(!isEgg || isFoodAvailable) && (
               <motion.span
                 className="absolute left-1/2 -translate-x-1/2 whitespace-nowrap rounded-full px-2 py-0.5 text-[8px] font-bold shadow-sm"
                 style={{ top: -18, background: 'rgba(255,255,255,0.95)', color: skin.text }}
@@ -305,6 +372,18 @@ export default function FoodieBuddy({
                 transition={{ repeat: Infinity, repeatType: 'reverse', duration: 3, ease: 'easeInOut' }}
               >
                 {bubble}
+              </motion.span>
+            )}
+            {/* 새 음식 상태의 작은 시선 반응 — 기존 이동/바운스 위에만 겹쳐 레이아웃을 바꾸지 않는다. */}
+            {isFoodAvailable && (
+              <motion.span
+                className="absolute -right-8 top-1 whitespace-nowrap text-[11px] drop-shadow-sm"
+                initial={{ x: 0, rotate: -4 }}
+                animate={{ x: 3, rotate: 4 }}
+                transition={{ repeat: Infinity, repeatType: 'reverse', duration: 0.7, ease: 'easeInOut' }}
+                aria-hidden="true"
+              >
+                👀→
               </motion.span>
             )}
             {/* 왕관 (만렙) */}
@@ -345,7 +424,7 @@ export default function FoodieBuddy({
         {isMax && (
           <>
             <motion.span
-              className="absolute z-10"
+              className="pointer-events-none absolute z-10"
               style={{ left: '22%', top: 24 }}
               initial={{ opacity: 0, scale: 0.6 }}
               animate={{ opacity: 1, scale: 1.1 }}
@@ -354,7 +433,7 @@ export default function FoodieBuddy({
               <Sparkles size={13} style={{ color: skin.accent }} />
             </motion.span>
             <motion.span
-              className="absolute z-10"
+              className="pointer-events-none absolute z-10"
               style={{ right: '20%', top: 40 }}
               initial={{ opacity: 0, scale: 0.6 }}
               animate={{ opacity: 1, scale: 1.2 }}
@@ -365,6 +444,6 @@ export default function FoodieBuddy({
           </>
         )}
       </div>
-    </button>
+    </div>
   );
 }

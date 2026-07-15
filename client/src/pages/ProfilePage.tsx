@@ -15,10 +15,20 @@ import { useApp, isFeedCommentHidden, type FeedPost } from '@/contexts/AppContex
 import { fileToResizedDataUrl } from '@/lib/imageUtils';
 import TemplateCoursemapCard from '@/components/munchie/TemplateCoursemapCard';
 import SkinPicker from '@/components/munchie/SkinPicker';
-import FoodieBuddy, { FOODIE_CHARS, foodieLevel } from '@/components/munchie/FoodieBuddy';
+import FoodieBuddy, {
+  FOODIE_CHARS,
+  foodieLevel,
+  type FoodieBuddyUiState,
+} from '@/components/munchie/FoodieBuddy';
 
 const EMOJIS = ['😊', '🍱', '🍜', '🍣', '🥩', '🍕', '🌮', '🍔', '🥗', '☕', '🎂', '🍰'];
 const DIETARY_OPTIONS = ['비건', '채식', '글루텐프리', '할랄', '유제품 제외', '견과류 알러지', '해산물 제외'];
+
+/** Phase 1A 표시 전용 fixture — AppContext/localStorage의 실제 사용자 데이터와 섞지 않는다. */
+const LUNCHMATE_PREVIEW_FIXTURE = {
+  uiState: 'foodAvailable',
+  unseenFoodCount: 2,
+} as const satisfies { uiState: FoodieBuddyUiState; unseenFoodCount: number };
 
 type SortMode = 'likes' | 'recent';
 
@@ -227,6 +237,8 @@ export default function ProfilePage() {
           char={profile.foodieChar}
           skinId={profile.foodieSkin}
           onCustomize={() => setFoodieOpen(true)}
+          uiState={LUNCHMATE_PREVIEW_FIXTURE.uiState}
+          unseenFoodCount={LUNCHMATE_PREVIEW_FIXTURE.unseenFoodCount}
         />
         <div className="relative z-20 -mt-9 px-3">
           <div className="flex items-end gap-3">
