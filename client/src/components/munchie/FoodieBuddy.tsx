@@ -1,7 +1,8 @@
-import { type CSSProperties } from 'react';
+import { useEffect, useRef, type CSSProperties, type Ref } from 'react';
 import { motion } from 'framer-motion';
 import { Sparkles } from 'lucide-react';
 import { getSkinById, MUNCHIE_SKINS, type MunchieSkin } from '@/constants/skins';
+import type { LunchmateProgressSnapshot } from '@/utils/lunchmateProgress';
 
 /**
  * Foodie Buddy — 프로필 배너의 다마고치.
@@ -50,7 +51,14 @@ export function foodieLevel(score: number): { level: FoodieLevel; index: number;
 
 const BUBBLES = ['냠냠 😋', '오늘 뭐 먹지?', '코스맵 더 줘!', '맛집 가고 싶다…', '먹부림 최고 🍴'];
 
-export type FoodieBuddyUiState = 'idle' | 'foodAvailable';
+export type FoodieBuddyUiState =
+  | 'idle'
+  | 'foodAvailable'
+  | 'selectingFood'
+  | 'submitting'
+  | 'sharingAnimation'
+  | 'reaction'
+  | 'error';
 
 export interface FoodieBuddyProps {
   /** 기존 성장점수. Phase 1A의 새 음식 fixture와는 별개로 기존 레벨 표시에만 사용한다. */
@@ -63,8 +71,22 @@ export interface FoodieBuddyProps {
   uiState?: FoodieBuddyUiState;
   /** 아직 확인하지 않은 음식 수. localStorage/AppContext에 저장하지 않는다. */
   unseenFoodCount?: number;
-  /** Phase 1A에서는 호출부를 연결하지 않고, 이후 런치박스 UI를 위한 경계만 제공한다. */
+  /** 런치박스 진입 동작. 생략하면 버튼은 표시만 하고 비활성화한다. */
   onLunchboxOpen?: () => void;
+  /** Sheet가 닫힌 뒤 런치박스 버튼으로 포커스를 복귀시키기 위한 ref */
+  lunchboxButtonRef?: Ref<HTMLButtonElement>;
+  /** 실제 성장점수와 분리된 맛추억 preview 상세 열기 */
+  onProgressOpen?: () => void;
+  /** 맛추억 상세 Sheet가 닫힌 뒤 포커스를 복귀시키기 위한 ref */
+  progressButtonRef?: Ref<HTMLButtonElement>;
+  /** 성공한 mock 음식의 전달 표현용 placeholder */
+  sharedFoodPlaceholder?: string;
+  /** 전달되면 배너 Level/XP/Progress/MAX 표시에 사용하는 단일 preview 원본 */
+  progressSnapshot?: LunchmateProgressSnapshot;
+  /** 한입 결과에서 같은 Level Definition 기반 progress 전환을 표현한다. */
+  previousProgressSnapshot?: LunchmateProgressSnapshot;
+  lastXpGain?: number;
+  resultMessage?: string;
   /** 별도 방 진입 동작이 생기기 전에는 기존 onCustomize로 폴백한다. */
   onFoodieRoomOpen?: () => void;
 }
@@ -237,25 +259,116 @@ export default function FoodieBuddy({
   uiState = 'idle',
   unseenFoodCount = 0,
   onLunchboxOpen,
+  lunchboxButtonRef,
+  onProgressOpen,
+  progressButtonRef,
+  sharedFoodPlaceholder,
+  progressSnapshot,
+  previousProgressSnapshot,
+  lastXpGain = 0,
+  resultMessage,
   onFoodieRoomOpen,
 }: FoodieBuddyProps) {
   const skin: MunchieSkin = getSkinById(skinId) ?? MUNCHIE_SKINS[0];
   const { level, index, next, progress } = foodieLevel(score);
   const isEgg = index === 0;
-  const isMax = index === LEVELS.length - 1;
+  const fallbackIsMax = index === LEVELS.length - 1;
   const face = isEgg ? '🥚' : (char ?? '🍙');
   const normalizedUnseenCount = Number.isFinite(unseenFoodCount)
     ? Math.max(0, Math.floor(unseenFoodCount))
     : 0;
-  const isFoodAvailable = uiState === 'foodAvailable';
+  const isFoodAvailable = uiState === 'foodAvailable'
+    || uiState === 'selectingFood'
+    || uiState === 'submitting'
+    || uiState === 'error';
+  const isSharingAnimation = uiState === 'sharingAnimation';
+  const isReaction = uiState === 'reaction';
   const unseenCountLabel = normalizedUnseenCount > 9 ? '9+' : String(normalizedUnseenCount);
-  // idle 말풍선은 점수 기반으로 고정 선택(리렌더마다 안 바뀌게), 새 음식 상태만 한 줄 안내로 교체한다.
-  const bubble = isFoodAvailable
-    ? normalizedUnseenCount > 0
-      ? `새 음식 ${unseenCountLabel}개 도착! 🍱`
-      : '새 음식이 도착했어! 🍱'
-    : BUBBLES[score % BUBBLES.length];
+  const displayedLevel = progressSnapshot?.level ?? index + 1;
+  const displayedLevelName = progressSnapshot?.levelName ?? level.name;
+  const displayedIsMax = progressSnapshot?.isMaxLevel ?? fallbackIsMax;
+  const displayedProgress = progressSnapshot
+    ? Math.min(1, Math.max(0, progressSnapshot.progressPercent / 100))
+    : progress;
+  const previousDisplayedProgress = progressSnapshot
+    && previousProgressSnapshot?.level === progressSnapshot.level
+    ? Math.min(1, Math.max(0, previousProgressSnapshot.progressPercent / 100))
+    : 0;
+  const progressLabel = progressSnapshot
+    ? progressSnapshot.isMaxLevel
+      ? `${progressSnapshot.totalXp} 맛추억 · MAX`
+      : `${progressSnapshot.totalXp} / ${progressSnapshot.nextLevelTotalXp} 맛추억`
+    : next
+      ? `다음 진화까지 ${next.min - score}점`
+      : 'MAX 🎖️';
+  const reactionProgressLabel = progressSnapshot
+    ? `+${lastXpGain} XP · ${progressLabel}`
+    : `맛추억 미리보기 +${lastXpGain} XP`;
+  // idle 말풍선은 점수 기반으로 고정하고, mock flow 상태에서만 짧은 안내로 교체한다.
+  const bubble = isReaction
+    ? (resultMessage ?? '맛있는 한입 고마워! 😋')
+    : isSharingAnimation
+      ? '한입이 오고 있어! 🍴'
+      : uiState === 'submitting'
+        ? '한입 준비 중…'
+        : uiState === 'error'
+          ? '다시 한 번 해볼까?'
+          : isFoodAvailable
+            ? normalizedUnseenCount > 0
+              ? `새 음식 ${unseenCountLabel}개 도착! 🍱`
+              : '새 음식이 도착했어! 🍱'
+            : BUBBLES[score % BUBBLES.length];
   const openFoodieRoom = onFoodieRoomOpen ?? onCustomize;
+  const wanderRef = useRef<HTMLDivElement>(null);
+  const bounceRef = useRef<HTMLDivElement>(null);
+  const shadowRef = useRef<HTMLDivElement>(null);
+
+  // transform repeat가 첫 pose에 고정되는 Framer Motion 경로를 피한다.
+  // 이 timeline은 Sheet 상태와 무관하게 계속 실행되고, 레벨 변경 또는 unmount 때만 정리된다.
+  useEffect(() => {
+    const animations: Animation[] = [];
+
+    if (wanderRef.current && level.wander > 0) {
+      animations.push(wanderRef.current.animate(
+        [
+          { transform: `translateX(${-level.wander}px)` },
+          { transform: `translateX(${level.wander}px)` },
+        ],
+        {
+          duration: level.bounce * 1500,
+          iterations: Infinity,
+          direction: 'alternate',
+          easing: 'ease-in-out',
+        },
+      ));
+    }
+
+    if (bounceRef.current) {
+      animations.push(bounceRef.current.animate(
+        [{ transform: 'translateY(0)' }, { transform: 'translateY(-7px)' }],
+        {
+          duration: level.bounce * 500,
+          iterations: Infinity,
+          direction: 'alternate',
+          easing: 'ease-in-out',
+        },
+      ));
+    }
+
+    if (shadowRef.current) {
+      animations.push(shadowRef.current.animate(
+        [{ transform: 'scaleX(1)' }, { transform: 'scaleX(0.75)' }],
+        {
+          duration: level.bounce * 500,
+          iterations: Infinity,
+          direction: 'alternate',
+          easing: 'ease-in-out',
+        },
+      ));
+    }
+
+    return () => animations.forEach(animation => animation.cancel());
+  }, [level.bounce, level.wander]);
 
   return (
     <div className="block w-full text-left">
@@ -279,26 +392,44 @@ export default function FoodieBuddy({
         />
 
         {/* 레벨 배지 + 진화 게이지 */}
-        <div className="pointer-events-none absolute top-2 left-2.5 z-10">
+        <button
+          ref={progressButtonRef}
+          type="button"
+          onClick={onProgressOpen}
+          tabIndex={onProgressOpen ? 0 : -1}
+          aria-disabled={!onProgressOpen}
+          aria-label="맛추억 미리보기 상세"
+          className={`absolute top-2 left-2.5 z-20 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white ${
+            onProgressOpen ? 'pointer-events-auto cursor-pointer' : 'pointer-events-none'
+          }`}
+        >
           <span
             className="rounded-full px-2 py-0.5 text-[9px] font-black"
             style={{ background: 'rgba(255,255,255,0.9)', color: skin.accent }}
           >
-            Lv.{index + 1} {level.name}
+            Lv.{displayedLevel} {displayedLevelName}
           </span>
-          <div className="mt-1 h-[5px] w-[86px] rounded-full overflow-hidden" style={{ background: 'rgba(255,255,255,0.65)' }}>
+          <div className="relative mt-1 h-[5px] w-[86px] overflow-hidden rounded-full" style={{ background: 'rgba(255,255,255,0.65)' }}>
             <motion.div
               className="h-full rounded-full"
               style={{ background: skin.accent }}
               initial={{ width: 0 }}
-              animate={{ width: `${progress * 100}%` }}
+              animate={{ width: `${displayedProgress * 100}%` }}
               transition={{ duration: 0.8, ease: 'easeOut' }}
             />
+            {isReaction && (
+              <motion.div
+                className="absolute inset-y-0 left-0 rounded-full bg-[#F5A623]"
+                initial={{ width: `${previousDisplayedProgress * 100}%` }}
+                animate={{ width: `${displayedProgress * 100}%` }}
+                transition={{ duration: 0.55, ease: 'easeOut' }}
+              />
+            )}
           </div>
           <p className="mt-0.5 text-[8px] font-semibold" style={{ color: skin.accent }}>
-            {next ? `다음 진화까지 ${next.min - score}점` : 'MAX 🎖️'}
+            {isReaction ? reactionProgressLabel : progressLabel}
           </p>
-        </div>
+        </button>
 
         {/* 커스텀 힌트 */}
         <span
@@ -308,8 +439,9 @@ export default function FoodieBuddy({
           🎨 탭해서 꾸미기
         </span>
 
-        {/* 런치박스 자리 — Phase 1A는 표시와 unseen badge만 제공하고 Sheet는 열지 않는다. */}
+        {/* 런치박스 영역 — 새 음식 상태와 Sheet 진입점을 기존 배너 안에 겹쳐 표시한다. */}
         <motion.button
+          ref={lunchboxButtonRef}
           type="button"
           onClick={(event) => {
             event.stopPropagation();
@@ -339,31 +471,32 @@ export default function FoodieBuddy({
           )}
         </motion.button>
 
-        {/* 캐릭터 (좌우 배회 + 바운스)
-            주의: 이 프로젝트 환경에서 배열 키프레임([a,b,c]) + repeat:Infinity 조합은 첫 프레임에
-            멈춰버리는 문제가 있어(WAAPI로 직접 구동해보면 정상 동작 확인됨), initial/animate 단일값 +
-            repeatType:'reverse' 방식으로 우회한다. */}
-        <motion.div
-          key={`wander-${level.wander}`}
-          className="pointer-events-none absolute left-1/2 z-10"
-          style={{ bottom: 16, marginLeft: -level.size / 2 }}
-          initial={{ x: level.wander > 0 ? -level.wander : 0 }}
-          animate={{ x: level.wander > 0 ? level.wander : 0 }}
-          transition={
-            level.wander > 0
-              ? { repeat: Infinity, repeatType: 'reverse', duration: level.bounce * 1.5, ease: 'easeInOut' }
-              : undefined
-          }
-        >
-          <motion.div
-            key={`bounce-${level.bounce}`}
-            className="relative"
-            initial={{ y: 0 }}
-            animate={{ y: -7 }}
-            transition={{ repeat: Infinity, repeatType: 'reverse', duration: level.bounce / 2, ease: 'easeInOut' }}
+        {isSharingAnimation && sharedFoodPlaceholder && (
+          <motion.span
+            className="pointer-events-none absolute bottom-10 right-[58px] z-20 text-[24px] drop-shadow-md"
+            initial={{ x: 0, y: 0, scale: 0.75, opacity: 0 }}
+            animate={{
+              x: [0, -38, -92, -112],
+              y: [0, -12, -9, -6],
+              scale: [0.75, 0.95, 1.05, 0.9],
+              opacity: [0, 1, 1, 0],
+            }}
+            transition={{ duration: 0.48, ease: 'easeInOut', times: [0, 0.18, 0.78, 1] }}
+            aria-hidden="true"
           >
+            {sharedFoodPlaceholder}
+          </motion.span>
+        )}
+
+        {/* 캐릭터 (좌우 배회 + 바운스) — Sheet open/close와 독립된 WAAPI timeline */}
+        <div
+          ref={wanderRef}
+          className="pointer-events-none absolute left-1/2 z-10 will-change-transform"
+          style={{ bottom: 16, marginLeft: -level.size / 2 }}
+        >
+          <div ref={bounceRef} className="relative will-change-transform">
             {/* 말풍선 */}
-            {(!isEgg || isFoodAvailable) && (
+            {(!isEgg || uiState !== 'idle') && (
               <motion.span
                 className="absolute left-1/2 -translate-x-1/2 whitespace-nowrap rounded-full px-2 py-0.5 text-[8px] font-bold shadow-sm"
                 style={{ top: -18, background: 'rgba(255,255,255,0.95)', color: skin.text }}
@@ -387,7 +520,7 @@ export default function FoodieBuddy({
               </motion.span>
             )}
             {/* 왕관 (만렙) */}
-            {isMax && (
+            {displayedIsMax && (
               <motion.span
                 className="absolute left-1/2 -translate-x-1/2"
                 style={{ top: -14, fontSize: 16 }}
@@ -398,30 +531,36 @@ export default function FoodieBuddy({
                 👑
               </motion.span>
             )}
-            <div style={{ position: 'relative', width: level.size, height: level.size }}>
-              <span style={{ fontSize: level.size, lineHeight: 1, display: 'block', filter: 'drop-shadow(0 3px 3px rgba(0,0,0,0.15))' }}>
-                {face}
-              </span>
-              <FoodieFace size={level.size} sleepy={isEgg} />
-            </div>
+            <motion.div
+              animate={isReaction
+                ? { scale: [1, 1.14, 1], rotate: [0, -5, 5, 0] }
+                : { scale: 1, rotate: 0 }}
+              transition={isReaction
+                ? { duration: 0.6, ease: 'easeInOut' }
+                : { duration: 0.2 }}
+            >
+              <div style={{ position: 'relative', width: level.size, height: level.size }}>
+                <span style={{ fontSize: level.size, lineHeight: 1, display: 'block', filter: 'drop-shadow(0 3px 3px rgba(0,0,0,0.15))' }}>
+                  {face}
+                </span>
+                <FoodieFace size={level.size} sleepy={isEgg} />
+              </div>
+            </motion.div>
             {/* 알 단계: 안에서 캐릭터가 기다리는 힌트 */}
             {isEgg && (
               <span className="absolute -right-2 -bottom-1 text-[13px]">💤</span>
             )}
-          </motion.div>
+          </div>
           {/* 그림자 */}
-          <motion.div
-            key={`shadow-${level.bounce}`}
-            className="mx-auto rounded-full"
+          <div
+            ref={shadowRef}
+            className="mx-auto rounded-full will-change-transform"
             style={{ width: level.size * 0.7, height: 5, background: 'rgba(0,0,0,0.14)', marginTop: 2 }}
-            initial={{ scaleX: 1 }}
-            animate={{ scaleX: 0.75 }}
-            transition={{ repeat: Infinity, repeatType: 'reverse', duration: level.bounce / 2, ease: 'easeInOut' }}
           />
-        </motion.div>
+        </div>
 
         {/* 만렙 반짝이 */}
-        {isMax && (
+        {displayedIsMax && (
           <>
             <motion.span
               className="pointer-events-none absolute z-10"

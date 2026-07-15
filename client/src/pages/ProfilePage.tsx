@@ -4,7 +4,7 @@
  * - 나의 코스맵: 스킨 카드 그리드, 좋아요 순/최신 순 정렬, 탭하면 상세(편집 가능)
  * - 나의 피드: 수정(한줄평/스킨)·삭제, 악성 댓글 숨기기(메인 피드에 일괄 반영)
  */
-import { useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useLocation } from 'wouter';
 import {
@@ -20,6 +20,10 @@ import FoodieBuddy, {
   foodieLevel,
   type FoodieBuddyUiState,
 } from '@/components/munchie/FoodieBuddy';
+import LunchboxBottomSheet, { type LunchboxFoodItem } from '@/components/munchie/LunchboxBottomSheet';
+import LunchmateProgressSheet from '@/components/munchie/LunchmateProgressSheet';
+import LunchmateLevelUpModal from '@/components/munchie/LunchmateLevelUpModal';
+import { useLunchmateFlow } from '@/hooks/useLunchmateFlow';
 
 const EMOJIS = ['😊', '🍱', '🍜', '🍣', '🥩', '🍕', '🌮', '🍔', '🥗', '☕', '🎂', '🍰'];
 const DIETARY_OPTIONS = ['비건', '채식', '글루텐프리', '할랄', '유제품 제외', '견과류 알러지', '해산물 제외'];
@@ -28,9 +32,43 @@ const DIETARY_OPTIONS = ['비건', '채식', '글루텐프리', '할랄', '유�
 const LUNCHMATE_PREVIEW_FIXTURE = {
   uiState: 'foodAvailable',
   unseenFoodCount: 2,
-} as const satisfies { uiState: FoodieBuddyUiState; unseenFoodCount: number };
+  foodItems: [
+    {
+      id: 'preview-onigiri',
+      name: '참치마요 주먹밥',
+      placeholder: '🍙',
+      quantity: 2,
+      unseenQuantity: 1,
+      sourceLabel: '코스 기록 완료 보상',
+      xpPreview: 5,
+    },
+    {
+      id: 'preview-strawberry-cake',
+      name: '딸기 한입 케이크',
+      placeholder: '🍰',
+      quantity: 1,
+      unseenQuantity: 1,
+      sourceLabel: '먼치 피드 기록 보상',
+      xpPreview: 8,
+    },
+    {
+      id: 'preview-ramen',
+      name: '따끈한 라멘',
+      placeholder: '🍜',
+      quantity: 0,
+      unseenQuantity: 0,
+      sourceLabel: '다음 기록에서 획득 가능',
+      xpPreview: 6,
+    },
+  ],
+} as const satisfies {
+  uiState: FoodieBuddyUiState;
+  unseenFoodCount: number;
+  foodItems: readonly LunchboxFoodItem[];
+};
 
 type SortMode = 'likes' | 'recent';
+type ProfileSheet = 'foodie' | 'settings' | 'avatar' | 'lunchbox' | 'progress' | 'levelUp';
 
 /** 프로필 아바타 — 업로드 사진이 있으면 사진, 없으면 이모지. 공통 렌더링으로 항상 최신 profile을 반영한다 */
 function Avatar({ photo, emoji, size }: { photo?: string; emoji: string; size: number }) {
@@ -160,11 +198,36 @@ export default function ProfilePage() {
   const { profile, updateProfile, courses, hiddenTemplateCourseIds, feedPosts, isMyPost } = useApp();
 
   const [sort, setSort] = useState<SortMode>('likes');
-  const [settingsOpen, setSettingsOpen] = useState(false);
-  const [foodieOpen, setFoodieOpen] = useState(false);
-  const [avatarOpen, setAvatarOpen] = useState(false);
+  const [activeSheet, setActiveSheet] = useState<ProfileSheet | null>(null);
   const [editName, setEditName] = useState(profile.name);
   const avatarFileRef = useRef<HTMLInputElement>(null);
+  const lunchboxButtonRef = useRef<HTMLButtonElement>(null);
+  const progressButtonRef = useRef<HTMLButtonElement>(null);
+  const closeActiveSheet = useCallback(() => setActiveSheet(null), []);
+  const lunchmateFlow = useLunchmateFlow({
+    initialState: LUNCHMATE_PREVIEW_FIXTURE.uiState,
+    onSuccessClose: closeActiveSheet,
+  });
+  const openLunchbox = useCallback(() => {
+    if (lunchmateFlow.beginSelecting()) setActiveSheet('lunchbox');
+  }, [lunchmateFlow.beginSelecting]);
+  const closeLunchbox = useCallback(() => {
+    lunchmateFlow.cancel();
+    closeActiveSheet();
+  }, [closeActiveSheet, lunchmateFlow.cancel]);
+  const openProgress = useCallback(() => {
+    if (!lunchmateFlow.isBusy) setActiveSheet('progress');
+  }, [lunchmateFlow.isBusy]);
+  const closeLevelUp = useCallback(() => {
+    lunchmateFlow.acknowledgeLevelUp();
+    closeActiveSheet();
+  }, [closeActiveSheet, lunchmateFlow.acknowledgeLevelUp]);
+
+  useEffect(() => {
+    if (lunchmateFlow.levelUpEvent && activeSheet === null) {
+      setActiveSheet('levelUp');
+    }
+  }, [activeSheet, lunchmateFlow.levelUpEvent]);
 
   const myPosts = useMemo(() => feedPosts.filter(isMyPost), [feedPosts, isMyPost]);
   const totalLikes = myPosts.reduce((sum, p) => sum + p.likes, 0);
@@ -180,7 +243,7 @@ export default function ProfilePage() {
 
   const saveSettings = () => {
     updateProfile({ name: editName });
-    setSettingsOpen(false);
+    setActiveSheet(null);
     toast.success('프로필 업데이트 완료! ✅');
   };
 
@@ -212,7 +275,7 @@ export default function ProfilePage() {
       {/* 상단 메뉴 */}
       <div className="flex justify-end px-5 pt-11">
         <button
-          onClick={() => { setEditName(profile.name); setSettingsOpen(true); }}
+          onClick={() => { setEditName(profile.name); setActiveSheet('settings'); }}
           className="w-10 h-10 rounded-full bg-white shadow-sm flex items-center justify-center active:scale-95"
           aria-label="프로필 설정"
         >
@@ -236,14 +299,23 @@ export default function ProfilePage() {
           score={foodieScore}
           char={profile.foodieChar}
           skinId={profile.foodieSkin}
-          onCustomize={() => setFoodieOpen(true)}
-          uiState={LUNCHMATE_PREVIEW_FIXTURE.uiState}
+          onCustomize={() => setActiveSheet('foodie')}
+          uiState={lunchmateFlow.state}
           unseenFoodCount={LUNCHMATE_PREVIEW_FIXTURE.unseenFoodCount}
+          onLunchboxOpen={openLunchbox}
+          lunchboxButtonRef={lunchboxButtonRef}
+          onProgressOpen={openProgress}
+          progressButtonRef={progressButtonRef}
+          sharedFoodPlaceholder={lunchmateFlow.selectedFood?.placeholder}
+          progressSnapshot={lunchmateFlow.progressSnapshot}
+          previousProgressSnapshot={lunchmateFlow.previousProgressSnapshot}
+          lastXpGain={lunchmateFlow.lastXpGain}
+          resultMessage={lunchmateFlow.resultMessage}
         />
         <div className="relative z-20 -mt-9 px-3">
           <div className="flex items-end gap-3">
             <button
-              onClick={() => setAvatarOpen(true)}
+              onClick={() => setActiveSheet('avatar')}
               className="relative shrink-0 rounded-full border-4 border-[#F8DCD2] shadow-md active:scale-95 transition-transform"
               aria-label="아바타 변경"
             >
@@ -345,14 +417,39 @@ export default function ProfilePage() {
         )}
       </div>
 
+      <LunchboxBottomSheet
+        open={activeSheet === 'lunchbox'}
+        items={LUNCHMATE_PREVIEW_FIXTURE.foodItems}
+        flowState={lunchmateFlow.state}
+        errorMessage={lunchmateFlow.errorMessage}
+        onFoodSelect={lunchmateFlow.selectFood}
+        onShare={lunchmateFlow.shareFood}
+        onClose={closeLunchbox}
+        onAfterClose={() => lunchboxButtonRef.current?.focus()}
+      />
+
+      <LunchmateProgressSheet
+        open={activeSheet === 'progress'}
+        snapshot={lunchmateFlow.progressSnapshot}
+        onClose={closeActiveSheet}
+        onAfterClose={() => progressButtonRef.current?.focus()}
+      />
+
+      <LunchmateLevelUpModal
+        open={activeSheet === 'levelUp'}
+        event={lunchmateFlow.levelUpEvent}
+        onClose={closeLevelUp}
+        onAfterClose={() => lunchboxButtonRef.current?.focus()}
+      />
+
       {/* 푸디 캐릭터 커스텀 시트 */}
       <AnimatePresence>
-        {foodieOpen && (
+        {activeSheet === 'foodie' && (
           <>
             <motion.div
               className="fixed inset-0 bg-black/40 z-50"
               initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-              onClick={() => setFoodieOpen(false)}
+              onClick={() => setActiveSheet(null)}
             />
             <motion.div
               className="fixed bottom-0 left-0 right-0 mx-auto w-full max-w-[430px] bg-white rounded-t-3xl z-50 px-5 pt-4 pb-8 max-h-[82dvh] overflow-y-auto"
@@ -362,7 +459,7 @@ export default function ProfilePage() {
               <div className="mx-auto mb-4 h-1 w-10 rounded-full bg-gray-200" />
               <div className="mb-1 flex items-center justify-between">
                 <p className="font-bold text-[16px]">푸디 캐릭터 꾸미기</p>
-                <button onClick={() => setFoodieOpen(false)}><X size={18} className="text-gray-400" /></button>
+                <button onClick={() => setActiveSheet(null)}><X size={18} className="text-gray-400" /></button>
               </div>
               <p className="mb-4 text-[11px] text-[#9B9B9B]">
                 코스맵·피드를 만들수록 성장점수가 쌓여요 — 현재 <b className="text-[#E85053]">{foodieScore}점</b> ·{' '}
@@ -399,7 +496,7 @@ export default function ProfilePage() {
               />
 
               <button
-                onClick={() => setFoodieOpen(false)}
+                onClick={() => setActiveSheet(null)}
                 className="mt-6 w-full h-12 rounded-2xl bg-[#E85053] text-white font-bold text-[14px]"
               >
                 완료
@@ -411,12 +508,12 @@ export default function ProfilePage() {
 
       {/* 프로필 설정 시트 (이름/이모지/식단) */}
       <AnimatePresence>
-        {settingsOpen && (
+        {activeSheet === 'settings' && (
           <>
             <motion.div
               className="fixed inset-0 bg-black/40 z-50"
               initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-              onClick={() => setSettingsOpen(false)}
+              onClick={() => setActiveSheet(null)}
             />
             <motion.div
               className="fixed bottom-0 left-0 right-0 mx-auto w-full max-w-[430px] bg-white rounded-t-3xl z-50 px-5 pt-4 pb-8 max-h-[80dvh] overflow-y-auto"
@@ -428,7 +525,7 @@ export default function ProfilePage() {
 
               {/* 아바타 — 탭하면 사진 업로드/이모지 변경 시트로 */}
               <button
-                onClick={() => setAvatarOpen(true)}
+                onClick={() => setActiveSheet('avatar')}
                 className="mb-5 flex w-full items-center gap-3 rounded-xl bg-[#FAF6F1] border border-[#F0E8E0] p-3 active:scale-[0.99] transition-transform"
               >
                 <Avatar photo={profile.avatarPhoto} emoji={profile.emoji} size={48} />
@@ -472,12 +569,12 @@ export default function ProfilePage() {
 
       {/* 아바타 변경 시트 — 사진 업로드 또는 기본 이모지 중 선택, 즉시 반영 */}
       <AnimatePresence>
-        {avatarOpen && (
+        {activeSheet === 'avatar' && (
           <>
             <motion.div
               className="fixed inset-0 bg-black/40 z-50"
               initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-              onClick={() => setAvatarOpen(false)}
+              onClick={() => setActiveSheet(null)}
             />
             <motion.div
               className="fixed bottom-0 left-0 right-0 mx-auto w-full max-w-[430px] bg-white rounded-t-3xl z-50 px-5 pt-4 pb-8 max-h-[80dvh] overflow-y-auto"
@@ -487,7 +584,7 @@ export default function ProfilePage() {
               <div className="mx-auto mb-4 h-1 w-10 rounded-full bg-gray-200" />
               <div className="mb-4 flex items-center justify-between">
                 <p className="font-bold text-[16px]">아바타 변경</p>
-                <button onClick={() => setAvatarOpen(false)}><X size={18} className="text-gray-400" /></button>
+                <button onClick={() => setActiveSheet(null)}><X size={18} className="text-gray-400" /></button>
               </div>
 
               <div className="mb-5 flex flex-col items-center">
@@ -525,7 +622,7 @@ export default function ProfilePage() {
               </div>
 
               <button
-                onClick={() => setAvatarOpen(false)}
+                onClick={() => setActiveSheet(null)}
                 className="mt-6 w-full h-12 rounded-2xl bg-[#E85053] text-white font-bold text-[14px]"
               >
                 완료
