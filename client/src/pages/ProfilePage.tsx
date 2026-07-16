@@ -24,6 +24,7 @@ import LunchboxBottomSheet, { type LunchboxFoodItem } from '@/components/munchie
 import LunchmateProgressSheet from '@/components/munchie/LunchmateProgressSheet';
 import LunchmateLevelUpModal from '@/components/munchie/LunchmateLevelUpModal';
 import { useLunchmateFlow } from '@/hooks/useLunchmateFlow';
+import type { FoodieRoomNavigationState } from '@/pages/FoodieRoomPage';
 
 const EMOJIS = ['😊', '🍱', '🍜', '🍣', '🥩', '🍕', '🌮', '🍔', '🥗', '☕', '🎂', '🍰'];
 const DIETARY_OPTIONS = ['비건', '채식', '글루텐프리', '할랄', '유제품 제외', '견과류 알러지', '해산물 제외'];
@@ -222,6 +223,15 @@ export default function ProfilePage() {
     lunchmateFlow.acknowledgeLevelUp();
     closeActiveSheet();
   }, [closeActiveSheet, lunchmateFlow.acknowledgeLevelUp]);
+  const openFoodieRoom = useCallback(() => {
+    setActiveSheet(null);
+    navigate('/profile/foodie-room', {
+      state: {
+        fromProfile: true,
+        progressSnapshot: lunchmateFlow.progressSnapshot,
+      } satisfies FoodieRoomNavigationState,
+    });
+  }, [lunchmateFlow.progressSnapshot, navigate]);
 
   useEffect(() => {
     if (lunchmateFlow.levelUpEvent && activeSheet === null) {
@@ -466,6 +476,14 @@ export default function ProfilePage() {
                 코스맵·피드를 만들수록 성장점수가 쌓여요 — 현재 <b className="text-[#E85053]">{foodieScore}점</b> ·{' '}
                 Lv.{foodieLevel(foodieScore).index + 1} {foodieLevel(foodieScore).level.name}
               </p>
+
+              <button
+                type="button"
+                onClick={openFoodieRoom}
+                className="mb-4 flex h-10 w-full items-center justify-center rounded-2xl border border-[#F0D8CC] bg-[#FFF8F4] text-[12px] font-bold text-[#D94B4E] transition-transform active:scale-[0.99] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#E85053]"
+              >
+                런치메이트룸 열기
+              </button>
 
               <p className="mb-2 text-[12px] font-semibold text-[#9B9B9B]">캐릭터</p>
               <div className="grid grid-cols-4 gap-2">

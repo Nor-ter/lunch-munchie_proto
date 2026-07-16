@@ -21,6 +21,7 @@ import CourseEditPage from "./pages/course/CourseEditPage";
 import CourseSharePage from "./pages/course/CourseSharePage";
 import SavedPage from "./pages/SavedPage";
 import ProfilePage from "./pages/ProfilePage";
+import FoodieRoomPage from "./pages/FoodieRoomPage";
 // Lunchie 그룹 세션 모드 (data-jp 플로우): 설정 → 로비/초대 → 스와이프 투표 → 결과
 import LunchieSettingsPage from "./pages/LunchieSettingsPage";
 import SessionLobbyPage from "./pages/SessionLobbyPage";
@@ -68,6 +69,7 @@ function AppShell() {
             <Route path="/course/:id/feeds" component={CourseFeedsPage} />
             <Route path="/course/:id" component={NewCourseDetailPage} />
             <Route path="/saved" component={SavedPage} />
+            <Route path="/profile/foodie-room" component={FoodieRoomPage} />
             <Route path="/profile" component={ProfilePage} />
             {/* Lunchie 그룹 세션 플로우 (data-jp) */}
             <Route path="/lunchie/settings" component={LunchieSettingsPage} />
