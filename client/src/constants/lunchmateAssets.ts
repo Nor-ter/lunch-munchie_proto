@@ -27,6 +27,14 @@ function assetSource(fileName: string): LunchmateAssetSource {
   };
 }
 
+export function lunchmateLayerAssetSource(relativePath: string): LunchmateAssetSource {
+  const basePath = `/assets/lunchmate/layers/${relativePath}`;
+  return {
+    src: `${basePath}.png`,
+    srcSet: `${basePath}.png 1x, ${basePath}@2x.png 2x`,
+  };
+}
+
 export const lunchmateStateAssets = {
   default: assetSource('default'),
   happy: assetSource('happy'),

@@ -5,6 +5,11 @@ import {
   type LunchmateAssetSource,
   type LunchmateStateAssetKey,
 } from '@/constants/lunchmateAssets';
+import {
+  EMPTY_LUNCHMATE_LOADOUT,
+  resolveLunchmateRenderLayers,
+} from '@/constants/lunchmateItems';
+import type { LunchmateLoadout } from '@/types/lunchmateCustomization';
 import type { FoodieBuddyUiState } from '@/components/munchie/FoodieBuddy';
 
 interface LunchmateCharacterRendererProps {
@@ -13,6 +18,7 @@ interface LunchmateCharacterRendererProps {
   size?: number;
   alt?: string;
   fallback?: ReactNode;
+  loadout?: LunchmateLoadout;
 }
 
 interface LunchmateStateMotion {
@@ -33,6 +39,36 @@ const STATE_ALT: Record<LunchmateStateAssetKey, string> = {
 };
 
 const stateAssetLoadCache = new Map<LunchmateStateAssetKey, Promise<boolean>>();
+
+function LunchmateLayerImage({
+  source,
+  layerName,
+}: {
+  source: LunchmateAssetSource;
+  layerName: string;
+}) {
+  const [loadFailed, setLoadFailed] = useState(false);
+
+  useEffect(() => {
+    setLoadFailed(false);
+  }, [source.src]);
+
+  if (loadFailed) return null;
+
+  return (
+    <img
+      src={source.src}
+      srcSet={source.srcSet}
+      alt=""
+      aria-hidden="true"
+      data-lunchmate-layer={layerName}
+      draggable={false}
+      onError={() => setLoadFailed(true)}
+      className="pointer-events-none absolute inset-0 h-full w-full select-none object-contain"
+      style={{ userSelect: 'none' }}
+    />
+  );
+}
 
 function loadStateAsset(assetKey: LunchmateStateAssetKey) {
   const cached = stateAssetLoadCache.get(assetKey);
@@ -150,6 +186,7 @@ export default function LunchmateCharacterRenderer({
   size = 76,
   alt,
   fallback,
+  loadout = EMPTY_LUNCHMATE_LOADOUT,
 }: LunchmateCharacterRendererProps) {
   const reducedMotion = useReducedMotion() ?? false;
   const requestedAssetKey = resolveLunchmateAssetKey(flowState, levelUpActive);
@@ -187,6 +224,7 @@ export default function LunchmateCharacterRenderer({
     () => motionForState(displayedAssetKey, reducedMotion),
     [displayedAssetKey, reducedMotion],
   );
+  const renderLayers = resolveLunchmateRenderLayers(loadout, displayedAssetKey);
 
   return (
     <motion.div
@@ -196,23 +234,44 @@ export default function LunchmateCharacterRenderer({
       transition={stateMotion.transition}
       aria-live="polite"
     >
-      {imageLoadFailed ? (
-        <span className="flex h-full w-full items-center justify-center" role="img" aria-label="런치메이트 이미지 대체 표시">
-          {fallback ?? '🙂'}
-        </span>
-      ) : (
-        <img
-          src={displayedAsset.src}
-          srcSet={displayedAsset.srcSet}
-          alt={alt ?? STATE_ALT[displayedAssetKey]}
-          width={size}
-          height={size}
-          draggable={false}
-          onError={() => setImageLoadFailed(true)}
-          className="h-full w-full select-none object-contain"
-          style={{ userSelect: 'none' }}
-        />
-      )}
+      <div
+        className="relative h-full w-full overflow-visible"
+        data-lunchmate-character-canvas="true"
+      >
+        {renderLayers.map(layer => layer.layerName === 'base' ? (
+          imageLoadFailed ? (
+            <span
+              key="base"
+              className="absolute inset-0 flex h-full w-full items-center justify-center"
+              role="img"
+              aria-label="런치메이트 이미지 대체 표시"
+              data-lunchmate-layer="base"
+            >
+              {fallback ?? '🙂'}
+            </span>
+          ) : (
+            <img
+              key="base"
+              src={displayedAsset.src}
+              srcSet={displayedAsset.srcSet}
+              alt={alt ?? STATE_ALT[displayedAssetKey]}
+              width={size}
+              height={size}
+              data-lunchmate-layer="base"
+              draggable={false}
+              onError={() => setImageLoadFailed(true)}
+              className="pointer-events-none absolute inset-0 h-full w-full select-none object-contain"
+              style={{ userSelect: 'none' }}
+            />
+          )
+        ) : (
+          <LunchmateLayerImage
+            key={`${layer.layerName}:${layer.source.src}`}
+            source={layer.source}
+            layerName={layer.layerName}
+          />
+        ))}
+      </div>
     </motion.div>
   );
 }

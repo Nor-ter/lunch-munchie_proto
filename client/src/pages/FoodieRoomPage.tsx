@@ -11,6 +11,7 @@ import {
 } from 'lucide-react';
 import { useApp } from '@/contexts/AppContext';
 import LunchmateCharacterRenderer from '@/components/munchie/LunchmateCharacterRenderer';
+import { LAYER_PREVIEW_LOADOUT } from '@/constants/lunchmateItems';
 import { getSkinById, MUNCHIE_SKINS } from '@/constants/skins';
 import {
   getLunchmateProgressSnapshot,
@@ -148,11 +149,12 @@ export default function FoodieRoomPage() {
               size={136}
               alt="런치메이트룸에 서 있는 런치메이트"
               fallback={<span className="text-[76px] leading-none">{profile.foodieChar ?? '🍙'}</span>}
+              loadout={LAYER_PREVIEW_LOADOUT}
             />
           </div>
 
           <p className="absolute bottom-5 left-1/2 z-10 -translate-x-1/2 whitespace-nowrap rounded-full bg-white/85 px-2.5 py-1 text-[9px] font-semibold text-[#8E796E]">
-            현재 설정을 보여주는 미리보기예요
+            레이어 조합을 확인하는 미리보기예요
           </p>
         </div>
         {!hasProfileSnapshot && (
