@@ -19,6 +19,7 @@ interface LunchmateCharacterRendererProps {
   alt?: string;
   fallback?: ReactNode;
   loadout?: LunchmateLoadout;
+  animated?: boolean;
 }
 
 interface LunchmateStateMotion {
@@ -187,6 +188,7 @@ export default function LunchmateCharacterRenderer({
   alt,
   fallback,
   loadout = EMPTY_LUNCHMATE_LOADOUT,
+  animated = true,
 }: LunchmateCharacterRendererProps) {
   const reducedMotion = useReducedMotion() ?? false;
   const requestedAssetKey = resolveLunchmateAssetKey(flowState, levelUpActive);
@@ -221,8 +223,8 @@ export default function LunchmateCharacterRenderer({
 
   const displayedAsset: LunchmateAssetSource = lunchmateStateAssets[displayedAssetKey];
   const stateMotion = useMemo(
-    () => motionForState(displayedAssetKey, reducedMotion),
-    [displayedAssetKey, reducedMotion],
+    () => motionForState(displayedAssetKey, reducedMotion || !animated),
+    [animated, displayedAssetKey, reducedMotion],
   );
   const renderLayers = resolveLunchmateRenderLayers(loadout, displayedAssetKey);
 

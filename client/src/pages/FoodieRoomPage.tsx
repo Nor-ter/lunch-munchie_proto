@@ -1,18 +1,13 @@
 import { useState, type KeyboardEvent } from 'react';
 import { useLocation } from 'wouter';
 import { useHistoryState } from 'wouter/use-browser-location';
-import {
-  Backpack,
-  ChevronLeft,
-  Crown,
-  Gift,
-  Glasses,
-  Shirt,
-} from 'lucide-react';
+import { ChevronLeft, Gift } from 'lucide-react';
 import { useApp } from '@/contexts/AppContext';
 import LunchmateCharacterRenderer from '@/components/munchie/LunchmateCharacterRenderer';
-import { LAYER_PREVIEW_LOADOUT } from '@/constants/lunchmateItems';
+import LunchmateWardrobePanel from '@/components/munchie/LunchmateWardrobePanel';
+import { PREVIEW_INITIAL_LOADOUT } from '@/components/munchie/lunchmateWardrobeFixtures';
 import { getSkinById, MUNCHIE_SKINS } from '@/constants/skins';
+import type { LunchmateLoadout } from '@/types/lunchmateCustomization';
 import {
   getLunchmateProgressSnapshot,
   type LunchmateProgressSnapshot,
@@ -31,13 +26,6 @@ const ROOM_TABS: readonly { id: FoodieRoomTab; label: string }[] = [
   { id: 'tastebook', label: '맛도감' },
   { id: 'growth', label: '성장일지' },
 ];
-
-const WARDROBE_SLOTS = [
-  { id: 'outfit', label: '옷', Icon: Shirt },
-  { id: 'headwear', label: '모자', Icon: Crown },
-  { id: 'eyewear', label: '안경', Icon: Glasses },
-  { id: 'bag', label: '가방', Icon: Backpack },
-] as const;
 
 function isProgressSnapshot(value: unknown): value is LunchmateProgressSnapshot {
   if (!value || typeof value !== 'object') return false;
@@ -66,6 +54,9 @@ export default function FoodieRoomPage() {
   const navigationState = useHistoryState<unknown>();
   const { profile } = useApp();
   const [activeTab, setActiveTab] = useState<FoodieRoomTab>('wardrobe');
+  const [draftLoadout, setDraftLoadout] = useState<LunchmateLoadout>(() => ({ ...PREVIEW_INITIAL_LOADOUT }));
+  const [appliedLoadout, setAppliedLoadout] = useState<LunchmateLoadout>(() => ({ ...PREVIEW_INITIAL_LOADOUT }));
+  const [appliedNotice, setAppliedNotice] = useState(false);
 
   const hasProfileSnapshot = isFoodieRoomNavigationState(navigationState);
   const progressSnapshot = hasProfileSnapshot
@@ -89,6 +80,16 @@ export default function FoodieRoomPage() {
     const nextTab = ROOM_TABS[nextIndex];
     setActiveTab(nextTab.id);
     document.getElementById(`foodie-room-tab-${nextTab.id}`)?.focus();
+  };
+
+  const handleDraftChange = (nextLoadout: LunchmateLoadout) => {
+    setDraftLoadout(nextLoadout);
+    setAppliedNotice(false);
+  };
+
+  const handleApplyLoadout = () => {
+    setAppliedLoadout({ ...draftLoadout });
+    setAppliedNotice(true);
   };
 
   return (
@@ -149,7 +150,7 @@ export default function FoodieRoomPage() {
               size={136}
               alt="런치메이트룸에 서 있는 런치메이트"
               fallback={<span className="text-[76px] leading-none">{profile.foodieChar ?? '🍙'}</span>}
-              loadout={LAYER_PREVIEW_LOADOUT}
+              loadout={draftLoadout}
             />
           </div>
 
@@ -201,23 +202,13 @@ export default function FoodieRoomPage() {
           className="mt-3 rounded-[24px] bg-white p-4 shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#E85053]"
         >
           {activeTab === 'wardrobe' && (
-            <div>
-              <h2 className="text-[16px] font-black">옷장</h2>
-              <p className="mt-1 text-[11px] leading-relaxed text-[#927E73]">
-                옷·모자·안경·가방을 조합하는 옷장을 준비하고 있어요.
-              </p>
-              <div className="mt-4 grid grid-cols-4 gap-2">
-                {WARDROBE_SLOTS.map(({ id, label, Icon }) => (
-                  <div key={id} className="rounded-2xl border border-[#F0E2DA] bg-[#FFF9F6] px-1 py-3 text-center">
-                    <span className="mx-auto flex h-9 w-9 items-center justify-center rounded-xl bg-white text-[#D87756] shadow-sm" aria-hidden="true">
-                      <Icon size={18} />
-                    </span>
-                    <p className="mt-2 text-[11px] font-black text-[#59463C]">{label}</p>
-                    <p className="mt-0.5 text-[8px] font-semibold text-[#B09A8E]">준비 중</p>
-                  </div>
-                ))}
-              </div>
-            </div>
+            <LunchmateWardrobePanel
+              draftLoadout={draftLoadout}
+              appliedLoadout={appliedLoadout}
+              appliedNotice={appliedNotice}
+              onDraftChange={handleDraftChange}
+              onApply={handleApplyLoadout}
+            />
           )}
 
           {activeTab === 'room' && (
