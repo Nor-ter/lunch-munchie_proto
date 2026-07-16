@@ -68,7 +68,7 @@ export default function LunchmateLevelUpModal({
             role="dialog"
             aria-modal="true"
             aria-labelledby="lunchmate-level-up-title"
-            className="w-full max-w-[360px] overflow-y-auto rounded-[28px] bg-white p-5 text-center shadow-2xl"
+            className="w-full max-w-[360px] overflow-y-auto rounded-[28px] bg-white px-5 py-4 text-center shadow-2xl"
             initial={{ opacity: 0, scale: 0.88, y: 18 }}
             animate={{ opacity: 1, scale: 1, y: 0 }}
             exit={{ opacity: 0, scale: 0.92, y: 12 }}
@@ -85,34 +85,43 @@ export default function LunchmateLevelUpModal({
               <Sparkles size={35} />
             </motion.div>
 
-            <p className="mt-4 text-[11px] font-black tracking-[0.16em] text-[#D57B52]">PREVIEW LEVEL UP</p>
-            <h2 id="lunchmate-level-up-title" className="mt-1 text-[23px] font-black text-[#31231D]">
-              {event.levelName}
+            <h2
+              id="lunchmate-level-up-title"
+              className="mt-3 text-[19px] font-black tracking-[0.08em] text-[#E85053]"
+            >
+              LEVEL UP!
             </h2>
-            <div className="mt-3 flex items-center justify-center gap-2 text-[15px] font-black">
-              <span className="rounded-full bg-[#F5EEE9] px-3 py-1.5 text-[#9A887E]">Lv.{event.previousLevel}</span>
-              <span className="text-[#D98964]" aria-hidden="true">→</span>
+
+            <div className="mt-2.5 flex items-center justify-center gap-1.5 text-[15px] font-black">
+              <span className="rounded-full bg-[#F5EEE9] px-3 py-1.5 text-[#8F8179]">Lv.{event.previousLevel}</span>
+              <span className="flex items-center self-stretch text-[#D98964]" aria-hidden="true">→</span>
               <span className="rounded-full bg-[#E85053] px-3 py-1.5 text-white">Lv.{event.newLevel}</span>
             </div>
 
-            <div className="mt-5 flex items-center gap-3 rounded-2xl border border-dashed border-[#E9CDBC] bg-[#FFF9F5] p-3 text-left">
+            <div className="mt-3.5">
+              <p className="text-[10px] font-bold tracking-[0.04em] text-[#A18C80]">새 칭호</p>
+              <p className="mt-0.5 text-[20px] font-black text-[#31231D]">{event.levelName}</p>
+            </div>
+
+            <div className="mt-4 flex items-center gap-3 rounded-2xl border border-[#F0D6C8] bg-[#FFF7F2] px-3.5 py-3 text-left">
               <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-white text-[#D8774D] shadow-sm" aria-hidden="true">
                 <Gift size={19} />
               </span>
               <div className="min-w-0">
-                <p className="text-[9px] font-black text-[#B38B76]">획득 아이템 PLACEHOLDER</p>
-                <p className="mt-0.5 text-[12px] font-black text-[#49372E]">{event.rewardPlaceholder}</p>
+                <p className="text-[9px] font-bold tracking-[0.02em] text-[#B07D65]">이번 레벨 보상</p>
+                <p className="mt-0.5 text-[13px] font-black text-[#49372E]">새로운 꾸미기 아이템</p>
+                <p className="mt-0.5 text-[10px] text-[#8F7C72]">옷장에서 확인할 수 있어요</p>
               </div>
             </div>
 
-            <p className="mt-3 text-[10px] leading-relaxed text-[#A18C80]">
-              화면에서만 동작하는 mock 결과이며 실제 해금이나 저장은 되지 않아요.
+            <p className="mt-2.5 text-[10px] leading-relaxed text-[#A99990]">
+              미리보기 결과이며 아직 저장되지 않아요.
             </p>
             <button
               ref={confirmButtonRef}
               type="button"
               onClick={onClose}
-              className="mt-5 h-12 w-full rounded-2xl bg-[#E85053] text-[14px] font-black text-white transition-transform active:scale-[0.99] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#E85053] focus-visible:ring-offset-2"
+              className="mt-4 h-11 w-full rounded-2xl bg-[#E85053] text-[14px] font-black text-white transition-transform active:scale-[0.99] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#E85053] focus-visible:ring-offset-2"
             >
               확인
             </button>

@@ -311,6 +311,7 @@ export default function ProfilePage() {
           previousProgressSnapshot={lunchmateFlow.previousProgressSnapshot}
           lastXpGain={lunchmateFlow.lastXpGain}
           resultMessage={lunchmateFlow.resultMessage}
+          levelUpActive={activeSheet === 'levelUp'}
         />
         <div className="relative z-20 -mt-9 px-3">
           <div className="flex items-end gap-3">

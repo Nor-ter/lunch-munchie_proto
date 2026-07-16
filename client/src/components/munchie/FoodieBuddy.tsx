@@ -1,8 +1,9 @@
 import { useEffect, useRef, type CSSProperties, type Ref } from 'react';
-import { motion } from 'framer-motion';
+import { motion, useReducedMotion } from 'framer-motion';
 import { Sparkles } from 'lucide-react';
 import { getSkinById, MUNCHIE_SKINS, type MunchieSkin } from '@/constants/skins';
 import type { LunchmateProgressSnapshot } from '@/utils/lunchmateProgress';
+import LunchmateCharacterRenderer from '@/components/munchie/LunchmateCharacterRenderer';
 
 /**
  * Foodie Buddy — 프로필 배너의 다마고치.
@@ -50,6 +51,7 @@ export function foodieLevel(score: number): { level: FoodieLevel; index: number;
 }
 
 const BUBBLES = ['냠냠 😋', '오늘 뭐 먹지?', '코스맵 더 줘!', '맛집 가고 싶다…', '먹부림 최고 🍴'];
+const LUNCHMATE_RENDER_SIZE = 76;
 
 export type FoodieBuddyUiState =
   | 'idle'
@@ -87,6 +89,8 @@ export interface FoodieBuddyProps {
   previousProgressSnapshot?: LunchmateProgressSnapshot;
   lastXpGain?: number;
   resultMessage?: string;
+  /** 기존 Level Up overlay 상태를 jump 이미지로 표현하기 위한 시각 전용 override */
+  levelUpActive?: boolean;
   /** 별도 방 진입 동작이 생기기 전에는 기존 onCustomize로 폴백한다. */
   onFoodieRoomOpen?: () => void;
 }
@@ -267,6 +271,7 @@ export default function FoodieBuddy({
   previousProgressSnapshot,
   lastXpGain = 0,
   resultMessage,
+  levelUpActive = false,
   onFoodieRoomOpen,
 }: FoodieBuddyProps) {
   const skin: MunchieSkin = getSkinById(skinId) ?? MUNCHIE_SKINS[0];
@@ -277,12 +282,16 @@ export default function FoodieBuddy({
   const normalizedUnseenCount = Number.isFinite(unseenFoodCount)
     ? Math.max(0, Math.floor(unseenFoodCount))
     : 0;
-  const isFoodAvailable = uiState === 'foodAvailable'
-    || uiState === 'selectingFood'
-    || uiState === 'submitting'
-    || uiState === 'error';
-  const isSharingAnimation = uiState === 'sharingAnimation';
-  const isReaction = uiState === 'reaction';
+  // 성공 연출이 idle로 끝난 뒤에도 unseen fixture가 남아 있으면 새 음식 기본 상태로 복귀한다.
+  const effectiveUiState: FoodieBuddyUiState = uiState === 'idle' && normalizedUnseenCount > 0
+    ? 'foodAvailable'
+    : uiState;
+  const isFoodAvailable = effectiveUiState === 'foodAvailable'
+    || effectiveUiState === 'selectingFood'
+    || effectiveUiState === 'submitting'
+    || effectiveUiState === 'error';
+  const isSharingAnimation = effectiveUiState === 'sharingAnimation';
+  const isReaction = effectiveUiState === 'reaction';
   const unseenCountLabel = normalizedUnseenCount > 9 ? '9+' : String(normalizedUnseenCount);
   const displayedLevel = progressSnapshot?.level ?? index + 1;
   const displayedLevelName = progressSnapshot?.levelName ?? level.name;
@@ -309,9 +318,9 @@ export default function FoodieBuddy({
     ? (resultMessage ?? '맛있는 한입 고마워! 😋')
     : isSharingAnimation
       ? '한입이 오고 있어! 🍴'
-      : uiState === 'submitting'
+      : effectiveUiState === 'submitting'
         ? '한입 준비 중…'
-        : uiState === 'error'
+        : effectiveUiState === 'error'
           ? '다시 한 번 해볼까?'
           : isFoodAvailable
             ? normalizedUnseenCount > 0
@@ -322,10 +331,13 @@ export default function FoodieBuddy({
   const wanderRef = useRef<HTMLDivElement>(null);
   const bounceRef = useRef<HTMLDivElement>(null);
   const shadowRef = useRef<HTMLDivElement>(null);
+  const reducedMotion = useReducedMotion();
 
   // transform repeat가 첫 pose에 고정되는 Framer Motion 경로를 피한다.
   // 이 timeline은 Sheet 상태와 무관하게 계속 실행되고, 레벨 변경 또는 unmount 때만 정리된다.
   useEffect(() => {
+    if (reducedMotion) return;
+
     const animations: Animation[] = [];
 
     if (wanderRef.current && level.wander > 0) {
@@ -368,7 +380,7 @@ export default function FoodieBuddy({
     }
 
     return () => animations.forEach(animation => animation.cancel());
-  }, [level.bounce, level.wander]);
+  }, [level.bounce, level.wander, reducedMotion]);
 
   return (
     <div className="block w-full text-left">
@@ -492,11 +504,11 @@ export default function FoodieBuddy({
         <div
           ref={wanderRef}
           className="pointer-events-none absolute left-1/2 z-10 will-change-transform"
-          style={{ bottom: 16, marginLeft: -level.size / 2 }}
+          style={{ bottom: 2, marginLeft: -LUNCHMATE_RENDER_SIZE / 2 }}
         >
           <div ref={bounceRef} className="relative will-change-transform">
             {/* 말풍선 */}
-            {(!isEgg || uiState !== 'idle') && (
+            {(!isEgg || effectiveUiState !== 'idle') && (
               <motion.span
                 className="absolute left-1/2 -translate-x-1/2 whitespace-nowrap rounded-full px-2 py-0.5 text-[8px] font-bold shadow-sm"
                 style={{ top: -18, background: 'rgba(255,255,255,0.95)', color: skin.text }}
@@ -531,31 +543,25 @@ export default function FoodieBuddy({
                 👑
               </motion.span>
             )}
-            <motion.div
-              animate={isReaction
-                ? { scale: [1, 1.14, 1], rotate: [0, -5, 5, 0] }
-                : { scale: 1, rotate: 0 }}
-              transition={isReaction
-                ? { duration: 0.6, ease: 'easeInOut' }
-                : { duration: 0.2 }}
-            >
-              <div style={{ position: 'relative', width: level.size, height: level.size }}>
-                <span style={{ fontSize: level.size, lineHeight: 1, display: 'block', filter: 'drop-shadow(0 3px 3px rgba(0,0,0,0.15))' }}>
-                  {face}
-                </span>
-                <FoodieFace size={level.size} sleepy={isEgg} />
-              </div>
-            </motion.div>
-            {/* 알 단계: 안에서 캐릭터가 기다리는 힌트 */}
-            {isEgg && (
-              <span className="absolute -right-2 -bottom-1 text-[13px]">💤</span>
-            )}
+            <LunchmateCharacterRenderer
+              flowState={effectiveUiState}
+              levelUpActive={levelUpActive}
+              size={LUNCHMATE_RENDER_SIZE}
+              fallback={(
+                <div style={{ position: 'relative', width: level.size, height: level.size }}>
+                  <span style={{ fontSize: level.size, lineHeight: 1, display: 'block', filter: 'drop-shadow(0 3px 3px rgba(0,0,0,0.15))' }}>
+                    {face}
+                  </span>
+                  <FoodieFace size={level.size} sleepy={isEgg} />
+                </div>
+              )}
+            />
           </div>
           {/* 그림자 */}
           <div
             ref={shadowRef}
             className="mx-auto rounded-full will-change-transform"
-            style={{ width: level.size * 0.7, height: 5, background: 'rgba(0,0,0,0.14)', marginTop: 2 }}
+            style={{ width: LUNCHMATE_RENDER_SIZE * 0.52, height: 5, background: 'rgba(0,0,0,0.14)', marginTop: 2 }}
           />
         </div>
 
