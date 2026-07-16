@@ -16,6 +16,12 @@ import { fileToResizedDataUrl } from '@/lib/imageUtils';
 import TemplateCoursemapCard from '@/components/munchie/TemplateCoursemapCard';
 import SkinPicker from '@/components/munchie/SkinPicker';
 import FoodieBuddy, { FOODIE_CHARS, foodieLevel } from '@/components/munchie/FoodieBuddy';
+import { ProfileStats } from '@/components/follow/ProfileStats';
+import { FollowerListSheet, type FollowListMode } from '@/components/follow/FollowerListSheet';
+import { AccountBanner } from '@/components/auth/AccountBanner';
+import {
+  GOOGLE_PROFILE_IMPORT_PARAM, GOOGLE_PROFILE_PROMPTED_KEY, IDENTITY_CONFLICT_CODE,
+} from '@/services/authApi';
 
 const EMOJIS = ['😊', '🍱', '🍜', '🍣', '🥩', '🍕', '🌮', '🍔', '🥗', '☕', '🎂', '🍰'];
 const DIETARY_OPTIONS = ['비건', '채식', '글루텐프리', '할랄', '유제품 제외', '견과류 알러지', '해산물 제외'];
@@ -150,9 +156,21 @@ export default function ProfilePage() {
   const { profile, updateProfile, courses, hiddenTemplateCourseIds, feedPosts, isMyPost } = useApp();
 
   const [sort, setSort] = useState<SortMode>('likes');
-  const [settingsOpen, setSettingsOpen] = useState(false);
+  const [settingsOpen, setSettingsOpen] = useState(() => {
+    const params = new URLSearchParams(window.location.search);
+    const firstGoogleProfilePrompt = params.get(GOOGLE_PROFILE_IMPORT_PARAM) === 'ask'
+      && localStorage.getItem(GOOGLE_PROFILE_PROMPTED_KEY) !== 'true';
+    if (params.get(GOOGLE_PROFILE_IMPORT_PARAM) === 'ask' && !firstGoogleProfilePrompt) {
+      const url = new URL(window.location.href);
+      url.searchParams.delete(GOOGLE_PROFILE_IMPORT_PARAM);
+      window.history.replaceState({}, '', `${url.pathname}${url.search}${url.hash}`);
+    }
+    return firstGoogleProfilePrompt
+      || params.get('error_code') === IDENTITY_CONFLICT_CODE;
+  });
   const [foodieOpen, setFoodieOpen] = useState(false);
   const [avatarOpen, setAvatarOpen] = useState(false);
+  const [followListMode, setFollowListMode] = useState<FollowListMode | null>(null);
   const [editName, setEditName] = useState(profile.name);
   const avatarFileRef = useRef<HTMLInputElement>(null);
 
@@ -250,18 +268,24 @@ export default function ProfilePage() {
           </div>
         </div>
         <div className="mt-4 grid grid-cols-3">
-          {[
-            { value: 2380, label: '팔로워' },
-            { value: 128, label: '팔로잉' },
-            { value: totalLikes, label: '좋아요' },
-          ].map((s, i, arr) => (
-            <div key={s.label} className={`text-center ${i < arr.length - 1 ? 'border-r border-[#EBC5B8]' : ''}`}>
-              <p className="font-black text-[17px] text-[#3B2A22]">{s.value.toLocaleString()}</p>
-              <p className="text-[10px] text-[#8A6E60] mt-0.5">{s.label}</p>
-            </div>
-          ))}
+          <ProfileStats
+            userId={profile.id}
+            onPressFollowers={() => setFollowListMode('followers')}
+            onPressFollowing={() => setFollowListMode('following')}
+          />
+          <div className="text-center">
+            <p className="font-black text-[17px] text-[#3B2A22]">{totalLikes.toLocaleString()}</p>
+            <p className="mt-0.5 text-[10px] text-[#8A6E60]">좋아요</p>
+          </div>
         </div>
       </div>
+
+      <FollowerListSheet
+        open={followListMode !== null}
+        userId={profile.id}
+        mode={followListMode ?? 'followers'}
+        onOpenChange={(open) => !open && setFollowListMode(null)}
+      />
 
       {/* 나의 템플릿 */}
       <div className="px-4 mt-7">
@@ -407,12 +431,18 @@ export default function ProfilePage() {
               onClick={() => setSettingsOpen(false)}
             />
             <motion.div
+              data-testid="profile-settings-sheet"
               className="fixed bottom-0 left-0 right-0 mx-auto w-full max-w-[430px] bg-white rounded-t-3xl z-50 px-5 pt-4 pb-8 max-h-[80dvh] overflow-y-auto"
               initial={{ y: '100%' }} animate={{ y: 0 }} exit={{ y: '100%' }}
               transition={{ type: 'tween', ease: [0.32, 0.72, 0, 1], duration: 0.3 }}
             >
               <div className="mx-auto mb-4 h-1 w-10 rounded-full bg-gray-200" />
               <p className="mb-4 font-bold text-[16px]">프로필 설정</p>
+
+              <div className="mb-5">
+                <p className="mb-1.5 text-[12px] font-semibold text-[#9B9B9B]">계정</p>
+                <AccountBanner />
+              </div>
 
               {/* 아바타 — 탭하면 사진 업로드/이모지 변경 시트로 */}
               <button

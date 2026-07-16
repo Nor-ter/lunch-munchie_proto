@@ -8,6 +8,7 @@ import React, { createContext, useContext, useState, useEffect, useCallback, use
 import { normalizeDiet, isHardRestriction, type DietTag } from '@shared/const';
 import { intentForHour, type Intent } from '@shared/intent';
 import { normalizeFoodTag, type TagType } from '@/constants/foodTags';
+import { supabase, ensureAnonymousSession } from '@/lib/supabase';
 export type { TagType } from '@/constants/foodTags';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -668,7 +669,29 @@ function buildLocalSession(
   };
 }
 
-export function AppProvider({ children }: { children: React.ReactNode }) {
+const LAST_AUTH_UID_KEY = 'lm_last_auth_uid_v1';
+
+function readStoredProfileId(): string | null {
+  try {
+    const stored = localStorage.getItem('lm_profile');
+    if (!stored) return null;
+    const id = (JSON.parse(stored) as Partial<UserProfile>).id;
+    return typeof id === 'string' ? id : null;
+  } catch {
+    return null;
+  }
+}
+
+export function AppProvider({
+  children,
+  initialAuthUserId = null,
+}: {
+  children: React.ReactNode;
+  initialAuthUserId?: string | null;
+}) {
+  const legacyProfileIdRef = useRef(readStoredProfileId());
+  const lastAuthUidRef = useRef(localStorage.getItem(LAST_AUTH_UID_KEY));
+  const isFirstAuthAdoption = Boolean(initialAuthUserId && !lastAuthUidRef.current);
   const [courses, setCourses] = useState<Course[]>(() => {
     try {
       const s = localStorage.getItem('lm_courses');
@@ -696,7 +719,13 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   });
 
   const [currentSession, setCurrentSession] = useState<GroupSession | null>(() => {
-    try { const s = localStorage.getItem('lm_session'); return s ? JSON.parse(s) : null; }
+    try {
+      const s = localStorage.getItem('lm_session');
+      // 기존 random id로 만들어진 활성 서버 세션의 host/member 권한을 새 auth uid로
+      // 클라이언트만 바꿔치기하지 않는다. 서버 상태와 갈라지는 것보다 로컬 연결을 종료한다.
+      if (s && isFirstAuthAdoption) return null;
+      return s ? JSON.parse(s) : null;
+    }
     catch { return null; }
   });
   // fetchSession(폴링)이 서버 필드만으로 filters를 재구성해 intent를 잃어버리는 걸 막기 위한 최신값 스냅샷.
@@ -722,12 +751,17 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         const parsed = JSON.parse(s) as FeedPost[];
         return parsed.map(p => ({
           ...p,
+          authorId: isFirstAuthAdoption && p.authorId === legacyProfileIdRef.current
+            ? initialAuthUserId ?? p.authorId
+            : p.authorId,
           tags: p.tags.map(tag => normalizeFoodTag(tag)),
           comments: Array.isArray(p.comments) ? p.comments : [],
         }));
       }
     } catch { /* fall through */ }
-    return MOCK_FEED_POSTS;
+    return MOCK_FEED_POSTS.map((post, index) => (
+      index === 0 && initialAuthUserId ? { ...post, authorId: initialAuthUserId } : post
+    ));
   });
 
   const [likedFeedIds, setLikedFeedIds] = useState<string[]>(() => {
@@ -750,10 +784,10 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
           parsed.id = generateUserId();
           localStorage.setItem('lm_profile', JSON.stringify(parsed));
         }
-        return parsed;
+        return initialAuthUserId ? { ...parsed, id: initialAuthUserId } : parsed;
       }
     } catch { /* fall through */ }
-    return { ...DEFAULT_PROFILE, id: generateUserId() };
+    return { ...DEFAULT_PROFILE, id: initialAuthUserId ?? generateUserId() };
   });
 
   useEffect(() => {
@@ -779,6 +813,31 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       })
       .catch(() => setApiAvailable(false))
       .finally(() => setIsLoading(false));
+  }, []);
+
+  // 최초 legacy id → auth uid에서만 로컬 작성자 id를 승계한다. 이후 Google 충돌 계정 전환이나
+  // 로그아웃→새 익명 uid에는 이전 계정의 로컬 소유권을 자동 양도하지 않는다.
+  const profileIdRef = useRef(profile.id);
+  useEffect(() => { profileIdRef.current = profile.id; }, [profile.id]);
+  useEffect(() => {
+    const adoptUid = (uid: string) => {
+      const oldId = profileIdRef.current;
+      const previousAuthUid = lastAuthUidRef.current;
+      if (oldId !== uid) {
+        profileIdRef.current = uid;
+        setProfile(prev => ({ ...prev, id: uid }));
+        if (previousAuthUid && previousAuthUid !== uid) setCurrentSession(null);
+      }
+      lastAuthUidRef.current = uid;
+      localStorage.setItem(LAST_AUTH_UID_KEY, uid);
+    };
+
+    if (initialAuthUserId) adoptUid(initialAuthUserId);
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      if (session) adoptUid(session.user.id);
+    });
+    return () => subscription.unsubscribe();
   }, []);
 
   useEffect(() => { localStorage.setItem('lm_courses', JSON.stringify(courses)); }, [courses]);
@@ -870,10 +929,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     ));
   }, [profile.name, profile.emoji]);
 
-  // 프로토타입: 기기 ID 일치 또는 (목업 시드용) 프로필 이름 일치를 내 게시물로 본다
-  const isMyPost = useCallback((post: FeedPost) =>
-    post.authorId === profile.id || post.authorName === profile.name,
-  [profile.id, profile.name]);
+  const isMyPost = useCallback((post: FeedPost) => post.authorId === profile.id, [profile.id]);
 
   const setCourseSkin = useCallback((courseId: string, skinId: string | null) => {
     setCourseSkins(prev => {
@@ -1153,7 +1209,13 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       getRestaurantById, getCourseById,
       isLoading, apiAvailable,
     }}>
-      {children}
+      <div
+        className="contents"
+        data-testid="app-identity"
+        data-identity-aligned={initialAuthUserId ? String(profile.id === initialAuthUserId) : 'auth-unavailable'}
+      >
+        {children}
+      </div>
     </AppContext.Provider>
   );
 }

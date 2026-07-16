@@ -8,7 +8,7 @@ input="$(cat)"
 cmd="$(printf '%s' "$input" | (jq -r '.tool_input.command // empty' 2>/dev/null || sed -n 's/.*"command"[[:space:]]*:[[:space:]]*"\(.*\)".*/\1/p'))"
 
 # 승인이 필요한 위험 패턴 (확장 정규식)
-BLOCK_RE='supabase[[:space:]]+db[[:space:]]+reset|supabase[[:space:]]+functions[[:space:]]+deploy|supabase[[:space:]]+secrets[[:space:]]+set|migration[[:space:]]+(repair|revert)|drop[[:space:]]+table|gcloud[[:space:]].*keys[[:space:]]+(delete|create)|regenerate|rm[[:space:]]+-rf|git[[:space:]]+push[[:space:]]+.*--force|>[[:space:]]*\.env'
+BLOCK_RE='supabase[[:space:]]+db[[:space:]]+reset|supabase[[:space:]]+functions[[:space:]]+deploy|supabase[[:space:]]+secrets[[:space:]]+set|migration[[:space:]]+(repair|revert)|drop[[:space:]]+(table|schema|database)|truncate[[:space:]]|gcloud[[:space:]].*keys[[:space:]]+(delete|create)|regenerate|rm[[:space:]]+-[^[:space:]]*r|git[[:space:]]+push[[:space:]]+(-f|.*--force)|pnpm[[:space:]]+(add|install)|npm[[:space:]]+(install|i)|(^|[[:space:]])(tee|cp|mv|sed[[:space:]]+-i)[[:space:]].*\.env|>[[:space:]]*\.env'
 
 if printf '%s' "$cmd" | grep -Eiq "$BLOCK_RE"; then
   echo "🚧 안전 게이트: 이 명령은 파괴적·비용·보안 영향이 있어 자동 실행이 차단됐습니다." >&2

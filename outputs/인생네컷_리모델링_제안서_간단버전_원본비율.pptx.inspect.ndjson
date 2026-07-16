@@ -1,0 +1,60 @@
+{"kind":"deck","id":"pr/hk1m4b","name":"Deck"}
+{"kind":"layout","layoutId":"51111653-0cf1-44bb-a0b3-5771cf6d060c","name":"Master","type":"master"}
+{"kind":"layout","layoutId":"87ee1e69-8781-4cc9-b931-92483520f1ce","name":"Title Slide","type":"title"}
+{"kind":"slide","id":"sl/bahoii","slide":1,"title":"인생네컷 매장","textShapes":3}
+{"kind":"textbox","id":"sh/4jy50bmp","slide":1,"text":"인생네컷 매장","textPreview":"인생네컷 매장","textChars":7,"textLines":1,"bbox":[72,176,620,58]}
+{"kind":"textbox","id":"sh/jipor6l4","slide":1,"text":"리모델링 제안","textPreview":"리모델링 제안","textChars":7,"textLines":1,"bbox":[72,242,650,86]}
+{"kind":"shape","id":"sh/ihgnyl4j","slide":1,"bbox":[72,354,530,0]}
+{"kind":"textbox","id":"sh/tor6x036","slide":1,"text":"대기 공간 · 대형 거울 · 프롭 선반","textPreview":"대기 공간 · 대형 거울 · 프롭 선반","textChars":21,"textLines":1,"bbox":[74,382,650,38]}
+{"kind":"image","id":"im/hsf2twne","slide":1,"name":"","geometry":"rect","alt":"대기 공간 리모델링 예시","bbox":[868,48,286,620]}
+{"kind":"notes","id":"nt/bahoii","slide":1,"text":""}
+{"kind":"slide","id":"sl/6f9765","slide":2,"title":"1. 대기 공간 리모델링","textShapes":11}
+{"kind":"textbox","id":"sh/907ed8n2","slide":2,"text":"1. 대기 공간 리모델링","textPreview":"1. 대기 공간 리모델링","textChars":13,"textLines":1,"bbox":[64,42,1152,52]}
+{"kind":"shape","id":"sh/mxgf2t4r","slide":2,"bbox":[64,112,1152,0]}
+{"kind":"shape","id":"sh/x4reh8ne","slide":2,"bbox":[64,120,540,44]}
+{"kind":"shape","id":"sh/a1gf6d4n","slide":2,"bbox":[676,120,540,44]}
+{"kind":"textbox","id":"sh/b2pwfi58","slide":2,"text":"현재 상태  ·  사진 1","textPreview":"현재 상태  ·  사진 1","textChars":14,"textLines":1,"bbox":[64,130,540,28]}
+{"kind":"textbox","id":"sh/k7ixcnmp","slide":2,"text":"제안 예시  ·  사진 2","textPreview":"제안 예시  ·  사진 2","textChars":14,"textLines":1,"bbox":[676,130,540,28]}
+{"kind":"textbox","id":"sh/58rels3a","slide":2,"text":"•","textPreview":"•","textChars":1,"textLines":1,"bbox":[76,500,24,30]}
+{"kind":"textbox","id":"sh/hwjy1cz6","slide":2,"text":"ㄱ자형 의자 설치 — 손님이 음료를 쏟을 수 있으므로 패브릭이 아닌, 닦기 쉬운 재질 사용","textPreview":"ㄱ자형 의자 설치 — 손님이 음료를 쏟을 수 있으므로 패브릭이 아닌, 닦기 쉬운 재질 사용","textChars":50,"textLines":1,"bbox":[108,500,1090,34]}
+{"kind":"textbox","id":"sh/gvah87il","slide":2,"text":"•","textPreview":"•","textChars":1,"textLines":1,"bbox":[76,542,24,30]}
+{"kind":"textbox","id":"sh/vu1gz21g","slide":2,"text":"왼쪽 벽에 큰 판거울과 긴 선반 설치","textPreview":"왼쪽 벽에 큰 판거울과 긴 선반 설치","textChars":20,"textLines":1,"bbox":[108,542,1090,34]}
+{"kind":"textbox","id":"sh/u9sz6h0v","slide":2,"text":"•","textPreview":"•","textChars":1,"textLines":1,"bbox":[76,584,24,30]}
+{"kind":"textbox","id":"sh/503i5wzi","slide":2,"text":"선반에 헤어드라이어, 고데기, 포토커터 등 사진을 자르는 도구 배치","textPreview":"선반에 헤어드라이어, 고데기, 포토커터 등 사진을 자르는 도구 배치","textChars":37,"textLines":1,"bbox":[108,584,1090,34]}
+{"kind":"textbox","id":"sh/4zuhcrix","slide":2,"text":"•","textPreview":"•","textChars":1,"textLines":1,"bbox":[76,626,24,30]}
+{"kind":"textbox","id":"sh/3yl03mhc","slide":2,"text":"공간이 밝아지도록 조명 추가","textPreview":"공간이 밝아지도록 조명 추가","textChars":15,"textLines":1,"bbox":[108,626,1090,34]}
+{"kind":"image","id":"im/6d0ruhkf","slide":2,"name":"","geometry":"rect","alt":"현재 상태 사진 1","bbox":[64,164,540,320]}
+{"kind":"image","id":"im/lcrqlc3u","slide":2,"name":"","geometry":"rect","alt":"제안 예시 사진 2","bbox":[676,164,540,320]}
+{"kind":"notes","id":"nt/6f9765","slide":2,"text":""}
+{"kind":"slide","id":"sl/603mte","slide":3,"title":"2. 포토보드 이동 및 대형 벽거울 설치","textShapes":9}
+{"kind":"textbox","id":"sh/54nux0fq","slide":3,"text":"2. 포토보드 이동 및 대형 벽거울 설치","textPreview":"2. 포토보드 이동 및 대형 벽거울 설치","textChars":22,"textLines":1,"bbox":[64,42,1152,52]}
+{"kind":"shape","id":"sh/ihwv25wf","slide":3,"bbox":[64,112,1152,0]}
+{"kind":"shape","id":"sh/xgnut0fu","slide":3,"bbox":[64,120,540,44]}
+{"kind":"shape","id":"sh/adcvylw3","slide":3,"bbox":[676,120,540,44]}
+{"kind":"textbox","id":"sh/velcrqxo","slide":3,"text":"현재 상태  ·  사진 4","textPreview":"현재 상태  ·  사진 4","textChars":14,"textLines":1,"bbox":[64,130,540,28]}
+{"kind":"textbox","id":"sh/8butwved","slide":3,"text":"제안 예시  ·  사진 6","textPreview":"제안 예시  ·  사진 6","textChars":14,"textLines":1,"bbox":[676,130,540,28]}
+{"kind":"textbox","id":"sh/9c3upgfy","slide":3,"text":"•","textPreview":"•","textChars":1,"textLines":1,"bbox":[76,506,24,30]}
+{"kind":"textbox","id":"sh/50zitcje","slide":3,"text":"현재 오른쪽에 있는 포토보드를 촬영방 사이 벽으로 이동","textPreview":"현재 오른쪽에 있는 포토보드를 촬영방 사이 벽으로 이동","textChars":30,"textLines":1,"bbox":[108,506,1090,34]}
+{"kind":"textbox","id":"sh/4zq10729","slide":3,"text":"•","textPreview":"•","textChars":1,"textLines":1,"bbox":[76,548,24,30]}
+{"kind":"textbox","id":"sh/jyh0r21o","slide":3,"text":"기존 포토보드 자리에는 아주 큰 벽거울 설치","textPreview":"기존 포토보드 자리에는 아주 큰 벽거울 설치","textChars":24,"textLines":1,"bbox":[108,548,1090,34]}
+{"kind":"textbox","id":"sh/ix8jyxk3","slide":3,"text":"•","textPreview":"•","textChars":1,"textLines":1,"bbox":[76,590,24,30]}
+{"kind":"textbox","id":"sh/hwzips3i","slide":3,"text":"거울은 더 크게 설치하고, 가능한 부분에 LED 엣지조명을 추가해 밖에서도 화사하고 밝게 보이도록 구성","textPreview":"거울은 더 크게 설치하고, 가능한 부분에 LED 엣지조명을 추가해 밖에서도 화사하고 밝게 보이도록 구성","textChars":57,"textLines":1,"bbox":[108,590,1090,34]}
+{"kind":"image","id":"im/25k3up8n","slide":3,"name":"","geometry":"rect","alt":"현재 상태 사진 4","bbox":[64,164,540,320]}
+{"kind":"image","id":"im/dwvmtora","slide":3,"name":"","geometry":"rect","alt":"제안 예시 사진 6","bbox":[676,164,540,320]}
+{"kind":"notes","id":"nt/603mte","slide":3,"text":""}
+{"kind":"slide","id":"sl/6gi4ry","slide":4,"title":"3. 헤어드라이어 자리를 프롭 선반으로 변경","textShapes":9}
+{"kind":"textbox","id":"sh/zalkne9g","slide":4,"text":"3. 헤어드라이어 자리를 프롭 선반으로 변경","textPreview":"3. 헤어드라이어 자리를 프롭 선반으로 변경","textChars":24,"textLines":1,"bbox":[64,42,1152,52]}
+{"kind":"shape","id":"sh/kbulgjq1","slide":4,"bbox":[64,112,1152,0]}
+{"kind":"shape","id":"sh/b6lkje94","slide":4,"bbox":[64,120,540,44]}
+{"kind":"shape","id":"sh/c7u1cjqp","slide":4,"bbox":[676,120,540,44]}
+{"kind":"textbox","id":"sh/d832lora","slide":4,"text":"현재 상태  ·  사진 5","textPreview":"현재 상태  ·  사진 5","textChars":14,"textLines":1,"bbox":[64,130,540,28]}
+{"kind":"textbox","id":"sh/2hsj6p8n","slide":4,"text":"제안 예시  ·  사진 3","textPreview":"제안 예시  ·  사진 3","textChars":14,"textLines":1,"bbox":[676,130,540,28]}
+{"kind":"textbox","id":"sh/3i1kfu98","slide":4,"text":"•","textPreview":"•","textChars":1,"textLines":1,"bbox":[76,510,24,30]}
+{"kind":"textbox","id":"sh/zqxgrit4","slide":4,"text":"왼쪽 헤어드라이어 테이블을 치우고, 해당 자리에 깔끔한 디자인의 프롭 선반 설치","textPreview":"왼쪽 헤어드라이어 테이블을 치우고, 해당 자리에 깔끔한 디자인의 프롭 선반 설치","textChars":44,"textLines":1,"bbox":[108,510,1090,34]}
+{"kind":"textbox","id":"sh/yp4zidsj","slide":4,"text":"•","textPreview":"•","textChars":1,"textLines":1,"bbox":[76,552,24,30]}
+{"kind":"textbox","id":"sh/lsfyt8ba","slide":4,"text":"드라이어 테이블이 2개이므로 프롭 선반 2개 추가 가능 — 헤드기어용 1개, 머리띠용 1개","textPreview":"드라이어 테이블이 2개이므로 프롭 선반 2개 추가 가능 — 헤드기어용 1개, 머리띠용 1개","textChars":50,"textLines":1,"bbox":[108,552,1090,34]}
+{"kind":"textbox","id":"sh/kr6hk3ap","slide":4,"text":"•","textPreview":"•","textChars":1,"textLines":1,"bbox":[76,594,24,30]}
+{"kind":"textbox","id":"sh/7exgvit0","slide":4,"text":"프롭 선택지를 현재보다 약 1.5배 늘리는 방향","textPreview":"프롭 선택지를 현재보다 약 1.5배 늘리는 방향","textChars":26,"textLines":1,"bbox":[108,594,1090,34]}
+{"kind":"image","id":"im/g3a18fmd","slide":4,"name":"","geometry":"rect","alt":"현재 상태 사진 5","bbox":[64,164,540,320]}
+{"kind":"image","id":"im/36l03al4","slide":4,"name":"","geometry":"rect","alt":"제안 예시 사진 3","bbox":[676,164,540,320]}
+{"kind":"notes","id":"nt/6gi4ry","slide":4,"text":""}

@@ -32,9 +32,14 @@ chmod +x .claude/hooks/safety-gate.sh
 ## 사용
 ```
 /resolve-issue 순서 변경 후 저장이 실패함
+/implement-web-follow
 ```
 그러면 TRIAGE → RCA → FIX → VERIFY → GATE → LOG 6단계가 자동으로 돈다.
 파괴적/비용/보안 명령(`db reset`, `deploy`, `secrets set`, 키 삭제 등)만 훅이 가로채 승인을 요구한다.
+
+웹 팔로우/로그인은 먼저 `pnpm harness:web-follow status`로 상태를 확인한다. 최신 Vite 화면은 5173,
+Express API는 3000이다. `.claude/commands/implement-web-follow.md`와
+`automation/web-follow-login/README.md`가 실행·증거 기록 계약이다.
 
 ## 훅 동작 확인
 ```bash

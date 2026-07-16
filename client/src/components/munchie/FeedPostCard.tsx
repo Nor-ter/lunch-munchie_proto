@@ -65,6 +65,14 @@ export default function FeedPostCard({
     <div className="rounded-[26px] bg-white border border-[#F0E8E0] shadow-sm overflow-hidden">
       {/* Author */}
       <div className="flex items-center gap-2.5 px-4 pt-3.5 pb-2.5">
+        <button
+          type="button"
+          data-testid={`feed-author-${post.id}`}
+          disabled={!interactive || !post.authorId}
+          onClick={() => post.authorId && navigate(`/profile/${post.authorId}`)}
+          className="flex min-w-0 flex-1 items-center gap-2.5 text-left disabled:cursor-default"
+          aria-label={post.authorId ? `${post.authorName} 프로필 열기` : undefined}
+        >
         <div
           className="w-9 h-9 rounded-full flex items-center justify-center text-[18px] shrink-0"
           style={{ background: '#FFF5F5' }}
@@ -79,6 +87,7 @@ export default function FeedPostCard({
             {course ? `${course.region} 후기` : '코스 후기'} · {timeAgo(post.createdAt)}
           </p>
         </div>
+        </button>
         <button className="shrink-0" style={{ color: '#9B9B9B' }}>
           <MoreHorizontal size={18} />
         </button>
