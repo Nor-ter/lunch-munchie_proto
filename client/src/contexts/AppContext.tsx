@@ -8,6 +8,13 @@ import React, { createContext, useContext, useState, useEffect, useCallback, use
 import { normalizeDiet, isHardRestriction, type DietTag } from '@shared/const';
 import { intentForHour, type Intent } from '@shared/intent';
 import { normalizeFoodTag, type TagType } from '@/constants/foodTags';
+import type { LunchmateProfileLoadout } from '@/types/lunchmateCustomization';
+import {
+  normalizeLunchmateOwnedItemIds,
+  normalizeLunchmateProfileLoadout,
+  normalizeLunchmateRewardClaims,
+  type LunchmateRewardClaim,
+} from '@/utils/lunchmateProfile';
 export type { TagType } from '@/constants/foodTags';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -143,6 +150,12 @@ export interface UserProfile {
   foodieChar?: string;
   /** 푸디 캐릭터 방 스킨 (먼치 스킨 id) */
   foodieSkin?: string;
+  /** 런치메이트룸에서 적용한 네 slot 코스튬 조합 */
+  lunchmateLoadout?: LunchmateProfileLoadout;
+  /** 보유한 런치메이트 코스튬 manifest ID 목록 */
+  lunchmateOwnedItemIds?: string[];
+  /** 현재 브라우저 preview에서 지급한 레벨별 코스튬 이력 */
+  lunchmateRewardClaims?: LunchmateRewardClaim[];
 }
 
 export interface SwipeRecord {
@@ -526,6 +539,8 @@ const DEFAULT_PROFILE: UserProfile = {
   totalSwipes: 0,
   totalLikes: 0,
   joinedAt: new Date().toISOString(),
+  lunchmateOwnedItemIds: normalizeLunchmateOwnedItemIds(undefined),
+  lunchmateRewardClaims: [],
 };
 
 // ─── Context ──────────────────────────────────────────────────────────────────
@@ -597,11 +612,97 @@ interface AppContextValue {
 
 const AppContext = createContext<AppContextValue | null>(null);
 
+export type ApiRequestAuth =
+  | {
+      status: 'authenticated';
+      accessToken: string;
+    }
+  | {
+      status: 'anonymous';
+    }
+  | {
+      status: 'blocked';
+    };
+
+interface ApiAuthEnvironment {
+  VITE_SUPABASE_URL?: string;
+  VITE_SUPABASE_PUBLISHABLE_KEY?: string;
+}
+
+interface ApiAuthClient {
+  auth: {
+    getSession: () => Promise<{
+      data: {
+        session: {
+          access_token: string;
+        } | null;
+      };
+      error: unknown;
+    }>;
+  };
+}
+
+interface ApiRequestAuthOptions {
+  environment?: ApiAuthEnvironment;
+  loadClient?: () => Promise<ApiAuthClient>;
+}
+
+export async function resolveApiRequestAuth(
+  options: ApiRequestAuthOptions = {},
+): Promise<ApiRequestAuth> {
+  const environment = options.environment ?? {
+    VITE_SUPABASE_URL: import.meta.env.VITE_SUPABASE_URL,
+    VITE_SUPABASE_PUBLISHABLE_KEY:
+      import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
+  };
+  const configured = Boolean(
+    environment.VITE_SUPABASE_URL?.trim()
+    && environment.VITE_SUPABASE_PUBLISHABLE_KEY?.trim(),
+  );
+
+  if (!configured) {
+    return { status: 'anonymous' };
+  }
+
+  try {
+    const client = await (
+      options.loadClient
+      ?? (async () => (await import('@/lib/supabase')).supabase)
+    )();
+    const { data, error } = await client.auth.getSession();
+
+    if (error) {
+      return { status: 'blocked' };
+    }
+
+    if (!data.session) {
+      return { status: 'anonymous' };
+    }
+
+    if (!data.session.access_token) {
+      return { status: 'blocked' };
+    }
+
+    return {
+      status: 'authenticated',
+      accessToken: data.session.access_token,
+    };
+  } catch {
+    return { status: 'blocked' };
+  }
+}
+
+interface BuildDeckDependencies {
+  resolveRequestAuth?: () => Promise<ApiRequestAuth>;
+  request?: typeof fetch;
+}
+
 // 런치 엔진 추천으로 덱을 정렬 + propensity 메타 부착. 실패 시 필터 순서 그대로(폴백).
-async function buildDeck(
+export async function buildDeck(
   filters: GroupSession['filters'],
   allRestaurants: Restaurant[],
   userId?: string,
+  dependencies: BuildDeckDependencies = {},
 ): Promise<{ restaurants: Restaurant[]; slateId?: string; recMeta?: GroupSession['recMeta']; modelVersion?: string }> {
   const base = allRestaurants.filter(r =>
     (filters.categories.length === 0 || filters.categories.includes(r.category)) &&
@@ -609,9 +710,24 @@ async function buildDeck(
   );
   if (base.length === 0) return { restaurants: base };
   try {
-    const res = await fetch('/api/recommend', {
+    const auth = await (
+      dependencies.resolveRequestAuth ?? resolveApiRequestAuth
+    )();
+    if (auth.status === 'blocked') {
+      return { restaurants: base };
+    }
+
+    const headers: Record<string, string> = {
+      'Content-Type': 'application/json',
+    };
+    if (auth.status === 'authenticated') {
+      headers.Authorization = `Bearer ${auth.accessToken}`;
+    }
+
+    const request = dependencies.request ?? fetch;
+    const res = await request('/api/recommend', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers,
       body: JSON.stringify({
         candidate_ids: base.map(r => r.id),
         // 앱이 이미 아는 맥락은 클라가 실어 보낸다 (companions=인원수). 나머지는 서버가 보강.
@@ -744,13 +860,21 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     try {
       const s = localStorage.getItem('lm_profile');
       if (s) {
-        const parsed = JSON.parse(s);
+        const parsed = JSON.parse(s) as UserProfile;
+        let migratedId = false;
         // 과거 공용 ID('me')는 기기 고유 ID로 마이그레이션.
         if (!parsed.id || parsed.id === 'me') {
           parsed.id = generateUserId();
-          localStorage.setItem('lm_profile', JSON.stringify(parsed));
+          migratedId = true;
         }
-        return parsed;
+        const normalizedProfile = {
+          ...parsed,
+          lunchmateLoadout: normalizeLunchmateProfileLoadout(parsed.lunchmateLoadout),
+          lunchmateOwnedItemIds: normalizeLunchmateOwnedItemIds(parsed.lunchmateOwnedItemIds),
+          lunchmateRewardClaims: normalizeLunchmateRewardClaims(parsed.lunchmateRewardClaims),
+        };
+        if (migratedId) localStorage.setItem('lm_profile', JSON.stringify(normalizedProfile));
+        return normalizedProfile;
       }
     } catch { /* fall through */ }
     return { ...DEFAULT_PROFILE, id: generateUserId() };

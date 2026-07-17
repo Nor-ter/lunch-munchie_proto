@@ -7,6 +7,7 @@ import NotFound from "@/pages/NotFound";
 import { Route, Switch, useLocation, useParams, Redirect } from "wouter";
 import ErrorBoundary from "./components/ErrorBoundary";
 import { ThemeProvider } from "./contexts/ThemeContext";
+import { AuthProvider } from "./contexts/AuthContext";
 import { AppProvider } from "./contexts/AppContext";
 import TabBar from "./components/TabBar";
 import OnboardingPage from "./pages/OnboardingPage";
@@ -22,6 +23,8 @@ import CourseSharePage from "./pages/course/CourseSharePage";
 import SavedPage from "./pages/SavedPage";
 import ProfilePage from "./pages/ProfilePage";
 import FoodieRoomPage from "./pages/FoodieRoomPage";
+import AuthLoginPage from "./pages/AuthLoginPage";
+import AuthCallbackPage from "./pages/AuthCallbackPage";
 // Lunchie 그룹 세션 모드 (data-jp 플로우): 설정 → 로비/초대 → 스와이프 투표 → 결과
 import LunchieSettingsPage from "./pages/LunchieSettingsPage";
 import SessionLobbyPage from "./pages/SessionLobbyPage";
@@ -37,7 +40,7 @@ import TemplateDetailPage from "./pages/TemplateDetailPage";
 import TemplatesBrowsePage from "./pages/TemplatesBrowsePage";
 import CourseFeedsPage from "./pages/course/CourseFeedsPage";
 
-const NO_TABBAR = ['/onboarding', '/tour-mode', '/course/', '/template/', '/templates', '/lunchie', '/session', '/join', '/feed/'];
+const NO_TABBAR = ['/onboarding', '/tour-mode', '/course/', '/template/', '/templates', '/lunchie', '/session', '/join', '/feed/', '/auth'];
 
 function CoursesRedirect() {
   const params = useParams<{ id: string }>();
@@ -53,6 +56,8 @@ function AppShell() {
         <SlideTransitionRoutes>
           <Switch>
             <Route path="/onboarding" component={OnboardingPage} />
+            <Route path="/auth/login" component={AuthLoginPage} />
+            <Route path="/auth/callback" component={AuthCallbackPage} />
             <Route path="/" component={HomePage} />
             {/* 기존 먼치모드(코스 탐색)는 Munchie Feed로 통합 */}
             <Route path="/explore">{() => <Redirect to="/feed" />}</Route>
@@ -95,12 +100,14 @@ export default function App() {
   return (
     <ErrorBoundary>
       <ThemeProvider defaultTheme="light">
-        <AppProvider>
-          <TooltipProvider>
-            <Toaster />
-            <AppShell />
-          </TooltipProvider>
-        </AppProvider>
+        <AuthProvider>
+          <AppProvider>
+            <TooltipProvider>
+              <Toaster />
+              <AppShell />
+            </TooltipProvider>
+          </AppProvider>
+        </AuthProvider>
       </ThemeProvider>
     </ErrorBoundary>
   );

@@ -9,15 +9,14 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { useLocation } from 'wouter';
 import {
   Menu, Heart, Clock, MessageCircle, Pencil, Trash2, EyeOff, Eye, ChevronDown, ChevronUp, X, Camera, Upload,
+  LogIn, LogOut,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { useApp, isFeedCommentHidden, type FeedPost } from '@/contexts/AppContext';
+import { useAuth } from '@/contexts/AuthContext';
 import { fileToResizedDataUrl } from '@/lib/imageUtils';
 import TemplateCoursemapCard from '@/components/munchie/TemplateCoursemapCard';
-import SkinPicker from '@/components/munchie/SkinPicker';
 import FoodieBuddy, {
-  FOODIE_CHARS,
-  foodieLevel,
   type FoodieBuddyUiState,
 } from '@/components/munchie/FoodieBuddy';
 import LunchboxBottomSheet, { type LunchboxFoodItem } from '@/components/munchie/LunchboxBottomSheet';
@@ -25,6 +24,11 @@ import LunchmateProgressSheet from '@/components/munchie/LunchmateProgressSheet'
 import LunchmateLevelUpModal from '@/components/munchie/LunchmateLevelUpModal';
 import { useLunchmateFlow } from '@/hooks/useLunchmateFlow';
 import type { FoodieRoomNavigationState } from '@/pages/FoodieRoomPage';
+import type { LunchmateLayerItem } from '@/types/lunchmateCustomization';
+import {
+  lunchmateLoadoutFromProfile,
+  resolveLunchmateLevelRewardGrant,
+} from '@/utils/lunchmateProfile';
 
 const EMOJIS = ['😊', '🍱', '🍜', '🍣', '🥩', '🍕', '🌮', '🍔', '🥗', '☕', '🎂', '🍰'];
 const DIETARY_OPTIONS = ['비건', '채식', '글루텐프리', '할랄', '유제품 제외', '견과류 알러지', '해산물 제외'];
@@ -69,7 +73,7 @@ const LUNCHMATE_PREVIEW_FIXTURE = {
 };
 
 type SortMode = 'likes' | 'recent';
-type ProfileSheet = 'foodie' | 'settings' | 'avatar' | 'lunchbox' | 'progress' | 'levelUp';
+type ProfileSheet = 'settings' | 'avatar' | 'lunchbox' | 'progress' | 'levelUp';
 
 /** 프로필 아바타 — 업로드 사진이 있으면 사진, 없으면 이모지. 공통 렌더링으로 항상 최신 profile을 반영한다 */
 function Avatar({ photo, emoji, size }: { photo?: string; emoji: string; size: number }) {
@@ -197,13 +201,21 @@ function MyFeedItem({
 export default function ProfilePage() {
   const [, navigate] = useLocation();
   const { profile, updateProfile, courses, hiddenTemplateCourseIds, feedPosts, isMyPost } = useApp();
+  const { status: authStatus, signOut } = useAuth();
+  const lunchmateLoadout = useMemo(
+    () => lunchmateLoadoutFromProfile(profile.lunchmateLoadout),
+    [profile.lunchmateLoadout],
+  );
 
   const [sort, setSort] = useState<SortMode>('likes');
   const [activeSheet, setActiveSheet] = useState<ProfileSheet | null>(null);
+  const [authActionPending, setAuthActionPending] = useState(false);
+  const [levelUpRewardItem, setLevelUpRewardItem] = useState<LunchmateLayerItem | null>(null);
   const [editName, setEditName] = useState(profile.name);
   const avatarFileRef = useRef<HTMLInputElement>(null);
   const lunchboxButtonRef = useRef<HTMLButtonElement>(null);
   const progressButtonRef = useRef<HTMLButtonElement>(null);
+  const rewardGrantGuardRef = useRef(new Set<number>());
   const closeActiveSheet = useCallback(() => setActiveSheet(null), []);
   const lunchmateFlow = useLunchmateFlow({
     initialState: LUNCHMATE_PREVIEW_FIXTURE.uiState,
@@ -234,10 +246,35 @@ export default function ProfilePage() {
   }, [lunchmateFlow.progressSnapshot, navigate]);
 
   useEffect(() => {
-    if (lunchmateFlow.levelUpEvent && activeSheet === null) {
-      setActiveSheet('levelUp');
+    const levelUpEvent = lunchmateFlow.levelUpEvent;
+    if (!levelUpEvent || activeSheet !== null) return;
+
+    const targetLevel = levelUpEvent.newLevel;
+    const stableSeedKey = `${profile.id}:lunchmate-level:${targetLevel}`;
+    const grant = resolveLunchmateLevelRewardGrant({
+      targetLevel,
+      ownedItemIds: profile.lunchmateOwnedItemIds,
+      rewardClaims: profile.lunchmateRewardClaims,
+      stableSeedKey,
+    });
+
+    setLevelUpRewardItem(grant.item);
+    if (grant.shouldPersist && !rewardGrantGuardRef.current.has(targetLevel)) {
+      rewardGrantGuardRef.current.add(targetLevel);
+      updateProfile({
+        lunchmateOwnedItemIds: grant.ownedItemIds,
+        lunchmateRewardClaims: grant.claims,
+      });
     }
-  }, [activeSheet, lunchmateFlow.levelUpEvent]);
+    setActiveSheet('levelUp');
+  }, [
+    activeSheet,
+    lunchmateFlow.levelUpEvent,
+    profile.id,
+    profile.lunchmateOwnedItemIds,
+    profile.lunchmateRewardClaims,
+    updateProfile,
+  ]);
 
   const myPosts = useMemo(() => feedPosts.filter(isMyPost), [feedPosts, isMyPost]);
   const totalLikes = myPosts.reduce((sum, p) => sum + p.likes, 0);
@@ -280,6 +317,25 @@ export default function ProfilePage() {
     }
   };
 
+  const handleProfileAuthAction = async () => {
+    if (authActionPending || authStatus === 'loading' || authStatus === 'unconfigured') return;
+
+    if (authStatus !== 'authenticated') {
+      navigate('/auth/login?next=%2Fprofile');
+      return;
+    }
+
+    setAuthActionPending(true);
+    const { error } = await signOut();
+    setAuthActionPending(false);
+
+    if (error) {
+      toast.error('로그아웃하지 못했어요. 잠시 후 다시 시도해 주세요.');
+      return;
+    }
+    toast.success('현재 브라우저에서 로그아웃했어요.');
+  };
+
   return (
     <div className="min-h-dvh bg-[#FCF4EE] pb-24">
       {/* 상단 메뉴 */}
@@ -309,7 +365,8 @@ export default function ProfilePage() {
           score={foodieScore}
           char={profile.foodieChar}
           skinId={profile.foodieSkin}
-          onCustomize={() => setActiveSheet('foodie')}
+          loadout={lunchmateLoadout}
+          onCustomize={openFoodieRoom}
           uiState={lunchmateFlow.state}
           unseenFoodCount={LUNCHMATE_PREVIEW_FIXTURE.unseenFoodCount}
           onLunchboxOpen={openLunchbox}
@@ -449,81 +506,11 @@ export default function ProfilePage() {
       <LunchmateLevelUpModal
         open={activeSheet === 'levelUp'}
         event={lunchmateFlow.levelUpEvent}
+        loadout={lunchmateLoadout}
+        rewardItem={levelUpRewardItem}
         onClose={closeLevelUp}
         onAfterClose={() => lunchboxButtonRef.current?.focus()}
       />
-
-      {/* 푸디 캐릭터 커스텀 시트 */}
-      <AnimatePresence>
-        {activeSheet === 'foodie' && (
-          <>
-            <motion.div
-              className="fixed inset-0 bg-black/40 z-50"
-              initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-              onClick={() => setActiveSheet(null)}
-            />
-            <motion.div
-              className="fixed bottom-0 left-0 right-0 mx-auto w-full max-w-[430px] bg-white rounded-t-3xl z-50 px-5 pt-4 pb-8 max-h-[82dvh] overflow-y-auto"
-              initial={{ y: '100%' }} animate={{ y: 0 }} exit={{ y: '100%' }}
-              transition={{ type: 'tween', ease: [0.32, 0.72, 0, 1], duration: 0.3 }}
-            >
-              <div className="mx-auto mb-4 h-1 w-10 rounded-full bg-gray-200" />
-              <div className="mb-1 flex items-center justify-between">
-                <p className="font-bold text-[16px]">푸디 캐릭터 꾸미기</p>
-                <button onClick={() => setActiveSheet(null)}><X size={18} className="text-gray-400" /></button>
-              </div>
-              <p className="mb-4 text-[11px] text-[#9B9B9B]">
-                코스맵·피드를 만들수록 성장점수가 쌓여요 — 현재 <b className="text-[#E85053]">{foodieScore}점</b> ·{' '}
-                Lv.{foodieLevel(foodieScore).index + 1} {foodieLevel(foodieScore).level.name}
-              </p>
-
-              <button
-                type="button"
-                onClick={openFoodieRoom}
-                className="mb-4 flex h-10 w-full items-center justify-center rounded-2xl border border-[#F0D8CC] bg-[#FFF8F4] text-[12px] font-bold text-[#D94B4E] transition-transform active:scale-[0.99] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#E85053]"
-              >
-                런치메이트룸 열기
-              </button>
-
-              <p className="mb-2 text-[12px] font-semibold text-[#9B9B9B]">캐릭터</p>
-              <div className="grid grid-cols-4 gap-2">
-                {FOODIE_CHARS.map(c => {
-                  const active = (profile.foodieChar ?? '🍙') === c.emoji;
-                  return (
-                    <button
-                      key={c.emoji}
-                      onClick={() => { updateProfile({ foodieChar: c.emoji }); toast.success(`${c.name}(으)로 변신! ${c.emoji}`); }}
-                      className={`rounded-2xl py-2.5 flex flex-col items-center gap-1 transition-all active:scale-95 ${
-                        active ? 'bg-[#FFF5F5] ring-2 ring-[#EB5053]' : 'bg-[#F7F3EE]'
-                      }`}
-                    >
-                      <span className="text-[26px] leading-none">{c.emoji}</span>
-                      <span className={`text-[10px] font-semibold ${active ? 'text-[#EB5053]' : 'text-[#8A7A6C]'}`}>{c.name}</span>
-                    </button>
-                  );
-                })}
-              </div>
-              {foodieLevel(foodieScore).index === 0 && (
-                <p className="mt-2 text-[10px] text-[#B09A8C]">🥚 아직 알 단계예요 — 2점부터 캐릭터가 부화해요!</p>
-              )}
-
-              <p className="mt-5 mb-2 text-[12px] font-semibold text-[#9B9B9B]">방 스킨</p>
-              <SkinPicker
-                value={profile.foodieSkin ?? 'pink-picnic'}
-                onChange={(skinId) => updateProfile({ foodieSkin: skinId })}
-                columns={3}
-              />
-
-              <button
-                onClick={() => setActiveSheet(null)}
-                className="mt-6 w-full h-12 rounded-2xl bg-[#E85053] text-white font-bold text-[14px]"
-              >
-                완료
-              </button>
-            </motion.div>
-          </>
-        )}
-      </AnimatePresence>
 
       {/* 프로필 설정 시트 (이름/이모지/식단) */}
       <AnimatePresence>
@@ -573,6 +560,31 @@ export default function ProfilePage() {
                     {d}
                   </button>
                 ))}
+              </div>
+
+              <div className="mt-5 border-t border-[#F0E8E0] pt-4">
+                <p className="mb-1.5 text-[12px] font-semibold text-[#9B9B9B]">계정</p>
+                <button
+                  type="button"
+                  onClick={handleProfileAuthAction}
+                  disabled={authStatus === 'loading' || authStatus === 'unconfigured' || authActionPending}
+                  aria-busy={authStatus === 'loading' || authActionPending}
+                  className="flex h-11 w-full items-center justify-center gap-2 rounded-xl border border-[#F0E8E0] bg-[#FAF6F1] text-[13px] font-bold text-[#4A4A4A] active:scale-[0.99] disabled:cursor-not-allowed disabled:opacity-55"
+                >
+                  {authStatus === 'authenticated' ? <LogOut size={15} /> : <LogIn size={15} />}
+                  {authActionPending || authStatus === 'loading'
+                    ? '인증 확인 중'
+                    : authStatus === 'authenticated'
+                      ? '로그아웃'
+                      : authStatus === 'unconfigured'
+                        ? '웹 로그인 설정 필요'
+                        : 'Google로 로그인'}
+                </button>
+                {authStatus === 'unconfigured' && (
+                  <p className="mt-2 text-[11px] text-[#A1948C]">
+                    웹 인증 환경 설정이 완료되면 로그인할 수 있어요.
+                  </p>
+                )}
               </div>
 
               <button

@@ -4,6 +4,7 @@ import { Sparkles } from 'lucide-react';
 import { getSkinById, MUNCHIE_SKINS, type MunchieSkin } from '@/constants/skins';
 import type { LunchmateProgressSnapshot } from '@/utils/lunchmateProgress';
 import LunchmateCharacterRenderer from '@/components/munchie/LunchmateCharacterRenderer';
+import type { LunchmateLoadout } from '@/types/lunchmateCustomization';
 
 /**
  * Foodie Buddy — 프로필 배너의 다마고치.
@@ -91,7 +92,9 @@ export interface FoodieBuddyProps {
   resultMessage?: string;
   /** 기존 Level Up overlay 상태를 jump 이미지로 표현하기 위한 시각 전용 override */
   levelUpActive?: boolean;
-  /** 별도 방 진입 동작이 생기기 전에는 기존 onCustomize로 폴백한다. */
+  /** lm_profile에 적용된 네 slot 코스튬 조합 */
+  loadout?: LunchmateLoadout;
+  /** 런치메이트룸 진입 동작. 생략하면 기존 onCustomize로 폴백한다. */
   onFoodieRoomOpen?: () => void;
 }
 
@@ -272,6 +275,7 @@ export default function FoodieBuddy({
   lastXpGain = 0,
   resultMessage,
   levelUpActive = false,
+  loadout,
   onFoodieRoomOpen,
 }: FoodieBuddyProps) {
   const skin: MunchieSkin = getSkinById(skinId) ?? MUNCHIE_SKINS[0];
@@ -332,6 +336,7 @@ export default function FoodieBuddy({
   const bounceRef = useRef<HTMLDivElement>(null);
   const shadowRef = useRef<HTMLDivElement>(null);
   const reducedMotion = useReducedMotion();
+  const motionIsReduced = reducedMotion ?? false;
 
   // transform repeat가 첫 pose에 고정되는 Framer Motion 경로를 피한다.
   // 이 timeline은 Sheet 상태와 무관하게 계속 실행되고, 레벨 변경 또는 unmount 때만 정리된다.
@@ -394,7 +399,7 @@ export default function FoodieBuddy({
           onClick={openFoodieRoom}
           className="absolute inset-0 z-0 rounded-3xl bg-transparent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset"
           style={{ '--tw-ring-color': skin.accent } as CSSProperties}
-          aria-label="푸디 캐릭터 커스텀"
+          aria-label="런치메이트룸 열기"
         />
 
         {/* 방 바닥 */}
@@ -448,7 +453,7 @@ export default function FoodieBuddy({
           className="pointer-events-none absolute top-2 right-2.5 z-10 rounded-full px-2 py-0.5 text-[9px] font-bold"
           style={{ background: 'rgba(255,255,255,0.85)', color: skin.sub }}
         >
-          🎨 탭해서 꾸미기
+          🎨 런치메이트룸
         </span>
 
         {/* 런치박스 영역 — 새 음식 상태와 Sheet 진입점을 기존 배너 안에 겹쳐 표시한다. */}
@@ -460,7 +465,7 @@ export default function FoodieBuddy({
             onLunchboxOpen?.();
           }}
           disabled={!onLunchboxOpen}
-          className="absolute bottom-2 right-3 z-20 flex h-10 w-12 items-center justify-center rounded-2xl border border-white/70 bg-white/90 text-[23px] shadow-sm disabled:cursor-default"
+          className="absolute bottom-2 right-3 z-30 flex h-10 w-12 items-center justify-center rounded-2xl border border-white/70 bg-white/90 text-[23px] shadow-sm disabled:cursor-default"
           initial={{ y: 0 }}
           animate={{ y: isFoodAvailable ? -2 : 0 }}
           transition={isFoodAvailable
@@ -485,15 +490,30 @@ export default function FoodieBuddy({
 
         {isSharingAnimation && sharedFoodPlaceholder && (
           <motion.span
-            className="pointer-events-none absolute bottom-10 right-[58px] z-20 text-[24px] drop-shadow-md"
-            initial={{ x: 0, y: 0, scale: 0.75, opacity: 0 }}
-            animate={{
-              x: [0, -38, -92, -112],
-              y: [0, -12, -9, -6],
-              scale: [0.75, 0.95, 1.05, 0.9],
-              opacity: [0, 1, 1, 0],
+            className="pointer-events-none absolute bottom-10 z-30 text-[24px] drop-shadow-md"
+            style={{ marginLeft: -12 }}
+            initial={motionIsReduced
+              ? { left: '52%', y: -6, scale: 0.9, opacity: 0 }
+              : { left: '88%', y: 0, scale: 0.75, opacity: 0 }}
+            animate={motionIsReduced
+              ? {
+                  left: '52%',
+                  y: -6,
+                  scale: [0.9, 1, 1],
+                  opacity: [0, 1, 1],
+                }
+              : {
+                  left: ['88%', '72%', '52%'],
+                  y: [0, -12, -6],
+                  scale: [0.75, 1.05, 1],
+                  opacity: [0, 1, 1],
+                }}
+            transition={{
+              duration: motionIsReduced ? 0.3 : 0.38,
+              ease: 'easeInOut',
+              times: motionIsReduced ? [0, 0.55, 1] : [0, 0.48, 1],
             }}
-            transition={{ duration: 0.48, ease: 'easeInOut', times: [0, 0.18, 0.78, 1] }}
+            data-lunchmate-food-flight="true"
             aria-hidden="true"
           >
             {sharedFoodPlaceholder}
@@ -546,7 +566,9 @@ export default function FoodieBuddy({
             <LunchmateCharacterRenderer
               flowState={effectiveUiState}
               levelUpActive={levelUpActive}
+              loadout={loadout}
               size={LUNCHMATE_RENDER_SIZE}
+              renderSize="compact"
               fallback={(
                 <div style={{ position: 'relative', width: level.size, height: level.size }}>
                   <span style={{ fontSize: level.size, lineHeight: 1, display: 'block', filter: 'drop-shadow(0 3px 3px rgba(0,0,0,0.15))' }}>

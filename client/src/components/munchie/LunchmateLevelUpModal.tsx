@@ -2,11 +2,48 @@ import { useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { AnimatePresence, motion } from 'framer-motion';
 import { Gift, Sparkles } from 'lucide-react';
+import LunchmateCharacterRenderer from '@/components/munchie/LunchmateCharacterRenderer';
+import type {
+  LunchmateLayerItem,
+  LunchmateLoadout,
+  LunchmateRarity,
+  LunchmateSlot,
+} from '@/types/lunchmateCustomization';
 import type { LunchmateLevelUpEvent } from '@/utils/lunchmateProgress';
+
+const SLOT_LABELS: Readonly<Record<LunchmateSlot, string>> = {
+  outfit: '의상',
+  headwear: '모자',
+  eyewear: '안경',
+  bag: '가방',
+};
+
+const RARITY_LABELS: Readonly<Record<LunchmateRarity, string>> = {
+  common: '일반',
+  rare: '레어',
+  special: '스페셜',
+};
+
+const RARITY_STYLES: Readonly<Record<LunchmateRarity, string>> = {
+  common: 'bg-[#F1E9E4] text-[#806F65]',
+  rare: 'bg-[#FFE5DC] text-[#D45A55]',
+  special: 'bg-[#FFF0BD] text-[#9A6A16]',
+};
+
+function createRewardPreviewLoadout(item: LunchmateLayerItem): LunchmateLoadout {
+  return {
+    outfitId: item.slot === 'outfit' ? item.id : null,
+    headwearId: item.slot === 'headwear' ? item.id : null,
+    eyewearId: item.slot === 'eyewear' ? item.id : null,
+    bagId: item.slot === 'bag' ? item.id : null,
+  };
+}
 
 interface LunchmateLevelUpModalProps {
   open: boolean;
   event: LunchmateLevelUpEvent | null;
+  loadout?: LunchmateLoadout;
+  rewardItem: LunchmateLayerItem | null;
   onClose: () => void;
   onAfterClose?: () => void;
 }
@@ -14,6 +51,8 @@ interface LunchmateLevelUpModalProps {
 export default function LunchmateLevelUpModal({
   open,
   event,
+  loadout,
+  rewardItem,
   onClose,
   onAfterClose,
 }: LunchmateLevelUpModalProps) {
@@ -75,15 +114,19 @@ export default function LunchmateLevelUpModal({
             transition={{ type: 'spring', stiffness: 330, damping: 25 }}
             onClick={modalEvent => modalEvent.stopPropagation()}
           >
-            <motion.div
-              className="mx-auto flex h-20 w-20 items-center justify-center rounded-[26px] bg-[#FFF0E9] text-[#E85053]"
-              initial={{ rotate: -8, scale: 0.8 }}
-              animate={{ rotate: [0, -5, 5, 0], scale: 1 }}
-              transition={{ duration: 0.55 }}
-              aria-hidden="true"
+            <div
+              className="mx-auto flex h-20 w-20 items-center justify-center overflow-visible rounded-[26px] bg-[#FFF0E9] text-[#E85053]"
             >
-              <Sparkles size={35} />
-            </motion.div>
+              <LunchmateCharacterRenderer
+                flowState="idle"
+                levelUpActive
+                size={80}
+                renderSize="compact"
+                alt="레벨업을 기뻐하며 점프하는 런치메이트"
+                loadout={loadout}
+                fallback={<Sparkles size={35} aria-hidden="true" />}
+              />
+            </div>
 
             <h2
               id="lunchmate-level-up-title"
@@ -103,19 +146,51 @@ export default function LunchmateLevelUpModal({
               <p className="mt-0.5 text-[20px] font-black text-[#31231D]">{event.levelName}</p>
             </div>
 
-            <div className="mt-4 flex items-center gap-3 rounded-2xl border border-[#F0D6C8] bg-[#FFF7F2] px-3.5 py-3 text-left">
-              <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-white text-[#D8774D] shadow-sm" aria-hidden="true">
-                <Gift size={19} />
-              </span>
-              <div className="min-w-0">
-                <p className="text-[9px] font-bold tracking-[0.02em] text-[#B07D65]">이번 레벨 보상</p>
-                <p className="mt-0.5 text-[13px] font-black text-[#49372E]">새로운 꾸미기 아이템</p>
-                <p className="mt-0.5 text-[10px] text-[#8F7C72]">옷장에서 확인할 수 있어요</p>
+            {rewardItem ? (
+              <div className="mt-4 flex items-center gap-3 rounded-2xl border border-[#F0D6C8] bg-[#FFF7F2] px-3 py-2.5 text-left">
+                <div className="flex h-[74px] w-[74px] shrink-0 items-center justify-center overflow-hidden rounded-2xl bg-white shadow-sm">
+                  <LunchmateCharacterRenderer
+                    flowState="idle"
+                    size={72}
+                    renderSize="compact"
+                    animated={false}
+                    alt={`${rewardItem.name}을 착용한 런치메이트`}
+                    loadout={createRewardPreviewLoadout(rewardItem)}
+                    fallback={<Gift size={22} className="text-[#D8774D]" aria-hidden="true" />}
+                  />
+                </div>
+                <div className="min-w-0 flex-1">
+                  <p className="text-[9px] font-bold tracking-[0.02em] text-[#B07D65]">이번 레벨 보상</p>
+                  <p className="mt-0.5 truncate text-[14px] font-black text-[#49372E]">
+                    {rewardItem.name}
+                  </p>
+                  <div className="mt-1.5 flex items-center gap-1.5">
+                    <span className="text-[10px] font-bold text-[#8F7C72]">
+                      {SLOT_LABELS[rewardItem.slot]}
+                    </span>
+                    <span className={`rounded-full px-2 py-0.5 text-[9px] font-black ${RARITY_STYLES[rewardItem.rarity]}`}>
+                      {RARITY_LABELS[rewardItem.rarity]}
+                    </span>
+                  </div>
+                  <p className="mt-1.5 text-[10px] text-[#8F7C72]">옷장에서 확인할 수 있어요</p>
+                </div>
               </div>
-            </div>
+            ) : (
+              <div className="mt-4 flex items-center gap-3 rounded-2xl border border-[#F0D6C8] bg-[#FFF7F2] px-3.5 py-3 text-left">
+                <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-white text-[#D8774D] shadow-sm" aria-hidden="true">
+                  <Gift size={19} />
+                </span>
+                <div className="min-w-0">
+                  <p className="text-[9px] font-bold tracking-[0.02em] text-[#B07D65]">이번 레벨 보상</p>
+                  <p className="mt-0.5 text-[13px] font-black text-[#49372E]">
+                    모든 꾸미기 아이템을 모았어요
+                  </p>
+                </div>
+              </div>
+            )}
 
             <p className="mt-2.5 text-[10px] leading-relaxed text-[#A99990]">
-              미리보기 결과이며 아직 저장되지 않아요.
+              현재 기기의 미리보기 보상으로 저장됐어요.
             </p>
             <button
               ref={confirmButtonRef}

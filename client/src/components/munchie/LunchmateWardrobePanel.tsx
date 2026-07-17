@@ -1,4 +1,4 @@
-import { useState, type KeyboardEvent } from 'react';
+import { useMemo, useState, type KeyboardEvent } from 'react';
 import {
   Backpack,
   Check,
@@ -17,7 +17,6 @@ import type {
   LunchmateSlot,
 } from '@/types/lunchmateCustomization';
 import {
-  PREVIEW_OWNED_ITEM_IDS,
   areLunchmateLoadoutsEqual,
   clearPreviewLoadout,
   createWardrobeCandidateLoadout,
@@ -28,6 +27,7 @@ import {
 interface LunchmateWardrobePanelProps {
   draftLoadout: LunchmateLoadout;
   appliedLoadout: LunchmateLoadout;
+  ownedItemIds: readonly string[];
   appliedNotice: boolean;
   onDraftChange: (loadout: LunchmateLoadout) => void;
   onApply: () => void;
@@ -87,6 +87,7 @@ function WardrobeItemCard({
           alt=""
           loadout={candidateLoadout}
           animated={false}
+          renderSize="compact"
         />
         {item === null && (
           <span className="absolute bottom-1 right-1 flex h-5 w-5 items-center justify-center rounded-full bg-white/90 text-[#A18C80] shadow-sm" aria-hidden="true">
@@ -118,11 +119,13 @@ function WardrobeItemCard({
 export default function LunchmateWardrobePanel({
   draftLoadout,
   appliedLoadout,
+  ownedItemIds,
   appliedNotice,
   onDraftChange,
   onApply,
 }: LunchmateWardrobePanelProps) {
   const [activeSlot, setActiveSlot] = useState<LunchmateSlot>('outfit');
+  const ownedItemIdSet = useMemo(() => new Set(ownedItemIds), [ownedItemIds]);
   const activeItemId = getWardrobeSlotItemId(draftLoadout, activeSlot);
   const hasChanges = !areLunchmateLoadoutsEqual(draftLoadout, appliedLoadout);
 
@@ -143,7 +146,7 @@ export default function LunchmateWardrobePanel({
         보유한 아이템을 조합해 런치메이트를 꾸며보세요.
       </p>
       <p className="mt-1 text-[9px] font-semibold text-[#B09A8E]">
-        아직 저장되지 않는 미리보기 기능이에요.
+        선택 중에는 미리보기이며 적용하기를 눌러 저장해요.
       </p>
 
       <div
@@ -187,10 +190,15 @@ export default function LunchmateWardrobePanel({
           draftLoadout={draftLoadout}
           selected={activeItemId === null}
           locked={false}
-          onSelect={() => onDraftChange(selectPreviewWardrobeItem(draftLoadout, activeSlot, null))}
+          onSelect={() => onDraftChange(selectPreviewWardrobeItem(
+            draftLoadout,
+            activeSlot,
+            null,
+            ownedItemIdSet,
+          ))}
         />
         {LUNCHMATE_ITEMS_BY_SLOT[activeSlot].map(item => {
-          const locked = !PREVIEW_OWNED_ITEM_IDS.has(item.id);
+          const locked = !ownedItemIdSet.has(item.id);
           return (
             <WardrobeItemCard
               key={item.id}
@@ -199,7 +207,12 @@ export default function LunchmateWardrobePanel({
               draftLoadout={draftLoadout}
               selected={activeItemId === item.id}
               locked={locked}
-              onSelect={() => onDraftChange(selectPreviewWardrobeItem(draftLoadout, activeSlot, item.id))}
+              onSelect={() => onDraftChange(selectPreviewWardrobeItem(
+                draftLoadout,
+                activeSlot,
+                item.id,
+                ownedItemIdSet,
+              ))}
             />
           );
         })}
@@ -224,10 +237,10 @@ export default function LunchmateWardrobePanel({
           </button>
         </div>
         <p className="mt-2 text-center text-[9px] leading-relaxed text-[#A18C80]">
-          미리보기 모드에서는 이 화면에만 적용돼요.
+          적용하기를 누른 조합만 프로필에 저장돼요.
         </p>
         <p className="min-h-4 text-center text-[9px] font-bold text-[#D45A55]" aria-live="polite">
-          {appliedNotice ? '미리보기에 적용했어요.' : ''}
+          {appliedNotice ? '프로필에 적용했어요.' : ''}
         </p>
       </div>
     </div>

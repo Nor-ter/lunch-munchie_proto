@@ -5,9 +5,15 @@ import { ChevronLeft, Gift } from 'lucide-react';
 import { useApp } from '@/contexts/AppContext';
 import LunchmateCharacterRenderer from '@/components/munchie/LunchmateCharacterRenderer';
 import LunchmateWardrobePanel from '@/components/munchie/LunchmateWardrobePanel';
-import { PREVIEW_INITIAL_LOADOUT } from '@/components/munchie/lunchmateWardrobeFixtures';
+import SkinPicker from '@/components/munchie/SkinPicker';
 import { getSkinById, MUNCHIE_SKINS } from '@/constants/skins';
 import type { LunchmateLoadout } from '@/types/lunchmateCustomization';
+import {
+  createLunchmateProfileLoadoutUpdate,
+  lunchmateLoadoutFromProfile,
+  normalizeLunchmateLoadout,
+  normalizeLunchmateOwnedItemIds,
+} from '@/utils/lunchmateProfile';
 import {
   getLunchmateProgressSnapshot,
   type LunchmateProgressSnapshot,
@@ -52,11 +58,16 @@ function isFoodieRoomNavigationState(value: unknown): value is FoodieRoomNavigat
 export default function FoodieRoomPage() {
   const [, navigate] = useLocation();
   const navigationState = useHistoryState<unknown>();
-  const { profile } = useApp();
+  const { profile, updateProfile } = useApp();
   const [activeTab, setActiveTab] = useState<FoodieRoomTab>('wardrobe');
-  const [draftLoadout, setDraftLoadout] = useState<LunchmateLoadout>(() => ({ ...PREVIEW_INITIAL_LOADOUT }));
-  const [appliedLoadout, setAppliedLoadout] = useState<LunchmateLoadout>(() => ({ ...PREVIEW_INITIAL_LOADOUT }));
+  const [draftLoadout, setDraftLoadout] = useState<LunchmateLoadout>(() => (
+    lunchmateLoadoutFromProfile(profile.lunchmateLoadout)
+  ));
+  const [appliedLoadout, setAppliedLoadout] = useState<LunchmateLoadout>(() => (
+    lunchmateLoadoutFromProfile(profile.lunchmateLoadout)
+  ));
   const [appliedNotice, setAppliedNotice] = useState(false);
+  const ownedItemIds = normalizeLunchmateOwnedItemIds(profile.lunchmateOwnedItemIds);
 
   const hasProfileSnapshot = isFoodieRoomNavigationState(navigationState);
   const progressSnapshot = hasProfileSnapshot
@@ -88,8 +99,14 @@ export default function FoodieRoomPage() {
   };
 
   const handleApplyLoadout = () => {
-    setAppliedLoadout({ ...draftLoadout });
+    const nextAppliedLoadout = normalizeLunchmateLoadout(draftLoadout);
+    updateProfile(createLunchmateProfileLoadoutUpdate(nextAppliedLoadout));
+    setAppliedLoadout(nextAppliedLoadout);
     setAppliedNotice(true);
+  };
+
+  const handleSkinChange = (skinId: string) => {
+    updateProfile({ foodieSkin: skinId });
   };
 
   return (
@@ -146,8 +163,9 @@ export default function FoodieRoomPage() {
 
           <div className="absolute inset-x-0 bottom-12 z-10 flex justify-center">
             <LunchmateCharacterRenderer
-              flowState="idle"
+              flowState="selectingFood"
               size={136}
+              renderSize="room"
               alt="런치메이트룸에 서 있는 런치메이트"
               fallback={<span className="text-[76px] leading-none">{profile.foodieChar ?? '🍙'}</span>}
               loadout={draftLoadout}
@@ -205,6 +223,7 @@ export default function FoodieRoomPage() {
             <LunchmateWardrobePanel
               draftLoadout={draftLoadout}
               appliedLoadout={appliedLoadout}
+              ownedItemIds={ownedItemIds}
               appliedNotice={appliedNotice}
               onDraftChange={handleDraftChange}
               onApply={handleApplyLoadout}
@@ -214,18 +233,15 @@ export default function FoodieRoomPage() {
           {activeTab === 'room' && (
             <div>
               <h2 className="text-[16px] font-black">방 꾸미기</h2>
-              <p className="mt-1 text-[11px] leading-relaxed text-[#927E73]">방 꾸미기 기능을 준비하고 있어요.</p>
-              <div className="mt-4 flex items-center gap-3 rounded-2xl border border-[#F0E2DA] bg-[#FFF9F6] p-3">
-                <div className="h-16 w-20 shrink-0 rounded-xl p-1.5" style={{ background: skin.frame, boxShadow: skin.frameShadow }}>
-                  <div className="flex h-full items-center justify-center rounded-lg" style={{ background: skin.paper }}>
-                    <span className="text-[23px]" aria-hidden="true">{skin.emoji}</span>
-                  </div>
-                </div>
-                <div className="min-w-0">
-                  <p className="text-[9px] font-bold text-[#AA8C7C]">현재 방 스킨</p>
-                  <p className="mt-0.5 truncate text-[14px] font-black text-[#49372E]">{skin.name}</p>
-                  <span className="mt-1 inline-flex rounded-full bg-[#F4E9E2] px-2 py-0.5 text-[8px] font-bold text-[#937A6C]">준비 중</span>
-                </div>
+              <p className="mt-1 text-[11px] leading-relaxed text-[#927E73]">
+                선택한 방 스킨은 프로필과 런치메이트룸에 바로 적용돼요.
+              </p>
+              <div className="mt-4">
+                <SkinPicker
+                  value={profile.foodieSkin ?? 'pink-picnic'}
+                  onChange={handleSkinChange}
+                  columns={3}
+                />
               </div>
             </div>
           )}

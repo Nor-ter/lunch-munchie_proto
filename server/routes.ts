@@ -1,5 +1,9 @@
-import { Router } from "express";
+import { Router, type Request, type Response } from "express";
 import { db, tryDb, withDb } from "./db.js";
+import {
+  verifySupabaseRequestAuth,
+  type SupabaseRequestAuthVerifier,
+} from "./auth/supabaseAuth.js";
 import { users, sessions, restaurants, swipes, courses, courseItems, sessionMembers } from "../shared/schema.js";
 import { eq, and, inArray } from "drizzle-orm";
 import { nanoid } from "nanoid";
@@ -20,6 +24,56 @@ import type { DietTag } from "../shared/const.js";
 import { intentForCategory, intentForHour } from "../shared/intent.js";
 
 const router = Router();
+
+interface EventsRouteDependencies {
+  verifyAuth: SupabaseRequestAuthVerifier;
+  persistEvents: (events: RecEventInput[]) => Promise<unknown>;
+}
+
+type CompatibleRequestIdentity =
+  | {
+      status: "ready";
+      userId: string | null | undefined;
+    }
+  | {
+      status: "responded";
+    };
+
+async function resolveCompatibleRequestIdentity(
+  req: Request,
+  res: Response,
+  fallbackUserId: string | null | undefined,
+  verifyAuth: SupabaseRequestAuthVerifier,
+): Promise<CompatibleRequestIdentity> {
+  let authResult;
+  try {
+    authResult = await verifyAuth(req.get("authorization"));
+  } catch {
+    res.status(401).json({ error: "invalid_authorization" });
+    return { status: "responded" };
+  }
+
+  if (
+    authResult.status === "malformed_authorization" ||
+    authResult.status === "invalid_token"
+  ) {
+    res.status(401).json({ error: "invalid_authorization" });
+    return { status: "responded" };
+  }
+
+  if (authResult.status === "unconfigured") {
+    res.status(503).json({ error: "auth_unavailable" });
+    return { status: "responded" };
+  }
+
+  return {
+    status: "ready",
+    userId:
+      authResult.status === "authenticated"
+        ? authResult.userId
+        : fallbackUserId,
+  };
+}
 
 // 공유 이미지 캡처용 동일 출처 프록시. 앱에서 사용하는 HTTPS 이미지 호스트만 허용한다.
 router.get("/image-proxy", async (req, res) => {
@@ -658,54 +712,116 @@ function requiredHardDiets(diet?: string[]): DietTag[] {
 }
 
 // 이벤트 수집: 단건 또는 { events: [...] } 배치 모두 허용.
-router.post("/events", async (req, res) => {
-  const body = req.body ?? {};
-  const events: RecEventInput[] = Array.isArray(body.events)
-    ? body.events
-    : body.event_type
-      ? [body]
-      : [];
-  if (!events.length) return res.status(400).json({ error: "no events" });
-  // v1 온라인 학습: 스와이프(암묵 라벨)마다 취향 벡터 theta_u를 즉시 SGD 갱신.
-  // v2 satiation: WINNER(=소비 프록시)로 (user,카테고리,시각) 소비 이력 누적.
-  for (const e of events) {
-    if (!e.user_id || !e.restaurant_id) continue;
-    const feat = getItemFeatures(String(e.restaurant_id));
-    if (!feat) continue;
-    const uid = String(e.user_id);
-    const vec = buildItemVector(feat);
-    if (e.event_type === "SWIPE" && (e.action === "LIKE" || e.action === "NOPE")) {
-      updateTaste(uid, vec, e.action === "LIKE" ? 1 : 0); // 스와이프=약한 라벨 (둘 다 별로의 FINAL NOPE도 여기)
-    } else if (e.event_type === "SWIPE" && e.action === "CHOOSE") {
-      // 듀얼 A>B = 최고급 pairwise 신호 (결정 플로우 ⑤). opponent로 패자 파생해 pairwise 학습.
-      // 신뢰도 가중: 빠르고 단호할수록 강하게(decision_ms).
-      const c = e.context as { opponent_id?: string; decision_ms?: number } | null | undefined;
-      const oppFeat = c?.opponent_id ? getItemFeatures(String(c.opponent_id)) : undefined;
-      if (oppFeat) updatePairwise(uid, vec, buildItemVector(oppFeat), pairwiseWeight(c?.decision_ms));
-    } else if (e.event_type === "WINNER" && feat.category) {
-      updateTaste(uid, vec, 1, 2); // v4: 우승=강한 긍정(직접 선택)
-      const ctx = e.context as { consumed_at?: number } | null | undefined;
-      const ts = typeof ctx?.consumed_at === "number" ? ctx.consumed_at : Date.now();
-      recordConsumption(uid, feat.category, ts); // v2 satiation
-      recordStop(uid, feat.category, ts);        // v2 음식 연쇄
-    } else if (e.event_type === "COURSE_SAVE") {
-      updateTaste(uid, vec, 1, 3); // v4: 저장=가장 강한 명시 신호
+export function createEventsHandler(
+  dependencies: EventsRouteDependencies = {
+    verifyAuth: verifySupabaseRequestAuth,
+    persistEvents: recordEvents,
+  },
+) {
+  return async (req: Request, res: Response) => {
+    const body = req.body ?? {};
+    const requestedEvents: RecEventInput[] = Array.isArray(body.events)
+      ? body.events
+      : body.event_type
+        ? [body]
+        : [];
+    if (!requestedEvents.length) {
+      return res.status(400).json({ error: "no events" });
     }
-  }
-  const result = await recordEvents(events);
-  res.status(201).json(result);
-});
+
+    let authResult;
+    try {
+      authResult = await dependencies.verifyAuth(req.get("authorization"));
+    } catch {
+      return res.status(401).json({ error: "invalid_authorization" });
+    }
+
+    if (
+      authResult.status === "malformed_authorization" ||
+      authResult.status === "invalid_token"
+    ) {
+      return res.status(401).json({ error: "invalid_authorization" });
+    }
+
+    if (authResult.status === "unconfigured") {
+      return res.status(503).json({ error: "auth_unavailable" });
+    }
+
+    const events: RecEventInput[] =
+      authResult.status === "authenticated"
+        ? requestedEvents.map((event) => ({
+            ...event,
+            user_id: authResult.userId,
+          }))
+        : requestedEvents;
+
+    // v1 온라인 학습: 스와이프(암묵 라벨)마다 취향 벡터 theta_u를 즉시 SGD 갱신.
+    // v2 satiation: WINNER(=소비 프록시)로 (user,카테고리,시각) 소비 이력 누적.
+    for (const e of events) {
+      if (!e.user_id || !e.restaurant_id) continue;
+      const feat = getItemFeatures(String(e.restaurant_id));
+      if (!feat) continue;
+      const uid = String(e.user_id);
+      const vec = buildItemVector(feat);
+      if (e.event_type === "SWIPE" && (e.action === "LIKE" || e.action === "NOPE")) {
+        updateTaste(uid, vec, e.action === "LIKE" ? 1 : 0); // 스와이프=약한 라벨 (둘 다 별로의 FINAL NOPE도 여기)
+      } else if (e.event_type === "SWIPE" && e.action === "CHOOSE") {
+        // 듀얼 A>B = 최고급 pairwise 신호 (결정 플로우 ⑤). opponent로 패자 파생해 pairwise 학습.
+        // 신뢰도 가중: 빠르고 단호할수록 강하게(decision_ms).
+        const c = e.context as { opponent_id?: string; decision_ms?: number } | null | undefined;
+        const oppFeat = c?.opponent_id ? getItemFeatures(String(c.opponent_id)) : undefined;
+        if (oppFeat) updatePairwise(uid, vec, buildItemVector(oppFeat), pairwiseWeight(c?.decision_ms));
+      } else if (e.event_type === "WINNER" && feat.category) {
+        updateTaste(uid, vec, 1, 2); // v4: 우승=강한 긍정(직접 선택)
+        const ctx = e.context as { consumed_at?: number } | null | undefined;
+        const ts = typeof ctx?.consumed_at === "number" ? ctx.consumed_at : Date.now();
+        recordConsumption(uid, feat.category, ts); // v2 satiation
+        recordStop(uid, feat.category, ts);        // v2 음식 연쇄
+      } else if (e.event_type === "COURSE_SAVE") {
+        updateTaste(uid, vec, 1, 3); // v4: 저장=가장 강한 명시 신호
+      }
+    }
+    const result = await dependencies.persistEvents(events);
+    res.status(201).json(result);
+  };
+}
+
+router.post("/events", createEventsHandler());
 
 // 추천 슬레이트 + propensity 로깅. v0 휴리스틱 스코어러.
-router.post("/recommend", async (req, res) => {
+interface RecommendRouteDependencies {
+  verifyAuth: SupabaseRequestAuthVerifier;
+  enrichRequestContext: (context: RecContext) => Promise<RecContext>;
+  loadCandidates: () => Promise<Candidate[]>;
+  persistEvents: (events: RecEventInput[]) => Promise<unknown>;
+}
+
+export function createRecommendHandler(
+  dependencies: RecommendRouteDependencies = {
+    verifyAuth: verifySupabaseRequestAuth,
+    enrichRequestContext: enrichContext,
+    loadCandidates: candidatePool,
+    persistEvents: recordEvents,
+  },
+) {
+  return async (req: Request, res: Response) => {
   const body = req.body ?? {};
+  const identity = await resolveCompatibleRequestIdentity(
+    req,
+    res,
+    body.user_id,
+    dependencies.verifyAuth,
+  );
+  if (identity.status === "responded") return;
+  const userId = identity.userId;
+
   // 맥락 보강(Phase 0b): 클라가 안 보낸 파생 가능 필드(시간대·요일·도시·날씨)를 서버에서 채움.
   // 스코어링·IMPRESSION 로깅 모두 보강된 맥락을 쓴다.
-  const ctx: RecContext = await enrichContext(body.context ?? {});
+  const ctx: RecContext = await dependencies.enrichRequestContext(body.context ?? {});
   const k = typeof body.k === "number" ? body.k : 7;
   // 진짜 A/B: 서버가 user_id로 결정적 배정 (body.variant는 테스트 오버라이드용).
-  const variant: string = body.variant ?? assignVariant(body.user_id);
-  const pool = await candidatePool();
+  const variant: string = body.variant ?? assignVariant(userId);
+  const pool = await dependencies.loadCandidates();
   recordCatalogSize(pool.length); // 커버리지 분모(전체 카탈로그 크기) 추적
   recordItemFeatures(pool.map((c) => ({ id: c.id, category: c.category, price_level: c.price_level, rating: c.rating }))); // feature 효과 분석용
   // 클라이언트가 사전 필터(카테고리 등)한 후보만 점수화하도록 범위 제한 (선택)
@@ -736,7 +852,7 @@ router.post("/recommend", async (req, res) => {
   // 그룹 합의: member_ids 있으면 멤버 취향을 least-misery로 합성. 없으면 단일 유저.
   const memberIds: string[] = Array.isArray(body.member_ids) && body.member_ids.length
     ? body.member_ids.map(String)
-    : (body.user_id ? [String(body.user_id)] : []);
+    : (userId ? [String(userId)] : []);
   const memberThetas: number[][] = [];
   for (const uid of memberIds) {
     const t = getTaste(uid);
@@ -750,13 +866,13 @@ router.post("/recommend", async (req, res) => {
     for (const th of memberThetas) m = Math.min(m, tasteFitFromTheta(th, x));
     return m;
   };
-  const prev = prevStop(body.user_id, now); // 같은 occasion 직전 스톱 (있으면 다음-스톱 가산)
+  const prev = prevStop(userId, now); // 같은 occasion 직전 스톱 (있으면 다음-스톱 가산)
   const slate = variant === "control"
     ? buildControlSlate(filtered, ctx, { k })
     : buildSlate(filtered, ctx, {
         k, eps: 0.05, tasteFit, // 탐색=Thompson, 그룹=least-misery
-        exposurePenalty: (id) => exposurePenalty(body.user_id, id, now),
-        satiation: (cat) => satiationScore(body.user_id, cat, now),
+        exposurePenalty: (id) => exposurePenalty(userId, id, now),
+        satiation: (cat) => satiationScore(userId, cat, now),
         chainFit: (cat) => chainFitFn(prev, cat),
       });
   // arm·합성 방식별 model_version
@@ -767,12 +883,12 @@ router.post("/recommend", async (req, res) => {
   const slate_type = (body.slate_type as "PRELIM" | "FINAL" | "NEXT_STOP" | "COURSE_FEED") ?? "PRELIM";
 
   // 노출(IMPRESSION) 이벤트를 slate_id·propensity와 함께 기록 → off-policy 평가 기반
-  await recordEvents(
+  await dependencies.persistEvents(
     slate.map((s) => ({
       event_type: "IMPRESSION" as const,
       slate_id,
       slate_type,
-      user_id: body.user_id ?? null,
+      user_id: userId ?? null,
       session_id: body.session_id ?? null,
       group_id: body.session_id ?? null,
       restaurant_id: s.id,
@@ -785,23 +901,49 @@ router.post("/recommend", async (req, res) => {
     }))
   );
   // 실제 보여준 카드만 노출 누적 (다음 추천의 단기 피로 패널티에 반영)
-  for (const s of slate) recordExposure(body.user_id, s.id, now);
+  for (const s of slate) recordExposure(userId, s.id, now);
 
   res.json({ slate, slate_id, slate_type, model_version: mv, variant, diet_relaxed, intent_relaxed });
-});
+  };
+}
+
+router.post("/recommend", createRecommendHandler());
 
 // 하루 여정: 오늘의 스톱 타임라인 + (사슬 열림 시) 다음-스톱 제안.
-  router.get("/journey/today", async (req, res) => {
-  const userId = String(req.query.userId ?? "");
+interface JourneyTodayRouteDependencies {
+  verifyAuth: SupabaseRequestAuthVerifier;
+  loadTodayStops: typeof todayStops;
+  loadRestaurantNames: typeof restaurantNames;
+  loadCandidates: typeof candidatePool;
+}
+
+export function createJourneyTodayHandler(
+  dependencies: JourneyTodayRouteDependencies = {
+    verifyAuth: verifySupabaseRequestAuth,
+    loadTodayStops: todayStops,
+    loadRestaurantNames: restaurantNames,
+    loadCandidates: candidatePool,
+  },
+) {
+  return async (req: Request, res: Response) => {
+  const fallbackUserId = String(req.query.userId ?? "");
+  const identity = await resolveCompatibleRequestIdentity(
+    req,
+    res,
+    fallbackUserId,
+    dependencies.verifyAuth,
+  );
+  if (identity.status === "responded") return;
+  const userId = String(identity.userId ?? "");
   if (!userId) return res.json({ stops: [], nextSuggestion: null });
   const now = Date.now();
-  const stopsRaw = await todayStops(userId, now);
-  const nameMap = await restaurantNames(stopsRaw.map((s) => s.restaurant_id));
+  const stopsRaw = await dependencies.loadTodayStops(userId, now);
+  const nameMap = await dependencies.loadRestaurantNames(stopsRaw.map((s) => s.restaurant_id));
   const stops = stopsRaw.map((s) => ({ ...s, name: nameMap.get(s.restaurant_id) ?? s.restaurant_id }));
   let nextSuggestion: { intent: string; restaurant: { id: string; name: string; category?: string }; reason: string } | null = null;
   const prev = prevStop(userId, now); // 6h occasion 윈도우 내 직전 카테고리 (없으면 null = 사슬 닫힘)
   if (prev) {
-    const pool = await candidatePool();
+    const pool = await dependencies.loadCandidates();
     // 직전 카테고리 다음에 가장 잘 오는 카테고리 (chainFit 최대) → 인텐트
     const cats = Array.from(new Set(pool.map((c) => c.category).filter(Boolean) as string[]));
     let bestCat: string | null = null, bestP = 0;
@@ -816,21 +958,46 @@ router.post("/recommend", async (req, res) => {
       .filter((c) => intentForCategory(c.category) === intent && !visited.has(c.id))
       .sort((a, b) => (b.rating ?? 0) - (a.rating ?? 0))[0];
     if (pick) {
-      const pickName = (await restaurantNames([pick.id])).get(pick.id) ?? pick.id;
+      const pickName = (await dependencies.loadRestaurantNames([pick.id])).get(pick.id) ?? pick.id;
       nextSuggestion = { intent, restaurant: { id: pick.id, name: pickName, category: pick.category }, reason: `${prev} 다음` };
     }
   }
     res.json({ stops, nextSuggestion });
-  });
+  };
+}
 
-  // 전구 알림에서 언제든 확인하는 최근 여정 히스토리 (최신순, 최대 5개).
-  router.get("/journey/history", async (req, res) => {
-    const userId = String(req.query.userId ?? "");
+router.get("/journey/today", createJourneyTodayHandler());
+
+// 전구 알림에서 언제든 확인하는 최근 여정 히스토리 (최신순, 최대 5개).
+interface JourneyHistoryRouteDependencies {
+  verifyAuth: SupabaseRequestAuthVerifier;
+  loadRecentStops: typeof recentStops;
+}
+
+export function createJourneyHistoryHandler(
+  dependencies: JourneyHistoryRouteDependencies = {
+    verifyAuth: verifySupabaseRequestAuth,
+    loadRecentStops: recentStops,
+  },
+) {
+  return async (req: Request, res: Response) => {
+    const fallbackUserId = String(req.query.userId ?? "");
+    const identity = await resolveCompatibleRequestIdentity(
+      req,
+      res,
+      fallbackUserId,
+      dependencies.verifyAuth,
+    );
+    if (identity.status === "responded") return;
+    const userId = String(identity.userId ?? "");
     if (!userId) return res.json({ stops: [] });
     const requested = Number(req.query.limit ?? 5);
     const limit = Number.isFinite(requested) ? Math.max(1, Math.min(Math.floor(requested), 5)) : 5;
-    res.json({ stops: await recentStops(userId, limit) });
-  });
+    res.json({ stops: await dependencies.loadRecentStops(userId, limit) });
+  };
+}
+
+router.get("/journey/history", createJourneyHistoryHandler());
 
 // 디버그: 인메모리 버퍼에 쌓인 이벤트 수 (DB 폴백 동작 확인용)
 router.get("/events/_debug", (_req, res) => {

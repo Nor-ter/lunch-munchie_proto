@@ -254,6 +254,13 @@ export const LUNCHMATE_ITEMS_BY_SLOT = {
   bag: LUNCHMATE_ITEMS.filter(item => item.slot === 'bag'),
 } satisfies Readonly<Record<LunchmateSlot, readonly LunchmateLayerItem[]>>;
 
+export const LUNCHMATE_STARTER_ITEM_IDS = [
+  'outfit_hoodie_coral',
+  'headwear_beret_coral',
+  'eyewear_round_black',
+  'bag_backpack_green',
+] as const;
+
 export const EMPTY_LUNCHMATE_LOADOUT: Readonly<LunchmateLoadout> = Object.freeze({
   outfitId: null,
   headwearId: null,

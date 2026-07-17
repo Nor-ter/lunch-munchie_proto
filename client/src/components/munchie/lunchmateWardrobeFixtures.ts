@@ -5,13 +5,6 @@ import {
 } from '../../constants/lunchmateItems';
 import type { LunchmateLoadout, LunchmateSlot } from '../../types/lunchmateCustomization';
 
-export const PREVIEW_OWNED_ITEM_IDS: ReadonlySet<string> = new Set([
-  'outfit_hoodie_coral',
-  'headwear_beret_coral',
-  'eyewear_round_black',
-  'bag_backpack_green',
-]);
-
 export const PREVIEW_INITIAL_LOADOUT: Readonly<LunchmateLoadout> = Object.freeze({
   ...LAYER_PREVIEW_LOADOUT,
 });
@@ -50,8 +43,9 @@ export function selectPreviewWardrobeItem(
   loadout: LunchmateLoadout,
   slot: LunchmateSlot,
   itemId: string | null,
+  ownedItemIds: ReadonlySet<string>,
 ): LunchmateLoadout {
-  if (itemId !== null && !PREVIEW_OWNED_ITEM_IDS.has(itemId)) return loadout;
+  if (itemId !== null && !ownedItemIds.has(itemId)) return loadout;
   return createWardrobeCandidateLoadout(loadout, slot, itemId);
 }
 

@@ -14,6 +14,14 @@ export interface LunchmateLoadout {
   bagId: string | null;
 }
 
+/** lm_profile에 저장하는 장착 상태. 보유 목록이나 잠금 상태는 포함하지 않는다. */
+export interface LunchmateProfileLoadout {
+  outfit: string | null;
+  headwear: string | null;
+  eyewear: string | null;
+  bag: string | null;
+}
+
 export interface LunchmateLayerPart {
   default: LunchmateAssetSource;
   stateOverrides?: Partial<Record<LunchmateStateAssetKey, LunchmateAssetSource>>;
