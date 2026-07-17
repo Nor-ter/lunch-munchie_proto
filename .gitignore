@@ -24,3 +24,6 @@ env.enc
 
 # Apple Sign In AuthKey (login-workflow.md §5.2) — never commit
 *.p8
+
+.artifacts/
+test-results/
