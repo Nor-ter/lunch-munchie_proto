@@ -2,7 +2,13 @@ import { motion } from "framer-motion";
 import { useLocation } from "wouter";
 import { useState, useEffect } from "react";
 import { ArrowRight, MapPin, Clock, Star } from "lucide-react";
-import { useApp, Course, isFeedCommentHidden } from "@/contexts/AppContext";
+import {
+  useApp,
+  Course,
+  isFeedCommentHidden,
+  resolveApiRequestAuth,
+  type ApiRequestAuth,
+} from "@/contexts/AppContext";
 import { getCourseSequenceColor } from "@/constants/courseTheme";
 import { MUNCHIE_SKINS } from "@/constants/skins";
 import { getCreatorName } from "@/constants/creators";
@@ -19,6 +25,47 @@ type JourneyStop = {
   at: number;
   satisfaction: "POS" | "NEU" | "NEG" | null;
 };
+
+interface JourneyRequestDependencies {
+  resolveRequestAuth?: () => Promise<ApiRequestAuth>;
+  request?: typeof fetch;
+}
+
+export async function fetchTodayJourney(
+  userId: string,
+  dependencies: JourneyRequestDependencies = {},
+): Promise<JourneyStop[]> {
+  try {
+    const auth = await (
+      dependencies.resolveRequestAuth ?? resolveApiRequestAuth
+    )();
+    if (auth.status === "blocked") {
+      return [];
+    }
+
+    const request = dependencies.request ?? fetch;
+    const requestInit: RequestInit | undefined =
+      auth.status === "authenticated"
+        ? {
+            headers: {
+              Authorization: `Bearer ${auth.accessToken}`,
+            },
+          }
+        : undefined;
+    const response = await request(
+      `/api/journey/today?userId=${encodeURIComponent(userId)}`,
+      requestInit,
+    );
+    if (!response.ok) {
+      return [];
+    }
+
+    const data = await response.json();
+    return data.stops ?? [];
+  } catch {
+    return [];
+  }
+}
 
 const INTENT_LABEL: Record<string, string> = { meal: "밥", cafe: "음료", dessert: "디저트" };
 const INTENT_ICON: Record<string, string> = { meal: "🍚", cafe: "☕", dessert: "🍰" };
@@ -77,9 +124,8 @@ function JourneyCard() {
 
   useEffect(() => {
     let active = true;
-    fetch(`/api/journey/today?userId=${encodeURIComponent(profile.id)}`)
-      .then(response => response.json())
-      .then(data => { if (active) setStops(data.stops ?? []); })
+    fetchTodayJourney(profile.id)
+      .then(data => { if (active) setStops(data); })
       .catch(() => { if (active) setStops([]); });
     return () => { active = false; };
   }, [profile.id]);

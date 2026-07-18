@@ -12,14 +12,46 @@
  */
 import { createClient, type Session } from '@supabase/supabase-js';
 
-const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
-const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY;
+const supabaseUrl = import.meta.env.VITE_SUPABASE_URL?.trim();
+const supabasePublishableKey = (
+  import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY
+  || import.meta.env.VITE_SUPABASE_ANON_KEY
+)?.trim();
 
-if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
-  throw new Error('VITE_SUPABASE_URL / VITE_SUPABASE_ANON_KEY 가 .env 에 설정되지 않았습니다.');
+function requireSupabaseEnvironmentVariable(
+  value: string | undefined,
+  variableName: 'VITE_SUPABASE_URL' | 'VITE_SUPABASE_PUBLISHABLE_KEY',
+): string {
+  if (!value) {
+    throw new Error(`[Supabase] Missing required environment variable: ${variableName}`);
+  }
+  return value;
 }
 
-export const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+function requireValidSupabaseUrl(value: string): string {
+  try {
+    const url = new URL(value);
+    if (url.protocol !== 'https:' && url.protocol !== 'http:') {
+      throw new Error('Unsupported protocol');
+    }
+    return url.toString().replace(/\/$/, '');
+  } catch {
+    throw new Error('[Supabase] VITE_SUPABASE_URL must be a valid HTTP(S) URL');
+  }
+}
+
+const validatedSupabaseUrl = requireValidSupabaseUrl(
+  requireSupabaseEnvironmentVariable(supabaseUrl, 'VITE_SUPABASE_URL'),
+);
+const validatedSupabasePublishableKey = requireSupabaseEnvironmentVariable(
+  supabasePublishableKey,
+  'VITE_SUPABASE_PUBLISHABLE_KEY',
+);
+
+export const supabase = createClient(
+  validatedSupabaseUrl,
+  validatedSupabasePublishableKey,
+);
 
 /**
  * 앱 부팅 시 호출: 세션이 없으면 익명 로그인해 auth.uid() 를 확보한다.

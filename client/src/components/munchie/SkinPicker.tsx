@@ -13,7 +13,7 @@ function SkinCell({
   onSelect: () => void;
 }) {
   return (
-    <button onClick={onSelect} className="text-left active:scale-95 transition-transform">
+    <button type="button" onClick={onSelect} className="text-left active:scale-95 transition-transform">
       <div
         className="relative rounded-2xl p-[7px]"
         style={{
