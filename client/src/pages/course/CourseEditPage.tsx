@@ -21,7 +21,7 @@ import {
 } from '@dnd-kit/sortable';
 import { KeyboardSensor } from '@dnd-kit/core';
 import { CSS } from '@dnd-kit/utilities';
-import { CourseMap } from '@/components/course/CourseMap';
+import { CourseMapView } from '@/components/course/CourseMapView';
 import { MOCK_COURSE } from '@/data/mockCourse';
 import { CoursePlace } from '@/types/course';
 import { getCourseSequenceColor } from '@/constants/courseTheme';
@@ -30,6 +30,9 @@ import { getSkinById } from '@/constants/skins';
 import SkinFrame from '@/components/munchie/SkinFrame';
 import RestaurantDetailSheet from '@/components/munchie/RestaurantDetailSheet';
 import { fileToResizedDataUrl } from '@/lib/imageUtils';
+import { usePlacesSearch } from '@/hooks/usePlacesSearch';
+import { getPlaceDetails } from '@/services/placesApi';
+import { mapGoogleRestaurant } from '@/lib/googlePlaces';
 
 const MAX_PLACES = 4;
 
@@ -54,6 +57,9 @@ function restaurantToPlace(r: Restaurant): CoursePlace {
     priceLevel: r.priceRange,
     imageUrl: r.image,
     coords: { x: 50, y: 50 },
+    latitude: r.lat,
+    longitude: r.lng,
+    address: r.address,
   };
 }
 
@@ -63,14 +69,43 @@ function RestaurantPickerSheet({
   addedIds,
   onPick,
   onClose,
+  bias,
 }: {
   addedIds: string[];
   onPick: (r: Restaurant) => void;
   onClose: () => void;
+  /** 이미 담긴 첫 장소 근처로 Google 검색 결과를 편향(모바일 AddRestaurantSheet와 동일 전략) */
+  bias?: { lat: number; lng: number };
 }) {
-  const { restaurants } = useApp();
-  const [query, setQuery] = useState('');
+  const { restaurants, registerRestaurants } = useApp();
+  const [detailsLoadingId, setDetailsLoadingId] = useState<string | null>(null);
+  const {
+    input: query,
+    setInput: setQuery,
+    sessionToken,
+    suggestions,
+    isLoading: isGoogleLoading,
+    isError: isGoogleError,
+    endSession,
+  } = usePlacesSearch(bias);
+
   const filtered = restaurants.filter((r) => r.name.toLowerCase().includes(query.trim().toLowerCase()));
+
+  const handlePickGoogle = async (placeId: string) => {
+    if (detailsLoadingId) return;
+    setDetailsLoadingId(placeId);
+    try {
+      const row = await getPlaceDetails(placeId, sessionToken);
+      const restaurant = mapGoogleRestaurant(row);
+      registerRestaurants([restaurant]);
+      onPick(restaurant);
+      endSession();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : '식당 정보를 가져오지 못했어요');
+    } finally {
+      setDetailsLoadingId(null);
+    }
+  };
 
   return (
     <>
@@ -95,39 +130,81 @@ function RestaurantPickerSheet({
           <input
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            placeholder="식당 이름으로 검색"
+            placeholder="식당 이름으로 검색 (Google)"
             className="flex-1 bg-transparent outline-none text-sm"
           />
         </div>
-        <div className="flex-1 overflow-y-auto space-y-2">
-          {filtered.map((r) => {
-            const added = addedIds.includes(r.id);
-            return (
-              <button
-                key={r.id}
-                onClick={() => !added && onPick(r)}
-                disabled={added}
-                className={`w-full flex items-center gap-3 rounded-xl border p-2.5 text-left transition-all ${
-                  added ? 'border-gray-100 opacity-50' : 'border-gray-100 active:scale-[0.98]'
-                }`}
-              >
-                <img src={r.image} alt="" className="w-12 h-12 rounded-lg object-cover shrink-0" />
-                <div className="min-w-0 flex-1">
-                  <p className="text-sm font-medium truncate">{r.name}</p>
-                  <p className="text-xs text-gray-400">{r.category} · {r.distance}</p>
-                </div>
-                <span
-                  className="w-6 h-6 rounded-full flex items-center justify-center shrink-0"
-                  style={{ background: added ? '#EAF7EC' : '#F5F5F5' }}
-                >
-                  {added ? <Check size={13} className="text-[#2E9E42]" /> : <Plus size={13} className="text-gray-400" />}
-                </span>
-              </button>
-            );
-          })}
-          {filtered.length === 0 && (
-            <p className="text-center text-sm text-gray-400 py-8">검색 결과가 없어요</p>
+        <div className="flex-1 overflow-y-auto space-y-4">
+          {query.trim().length >= 2 && (
+            <div>
+              <p className="mb-1.5 text-[11px] font-semibold text-gray-400">Google 검색 결과</p>
+              {isGoogleLoading && <p className="py-3 text-center text-xs text-gray-400">검색 중…</p>}
+              {isGoogleError && <p className="py-3 text-center text-xs text-red-500">검색에 실패했어요</p>}
+              {!isGoogleLoading && !isGoogleError && suggestions.length === 0 && (
+                <p className="py-3 text-center text-xs text-gray-400">일치하는 장소가 없어요</p>
+              )}
+              <div className="space-y-2">
+                {suggestions.map((s) => {
+                  const added = addedIds.includes(s.placeId);
+                  return (
+                    <button
+                      key={s.placeId}
+                      onClick={() => !added && handlePickGoogle(s.placeId)}
+                      disabled={added || !!detailsLoadingId}
+                      className={`w-full flex items-center gap-3 rounded-xl border p-2.5 text-left transition-all ${
+                        added ? 'border-gray-100 opacity-50' : 'border-gray-100 active:scale-[0.98] disabled:opacity-50'
+                      }`}
+                    >
+                      <MapPin size={16} className="shrink-0 text-[#EB5053]" />
+                      <span className="min-w-0 flex-1 truncate text-sm">{s.text}</span>
+                      <span
+                        className="w-6 h-6 rounded-full flex items-center justify-center shrink-0"
+                        style={{ background: added ? '#EAF7EC' : '#F5F5F5' }}
+                      >
+                        {added ? <Check size={13} className="text-[#2E9E42]" /> : <Plus size={13} className="text-gray-400" />}
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
           )}
+
+          <div>
+            {query.trim().length >= 2 && (
+              <p className="mb-1.5 text-[11px] font-semibold text-gray-400">저장된 식당</p>
+            )}
+            <div className="space-y-2">
+              {filtered.map((r) => {
+                const added = addedIds.includes(r.id);
+                return (
+                  <button
+                    key={r.id}
+                    onClick={() => !added && onPick(r)}
+                    disabled={added}
+                    className={`w-full flex items-center gap-3 rounded-xl border p-2.5 text-left transition-all ${
+                      added ? 'border-gray-100 opacity-50' : 'border-gray-100 active:scale-[0.98]'
+                    }`}
+                  >
+                    <img src={r.image} alt="" className="w-12 h-12 rounded-lg object-cover shrink-0" />
+                    <div className="min-w-0 flex-1">
+                      <p className="text-sm font-medium truncate">{r.name}</p>
+                      <p className="text-xs text-gray-400 truncate">{r.category} · {r.address}</p>
+                    </div>
+                    <span
+                      className="w-6 h-6 rounded-full flex items-center justify-center shrink-0"
+                      style={{ background: added ? '#EAF7EC' : '#F5F5F5' }}
+                    >
+                      {added ? <Check size={13} className="text-[#2E9E42]" /> : <Plus size={13} className="text-gray-400" />}
+                    </span>
+                  </button>
+                );
+              })}
+              {filtered.length === 0 && query.trim().length < 2 && (
+                <p className="text-center text-sm text-gray-400 py-8">식당 이름을 검색해보세요</p>
+              )}
+            </div>
+          </div>
         </div>
       </motion.div>
     </>
@@ -227,6 +304,9 @@ function SortableItem({
           <span className="text-xs text-gray-400">
             {place.distance} · {'₩'.repeat(place.priceLevel)}
           </span>
+          {place.address && (
+            <span className="text-[11px] text-gray-400 truncate">{place.address}</span>
+          )}
           {selected && (
             <motion.span
               initial={{ opacity: 0, y: 3 }}
@@ -579,7 +659,7 @@ export default function CourseEditPage() {
             <span className="text-xs text-gray-400">지도 · 현재 코스</span>
             <button onClick={() => setShowPicker(true)} className="text-xs text-[#E85053]">+ 근처 식당 추가</button>
           </div>
-          <CourseMap
+          <CourseMapView
             places={places}
             width={398}
             height={160}
@@ -640,6 +720,11 @@ export default function CourseEditPage() {
             addedIds={places.map((p) => p.id)}
             onPick={addPlace}
             onClose={() => setShowPicker(false)}
+            bias={
+              places[0]?.latitude != null && places[0]?.longitude != null
+                ? { lat: places[0].latitude, lng: places[0].longitude }
+                : undefined
+            }
           />
         )}
       </AnimatePresence>

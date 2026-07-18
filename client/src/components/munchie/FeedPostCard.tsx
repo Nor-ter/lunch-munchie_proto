@@ -93,20 +93,29 @@ export default function FeedPostCard({
   const infoPanel = (
     <div className="flex min-w-0 flex-col gap-2 bg-white p-3">
         <div className="flex items-center gap-2">
-          <div
-            className="w-8 h-8 rounded-full flex items-center justify-center text-[16px] shrink-0"
-            style={{ background: '#FFF5F5' }}
+          <button
+            type="button"
+            data-testid={`feed-author-${post.id}`}
+            disabled={!interactive || !post.authorId}
+            onClick={() => post.authorId && navigate(`/profile/${post.authorId}`)}
+            className="flex min-w-0 flex-1 items-center gap-2 text-left disabled:cursor-default"
+            aria-label={post.authorId ? `${post.authorName} 프로필 열기` : undefined}
           >
-            {post.authorEmoji}
-          </div>
-          <div className="min-w-0 flex-1">
-            <p className="truncate text-[13px] font-bold leading-tight" style={{ color: '#1A1A1A' }}>
-              {post.authorName}
-            </p>
-            <p className="truncate text-[10px] leading-tight" style={{ color: '#9B9B9B' }}>
-              {course ? `${course.region} 후기` : '코스 후기'} · {timeAgo(post.createdAt)}
-            </p>
-          </div>
+            <div
+              className="w-8 h-8 rounded-full flex items-center justify-center text-[16px] shrink-0"
+              style={{ background: '#FFF5F5' }}
+            >
+              {post.authorEmoji}
+            </div>
+            <div className="min-w-0 flex-1">
+              <p className="truncate text-[13px] font-bold leading-tight" style={{ color: '#1A1A1A' }}>
+                {post.authorName}
+              </p>
+              <p className="truncate text-[10px] leading-tight" style={{ color: '#9B9B9B' }}>
+                {course ? `${course.region} 후기` : '코스 후기'} · {timeAgo(post.createdAt)}
+              </p>
+            </div>
+          </button>
           <button className="shrink-0" style={{ color: '#9B9B9B' }}>
             <MoreHorizontal size={16} />
           </button>

@@ -3,10 +3,14 @@ dist/
 .DS_Store
 .env
 .env.*
+!/.env.example
 *.local
 .project-config.json
 .manus-logs/
 .vercel
+.artifacts/
+test-results/
+playwright-report/
 
 # Superpowers brainstorm mockups
 .superpowers/
