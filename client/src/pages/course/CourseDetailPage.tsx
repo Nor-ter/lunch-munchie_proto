@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useParams, useLocation, useSearch } from 'wouter';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Heart, Bookmark, Share2, ChevronLeft, ChevronRight, Star, X, GripVertical, Palette } from 'lucide-react';
+import { toast } from 'sonner';
+import { Heart, Bookmark, Share2, ChevronLeft, ChevronRight, Star, X, GripVertical, Palette, MessageCircle } from 'lucide-react';
 import {
   DndContext,
   closestCenter,
@@ -19,7 +20,7 @@ import {
   arrayMove,
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
-import { CourseMap } from '@/components/course/CourseMap';
+import { CourseMapView } from '@/components/course/CourseMapView';
 import { useApp } from '@/contexts/AppContext';
 import { getCourseById as getMockCourseById } from '@/data/mockCourse';
 import { CoursePlace } from '@/types/course';
@@ -30,13 +31,13 @@ import SkinFrame from '@/components/munchie/SkinFrame';
 import SkinPicker from '@/components/munchie/SkinPicker';
 import RestaurantDetailSheet from '@/components/munchie/RestaurantDetailSheet';
 
-type FromMode = 'explore' | 'saved' | 'feed' | 'template' | 'profile';
+type FromMode = 'explore' | 'saved' | 'feed' | 'template' | 'template-detail' | 'profile';
 
 function useFrom(): FromMode {
   const search = useSearch();
   const params = new URLSearchParams(search);
   const from = params.get('from');
-  if (from === 'saved' || from === 'feed' || from === 'template' || from === 'profile') return from;
+  if (from === 'saved' || from === 'feed' || from === 'template' || from === 'template-detail' || from === 'profile') return from;
   return 'explore';
 }
 
@@ -45,6 +46,7 @@ const BACK_PATH: Record<FromMode, string> = {
   profile: '/profile',
   feed: '/feed?tab=feed',
   template: '/feed?tab=template',
+  'template-detail': '/feed?tab=template',
   explore: '/feed', // 먼치모드 통합 — 구 explore 진입도 피드로 복귀
 };
 
@@ -149,6 +151,7 @@ function PlaceItem({
             {' '}{place.rating} · {place.distance}
           </p>
           <p className="text-xs text-gray-400">{place.category}</p>
+          {place.address && <p className="text-[11px] text-gray-400 truncate">{place.address}</p>}
           {/* 하이라이트 시: 밀어서 상세보기 힌트 */}
           {selected && !isEditing && (
             <motion.p
@@ -198,6 +201,7 @@ export default function CourseDetailPage() {
   const { id } = useParams<{ id: string }>();
   const [, navigate] = useLocation();
   const from = useFrom();
+  const search = useSearch();
   // 프로필 진입도 내 코스맵이므로 편집 가능 모드
   const fromSaved = from === 'saved' || from === 'profile';
   const {
@@ -206,12 +210,20 @@ export default function CourseDetailPage() {
     unsaveCourse,
     getCourseById: getAppCourseById,
     getRestaurantById,
+    feedPosts,
     courseSkins,
     setCourseSkin,
   } = useApp();
   const skin = id ? getSkinById(courseSkins[id]) : undefined;
   const [skinSheetOpen, setSkinSheetOpen] = useState(false);
   const isBookmarked = id ? savedCourseIds.includes(id) : false;
+  const templateId = new URLSearchParams(search).get('template');
+  const templateFrom = new URLSearchParams(search).get('templateFrom');
+  const isProfileTemplateCourse = from === 'template-detail' && templateFrom === 'profile';
+  const canManageCourse = fromSaved || isProfileTemplateCourse;
+  const backPath = from === 'template-detail' && templateId && id
+    ? `/template/${templateId}?course=${id}${templateFrom === 'profile' ? '&from=profile' : ''}`
+    : BACK_PATH[from];
 
   const toggleBookmark = () => {
     if (!id) return;
@@ -235,6 +247,9 @@ export default function CourseDetailPage() {
     ? `${Math.floor(appCourse.metadata.duration / 60)}h`
     : `${courseData.durationHours}h`;
   const saveCount = appCourse?.savedCount ?? courseData.saveCount;
+  const relatedFeedCount = id
+    ? feedPosts.filter(post => post.courseId === id).length
+    : 0;
 
   // Local editable state (only used in saved mode)
   const [title, setTitle] = useState(initialTitle);
@@ -276,7 +291,31 @@ export default function CourseDetailPage() {
 
   const handleDelete = () => {
     if (window.confirm('이 코스를 삭제할까요?')) {
-      navigate(BACK_PATH[from]);
+      navigate(backPath);
+    }
+  };
+
+  const shareCourseMap = async () => {
+    if (!id) return;
+    const url = `${window.location.origin}/course/${id}`;
+    const shareData = {
+      title: `Lunchie Munchie — ${title}`,
+      text: `${title} 코스맵을 확인해보세요!`,
+      url,
+    };
+
+    try {
+      if (navigator.share) {
+        await navigator.share(shareData);
+        toast.success('코스맵을 공유했어요!');
+        return;
+      }
+      await navigator.clipboard.writeText(url);
+      toast.success('공유 링크를 복사했어요! 🔗');
+    } catch (error) {
+      // 네이티브 공유 시트를 닫은 경우에는 실패 메시지를 표시하지 않는다.
+      if (error instanceof DOMException && error.name === 'AbortError') return;
+      toast.error('코스맵을 공유하지 못했어요');
     }
   };
 
@@ -307,7 +346,8 @@ export default function CourseDetailPage() {
       {/* Back button */}
       <div className="px-4 pt-4 pb-3">
         <button
-          onClick={() => navigate(BACK_PATH[from])}
+          onClick={() => navigate(backPath)}
+          aria-label="이전 화면으로 돌아가기"
           className="w-9 h-9 bg-white rounded-full shadow flex items-center justify-center"
         >
           <ChevronLeft size={20} />
@@ -336,6 +376,13 @@ export default function CourseDetailPage() {
             className="border border-gray-300 text-sm px-3 py-1 rounded-full"
           >
             {isEditing ? '완료' : '편집'}
+          </button>
+        ) : isProfileTemplateCourse ? (
+          <button
+            onClick={() => navigate(`/course/${id}/edit?from=profile`)}
+            className="border border-gray-300 text-sm px-3 py-1 rounded-full"
+          >
+            편집
           </button>
         ) : (
           <button className="border border-gray-300 text-sm px-3 py-1 rounded-full">
@@ -431,18 +478,23 @@ export default function CourseDetailPage() {
         </AnimatePresence>
       </motion.div>
 
-      {/* Map area */}
-      <div className="relative mx-4 mb-4 h-[220px] rounded-2xl overflow-hidden">
-        <CourseMap places={places} width={430} height={220} className="w-full h-full" />
-
-        <div className="absolute top-3 right-3 flex gap-2">
+      {/* Map actions — 지도 위에 분리해 지도를 가리지 않는다. */}
+      <div className="mx-4 mb-2 flex justify-end gap-2">
           <button
-            onClick={() => navigate(`/course/${id}/share${fromSaved ? '?from=saved' : ''}`)}
+            onClick={shareCourseMap}
+            aria-label="코스맵 공유"
             className="w-9 h-9 bg-white rounded-full shadow flex items-center justify-center"
           >
             <Share2 size={18} />
           </button>
-          {!fromSaved && (
+          <button
+            onClick={() => navigate(`/course/${id}/share${fromSaved ? '?from=saved' : ''}`)}
+            aria-label="코스맵 템플릿 만들기"
+            className="w-9 h-9 bg-white rounded-full shadow flex items-center justify-center"
+          >
+            <Palette size={18} />
+          </button>
+          {!canManageCourse && (
             <button
               onClick={toggleBookmark}
               className="w-9 h-9 bg-white rounded-full shadow flex items-center justify-center"
@@ -454,7 +506,11 @@ export default function CourseDetailPage() {
               />
             </button>
           )}
-        </div>
+      </div>
+
+      {/* Map area */}
+      <div className="relative mx-4 mb-4 h-[220px] rounded-2xl overflow-hidden">
+        <CourseMapView places={places} width={430} height={220} className="w-full h-full" />
       </div>
 
       {/* Stats bar */}
@@ -473,6 +529,25 @@ export default function CourseDetailPage() {
             <span className="text-xs text-gray-400">{stat.label}</span>
           </div>
         ))}
+      </div>
+
+      <div className="mx-4 mb-4">
+        <button
+          type="button"
+          onClick={() => navigate(`/course/${id}/feeds${search ? `?${search}` : ''}`)}
+          className="flex w-full items-center gap-3 rounded-2xl border border-[#F2D8D3] bg-[#FFF8F4] p-3.5 text-left active:scale-[0.99]"
+        >
+          <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-[#FDE1E1] text-[#D94447]">
+            <MessageCircle size={18} />
+          </span>
+          <span className="min-w-0 flex-1">
+            <span className="block text-[14px] font-black text-[#3B2A22]">이 코스로 만든 피드</span>
+            <span className="mt-0.5 block text-[11px] text-[#9D887C]">
+              {relatedFeedCount > 0 ? `올라온 피드 ${relatedFeedCount}개 둘러보기` : '아직 올라온 피드가 없어요'}
+            </span>
+          </span>
+          <ChevronRight size={18} color="#B09A8C" />
+        </button>
       </div>
 
       {/* Place list */}
@@ -504,7 +579,7 @@ export default function CourseDetailPage() {
       </div>
 
       {/* 템플릿 스킨 바꾸기 — 내 코스(저장/프로필 진입)에서만 */}
-      {fromSaved && (
+      {canManageCourse && (
         <div className="px-4 pb-4">
           <button
             onClick={() => setSkinSheetOpen(true)}
@@ -575,7 +650,14 @@ export default function CourseDetailPage() {
 
       {/* Bottom bar */}
       <div className="fixed bottom-4 left-1/2 -translate-x-1/2 w-[calc(100%-32px)] max-w-[398px] bg-white rounded-2xl shadow-lg px-4 py-3 flex gap-2">
-        {fromSaved ? (
+        {isProfileTemplateCourse ? (
+          <button
+            onClick={() => navigate(`/course/${id}/edit?from=profile`)}
+            className="h-11 flex-1 rounded-xl bg-[#E85053] text-sm font-medium text-white"
+          >
+            편집
+          </button>
+        ) : fromSaved ? (
           <>
             <button
               onClick={handleDelete}

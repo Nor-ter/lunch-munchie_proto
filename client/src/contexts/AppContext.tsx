@@ -4,10 +4,18 @@
  * Manages: courses, restaurants, sessions, profile, swipe data
  */
 
-import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
 import { normalizeDiet, isHardRestriction, type DietTag } from '@shared/const';
-import { intentForHour } from '@shared/intent';
+import { intentForHour, type Intent } from '@shared/intent';
 import { normalizeFoodTag, type TagType } from '@/constants/foodTags';
+import { supabase, ensureAnonymousSession } from '@/lib/supabase';
+import type { LunchmateProfileLoadout } from '@/types/lunchmateCustomization';
+import {
+  normalizeLunchmateOwnedItemIds,
+  normalizeLunchmateProfileLoadout,
+  normalizeLunchmateRewardClaims,
+  type LunchmateRewardClaim,
+} from '@/utils/lunchmateProfile';
 export type { TagType } from '@/constants/foodTags';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -27,6 +35,18 @@ function matchesDiet(category: string, restaurantDietary: string[], filterDietar
   );
 }
 
+// TagType은 @/constants/foodTags 로 이동(위 import+re-export). 인라인 정의 제거 — 태그 taxonomy 단일화.
+export interface MenuItem {
+  name: string;
+  price: number | null;
+  image?: string;
+  dietary?: string[];
+  /** 소스 메뉴판의 섹션 헤더 그대로(예: "Mains", "Pizzas"). 없으면 미분류. */
+  category?: string;
+  /** 재료/상세 설명 (소스에 있을 때만) */
+  description?: string;
+}
+
 export interface Restaurant {
   id: string;
   name: string;
@@ -37,6 +57,8 @@ export interface Restaurant {
   distance: string;
   address: string;
   image: string;
+  photos?: string[];
+  menuItems?: MenuItem[];
   lat: number;
   lng: number;
   priceRange: 1 | 2 | 3 | 4;
@@ -85,6 +107,8 @@ export interface GroupSession {
     budget: 1 | 2 | 3 | 4;
     radius: number;
     categories: string[];
+    /** 명시적으로 고른 밥/카페/디저트. 없으면(undefined) 시간대로 자동 판정. */
+    intent?: Intent;
   };
   deadline: string | null;
   /** 마감 타이밍(분) — 투표 시작 시점에 deadline으로 변환 적용 */
@@ -127,6 +151,12 @@ export interface UserProfile {
   foodieChar?: string;
   /** 푸디 캐릭터 방 스킨 (먼치 스킨 id) */
   foodieSkin?: string;
+  /** 런치메이트룸에서 적용한 네 slot 코스튬 조합 */
+  lunchmateLoadout?: LunchmateProfileLoadout;
+  /** 보유한 런치메이트 코스튬 manifest ID 목록 */
+  lunchmateOwnedItemIds?: string[];
+  /** 현재 브라우저 preview에서 지급한 레벨별 코스튬 이력 */
+  lunchmateRewardClaims?: LunchmateRewardClaim[];
 }
 
 export interface SwipeRecord {
@@ -510,6 +540,8 @@ const DEFAULT_PROFILE: UserProfile = {
   totalSwipes: 0,
   totalLikes: 0,
   joinedAt: new Date().toISOString(),
+  lunchmateOwnedItemIds: normalizeLunchmateOwnedItemIds(undefined),
+  lunchmateRewardClaims: [],
 };
 
 // ─── Context ──────────────────────────────────────────────────────────────────
@@ -520,6 +552,10 @@ interface AppContextValue {
   saveCourse: (courseId: string) => void;
   unsaveCourse: (courseId: string) => void;
   addCourse: (course: Course) => void;
+  updateCourse: (courseId: string, updates: Partial<Course>) => void;
+  /** 프로필의 나의 템플릿에서만 숨긴 코스 ID — 원본 코스와 피드는 유지한다. */
+  hiddenTemplateCourseIds: string[];
+  deleteProfileTemplate: (courseId: string) => void;
 
   currentSession: GroupSession | null;
   setCurrentSession: (s: GroupSession | null) => void;
@@ -537,6 +573,8 @@ interface AppContextValue {
 
   swipeRecords: SwipeRecord[];
   addSwipe: (restaurantId: string, action: SwipeRecord['action']) => void;
+  /** 세션의 로컬 스와이프 기록을 지운다 — "다시 고르기"로 카드를 처음부터 다시 보여주기 위한 용도 */
+  clearSessionSwipes: (sessionId: string) => void;
   /** 그룹 reroll: 거절·다수미움 제외한 fresh 덱으로 다음 세대 예선 시작 */
   rerollSession: (excludeIds: string[]) => Promise<void>;
   likedRestaurantIds: string[];
@@ -552,7 +590,7 @@ interface AppContextValue {
   /** Munchie Feed */
   feedPosts: FeedPost[];
   addFeedPost: (post: Omit<FeedPost, 'id' | 'likes' | 'saves' | 'comments' | 'createdAt'>) => FeedPost;
-  updateFeedPost: (postId: string, updates: Partial<Pick<FeedPost, 'caption' | 'skinId' | 'photos'>>) => void;
+  updateFeedPost: (postId: string, updates: Partial<Pick<FeedPost, 'courseId' | 'caption' | 'skinId' | 'photos' | 'tags'>>) => void;
   deleteFeedPost: (postId: string) => void;
   likedFeedIds: string[];
   toggleFeedLike: (postId: string) => void;
@@ -567,6 +605,11 @@ interface AppContextValue {
   setCourseSkin: (courseId: string, skinId: string | null) => void;
 
   restaurants: Restaurant[];
+  /** Google Places로 새로 가져온 식당을 로컬 풀에 병합(id 중복이면 최신으로 덮어씀) —
+   * PlaceExplorePage가 place-details 직후 getRestaurantById가 바로 찾을 수 있게 한다.
+   * 서버(Supabase restaurants 테이블)에는 Edge Function이 이미 upsert 해뒀으니
+   * 다음 부팅 시 /api/restaurants 로 자연히 들어옴 — 이건 같은 세션 내 즉시 반영용. */
+  registerRestaurants: (newRestaurants: Restaurant[]) => void;
   getRestaurantById: (id: string) => Restaurant | undefined;
   getCourseById: (id: string) => Course | undefined;
   isLoading: boolean;
@@ -575,11 +618,97 @@ interface AppContextValue {
 
 const AppContext = createContext<AppContextValue | null>(null);
 
+export type ApiRequestAuth =
+  | {
+      status: 'authenticated';
+      accessToken: string;
+    }
+  | {
+      status: 'anonymous';
+    }
+  | {
+      status: 'blocked';
+    };
+
+interface ApiAuthEnvironment {
+  VITE_SUPABASE_URL?: string;
+  VITE_SUPABASE_PUBLISHABLE_KEY?: string;
+}
+
+interface ApiAuthClient {
+  auth: {
+    getSession: () => Promise<{
+      data: {
+        session: {
+          access_token: string;
+        } | null;
+      };
+      error: unknown;
+    }>;
+  };
+}
+
+interface ApiRequestAuthOptions {
+  environment?: ApiAuthEnvironment;
+  loadClient?: () => Promise<ApiAuthClient>;
+}
+
+export async function resolveApiRequestAuth(
+  options: ApiRequestAuthOptions = {},
+): Promise<ApiRequestAuth> {
+  const environment = options.environment ?? {
+    VITE_SUPABASE_URL: import.meta.env.VITE_SUPABASE_URL,
+    VITE_SUPABASE_PUBLISHABLE_KEY:
+      import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
+  };
+  const configured = Boolean(
+    environment.VITE_SUPABASE_URL?.trim()
+    && environment.VITE_SUPABASE_PUBLISHABLE_KEY?.trim(),
+  );
+
+  if (!configured) {
+    return { status: 'anonymous' };
+  }
+
+  try {
+    const client = await (
+      options.loadClient
+      ?? (async () => (await import('@/lib/supabase')).supabase)
+    )();
+    const { data, error } = await client.auth.getSession();
+
+    if (error) {
+      return { status: 'blocked' };
+    }
+
+    if (!data.session) {
+      return { status: 'anonymous' };
+    }
+
+    if (!data.session.access_token) {
+      return { status: 'blocked' };
+    }
+
+    return {
+      status: 'authenticated',
+      accessToken: data.session.access_token,
+    };
+  } catch {
+    return { status: 'blocked' };
+  }
+}
+
+interface BuildDeckDependencies {
+  resolveRequestAuth?: () => Promise<ApiRequestAuth>;
+  request?: typeof fetch;
+}
+
 // 런치 엔진 추천으로 덱을 정렬 + propensity 메타 부착. 실패 시 필터 순서 그대로(폴백).
-async function buildDeck(
+export async function buildDeck(
   filters: GroupSession['filters'],
   allRestaurants: Restaurant[],
   userId?: string,
+  dependencies: BuildDeckDependencies = {},
 ): Promise<{ restaurants: Restaurant[]; slateId?: string; recMeta?: GroupSession['recMeta']; modelVersion?: string }> {
   const base = allRestaurants.filter(r =>
     (filters.categories.length === 0 || filters.categories.includes(r.category)) &&
@@ -587,13 +716,28 @@ async function buildDeck(
   );
   if (base.length === 0) return { restaurants: base };
   try {
-    const res = await fetch('/api/recommend', {
+    const auth = await (
+      dependencies.resolveRequestAuth ?? resolveApiRequestAuth
+    )();
+    if (auth.status === 'blocked') {
+      return { restaurants: base };
+    }
+
+    const headers: Record<string, string> = {
+      'Content-Type': 'application/json',
+    };
+    if (auth.status === 'authenticated') {
+      headers.Authorization = `Bearer ${auth.accessToken}`;
+    }
+
+    const request = dependencies.request ?? fetch;
+    const res = await request('/api/recommend', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers,
       body: JSON.stringify({
         candidate_ids: base.map(r => r.id),
         // 앱이 이미 아는 맥락은 클라가 실어 보낸다 (companions=인원수). 나머지는 서버가 보강.
-        context: { diet: filters.dietary, companions: filters.partySize, intent: intentForHour(new Date().getHours()) },
+        context: { diet: filters.dietary, companions: filters.partySize, intent: filters.intent ?? intentForHour(new Date().getHours()) },
         // 예선 = 엔진 추천 top-7 (결정 플로우 ①). 스와이프 덱 = 슬레이트와 1:1.
         k: 7,
         slate_type: 'PRELIM',
@@ -646,7 +790,29 @@ function buildLocalSession(
   };
 }
 
-export function AppProvider({ children }: { children: React.ReactNode }) {
+const LAST_AUTH_UID_KEY = 'lm_last_auth_uid_v1';
+
+function readStoredProfileId(): string | null {
+  try {
+    const stored = localStorage.getItem('lm_profile');
+    if (!stored) return null;
+    const id = (JSON.parse(stored) as Partial<UserProfile>).id;
+    return typeof id === 'string' ? id : null;
+  } catch {
+    return null;
+  }
+}
+
+export function AppProvider({
+  children,
+  initialAuthUserId = null,
+}: {
+  children: React.ReactNode;
+  initialAuthUserId?: string | null;
+}) {
+  const legacyProfileIdRef = useRef(readStoredProfileId());
+  const lastAuthUidRef = useRef(localStorage.getItem(LAST_AUTH_UID_KEY));
+  const isFirstAuthAdoption = Boolean(initialAuthUserId && !lastAuthUidRef.current);
   const [courses, setCourses] = useState<Course[]>(() => {
     try {
       const s = localStorage.getItem('lm_courses');
@@ -668,10 +834,25 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     catch { return ['c1']; }
   });
 
+  const [hiddenTemplateCourseIds, setHiddenTemplateCourseIds] = useState<string[]>(() => {
+    try { const s = localStorage.getItem('lm_hidden_profile_templates'); return s ? JSON.parse(s) : []; }
+    catch { return []; }
+  });
+
   const [currentSession, setCurrentSession] = useState<GroupSession | null>(() => {
-    try { const s = localStorage.getItem('lm_session'); return s ? JSON.parse(s) : null; }
+    try {
+      const s = localStorage.getItem('lm_session');
+      // 기존 random id로 만들어진 활성 서버 세션의 host/member 권한을 새 auth uid로
+      // 클라이언트만 바꿔치기하지 않는다. 서버 상태와 갈라지는 것보다 로컬 연결을 종료한다.
+      if (s && isFirstAuthAdoption) return null;
+      return s ? JSON.parse(s) : null;
+    }
     catch { return null; }
   });
+  // fetchSession(폴링)이 서버 필드만으로 filters를 재구성해 intent를 잃어버리는 걸 막기 위한 최신값 스냅샷.
+  // (서버 sessions 테이블에 intent 컬럼이 없어 서버 왕복으로는 못 지킴 — 클라 로컬로 보존.)
+  const currentSessionRef = useRef(currentSession);
+  useEffect(() => { currentSessionRef.current = currentSession; }, [currentSession]);
 
   const [swipeRecords, setSwipeRecords] = useState<SwipeRecord[]>(() => {
     try { const s = localStorage.getItem('lm_swipes'); return s ? JSON.parse(s) : []; }
@@ -691,12 +872,17 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         const parsed = JSON.parse(s) as FeedPost[];
         return parsed.map(p => ({
           ...p,
+          authorId: isFirstAuthAdoption && p.authorId === legacyProfileIdRef.current
+            ? initialAuthUserId ?? p.authorId
+            : p.authorId,
           tags: p.tags.map(tag => normalizeFoodTag(tag)),
           comments: Array.isArray(p.comments) ? p.comments : [],
         }));
       }
     } catch { /* fall through */ }
-    return MOCK_FEED_POSTS;
+    return MOCK_FEED_POSTS.map((post, index) => (
+      index === 0 && initialAuthUserId ? { ...post, authorId: initialAuthUserId } : post
+    ));
   });
 
   const [likedFeedIds, setLikedFeedIds] = useState<string[]>(() => {
@@ -713,16 +899,26 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     try {
       const s = localStorage.getItem('lm_profile');
       if (s) {
-        const parsed = JSON.parse(s);
+        const parsed = JSON.parse(s) as UserProfile;
+        let migratedId = false;
         // 과거 공용 ID('me')는 기기 고유 ID로 마이그레이션.
         if (!parsed.id || parsed.id === 'me') {
           parsed.id = generateUserId();
-          localStorage.setItem('lm_profile', JSON.stringify(parsed));
+          migratedId = true;
         }
-        return parsed;
+        const normalizedProfile = {
+          ...parsed,
+          lunchmateLoadout: normalizeLunchmateProfileLoadout(parsed.lunchmateLoadout),
+          lunchmateOwnedItemIds: normalizeLunchmateOwnedItemIds(parsed.lunchmateOwnedItemIds),
+          lunchmateRewardClaims: normalizeLunchmateRewardClaims(parsed.lunchmateRewardClaims),
+        };
+        if (migratedId) localStorage.setItem('lm_profile', JSON.stringify(normalizedProfile));
+        return initialAuthUserId
+          ? { ...normalizedProfile, id: initialAuthUserId }
+          : normalizedProfile;
       }
     } catch { /* fall through */ }
-    return { ...DEFAULT_PROFILE, id: generateUserId() };
+    return { ...DEFAULT_PROFILE, id: initialAuthUserId ?? generateUserId() };
   });
 
   useEffect(() => {
@@ -750,8 +946,34 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       .finally(() => setIsLoading(false));
   }, []);
 
+  // 최초 legacy id → auth uid에서만 로컬 작성자 id를 승계한다. 이후 Google 충돌 계정 전환이나
+  // 로그아웃→새 익명 uid에는 이전 계정의 로컬 소유권을 자동 양도하지 않는다.
+  const profileIdRef = useRef(profile.id);
+  useEffect(() => { profileIdRef.current = profile.id; }, [profile.id]);
+  useEffect(() => {
+    const adoptUid = (uid: string) => {
+      const oldId = profileIdRef.current;
+      const previousAuthUid = lastAuthUidRef.current;
+      if (oldId !== uid) {
+        profileIdRef.current = uid;
+        setProfile(prev => ({ ...prev, id: uid }));
+        if (previousAuthUid && previousAuthUid !== uid) setCurrentSession(null);
+      }
+      lastAuthUidRef.current = uid;
+      localStorage.setItem(LAST_AUTH_UID_KEY, uid);
+    };
+
+    if (initialAuthUserId) adoptUid(initialAuthUserId);
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      if (session) adoptUid(session.user.id);
+    });
+    return () => subscription.unsubscribe();
+  }, []);
+
   useEffect(() => { localStorage.setItem('lm_courses', JSON.stringify(courses)); }, [courses]);
   useEffect(() => { localStorage.setItem('lm_saved', JSON.stringify(savedCourseIds)); }, [savedCourseIds]);
+  useEffect(() => { localStorage.setItem('lm_hidden_profile_templates', JSON.stringify(hiddenTemplateCourseIds)); }, [hiddenTemplateCourseIds]);
   useEffect(() => {
     if (currentSession) localStorage.setItem('lm_session', JSON.stringify(currentSession));
     else localStorage.removeItem('lm_session');
@@ -778,6 +1000,14 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     setCourses(prev => [course, ...prev]);
   }, []);
 
+  const updateCourse = useCallback((courseId: string, updates: Partial<Course>) => {
+    setCourses(previous => previous.map(course => course.id === courseId ? { ...course, ...updates } : course));
+  }, []);
+
+  const deleteProfileTemplate = useCallback((courseId: string) => {
+    setHiddenTemplateCourseIds(previous => previous.includes(courseId) ? previous : [...previous, courseId]);
+  }, []);
+
   const addFeedPost = useCallback((post: Omit<FeedPost, 'id' | 'likes' | 'saves' | 'comments' | 'createdAt'>) => {
     const full: FeedPost = {
       ...post,
@@ -791,7 +1021,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     return full;
   }, []);
 
-  const updateFeedPost = useCallback((postId: string, updates: Partial<Pick<FeedPost, 'caption' | 'skinId' | 'photos'>>) => {
+  const updateFeedPost = useCallback((postId: string, updates: Partial<Pick<FeedPost, 'courseId' | 'caption' | 'skinId' | 'photos' | 'tags'>>) => {
     setFeedPosts(posts => posts.map(p => p.id === postId ? { ...p, ...updates } : p));
   }, []);
 
@@ -830,10 +1060,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     ));
   }, [profile.name, profile.emoji]);
 
-  // 프로토타입: 기기 ID 일치 또는 (목업 시드용) 프로필 이름 일치를 내 게시물로 본다
-  const isMyPost = useCallback((post: FeedPost) =>
-    post.authorId === profile.id || post.authorName === profile.name,
-  [profile.id, profile.name]);
+  const isMyPost = useCallback((post: FeedPost) => post.authorId === profile.id, [profile.id]);
 
   const setCourseSkin = useCallback((courseId: string, skinId: string | null) => {
     setCourseSkins(prev => {
@@ -927,12 +1154,15 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     if (!res.ok) throw new Error('Session not found');
     const data = await res.json();
     const status = (data.session.status as string).toLowerCase() as GroupSession['status'];
+    // 서버 sessions 테이블에 intent 컬럼이 없어 서버 응답엔 안 실려옴 — 직전 로컬 세션의 intent를 승계.
+    const prevIntent = currentSessionRef.current?.inviteCode === token ? currentSessionRef.current.filters.intent : undefined;
     const sessFilters = {
       partySize: data.session.group_size,
       dietary: data.session.filter_dietary || [],
       budget: data.session.filter_budget,
       radius: data.session.filter_distance,
       categories: data.session.filter_vibe || [],
+      intent: prevIntent,
     };
     const deck = await buildDeck(sessFilters, restaurants, profile.id);
     const session: GroupSession = {
@@ -1054,6 +1284,12 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     }
   }, [apiAvailable, currentSession, profile.id]);
 
+  // "다시 고르기": 로컬 스와이프 기록을 지워야 카드가 처음부터 다시 나온다.
+  // 안 지우면 예선 자동완료 감지(unswipedCount===0)가 즉시 다시 걸려 결정 화면으로 튕긴다.
+  const clearSessionSwipes = useCallback((sessionId: string) => {
+    setSwipeRecords(prev => prev.filter(s => s.sessionId !== sessionId));
+  }, []);
+
   // 그룹 reroll: 거절·다수미움(excludeIds) 뺀 fresh 풀로 새 덱 → 세대 +1. 멤버 각자 재스와이프.
   const rerollSession = useCallback(async (excludeIds: string[]) => {
     if (!currentSession) return;
@@ -1089,21 +1325,36 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const getRestaurantById = useCallback((id: string) => restaurants.find(r => r.id === id), [restaurants]);
   const getCourseById = useCallback((id: string) => courses.find(c => c.id === id), [courses]);
 
+  const registerRestaurants = useCallback((newRestaurants: Restaurant[]) => {
+    setRestaurants(prev => {
+      const byId = new Map(prev.map(r => [r.id, r] as const));
+      for (const r of newRestaurants) byId.set(r.id, r);
+      return Array.from(byId.values());
+    });
+  }, []);
+
   return (
     <AppContext.Provider value={{
-      courses, savedCourseIds, saveCourse, unsaveCourse, addCourse,
+      courses, savedCourseIds, saveCourse, unsaveCourse, addCourse, updateCourse,
+      hiddenTemplateCourseIds, deleteProfileTemplate,
       currentSession, setCurrentSession, createSession, joinSession, fetchSession, toggleReady, startSession,
-      swipeRecords, addSwipe, rerollSession, likedRestaurantIds,
+      swipeRecords, addSwipe, clearSessionSwipes, rerollSession, likedRestaurantIds,
       savedRestaurantIds, saveRestaurant, unsaveRestaurant,
       profile, updateProfile,
       feedPosts, addFeedPost, updateFeedPost, deleteFeedPost,
       likedFeedIds, toggleFeedLike, addFeedComment, toggleCommentHidden, isMyPost,
       courseSkins, setCourseSkin,
-      restaurants,
+      restaurants, registerRestaurants,
       getRestaurantById, getCourseById,
       isLoading, apiAvailable,
     }}>
-      {children}
+      <div
+        className="contents"
+        data-testid="app-identity"
+        data-identity-aligned={initialAuthUserId ? String(profile.id === initialAuthUserId) : 'auth-unavailable'}
+      >
+        {children}
+      </div>
     </AppContext.Provider>
   );
 }

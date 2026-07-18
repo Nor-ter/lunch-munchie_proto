@@ -39,6 +39,17 @@ export const FOOD_PHOTOS: Record<string, string[]> = {
   ],
 };
 
+// 영문 멜번 카테고리 → 한국어 키 정규화 (Cafe→카페 사진 등). 없으면 default.
+const CAT_KEY: [RegExp, string][] = [
+  [/카페|찻집|cafe|coffee/i, '카페'],
+  [/베이커리|bakery|pastry|patisserie/i, '베이커리'],
+  [/이탈리안|italian|pizza|pasta/i, '이탈리안'],
+  [/일식|japanese|sushi|ramen/i, '일식'],
+  [/중식|chinese/i, '중식'],
+];
+
 export function getFoodPhotos(category: string): string[] {
-  return FOOD_PHOTOS[category] || FOOD_PHOTOS['default'];
+  if (FOOD_PHOTOS[category]) return FOOD_PHOTOS[category];
+  for (const [re, k] of CAT_KEY) if (re.test(category || '')) return FOOD_PHOTOS[k];
+  return FOOD_PHOTOS['default'];
 }

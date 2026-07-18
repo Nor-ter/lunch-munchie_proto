@@ -19,6 +19,38 @@ describe("selectTodayStops", () => {
     expect(stops[1].satisfaction).toBe("POS");
     expect(stops[0].satisfaction).toBeNull();
   });
+
+  it("같은 session_id여도 다른 사용자의 스톱과 만족도를 반환하지 않음", () => {
+    const events = [
+      {
+        event_type: "WINNER",
+        user_id: "auth-owner",
+        session_id: "shared-session",
+        restaurant_id: "r1",
+        created_at: new Date("2026-06-26T12:00:00"),
+      },
+      {
+        event_type: "WINNER",
+        user_id: "auth-other",
+        session_id: "shared-session",
+        restaurant_id: "r7",
+        created_at: new Date("2026-06-26T12:30:00"),
+      },
+      {
+        event_type: "SURVEY",
+        user_id: "auth-other",
+        session_id: "shared-session",
+        restaurant_id: "r1",
+        action: "NEG",
+      },
+    ];
+
+    const stops = selectTodayStops(events, "auth-owner", now, cat);
+
+    expect(stops).toHaveLength(1);
+    expect(stops[0].restaurant_id).toBe("r1");
+    expect(stops[0].satisfaction).toBeNull();
+  });
 });
 
 describe("selectRecentStops", () => {
@@ -46,5 +78,28 @@ describe("selectRecentStops", () => {
     const stops = selectRecentStops(events, "u1", 5, cat);
     expect(stops.map(stop => stop.restaurant_id)).toEqual(["r7", "r6", "r5", "r4", "r3"]);
     expect(stops[0].satisfaction).toBe("POS");
+  });
+
+  it("같은 session_id의 다른 사용자 기록을 히스토리에 포함하지 않음", () => {
+    const events = [
+      {
+        event_type: "WINNER",
+        user_id: "auth-owner",
+        session_id: "shared-session",
+        restaurant_id: "r1",
+        created_at: new Date("2026-06-26T12:00:00"),
+      },
+      {
+        event_type: "WINNER",
+        user_id: "auth-other",
+        session_id: "shared-session",
+        restaurant_id: "r7",
+        created_at: new Date("2026-06-26T13:00:00"),
+      },
+    ];
+
+    const stops = selectRecentStops(events, "auth-owner", 5, cat);
+
+    expect(stops.map(stop => stop.restaurant_id)).toEqual(["r1"]);
   });
 });

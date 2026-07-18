@@ -57,6 +57,7 @@ export interface GroupDecision {
 //   예선(round1) → 후보 선정(least-misery + 들러리 필터) → 결승 3지선다(round2: A/B/REJECT)
 //   → DONE / REROLL('둘 다 별로' 최다, 제외집합 노출) / NO_CONSENSUS(세대 ≥ cap).
 // completedPrelim=예선 채운 멤버 수. generation=현재 세대(1부터). rerollCap=최대 세대.
+// forcePrelim/forceFinal=호스트 '지금 진행'으로 해당 단계 강제 완료 (D).
 export function decideGroup(
   round1: SwipeRow[],
   round2: SwipeRow[],
@@ -65,12 +66,14 @@ export function decideGroup(
   isExpired: boolean,
   generation = 1,
   rerollCap = 3,
+  forcePrelim = false,
+  forceFinal = false,
 ): GroupDecision {
   const results = rankResultsLeastMisery(round1, memberCount);
   const base: Omit<GroupDecision, "phase"> = {
     results, finalists: [], finalTally: {}, finalVotedCount: 0, rejectVotes: 0, winnerId: null, excludeIds: [],
   };
-  const prelimDone = completedPrelim >= memberCount || isExpired;
+  const prelimDone = completedPrelim >= memberCount || isExpired || forcePrelim;
   if (!prelimDone) return { ...base, phase: "PRELIM" };
 
   const majority = Math.floor(memberCount / 2);
@@ -108,7 +111,7 @@ export function decideGroup(
   for (const f of finalists) tally[f.restaurantId] = 0;
   for (const rid of Array.from(userVote.values())) tally[rid] += 1;
   const finalVoted = userVote.size;
-  const finalDone = finalVoted >= memberCount || isExpired;
+  const finalDone = finalVoted >= memberCount || isExpired || forceFinal;
   if (!finalDone) {
     return { ...base, phase: "FINAL", finalists, finalTally: tally, finalVotedCount: finalVoted, rejectVotes: tally[REJECT_ID] };
   }

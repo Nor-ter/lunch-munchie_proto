@@ -103,5 +103,8 @@ export function getCoursePlacesFromStops(
     time: stop.startTime,
     imageUrl: restaurant.image,
     coords: points[index] ?? { x: 50, y: 50 },
+    latitude: restaurant.lat,
+    longitude: restaurant.lng,
+    address: restaurant.address,
   }));
 }

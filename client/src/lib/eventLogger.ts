@@ -12,14 +12,62 @@ const FLUSH_MS = 4000;
 let queue: RecEventInput[] = [];
 let timer: ReturnType<typeof setTimeout> | null = null;
 
-function send(events: RecEventInput[]): void {
-  if (!events.length) return;
-  const payload = JSON.stringify({ events });
+type EventAuthTransport =
+  | {
+      status: "authenticated";
+      accessToken: string;
+    }
+  | {
+      status: "anonymous";
+    }
+  | {
+      status: "blocked";
+    };
+
+function isSupabaseConfigured(): boolean {
+  return Boolean(
+    import.meta.env.VITE_SUPABASE_URL?.trim()
+    && import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY?.trim(),
+  );
+}
+
+async function resolveEventAuthTransport(): Promise<EventAuthTransport> {
+  if (!isSupabaseConfigured()) {
+    return { status: "anonymous" };
+  }
+
+  try {
+    const { supabase } = await import("./supabase");
+    const { data, error } = await supabase.auth.getSession();
+
+    if (error) {
+      return { status: "blocked" };
+    }
+
+    if (!data.session) {
+      return { status: "anonymous" };
+    }
+
+    if (!data.session.access_token) {
+      return { status: "blocked" };
+    }
+
+    return {
+      status: "authenticated",
+      accessToken: data.session.access_token,
+    };
+  } catch {
+    return { status: "blocked" };
+  }
+}
+
+function sendAnonymous(payload: string): void {
   // 이탈 시점에도 안전하게 전송
   if (typeof navigator !== "undefined" && navigator.sendBeacon) {
     const ok = navigator.sendBeacon(ENDPOINT, new Blob([payload], { type: "application/json" }));
     if (ok) return;
   }
+
   fetch(ENDPOINT, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -30,6 +78,35 @@ function send(events: RecEventInput[]): void {
   });
 }
 
+async function send(events: RecEventInput[]): Promise<void> {
+  if (!events.length) return;
+  const payload = JSON.stringify({ events });
+  const authTransport = await resolveEventAuthTransport();
+
+  if (authTransport.status === "blocked") {
+    return;
+  }
+
+  if (authTransport.status === "anonymous") {
+    sendAnonymous(payload);
+    return;
+  }
+
+  try {
+    await fetch(ENDPOINT, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${authTransport.accessToken}`,
+      },
+      body: payload,
+      keepalive: true,
+    });
+  } catch {
+    /* 인증 이벤트는 익명 transport로 재전송하지 않는다 */
+  }
+}
+
 export function flushEvents(): void {
   if (timer) {
     clearTimeout(timer);
@@ -38,7 +115,7 @@ export function flushEvents(): void {
   if (!queue.length) return;
   const batch = queue;
   queue = [];
-  send(batch);
+  void send(batch);
 }
 
 export function logEvent(event: RecEventInput): void {

@@ -1,5 +1,11 @@
 import { RefObject } from 'react';
 import { toPng } from 'html-to-image';
+import { calculateTargetPixelRatio, chooseShareDelivery } from '@/lib/lunchieShare';
+
+interface CaptureCardOptions {
+  /** Render to this output width while preserving the element's CSS aspect ratio. */
+  targetWidth?: number;
+}
 
 function downloadBlob(blob: Blob, filename: string): void {
   const url = URL.createObjectURL(blob);
@@ -20,7 +26,10 @@ export function useCourseShare() {
    * because html2canvas 1.x cannot parse modern CSS color functions (oklch, lab, etc.)
    * that Tailwind v4 generates.
    */
-  const captureCard = async (ref: RefObject<HTMLDivElement | null>): Promise<string> => {
+  const captureCard = async (
+    ref: RefObject<HTMLDivElement | null>,
+    options?: CaptureCardOptions,
+  ): Promise<string> => {
     if (!ref.current) throw new Error('ref is null');
 
     // 배경·코스 사진이 모두 로드된 뒤 캡처해야 빈 이미지나 저장 실패가 발생하지 않는다.
@@ -42,8 +51,14 @@ export function useCourseShare() {
       }
     }));
 
+    const cssWidth = ref.current.getBoundingClientRect().width || ref.current.offsetWidth;
+    const targetWidth = options?.targetWidth;
+    const pixelRatio = typeof targetWidth === 'number'
+      ? calculateTargetPixelRatio(cssWidth, targetWidth)
+      : 2;
+
     return toPng(ref.current, {
-      pixelRatio: 2,
+      pixelRatio,
       cacheBust: true,
       skipAutoScale: false,
       // Ignore elements outside the card (like Sonner toasts)
@@ -79,11 +94,13 @@ export function useCourseShare() {
     const blob = await res.blob();
     const file = new File([blob], filename, { type: 'image/png' });
 
-    if (
+    const canShareFiles = Boolean(
       options?.preferNativeShare &&
       typeof navigator.canShare === 'function' &&
       navigator.canShare({ files: [file] })
-    ) {
+    );
+
+    if (chooseShareDelivery(canShareFiles) === 'share') {
       await navigator.share({ files: [file], title: 'Lunchie Munchie' });
       return 'share';
     }

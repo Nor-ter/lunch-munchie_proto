@@ -113,4 +113,21 @@ describe("decideGroup", () => {
     const d = decideGroup(r1, [], 2, 2, false);
     expect(d.phase).toBe("REROLL");
   });
+
+  it("D: 호스트 '지금 진행'(forcePrelim) → 예선 미완료여도 결승으로", () => {
+    const r1 = [like("A", "u0"), like("B", "u0")]; // 3명 중 u0만 스와이프
+    expect(decideGroup(r1, [], 3, 1, false).phase).toBe("PRELIM"); // 평소엔 대기
+    const forced = decideGroup(r1, [], 3, 1, false, 1, 3, true); // forcePrelim
+    expect(forced.phase).toBe("FINAL");
+    expect(forced.finalists.map((f) => f.restaurantId).sort()).toEqual(["A", "B"]);
+  });
+
+  it("D: 호스트 '지금 진행'(forceFinal) → 투표 미완이어도 확정", () => {
+    const r1 = [like("A", "u0"), like("A", "u1"), like("B", "u0"), like("B", "u1")];
+    const r2 = [vote("A", "u0")]; // 2명 중 1명만 투표
+    expect(decideGroup(r1, r2, 2, 2, false).phase).toBe("FINAL"); // 평소엔 대기
+    const forced = decideGroup(r1, r2, 2, 2, false, 1, 3, false, true); // forceFinal
+    expect(forced.phase).toBe("DONE");
+    expect(forced.winnerId).toBe("A");
+  });
 });

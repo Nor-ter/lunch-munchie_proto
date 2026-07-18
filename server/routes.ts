@@ -1,7 +1,11 @@
-import { Router } from "express";
-import { db } from "./db.js";
+import { Router, type Request, type Response } from "express";
+import { db, tryDb, withDb } from "./db.js";
+import {
+  verifySupabaseRequestAuth,
+  type SupabaseRequestAuthVerifier,
+} from "./auth/supabaseAuth.js";
 import { users, sessions, restaurants, swipes, courses, courseItems, sessionMembers } from "../shared/schema.js";
-import { eq, and } from "drizzle-orm";
+import { eq, and, inArray } from "drizzle-orm";
 import { nanoid } from "nanoid";
 import { MOCK_RESTAURANTS, MOCK_COURSES } from "./melbourneData.js";
 import { buildSlate, buildControlSlate, assignVariant } from "./engine/scorer.js";
@@ -17,9 +21,59 @@ import { ENGINE_MODEL_VERSION } from "../shared/engine.js";
 import type { Candidate, RecContext, RecEventInput } from "../shared/engine.js";
 import { normalizeDiet, isHardRestriction } from "../shared/const.js";
 import type { DietTag } from "../shared/const.js";
-import { categoriesForIntent, intentForCategory } from "../shared/intent.js";
+import { intentForCategory, intentForHour } from "../shared/intent.js";
 
 const router = Router();
+
+interface EventsRouteDependencies {
+  verifyAuth: SupabaseRequestAuthVerifier;
+  persistEvents: (events: RecEventInput[]) => Promise<unknown>;
+}
+
+type CompatibleRequestIdentity =
+  | {
+      status: "ready";
+      userId: string | null | undefined;
+    }
+  | {
+      status: "responded";
+    };
+
+async function resolveCompatibleRequestIdentity(
+  req: Request,
+  res: Response,
+  fallbackUserId: string | null | undefined,
+  verifyAuth: SupabaseRequestAuthVerifier,
+): Promise<CompatibleRequestIdentity> {
+  let authResult;
+  try {
+    authResult = await verifyAuth(req.get("authorization"));
+  } catch {
+    res.status(401).json({ error: "invalid_authorization" });
+    return { status: "responded" };
+  }
+
+  if (
+    authResult.status === "malformed_authorization" ||
+    authResult.status === "invalid_token"
+  ) {
+    res.status(401).json({ error: "invalid_authorization" });
+    return { status: "responded" };
+  }
+
+  if (authResult.status === "unconfigured") {
+    res.status(503).json({ error: "auth_unavailable" });
+    return { status: "responded" };
+  }
+
+  return {
+    status: "ready",
+    userId:
+      authResult.status === "authenticated"
+        ? authResult.userId
+        : fallbackUserId,
+  };
+}
 
 // 공유 이미지 캡처용 동일 출처 프록시. 앱에서 사용하는 HTTPS 이미지 호스트만 허용한다.
 router.get("/image-proxy", async (req, res) => {
@@ -52,6 +106,8 @@ interface MemStore {
   swipes: Record<string, any>[];
 }
 const memSessions = new Map<string, MemStore>(); // key: share_token
+// 호스트 '지금 진행'(D): 강제 완료된 단계 `${session.id}:${round}` 집합 (서버 메모리).
+const forcedSteps = new Set<string>();
 
 function memByToken(token: string): MemStore | undefined {
   return memSessions.get(token);
@@ -64,9 +120,37 @@ function memBySessionId(id: string): MemStore | undefined {
   return found;
 }
 
+// 인제스트된 멜번 OSM 데이터(server/data/melbourne_osm.json)가 있으면 폴백으로 우선 사용.
+// 없으면 기존 하드코딩 mock. (DB 적재 전에도 실데이터로 앱이 돈다 — © OpenStreetMap contributors)
+import { readFileSync, existsSync } from "node:fs";
+import { join, dirname } from "node:path";
+import { fileURLToPath } from "node:url";
+const __osmPath = join(dirname(fileURLToPath(import.meta.url)), "data", "melbourne_osm.json");
+let __osmCache: Record<string, any>[] | null | undefined; // undefined=미시도, null=없음
+function osmRestaurants(): Record<string, any>[] | null {
+  if (__osmCache !== undefined) return __osmCache;
+  try {
+    __osmCache = existsSync(__osmPath) ? JSON.parse(readFileSync(__osmPath, "utf8")) : null;
+    if (__osmCache) console.log(`[data] 멜번 OSM 폴백 로드: ${__osmCache.length}곳`);
+  } catch { __osmCache = null; }
+  return __osmCache ?? null;
+}
+
 // DB 연결이 불가능할 때(예: Supabase 일시정지/포트 차단) 코스맵 프로토타입이
 // 그대로 동작하도록, 멜버른 샘플 데이터를 API 응답 형태로 변환하는 폴백 헬퍼.
 function mockRestaurantsResponse() {
+  const osm = osmRestaurants();
+  if (osm) {
+    return osm.map(r => ({
+      id: r.id, name: r.name, category: r.category,
+      tags: r.tags || [], rating: r.rating, reviewCount: r.review_count,
+      distance: "", address: r.address, image: (r.photos && r.photos[0]) || "",
+      photos: r.photos || [], menuItems: r.menu_items || [],
+      lat: r.latitude, lng: r.longitude, priceRange: r.price_level,
+      openHours: r.business_hours, dietary: r.dietary_options || [],
+      description: r.short_description,
+    }));
+  }
   return MOCK_RESTAURANTS.map(r => ({
     id: r.id,
     name: r.name,
@@ -77,6 +161,8 @@ function mockRestaurantsResponse() {
     distance: "500m",
     address: r.address,
     image: (r.photos && r.photos.length > 0) ? r.photos[0] : "",
+    photos: r.photos || [],
+    menuItems: r.menu_items || [],
     lat: r.latitude,
     lng: r.longitude,
     priceRange: r.price_level,
@@ -84,6 +170,20 @@ function mockRestaurantsResponse() {
     dietary: r.dietary_options || [],
     description: r.short_description,
   }));
+}
+
+// 여정 타임라인 표시용 — id → name (DB 우선, 실패 시 OSM 폴백). 대상 id만 조회(전체 스캔 X).
+async function restaurantNames(ids: string[]): Promise<Map<string, string>> {
+  const uniq = Array.from(new Set(ids));
+  if (!uniq.length) return new Map();
+  try {
+    const rows = await db.select({ id: restaurants.id, name: restaurants.name }).from(restaurants).where(inArray(restaurants.id, uniq));
+    if (rows.length) return new Map(rows.map((r) => [r.id, r.name]));
+  } catch { /* DB 불가 → 폴백 */ }
+  const osm = osmRestaurants();
+  const pool = osm ?? MOCK_RESTAURANTS;
+  const idSet = new Set(uniq);
+  return new Map(pool.filter((r) => idSet.has(r.id)).map((r) => [r.id, r.name as string]));
 }
 
 function mockCoursesResponse() {
@@ -175,14 +275,16 @@ router.post("/sessions/create", async (req: any, res: any) => {
       created_at: new Date()
     };
 
-    try {
-      await db.insert(sessions).values(newSession as any);
-      await db.insert(sessionMembers).values(newMember);
-    } catch (dbErr) {
-      // DB 불가 → 메모리 폴백 (같은 서버를 보는 모든 유저가 공유)
-      console.error("DB unavailable, creating session in memory:", (dbErr as Error)?.message);
-      memSessions.set(token, { session: newSession, members: [newMember], swipes: [] });
-    }
+    await withDb(
+      async () => {
+        await db.insert(sessions).values(newSession as any);
+        await db.insert(sessionMembers).values(newMember);
+      },
+      () => {
+        // DB 불가 → 메모리 폴백 (같은 서버를 보는 모든 유저가 공유)
+        memSessions.set(token, { session: newSession, members: [newMember], swipes: [] });
+      },
+    );
 
     res.status(201).json({ session: newSession, token });
   } catch (err) {
@@ -193,15 +295,14 @@ router.post("/sessions/create", async (req: any, res: any) => {
 
 router.get("/sessions/:token", async (req: any, res: any) => {
   const token = req.params.token;
-  try {
+  const r = await tryDb(async () => {
     const [session] = await db.select().from(sessions).where(eq(sessions.share_token, token));
-    if (session) {
-      const members = await db.select().from(sessionMembers).where(eq(sessionMembers.session_id, session.id));
-      return res.json({ session, members });
-    }
-  } catch (err) {
-    console.error("DB unavailable for fetch, trying memory:", (err as Error)?.message);
-  }
+    if (!session) return null;
+    const members = await db.select().from(sessionMembers).where(eq(sessionMembers.session_id, session.id));
+    return { session, members };
+  });
+  if (r.ok && r.value) return res.json(r.value);
+  // DB 다운이거나, DB엔 없지만 메모리(다운 중 생성된 세션)에 있을 수 있다.
   const mem = memByToken(token);
   if (mem) return res.json({ session: mem.session, members: mem.members });
   res.status(404).json({ error: "Session not found" });
@@ -210,38 +311,40 @@ router.get("/sessions/:token", async (req: any, res: any) => {
 router.post("/sessions/:token/join", async (req: any, res: any) => {
   const token = req.params.token;
   const { userId, userName, emoji } = req.body;
-  try {
+  const r = await tryDb(async () => {
     const [session] = await db.select().from(sessions).where(eq(sessions.share_token, token));
-    if (session) {
-      const existing = await db.select().from(sessionMembers).where(eq(sessionMembers.session_id, session.id));
-      const isAlreadyJoined = existing.find(m => m.user_id === userId);
+    if (!session) return { found: false as const };
+    const existing = await db.select().from(sessionMembers).where(eq(sessionMembers.session_id, session.id));
+    const isAlreadyJoined = existing.find(m => m.user_id === userId);
 
-      // 정원 제한: 새 참여자가 group_size를 넘기면 거부 (이미 들어온 사람은 갱신 허용)
-      const cap = (session as { group_size?: number }).group_size ?? 99;
-      if (!isAlreadyJoined && existing.length >= cap) {
-        return res.status(409).json({ error: "session_full", message: "정원이 찼어요", cap });
-      }
-
-      if (!isAlreadyJoined) {
-        await db.insert(sessionMembers).values({
-          id: nanoid(),
-          session_id: session.id,
-          user_id: userId,
-          user_name: userName,
-          emoji: emoji,
-          is_ready: false,
-          created_at: new Date()
-        });
-      } else {
-        await db.update(sessionMembers)
-          .set({ user_name: userName, emoji: emoji })
-          .where(and(eq(sessionMembers.user_id, userId), eq(sessionMembers.session_id, session.id)));
-      }
-
-      return res.status(200).json({ success: true });
+    // 정원 제한: 새 참여자가 group_size를 넘기면 거부 (이미 들어온 사람은 갱신 허용)
+    const cap = (session as { group_size?: number }).group_size ?? 99;
+    if (!isAlreadyJoined && existing.length >= cap) {
+      return { found: true as const, full: true as const, cap };
     }
-  } catch (err) {
-    console.error("DB unavailable for join, trying memory:", (err as Error)?.message);
+
+    if (!isAlreadyJoined) {
+      await db.insert(sessionMembers).values({
+        id: nanoid(),
+        session_id: session.id,
+        user_id: userId,
+        user_name: userName,
+        emoji: emoji,
+        is_ready: false,
+        created_at: new Date()
+      });
+    } else {
+      await db.update(sessionMembers)
+        .set({ user_name: userName, emoji: emoji })
+        .where(and(eq(sessionMembers.user_id, userId), eq(sessionMembers.session_id, session.id)));
+    }
+    return { found: true as const, full: false as const };
+  });
+  if (r.ok && r.value.found) {
+    if (r.value.full) {
+      return res.status(409).json({ error: "session_full", message: "정원이 찼어요", cap: r.value.cap });
+    }
+    return res.status(200).json({ success: true });
   }
   const mem = memByToken(token);
   if (mem) {
@@ -272,17 +375,15 @@ router.post("/sessions/:token/join", async (req: any, res: any) => {
 router.post("/sessions/:token/ready", async (req: any, res: any) => {
   const token = req.params.token;
   const { userId, isReady } = req.body;
-  try {
+  const r = await tryDb(async () => {
     const [session] = await db.select().from(sessions).where(eq(sessions.share_token, token));
-    if (session) {
-      await db.update(sessionMembers)
-        .set({ is_ready: isReady })
-        .where(and(eq(sessionMembers.user_id, userId), eq(sessionMembers.session_id, session.id)));
-      return res.status(200).json({ success: true });
-    }
-  } catch (err) {
-    console.error("DB unavailable for ready, trying memory:", (err as Error)?.message);
-  }
+    if (!session) return false;
+    await db.update(sessionMembers)
+      .set({ is_ready: isReady })
+      .where(and(eq(sessionMembers.user_id, userId), eq(sessionMembers.session_id, session.id)));
+    return true;
+  });
+  if (r.ok && r.value) return res.status(200).json({ success: true });
   const mem = memByToken(token);
   if (mem) {
     const member = mem.members.find(m => m.user_id === userId);
@@ -300,23 +401,36 @@ router.post("/sessions/:token/status", async (req: any, res: any) => {
   if (deadlineMinutes) {
     patch.deadline_at = new Date(Date.now() + 1000 * 60 * Number(deadlineMinutes));
   }
-  try {
+  const r = await tryDb(async () => {
     const [session] = await db.select().from(sessions).where(eq(sessions.share_token, token));
-    if (session) {
-      await db.update(sessions)
-        .set(patch)
-        .where(eq(sessions.share_token, token));
-      return res.status(200).json({ success: true });
-    }
-  } catch (err) {
-    console.error("DB unavailable for status, trying memory:", (err as Error)?.message);
-  }
+    if (!session) return false;
+    await db.update(sessions)
+      .set(patch)
+      .where(eq(sessions.share_token, token));
+    return true;
+  });
+  if (r.ok && r.value) return res.status(200).json({ success: true });
   const mem = memByToken(token);
   if (mem) {
     Object.assign(mem.session, patch);
     return res.status(200).json({ success: true });
   }
   res.status(404).json({ error: "Session not found" });
+});
+
+// 호스트 '지금 진행'(D) — 현재 단계(round)를 강제 완료 처리. 호스트만.
+router.post("/sessions/:token/force", async (req: any, res: any) => {
+  const { userId, round } = req.body;
+  let session: Record<string, any> | null = null;
+  try {
+    const [s] = await db.select().from(sessions).where(eq(sessions.share_token, req.params.token));
+    if (s) session = s;
+  } catch { /* mem 폴백 */ }
+  if (!session) { const mem = memByToken(req.params.token); if (mem) session = mem.session; }
+  if (!session) return res.status(404).json({ error: "Session not found" });
+  if (session.host_user_id !== userId) return res.status(403).json({ error: "host_only" });
+  forcedSteps.add(`${session.id}:${Number(round)}`);
+  return res.json({ success: true });
 });
 
 // 세션 결과 집계 — DB/메모리 공용 (rows는 컬럼명 기반 객체)
@@ -343,12 +457,21 @@ function buildResultsPayload(
   const prelimRound = 2 * generation - 1;
   const finalRound = 2 * generation;
   // 예선 덱은 추천엔진이 식단·시간대 인텐트까지 걸러 targetCount보다 작을 수 있다(예: 4장).
-  // 서버는 멤버별 실제 덱 크기를 재현할 수 없으므로, 덱을 다 소진한 클라가 보내는
-  // PRELIM_DONE_ID sentinel(결승의 __reject__와 같은 패턴)을 완료 신호로 함께 인정한다.
+  // 서버는 멤버별 실제 덱 크기를 재현할 수 없으므로, 클라가 스와이프를 시작하자마자 보내는
+  // DECK_SIZE sentinel로 자기 덱 크기를 알리고, 다 소진하면 PRELIM_DONE_ID로 완료를 알린다.
   const PRELIM_DONE_ID = "__prelim_done__";
+  const DECK_SIZE_PREFIX = "__deck_size__:";
   const r1All = sessionSwipes.filter(s => (Number(s.round) || 1) === prelimRound);
   const doneUsers = new Set(r1All.filter(s => s.restaurant_id === PRELIM_DONE_ID).map(s => s.user_id));
-  const r1 = r1All.filter(s => s.restaurant_id !== PRELIM_DONE_ID); // 집계에서 sentinel 제외 (안 빼면 가짜 결승 후보가 된다)
+  const deckSizeByUser: Record<string, number> = {};
+  r1All.forEach(s => {
+    if (typeof s.restaurant_id === 'string' && s.restaurant_id.startsWith(DECK_SIZE_PREFIX)) {
+      const n = Number(s.restaurant_id.slice(DECK_SIZE_PREFIX.length));
+      if (Number.isFinite(n) && n > 0) deckSizeByUser[s.user_id] = n;
+    }
+  });
+  // 집계에서 sentinel 전부 제외 (안 빼면 가짜 결승 후보가 된다)
+  const r1 = r1All.filter(s => s.restaurant_id !== PRELIM_DONE_ID && !(typeof s.restaurant_id === 'string' && s.restaurant_id.startsWith(DECK_SIZE_PREFIX)));
   const r2 = sessionSwipes.filter(s => Number(s.round) === finalRound);
 
   const completionMap: Record<string, number> = {};
@@ -356,13 +479,19 @@ function buildResultsPayload(
     completionMap[s.user_id] = (completionMap[s.user_id] || 0) + 1;
   });
 
+  // 멤버별 실제 목표치 — 클라가 알려온 자기 덱 크기가 있으면 그걸, 없으면(아직 미도착) 서버 추정치.
+  const memberTargetOf = (userId: string) => deckSizeByUser[userId] ?? targetCount;
   const isMemberDone = (userId: string) =>
-    (completionMap[userId] || 0) >= targetCount || doneUsers.has(userId);
+    (completionMap[userId] || 0) >= memberTargetOf(userId) || doneUsers.has(userId);
   const completedMembers = members.filter(m => isMemberDone(m.user_id));
   const isExpired = Date.now() > new Date(session.deadline_at).getTime();
 
+  // D: 호스트 '지금 진행'으로 현재 예선/결승 단계 강제 완료됐나
+  const forcePrelim = forcedSteps.has(`${session.id}:${prelimRound}`);
+  const forceFinal = forcedSteps.has(`${session.id}:${finalRound}`);
+
   // 그룹 결정 상태기계: least-misery 집계 + 3지선다 결승 + reroll/합의실패 (현재 세대 기준)
-  const decision = decideGroup(r1 as any, r2 as any, members.length, completedMembers.length, isExpired, generation, REROLL_CAP);
+  const decision = decideGroup(r1 as any, r2 as any, members.length, completedMembers.length, isExpired, generation, REROLL_CAP, forcePrelim, forceFinal);
 
   // 결승 투표 여부(라운드=finalRound의 LIKE, 후보든 '둘 다 별로'든 한 표 던지면 투표 완료).
   const finalVoters = new Set(r2.filter(s => s.swipe_action === 'LIKE').map(s => s.user_id));
@@ -373,8 +502,8 @@ function buildResultsPayload(
   const memberCompletion = members.map(m => {
     const cnt = completionMap[m.user_id] || 0;
     const prelimDone = isMemberDone(m.user_id);
-    // 덱이 targetCount보다 작았던 멤버는 실제 스와이프 수를 분모로 보여준다 (예: 4/4)
-    const memberTarget = prelimDone ? Math.min(cnt, targetCount) || targetCount : targetCount;
+    // 클라가 알려온 실제 덱 크기를 분모로 쓴다 (예: 4장이면 진행 중에도 x/4로 표시).
+    const memberTarget = memberTargetOf(m.user_id);
     const inFinalStage = decision.phase === 'FINAL';
     return {
       id: m.user_id,
@@ -407,26 +536,23 @@ function buildResultsPayload(
 
 router.get("/sessions/:token/results", async (req: any, res: any) => {
   const token = req.params.token;
-  try {
+  const r = await tryDb(async () => {
     const [session] = await db.select().from(sessions).where(eq(sessions.share_token, token));
-    if (session) {
-      const members = await db.select().from(sessionMembers).where(eq(sessionMembers.session_id, session.id));
-      const sessionSwipes = await db.select().from(swipes).where(eq(swipes.session_id, session.id));
-      const allRestaurants = await db.select().from(restaurants);
+    if (!session) return null;
+    const members = await db.select().from(sessionMembers).where(eq(sessionMembers.session_id, session.id));
+    const sessionSwipes = await db.select().from(swipes).where(eq(swipes.session_id, session.id));
+    const allRestaurants = await db.select().from(restaurants);
 
-      const payload = buildResultsPayload(session, members, sessionSwipes, allRestaurants);
+    const payload = buildResultsPayload(session, members, sessionSwipes, allRestaurants);
 
-      if (payload.isExpired && session.status !== 'COMPLETED') {
-        await db.update(sessions)
-          .set({ status: 'COMPLETED' })
-          .where(eq(sessions.id, session.id));
-      }
-
-      return res.json(payload);
+    if (payload.isExpired && session.status !== 'COMPLETED') {
+      await db.update(sessions)
+        .set({ status: 'COMPLETED' })
+        .where(eq(sessions.id, session.id));
     }
-  } catch (err) {
-    console.error("DB unavailable for results, trying memory:", (err as Error)?.message);
-  }
+    return payload;
+  });
+  if (r.ok && r.value) return res.json(r.value);
   const mem = memByToken(token);
   if (mem) {
     const payload = buildResultsPayload(mem.session, mem.members, mem.swipes, MOCK_RESTAURANTS);
@@ -440,9 +566,9 @@ router.get("/sessions/:token/results", async (req: any, res: any) => {
 
 // Restaurants
 router.get("/restaurants", async (req: any, res: any) => {
-  try {
-    const allRestaurants = await db.select().from(restaurants);
-    const formatted = allRestaurants.map(r => ({
+  const dbRes = await tryDb(() => db.select().from(restaurants));
+  if (dbRes.ok) {
+    const formatted = dbRes.value.map(r => ({
       id: r.id,
       name: r.name,
       category: r.category,
@@ -452,6 +578,8 @@ router.get("/restaurants", async (req: any, res: any) => {
       distance: "500m", // Mock distance
       address: r.address,
       image: (r.photos && r.photos.length > 0) ? r.photos[0] : "",
+      photos: r.photos || [],
+      menuItems: r.menu_items || [],
       lat: r.latitude,
       lng: r.longitude,
       priceRange: r.price_level,
@@ -460,19 +588,20 @@ router.get("/restaurants", async (req: any, res: any) => {
       description: r.short_description
     }));
     // DB가 비어 있으면(시드 전) 멜버른 샘플 데이터로 폴백.
-    res.json(formatted.length > 0 ? formatted : mockRestaurantsResponse());
-  } catch (err) {
-    console.error("Falling back to mock restaurants:", (err as Error)?.message);
-    res.json(mockRestaurantsResponse());
+    return res.json(formatted.length > 0 ? formatted : mockRestaurantsResponse());
   }
+  res.json(mockRestaurantsResponse());
 });
 
 // Courses
 router.get("/courses", async (req: any, res: any) => {
-  try {
+  const dbRes = await tryDb(async () => {
     const allCourses = await db.select().from(courses);
     const allCourseItems = await db.select().from(courseItems);
-    
+    return { allCourses, allCourseItems };
+  });
+  if (dbRes.ok) {
+    const { allCourses, allCourseItems } = dbRes.value;
     const formattedCourses = allCourses.map(c => {
       const stops = allCourseItems.filter(ci => ci.course_id === c.id).map(ci => ({
         placeId: ci.restaurant_id,
@@ -502,11 +631,9 @@ router.get("/courses", async (req: any, res: any) => {
         savedCount: c.saves_count
       };
     });
-    res.json(formattedCourses.length > 0 ? formattedCourses : mockCoursesResponse());
-  } catch (err) {
-    console.error("Falling back to mock courses:", (err as Error)?.message);
-    res.json(mockCoursesResponse());
+    return res.json(formattedCourses.length > 0 ? formattedCourses : mockCoursesResponse());
   }
+  res.json(mockCoursesResponse());
 });
 
 // Swipes
@@ -521,12 +648,8 @@ router.post("/swipes", async (req: any, res: any) => {
     swipe_action,
     created_at: created_at ? new Date(created_at) : new Date()
   };
-  try {
-    await db.insert(swipes).values(row);
-    return res.status(201).json({ success: true });
-  } catch (err) {
-    console.error("DB unavailable for swipe, trying memory:", (err as Error)?.message);
-  }
+  const r = await tryDb(() => db.insert(swipes).values(row));
+  if (r.ok) return res.status(201).json({ success: true });
   const mem = memBySessionId(session_id);
   if (mem) {
     mem.swipes.push(row);
@@ -538,8 +661,8 @@ router.post("/swipes", async (req: any, res: any) => {
 // ── 런치 엔진 v0 — 로깅 / 추천 (Phase 0) ─────────────────────────────────────
 // 후보 풀: DB 우선, 실패 시 멜버른 mock 폴백.
 async function candidatePool(): Promise<Candidate[]> {
-  try {
-    const rows = await db
+  const dbRes = await tryDb(() =>
+    db
       .select({
         id: restaurants.id,
         rating: restaurants.rating,
@@ -548,10 +671,17 @@ async function candidatePool(): Promise<Candidate[]> {
         category: restaurants.category,
         dietary_options: restaurants.dietary_options,
       })
-      .from(restaurants);
-    if (rows.length) return rows as Candidate[];
-  } catch (err) {
-    console.error("DB unavailable for candidates, using mock:", (err as Error)?.message);
+      .from(restaurants),
+  );
+  if (dbRes.ok && dbRes.value.length) return dbRes.value as Candidate[];
+  // DB 불가/빈 결과 → OSM(멜버른) 폴백 → 그래도 없으면 MOCK (폴백 체인)
+  const osm = osmRestaurants();
+  if (osm) {
+    return osm.map((r) => ({
+      id: r.id, rating: r.rating, review_count: r.review_count,
+      price_level: r.price_level, category: r.category,
+      dietary_options: r.dietary_options,
+    })) as Candidate[];
   }
   return MOCK_RESTAURANTS.map((r) => ({
     id: r.id,
@@ -582,54 +712,116 @@ function requiredHardDiets(diet?: string[]): DietTag[] {
 }
 
 // 이벤트 수집: 단건 또는 { events: [...] } 배치 모두 허용.
-router.post("/events", async (req, res) => {
-  const body = req.body ?? {};
-  const events: RecEventInput[] = Array.isArray(body.events)
-    ? body.events
-    : body.event_type
-      ? [body]
-      : [];
-  if (!events.length) return res.status(400).json({ error: "no events" });
-  // v1 온라인 학습: 스와이프(암묵 라벨)마다 취향 벡터 theta_u를 즉시 SGD 갱신.
-  // v2 satiation: WINNER(=소비 프록시)로 (user,카테고리,시각) 소비 이력 누적.
-  for (const e of events) {
-    if (!e.user_id || !e.restaurant_id) continue;
-    const feat = getItemFeatures(String(e.restaurant_id));
-    if (!feat) continue;
-    const uid = String(e.user_id);
-    const vec = buildItemVector(feat);
-    if (e.event_type === "SWIPE" && (e.action === "LIKE" || e.action === "NOPE")) {
-      updateTaste(uid, vec, e.action === "LIKE" ? 1 : 0); // 스와이프=약한 라벨 (둘 다 별로의 FINAL NOPE도 여기)
-    } else if (e.event_type === "SWIPE" && e.action === "CHOOSE") {
-      // 듀얼 A>B = 최고급 pairwise 신호 (결정 플로우 ⑤). opponent로 패자 파생해 pairwise 학습.
-      // 신뢰도 가중: 빠르고 단호할수록 강하게(decision_ms).
-      const c = e.context as { opponent_id?: string; decision_ms?: number } | null | undefined;
-      const oppFeat = c?.opponent_id ? getItemFeatures(String(c.opponent_id)) : undefined;
-      if (oppFeat) updatePairwise(uid, vec, buildItemVector(oppFeat), pairwiseWeight(c?.decision_ms));
-    } else if (e.event_type === "WINNER" && feat.category) {
-      updateTaste(uid, vec, 1, 2); // v4: 우승=강한 긍정(직접 선택)
-      const ctx = e.context as { consumed_at?: number } | null | undefined;
-      const ts = typeof ctx?.consumed_at === "number" ? ctx.consumed_at : Date.now();
-      recordConsumption(uid, feat.category, ts); // v2 satiation
-      recordStop(uid, feat.category, ts);        // v2 음식 연쇄
-    } else if (e.event_type === "COURSE_SAVE") {
-      updateTaste(uid, vec, 1, 3); // v4: 저장=가장 강한 명시 신호
+export function createEventsHandler(
+  dependencies: EventsRouteDependencies = {
+    verifyAuth: verifySupabaseRequestAuth,
+    persistEvents: recordEvents,
+  },
+) {
+  return async (req: Request, res: Response) => {
+    const body = req.body ?? {};
+    const requestedEvents: RecEventInput[] = Array.isArray(body.events)
+      ? body.events
+      : body.event_type
+        ? [body]
+        : [];
+    if (!requestedEvents.length) {
+      return res.status(400).json({ error: "no events" });
     }
-  }
-  const result = await recordEvents(events);
-  res.status(201).json(result);
-});
+
+    let authResult;
+    try {
+      authResult = await dependencies.verifyAuth(req.get("authorization"));
+    } catch {
+      return res.status(401).json({ error: "invalid_authorization" });
+    }
+
+    if (
+      authResult.status === "malformed_authorization" ||
+      authResult.status === "invalid_token"
+    ) {
+      return res.status(401).json({ error: "invalid_authorization" });
+    }
+
+    if (authResult.status === "unconfigured") {
+      return res.status(503).json({ error: "auth_unavailable" });
+    }
+
+    const events: RecEventInput[] =
+      authResult.status === "authenticated"
+        ? requestedEvents.map((event) => ({
+            ...event,
+            user_id: authResult.userId,
+          }))
+        : requestedEvents;
+
+    // v1 온라인 학습: 스와이프(암묵 라벨)마다 취향 벡터 theta_u를 즉시 SGD 갱신.
+    // v2 satiation: WINNER(=소비 프록시)로 (user,카테고리,시각) 소비 이력 누적.
+    for (const e of events) {
+      if (!e.user_id || !e.restaurant_id) continue;
+      const feat = getItemFeatures(String(e.restaurant_id));
+      if (!feat) continue;
+      const uid = String(e.user_id);
+      const vec = buildItemVector(feat);
+      if (e.event_type === "SWIPE" && (e.action === "LIKE" || e.action === "NOPE")) {
+        updateTaste(uid, vec, e.action === "LIKE" ? 1 : 0); // 스와이프=약한 라벨 (둘 다 별로의 FINAL NOPE도 여기)
+      } else if (e.event_type === "SWIPE" && e.action === "CHOOSE") {
+        // 듀얼 A>B = 최고급 pairwise 신호 (결정 플로우 ⑤). opponent로 패자 파생해 pairwise 학습.
+        // 신뢰도 가중: 빠르고 단호할수록 강하게(decision_ms).
+        const c = e.context as { opponent_id?: string; decision_ms?: number } | null | undefined;
+        const oppFeat = c?.opponent_id ? getItemFeatures(String(c.opponent_id)) : undefined;
+        if (oppFeat) updatePairwise(uid, vec, buildItemVector(oppFeat), pairwiseWeight(c?.decision_ms));
+      } else if (e.event_type === "WINNER" && feat.category) {
+        updateTaste(uid, vec, 1, 2); // v4: 우승=강한 긍정(직접 선택)
+        const ctx = e.context as { consumed_at?: number } | null | undefined;
+        const ts = typeof ctx?.consumed_at === "number" ? ctx.consumed_at : Date.now();
+        recordConsumption(uid, feat.category, ts); // v2 satiation
+        recordStop(uid, feat.category, ts);        // v2 음식 연쇄
+      } else if (e.event_type === "COURSE_SAVE") {
+        updateTaste(uid, vec, 1, 3); // v4: 저장=가장 강한 명시 신호
+      }
+    }
+    const result = await dependencies.persistEvents(events);
+    res.status(201).json(result);
+  };
+}
+
+router.post("/events", createEventsHandler());
 
 // 추천 슬레이트 + propensity 로깅. v0 휴리스틱 스코어러.
-router.post("/recommend", async (req, res) => {
+interface RecommendRouteDependencies {
+  verifyAuth: SupabaseRequestAuthVerifier;
+  enrichRequestContext: (context: RecContext) => Promise<RecContext>;
+  loadCandidates: () => Promise<Candidate[]>;
+  persistEvents: (events: RecEventInput[]) => Promise<unknown>;
+}
+
+export function createRecommendHandler(
+  dependencies: RecommendRouteDependencies = {
+    verifyAuth: verifySupabaseRequestAuth,
+    enrichRequestContext: enrichContext,
+    loadCandidates: candidatePool,
+    persistEvents: recordEvents,
+  },
+) {
+  return async (req: Request, res: Response) => {
   const body = req.body ?? {};
+  const identity = await resolveCompatibleRequestIdentity(
+    req,
+    res,
+    body.user_id,
+    dependencies.verifyAuth,
+  );
+  if (identity.status === "responded") return;
+  const userId = identity.userId;
+
   // 맥락 보강(Phase 0b): 클라가 안 보낸 파생 가능 필드(시간대·요일·도시·날씨)를 서버에서 채움.
   // 스코어링·IMPRESSION 로깅 모두 보강된 맥락을 쓴다.
-  const ctx: RecContext = await enrichContext(body.context ?? {});
+  const ctx: RecContext = await dependencies.enrichRequestContext(body.context ?? {});
   const k = typeof body.k === "number" ? body.k : 7;
   // 진짜 A/B: 서버가 user_id로 결정적 배정 (body.variant는 테스트 오버라이드용).
-  const variant: string = body.variant ?? assignVariant(body.user_id);
-  const pool = await candidatePool();
+  const variant: string = body.variant ?? assignVariant(userId);
+  const pool = await dependencies.loadCandidates();
   recordCatalogSize(pool.length); // 커버리지 분모(전체 카탈로그 크기) 추적
   recordItemFeatures(pool.map((c) => ({ id: c.id, category: c.category, price_level: c.price_level, rating: c.rating }))); // feature 효과 분석용
   // 클라이언트가 사전 필터(카테고리 등)한 후보만 점수화하도록 범위 제한 (선택)
@@ -651,8 +843,7 @@ router.post("/recommend", async (req, res) => {
   // 인텐트(밥/카페/디저트) 필터: 후보를 해당 카테고리군으로 제한. 모두 걸러지면 완화.
   let intent_relaxed = false;
   if (ctx.intent) {
-    const cats = new Set(categoriesForIntent(ctx.intent));
-    const byIntent = filtered.filter((c) => c.category != null && cats.has(c.category));
+    const byIntent = filtered.filter((c) => intentForCategory(c.category) === ctx.intent);
     if (byIntent.length) filtered = byIntent;
     else intent_relaxed = true;
   }
@@ -661,7 +852,7 @@ router.post("/recommend", async (req, res) => {
   // 그룹 합의: member_ids 있으면 멤버 취향을 least-misery로 합성. 없으면 단일 유저.
   const memberIds: string[] = Array.isArray(body.member_ids) && body.member_ids.length
     ? body.member_ids.map(String)
-    : (body.user_id ? [String(body.user_id)] : []);
+    : (userId ? [String(userId)] : []);
   const memberThetas: number[][] = [];
   for (const uid of memberIds) {
     const t = getTaste(uid);
@@ -675,13 +866,13 @@ router.post("/recommend", async (req, res) => {
     for (const th of memberThetas) m = Math.min(m, tasteFitFromTheta(th, x));
     return m;
   };
-  const prev = prevStop(body.user_id, now); // 같은 occasion 직전 스톱 (있으면 다음-스톱 가산)
+  const prev = prevStop(userId, now); // 같은 occasion 직전 스톱 (있으면 다음-스톱 가산)
   const slate = variant === "control"
     ? buildControlSlate(filtered, ctx, { k })
     : buildSlate(filtered, ctx, {
         k, eps: 0.05, tasteFit, // 탐색=Thompson, 그룹=least-misery
-        exposurePenalty: (id) => exposurePenalty(body.user_id, id, now),
-        satiation: (cat) => satiationScore(body.user_id, cat, now),
+        exposurePenalty: (id) => exposurePenalty(userId, id, now),
+        satiation: (cat) => satiationScore(userId, cat, now),
         chainFit: (cat) => chainFitFn(prev, cat),
       });
   // arm·합성 방식별 model_version
@@ -692,12 +883,12 @@ router.post("/recommend", async (req, res) => {
   const slate_type = (body.slate_type as "PRELIM" | "FINAL" | "NEXT_STOP" | "COURSE_FEED") ?? "PRELIM";
 
   // 노출(IMPRESSION) 이벤트를 slate_id·propensity와 함께 기록 → off-policy 평가 기반
-  await recordEvents(
+  await dependencies.persistEvents(
     slate.map((s) => ({
       event_type: "IMPRESSION" as const,
       slate_id,
       slate_type,
-      user_id: body.user_id ?? null,
+      user_id: userId ?? null,
       session_id: body.session_id ?? null,
       group_id: body.session_id ?? null,
       restaurant_id: s.id,
@@ -710,21 +901,49 @@ router.post("/recommend", async (req, res) => {
     }))
   );
   // 실제 보여준 카드만 노출 누적 (다음 추천의 단기 피로 패널티에 반영)
-  for (const s of slate) recordExposure(body.user_id, s.id, now);
+  for (const s of slate) recordExposure(userId, s.id, now);
 
   res.json({ slate, slate_id, slate_type, model_version: mv, variant, diet_relaxed, intent_relaxed });
-});
+  };
+}
+
+router.post("/recommend", createRecommendHandler());
 
 // 하루 여정: 오늘의 스톱 타임라인 + (사슬 열림 시) 다음-스톱 제안.
-  router.get("/journey/today", async (req, res) => {
-  const userId = String(req.query.userId ?? "");
+interface JourneyTodayRouteDependencies {
+  verifyAuth: SupabaseRequestAuthVerifier;
+  loadTodayStops: typeof todayStops;
+  loadRestaurantNames: typeof restaurantNames;
+  loadCandidates: typeof candidatePool;
+}
+
+export function createJourneyTodayHandler(
+  dependencies: JourneyTodayRouteDependencies = {
+    verifyAuth: verifySupabaseRequestAuth,
+    loadTodayStops: todayStops,
+    loadRestaurantNames: restaurantNames,
+    loadCandidates: candidatePool,
+  },
+) {
+  return async (req: Request, res: Response) => {
+  const fallbackUserId = String(req.query.userId ?? "");
+  const identity = await resolveCompatibleRequestIdentity(
+    req,
+    res,
+    fallbackUserId,
+    dependencies.verifyAuth,
+  );
+  if (identity.status === "responded") return;
+  const userId = String(identity.userId ?? "");
   if (!userId) return res.json({ stops: [], nextSuggestion: null });
   const now = Date.now();
-  const stops = await todayStops(userId, now);
-  let nextSuggestion: { intent: string; restaurant: { id: string; category?: string }; reason: string } | null = null;
+  const stopsRaw = await dependencies.loadTodayStops(userId, now);
+  const nameMap = await dependencies.loadRestaurantNames(stopsRaw.map((s) => s.restaurant_id));
+  const stops = stopsRaw.map((s) => ({ ...s, name: nameMap.get(s.restaurant_id) ?? s.restaurant_id }));
+  let nextSuggestion: { intent: string; restaurant: { id: string; name: string; category?: string }; reason: string } | null = null;
   const prev = prevStop(userId, now); // 6h occasion 윈도우 내 직전 카테고리 (없으면 null = 사슬 닫힘)
   if (prev) {
-    const pool = await candidatePool();
+    const pool = await dependencies.loadCandidates();
     // 직전 카테고리 다음에 가장 잘 오는 카테고리 (chainFit 최대) → 인텐트
     const cats = Array.from(new Set(pool.map((c) => c.category).filter(Boolean) as string[]));
     let bestCat: string | null = null, bestP = 0;
@@ -732,27 +951,53 @@ router.post("/recommend", async (req, res) => {
       const p = chainFitFn(prev, c);
       if (p > bestP) { bestP = p; bestCat = c; }
     }
-    const intent = intentForCategory(bestCat) ?? "cafe";
+    // 신호 없으면(bestCat null) 시간대 기반으로 — "cafe" 하드코딩 폴백은 버그였음(항상 카페만 제안됨)
+    const intent = bestCat ? (intentForCategory(bestCat) ?? intentForHour(new Date(now).getHours())) : intentForHour(new Date(now).getHours());
     const visited = new Set(stops.map((s) => s.restaurant_id));
-    const wanted = new Set(categoriesForIntent(intent as "meal" | "cafe" | "dessert"));
     const pick = pool
-      .filter((c) => c.category && wanted.has(c.category) && !visited.has(c.id))
+      .filter((c) => intentForCategory(c.category) === intent && !visited.has(c.id))
       .sort((a, b) => (b.rating ?? 0) - (a.rating ?? 0))[0];
     if (pick) {
-      nextSuggestion = { intent, restaurant: { id: pick.id, category: pick.category }, reason: `${prev} 다음` };
+      const pickName = (await dependencies.loadRestaurantNames([pick.id])).get(pick.id) ?? pick.id;
+      nextSuggestion = { intent, restaurant: { id: pick.id, name: pickName, category: pick.category }, reason: `${prev} 다음` };
     }
   }
     res.json({ stops, nextSuggestion });
-  });
+  };
+}
 
-  // 전구 알림에서 언제든 확인하는 최근 여정 히스토리 (최신순, 최대 5개).
-  router.get("/journey/history", async (req, res) => {
-    const userId = String(req.query.userId ?? "");
+router.get("/journey/today", createJourneyTodayHandler());
+
+// 전구 알림에서 언제든 확인하는 최근 여정 히스토리 (최신순, 최대 5개).
+interface JourneyHistoryRouteDependencies {
+  verifyAuth: SupabaseRequestAuthVerifier;
+  loadRecentStops: typeof recentStops;
+}
+
+export function createJourneyHistoryHandler(
+  dependencies: JourneyHistoryRouteDependencies = {
+    verifyAuth: verifySupabaseRequestAuth,
+    loadRecentStops: recentStops,
+  },
+) {
+  return async (req: Request, res: Response) => {
+    const fallbackUserId = String(req.query.userId ?? "");
+    const identity = await resolveCompatibleRequestIdentity(
+      req,
+      res,
+      fallbackUserId,
+      dependencies.verifyAuth,
+    );
+    if (identity.status === "responded") return;
+    const userId = String(identity.userId ?? "");
     if (!userId) return res.json({ stops: [] });
     const requested = Number(req.query.limit ?? 5);
     const limit = Number.isFinite(requested) ? Math.max(1, Math.min(Math.floor(requested), 5)) : 5;
-    res.json({ stops: await recentStops(userId, limit) });
-  });
+    res.json({ stops: await dependencies.loadRecentStops(userId, limit) });
+  };
+}
+
+router.get("/journey/history", createJourneyHistoryHandler());
 
 // 디버그: 인메모리 버퍼에 쌓인 이벤트 수 (DB 폴백 동작 확인용)
 router.get("/events/_debug", (_req, res) => {
