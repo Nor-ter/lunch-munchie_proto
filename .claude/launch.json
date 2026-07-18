@@ -19,6 +19,12 @@
       "runtimeArgs": ["run", "dev:client", "--", "--port", "0"],
       "port": 5173,
       "autoPort": true
+    },
+    {
+      "name": "doc-preview",
+      "runtimeExecutable": "python3",
+      "runtimeArgs": ["-m", "http.server", "8931", "--directory", "/private/tmp/claude-501/-Users-jonghopark-Documents-GitHub-lunch-munchie-proto/acf21dbe-ab07-4898-a897-3c18d52ae0d5/scratchpad"],
+      "port": 8931
     }
   ]
 }
