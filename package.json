@@ -16,6 +16,8 @@
     "test:e2e:web-follow": "playwright test --config playwright.web-follow.config.ts",
     "harness:web-follow": "node automation/web-follow-login/run.mjs",
     "harness:web-follow:status": "node automation/web-follow-login/run.mjs status",
+    "harness:web-maps": "node automation/web-maps-places/run.mjs",
+    "harness:web-maps:status": "node automation/web-maps-places/run.mjs status",
     "format": "prettier --write ."
   },
   "dependencies": {
@@ -52,6 +54,7 @@
     "@supabase/supabase-js": "^2.110.5",
     "@tanstack/react-query": "^5.101.2",
     "@types/leaflet": "^1.9.21",
+    "@vis.gl/react-google-maps": "^1.9.0",
     "axios": "^1.12.0",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",

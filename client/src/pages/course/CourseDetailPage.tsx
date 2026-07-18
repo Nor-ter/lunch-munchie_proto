@@ -20,7 +20,7 @@ import {
   arrayMove,
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
-import { CourseMap } from '@/components/course/CourseMap';
+import { CourseMapView } from '@/components/course/CourseMapView';
 import { useApp } from '@/contexts/AppContext';
 import { getCourseById as getMockCourseById } from '@/data/mockCourse';
 import { CoursePlace } from '@/types/course';
@@ -151,6 +151,7 @@ function PlaceItem({
             {' '}{place.rating} · {place.distance}
           </p>
           <p className="text-xs text-gray-400">{place.category}</p>
+          {place.address && <p className="text-[11px] text-gray-400 truncate">{place.address}</p>}
           {/* 하이라이트 시: 밀어서 상세보기 힌트 */}
           {selected && !isEditing && (
             <motion.p
@@ -509,7 +510,7 @@ export default function CourseDetailPage() {
 
       {/* Map area */}
       <div className="relative mx-4 mb-4 h-[220px] rounded-2xl overflow-hidden">
-        <CourseMap places={places} width={430} height={220} className="w-full h-full" />
+        <CourseMapView places={places} width={430} height={220} className="w-full h-full" />
       </div>
 
       {/* Stats bar */}

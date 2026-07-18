@@ -590,6 +590,11 @@ interface AppContextValue {
   setCourseSkin: (courseId: string, skinId: string | null) => void;
 
   restaurants: Restaurant[];
+  /** Google Places로 새로 가져온 식당을 로컬 풀에 병합(id 중복이면 최신으로 덮어씀) —
+   * PlaceExplorePage가 place-details 직후 getRestaurantById가 바로 찾을 수 있게 한다.
+   * 서버(Supabase restaurants 테이블)에는 Edge Function이 이미 upsert 해뒀으니
+   * 다음 부팅 시 /api/restaurants 로 자연히 들어옴 — 이건 같은 세션 내 즉시 반영용. */
+  registerRestaurants: (newRestaurants: Restaurant[]) => void;
   getRestaurantById: (id: string) => Restaurant | undefined;
   getCourseById: (id: string) => Course | undefined;
   isLoading: boolean;
@@ -1194,6 +1199,14 @@ export function AppProvider({
   const getRestaurantById = useCallback((id: string) => restaurants.find(r => r.id === id), [restaurants]);
   const getCourseById = useCallback((id: string) => courses.find(c => c.id === id), [courses]);
 
+  const registerRestaurants = useCallback((newRestaurants: Restaurant[]) => {
+    setRestaurants(prev => {
+      const byId = new Map(prev.map(r => [r.id, r] as const));
+      for (const r of newRestaurants) byId.set(r.id, r);
+      return Array.from(byId.values());
+    });
+  }, []);
+
   return (
     <AppContext.Provider value={{
       courses, savedCourseIds, saveCourse, unsaveCourse, addCourse, updateCourse,
@@ -1205,7 +1218,7 @@ export function AppProvider({
       feedPosts, addFeedPost, updateFeedPost, deleteFeedPost,
       likedFeedIds, toggleFeedLike, addFeedComment, toggleCommentHidden, isMyPost,
       courseSkins, setCourseSkin,
-      restaurants,
+      restaurants, registerRestaurants,
       getRestaurantById, getCourseById,
       isLoading, apiAvailable,
     }}>

@@ -12,6 +12,7 @@ import { ThemeProvider } from "./contexts/ThemeContext";
 import { AppProvider } from "./contexts/AppContext";
 import { supabase } from "./lib/supabase";
 import AuthBootstrap from "./components/auth/AuthBootstrap";
+import { MapProvider } from "./components/map/MapProvider";
 import TabBar from "./components/TabBar";
 import OnboardingPage from "./pages/OnboardingPage";
 import HomePage from "./pages/HomePage";
@@ -40,8 +41,9 @@ import MetricsPage from "./pages/MetricsPage";
 import TemplateDetailPage from "./pages/TemplateDetailPage";
 import TemplatesBrowsePage from "./pages/TemplatesBrowsePage";
 import CourseFeedsPage from "./pages/course/CourseFeedsPage";
+import PlaceExplorePage from "./pages/PlaceExplorePage";
 
-const NO_TABBAR = ['/onboarding', '/tour-mode', '/course/', '/template/', '/templates', '/lunchie', '/session', '/join', '/feed/'];
+const NO_TABBAR = ['/onboarding', '/tour-mode', '/course/', '/template/', '/templates', '/lunchie', '/session', '/join', '/feed/', '/explore/places'];
 
 function CoursesRedirect() {
   const params = useParams<{ id: string }>();
@@ -60,6 +62,7 @@ function AppShell() {
             <Route path="/" component={HomePage} />
             {/* 기존 먼치모드(코스 탐색)는 Munchie Feed로 통합 */}
             <Route path="/explore">{() => <Redirect to="/feed" />}</Route>
+            <Route path="/explore/places" component={PlaceExplorePage} />
             <Route path="/feed" component={MunchieFeedPage} />
             <Route path="/feed/new" component={FeedComposePage} />
             <Route path="/feed/:id/edit" component={FeedEditPage} />
@@ -123,10 +126,12 @@ export default function App() {
           <AuthBootstrap>
             {(userId) => (
               <AppProvider initialAuthUserId={userId}>
-                <TooltipProvider>
-                  <Toaster />
-                  <AppShell />
-                </TooltipProvider>
+                <MapProvider>
+                  <TooltipProvider>
+                    <Toaster />
+                    <AppShell />
+                  </TooltipProvider>
+                </MapProvider>
               </AppProvider>
             )}
           </AuthBootstrap>

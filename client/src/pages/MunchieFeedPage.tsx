@@ -6,7 +6,7 @@ import { useState } from 'react';
 import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useLocation, useSearch } from 'wouter';
-import { ChevronRight, LayoutGrid, SlidersHorizontal, PenLine, Plus } from 'lucide-react';
+import { ChevronRight, LayoutGrid, SlidersHorizontal, PenLine, Plus, MapPinned } from 'lucide-react';
 import { useApp, TagType } from '@/contexts/AppContext';
 import { getCourseTagStyle } from '@/constants/courseTheme';
 import { FOOD_FILTER_TAGS, hasFoodTag } from '@/constants/foodTags';
@@ -46,9 +46,19 @@ export default function MunchieFeedPage() {
               {view === 'feed' ? '사진과 한줄평으로 남기는 정성 기록' : '스크랩북 템플릿을 탐색해보아요'}
             </p>
           </div>
-          <button className="w-10 h-10 rounded-full bg-[#F5F5F5] flex items-center justify-center">
-            <SlidersHorizontal size={18} color="#4A4A4A" />
-          </button>
+          <div className="flex items-center gap-2">
+            {/* 실제 식당 탐색(Google Places) 진입 — web-maps-places-workflow.md Phase 3 */}
+            <button
+              onClick={() => navigate('/explore/places')}
+              className="w-10 h-10 rounded-full bg-[#F5F5F5] flex items-center justify-center"
+              aria-label="실제 식당 탐색"
+            >
+              <MapPinned size={18} color="#4A4A4A" />
+            </button>
+            <button className="w-10 h-10 rounded-full bg-[#F5F5F5] flex items-center justify-center">
+              <SlidersHorizontal size={18} color="#4A4A4A" />
+            </button>
+          </div>
         </div>
 
         {/* 피드 / 코스맵 세그먼트 (먼치모드 통합) */}
