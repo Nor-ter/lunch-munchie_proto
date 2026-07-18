@@ -1,21 +1,15 @@
-import { motion } from "framer-motion";
-import { useLocation } from "wouter";
-import { useState, useEffect } from "react";
-import { ArrowRight, MapPin, Clock, Star } from "lucide-react";
+import { useEffect, useMemo, useState } from 'react';
+import { motion } from 'framer-motion';
+import { ArrowRight, Bell, Sparkles } from 'lucide-react';
+import { useLocation } from 'wouter';
 import {
-  useApp,
-  Course,
-  isFeedCommentHidden,
   resolveApiRequestAuth,
   type ApiRequestAuth,
-} from "@/contexts/AppContext";
-import { getCourseSequenceColor } from "@/constants/courseTheme";
-import { MUNCHIE_SKINS } from "@/constants/skins";
-import { getCreatorName } from "@/constants/creators";
-import SkinFrame from "@/components/munchie/SkinFrame";
-import { logEvent } from "@/lib/eventLogger";
-import { toast } from "sonner";
-import { useRotatingFeedback } from "@/hooks/useRotatingFeedback";
+  useApp,
+} from '@/contexts/AppContext';
+import { lunchmateLoadoutFromProfile } from '@/utils/lunchmateProfile';
+import LunchmateCharacterRenderer from '@/components/munchie/LunchmateCharacterRenderer';
+import UnifiedMunchieCard from '@/components/munchie/UnifiedMunchieCard';
 
 type JourneyStop = {
   restaurant_id: string;
@@ -23,7 +17,7 @@ type JourneyStop = {
   category: string | null;
   intent: string | null;
   at: number;
-  satisfaction: "POS" | "NEU" | "NEG" | null;
+  satisfaction: 'POS' | 'NEU' | 'NEG' | null;
 };
 
 interface JourneyRequestDependencies {
@@ -39,27 +33,17 @@ export async function fetchTodayJourney(
     const auth = await (
       dependencies.resolveRequestAuth ?? resolveApiRequestAuth
     )();
-    if (auth.status === "blocked") {
-      return [];
-    }
+    if (auth.status === 'blocked') return [];
 
     const request = dependencies.request ?? fetch;
-    const requestInit: RequestInit | undefined =
-      auth.status === "authenticated"
-        ? {
-            headers: {
-              Authorization: `Bearer ${auth.accessToken}`,
-            },
-          }
-        : undefined;
+    const requestInit: RequestInit | undefined = auth.status === 'authenticated'
+      ? { headers: { Authorization: `Bearer ${auth.accessToken}` } }
+      : undefined;
     const response = await request(
       `/api/journey/today?userId=${encodeURIComponent(userId)}`,
       requestInit,
     );
-    if (!response.ok) {
-      return [];
-    }
-
+    if (!response.ok) return [];
     const data = await response.json();
     return data.stops ?? [];
   } catch {
@@ -67,388 +51,150 @@ export async function fetchTodayJourney(
   }
 }
 
-const INTENT_LABEL: Record<string, string> = { meal: "밥", cafe: "음료", dessert: "디저트" };
-const INTENT_ICON: Record<string, string> = { meal: "🍚", cafe: "☕", dessert: "🍰" };
-const INTENT_ORDER = ["meal", "cafe", "dessert"] as const;
+const QUICK_MATCH_CHOICES = [
+  { label: '밥', icon: '🍚', rotate: -7, x: 0 },
+  { label: '카페', icon: '☕', rotate: 0, x: -7 },
+  { label: '디저트', icon: '🍰', rotate: 7, x: -14 },
+] as const;
 
-function FeedbackRow({
-  stop,
-  onAnswer,
-  defaultOpen,
-}: {
-  stop: JourneyStop;
-  onAnswer: (action: "POS" | "NEU" | "NEG") => void;
-  defaultOpen?: boolean;
-}) {
-  const [open, setOpen] = useState(!!defaultOpen);
-  const emoji = stop.satisfaction === "POS" ? "👍" : stop.satisfaction === "NEG" ? "👎" : stop.satisfaction === "NEU" ? "😐" : null;
-
-  if (!open) {
-    return (
-      <button onClick={() => setOpen(true)} className="flex-shrink-0 text-[15px] leading-none active:scale-90">
-        {emoji ?? <span className="whitespace-nowrap rounded-full bg-[#FFF5F5] px-2 py-1 text-[10px] font-bold text-[#EB5053]">평가하기</span>}
-      </button>
-    );
-  }
-
-  return (
-    <div className="mt-1.5 flex w-full gap-1.5">
-      {([[
-        "POS", "👍 좋았어요", "#EAF7EC", "#2E9E42",
-      ], [
-        "NEU", "😐 그냥", "#F1EFE8", "#6E6E6E",
-      ], [
-        "NEG", "👎 별로", "#FBECEC", "#D83A3D",
-      ]] as const).map(([action, label, background, color]) => (
-        <button
-          key={action}
-          onClick={() => {
-            onAnswer(action);
-            setOpen(false);
-          }}
-          className="flex-1 rounded-lg py-1.5 text-[11px] font-bold transition-transform active:scale-95"
-          style={{ background, color }}
-        >
-          {label}
-        </button>
-      ))}
-    </div>
-  );
-}
-
-// data-jp-v3의 오늘의 여정 + Lunchie Mode 통합 진입 카드.
-function JourneyCard() {
-  const { profile } = useApp();
+function LunchieLandingCard() {
   const [, navigate] = useLocation();
-  const [stops, setStops] = useState<JourneyStop[] | null>(null);
+  const { profile } = useApp();
+  const [journeyStops, setJourneyStops] = useState<JourneyStop[]>([]);
+  const loadout = useMemo(
+    () => lunchmateLoadoutFromProfile(profile.lunchmateLoadout),
+    [profile.lunchmateLoadout],
+  );
 
   useEffect(() => {
     let active = true;
-    fetchTodayJourney(profile.id)
-      .then(data => { if (active) setStops(data); })
-      .catch(() => { if (active) setStops([]); });
+    fetchTodayJourney(profile.id).then(stops => {
+      if (active) setJourneyStops(stops);
+    });
     return () => { active = false; };
   }, [profile.id]);
 
-  const answer = (stop: JourneyStop, action: "POS" | "NEU" | "NEG") => {
-    logEvent({
-      event_type: "SURVEY",
-      action,
-      user_id: profile.id,
-      restaurant_id: stop.restaurant_id,
-      session_id: null,
-    });
-    setStops(previous => previous?.map(item => (
-      item.restaurant_id === stop.restaurant_id && item.at === stop.at
-        ? { ...item, satisfaction: action }
-        : item
-    )) ?? previous);
-    toast.success("피드백 고마워요! 🙌");
-  };
-
-  const hasStops = !!stops && stops.length > 0;
-  const timeOf = (at: number) => new Date(at).toLocaleString("ko-KR", {
-    month: "long",
-    day: "numeric",
-    hour: "numeric",
-    minute: "2-digit",
-  });
-
   return (
-    <motion.div
-      className="mx-4 mb-4 mt-[31px] overflow-hidden rounded-3xl"
-      style={{ background: "white", boxShadow: "0 2px 12px rgba(0,0,0,0.05)" }}
+    <motion.section
+      initial={{ opacity: 0, y: 18 }}
+      animate={{ opacity: 1, y: 0 }}
+      className="mx-4 overflow-hidden rounded-[28px] border border-[#E9DDD4] bg-white shadow-[0_14px_36px_rgba(73,44,30,0.08)]"
     >
-      <div className="p-4">
-        <p className="mb-1 text-[13px] font-bold text-[#1A1A1A]">오늘의 여정</p>
-        {stops === null ? null : hasStops ? (
-          <div className="mt-2 space-y-1">
-            {stops.map((stop, index) => (
-              <div key={`${stop.restaurant_id}-${stop.at}`} className="flex flex-wrap items-center gap-2 border-b border-[#F5F0EC] py-1.5 text-[13px] last:border-b-0">
-                <span className="text-[#EB5053]">●</span>
-                <div className="min-w-0 flex-1">
-                  <div className="flex flex-wrap items-center gap-1.5">
-                    <span className="font-semibold text-[#1A1A1A]">{stop.name}</span>
-                    {stop.intent && (
-                      <span className="rounded-full bg-[#FFF5F5] px-1.5 py-0.5 text-[10px] font-bold text-[#EB5053]">
-                        {INTENT_LABEL[stop.intent] ?? stop.intent}
-                      </span>
-                    )}
-                  </div>
-                  <p className="mt-0.5 text-[11px] text-[#9B9B9B]">
-                    {stop.category ?? ""}{stop.category ? " · " : ""}{timeOf(stop.at)}
-                  </p>
-                </div>
-                <FeedbackRow
-                  stop={stop}
-                  onAnswer={action => answer(stop, action)}
-                  defaultOpen={index === stops.length - 1 && !stop.satisfaction}
-                />
-              </div>
-            ))}
-          </div>
-        ) : (
-          <p className="mb-1 mt-1 text-[13px] text-[#9B9B9B]">오늘의 여정을 시작해보세요</p>
+      <div className="flex items-end justify-between px-5 pb-3 pt-5">
+        <div>
+          <p className="text-[10px] font-black uppercase tracking-[0.18em] text-[#FF424B]">Quick decision</p>
+          <h2 className="mt-1 text-[24px] font-black leading-none text-[#211713]">LUNCHIE</h2>
+          <p className="mt-2 text-[12px] font-semibold text-[#8D776C]">런치로 같이 점심 정하기!</p>
+        </div>
+        {journeyStops.length > 0 && (
+          <span className="max-w-[120px] truncate rounded-full bg-[#FFF0EA] px-3 py-1.5 text-[9px] font-black text-[#F25055]">
+            오늘 {journeyStops.length}곳 완료
+          </span>
         )}
       </div>
 
-      <div className="px-4 pb-4">
-        {hasStops && <p className="mb-2 text-[12px] font-bold text-[#1A1A1A]">다음 여정은?</p>}
-        <div className="flex gap-2">
-          {INTENT_ORDER.map(intent => (
-            <motion.button
-              key={intent}
-              whileTap={{ scale: 0.95 }}
-              onClick={() => navigate(`/lunchie/settings?intent=${intent}`)}
-              className="flex flex-1 flex-col items-center gap-1 rounded-2xl py-3"
-              style={{ background: "linear-gradient(180deg, #FB4448 0%, #F47F80 100%)" }}
-            >
-              <span className="text-[22px] leading-none">{INTENT_ICON[intent]}</span>
-              <span className="text-[11px] font-bold text-white">{INTENT_LABEL[intent]}</span>
-            </motion.button>
-          ))}
-        </div>
-        <p className="mt-2 text-center text-[10px] text-[#B0B0B0]">그룹과 함께 스와이프로 빠르게 골라요 · Quick Match</p>
-      </div>
-    </motion.div>
-  );
-}
+      <div className="relative mx-3.5 mb-3.5 min-h-[228px] overflow-hidden rounded-[24px] bg-[linear-gradient(145deg,#FFF2E8_0%,#FFE6E4_100%)] px-4 py-4">
+        <div className="absolute -right-9 -top-9 h-32 w-32 rounded-full bg-white/40" />
+        <div className="absolute -bottom-12 -left-8 h-36 w-36 rounded-full bg-[#FFC8C5]/35" />
 
-/** 스크랩북 스킨을 입힌 코스 카드 — 홈 Munchie Mode 좌우 스와이프 캐러셀용 */
-function SkinCourseCard({ course, skinIndex }: { course: Course; skinIndex: number }) {
-  const [, navigate] = useLocation();
-  const { getRestaurantById, feedPosts } = useApp();
-  const skin = MUNCHIE_SKINS[skinIndex % 4]; // 핑크/옐로우/빈티지/블루 순환
-
-  const stopRestaurants = course.stops
-    .map(s => getRestaurantById(s.placeId))
-    .filter((r): r is NonNullable<typeof r> => !!r);
-  const rating = stopRestaurants.length
-    ? (stopRestaurants.reduce((sum, r) => sum + r.rating, 0) / stopRestaurants.length).toFixed(1)
-    : '4.5';
-  const collagePhotos = [course.heroImage, ...stopRestaurants.map(r => r.image)].slice(0, 2);
-  // 작성자의 한줄평 다음, 인기 피드의 답글을 최신순으로 순환한다.
-  const coursePosts = feedPosts
-    .filter(p => p.courseId === course.id)
-    .sort((a, b) => (b.likes + b.saves) - (a.likes + a.saves) || b.createdAt.localeCompare(a.createdAt));
-  const latestCaption = [...coursePosts].sort((a, b) => b.createdAt.localeCompare(a.createdAt))[0]?.caption;
-  const rotatingFeedback = useRotatingFeedback([
-    ...(latestCaption ? [latestCaption] : []),
-    ...coursePosts.flatMap(post => post.comments
-      .filter(comment => !isFeedCommentHidden(comment))
-      .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
-      .map(comment => comment.text)),
-  ]);
-
-  return (
-    <motion.div
-      className="w-[236px] flex-shrink-0 snap-center cursor-pointer"
-      whileTap={{ scale: 0.97 }}
-      onClick={() => navigate(`/course/${course.id}?from=feed`)}
-    >
-      <SkinFrame skin={skin} radius={22} padding={9}>
-        <div className="px-3 pt-3 pb-3.5">
-          {/* 폴라로이드 콜라주 */}
-          <div className="relative h-[118px]">
-            {collagePhotos.map((src, i) => (
-              <div
-                key={i}
-                className="absolute bg-white p-[5px] pb-[14px] shadow-md"
-                style={{
-                  width: 118,
-                  left: i === 0 ? 6 : 84,
-                  top: i === 0 ? 2 : 10,
-                  transform: `rotate(${i === 0 ? -4 : 5}deg)`,
-                  zIndex: i === 0 ? 1 : 2,
-                  borderRadius: 4,
-                }}
+        <div className="relative flex h-[142px] items-center">
+          <div className="flex min-w-0 flex-1 items-center pl-1">
+            {QUICK_MATCH_CHOICES.map(choice => (
+              <button
+                type="button"
+                key={choice.label}
+                onClick={() => navigate(`/lunchie/settings?intent=${choice.label === '밥' ? 'meal' : choice.label === '카페' ? 'cafe' : 'dessert'}`)}
+                className="relative flex h-[104px] w-[82px] shrink-0 flex-col items-center justify-center rounded-[20px] border-2 border-white bg-white shadow-[0_10px_24px_rgba(85,49,34,0.12)] active:scale-95"
+                style={{ transform: `translateX(${choice.x}px) rotate(${choice.rotate}deg)` }}
               >
-                <img src={src} alt="" className="h-[80px] w-full object-cover" draggable={false} />
-              </div>
+                <span className="text-[30px]">{choice.icon}</span>
+                <span className="mt-1 text-[12px] font-black text-[#392A23]">{choice.label}</span>
+              </button>
             ))}
           </div>
-
-          {/* 제목 + 평점 */}
-          <div className="mt-2 flex items-center gap-1.5">
-            <h3
-              className="font-bold text-[14px] leading-tight truncate"
-              style={{ color: skin.text, fontFamily: skin.titleFont }}
-            >
-              {course.title}
-            </h3>
-            <span className="flex items-center gap-0.5 text-[11px] font-bold shrink-0" style={{ color: skin.accent }}>
-              <Star size={10} fill="currentColor" /> {rating}
+          <div className="relative z-10 mr-1 flex w-[106px] flex-col items-center">
+            <span className="mb-[-8px] rounded-full bg-white px-2.5 py-1 text-[9px] font-black text-[#FF424B] shadow-sm">
+              뭐 먹지?
             </span>
-          </div>
-
-          {/* 스탯 */}
-          <div className="mt-1.5 flex items-center gap-2.5 text-[10px]" style={{ color: skin.sub }}>
-            <span>◎ {course.metadata.placeCount} Stops</span>
-            <span className="flex items-center gap-0.5"><Clock size={9} /> {Math.floor(course.metadata.duration / 60)}h</span>
-            <span className="flex items-center gap-0.5"><MapPin size={9} /> {course.metadata.distance}km</span>
-          </div>
-
-          {/* 한줄평 (이 코스로 남긴 최근 피드) */}
-          {rotatingFeedback && (
-            <motion.p
-              key={rotatingFeedback}
-              initial={{ opacity: 0, y: 3 }}
-              animate={{ opacity: 1, y: 0 }}
-              className="mt-2 flex h-[42px] items-center overflow-hidden rounded-lg px-2 py-1.5 text-[10.5px] leading-snug"
-              style={{ background: `${skin.accent}12`, color: skin.text }}
-            >
-              <span className="line-clamp-2">💬 {rotatingFeedback}</span>
-            </motion.p>
-          )}
-
-          {/* 스팟 번호 서클 */}
-          <div className="mt-2.5 flex items-center">
-            {stopRestaurants.slice(0, 4).map((r, i) => {
-              const color = getCourseSequenceColor(i);
-              return (
-                <div key={`${r.id}-${i}`} className="flex items-center">
-                  <div className="relative">
-                    <div className="w-9 h-9 rounded-full overflow-hidden border-2" style={{ borderColor: color.base }}>
-                      <img src={r.image} alt="" className="w-full h-full object-cover" draggable={false} />
-                    </div>
-                    <span
-                      className="absolute -top-1 -left-1 w-[15px] h-[15px] rounded-full text-white text-[9px] font-bold flex items-center justify-center"
-                      style={{ background: color.base }}
-                    >
-                      {i + 1}
-                    </span>
-                  </div>
-                  {i < Math.min(stopRestaurants.length, 4) - 1 && (
-                    <span className="w-3 border-t-2 border-dotted" style={{ borderColor: color.lighter }} />
-                  )}
-                </div>
-              );
-            })}
-          </div>
-
-          {/* 작성자 */}
-          <div className="mt-2.5 flex items-center gap-1.5">
-            <div className="w-6 h-6 rounded-full flex items-center justify-center text-[12px]" style={{ background: `${skin.accent}1A` }}>
-              🙂
-            </div>
-            <span className="text-[10px] font-semibold" style={{ color: skin.text }}>
-              {getCreatorName(course.creatorId)}
-            </span>
-            <span className="text-[10px]" style={{ color: skin.sub }}>
-              팔로워 2,380명
-            </span>
+            <LunchmateCharacterRenderer
+              flowState="selectingFood"
+              loadout={loadout}
+              size={94}
+              renderSize="room"
+            />
           </div>
         </div>
-      </SkinFrame>
-    </motion.div>
+
+        <button
+          type="button"
+          onClick={() => navigate('/lunchie/settings')}
+          className="relative flex h-12 w-full items-center justify-center gap-2 rounded-2xl bg-[#FF424B] text-[13px] font-black text-white shadow-[0_10px_22px_rgba(255,66,75,0.27)] active:scale-[0.98]"
+        >
+          <Sparkles size={16} /> Quick Match Start!
+        </button>
+      </div>
+    </motion.section>
   );
 }
-
-const stagger = {
-  hidden: { opacity: 0 },
-  visible: { opacity: 1, transition: { staggerChildren: 0.08 } },
-};
-
-const fadeUp = {
-  hidden: { opacity: 0, y: 16 },
-  visible: {
-    opacity: 1,
-    y: 0,
-    transition: { type: "spring" as const, stiffness: 280, damping: 26 },
-  },
-};
 
 export default function HomePage() {
   const [, navigate] = useLocation();
-  const { courses } = useApp();
+  const { feedPosts } = useApp();
 
   return (
-    <motion.div
-      className="min-h-dvh pb-[86px]"
-      style={{ background: "#FCF4EE" }}
-      variants={stagger}
-      initial="hidden"
-      animate="visible"
-    >
-      {/* Header */}
-      <motion.div
-        variants={fadeUp}
-        className="pb-2"
-        style={{
-          paddingLeft: "clamp(24px, 10.2vw, 41px)",
-          paddingRight: "clamp(24px, 10.2vw, 41px)",
-          paddingTop: 64,
-        }}
-      >
-        <div className="mb-[27px] flex items-center justify-center">
-          <span
-            className="text-center text-[19px] font-black leading-none"
-            style={{
-              color: "#FF393D",
-              textShadow: "0 4px 10px rgba(235,80,83,0.18)",
-            }}
-          >
-            Lunchie Munchie
-          </span>
-        </div>
-
-        <h1 className="text-[28px] font-bold leading-[1.25] text-black" style={{ paddingLeft: 20 }}>
-          스크랩으로 기록하고,
-          <br />
-          함께 나누는 맛집 코스
-        </h1>
-        <p
-          className="mt-[13px] text-[11px] leading-none"
-          style={{ color: "#6E6A67", paddingLeft: 20 }}
-        >
-          코스를 발견하고, 스킨을 입혀 추억을 공유해요.
-        </p>
-      </motion.div>
-
-      {/* 오늘의 여정 + Lunchie Mode — data-jp-v3 UI/로직 */}
-      <JourneyCard />
-
-      {/* Munchie Mode */}
-      <motion.div
-        variants={fadeUp}
-        className="mt-[55px]"
-        style={{
-          paddingLeft: "clamp(24px, 10.2vw, 41px)",
-          paddingRight: "clamp(24px, 10.2vw, 41px)",
-        }}
-      >
-        <div className="mb-[6px] flex items-end justify-between">
-          <p className="text-[20px] font-black leading-none text-black" style={{ paddingLeft: 20 }}>
-            Munchie Mode
-          </p>
+    <div className="min-h-dvh bg-[#FFFDFB] pb-[96px]">
+      <header className="px-5 pb-7 pt-12">
+        <div className="relative flex items-center justify-center">
+          <p className="text-[17px] font-black tracking-[-0.02em] text-[#251A16]">Lunchie Munchie</p>
           <button
-            onClick={() => navigate("/feed")}
-            className="flex items-center gap-[6px] text-[16px] font-bold leading-none text-black active:opacity-60"
+            type="button"
+            aria-label="알림 열기"
+            className="absolute right-0 flex h-11 w-11 items-center justify-center rounded-full border border-[#2C211C] bg-white text-[#2C211C] active:scale-95"
           >
-            더보기 <ArrowRight size={20} strokeWidth={2.4} />
+            <Bell size={18} />
+            <span className="absolute right-[9px] top-[8px] h-2 w-2 rounded-full border-2 border-white bg-[#FF424B]" />
           </button>
         </div>
-        <p className="mb-[12px] text-[10px] leading-none text-black" style={{ paddingLeft: 20 }}>
-          이번주 사람들이 많이 저장한 코스
-        </p>
-      </motion.div>
 
-      {/* 스킨 카드 캐러셀 — 좌우 스와이프 */}
-      <motion.div variants={fadeUp}>
-        <div
-          className="flex gap-4 overflow-x-auto snap-x snap-mandatory scrollbar-hide pt-3 pb-4"
-          style={{
-            paddingLeft: "clamp(24px, 10.2vw, 41px)",
-            paddingRight: "clamp(24px, 10.2vw, 41px)",
-            scrollbarWidth: "none",
-          }}
-        >
-          {courses.slice(0, 4).map((course, i) => (
-            <SkinCourseCard key={course.id} course={course} skinIndex={i} />
+        <div className="mt-12">
+          <p className="text-[10px] font-black uppercase tracking-[0.2em] text-[#FF424B]">Two ways to enjoy</p>
+          <h1 className="mt-3 text-[29px] font-black leading-[1.32] tracking-[-0.04em] text-[#1F1713]">
+            런치로 같이 점심 정하기!
+            <br />
+            먼치로 함께 맛집 코스 탐방!
+          </h1>
+          <p className="mt-3 text-[11px] font-semibold leading-relaxed text-[#927D72]">
+            오늘의 메뉴를 빠르게 고르고, 마음에 든 코스는 템플릿으로 기록해요.
+          </p>
+        </div>
+      </header>
+
+      <LunchieLandingCard />
+
+      <section className="mt-10">
+        <div className="flex items-end justify-between px-5">
+          <div>
+            <p className="text-[10px] font-black uppercase tracking-[0.18em] text-[#FF424B]">Course stories</p>
+            <h2 className="mt-1 text-[24px] font-black leading-none text-[#211713]">MUNCHIE</h2>
+            <p className="mt-2 text-[12px] font-semibold text-[#8D776C]">먼치로 함께 맛집 코스 탐방</p>
+          </div>
+          <button
+            type="button"
+            onClick={() => navigate('/feed')}
+            className="flex items-center gap-1 text-[12px] font-black text-[#3B2B24]"
+          >
+            더보기 <ArrowRight size={17} />
+          </button>
+        </div>
+
+        <div className="mt-4 flex snap-x snap-mandatory gap-3.5 overflow-x-auto px-4 pb-5 scrollbar-hide">
+          {feedPosts.slice(0, 4).map(post => (
+            <div key={post.id} className="w-[340px] shrink-0 snap-center">
+              <UnifiedMunchieCard post={post} compact />
+            </div>
           ))}
         </div>
-      </motion.div>
-
-    </motion.div>
+      </section>
+    </div>
   );
 }
