@@ -298,7 +298,7 @@ describe("GET /api/journey compatibility auth", () => {
   it.each([
     ["today", createJourneyTodayHandler],
     ["history", createJourneyHistoryHandler],
-  ] as const)("does not query %s for an invalid token", async (route) => {
+  ] as const)("does not query %s for an invalid token", async (_name, route) => {
     const verifyAuth = createVerifier({
       status: "invalid_token",
       userId: null,
