@@ -261,7 +261,7 @@ export default function FeedPostCard({
                     key={src}
                     src={src}
                     alt={`피드 사진 ${pairIndex * 2 + imageIndex + 1}`}
-                    className="pointer-events-none h-full min-h-0 w-full select-none object-cover"
+                    className="pointer-events-none h-full min-h-0 w-full select-none bg-[#F1E7DE] object-contain"
                     draggable={false}
                   />
                 ))}

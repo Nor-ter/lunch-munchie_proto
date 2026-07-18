@@ -6,11 +6,12 @@
 import { useMemo, useRef, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useLocation } from 'wouter';
-import { ChevronLeft, Check, Plus, MapPin, Clock, X } from 'lucide-react';
+import { ChevronLeft, Check, Plus, MapPin, Clock, X, Crop } from 'lucide-react';
 import { toast } from 'sonner';
 import { useApp, type Course, type FeedPost } from '@/contexts/AppContext';
 import FeedPostCard from '@/components/munchie/FeedPostCard';
-import { fileToResizedDataUrl } from '@/lib/imageUtils';
+import PhotoCropEditor from '@/components/munchie/PhotoCropEditor';
+import { fileToResizedDataUrl, type CropArea } from '@/lib/imageUtils';
 
 const STEP_TITLES = ['코스 선택', '사진/한줄평 작성', '미리보기', '게시 완료'];
 
@@ -46,6 +47,9 @@ export default function FeedComposePage() {
   const [courseId, setCourseId] = useState<string | null>(null);
   const [photos, setPhotos] = useState<string[]>([]);
   const [uploaded, setUploaded] = useState<string[]>([]);
+  const [croppedPhotos, setCroppedPhotos] = useState<Record<string, string>>({});
+  const [photoCrops, setPhotoCrops] = useState<Record<string, CropArea>>({});
+  const [editingPhoto, setEditingPhoto] = useState<string | null>(null);
   const [caption, setCaption] = useState('');
   const [published, setPublished] = useState<FeedPost | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
@@ -58,6 +62,10 @@ export default function FeedComposePage() {
   }, [courses, savedCourseIds]);
 
   const course = courseId ? courses.find(c => c.id === courseId) : undefined;
+  const resolvedPhotos = useMemo(
+    () => photos.map(src => croppedPhotos[src] ?? src),
+    [croppedPhotos, photos],
+  );
 
   const previewPost = useMemo<FeedPost | null>(() => {
     if (!courseId || !course || photos.length === 0 || !caption.trim()) return null;
@@ -67,7 +75,7 @@ export default function FeedComposePage() {
       authorName: profile.name,
       authorEmoji: profile.emoji,
       courseId,
-      photos,
+      photos: resolvedPhotos,
       caption: caption.trim(),
       skinId: 'default',
       likes: 0,
@@ -76,7 +84,7 @@ export default function FeedComposePage() {
       createdAt: new Date().toISOString(),
       tags: course.tags,
     };
-  }, [caption, course, courseId, photos, profile]);
+  }, [caption, course, courseId, photos.length, profile, resolvedPhotos]);
 
   // 사진 후보: 선택한 코스의 스팟 이미지 + 직접 업로드
   const photoChoices = useMemo(() => {
@@ -184,17 +192,34 @@ export default function FeedComposePage() {
                 {photoChoices.map(src => {
                   const order = photos.indexOf(src);
                   return (
-                    <button key={src} onClick={() => togglePhoto(src)} className="relative aspect-square rounded-xl overflow-hidden active:scale-95 transition-transform">
-                      <img src={src} alt="" className="w-full h-full object-cover" />
+                    <div key={src} className="relative aspect-square overflow-hidden rounded-xl">
+                      <button
+                        type="button"
+                        onClick={() => togglePhoto(src)}
+                        aria-label={order >= 0 ? '사진 선택 해제' : '사진 선택'}
+                        className="h-full w-full active:scale-95 transition-transform"
+                      >
+                        <img src={croppedPhotos[src] ?? src} alt="" className="w-full h-full bg-[#F1E7DE] object-contain" />
+                        {order >= 0 && (
+                          <>
+                            <span className="absolute inset-0 bg-[#E85053]/25 border-2 border-[#E85053] rounded-xl" />
+                            <span className="absolute top-1.5 right-1.5 w-6 h-6 rounded-full bg-[#E85053] text-white text-[12px] font-bold flex items-center justify-center">
+                              {order + 1}
+                            </span>
+                          </>
+                        )}
+                      </button>
                       {order >= 0 && (
-                        <>
-                          <span className="absolute inset-0 bg-[#E85053]/25 border-2 border-[#E85053] rounded-xl" />
-                          <span className="absolute top-1.5 right-1.5 w-6 h-6 rounded-full bg-[#E85053] text-white text-[12px] font-bold flex items-center justify-center">
-                            {order + 1}
-                          </span>
-                        </>
+                        <button
+                          type="button"
+                          onClick={() => setEditingPhoto(src)}
+                          aria-label={`${order + 1}번째 사진 크롭 및 크기 조절`}
+                          className="absolute bottom-1.5 left-1.5 z-10 flex h-7 items-center gap-1 rounded-full bg-black/65 px-2.5 text-[10px] font-bold text-white shadow"
+                        >
+                          <Crop size={12} /> 편집
+                        </button>
                       )}
-                    </button>
+                    </div>
                   );
                 })}
                 <button
@@ -205,6 +230,11 @@ export default function FeedComposePage() {
                 </button>
                 <input ref={fileRef} type="file" accept="image/*" multiple className="hidden" onChange={handleUpload} />
               </div>
+              {photos.length > 0 && (
+                <p className="mt-2 px-1 text-[11px] text-[#9B9B9B]">
+                  선택한 사진의 <b className="text-[#6E5B50]">편집</b>을 눌러 사진마다 크롭 프레임의 위치와 비율을 조절할 수 있어요.
+                </p>
+              )}
 
               <textarea
                 value={caption}
@@ -301,6 +331,20 @@ export default function FeedComposePage() {
           </motion.button>
         )}
       </div>
+
+      {editingPhoto && (
+        <PhotoCropEditor
+          src={editingPhoto}
+          initialCrop={photoCrops[editingPhoto]}
+          onCancel={() => setEditingPhoto(null)}
+          onSave={(dataUrl, crop) => {
+            setCroppedPhotos(current => ({ ...current, [editingPhoto]: dataUrl }));
+            setPhotoCrops(current => ({ ...current, [editingPhoto]: crop }));
+            setEditingPhoto(null);
+            toast.success('사진 크롭을 적용했어요');
+          }}
+        />
+      )}
     </div>
   );
 }
