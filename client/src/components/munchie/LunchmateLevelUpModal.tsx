@@ -124,6 +124,7 @@ export default function LunchmateLevelUpModal({
                 renderSize="compact"
                 alt="레벨업을 기뻐하며 점프하는 런치메이트"
                 loadout={loadout}
+                artwork="chicken"
                 fallback={<Sparkles size={35} aria-hidden="true" />}
               />
             </div>
@@ -156,6 +157,7 @@ export default function LunchmateLevelUpModal({
                     animated={false}
                     alt={`${rewardItem.name}을 착용한 런치메이트`}
                     loadout={createRewardPreviewLoadout(rewardItem)}
+                    artwork="chicken"
                     fallback={<Gift size={22} className="text-[#D8774D]" aria-hidden="true" />}
                   />
                 </div>

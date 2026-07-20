@@ -88,6 +88,7 @@ function WardrobeItemCard({
           loadout={candidateLoadout}
           animated={false}
           renderSize="compact"
+          artwork="chicken"
         />
         {item === null && (
           <span className="absolute bottom-1 right-1 flex h-5 w-5 items-center justify-center rounded-full bg-white/90 text-[#A18C80] shadow-sm" aria-hidden="true">
@@ -182,7 +183,7 @@ export default function LunchmateWardrobePanel({
         id="wardrobe-items-panel"
         role="tabpanel"
         aria-labelledby={`wardrobe-slot-${activeSlot}`}
-        className="mt-3 grid grid-cols-3 gap-2 min-[450px]:grid-cols-4"
+        className="mt-3 grid grid-cols-3 gap-3 min-[450px]:grid-cols-4"
       >
         <WardrobeItemCard
           item={null}

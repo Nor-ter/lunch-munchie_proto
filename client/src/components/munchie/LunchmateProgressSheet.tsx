@@ -1,7 +1,8 @@
 import { useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { AnimatePresence, motion } from 'framer-motion';
-import { Gift, X } from 'lucide-react';
+import { X } from 'lucide-react';
+import { getLunchmateLevelIcon } from '@/constants/lunchmateLevelIcons';
 import type { LunchmateProgressSnapshot } from '@/utils/lunchmateProgress';
 
 interface LunchmateProgressSheetProps {
@@ -72,6 +73,10 @@ export default function LunchmateProgressSheet({
   if (typeof document === 'undefined') return null;
 
   const progressPercent = snapshot.progressPercent;
+  const currentLevelIcon = getLunchmateLevelIcon(snapshot.level);
+  const CurrentLevelIcon = currentLevelIcon.Icon;
+  const nextRewardLevel = snapshot.isMaxLevel ? snapshot.level : snapshot.level + 1;
+  const NextRewardIcon = getLunchmateLevelIcon(nextRewardLevel).Icon;
 
   return createPortal(
     <AnimatePresence onExitComplete={onAfterClose}>
@@ -124,9 +129,18 @@ export default function LunchmateProgressSheet({
                 <div className="flex items-center justify-between gap-3">
                   <div>
                     <p className="text-[11px] font-bold text-[#C47B54]">PREVIEW LEVEL</p>
-                    <p className="mt-0.5 text-[19px] font-black text-[#33251F]">
-                      Lv.{snapshot.level} {snapshot.levelName}
-                    </p>
+                    <div className="mt-1 flex items-center gap-2">
+                      <span
+                        className="flex h-8 w-8 items-center justify-center rounded-xl"
+                        style={{ background: currentLevelIcon.background, color: currentLevelIcon.color }}
+                        aria-hidden="true"
+                      >
+                        <CurrentLevelIcon size={17} strokeWidth={2.5} />
+                      </span>
+                      <p className="text-[19px] font-black text-[#33251F]">
+                        Lv.{snapshot.level} {snapshot.levelName}
+                      </p>
+                    </div>
                   </div>
                   <div className="rounded-2xl bg-white px-3 py-2 text-right shadow-sm">
                     <p className="text-[10px] font-semibold text-[#A18C80]">누적 맛추억</p>
@@ -162,7 +176,7 @@ export default function LunchmateProgressSheet({
 
               <div className="mt-3 flex items-center gap-3 rounded-[20px] border border-dashed border-[#E8CDBD] bg-white p-4">
                 <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-[#FFF0E8] text-[#D8774D]" aria-hidden="true">
-                  <Gift size={21} />
+                  <NextRewardIcon size={21} />
                 </span>
                 <div className="min-w-0">
                   <p className="text-[10px] font-bold text-[#B1907E]">다음 보상 PLACEHOLDER</p>

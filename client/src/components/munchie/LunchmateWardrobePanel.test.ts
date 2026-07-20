@@ -135,7 +135,9 @@ describe('Lunchmate wardrobe UI contracts', () => {
   });
 
   it('uses three columns at 375px and switches to four only at 450px', () => {
-    expect(PANEL_SOURCE).toContain('grid grid-cols-3 gap-2 min-[450px]:grid-cols-4');
+    expect(PANEL_SOURCE).toContain('grid grid-cols-3 gap-3 min-[450px]:grid-cols-4');
+    expect(FOODIE_ROOM_SOURCE).toContain("const ROOM_CONTENT_GRID_CLASS = 'grid grid-cols-3 gap-3 min-[450px]:grid-cols-4'");
+    expect(SKIN_PICKER_SOURCE).toContain("'grid-cols-3 min-[450px]:grid-cols-4'");
   });
 
   it('stores only from 적용하기 and initializes both loadouts from lm_profile', () => {
@@ -172,6 +174,15 @@ describe('Lunchmate wardrobe UI contracts', () => {
     expect(LEVEL_UP_MODAL_SOURCE).toContain('levelUpActive');
     expect(LEVEL_UP_MODAL_SOURCE).toContain('loadout={loadout}');
     expect(PROFILE_SOURCE).not.toContain('PREVIEW_OWNED_ITEM_IDS');
+  });
+
+  it('keeps the Profile avatar overlap while separating the identity block below the banner', () => {
+    expect(PROFILE_SOURCE).toContain('className="relative z-20 -mt-9 px-3"');
+    expect(PROFILE_SOURCE).toContain('className="flex items-start gap-4"');
+    expect(PROFILE_SOURCE).toContain('className="min-w-0 flex-1 pt-11"');
+    expect(PROFILE_SOURCE).toContain('className="flex min-w-0 items-center gap-2 whitespace-nowrap"');
+    expect(PROFILE_SOURCE).toContain('className="mt-1.5 whitespace-nowrap text-[13px]');
+    expect(PROFILE_SOURCE).toContain('className="mt-5 grid grid-cols-3"');
   });
 
   it('keeps owned IDs in the existing lm_profile persistence flow', () => {

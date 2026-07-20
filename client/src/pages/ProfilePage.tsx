@@ -19,7 +19,11 @@ import TemplateCoursemapCard from '@/components/munchie/TemplateCoursemapCard';
 import FoodieBuddy, {
   type FoodieBuddyUiState,
 } from '@/components/munchie/FoodieBuddy';
-import LunchboxBottomSheet, { type LunchboxFoodItem } from '@/components/munchie/LunchboxBottomSheet';
+import LunchboxBottomSheet, {
+  isPointInsideLunchboxDropTarget,
+  type LunchboxFoodDragPayload,
+  type LunchboxFoodItem,
+} from '@/components/munchie/LunchboxBottomSheet';
 import LunchmateProgressSheet from '@/components/munchie/LunchmateProgressSheet';
 import LunchmateLevelUpModal from '@/components/munchie/LunchmateLevelUpModal';
 import { useLunchmateFlow } from '@/hooks/useLunchmateFlow';
@@ -214,20 +218,77 @@ export default function ProfilePage() {
   const [editName, setEditName] = useState(profile.name);
   const avatarFileRef = useRef<HTMLInputElement>(null);
   const lunchboxButtonRef = useRef<HTMLButtonElement>(null);
+  const foodieDropTargetRef = useRef<HTMLDivElement>(null);
   const progressButtonRef = useRef<HTMLButtonElement>(null);
   const rewardGrantGuardRef = useRef(new Set<number>());
+  const feedingDropGuardRef = useRef(false);
+  const activeFoodDragIdRef = useRef<string | null>(null);
+  const [draggedFoodId, setDraggedFoodId] = useState<string | null>(null);
+  const [isFoodDragOver, setIsFoodDragOver] = useState(false);
   const closeActiveSheet = useCallback(() => setActiveSheet(null), []);
   const lunchmateFlow = useLunchmateFlow({
     initialState: LUNCHMATE_PREVIEW_FIXTURE.uiState,
     onSuccessClose: closeActiveSheet,
   });
+  const clearFoodDragState = useCallback(() => {
+    activeFoodDragIdRef.current = null;
+    setDraggedFoodId(null);
+    setIsFoodDragOver(false);
+  }, []);
+  const isOverFoodieDropTarget = useCallback((payload: LunchboxFoodDragPayload) => {
+    const bounds = foodieDropTargetRef.current?.getBoundingClientRect();
+    return bounds
+      ? isPointInsideLunchboxDropTarget(payload, bounds)
+      : false;
+  }, []);
+  const submitLunchmateFood = useCallback(
+    (item: LunchboxFoodItem) => lunchmateFlow.shareFood(item),
+    [lunchmateFlow.shareFood],
+  );
+  const handleFoodDragStart = useCallback((payload: LunchboxFoodDragPayload) => {
+    if (lunchmateFlow.isBusy || payload.item.quantity <= 0) return;
+    activeFoodDragIdRef.current = payload.item.id;
+    setDraggedFoodId(payload.item.id);
+    setIsFoodDragOver(isOverFoodieDropTarget(payload));
+  }, [isOverFoodieDropTarget, lunchmateFlow.isBusy]);
+  const handleFoodDragMove = useCallback((payload: LunchboxFoodDragPayload) => {
+    if (activeFoodDragIdRef.current !== payload.item.id || lunchmateFlow.isBusy) return;
+    const nextIsOver = isOverFoodieDropTarget(payload);
+    setIsFoodDragOver(current => current === nextIsOver ? current : nextIsOver);
+  }, [isOverFoodieDropTarget, lunchmateFlow.isBusy]);
+  const handleFoodDrop = useCallback((payload: LunchboxFoodDragPayload) => {
+    const validDrag = activeFoodDragIdRef.current === payload.item.id;
+    const droppedOnFoodie = isOverFoodieDropTarget(payload);
+    clearFoodDragState();
+
+    if (
+      !validDrag
+      || !droppedOnFoodie
+      || payload.item.quantity <= 0
+      || lunchmateFlow.isBusy
+      || feedingDropGuardRef.current
+    ) return;
+
+    feedingDropGuardRef.current = true;
+    lunchmateFlow.selectFood(payload.item);
+    void submitLunchmateFood(payload.item).finally(() => {
+      feedingDropGuardRef.current = false;
+    });
+  }, [
+    clearFoodDragState,
+    isOverFoodieDropTarget,
+    lunchmateFlow.isBusy,
+    lunchmateFlow.selectFood,
+    submitLunchmateFood,
+  ]);
   const openLunchbox = useCallback(() => {
     if (lunchmateFlow.beginSelecting()) setActiveSheet('lunchbox');
   }, [lunchmateFlow.beginSelecting]);
   const closeLunchbox = useCallback(() => {
+    clearFoodDragState();
     lunchmateFlow.cancel();
     closeActiveSheet();
-  }, [closeActiveSheet, lunchmateFlow.cancel]);
+  }, [clearFoodDragState, closeActiveSheet, lunchmateFlow.cancel]);
   const openProgress = useCallback(() => {
     if (!lunchmateFlow.isBusy) setActiveSheet('progress');
   }, [lunchmateFlow.isBusy]);
@@ -359,7 +420,7 @@ export default function ProfilePage() {
       </div>
 
       {/* 핑크 프로필 카드 */}
-      <div className="mx-4 mt-2 rounded-[28px] p-4 pb-5" style={{ background: '#F8DCD2' }}>
+      <div className="mx-4 mt-2 rounded-[30px] p-4 pb-5" style={{ background: '#F8DCD2' }}>
         {/* 다마고치 배너 — 코스맵·피드가 늘수록 진화하는 푸디 캐릭터 */}
         <FoodieBuddy
           score={foodieScore}
@@ -379,29 +440,39 @@ export default function ProfilePage() {
           lastXpGain={lunchmateFlow.lastXpGain}
           resultMessage={lunchmateFlow.resultMessage}
           levelUpActive={activeSheet === 'levelUp'}
+          foodDropTargetRef={foodieDropTargetRef}
+          isLunchboxOpen={activeSheet === 'lunchbox'}
+          isFoodDragging={draggedFoodId !== null}
+          isFoodDragOver={isFoodDragOver}
         />
         <div className="relative z-20 -mt-9 px-3">
-          <div className="flex items-end gap-3">
+          <div className="flex items-start gap-4">
             <button
               onClick={() => setActiveSheet('avatar')}
               className="relative shrink-0 rounded-full border-4 border-[#F8DCD2] shadow-md active:scale-95 transition-transform"
               aria-label="아바타 변경"
             >
-              <Avatar photo={profile.avatarPhoto} emoji={profile.emoji} size={74} />
+              <Avatar photo={profile.avatarPhoto} emoji={profile.emoji} size={78} />
               <span className="absolute bottom-0 right-0 w-6 h-6 rounded-full bg-[#EB5053] border-2 border-white flex items-center justify-center">
                 <Camera size={11} color="white" />
               </span>
             </button>
-            <div className="pb-1.5 min-w-0">
-              <p className="flex items-center gap-1.5 font-black text-[16px] text-[#3B2A22] truncate">
-                @{profile.name}
-                <span className="rounded-full bg-white/80 px-1.5 py-0.5 text-[9px] font-bold text-[#C7864B]">🏅 배지</span>
+            <div className="min-w-0 flex-1 pt-11">
+              <div className="flex min-w-0 items-center gap-2 whitespace-nowrap">
+                <p className="min-w-0 truncate text-[19px] font-black text-[#3B2A22]">
+                  @{profile.name}
+                </p>
+                <span className="shrink-0 rounded-full bg-white/80 px-1.5 py-0.5 text-[9px] font-bold text-[#C7864B]">
+                  🏅 배지
+                </span>
+              </div>
+              <p className="mt-1.5 whitespace-nowrap text-[13px] font-medium text-[#8A6E60]">
+                오늘도 맛있는 하루를 위해
               </p>
-              <p className="text-[11px] text-[#8A6E60] mt-0.5">오늘도 맛있는 하루를 위해</p>
             </div>
           </div>
         </div>
-        <div className="mt-4 grid grid-cols-3">
+        <div className="mt-5 grid grid-cols-3">
           {[
             { value: 2380, label: '팔로워' },
             { value: 128, label: '팔로잉' },
@@ -491,7 +562,12 @@ export default function ProfilePage() {
         flowState={lunchmateFlow.state}
         errorMessage={lunchmateFlow.errorMessage}
         onFoodSelect={lunchmateFlow.selectFood}
-        onShare={lunchmateFlow.shareFood}
+        onShare={submitLunchmateFood}
+        onFoodDragStart={handleFoodDragStart}
+        onFoodDragMove={handleFoodDragMove}
+        onFoodDrop={handleFoodDrop}
+        onFoodDragCancel={clearFoodDragState}
+        dropTargetRef={foodieDropTargetRef}
         onClose={closeLunchbox}
         onAfterClose={() => lunchboxButtonRef.current?.focus()}
       />
