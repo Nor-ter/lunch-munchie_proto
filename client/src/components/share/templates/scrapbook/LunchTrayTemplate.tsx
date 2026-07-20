@@ -129,7 +129,7 @@ interface Props {
 /** 먼치트레이 — "What I ate today" 스테인리스 식판에 스팟 사진을 담는다 */
 const LunchTrayTemplate = forwardRef<HTMLDivElement, Props>(({ course, palette }, ref) => {
   const p = palette ?? SCRAP_PALETTES.pink;
-  const places = course.places.slice(0, 5);
+  const places = course.places.slice(0, 3);
   const dateLabel = course.date ?? new Date().toISOString().slice(0, 10).replace(/-/g, '.');
 
   return (

@@ -37,7 +37,7 @@ interface Props {
 
 // 장소가 없을 때의 기본 시야 (Melbourne — Places 검증에서 쓴 것과 동일 기준점)
 const FALLBACK_CENTER = { lat: -37.8136, lng: 144.9631 };
-const FIT_PADDING_PX = 48;
+const FIT_PADDING_PX = 72;
 
 /** <Map> 자식으로 마운트 — points가 바뀔 때마다 카메라를 전체가 보이게 fit한다. */
 function FitBounds({ points }: { points: MapPoint[] }) {

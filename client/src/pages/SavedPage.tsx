@@ -6,11 +6,11 @@
 import { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useLocation } from 'wouter';
-import { MapPin, Bookmark, Star, Zap, Map as MapIcon } from 'lucide-react';
+import { MapPin, Bookmark, BookmarkX, Star, Zap, Map as MapIcon } from 'lucide-react';
 import { useApp, TagType } from '@/contexts/AppContext';
 import { getCourseTagStyle } from '@/constants/courseTheme';
 import { FOOD_FILTER_TAGS, hasFoodTag } from '@/constants/foodTags';
-import TemplateCoursemapCard from '@/components/munchie/TemplateCoursemapCard';
+import UnifiedMunchieCard from '@/components/munchie/UnifiedMunchieCard';
 
 type Tab = 'coursemaps' | 'restaurants';
 
@@ -74,16 +74,24 @@ function RestaurantSavedCard({
 export default function SavedPage() {
   const [, navigate] = useLocation();
   const {
-    courses, savedCourseIds, unsaveCourse,
+    feedPosts, savedCourseIds, unsaveCourse,
     savedRestaurantIds, unsaveRestaurant,
   } = useApp();
   const [tab, setTab] = useState<Tab>('coursemaps');
   const [activeFilter, setActiveFilter] = useState<TagType | 'all'>('all');
 
-  const savedCourses = courses.filter(c => savedCourseIds.includes(c.id));
-  const filteredCourses = activeFilter === 'all'
-    ? savedCourses
-    : savedCourses.filter(c => hasFoodTag(c.tags, activeFilter as TagType));
+  const savedPosts = Array.from(
+    feedPosts
+      .filter(post => savedCourseIds.includes(post.courseId))
+      .reduce((byCourse, post) => {
+        if (!byCourse.has(post.courseId)) byCourse.set(post.courseId, post);
+        return byCourse;
+      }, new Map<string, (typeof feedPosts)[number]>())
+      .values(),
+  );
+  const filteredPosts = activeFilter === 'all'
+    ? savedPosts
+    : savedPosts.filter(post => hasFoodTag(post.tags, activeFilter as TagType));
 
   return (
     <div className="min-h-dvh bg-[#FCF4EE] pb-24">
@@ -91,13 +99,13 @@ export default function SavedPage() {
       <div className="px-5 pt-12 pb-4">
         <h1 className="font-bold text-[22px] text-[#1A1A1A] mb-1">저장 목록 🔖</h1>
         <p className="text-[12px] text-[#9B9B9B] mb-4">
-          {tab === 'coursemaps' ? '다른 사람이 만든 코스맵을 모아봤어요' : 'Quick Match에서 저장한 맛집이에요'}
+          {tab === 'coursemaps' ? '마음에 든 한줄평과 코스맵을 함께 모아봤어요' : 'Quick Match에서 저장한 맛집이에요'}
         </p>
 
         {/* 모드 세그먼트 */}
         <div className="flex rounded-full bg-[#F5F0EA] p-1">
           {([
-            ['coursemaps', 'Munchie 템플릿', MapIcon, savedCourses.length],
+            ['coursemaps', 'Munchie 먼치픽', MapIcon, savedPosts.length],
             ['restaurants', 'Lunchie 런치픽', Zap, savedRestaurantIds.length],
           ] as const).map(([key, label, Icon, count]) => (
             <button
@@ -118,7 +126,7 @@ export default function SavedPage() {
                 <Icon size={13} /> {label}
                 <span
                   className="rounded-full px-1.5 text-[10px] font-black"
-                  style={{ background: tab === key ? 'rgba(255,255,255,0.25)' : 'rgba(0,0,0,0.06)' }}
+                  style={{ background: tab === key ? '#FF8A80' : '#E8DED8' }}
                 >
                   {count}
                 </span>
@@ -148,23 +156,33 @@ export default function SavedPage() {
         )}
       </div>
 
-      {/* ── Munchie 템플릿 탭 ─────────────────────────────────────────────── */}
+      {/* ── Munchie 먼치픽 탭 ─────────────────────────────────────────────── */}
       {tab === 'coursemaps' && (
-        <div className="px-5">
-          {filteredCourses.length > 0 ? (
-            <div className="grid grid-cols-3 gap-x-2.5 gap-y-5">
-              {filteredCourses.map((course, i) => (
-                <TemplateCoursemapCard key={course.id} course={course} index={i} from="saved" showAuthor />
+        <div className="px-3">
+          {filteredPosts.length > 0 ? (
+            <div className="grid grid-cols-2 items-start gap-3 pb-4">
+              {filteredPosts.map(post => (
+                <div key={post.id} className="relative min-w-0">
+                  <UnifiedMunchieCard post={post} compact />
+                  <button
+                    type="button"
+                    onClick={() => unsaveCourse(post.courseId)}
+                    className="absolute bottom-1.5 right-1.5 flex h-6 w-6 items-center justify-center rounded-full border border-[#F0C9BE] bg-[#FFFDFC]/95 text-[#D94449] shadow-sm"
+                    aria-label="먼치픽 저장 해제"
+                  >
+                    <BookmarkX size={12} />
+                  </button>
+                </div>
               ))}
             </div>
           ) : (
             <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="text-center py-16">
               <div className="text-5xl mb-3">🔖</div>
               <p className="font-bold text-[16px] text-[#1A1A1A] mb-1">
-                {activeFilter === 'all' ? '아직 저장한 코스맵이 없어요!' : '해당 카테고리 코스맵이 없어요'}
+                {activeFilter === 'all' ? '아직 저장한 먼치픽이 없어요!' : '해당 카테고리 먼치픽이 없어요'}
               </p>
               <p className="text-[13px] text-[#9B9B9B] mb-6">
-                {activeFilter === 'all' ? 'Munchie Feed에서 마음에 드는 코스맵을 저장해보세요' : '다른 필터를 선택해보세요'}
+                {activeFilter === 'all' ? 'Munchie Feed에서 마음에 드는 한줄평과 코스맵을 저장해보세요' : '다른 필터를 선택해보세요'}
               </p>
               {activeFilter === 'all' && (
                 <button onClick={() => navigate('/feed')} className="lm-btn-primary px-6 inline-flex items-center justify-center">

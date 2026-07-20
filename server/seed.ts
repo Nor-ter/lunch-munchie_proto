@@ -23,7 +23,7 @@ export async function seedDatabase() {
       const { stops, ...courseData } = c;
       await db.insert(courses).values(courseData);
 
-      const items = stops.map(s => ({
+      const items = stops.slice(0, 3).map(s => ({
         id: `ci_${c.id}_${s.order}`,
         course_id: c.id,
         restaurant_id: s.placeId,

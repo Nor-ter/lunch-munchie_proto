@@ -44,7 +44,7 @@ export default function CourseDetailPage() {
   }
 
   const handleShare = () => {
-    navigate(`/courses/${course.id}/share`);
+    navigate(`/course/${course.id}/share`);
   };
 
   const toggleStopBookmark = (placeId: string) => {

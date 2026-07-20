@@ -95,6 +95,21 @@ export interface Course {
   savedCount: number;
 }
 
+export const MAX_COURSE_STOPS = 3;
+
+function limitCourseToThreeStops(course: Course): Course {
+  const stops = course.stops
+    .slice()
+    .sort((a, b) => a.order - b.order)
+    .slice(0, MAX_COURSE_STOPS)
+    .map((stop, index) => ({ ...stop, order: index + 1 }));
+  return {
+    ...course,
+    stops,
+    metadata: { ...course.metadata, placeCount: stops.length },
+  };
+}
+
 export interface GroupSession {
   id: string;
   name: string;
@@ -174,6 +189,10 @@ export interface FeedComment {
   text: string;
   createdAt: string;
   hidden?: boolean;
+  likes?: number;
+  dislikes?: number;
+  myReaction?: 'like' | 'dislike';
+  reported?: boolean;
 }
 
 /** 과거 로컬 저장 데이터의 문자열/숫자 값까지 포함해 숨김 상태를 일관되게 판정한다. */
@@ -194,6 +213,7 @@ export interface FeedPost {
   caption: string;
   skinId: string;
   likes: number;
+  dislikes?: number;
   saves: number;
   comments: FeedComment[];
   createdAt: string;
@@ -374,13 +394,11 @@ export const MOCK_COURSES: Course[] = [
     tags: ['데이트코스', '카페'],
     hashtags: ['#데이트', '#카페', '#분위기', '#성수핫플'],
     region: '성수동',
-    metadata: { distance: 3.2, duration: 300, placeCount: 5 },
+    metadata: { distance: 3.2, duration: 300, placeCount: 3 },
     stops: [
       { placeId: 'r1', order: 1, startTime: '10:00', endTime: '11:00', isBookmarked: false },
       { placeId: 'r2', order: 2, startTime: '11:20', endTime: '12:30', isBookmarked: false },
       { placeId: 'r3', order: 3, startTime: '12:40', endTime: '14:00', isBookmarked: true },
-      { placeId: 'r4', order: 4, startTime: '14:20', endTime: '15:30', isBookmarked: false },
-      { placeId: 'r5', order: 5, startTime: '15:30', endTime: '16:40', isBookmarked: false },
     ],
     createdAt: '2026-05-20',
     isPublic: true,
@@ -395,7 +413,7 @@ export const MOCK_COURSES: Course[] = [
     tags: ['브런치', '혼밥'],
     hashtags: ['#브런치', '#한남', '#주말'],
     region: '한남동',
-    metadata: { distance: 2.7, duration: 240, placeCount: 4 },
+    metadata: { distance: 2.7, duration: 240, placeCount: 3 },
     stops: [
       { placeId: 'r6', order: 1, startTime: '10:30', endTime: '12:00', isBookmarked: false },
       { placeId: 'r7', order: 2, startTime: '12:30', endTime: '14:00', isBookmarked: false },
@@ -432,7 +450,7 @@ export const MOCK_COURSES: Course[] = [
     tags: ['맛집', '펍나이트'],
     hashtags: ['#연남동', '#맛집', '#투어'],
     region: '연남동',
-    metadata: { distance: 3.8, duration: 360, placeCount: 5 },
+    metadata: { distance: 3.8, duration: 360, placeCount: 3 },
     stops: [
       { placeId: 'r8', order: 1, startTime: '11:00', endTime: '12:30', isBookmarked: false },
       { placeId: 'r9', order: 2, startTime: '13:00', endTime: '14:30', isBookmarked: false },
@@ -593,8 +611,12 @@ interface AppContextValue {
   updateFeedPost: (postId: string, updates: Partial<Pick<FeedPost, 'courseId' | 'caption' | 'skinId' | 'photos' | 'tags'>>) => void;
   deleteFeedPost: (postId: string) => void;
   likedFeedIds: string[];
+  dislikedFeedIds: string[];
   toggleFeedLike: (postId: string) => void;
+  toggleFeedDislike: (postId: string) => void;
   addFeedComment: (postId: string, text: string) => void;
+  reactToFeedComment: (postId: string, commentId: string, reaction: 'like' | 'dislike') => void;
+  reportFeedComment: (postId: string, commentId: string) => void;
   /** 내 게시물의 악성 댓글 숨김 토글 — 메인 피드에 일괄 반영 */
   toggleCommentHidden: (postId: string, commentId: string) => void;
   /** 게시물이 내 것인지 (수정/삭제/댓글 숨김 권한) */
@@ -816,8 +838,20 @@ export function AppProvider({
   const [courses, setCourses] = useState<Course[]>(() => {
     try {
       const s = localStorage.getItem('lm_courses');
-      const stored = s ? JSON.parse(s) as Course[] : MOCK_COURSES;
-      return stored.map(course => ({
+      const stored = s ? JSON.parse(s) as Course[] : [];
+      const merged = new Map(MOCK_COURSES.map(course => [course.id, course]));
+      stored.forEach(course => {
+        const baseline = merged.get(course.id);
+        const hasResolvableStops = course.stops?.some(stop => (
+          MOCK_RESTAURANTS.some(restaurant => restaurant.id === stop.placeId)
+        ));
+        merged.set(course.id, {
+          ...baseline,
+          ...course,
+          stops: hasResolvableStops ? course.stops : baseline?.stops ?? course.stops ?? [],
+        });
+      });
+      return Array.from(merged.values()).map(course => limitCourseToThreeStops({
         ...course,
         tags: course.tags.map(tag => normalizeFoodTag(tag)),
       }));
@@ -876,17 +910,26 @@ export function AppProvider({
             ? initialAuthUserId ?? p.authorId
             : p.authorId,
           tags: p.tags.map(tag => normalizeFoodTag(tag)),
+          photos: p.photos.slice(0, MAX_COURSE_STOPS),
           comments: Array.isArray(p.comments) ? p.comments : [],
+          dislikes: p.dislikes ?? 0,
         }));
       }
     } catch { /* fall through */ }
-    return MOCK_FEED_POSTS.map((post, index) => (
-      index === 0 && initialAuthUserId ? { ...post, authorId: initialAuthUserId } : post
-    ));
+    return MOCK_FEED_POSTS.map((post, index) => ({
+      ...post,
+      ...(index === 0 && initialAuthUserId ? { authorId: initialAuthUserId } : {}),
+      photos: post.photos.slice(0, MAX_COURSE_STOPS),
+    }));
   });
 
   const [likedFeedIds, setLikedFeedIds] = useState<string[]>(() => {
     try { const s = localStorage.getItem('lm_feed_likes'); return s ? JSON.parse(s) : []; }
+    catch { return []; }
+  });
+
+  const [dislikedFeedIds, setDislikedFeedIds] = useState<string[]>(() => {
+    try { const s = localStorage.getItem('lm_feed_dislikes'); return s ? JSON.parse(s) : []; }
     catch { return []; }
   });
 
@@ -929,16 +972,27 @@ export function AppProvider({
     ])
       .then(([resData, courseData]) => {
         if (Array.isArray(resData) && resData.length > 0) {
-          setRestaurants(resData.map((restaurant: Restaurant) => ({
-            ...restaurant,
-            tags: restaurant.tags.map(tag => normalizeFoodTag(tag)),
-          })));
+          setRestaurants(previous => {
+            const merged = new Map(previous.map(restaurant => [restaurant.id, restaurant]));
+            resData.forEach((restaurant: Restaurant) => merged.set(restaurant.id, {
+              ...restaurant,
+              tags: restaurant.tags.map(tag => normalizeFoodTag(tag)),
+            }));
+            return Array.from(merged.values());
+          });
         }
         if (Array.isArray(courseData) && courseData.length > 0) {
-          setCourses(courseData.map((course: Course) => ({
+          const remoteCourses = courseData.map((course: Course) => limitCourseToThreeStops({
             ...course,
             tags: course.tags.map(tag => normalizeFoodTag(tag)),
-          })));
+          }));
+          // 피드는 코스맵과 하나의 기록이다. API 갱신이 로컬 작성 코스를 지워
+          // 피드 카드가 사라지지 않도록 원격 데이터와 기존 데이터를 ID 기준으로 병합한다.
+          setCourses(previous => {
+            const merged = new Map(previous.map(course => [course.id, course]));
+            remoteCourses.forEach(course => merged.set(course.id, course));
+            return Array.from(merged.values());
+          });
         }
         setApiAvailable(true);
       })
@@ -986,6 +1040,7 @@ export function AppProvider({
     try { localStorage.setItem('lm_feed_v2', JSON.stringify(feedPosts)); } catch { /* noop */ }
   }, [feedPosts]);
   useEffect(() => { localStorage.setItem('lm_feed_likes', JSON.stringify(likedFeedIds)); }, [likedFeedIds]);
+  useEffect(() => { localStorage.setItem('lm_feed_dislikes', JSON.stringify(dislikedFeedIds)); }, [dislikedFeedIds]);
   useEffect(() => { localStorage.setItem('lm_course_skins', JSON.stringify(courseSkins)); }, [courseSkins]);
 
   const saveCourse = useCallback((id: string) => {
@@ -997,11 +1052,13 @@ export function AppProvider({
   }, []);
 
   const addCourse = useCallback((course: Course) => {
-    setCourses(prev => [course, ...prev]);
+    setCourses(prev => [limitCourseToThreeStops(course), ...prev]);
   }, []);
 
   const updateCourse = useCallback((courseId: string, updates: Partial<Course>) => {
-    setCourses(previous => previous.map(course => course.id === courseId ? { ...course, ...updates } : course));
+    setCourses(previous => previous.map(course => course.id === courseId
+      ? limitCourseToThreeStops({ ...course, ...updates })
+      : course));
   }, []);
 
   const deleteProfileTemplate = useCallback((courseId: string) => {
@@ -1011,8 +1068,10 @@ export function AppProvider({
   const addFeedPost = useCallback((post: Omit<FeedPost, 'id' | 'likes' | 'saves' | 'comments' | 'createdAt'>) => {
     const full: FeedPost = {
       ...post,
+      photos: post.photos.slice(0, MAX_COURSE_STOPS),
       id: `f_${Date.now()}`,
       likes: 0,
+      dislikes: 0,
       saves: 0,
       comments: [],
       createdAt: new Date().toISOString(),
@@ -1022,7 +1081,9 @@ export function AppProvider({
   }, []);
 
   const updateFeedPost = useCallback((postId: string, updates: Partial<Pick<FeedPost, 'courseId' | 'caption' | 'skinId' | 'photos' | 'tags'>>) => {
-    setFeedPosts(posts => posts.map(p => p.id === postId ? { ...p, ...updates } : p));
+    setFeedPosts(posts => posts.map(p => p.id === postId
+      ? { ...p, ...updates, photos: (updates.photos ?? p.photos).slice(0, MAX_COURSE_STOPS) }
+      : p));
   }, []);
 
   const deleteFeedPost = useCallback((postId: string) => {
@@ -1040,12 +1101,34 @@ export function AppProvider({
   const toggleFeedLike = useCallback((postId: string) => {
     setLikedFeedIds(prev => {
       const liked = prev.includes(postId);
+      const wasDisliked = dislikedFeedIds.includes(postId);
       setFeedPosts(posts => posts.map(p =>
-        p.id === postId ? { ...p, likes: Math.max(0, p.likes + (liked ? -1 : 1)) } : p,
+        p.id === postId ? {
+          ...p,
+          likes: Math.max(0, p.likes + (liked ? -1 : 1)),
+          dislikes: Math.max(0, (p.dislikes ?? 0) - (!liked && wasDisliked ? 1 : 0)),
+        } : p,
       ));
+      if (!liked && wasDisliked) setDislikedFeedIds(ids => ids.filter(id => id !== postId));
       return liked ? prev.filter(i => i !== postId) : [...prev, postId];
     });
-  }, []);
+  }, [dislikedFeedIds]);
+
+  const toggleFeedDislike = useCallback((postId: string) => {
+    setDislikedFeedIds(prev => {
+      const disliked = prev.includes(postId);
+      const wasLiked = likedFeedIds.includes(postId);
+      setFeedPosts(posts => posts.map(p =>
+        p.id === postId ? {
+          ...p,
+          dislikes: Math.max(0, (p.dislikes ?? 0) + (disliked ? -1 : 1)),
+          likes: Math.max(0, p.likes - (!disliked && wasLiked ? 1 : 0)),
+        } : p,
+      ));
+      if (!disliked && wasLiked) setLikedFeedIds(ids => ids.filter(id => id !== postId));
+      return disliked ? prev.filter(i => i !== postId) : [...prev, postId];
+    });
+  }, [likedFeedIds]);
 
   const addFeedComment = useCallback((postId: string, text: string) => {
     const comment: FeedComment = {
@@ -1054,11 +1137,39 @@ export function AppProvider({
       authorEmoji: profile.emoji,
       text,
       createdAt: new Date().toISOString(),
+      likes: 0,
+      dislikes: 0,
     };
     setFeedPosts(posts => posts.map(p =>
       p.id === postId ? { ...p, comments: [...p.comments, comment] } : p,
     ));
   }, [profile.name, profile.emoji]);
+
+  const reactToFeedComment = useCallback((postId: string, commentId: string, reaction: 'like' | 'dislike') => {
+    setFeedPosts(posts => posts.map(post => post.id !== postId ? post : {
+      ...post,
+      comments: post.comments.map(comment => {
+        if (comment.id !== commentId) return comment;
+        const previous = comment.myReaction;
+        const next = previous === reaction ? undefined : reaction;
+        return {
+          ...comment,
+          myReaction: next,
+          likes: Math.max(0, (comment.likes ?? 0) + (next === 'like' ? 1 : 0) - (previous === 'like' ? 1 : 0)),
+          dislikes: Math.max(0, (comment.dislikes ?? 0) + (next === 'dislike' ? 1 : 0) - (previous === 'dislike' ? 1 : 0)),
+        };
+      }),
+    }));
+  }, []);
+
+  const reportFeedComment = useCallback((postId: string, commentId: string) => {
+    setFeedPosts(posts => posts.map(post => post.id !== postId ? post : {
+      ...post,
+      comments: post.comments.map(comment => comment.id === commentId
+        ? { ...comment, reported: true }
+        : comment),
+    }));
+  }, []);
 
   const isMyPost = useCallback((post: FeedPost) => post.authorId === profile.id, [profile.id]);
 
@@ -1342,7 +1453,8 @@ export function AppProvider({
       savedRestaurantIds, saveRestaurant, unsaveRestaurant,
       profile, updateProfile,
       feedPosts, addFeedPost, updateFeedPost, deleteFeedPost,
-      likedFeedIds, toggleFeedLike, addFeedComment, toggleCommentHidden, isMyPost,
+      likedFeedIds, dislikedFeedIds, toggleFeedLike, toggleFeedDislike, addFeedComment,
+      reactToFeedComment, reportFeedComment, toggleCommentHidden, isMyPost,
       courseSkins, setCourseSkin,
       restaurants, registerRestaurants,
       getRestaurantById, getCourseById,

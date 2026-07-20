@@ -31,7 +31,7 @@ interface Props {
 /** 먼치 영수증 — 크레용 체크 배경 위 구겨진 영수증에 코스를 기록한다 */
 const ReceiptTemplate = forwardRef<HTMLDivElement, Props>(({ course, palette }, ref) => {
   const p = palette ?? SCRAP_PALETTES.blue;
-  const places = course.places.slice(0, 4);
+  const places = course.places.slice(0, 3);
   const dateLabel = course.date ?? new Date().toISOString().slice(0, 10).replace(/-/g, '/');
   const ink = '#2B2B2B';
 

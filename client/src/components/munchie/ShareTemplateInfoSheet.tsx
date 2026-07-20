@@ -48,11 +48,13 @@ export default function ShareTemplateInfoSheet({
                 <X size={18} />
               </button>
             </div>
-            <div className="mx-auto w-full max-w-[285px] rounded-[24px] bg-white p-2 shadow-[0_14px_35px_rgba(91,57,42,0.15)]">
+            <div className={`mx-auto flex items-center justify-center rounded-[24px] bg-white p-2 shadow-[0_14px_35px_rgba(91,57,42,0.15)] ${template.aspect === '9:16' ? 'h-[62dvh] max-h-[560px] w-full max-w-[250px]' : 'w-full max-w-[285px]'}`}>
               <img
                 src={template.background}
                 alt={`${template.name} 기본 디자인`}
-                className="aspect-[9/16] w-full rounded-[18px] object-cover"
+                className={template.aspect === '9:16'
+                  ? 'max-h-full max-w-full rounded-[18px] object-contain'
+                  : 'aspect-[3/4] w-full rounded-[18px] object-contain'}
               />
             </div>
             <div className="mt-5 flex items-center justify-between rounded-2xl bg-white px-4 py-3">

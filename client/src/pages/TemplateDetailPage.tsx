@@ -3,8 +3,8 @@ import { AnimatePresence, motion } from 'framer-motion';
 import { useLocation, useParams, useSearch } from 'wouter';
 import { Bookmark, ChevronDown, ChevronLeft, ChevronRight, Clock3, MapPin, MessageCircle, Pencil, Star, Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
-import { isFeedCommentHidden, useApp, type Restaurant } from '@/contexts/AppContext';
-import { getTemplateById } from '@/constants/coursemapTemplates';
+import { isFeedCommentHidden, useApp, type Course, type Restaurant } from '@/contexts/AppContext';
+import { getTemplateById, getTemplateForCourse } from '@/constants/coursemapTemplates';
 import TemplateArtwork from '@/components/munchie/TemplateArtwork';
 import TemplateInfoSheet from '@/components/munchie/TemplateInfoSheet';
 import RestaurantDetailSheet from '@/components/munchie/RestaurantDetailSheet';
@@ -29,8 +29,26 @@ export default function TemplateDetailPage() {
   const courseId = searchParams.get('course') ?? undefined;
   const source = searchParams.get('from') === 'profile' ? 'profile' : 'feed';
   const backPath = source === 'profile' ? '/profile' : '/feed?tab=template';
-  const template = getTemplateById(templateId);
-  const course = courseId ? getCourseById(courseId) : undefined;
+  const linkedPost = courseId ? feedPosts.find(post => post.courseId === courseId) : undefined;
+  const linkedCourse = courseId ? getCourseById(courseId) : undefined;
+  const fallbackCourse: Course | undefined = courseId && linkedPost ? {
+    id: courseId,
+    title: '',
+    description: linkedPost.caption,
+    heroImage: linkedPost.photos[0] ?? '',
+    tags: linkedPost.tags,
+    hashtags: [],
+    region: 'Munchie 커뮤니티',
+    metadata: { distance: 0, duration: 0, placeCount: Math.min(linkedPost.photos.length, 3) },
+    stops: [],
+    createdAt: linkedPost.createdAt,
+    isPublic: true,
+    creatorId: linkedPost.authorId ?? '',
+    savedCount: 0,
+  } : undefined;
+  const course = linkedCourse ?? fallbackCourse;
+  const fallbackTemplateIndex = Math.max(feedPosts.findIndex(post => post.courseId === courseId), 0);
+  const template = getTemplateById(templateId) ?? (course ? getTemplateForCourse(course.id, fallbackTemplateIndex) : undefined);
   const isSaved = course ? savedCourseIds.includes(course.id) : false;
 
   const editTemplate = () => {
@@ -129,7 +147,7 @@ export default function TemplateDetailPage() {
 
       <section className="px-5">
         <div className="mx-auto w-full max-w-[350px] rounded-[28px] bg-white p-2.5 shadow-[0_18px_45px_rgba(91,57,42,0.16)]">
-          <TemplateArtwork course={course} template={template} className="rounded-[20px]" eager />
+          <TemplateArtwork course={course} template={template} photoSources={linkedPost?.photos} className="rounded-[20px]" eager />
         </div>
       </section>
 

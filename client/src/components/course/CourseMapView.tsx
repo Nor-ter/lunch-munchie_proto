@@ -20,7 +20,11 @@ interface Props {
  * 코스) 기존 추상 그리드 SVG로 폴백한다.
  */
 export function CourseMapView({ places, width, height, className }: Props) {
+  // 키가 없으면 MapProvider가 APIProvider 없이 children만 렌더하므로,
+  // GoogleCourseMap을 그리면 앱이 죽는다 — 이때도 SVG 폴백을 쓴다.
+  const hasMapsKey = !!import.meta.env.VITE_GOOGLE_MAPS_API_KEY;
   const hasGeo =
+    hasMapsKey &&
     places.length > 0 &&
     places.every((p) => typeof p.latitude === 'number' && typeof p.longitude === 'number');
 

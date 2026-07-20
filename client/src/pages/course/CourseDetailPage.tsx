@@ -1,8 +1,7 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState, type RefObject } from 'react';
 import { useParams, useLocation, useSearch } from 'wouter';
 import { motion, AnimatePresence } from 'framer-motion';
-import { toast } from 'sonner';
-import { Heart, Bookmark, Share2, ChevronLeft, ChevronRight, Star, X, GripVertical, Palette, MessageCircle } from 'lucide-react';
+import { Heart, Bookmark, Share2, ChevronLeft, ChevronRight, Star, X, GripVertical, MessageCircle } from 'lucide-react';
 import {
   DndContext,
   closestCenter,
@@ -21,15 +20,15 @@ import {
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { CourseMapView } from '@/components/course/CourseMapView';
+import { getCourseMapPositionPercent } from '@/components/course/CourseMap';
 import { useApp } from '@/contexts/AppContext';
 import { getCourseById as getMockCourseById } from '@/data/mockCourse';
 import { CoursePlace } from '@/types/course';
 import { COURSE_THEME, getCourseSequenceColor } from '@/constants/courseTheme';
 import { getCoursePlacesFromStops } from '@/lib/courseMapSync';
-import { getSkinById } from '@/constants/skins';
-import SkinFrame from '@/components/munchie/SkinFrame';
-import SkinPicker from '@/components/munchie/SkinPicker';
 import RestaurantDetailSheet from '@/components/munchie/RestaurantDetailSheet';
+import FruitCharacter, { fruitForStop } from '@/components/munchie/FruitCharacter';
+import OneLineReviewBox from '@/components/munchie/OneLineReviewBox';
 
 type FromMode = 'explore' | 'saved' | 'feed' | 'template' | 'template-detail' | 'profile';
 
@@ -54,6 +53,99 @@ function normalizeHashtags(tags: string[]) {
   return tags.map((tag) => tag.replace(/^#/, ''));
 }
 
+function DraggableMapPhoto({
+  place,
+  index,
+  mapRef,
+  onOpen,
+}: {
+  place: CoursePlace;
+  index: number;
+  mapRef: RefObject<HTMLDivElement | null>;
+  onOpen: () => void;
+}) {
+  const didDrag = useRef(false);
+  const dragStart = useRef<{ pointerX: number; pointerY: number; offsetX: number; offsetY: number } | null>(null);
+  const [offset, setOffset] = useState({ x: 0, y: 0 });
+  const boxOnRight = place.coords.x < 55;
+
+  const movePhoto = (event: React.PointerEvent<HTMLButtonElement>) => {
+    if (!dragStart.current || !mapRef.current) return;
+    const deltaX = event.clientX - dragStart.current.pointerX;
+    const deltaY = event.clientY - dragStart.current.pointerY;
+    if (Math.abs(deltaX) + Math.abs(deltaY) > 4) didDrag.current = true;
+
+    const desired = {
+      x: dragStart.current.offsetX + deltaX,
+      y: dragStart.current.offsetY + deltaY,
+    };
+    const mapBounds = mapRef.current.getBoundingClientRect();
+    const photoBounds = event.currentTarget.getBoundingClientRect();
+    const baseLeft = photoBounds.left - offset.x;
+    const baseTop = photoBounds.top - offset.y;
+    const padding = 5;
+
+    setOffset({
+      x: Math.min(mapBounds.right - padding - photoBounds.width - baseLeft, Math.max(mapBounds.left + padding - baseLeft, desired.x)),
+      y: Math.min(mapBounds.bottom - padding - photoBounds.height - baseTop, Math.max(mapBounds.top + padding - baseTop, desired.y)),
+    });
+  };
+
+  const finishDrag = (event: React.PointerEvent<HTMLButtonElement>) => {
+    if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+      event.currentTarget.releasePointerCapture(event.pointerId);
+    }
+    dragStart.current = null;
+    window.setTimeout(() => { didDrag.current = false; }, 0);
+  };
+
+  return (
+    <div
+      className="pointer-events-none absolute"
+      style={{
+        left: `${getCourseMapPositionPercent(place.coords.x, 430)}%`,
+        top: `${getCourseMapPositionPercent(place.coords.y, 300)}%`,
+        transform: 'translate(-50%, -50%)',
+      }}
+    >
+      <FruitCharacter kind={fruitForStop(index)} size={34} />
+      <button
+        type="button"
+        onPointerDown={(event) => {
+          event.currentTarget.setPointerCapture(event.pointerId);
+          dragStart.current = {
+            pointerX: event.clientX,
+            pointerY: event.clientY,
+            offsetX: offset.x,
+            offsetY: offset.y,
+          };
+        }}
+        onPointerMove={movePhoto}
+        onPointerUp={finishDrag}
+        onPointerCancel={finishDrag}
+        onClick={() => { if (!didDrag.current) onOpen(); }}
+        aria-label={`${place.name} 사진 이동 또는 보기`}
+        className="pointer-events-auto absolute flex w-[92px] cursor-grab touch-none flex-col overflow-hidden rounded-xl border border-[#E8D9D0] bg-white shadow-[0_6px_16px_rgba(91,56,39,0.15)] active:cursor-grabbing"
+        style={{
+          top: -22,
+          transform: `translate3d(${offset.x}px, ${offset.y}px, 0)`,
+          zIndex: dragStart.current ? 30 : 10,
+          ...(boxOnRight ? { left: 40 } : { right: 40 }),
+        }}
+      >
+        {place.imageUrl ? (
+          <img src={place.imageUrl} alt="" className="h-12 w-full select-none object-cover" draggable={false} />
+        ) : (
+          <span className="flex h-12 w-full items-center justify-center bg-[#F5F1ED] text-[9px] text-[#A8978D]">사진</span>
+        )}
+        <span className="truncate px-1.5 py-1 text-[8.5px] font-black text-[#3B2A22]">
+          {place.name}
+        </span>
+      </button>
+    </div>
+  );
+}
+
 // ── PlaceItem ─────────────────────────────────────────────────────────────────
 
 function PlaceItem({
@@ -75,7 +167,7 @@ function PlaceItem({
   /** 터치로 하이라이트된 상태 */
   selected?: boolean;
   onSelect?: (id: string) => void;
-  /** 왼쪽으로 밀거나 화살표 탭 시 식당 상세 열기 */
+  /** 오른쪽으로 밀거나 화살표 탭 시 식당 상세 열기 */
   onOpenDetail?: (id: string) => void;
   hasDetail?: boolean;
 }) {
@@ -93,12 +185,8 @@ function PlaceItem({
       className={`flex gap-3 ${isDragging ? 'opacity-50' : ''}`}
     >
       <div className="flex flex-col items-center">
-        <div
-          className="w-7 h-7 rounded-full text-white text-xs flex items-center justify-center shrink-0"
-          style={{ background: color.base }}
-        >
-          {index + 1}
-        </div>
+        {/* 번호 대신 과일 캐릭터 (키위 → 사과 → 딸기 순) */}
+        <FruitCharacter kind={fruitForStop(index)} size={32} />
         {!isLast && (
           <div
             className="flex-1 border-l-2 border-dashed ml-[1px] my-1"
@@ -109,20 +197,40 @@ function PlaceItem({
 
       <motion.div
         layout
+        role={canPeek ? 'button' : undefined}
+        tabIndex={canPeek ? 0 : undefined}
+        aria-label={canPeek ? (selected ? `${place.name} 상세보기` : `${place.name} 선택`) : undefined}
+        aria-pressed={canPeek ? selected : undefined}
         drag={canPeek && selected ? 'x' : false}
-        dragConstraints={{ left: -90, right: 0 }}
+        dragConstraints={{ left: 0, right: 90 }}
         dragElastic={0.12}
         dragSnapToOrigin
         onDragEnd={(_, info) => {
-          if (info.offset.x < -55) onOpenDetail?.(place.id);
+          if (info.offset.x > 55) onOpenDetail?.(place.id);
         }}
-        onClick={() => canPeek && onSelect?.(place.id)}
+        onClick={() => {
+          if (!canPeek) return;
+          if (selected) {
+            onOpenDetail?.(place.id);
+            return;
+          }
+          onSelect?.(place.id);
+        }}
+        onKeyDown={(event) => {
+          if (!canPeek || (event.key !== 'Enter' && event.key !== ' ')) return;
+          event.preventDefault();
+          if (selected) {
+            onOpenDetail?.(place.id);
+            return;
+          }
+          onSelect?.(place.id);
+        }}
         className={`flex-1 border rounded-xl p-3 flex gap-3 items-center transition-colors ${!isLast ? 'mb-2' : ''} ${
           canPeek ? 'cursor-pointer' : ''
         }`}
         style={selected
           ? { borderColor: color.base, background: color.faint, touchAction: 'pan-y' }
-          : { borderColor: '#F3F4F6', touchAction: 'pan-y' }}
+          : { borderColor: '#EADBD2', background: '#FFFDFC', touchAction: 'pan-y' }}
       >
         <AnimatePresence>
           {isEditing && (
@@ -160,7 +268,7 @@ function PlaceItem({
               className="mt-1 text-[10px] font-bold"
               style={{ color: color.text }}
             >
-              ← 밀어서 식당 상세·후기 보기
+              한 번 더 누르거나 오른쪽으로 밀어서 상세보기 →
             </motion.p>
           )}
         </div>
@@ -211,14 +319,11 @@ export default function CourseDetailPage() {
     getCourseById: getAppCourseById,
     getRestaurantById,
     feedPosts,
-    courseSkins,
-    setCourseSkin,
   } = useApp();
-  const skin = id ? getSkinById(courseSkins[id]) : undefined;
-  const [skinSheetOpen, setSkinSheetOpen] = useState(false);
   const isBookmarked = id ? savedCourseIds.includes(id) : false;
   const templateId = new URLSearchParams(search).get('template');
   const templateFrom = new URLSearchParams(search).get('templateFrom');
+  const requestedPostId = new URLSearchParams(search).get('post');
   const isProfileTemplateCourse = from === 'template-detail' && templateFrom === 'profile';
   const canManageCourse = fromSaved || isProfileTemplateCourse;
   const backPath = from === 'template-detail' && templateId && id
@@ -232,16 +337,32 @@ export default function CourseDetailPage() {
   };
 
   const appCourse = id ? getAppCourseById(id) : undefined;
+  const orphanPost = id
+    ? feedPosts.find(post => post.id === requestedPostId && post.courseId === id)
+      ?? feedPosts.find(post => post.courseId === id)
+    : undefined;
   const courseData = getMockCourseById(id);
   const syncedPlaces = useMemo(
     () => (appCourse ? getCoursePlacesFromStops(appCourse, getRestaurantById) : []),
     [appCourse, getRestaurantById],
   );
-  const initialTitle = appCourse?.title ?? courseData.title;
-  const initialHashtags = normalizeHashtags(appCourse?.hashtags ?? courseData.hashtags);
+  const legacyPhotoPlaces: CoursePlace[] = (orphanPost?.photos ?? []).slice(0, 3).map((photo, index) => ({
+    id: `legacy-${orphanPost!.id}-${index}`,
+    name: `코스 스팟 ${index + 1}`,
+    rating: 0,
+    distance: '기록 사진',
+    category: orphanPost?.tags[index] ?? 'Munchie',
+    priceLevel: 1,
+    imageUrl: photo,
+    coords: [{ x: 20, y: 28 }, { x: 70, y: 50 }, { x: 32, y: 76 }][index]!,
+  }));
+  const initialTitle = orphanPost?.caption || appCourse?.description || courseData.title;
+  const initialHashtags = normalizeHashtags(appCourse?.hashtags ?? orphanPost?.tags ?? courseData.hashtags);
   const initialPlaces = appCourse && syncedPlaces.length > 0
     ? syncedPlaces
-    : courseData.places.map(p => ({ ...p }));
+    : legacyPhotoPlaces.length > 0
+      ? legacyPhotoPlaces
+      : courseData.places.map(p => ({ ...p }));
   const distanceKm = appCourse?.metadata.distance ?? courseData.distanceKm;
   const durationLabel = appCourse
     ? `${Math.floor(appCourse.metadata.duration / 60)}h`
@@ -250,6 +371,8 @@ export default function CourseDetailPage() {
   const relatedFeedCount = id
     ? feedPosts.filter(post => post.courseId === id).length
     : 0;
+  const authorHandle = (orphanPost?.authorName || courseData.authorHandle).replace(/^@/, '');
+  const authorMeta = orphanPost ? 'Munchie creator' : `${courseData.followerCount} Followers`;
 
   // Local editable state (only used in saved mode)
   const [title, setTitle] = useState(initialTitle);
@@ -261,6 +384,9 @@ export default function CourseDetailPage() {
   // 코스 순서: 터치 → 하이라이트, 밀기 → 식당 상세 슬라이드
   const [selectedPlaceId, setSelectedPlaceId] = useState<string | null>(null);
   const [detailPlaceId, setDetailPlaceId] = useState<string | null>(null);
+  // 지도 위 음식점 박스 클릭 → 레스토랑 이미지 라이트박스
+  const [lightboxPlace, setLightboxPlace] = useState<CoursePlace | null>(null);
+  const mapRef = useRef<HTMLDivElement>(null);
 
   const titleInputRef = useRef<HTMLInputElement>(null);
   const tagInputRef = useRef<HTMLInputElement>(null);
@@ -295,28 +421,9 @@ export default function CourseDetailPage() {
     }
   };
 
-  const shareCourseMap = async () => {
+  const shareCourseMap = () => {
     if (!id) return;
-    const url = `${window.location.origin}/course/${id}`;
-    const shareData = {
-      title: `Lunchie Munchie — ${title}`,
-      text: `${title} 코스맵을 확인해보세요!`,
-      url,
-    };
-
-    try {
-      if (navigator.share) {
-        await navigator.share(shareData);
-        toast.success('코스맵을 공유했어요!');
-        return;
-      }
-      await navigator.clipboard.writeText(url);
-      toast.success('공유 링크를 복사했어요! 🔗');
-    } catch (error) {
-      // 네이티브 공유 시트를 닫은 경우에는 실패 메시지를 표시하지 않는다.
-      if (error instanceof DOMException && error.name === 'AbortError') return;
-      toast.error('코스맵을 공유하지 못했어요');
-    }
+    navigate(`/course/${id}/share`);
   };
 
   const sensors = useSensors(
@@ -337,36 +444,41 @@ export default function CourseDetailPage() {
 
   return (
     <motion.div
-      className="max-w-[430px] mx-auto min-h-screen pb-[112px]"
-      style={{ backgroundColor: 'var(--lm-bg)' }}
+      className="mx-auto min-h-screen max-w-[430px] bg-[#FFF8F3] pb-[112px]"
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.3 }}
     >
       {/* Back button */}
-      <div className="px-4 pt-4 pb-3">
+      <div className="flex items-center justify-between px-4 pb-3 pt-4">
         <button
           onClick={() => navigate(backPath)}
           aria-label="이전 화면으로 돌아가기"
-          className="w-9 h-9 bg-white rounded-full shadow flex items-center justify-center"
+          className="flex h-9 w-9 items-center justify-center rounded-full border border-[#EBD8CE] bg-white text-[#8B6A5D] shadow-sm"
         >
           <ChevronLeft size={20} />
         </button>
+        <div className="text-center">
+          <p className="text-[10px] font-black uppercase tracking-[0.18em] text-[#E67E78]">Munchie</p>
+          <p className="text-[16px] font-black text-[#49362E]">코스맵 보기</p>
+        </div>
+        <div className="h-9 w-9" aria-hidden="true" />
       </div>
 
-      {/* White card — 스킨 적용 시 스크랩북 프레임으로 감싼다 */}
-      <SkinFrame skin={skin} className="mx-4" radius={26}>
-      <div className={skin ? undefined : 'bg-white rounded-3xl shadow-sm overflow-hidden'}>
+      {/* Every course map uses the same basic card. Stored legacy skins are intentionally ignored. */}
+      <div className="mx-4 overflow-hidden rounded-3xl border border-[#EBD9CF] bg-[#FFFDFC] shadow-[0_10px_28px_rgba(105,67,48,0.08)]">
 
       {/* Author */}
       <div className="px-4 pt-4 pb-2 flex items-center justify-between">
         <div className="flex items-center gap-2">
-          <div className="w-10 h-10 rounded-full bg-gray-200 shrink-0" />
+          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[#F3EDE8] text-lg">
+            {orphanPost?.authorEmoji || '🍽️'}
+          </div>
           <div>
             <div className="flex items-center gap-1.5">
-              <span className="font-medium text-sm">@{courseData.authorHandle}</span>
+              <span className="font-medium text-sm">@{authorHandle}</span>
             </div>
-            <span className="text-xs text-gray-500">{courseData.followerCount} Followers</span>
+            <span className="text-xs text-gray-500">{authorMeta}</span>
           </div>
         </div>
 
@@ -393,33 +505,40 @@ export default function CourseDetailPage() {
 
       {/* Course info */}
       <motion.div layout className="px-4 pb-3">
-        {/* Title */}
+        {/* One-line review */}
         <AnimatePresence mode="wait">
           {fromSaved && isEditing ? (
-            <motion.input
+            <motion.div
               key="title-input"
-              ref={titleInputRef}
               layout
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
               transition={{ duration: 0.15 }}
-              value={title}
-              onChange={e => setTitle(e.target.value)}
-              className="text-xl font-bold w-full border-b border-gray-300 outline-none pb-0.5 bg-transparent"
-            />
+            >
+              <OneLineReviewBox>
+                <input
+                  ref={titleInputRef}
+                  value={title}
+                  onChange={e => setTitle(e.target.value)}
+                  aria-label="한줄평 수정"
+                  className="w-full bg-transparent text-[14px] font-bold leading-relaxed text-[#3B2A23] outline-none"
+                />
+              </OneLineReviewBox>
+            </motion.div>
           ) : (
-            <motion.h1
+            <motion.div
               key="title-text"
               layout
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
               transition={{ duration: 0.15 }}
-              className="text-xl font-bold"
             >
-              {title}
-            </motion.h1>
+              <OneLineReviewBox>
+                <p className="text-[14px] font-bold leading-relaxed text-[#3B2A23]">{title}</p>
+              </OneLineReviewBox>
+            </motion.div>
           )}
         </AnimatePresence>
 
@@ -479,28 +598,22 @@ export default function CourseDetailPage() {
       </motion.div>
 
       {/* Map actions — 지도 위에 분리해 지도를 가리지 않는다. */}
-      <div className="mx-4 mb-2 flex justify-end gap-2">
+      <div className="mx-4 mb-2 flex justify-end gap-1.5">
           <button
             onClick={shareCourseMap}
             aria-label="코스맵 공유"
-            className="w-9 h-9 bg-white rounded-full shadow flex items-center justify-center"
+            className="flex h-8 w-8 items-center justify-center rounded-full border border-[#D5E1D9] bg-[#F6FBF7] text-[#688373]"
           >
-            <Share2 size={18} />
-          </button>
-          <button
-            onClick={() => navigate(`/course/${id}/share${fromSaved ? '?from=saved' : ''}`)}
-            aria-label="코스맵 템플릿 만들기"
-            className="w-9 h-9 bg-white rounded-full shadow flex items-center justify-center"
-          >
-            <Palette size={18} />
+            <Share2 size={15} />
           </button>
           {!canManageCourse && (
             <button
               onClick={toggleBookmark}
-              className="w-9 h-9 bg-white rounded-full shadow flex items-center justify-center"
+              aria-label="코스맵 저장"
+              className="flex h-8 w-8 items-center justify-center rounded-full border border-[#F0C7BD] bg-[#FFF5F1] text-[#D56F69]"
             >
               <Bookmark
-                size={18}
+                size={15}
                 fill={isBookmarked ? '#E85053' : 'none'}
                 stroke={isBookmarked ? '#E85053' : 'currentColor'}
               />
@@ -508,13 +621,27 @@ export default function CourseDetailPage() {
           )}
       </div>
 
-      {/* Map area */}
-      <div className="relative mx-4 mb-4 h-[220px] rounded-2xl overflow-hidden">
-        <CourseMapView places={places} width={430} height={220} className="w-full h-full" />
+      {/* Map area — 과일 캐릭터 마커 + 음식점 박스 오버레이 */}
+      <div ref={mapRef} className="relative mx-4 mb-4 h-[300px] overflow-hidden rounded-[22px] border-2 border-[#E9D8CF] bg-[#FBF7F1] shadow-[0_8px_22px_rgba(105,67,48,0.08)]">
+        <CourseMapView places={places} width={430} height={300} className="h-full w-full" />
+        <div className="pointer-events-none absolute inset-0 z-10">
+          {places.map((place, i) => (
+            <DraggableMapPhoto
+              key={place.id}
+              place={place}
+              index={i}
+              mapRef={mapRef}
+              onOpen={() => setLightboxPlace(place)}
+            />
+          ))}
+          <span className="absolute bottom-2 left-1/2 -translate-x-1/2 rounded-full bg-white/90 px-3 py-1 text-[9px] font-bold text-[#8D776C] shadow-sm">
+            사진을 드래그해 지도를 확인하세요
+          </span>
+        </div>
       </div>
 
       {/* Stats bar */}
-      <div className="mx-4 mb-4 border border-gray-100 rounded-xl grid grid-cols-4">
+      <div className="mx-4 mb-4 grid grid-cols-4 overflow-hidden rounded-2xl border border-[#EADBD2] bg-[#FFFDFC]">
         {[
           { value: `${distanceKm}km`, label: '거리' },
           { value: durationLabel, label: '소요 시간' },
@@ -523,7 +650,7 @@ export default function CourseDetailPage() {
         ].map((stat, i, arr) => (
           <div
             key={stat.label}
-            className={`py-3 flex flex-col items-center ${i < arr.length - 1 ? 'border-r border-gray-100' : ''}`}
+            className={`flex flex-col items-center py-3 ${i < arr.length - 1 ? 'border-r border-[#EFE2DA]' : ''}`}
           >
             <span className="font-bold text-sm">{stat.value}</span>
             <span className="text-xs text-gray-400">{stat.label}</span>
@@ -554,7 +681,7 @@ export default function CourseDetailPage() {
       <div className="px-4 pb-4">
         <div className="flex items-center justify-between mb-3">
           <p className="text-sm font-semibold">코스 순서</p>
-          <p className="text-[10px] text-gray-400">터치해서 식당 자세히 보기</p>
+          <p className="text-[10px] text-gray-400">한 번 선택 · 두 번 상세보기</p>
         </div>
         <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
           <SortableContext items={places.map(p => p.id)} strategy={verticalListSortingStrategy}>
@@ -567,7 +694,7 @@ export default function CourseDetailPage() {
                   isLast={i === places.length - 1}
                   isEditing={fromSaved && isEditing}
                   onRemove={id => setPlaces(prev => prev.filter(p => p.id !== id))}
-                  hasDetail={!!getRestaurantById(place.id)}
+                  hasDetail
                   selected={selectedPlaceId === place.id}
                   onSelect={pid => setSelectedPlaceId(prev => (prev === pid ? null : pid))}
                   onOpenDetail={pid => setDetailPlaceId(pid)}
@@ -578,75 +705,68 @@ export default function CourseDetailPage() {
         </DndContext>
       </div>
 
-      {/* 템플릿 스킨 바꾸기 — 내 코스(저장/프로필 진입)에서만 */}
-      {canManageCourse && (
-        <div className="px-4 pb-4">
-          <button
-            onClick={() => setSkinSheetOpen(true)}
-            className="w-full h-11 rounded-xl border border-dashed flex items-center justify-center gap-2 text-sm font-semibold active:scale-[0.99] transition-transform"
-            style={{ borderColor: skin?.accent ?? '#E85053', color: skin?.accent ?? '#E85053' }}
-          >
-            <Palette size={16} /> {skin ? `스킨 · ${skin.name}` : '템플릿 스킨 입히기'}
-          </button>
-        </div>
-      )}
       </div>
-      </SkinFrame>
+
+      {/* 지도 박스 클릭 → 레스토랑 이미지 라이트박스 */}
+      <AnimatePresence>
+        {lightboxPlace && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            onClick={() => setLightboxPlace(null)}
+            className="fixed inset-0 z-[60] flex items-center justify-center bg-black/70 px-8"
+          >
+            <motion.div
+              initial={{ scale: 0.85, y: 14 }}
+              animate={{ scale: 1, y: 0 }}
+              exit={{ scale: 0.9, y: 10 }}
+              onClick={event => event.stopPropagation()}
+              className="w-full max-w-[340px] overflow-hidden rounded-3xl bg-white"
+            >
+              {lightboxPlace.imageUrl ? (
+                <img src={lightboxPlace.imageUrl} alt={lightboxPlace.name} className="aspect-square w-full object-cover" />
+              ) : (
+                <div className="flex aspect-square w-full items-center justify-center bg-gray-100 text-sm text-gray-400">
+                  등록된 사진이 없어요
+                </div>
+              )}
+              <div className="flex items-center gap-2.5 px-4 py-3.5">
+                <FruitCharacter
+                  kind={fruitForStop(places.findIndex(p => p.id === lightboxPlace.id))}
+                  size={30}
+                />
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-[15px] font-black text-[#2B211D]">{lightboxPlace.name}</p>
+                  <p className="truncate text-[11px] text-gray-400">
+                    {lightboxPlace.category}{lightboxPlace.address ? ` · ${lightboxPlace.address}` : ''}
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => { setLightboxPlace(null); setDetailPlaceId(lightboxPlace.id); }}
+                  className="shrink-0 rounded-full bg-[#E85053] px-3 py-1.5 text-[11px] font-black text-white active:scale-95"
+                >
+                  상세보기
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* 식당 상세 슬라이드 (뒤로가면 이 화면으로 복귀) */}
       <AnimatePresence>
         {detailPlaceId && (
           <RestaurantDetailSheet
             restaurantId={detailPlaceId}
+            fallbackPlace={places.find(place => place.id === detailPlaceId)}
+            courseId={id}
             onClose={() => setDetailPlaceId(null)}
           />
         )}
       </AnimatePresence>
 
-      {/* 스킨 선택 바텀시트 */}
-      <AnimatePresence>
-        {skinSheetOpen && (
-          <>
-            <motion.div
-              className="fixed inset-0 bg-black/40 z-50"
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              onClick={() => setSkinSheetOpen(false)}
-            />
-            <motion.div
-              className="fixed bottom-0 left-0 right-0 mx-auto w-full max-w-[430px] bg-white rounded-t-3xl z-50 px-5 pt-4 pb-8"
-              initial={{ y: '100%' }}
-              animate={{ y: 0 }}
-              exit={{ y: '100%' }}
-              transition={{ type: 'tween', ease: [0.32, 0.72, 0, 1], duration: 0.3 }}
-            >
-              <div className="mx-auto mb-4 h-1 w-10 rounded-full bg-gray-200" />
-              <div className="mb-4 flex items-center justify-between">
-                <p className="font-bold text-[16px]">템플릿 스킨 선택</p>
-                <button
-                  onClick={() => { if (id) setCourseSkin(id, null); }}
-                  className="text-[12px] text-gray-400 underline underline-offset-2"
-                >
-                  기본으로
-                </button>
-              </div>
-              <SkinPicker
-                value={id ? courseSkins[id] ?? null : null}
-                onChange={(skinId) => { if (id) setCourseSkin(id, skinId); }}
-                previewPhoto={places[0]?.imageUrl}
-                columns={3}
-              />
-              <button
-                onClick={() => setSkinSheetOpen(false)}
-                className="mt-5 w-full h-12 rounded-2xl bg-[#E85053] text-white font-bold text-[14px]"
-              >
-                완료
-              </button>
-            </motion.div>
-          </>
-        )}
-      </AnimatePresence>
 
       {/* Bottom bar */}
       <div className="fixed bottom-4 left-1/2 -translate-x-1/2 w-[calc(100%-32px)] max-w-[398px] bg-white rounded-2xl shadow-lg px-4 py-3 flex gap-2">
@@ -688,7 +808,7 @@ export default function CourseDetailPage() {
               />
             </button>
             <button
-              onClick={() => navigate(`/course/${id}/edit?from=explore`)}
+              onClick={() => navigate(`/coursemap/new?course=${id}`)}
               className="flex-1 text-white rounded-xl h-11 text-sm font-medium"
               style={{ backgroundColor: COURSE_THEME.primary }}
             >

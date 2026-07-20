@@ -353,7 +353,6 @@ export const MOCK_COURSES: MockCourse[] = [
       { placeId: 'r2', order: 1, startTime: '09:30', endTime: '10:50', isBookmarked: false },
       { placeId: 'r3', order: 2, startTime: '11:10', endTime: '11:50', isBookmarked: false },
       { placeId: 'r4', order: 3, startTime: '12:30', endTime: '14:00', isBookmarked: true },
-      { placeId: 'r5', order: 4, startTime: '18:00', endTime: '19:30', isBookmarked: false },
     ],
   },
   {
@@ -373,8 +372,6 @@ export const MOCK_COURSES: MockCourse[] = [
       { placeId: 'r7', order: 1, startTime: '08:30', endTime: '09:30', isBookmarked: false },
       { placeId: 'r8', order: 2, startTime: '09:50', endTime: '10:40', isBookmarked: true },
       { placeId: 'r9', order: 3, startTime: '14:00', endTime: '14:40', isBookmarked: false },
-      { placeId: 'r12', order: 4, startTime: '17:30', endTime: '18:40', isBookmarked: false },
-      { placeId: 'r10', order: 5, startTime: '19:00', endTime: '21:30', isBookmarked: true },
     ],
   },
   {
@@ -413,7 +410,6 @@ export const MOCK_COURSES: MockCourse[] = [
       { placeId: 'r1', order: 1, startTime: '09:00', endTime: '09:50', isBookmarked: false },
       { placeId: 'r5', order: 2, startTime: '12:00', endTime: '13:30', isBookmarked: true },
       { placeId: 'r11', order: 3, startTime: '15:00', endTime: '16:00', isBookmarked: false },
-      { placeId: 'r10', order: 4, startTime: '19:00', endTime: '21:30', isBookmarked: false },
     ],
   },
 
@@ -513,7 +509,6 @@ export const MOCK_COURSES: MockCourse[] = [
       { placeId: 'r13', order: 1, startTime: '12:00', endTime: '13:30', isBookmarked: false },
       { placeId: 'r24', order: 2, startTime: '15:00', endTime: '16:30', isBookmarked: true },
       { placeId: 'r15', order: 3, startTime: '18:00', endTime: '19:30', isBookmarked: false },
-      { placeId: 'r10', order: 4, startTime: '20:00', endTime: '22:00', isBookmarked: true },
     ],
   },
   {

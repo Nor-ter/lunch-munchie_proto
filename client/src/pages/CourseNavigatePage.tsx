@@ -78,7 +78,7 @@ export default function CourseNavigatePage() {
         </button>
         <span className="font-semibold text-[15px] text-[#1A1A1A]">코스 따라가기</span>
         <button
-          onClick={() => navigate('/tour-map')}
+          onClick={() => navigate(`/course/${params.id}/share`)}
           className="w-9 h-9 rounded-full bg-[#FFF5F5] flex items-center justify-center active:scale-95"
           title="코스맵 공유"
         >
@@ -173,6 +173,7 @@ export default function CourseNavigatePage() {
             className="lm-btn-primary flex items-center justify-center gap-2 flex-[7]"
             onClick={() => {
               if (currentStopIndex < stops.length - 1) setCurrentStopIndex(i => i + 1);
+              else navigate(`/course/${params.id}/share`);
             }}
           >
             <Navigation size={16} />

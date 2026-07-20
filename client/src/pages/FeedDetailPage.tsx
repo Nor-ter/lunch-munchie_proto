@@ -1,7 +1,7 @@
 import { useLocation, useParams, useSearch } from 'wouter';
 import { ChevronLeft, Pencil } from 'lucide-react';
 import { useApp } from '@/contexts/AppContext';
-import FeedPostCard from '@/components/munchie/FeedPostCard';
+import UnifiedMunchieCard from '@/components/munchie/UnifiedMunchieCard';
 
 export default function FeedDetailPage() {
   const { id } = useParams<{ id: string }>();
@@ -41,7 +41,7 @@ export default function FeedDetailPage() {
         ) : <span className="h-10 w-10" />}
       </header>
       <section className="px-4 pt-2">
-        <FeedPostCard post={post} />
+        <UnifiedMunchieCard post={post} />
       </section>
     </main>
   );

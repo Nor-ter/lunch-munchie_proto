@@ -18,13 +18,11 @@ import TabBar from "./components/TabBar";
 import OnboardingPage from "./pages/OnboardingPage";
 import HomePage from "./pages/HomePage";
 import MunchieFeedPage from "./pages/MunchieFeedPage";
-import FeedComposePage from "./pages/FeedComposePage";
 import FeedDetailPage from "./pages/FeedDetailPage";
 import FeedEditPage from "./pages/FeedEditPage";
 import CourseNavigatePage from "./pages/CourseNavigatePage";
 import NewCourseDetailPage from "./pages/course/CourseDetailPage";
-import CourseEditPage from "./pages/course/CourseEditPage";
-import CourseSharePage from "./pages/course/CourseSharePage";
+import CoursemapCreatePage from "./pages/course/CoursemapCreatePage";
 import SavedPage from "./pages/SavedPage";
 import ProfilePage from "./pages/ProfilePage";
 import OtherProfilePage from "./pages/OtherProfilePage";
@@ -46,12 +44,24 @@ import TemplateDetailPage from "./pages/TemplateDetailPage";
 import TemplatesBrowsePage from "./pages/TemplatesBrowsePage";
 import CourseFeedsPage from "./pages/course/CourseFeedsPage";
 import PlaceExplorePage from "./pages/PlaceExplorePage";
+import StorySharePage from "./pages/StorySharePage";
 
-const NO_TABBAR = ['/onboarding', '/tour-mode', '/course/', '/template/', '/templates', '/lunchie', '/session', '/join', '/feed/', '/explore/places', '/auth'];
+const NO_TABBAR = ['/onboarding', '/tour-mode', '/course/', '/coursemap', '/template/', '/templates', '/lunchie', '/session', '/join', '/feed/', '/explore/places', '/auth'];
 
 function CoursesRedirect() {
   const params = useParams<{ id: string }>();
   return <Redirect to={`/course/${params.id}`} />;
+}
+
+function IntegratedCourseEditorRedirect() {
+  const params = useParams<{ id: string }>();
+  const [, navigate] = useLocation();
+
+  useEffect(() => {
+    navigate(`/coursemap/new?course=${params.id}`, { replace: true });
+  }, [navigate, params.id]);
+
+  return null;
 }
 
 function AppShell() {
@@ -70,15 +80,16 @@ function AppShell() {
             <Route path="/explore">{() => <Redirect to="/feed" />}</Route>
             <Route path="/explore/places" component={PlaceExplorePage} />
             <Route path="/feed" component={MunchieFeedPage} />
-            <Route path="/feed/new" component={FeedComposePage} />
+            <Route path="/feed/new">{() => <Redirect to="/coursemap/new" />}</Route>
             <Route path="/feed/:id/edit" component={FeedEditPage} />
             <Route path="/feed/:id" component={FeedDetailPage} />
             <Route path="/templates" component={TemplatesBrowsePage} />
             <Route path="/template/:templateId" component={TemplateDetailPage} />
             <Route path="/courses/:id/navigate" component={CourseNavigatePage} />
             <Route path="/courses/:id" component={CoursesRedirect} />
-            <Route path="/course/:id/edit" component={CourseEditPage} />
-            <Route path="/course/:id/share" component={CourseSharePage} />
+            <Route path="/coursemap/new" component={CoursemapCreatePage} />
+            <Route path="/course/:id/edit" component={IntegratedCourseEditorRedirect} />
+            <Route path="/course/:id/share" component={StorySharePage} />
             <Route path="/course/:id/feeds" component={CourseFeedsPage} />
             <Route path="/course/:id" component={NewCourseDetailPage} />
             <Route path="/saved" component={SavedPage} />

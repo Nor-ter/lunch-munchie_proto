@@ -53,7 +53,7 @@ export default function TemplateInfoSheet({
               <img
                 src={template.image}
                 alt={`${template.name} 사진을 넣기 전 기본 양식`}
-                className="aspect-[9/16] w-full rounded-[18px] object-cover"
+                className="aspect-[3/4] w-full rounded-[18px] object-cover"
               />
             </div>
 
@@ -63,7 +63,7 @@ export default function TemplateInfoSheet({
                   <ImageIcon size={12} /> 사진 {template.slots.length}장
                 </span>
                 <span className="flex items-center gap-1 rounded-full bg-[#F1E9E3] px-2.5 py-1 text-[11px] font-bold text-[#79645A]">
-                  <Layers3 size={12} /> 9:16 세로형
+                  <Layers3 size={12} /> 4:3 규격
                 </span>
               </div>
               <p className="mt-3 text-[14px] leading-relaxed text-[#6C574C]">{template.description}</p>
