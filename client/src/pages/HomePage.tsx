@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { AnimatePresence, motion } from 'framer-motion';
 import { ArrowRight, Bell, MapPin, MessageCircle, ThumbsDown, ThumbsUp, X } from 'lucide-react';
 import { useLocation, useSearch } from 'wouter';
@@ -88,7 +89,7 @@ function QuickMatchDeck({
 }) {
   return (
     <motion.div
-      className="relative h-[174px] w-full max-w-[330px]"
+      className="relative mx-auto h-[174px] w-full max-w-[330px]"
       whileHover={{ y: -5 }}
       transition={{ type: 'spring', stiffness: 250, damping: 17 }}
     >
@@ -96,37 +97,42 @@ function QuickMatchDeck({
         const position = DECK_POSITIONS[(index - activeIndex + 3) % 3]!;
         const isFront = position.zIndex === 3;
         return (
-          <motion.button
-            type="button"
+          <div
             key={card.key}
-            aria-label={`${card.label} 카드${isFront ? ' (선택됨)' : ''}`}
-            drag={isFront ? 'x' : false}
-            dragConstraints={{ left: 0, right: 0 }}
-            dragElastic={0.45}
-            onDragEnd={(_, info) => {
-              if (info.offset.x < -45) onChange((activeIndex + 2) % 3);
-              else if (info.offset.x > 45) onChange((activeIndex + 1) % 3);
-            }}
-            onClick={() => !isFront && onChange(index)}
-            animate={{
-              x: position.x,
-              y: position.y,
-              scale: position.scale,
-              rotate: position.rotate,
-              opacity: position.opacity,
-            }}
-            transition={{ type: 'spring', stiffness: 320, damping: 26 }}
-            whileHover={{ scale: position.scale + 0.025 }}
-            whileTap={{ scale: position.scale - 0.03 }}
-            className="absolute left-1/2 top-1/2 flex h-[154px] w-[116px] -translate-x-1/2 -translate-y-1/2 cursor-grab flex-col items-center justify-center overflow-hidden rounded-[11px] border-[0.75px] border-[#EE8C8D] px-2 pb-3 pt-2 shadow-[0_10px_22px_rgba(153,74,62,0.13)] active:cursor-grabbing"
-            style={{ zIndex: position.zIndex, touchAction: 'pan-y', background: card.background }}
+            className="pointer-events-none absolute inset-0 flex items-center justify-center"
+            style={{ zIndex: position.zIndex }}
           >
-            <span className="relative flex h-[106px] w-[104px] items-end justify-center">
-              {card.steam && <SteamWisps />}
-              <img src={card.image} alt={`${card.label} 음식`} className="h-[98px] w-[102px] object-contain drop-shadow-[0_7px_8px_rgba(104,55,38,0.13)]" draggable={false} />
-            </span>
-            <span className="mt-0.5 rounded-full bg-white/75 px-2 py-0.5 text-[11px] font-black tracking-[0.05em] text-[#C93B3E]">{card.en}</span>
-          </motion.button>
+            <motion.button
+              type="button"
+              aria-label={`${card.label} 카드${isFront ? ' (선택됨)' : ''}`}
+              drag={isFront ? 'x' : false}
+              dragConstraints={{ left: 0, right: 0 }}
+              dragElastic={0.45}
+              onDragEnd={(_, info) => {
+                if (info.offset.x < -45) onChange((activeIndex + 2) % 3);
+                else if (info.offset.x > 45) onChange((activeIndex + 1) % 3);
+              }}
+              onClick={() => !isFront && onChange(index)}
+              animate={{
+                x: position.x,
+                y: position.y,
+                scale: position.scale,
+                rotate: position.rotate,
+                opacity: position.opacity,
+              }}
+              transition={{ type: 'spring', stiffness: 320, damping: 26 }}
+              whileHover={{ scale: position.scale + 0.025 }}
+              whileTap={{ scale: position.scale - 0.03 }}
+              className="pointer-events-auto flex h-[154px] w-[116px] cursor-grab flex-col items-center justify-center overflow-hidden rounded-[11px] border-[0.75px] border-[#EE8C8D] px-2 pb-3 pt-2 shadow-[0_10px_22px_rgba(153,74,62,0.13)] active:cursor-grabbing"
+              style={{ touchAction: 'pan-y', background: card.background }}
+            >
+              <span className="relative flex h-[106px] w-[104px] items-end justify-center">
+                {card.steam && <SteamWisps />}
+                <img src={card.image} alt={`${card.label} 음식`} className="h-[98px] w-[102px] object-contain drop-shadow-[0_7px_8px_rgba(104,55,38,0.13)]" draggable={false} />
+              </span>
+              <span className="mt-0.5 rounded-full bg-white/75 px-2 py-0.5 text-[11px] font-black tracking-[0.05em] text-[#C93B3E]">{card.en}</span>
+            </motion.button>
+          </div>
         );
       })}
     </motion.div>
@@ -260,7 +266,8 @@ export default function HomePage() {
             type="button"
             onClick={() => setNotificationsOpen(true)}
             aria-label="알림 열기"
-            whileHover={{ scale: 1.08, y: -2, rotate: [0, -6, 6, -3, 0] }}
+            aria-expanded={notificationsOpen}
+            whileHover={{ scale: 1.08, y: -2, rotate: 4 }}
             whileTap={{ scale: 0.9 }}
             transition={{ type: 'spring', stiffness: 360, damping: 16 }}
             className="group absolute right-0 flex h-10 w-10 items-center justify-center overflow-visible rounded-full border-[0.75px] border-[#EF777A] bg-[linear-gradient(145deg,#FFFDFC_5%,#FFE1D7_100%)] text-[#D94447] shadow-[0_6px_16px_rgba(209,74,68,0.18)]"
@@ -330,18 +337,23 @@ export default function HomePage() {
         </div>
       </section>
 
-      <AnimatePresence>
-        {notificationsOpen && (
-          <>
+      {typeof document !== 'undefined' && createPortal(
+        <AnimatePresence>
+          {notificationsOpen && (
+            <>
             <motion.button
               type="button"
               aria-label="알림 닫기"
               className="fixed inset-0 z-50 bg-black/35"
-              initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1, pointerEvents: 'auto' }}
+              exit={{ opacity: 0, pointerEvents: 'none' }}
               onClick={() => setNotificationsOpen(false)}
             />
             <motion.aside
-              initial={{ x: '100%' }} animate={{ x: 0 }} exit={{ x: '100%' }}
+              initial={{ x: '100%' }}
+              animate={{ x: 0, pointerEvents: 'auto' }}
+              exit={{ x: '100%', pointerEvents: 'none' }}
               transition={{ type: 'tween', duration: 0.28, ease: [0.32, 0.72, 0, 1] }}
               className="fixed bottom-0 right-0 top-0 z-[60] w-[min(88vw,390px)] overflow-y-auto bg-[#FFFDFB] px-4 pb-8 pt-12 shadow-[-18px_0_45px_rgba(47,29,20,0.18)]"
             >
@@ -399,9 +411,11 @@ export default function HomePage() {
                 })}
               </div>
             </motion.aside>
-          </>
-        )}
-      </AnimatePresence>
+            </>
+          )}
+        </AnimatePresence>,
+        document.body,
+      )}
     </div>
   );
 }
