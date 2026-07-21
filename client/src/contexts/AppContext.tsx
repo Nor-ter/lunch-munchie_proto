@@ -8,7 +8,7 @@ import React, { createContext, useContext, useState, useEffect, useCallback, use
 import { normalizeDiet, isHardRestriction, type DietTag } from '@shared/const';
 import { intentForHour, type Intent } from '@shared/intent';
 import { normalizeFoodTag, type TagType } from '@/constants/foodTags';
-import { supabase, ensureAnonymousSession } from '@/lib/supabase';
+import { isWebAuthConfigured } from '@/contexts/AuthContext';
 import { MAX_MUNCHIE_FEED_PHOTOS } from '@/lib/coursemapDecor';
 import type { LunchmateProfileLoadout } from '@/types/lunchmateCustomization';
 import {
@@ -1021,10 +1021,24 @@ export function AppProvider({
 
     if (initialAuthUserId) adoptUid(initialAuthUserId);
 
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-      if (session) adoptUid(session.user.id);
+    if (!isWebAuthConfigured()) return;
+
+    let active = true;
+    let unsubscribe: (() => void) | undefined;
+
+    void import('@/lib/supabase').then(({ supabase }) => {
+      if (!active) return;
+
+      const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+        if (session) adoptUid(session.user.id);
+      });
+      unsubscribe = () => subscription.unsubscribe();
     });
-    return () => subscription.unsubscribe();
+
+    return () => {
+      active = false;
+      unsubscribe?.();
+    };
   }, []);
 
   useEffect(() => { localStorage.setItem('lm_courses', JSON.stringify(courses)); }, [courses]);

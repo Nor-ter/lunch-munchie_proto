@@ -10,6 +10,7 @@ import {
 } from '@/contexts/AppContext';
 import LunchkinCharacter from '@/components/munchie/LunchkinCharacter';
 import UnifiedMunchieCard from '@/components/munchie/UnifiedMunchieCard';
+import HeaderIconButton, { HeaderActionRow } from '@/components/ui/HeaderIconButton';
 
 type JourneyStop = {
   restaurant_id: string;
@@ -60,9 +61,9 @@ const QUICK_MATCH_CARDS = [
 
 /** 카드 순환 위치: 0=앞, 1=오른쪽 behind, 2=왼쪽 behind */
 const DECK_POSITIONS = [
-  { x: 0, y: 0, scale: 1, rotate: 0, opacity: 1, zIndex: 3 },
-  { x: 88, y: 12, scale: 0.88, rotate: 9, opacity: 1, zIndex: 1 },
-  { x: -88, y: 12, scale: 0.88, rotate: -9, opacity: 1, zIndex: 1 },
+  { x: 0, y: -8, scale: 1, rotate: 0, opacity: 1, zIndex: 3 },
+  { x: 76, y: 4, scale: 0.88, rotate: 9, opacity: 1, zIndex: 1 },
+  { x: -76, y: 4, scale: 0.88, rotate: -9, opacity: 1, zIndex: 1 },
 ] as const;
 
 function SteamWisps() {
@@ -89,7 +90,7 @@ function QuickMatchDeck({
 }) {
   return (
     <motion.div
-      className="relative mx-auto h-[174px] w-full max-w-[330px]"
+      className="relative mx-auto h-[158px] w-full max-w-[330px]"
       whileHover={{ y: -5 }}
       transition={{ type: 'spring', stiffness: 250, damping: 17 }}
     >
@@ -123,12 +124,12 @@ function QuickMatchDeck({
               transition={{ type: 'spring', stiffness: 320, damping: 26 }}
               whileHover={{ scale: position.scale + 0.025 }}
               whileTap={{ scale: position.scale - 0.03 }}
-              className="pointer-events-auto flex h-[154px] w-[116px] cursor-grab flex-col items-center justify-center overflow-hidden rounded-[11px] border-[0.75px] border-[#EE8C8D] px-2 pb-3 pt-2 shadow-[0_10px_22px_rgba(153,74,62,0.13)] active:cursor-grabbing"
+              className="pointer-events-auto flex h-[132px] w-[108px] cursor-grab flex-col items-center justify-center overflow-hidden rounded-[11px] border-[0.75px] border-[#EE8C8D] px-1.5 pb-1.5 pt-1 shadow-[0_10px_22px_rgba(153,74,62,0.13)] active:cursor-grabbing"
               style={{ touchAction: 'pan-y', background: card.background }}
             >
-              <span className="relative flex h-[106px] w-[104px] items-end justify-center">
+              <span className="relative flex h-[92px] w-[96px] items-end justify-center">
                 {card.steam && <SteamWisps />}
-                <img src={card.image} alt={`${card.label} 음식`} className="h-[98px] w-[102px] object-contain drop-shadow-[0_7px_8px_rgba(104,55,38,0.13)]" draggable={false} />
+                <img src={card.image} alt={`${card.label} 음식`} className="h-[86px] w-[94px] object-contain drop-shadow-[0_7px_8px_rgba(104,55,38,0.13)]" draggable={false} />
               </span>
               <span className="mt-0.5 rounded-full bg-white/75 px-2 py-0.5 text-[11px] font-black tracking-[0.05em] text-[#C93B3E]">{card.en}</span>
             </motion.button>
@@ -150,7 +151,7 @@ function LunchieLandingCard() {
       data-ui="lunchie-card-panel"
       initial={{ opacity: 0, y: 18 }}
       animate={{ opacity: 1, y: 0 }}
-      className="relative mx-4 flex min-h-[232px] items-start justify-center overflow-hidden rounded-[22px] border-[0.75px] border-[#F0A0A0] px-4 pb-8 pt-5 shadow-[0_14px_34px_rgba(139,74,61,0.12)]"
+      className="relative mx-4 flex flex-col items-center overflow-hidden rounded-[22px] border-[0.75px] border-[#F0A0A0] px-4 pb-2 pt-2 shadow-[0_14px_34px_rgba(139,74,61,0.12)]"
       style={{
         backgroundColor: '#FFF9F5',
         backgroundImage: 'radial-gradient(circle at 18% 22%, rgba(255,190,169,.28) 0 18px, transparent 19px), radial-gradient(circle at 84% 76%, rgba(255,214,181,.34) 0 26px, transparent 27px), radial-gradient(rgba(224,113,105,.18) .7px, transparent .7px)',
@@ -160,7 +161,7 @@ function LunchieLandingCard() {
       <span className="pointer-events-none absolute -left-5 top-8 h-16 w-16 rotate-12 rounded-[18px] bg-[#FFDCCF]/55" aria-hidden="true" />
       <span className="pointer-events-none absolute -right-3 bottom-8 h-14 w-20 -rotate-12 rounded-full bg-[#FFE5BE]/55" aria-hidden="true" />
       <span className="pointer-events-none absolute left-5 top-3 h-3 w-14 -rotate-6 rounded-sm bg-[#F5B9A5]/45" aria-hidden="true" />
-      <div className="relative z-[1] w-full">
+      <div className="relative z-[1] w-full shrink-0">
         <QuickMatchDeck activeIndex={activeCard} onChange={setActiveCard} />
       </div>
       <motion.button
@@ -168,7 +169,7 @@ function LunchieLandingCard() {
         onClick={() => navigate(`/lunchie/settings?intent=${selectedCard.intent}`)}
         whileHover={{ y: -2, scale: 1.025 }}
         whileTap={{ scale: 0.97 }}
-        className="absolute bottom-4 left-1/2 z-10 flex h-12 w-[64%] -translate-x-1/2 items-center justify-center rounded-[11px] border-[0.75px] border-[#D94447] bg-[#EB5053] px-4 text-[16px] font-black text-white shadow-[0_9px_20px_rgba(201,59,62,0.26)]"
+        className="relative z-10 mt-1 flex h-12 w-[64%] shrink-0 items-center justify-center rounded-[11px] border-[0.75px] border-[#D94447] bg-[#EB5053] px-4 text-[16px] font-black text-white shadow-[0_9px_20px_rgba(201,59,62,0.26)]"
       >
         Quick Match!
       </motion.button>
@@ -258,23 +259,17 @@ export default function HomePage() {
   };
 
   return (
-    <div className="min-h-dvh bg-[#FFF8F2] pb-[104px] pt-6">
-      <header className="px-5 pt-2">
-        <div className="relative flex items-center justify-center">
-          <img src="/assets/lunchie-wordmark.png" alt="Lunchie Munchie" className="h-auto w-[148px] object-contain" />
-          <motion.button
-            type="button"
+    <div className="min-h-dvh bg-[#FFF8F2] pb-6">
+      <header className="relative">
+        <HeaderActionRow data-ui="home-notification-area" className="header-action-row--raised">
+          <HeaderIconButton
             onClick={() => setNotificationsOpen(true)}
             aria-label="알림 열기"
             aria-expanded={notificationsOpen}
-            whileHover={{ scale: 1.08, y: -2, rotate: 4 }}
-            whileTap={{ scale: 0.9 }}
-            transition={{ type: 'spring', stiffness: 360, damping: 16 }}
-            className="group absolute right-0 flex h-10 w-10 items-center justify-center overflow-visible rounded-full border-[0.75px] border-[#EF777A] bg-[linear-gradient(145deg,#FFFDFC_5%,#FFE1D7_100%)] text-[#D94447] shadow-[0_6px_16px_rgba(209,74,68,0.18)]"
+            className="overflow-visible text-[#4A4A4A]"
           >
-            <span className="pointer-events-none absolute inset-[3px] rounded-full bg-[radial-gradient(circle_at_32%_22%,rgba(255,255,255,0.95),transparent_48%)]" aria-hidden="true" />
             <motion.span
-              className="relative z-[1] flex"
+              className="flex"
               animate={unreadCount > 0 ? { rotate: [0, 0, -8, 8, -4, 0, 0] } : { rotate: 0 }}
               transition={unreadCount > 0 ? { duration: 3.2, repeat: Infinity, ease: 'easeInOut' } : undefined}
             >
@@ -289,19 +284,19 @@ export default function HomePage() {
                 {unreadCount > 9 ? '9+' : unreadCount}
               </motion.span>
             )}
-          </motion.button>
-        </div>
+          </HeaderIconButton>
+        </HeaderActionRow>
 
-        <div className="mt-9 flex items-center justify-between gap-3">
-          <h1 className="min-w-0 text-[25px] font-black leading-[1.45] tracking-[-0.04em] text-[#3B2A23]">
-            런치로 같이 메뉴 정하기!
-            <br />먼치로 함께 맛집 코스 탐방!
+        <div data-ui="home-heading-group" className="mx-5 mt-[30px] flex items-center justify-evenly">
+          <LunchkinCharacter size={60} />
+          <h1 data-ui="home-heading" className="w-fit min-w-0 max-w-[calc(100%-84px)] shrink text-center text-[22px] font-bold leading-[1.45] tracking-[-0.04em] text-[#935B5C]">
+            <span className="block">런치로 같이 메뉴 정하기!</span>
+            <span className="block">먼치로 함께 맛집 코스 탐방!</span>
           </h1>
-          <LunchkinCharacter size={78} className="mr-2" />
         </div>
       </header>
 
-      <section className="mt-10">
+      <section className="mt-[30px]">
         <div className="px-4">
           <h2 className="text-[25px] font-black leading-none tracking-[0.01em] text-[#C93B3E]">LUNCHIE</h2>
           <p className="mt-1 text-[14px] font-medium text-[#8B5E5D]">런치로 같이 점심 정하기!</p>
@@ -311,7 +306,7 @@ export default function HomePage() {
         </div>
       </section>
 
-      <section className="mt-12">
+      <section className="mt-[35px]">
         <div className="flex items-end justify-between px-4">
           <div>
             <h2 className="text-[25px] font-black leading-none text-[#C93B3E]">MUNCHIE</h2>

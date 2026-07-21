@@ -26,6 +26,7 @@ import {
 import LunchboxBottomSheet, { type LunchboxFoodItem } from '@/components/munchie/LunchboxBottomSheet';
 import LunchmateProgressSheet from '@/components/munchie/LunchmateProgressSheet';
 import LunchmateLevelUpModal from '@/components/munchie/LunchmateLevelUpModal';
+import HeaderIconButton, { HeaderActionRow } from '@/components/ui/HeaderIconButton';
 import { useLunchmateFlow } from '@/hooks/useLunchmateFlow';
 import type { FoodieRoomNavigationState } from '@/pages/FoodieRoomPage';
 import type { LunchmateLayerItem } from '@/types/lunchmateCustomization';
@@ -251,14 +252,13 @@ export default function ProfilePage() {
   return (
     <div className="min-h-dvh bg-[#FCF4EE] pb-24">
       {/* 상단 메뉴 */}
-      <div className="flex justify-end px-5 pt-11">
-        <button
+      <HeaderActionRow className="header-action-row--raised">
+        <HeaderIconButton
           onClick={() => { setEditName(profile.name); setActiveSheet('settings'); }}
-          className="w-10 h-10 rounded-full bg-white shadow-sm flex items-center justify-center active:scale-95"
           aria-label="프로필 설정"
         >
           <Menu size={18} color="#4A4A4A" />
-        </button>
+        </HeaderIconButton>
 
         {/* 아바타 업로드용 숨은 파일 입력 — 헤더 아바타 탭 시트/설정 시트 공용 */}
         <input
@@ -268,7 +268,7 @@ export default function ProfilePage() {
           className="hidden"
           onChange={handleAvatarUpload}
         />
-      </div>
+      </HeaderActionRow>
 
       {/* 핑크 프로필 카드 */}
       <div className="mx-4 mt-2 rounded-[28px] p-4 pb-5" style={{ background: '#F8DCD2' }}>

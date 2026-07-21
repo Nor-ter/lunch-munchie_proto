@@ -78,7 +78,7 @@ export default function FeedEditPage() {
         </OneLineReviewBox>
       </section>
 
-      <div className="fixed bottom-4 left-1/2 z-30 w-[calc(100%-32px)] max-w-[398px] -translate-x-1/2">
+      <div className="page-bottom-bar fixed bottom-4 left-1/2 z-30 w-[calc(100%-32px)] max-w-[398px] -translate-x-1/2">
         <button onClick={save} disabled={!caption.trim() || placed.length === 0} className="h-[52px] w-full rounded-2xl bg-[#EB5053] font-bold text-white shadow-lg disabled:bg-[#E5CFC5]">수정 완료</button>
       </div>
     </main>

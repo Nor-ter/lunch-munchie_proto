@@ -329,7 +329,7 @@ export default function StorySharePage() {
         </div>
       </section>
 
-      <div className="fixed bottom-0 left-1/2 z-40 flex w-full max-w-[430px] -translate-x-1/2 gap-2 border-t border-[#F0E1D9] bg-[#FFFDFC]/96 px-4 pb-[calc(1rem+env(safe-area-inset-bottom))] pt-3 backdrop-blur">
+      <div className="page-bottom-bar fixed bottom-0 left-1/2 z-40 w-full max-w-[430px] -translate-x-1/2 gap-2 border-t border-[#F0E1D9] bg-[#FFFDFC]/96 px-4 backdrop-blur">
         <button type="button" onClick={shareToStory} disabled={sharing} className="flex h-13 flex-1 items-center justify-center gap-2 rounded-2xl bg-[#EF575B] text-[13px] font-black text-white disabled:opacity-60">
           <Share2 size={16} /> {sharing ? '이미지 만드는 중…' : '스토리에 공유'}
         </button>

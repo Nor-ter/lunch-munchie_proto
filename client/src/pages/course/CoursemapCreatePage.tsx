@@ -1,6 +1,6 @@
 /**
  * 코스맵 만들기 — 6단계 통합 플로우 (코스맵과 피드를 순차적으로 동시 작성)
- * ① 코스맵 정하기 — 해시태그·한줄평 + 과일핀(최대 3) 지도검색 + 사진박스
+ * ① 코스맵 정하기 — 해시태그·한줄평 + 숫자핀(최대 3) 지도검색 + 사진박스
  * ② 템플릿 선정 — 룰렛 스와이프, 가운데 템플릿이 자동 선정
  * ③ 템플릿 꾸미기 — 업로드한 사진을 drag & drop, 크기·회전 조정
  * ④ 사진 에디터 — crop(확대)·그리기·텍스트·하이라이터·필터
@@ -11,7 +11,7 @@ import { useMemo, useRef, useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { useLocation, useSearch } from 'wouter';
 import {
-  Camera, ChevronLeft, ChevronRight, Minus, Pencil, Plus,
+  ChevronLeft, ChevronRight, Minus, Pencil, Plus,
   RotateCcw, RotateCw, Search, Share2, Trash2, Type, X, Highlighter, Wand2,
 } from 'lucide-react';
 import { toast } from 'sonner';
@@ -23,7 +23,7 @@ import {
 } from '@/constants/coursemapTemplates';
 import { MAX_MUNCHIE_FEED_PHOTOS, saveCoursemapDecor, type PlacedPhoto } from '@/lib/coursemapDecor';
 import { getCourseMapPoints, getCurvedCourseSegments } from '@/lib/courseMapSync';
-import FruitCharacter, { FRUIT_SEQUENCE, fruitForStop } from '@/components/munchie/FruitCharacter';
+import CourseSequenceMarker from '@/components/course/CourseSequenceMarker';
 import { fileToResizedDataUrl } from '@/lib/imageUtils';
 import OneLineReviewBox from '@/components/munchie/OneLineReviewBox';
 import UnifiedMunchieCard from '@/components/munchie/UnifiedMunchieCard';
@@ -39,7 +39,7 @@ const STEP_TITLES = [
 
 const MAX_PINS = 3;
 
-interface FruitPin {
+interface CoursePin {
   restaurant: Restaurant;
   /** null이면 사진 없이 진행 */
   photo: string | null;
@@ -47,12 +47,12 @@ interface FruitPin {
 
 // ── ① 코스맵 정하기 ───────────────────────────────────────────────────────────
 
-function PinMap({ pins, activeBubble, onFruitTap }: {
-  pins: (FruitPin | null)[];
+function PinMap({ pins, activeBubble, onMarkerTap }: {
+  pins: (CoursePin | null)[];
   activeBubble: number | null;
-  onFruitTap: (slot: number) => void;
+  onMarkerTap: (slot: number) => void;
 }) {
-  const filled = pins.filter((pin): pin is FruitPin => !!pin);
+  const filled = pins.filter((pin): pin is CoursePin => !!pin);
   const points = getCourseMapPoints(filled.map(pin => pin.restaurant));
   const segments = getCurvedCourseSegments(points);
   // slot 인덱스 → 채워진 핀 순번
@@ -95,11 +95,11 @@ function PinMap({ pins, activeBubble, onFruitTap }: {
           >
             <button
               type="button"
-              onClick={() => onFruitTap(slot)}
-              className={`block active:scale-90 ${activeBubble === slot ? 'scale-110' : ''}`}
-              aria-label={`${slot + 1}번 과일핀`}
+              onClick={() => onMarkerTap(slot)}
+              className="block active:scale-90"
+              aria-label={`${slot + 1}번 장소 마커`}
             >
-              <FruitCharacter kind={FRUIT_SEQUENCE[slot % FRUIT_SEQUENCE.length]!} size={36} />
+              <CourseSequenceMarker index={slot} selected={activeBubble === slot} />
             </button>
             <span className="absolute left-1/2 top-full mt-0.5 max-w-[92px] -translate-x-1/2 truncate rounded-full bg-white/90 px-1.5 py-0.5 text-[8.5px] font-black text-[#3B2A22] shadow-sm">
               {pin.restaurant.name}
@@ -110,7 +110,7 @@ function PinMap({ pins, activeBubble, onFruitTap }: {
 
       {filled.length === 0 && (
         <p className="absolute inset-x-4 top-1/2 -translate-y-1/2 text-center text-[12px] font-semibold text-[#B4A79A]">
-          아래 과일 캐릭터를 눌러 말풍선에서
+          아래 숫자 마커를 눌러 말풍선에서
           <br />
           지도검색으로 장소를 찍어보세요 🗺️
         </p>
@@ -122,8 +122,8 @@ function PinMap({ pins, activeBubble, onFruitTap }: {
 function PinsStep({
   pins, setPins, hashtags, setHashtags, caption, setCaption,
 }: {
-  pins: (FruitPin | null)[];
-  setPins: React.Dispatch<React.SetStateAction<(FruitPin | null)[]>>;
+  pins: (CoursePin | null)[];
+  setPins: React.Dispatch<React.SetStateAction<(CoursePin | null)[]>>;
   hashtags: string[];
   setHashtags: React.Dispatch<React.SetStateAction<string[]>>;
   caption: string;
@@ -133,8 +133,6 @@ function PinsStep({
   const [bubbleSlot, setBubbleSlot] = useState<number | null>(null);
   const [query, setQuery] = useState('');
   const [newTag, setNewTag] = useState('');
-  const photoInputRef = useRef<HTMLInputElement>(null);
-  const photoTargetRef = useRef<number | null>(null);
 
   const results = query.trim().length >= 1
     ? restaurants.filter(r =>
@@ -159,25 +157,6 @@ function PinsStep({
     const trimmed = newTag.trim().replace(/^#/, '');
     if (trimmed && !hashtags.includes(trimmed)) setHashtags(prev => [...prev, trimmed]);
     setNewTag('');
-  };
-
-  const openPhotoUpload = (slot: number) => {
-    photoTargetRef.current = slot;
-    photoInputRef.current?.click();
-  };
-
-  const handlePhotoFile = async (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
-    event.target.value = '';
-    const slot = photoTargetRef.current;
-    if (!file || slot == null) return;
-    try {
-      const url = await fileToResizedDataUrl(file, 900, 0.8);
-      setPins(prev => prev.map((pin, i) => (i === slot && pin ? { ...pin, photo: url } : pin)));
-      toast.success('사진을 업로드했어요');
-    } catch {
-      toast.error('사진을 불러오지 못했어요');
-    }
   };
 
   return (
@@ -222,10 +201,10 @@ function PinsStep({
       {/* 코스맵 지도 */}
       <div>
         <p className="mb-1.5 text-xs text-gray-400">코스맵</p>
-        <PinMap pins={pins} activeBubble={bubbleSlot} onFruitTap={slot => setBubbleSlot(prev => prev === slot ? null : slot)} />
+        <PinMap pins={pins} activeBubble={bubbleSlot} onMarkerTap={slot => setBubbleSlot(prev => prev === slot ? null : slot)} />
       </div>
 
-      {/* 코스 순서 — 과일핀 슬롯 (최대 3개) */}
+      {/* 코스 순서 — 숫자핀 슬롯 (최대 3개) */}
       <div>
         <p className="mb-2 text-xs text-gray-400">코스 순서 <span className="text-[10px]">(최대 {MAX_PINS}곳)</span></p>
         <div className="space-y-2">
@@ -241,9 +220,7 @@ function PinsStep({
                   className="shrink-0 active:scale-90"
                   aria-label={`${slot + 1}번 장소 검색`}
                 >
-                  <span className={pin ? '' : 'opacity-35 grayscale'}>
-                    <FruitCharacter kind={FRUIT_SEQUENCE[slot % FRUIT_SEQUENCE.length]!} size={38} />
-                  </span>
+                  <CourseSequenceMarker index={slot} selected={bubbleSlot === slot} />
                 </button>
 
                 {pin ? (
@@ -251,32 +228,6 @@ function PinsStep({
                     <div className="min-w-0 flex-1">
                       <p className="truncate text-sm font-medium">{pin.restaurant.name}</p>
                       <p className="truncate text-[11px] text-gray-400">{pin.restaurant.category} · {pin.restaurant.address}</p>
-                    </div>
-                    {/* 사진 박스 — 업로드/교체/제거 */}
-                    <div className="relative shrink-0">
-                      <button
-                        type="button"
-                        onClick={() => openPhotoUpload(slot)}
-                        className="block h-12 w-12 overflow-hidden rounded-lg border border-dashed border-gray-300 bg-gray-50 active:scale-95"
-                        aria-label="사진 업로드"
-                      >
-                        {pin.photo ? (
-                          <img src={pin.photo} alt="" className="h-full w-full object-cover" />
-                        ) : (
-                          <span className="flex h-full w-full items-center justify-center text-gray-300"><Camera size={16} /></span>
-                        )}
-                      </button>
-                      {pin.photo && (
-                        <button
-                          type="button"
-                          onClick={() => setPins(prev => prev.map((p, i) => i === slot && p ? { ...p, photo: null } : p))}
-                          className="absolute -right-1.5 -top-1.5 flex h-4.5 w-4.5 items-center justify-center rounded-full bg-[#3B2A22] text-white"
-                          aria-label="사진 제거"
-                          style={{ width: 18, height: 18 }}
-                        >
-                          <X size={10} />
-                        </button>
-                      )}
                     </div>
                     <button
                       type="button"
@@ -293,7 +244,7 @@ function PinsStep({
                     onClick={() => setBubbleSlot(slot)}
                     className="flex-1 py-1.5 text-left text-[12px] text-gray-400"
                   >
-                    과일을 눌러 장소를 검색해보세요
+                    번호를 눌러 장소를 검색해보세요
                   </button>
                 )}
               </div>
@@ -347,8 +298,6 @@ function PinsStep({
           ))}
         </div>
       </div>
-
-      <input ref={photoInputRef} type="file" accept="image/*" className="hidden" onChange={handlePhotoFile} />
     </div>
   );
 }
@@ -578,7 +527,7 @@ function DecorateStep({
             </div>
             {index < 3 && (
               <span className="pointer-events-none absolute -top-3.5 left-1/2 z-10 -translate-x-1/2">
-                <FruitCharacter kind={fruitForStop(index)} size={26} />
+                <CourseSequenceMarker index={index} selected={photo.id === selectedId} />
               </span>
             )}
             {photo.id === selectedId && (
@@ -990,8 +939,8 @@ export default function CoursemapCreatePage() {
 
   // 복사해서 가져오기 — 기존 코스의 장소·해시태그를 초기값으로
   const sourceCourse = sourceCourseId ? getCourseById(sourceCourseId) : undefined;
-  const initialPins = useMemo<(FruitPin | null)[]>(() => {
-    const slots: (FruitPin | null)[] = [null, null, null];
+  const initialPins = useMemo<(CoursePin | null)[]>(() => {
+    const slots: (CoursePin | null)[] = [null, null, null];
     if (sourceCourse) {
       [...sourceCourse.stops]
         .sort((a, b) => a.order - b.order)
@@ -1006,7 +955,7 @@ export default function CoursemapCreatePage() {
   }, [sourceCourseId]);
 
   const [step, setStep] = useState(0);
-  const [pins, setPins] = useState<(FruitPin | null)[]>(initialPins);
+  const [pins, setPins] = useState<(CoursePin | null)[]>(initialPins);
   const [hashtags, setHashtags] = useState<string[]>(
     sourceCourse ? sourceCourse.hashtags.map(tag => tag.replace(/^#/, '')) : [],
   );
@@ -1018,7 +967,7 @@ export default function CoursemapCreatePage() {
   const [rewardCount, setRewardCount] = useState<number | null>(null);
   const [publishedCourseId, setPublishedCourseId] = useState<string | null>(null);
 
-  const filledPins = pins.filter((pin): pin is FruitPin => !!pin);
+  const filledPins = pins.filter((pin): pin is CoursePin => !!pin);
   const template = COURSEMAP_TEMPLATES[templateIndex]!;
   const photoPool = useMemo(() => {
     const pinPhotos = filledPins.map(pin => pin.photo).filter((photo): photo is string => !!photo);
@@ -1292,8 +1241,8 @@ export default function CoursemapCreatePage() {
 
       {/* 하단 CTA */}
       {step < 4 && (
-        <div className="fixed bottom-4 left-1/2 z-30 w-[calc(100%-32px)] max-w-[398px] -translate-x-1/2">
-          <div className="flex gap-2.5">
+        <div className="page-bottom-bar fixed bottom-4 left-1/2 z-30 w-[calc(100%-32px)] max-w-[398px] -translate-x-1/2">
+          <div className="flex w-full gap-2.5">
             {step > 0 && (
               <button
                 type="button"

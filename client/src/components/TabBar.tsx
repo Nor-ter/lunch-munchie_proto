@@ -100,7 +100,7 @@ function FaceIcon({ active }: { active: boolean }) {
       src="/assets/Logo%20003%203.png"
       alt=""
       aria-hidden="true"
-      className="h-[42px] w-[42px] object-contain"
+      className="tab-profile-icon object-contain"
       style={{ opacity: active ? 1 : 0.62 }}
     />
   );
@@ -116,23 +116,25 @@ const TABS = [
 
 export default function TabBar() {
   const [location, navigate] = useLocation();
+  const isFlat = location === "/" || location === "/feed" || location === "/saved" || location === "/profile";
 
   return (
-    <div className="tab-bar">
-      <div className="grid h-[68px] grid-cols-5 items-center px-[22px]">
+    <div className={`tab-bar ${isFlat ? "tab-bar--flat" : ""}`}>
+      <div className="tab-bar-content grid grid-cols-5 items-center px-[22px]">
         {TABS.map((tab) => {
           const isActive =
             location === tab.path || (tab.path !== "/" && location.startsWith(tab.path));
+          const isProfile = tab.path === "/profile";
 
           return (
             <button
               key={tab.path}
               onClick={() => navigate(tab.path)}
               aria-label={tab.label}
-              className="flex h-12 w-12 items-center justify-center justify-self-center transition-all active:scale-95"
+              className={`flex items-center justify-center justify-self-center transition-all active:scale-95 ${isProfile ? "h-[51px] w-[51px]" : "h-12 w-12"}`}
             >
               <motion.div
-                animate={isActive ? { scale: 1.06 } : { scale: 1 }}
+                animate={isActive && !isProfile ? { scale: 1.06 } : { scale: 1 }}
                 whileTap={{ scale: 0.92 }}
                 transition={{ type: "spring", stiffness: 400, damping: 20 }}
               >

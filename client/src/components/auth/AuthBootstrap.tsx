@@ -1,5 +1,5 @@
 import { useEffect, useState, type ReactNode } from 'react';
-import { ensureAnonymousSession } from '@/lib/supabase';
+import { isWebAuthConfigured } from '@/contexts/AuthContext';
 
 type AuthBootstrapProps = {
   children: (userId: string | null) => ReactNode;
@@ -17,13 +17,22 @@ export default function AuthBootstrap({ children }: AuthBootstrapProps) {
   useEffect(() => {
     let active = true;
 
-    ensureAnonymousSession()
-      .then((session) => {
-        if (active) setState({ status: 'ready', userId: session?.user.id ?? null });
-      })
-      .catch(() => {
+    const bootstrap = async () => {
+      if (!isWebAuthConfigured()) {
         if (active) setState({ status: 'ready', userId: null });
-      });
+        return;
+      }
+
+      try {
+        const { ensureAnonymousSession } = await import('@/lib/supabase');
+        const session = await ensureAnonymousSession();
+        if (active) setState({ status: 'ready', userId: session?.user.id ?? null });
+      } catch {
+        if (active) setState({ status: 'ready', userId: null });
+      }
+    };
+
+    void bootstrap();
 
     return () => {
       active = false;

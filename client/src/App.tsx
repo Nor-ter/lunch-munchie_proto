@@ -9,9 +9,8 @@ import { Route, Switch, useLocation, useParams, Redirect } from "wouter";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import ErrorBoundary from "./components/ErrorBoundary";
 import { ThemeProvider } from "./contexts/ThemeContext";
-import { AuthProvider } from "./contexts/AuthContext";
+import { AuthProvider, isWebAuthConfigured } from "./contexts/AuthContext";
 import { AppProvider } from "./contexts/AppContext";
-import { supabase } from "./lib/supabase";
 import AuthBootstrap from "./components/auth/AuthBootstrap";
 import { MapProvider } from "./components/map/MapProvider";
 import TabBar from "./components/TabBar";
@@ -69,7 +68,7 @@ function AppShell() {
   const showTabBar = !NO_TABBAR.some(p => location.startsWith(p));
   return (
     <div className="app-shell">
-      <div className={showTabBar ? "min-h-dvh pb-20" : "min-h-dvh"}>
+      <div className={showTabBar ? "app-content-with-tab-bar min-h-dvh" : "min-h-dvh"}>
         <SlideTransitionRoutes>
           <Switch>
             <Route path="/onboarding" component={OnboardingPage} />
@@ -125,16 +124,30 @@ const IDENTITY_CHANGE_EVENTS = new Set(["SIGNED_IN", "SIGNED_OUT", "USER_UPDATED
 
 export default function App() {
   useEffect(() => {
-    const {
-      data: { subscription },
-    } = supabase.auth.onAuthStateChange((event, session) => {
-      if (IDENTITY_CHANGE_EVENTS.has(event)) {
-        window.setTimeout(() => {
-          queryClient.clear();
-        }, 0);
-      }
+    if (!isWebAuthConfigured()) return;
+
+    let active = true;
+    let unsubscribe: (() => void) | undefined;
+
+    void import("./lib/supabase").then(({ supabase }) => {
+      if (!active) return;
+
+      const {
+        data: { subscription },
+      } = supabase.auth.onAuthStateChange((event) => {
+        if (IDENTITY_CHANGE_EVENTS.has(event)) {
+          window.setTimeout(() => {
+            queryClient.clear();
+          }, 0);
+        }
+      });
+      unsubscribe = () => subscription.unsubscribe();
     });
-    return () => subscription.unsubscribe();
+
+    return () => {
+      active = false;
+      unsubscribe?.();
+    };
   }, []);
 
   return (

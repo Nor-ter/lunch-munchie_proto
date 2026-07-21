@@ -60,6 +60,7 @@
 
   /* LM Design Tokens */
   --lm-primary: #E85053;
+  --lm-session-primary: #EB5053;
   --lm-accent: #D94447;
   --lm-green: #3CBA44;
   --lm-blue: #3E719B;
@@ -67,6 +68,8 @@
   --lm-card-warm: #FFD6D6;
   --lm-text: #1A1A1A;
   --lm-sub: #9B9B9B;
+  --lm-tab-bar-height: 88px;
+  --lm-tab-profile-icon-size: 51px;
 }
 
 @layer base {
@@ -102,6 +105,43 @@
   }
   .lm-btn-primary:active { opacity: 0.85; transform: scale(0.98); }
 
+  /* Lunchie settings/lobby share one primary session action treatment. */
+  .lunchie-session-primary-action {
+    display: flex;
+    width: 100%;
+    height: 56px;
+    align-items: center;
+    justify-content: center;
+    border: 0;
+    border-radius: 1rem;
+    background: var(--lm-session-primary);
+    color: white;
+    font-size: 16px;
+    font-weight: 900;
+    line-height: 1;
+    outline: none;
+    transition: opacity 150ms ease, transform 150ms ease;
+  }
+
+  .lunchie-session-primary-action:disabled { opacity: 0.6; }
+  .lunchie-session-primary-action:not(:disabled):active { opacity: 0.88; transform: scale(0.97); }
+  .lunchie-session-primary-action:focus-visible {
+    box-shadow: 0 0 0 2px white, 0 0 0 4px var(--lm-session-primary);
+  }
+
+  .lunchie-lobby { --lm-text: #3E2922; }
+
+  .header-action-row {
+    display: flex;
+    justify-content: flex-end;
+    padding-top: max(44px, calc(env(safe-area-inset-top, 0px) + 12px));
+    padding-inline: 20px;
+  }
+
+  .header-action-row--raised {
+    padding-top: max(19px, env(safe-area-inset-top, 0px));
+  }
+
   .lm-btn-outline {
     background: white; color: #1A1A1A; border-radius: 16px;
     height: 52px; font-weight: 600; font-size: 15px;
@@ -130,10 +170,104 @@
   .tab-bar {
     position: fixed; bottom: 0; left: 50%; transform: translateX(-50%);
     width: 100%; max-width: 480px;
+    height: var(--lm-tab-bar-height);
     background: #FF3E4D;
     border-radius: 20px 20px 0 0;
     z-index: 50;
     padding-bottom: env(safe-area-inset-bottom, 0px);
+  }
+
+  .tab-bar-content {
+    height: calc(var(--lm-tab-bar-height) - env(safe-area-inset-bottom, 0px));
+  }
+
+  .tab-profile-icon {
+    width: var(--lm-tab-profile-icon-size);
+    height: var(--lm-tab-profile-icon-size);
+  }
+
+  .tab-bar--flat {
+    border-radius: 0;
+    box-shadow: none;
+  }
+
+  .app-content-with-tab-bar {
+    padding-bottom: var(--lm-tab-bar-height);
+  }
+
+  .page-bottom-bar {
+    display: flex;
+    height: var(--lm-tab-bar-height);
+    align-items: center;
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+  }
+
+  .page-with-bottom-action {
+    padding-bottom: calc(var(--lm-tab-bar-height) + 1rem);
+  }
+
+  .page-bottom-action-bar {
+    position: fixed;
+    bottom: 0;
+    left: 50%;
+    z-index: 40;
+    width: 100%;
+    max-width: 430px;
+    transform: translateX(-50%);
+    gap: 0.5rem;
+    border-top: 1px solid #F0E6DF;
+    background: rgba(255, 255, 255, 0.95);
+    padding-inline: 1.25rem;
+    -webkit-backdrop-filter: blur(8px);
+    backdrop-filter: blur(8px);
+  }
+
+  .page-bottom-action-primary {
+    display: flex;
+    height: 52px;
+    flex: 1;
+    align-items: center;
+    justify-content: center;
+    border-radius: 1rem;
+    background: var(--lm-primary);
+    color: white;
+    font-size: 15px;
+    font-weight: 700;
+    box-shadow: 0 8px 20px rgba(232, 80, 83, 0.25);
+  }
+
+  .page-bottom-action-secondary {
+    display: flex;
+    width: 56px;
+    height: 52px;
+    flex-shrink: 0;
+    align-items: center;
+    justify-content: center;
+    border: 1px solid #F0C8C8;
+    border-radius: 1rem;
+    color: var(--lm-primary);
+  }
+
+  .page-bottom-action-primary:active,
+  .page-bottom-action-secondary:active {
+    transform: scale(0.99);
+  }
+
+  .landing-lunchkin-frame {
+    background-image: url('/assets/characters/landing/lunchie-blink-sprite.png');
+    background-position: right center;
+    background-repeat: no-repeat;
+    background-size: 200% 100%;
+  }
+
+  .landing-lunchkin-frame--animated {
+    animation: landing-lunchkin-blink 2.2s steps(1, end) infinite;
+  }
+
+  .landing-lunchkin-float {
+    transform-origin: center;
+    animation: landing-lunchkin-float 2.2s ease-in-out infinite;
+    will-change: transform;
   }
 
   /* Swipe card perspective wrapper */
@@ -142,6 +276,23 @@
   }
 
   .leaflet-container { border-radius: 1rem; z-index: 0; }
+}
+
+@keyframes landing-lunchkin-blink {
+  0%, 22.99%, 27.01%, 72.99%, 77.01%, 100% { background-position: right center; }
+  23%, 27%, 73%, 77% { background-position: left center; }
+}
+
+@keyframes landing-lunchkin-float {
+  0%, 100% { transform: translateY(0) rotate(0); }
+  25% { transform: translateY(-2px) rotate(-1.5deg); }
+  50% { transform: translateY(-4px) rotate(0); }
+  75% { transform: translateY(-2px) rotate(1.5deg); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .landing-lunchkin-frame--animated,
+  .landing-lunchkin-float { animation: none; }
 }
 
 ::-webkit-scrollbar { width: 3px; height: 3px; }

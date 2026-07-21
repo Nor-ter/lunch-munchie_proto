@@ -30,6 +30,21 @@ describe('Supabase browser client', () => {
     expect(supabase).toEqual({ kind: 'supabase-client' });
   });
 
+  it('creates an inactive local client when Supabase is fully unconfigured', async () => {
+    vi.stubEnv('VITE_SUPABASE_URL', '');
+    vi.stubEnv('VITE_SUPABASE_PUBLISHABLE_KEY', '');
+    vi.stubEnv('VITE_SUPABASE_ANON_KEY', '');
+
+    const { supabase } = await import('./supabase');
+
+    expect(createClientMock).toHaveBeenCalledOnce();
+    expect(createClientMock).toHaveBeenCalledWith(
+      'http://127.0.0.1:54321',
+      'local-development-placeholder',
+    );
+    expect(supabase).toEqual({ kind: 'supabase-client' });
+  });
+
   it('fails without exposing values when the project URL is missing', async () => {
     vi.stubEnv('VITE_SUPABASE_URL', '');
     vi.stubEnv('VITE_SUPABASE_PUBLISHABLE_KEY', 'sb_publishable_example');

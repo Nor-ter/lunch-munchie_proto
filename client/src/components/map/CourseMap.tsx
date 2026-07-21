@@ -16,6 +16,7 @@
 import { useEffect, useMemo } from 'react';
 import { Map, AdvancedMarker, Polyline, useMap } from '@vis.gl/react-google-maps';
 import { BRAND } from '@/constants/brand';
+import { getCourseSequenceColor } from '@/constants/courseTheme';
 
 /** 지도에 찍을 최소 마커 단위 (course_items ⨝ restaurants 대응) */
 export interface MapPoint {
@@ -95,7 +96,7 @@ export function CourseMap({ points, width, height, onPressPoint, routeCoordinate
                 width: 28,
                 height: 28,
                 borderRadius: '50%',
-                background: BRAND.primary,
+                background: getCourseSequenceColor(idx).base,
                 border: '2px solid white',
                 color: 'white',
                 fontSize: 13,

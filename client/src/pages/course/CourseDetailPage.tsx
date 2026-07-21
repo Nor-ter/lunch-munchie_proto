@@ -1,7 +1,7 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useParams, useLocation, useSearch } from 'wouter';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Heart, Bookmark, Share2, ChevronLeft, ChevronRight, Star, X, GripVertical, MessageCircle, MapPin, Clock } from 'lucide-react';
+import { Heart, ChevronLeft, ChevronRight, Star, X, GripVertical, Clock } from 'lucide-react';
 import {
   DndContext,
   closestCenter,
@@ -23,10 +23,9 @@ import { CourseMapView } from '@/components/course/CourseMapView';
 import { useApp } from '@/contexts/AppContext';
 import { getCourseById as getMockCourseById } from '@/data/mockCourse';
 import { CoursePlace } from '@/types/course';
-import { COURSE_THEME, getCourseSequenceColor } from '@/constants/courseTheme';
+import { getCourseSequenceColor } from '@/constants/courseTheme';
 import { getCoursePlacesFromStops } from '@/lib/courseMapSync';
 import RestaurantDetailSheet from '@/components/munchie/RestaurantDetailSheet';
-import FruitCharacter, { fruitForStop } from '@/components/munchie/FruitCharacter';
 
 type FromMode = 'explore' | 'saved' | 'feed' | 'template' | 'template-detail' | 'profile';
 
@@ -46,10 +45,6 @@ const BACK_PATH: Record<FromMode, string> = {
   'template-detail': '/feed?tab=template',
   explore: '/feed', // 먼치모드 통합 — 구 explore 진입도 피드로 복귀
 };
-
-function normalizeHashtags(tags: string[]) {
-  return tags.map((tag) => tag.replace(/^#/, ''));
-}
 
 // ── PlaceItem ─────────────────────────────────────────────────────────────────
 
@@ -90,8 +85,13 @@ function PlaceItem({
       className={`flex gap-3 ${isDragging ? 'opacity-50' : ''}`}
     >
       <div className="flex flex-col items-center">
-        {/* 번호 대신 과일 캐릭터 (키위 → 사과 → 딸기 순) */}
-        <FruitCharacter kind={fruitForStop(index)} size={32} />
+        <span
+          className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-[12px] font-black leading-none text-white"
+          style={{ backgroundColor: color.base }}
+          aria-label={`${index + 1}번째 장소`}
+        >
+          {index + 1}
+        </span>
         {!isLast && (
           <div
             className="flex-1 border-l-2 border-dashed ml-[1px] my-1"
@@ -165,17 +165,6 @@ function PlaceItem({
           </p>
           <p className="text-xs text-gray-400">{place.category}</p>
           {place.address && <p className="text-[11px] text-gray-400 truncate">{place.address}</p>}
-          {/* 하이라이트 시: 밀어서 상세보기 힌트 */}
-          {selected && !isEditing && (
-            <motion.p
-              initial={{ opacity: 0, y: 3 }}
-              animate={{ opacity: 1, y: 0 }}
-              className="mt-1 text-[10px] font-bold"
-              style={{ color: color.text }}
-            >
-              한 번 더 누르거나 오른쪽으로 밀어서 상세보기 →
-            </motion.p>
-          )}
         </div>
         {canPeek && selected && (
           <motion.button
@@ -218,29 +207,18 @@ export default function CourseDetailPage() {
   // 프로필 진입도 내 코스맵이므로 편집 가능 모드
   const fromSaved = from === 'saved' || from === 'profile';
   const {
-    savedCourseIds,
-    saveCourse,
-    unsaveCourse,
     getCourseById: getAppCourseById,
     getRestaurantById,
     feedPosts,
   } = useApp();
-  const isBookmarked = id ? savedCourseIds.includes(id) : false;
   const templateId = new URLSearchParams(search).get('template');
   const templateFrom = new URLSearchParams(search).get('templateFrom');
   const templateOrigin = templateFrom === 'profile' || templateFrom === 'saved' ? templateFrom : 'feed';
   const requestedPostId = new URLSearchParams(search).get('post');
   const isProfileTemplateCourse = from === 'template-detail' && templateFrom === 'profile';
-  const canManageCourse = fromSaved || isProfileTemplateCourse;
   const backPath = from === 'template-detail' && templateId && id
     ? `/template/${templateId}?course=${id}&from=${templateOrigin}`
     : BACK_PATH[from];
-
-  const toggleBookmark = () => {
-    if (!id) return;
-    if (isBookmarked) unsaveCourse(id);
-    else saveCourse(id);
-  };
 
   const appCourse = id ? getAppCourseById(id) : undefined;
   const orphanPost = id
@@ -262,7 +240,6 @@ export default function CourseDetailPage() {
     imageUrl: photo,
     coords: [{ x: 20, y: 28 }, { x: 70, y: 50 }, { x: 32, y: 76 }][index]!,
   }));
-  const initialHashtags = normalizeHashtags(appCourse?.hashtags ?? orphanPost?.tags ?? courseData.hashtags);
   const initialPlaces = appCourse && syncedPlaces.length > 0
     ? syncedPlaces
     : legacyPhotoPlaces.length > 0
@@ -272,55 +249,25 @@ export default function CourseDetailPage() {
     ? appCourse.metadata.duration / 60
     : courseData.durationHours;
   const durationLabel = `${Number.isInteger(durationHours) ? durationHours : durationHours.toFixed(1)}시간`;
-  const relatedFeedCount = id
-    ? feedPosts.filter(post => post.courseId === id).length
-    : 0;
   const authorHandle = (orphanPost?.authorName || courseData.authorHandle).replace(/^@/, '');
   const authorMeta = orphanPost ? 'Munchie creator' : `${courseData.followerCount} Followers`;
-  const addressLabel = initialPlaces.find(place => place.address)?.address
-    ?? appCourse?.region
-    ?? courseData.region
-    ?? '주소 정보 없음';
 
   // Local editable state (only used in saved mode)
-  const [hashtags, setHashtags] = useState<string[]>(initialHashtags);
   const [places, setPlaces] = useState<CoursePlace[]>(initialPlaces);
   const [isEditing, setIsEditing] = useState(false);
-  const [newTag, setNewTag] = useState('');
-  const [isAddingTag, setIsAddingTag] = useState(false);
   // 코스 순서: 터치 → 하이라이트, 밀기 → 식당 상세 슬라이드
   const [selectedPlaceId, setSelectedPlaceId] = useState<string | null>(null);
   const [detailPlaceId, setDetailPlaceId] = useState<string | null>(null);
-  const tagInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     if (isEditing) return;
-    setHashtags(initialHashtags);
     setPlaces(initialPlaces);
   }, [id, isEditing, appCourse, syncedPlaces]);
-
-  useEffect(() => {
-    if (isAddingTag) tagInputRef.current?.focus();
-  }, [isAddingTag]);
-
-  const commitTag = () => {
-    const trimmed = newTag.trim().replace(/^#/, '');
-    if (trimmed && !hashtags.includes(trimmed)) {
-      setHashtags(prev => [...prev, trimmed]);
-    }
-    setNewTag('');
-    setIsAddingTag(false);
-  };
 
   const handleDelete = () => {
     if (window.confirm('이 코스를 삭제할까요?')) {
       navigate(backPath);
     }
-  };
-
-  const shareCourseMap = () => {
-    if (!id) return;
-    navigate(`/course/${id}/share`);
   };
 
   const sensors = useSensors(
@@ -341,7 +288,7 @@ export default function CourseDetailPage() {
 
   return (
     <motion.div
-      className="mx-auto min-h-screen max-w-[430px] bg-[#FFF8F3] pb-[112px]"
+      className="page-with-bottom-action mx-auto min-h-screen max-w-[430px] bg-[#FFF8F3]"
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.3 }}
@@ -400,103 +347,19 @@ export default function CourseDetailPage() {
         )}
       </div>
 
-      {/* Hashtags — 한줄평은 지도 아래 상세 정보 영역에서만 보여준다. */}
-      <motion.div layout className="px-4 pb-3">
-        <AnimatePresence mode="wait">
-          {fromSaved && isEditing ? (
-            <motion.div
-              key="tags-edit"
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              transition={{ duration: 0.15 }}
-              className="flex flex-wrap gap-1.5 mt-1.5"
-            >
-              {hashtags.map(tag => (
-                <span key={tag} className="flex items-center gap-1 border border-gray-200 rounded-full px-2.5 py-0.5 text-xs text-gray-500">
-                  #{tag}
-                  <button onClick={() => setHashtags(prev => prev.filter(t => t !== tag))}>
-                    <X size={10} className="text-gray-400" />
-                  </button>
-                </span>
-              ))}
-              {isAddingTag ? (
-                <input
-                  ref={tagInputRef}
-                  value={newTag}
-                  onChange={e => setNewTag(e.target.value)}
-                  onKeyDown={e => e.key === 'Enter' && commitTag()}
-                  onBlur={commitTag}
-                  className="border border-[#E85053] rounded-full px-2.5 py-0.5 text-xs outline-none w-20"
-                  placeholder="#태그"
-                />
-              ) : (
-                <button
-                  onClick={() => setIsAddingTag(true)}
-                  className="border border-dashed border-gray-300 rounded-full px-2.5 py-0.5 text-xs text-gray-400"
-                >
-                  + 추가
-                </button>
-              )}
-            </motion.div>
-          ) : (
-            <motion.div
-              key="tags-view"
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              transition={{ duration: 0.15 }}
-              className="space-x-1 mt-1"
-            >
-              {hashtags.map(tag => (
-                <span key={tag} className="text-xs text-gray-400">#{tag}</span>
-              ))}
-            </motion.div>
-          )}
-        </AnimatePresence>
-      </motion.div>
-
-      {/* Map actions — 지도 위에 분리해 지도를 가리지 않는다. */}
-      <div className="mx-4 mb-2 flex justify-end gap-1.5">
-          <button
-            onClick={shareCourseMap}
-            aria-label="코스맵 공유"
-            className="flex h-8 w-8 items-center justify-center rounded-full border border-[#D5E1D9] bg-[#F6FBF7] text-[#688373]"
-          >
-            <Share2 size={15} />
-          </button>
-          {!canManageCourse && (
-            <button
-              onClick={toggleBookmark}
-              aria-label="코스맵 저장"
-              className="flex h-8 w-8 items-center justify-center rounded-full border border-[#F0C7BD] bg-[#FFF5F1] text-[#D56F69]"
-            >
-              <Bookmark
-                size={15}
-                fill={isBookmarked ? '#E85053' : 'none'}
-                stroke={isBookmarked ? '#E85053' : 'currentColor'}
-              />
-            </button>
-          )}
-      </div>
-
       {/* Map area — 지도·경로·순번 마커만 표시한다. */}
       <div
         data-ui="course-map-area"
-        className="relative mx-4 mb-4 h-[300px] overflow-hidden rounded-[22px] border border-[#E9D8CF] bg-[#FBF7F1] shadow-[0_8px_22px_rgba(105,67,48,0.08)]"
+        className="relative mx-4 mb-4 h-[270px] overflow-hidden rounded-[22px] border border-[#E9D8CF] bg-[#FBF7F1] shadow-[0_8px_22px_rgba(105,67,48,0.08)]"
       >
-        <CourseMapView places={places} width={430} height={300} className="h-full w-full" />
+        <CourseMapView places={places} width={430} height={270} className="h-full w-full" />
       </div>
 
-      {/* Address / time / spots */}
+      {/* Time / spots */}
       <div
         data-ui="course-meta"
-        className="mx-4 flex items-center gap-4 border-y border-[#EEE0D8] py-3 text-[11px] font-bold text-[#766158]"
+        className="mx-4 flex items-center justify-start gap-3 border-y border-[#EEE0D8] py-3 text-[11px] font-bold text-[#766158]"
       >
-        <span className="flex min-w-0 flex-1 items-center gap-1.5">
-          <MapPin size={14} className="shrink-0 text-[#EE7772]" />
-          <span className="truncate">{addressLabel}</span>
-        </span>
         <span className="flex shrink-0 items-center gap-1.5">
           <Clock size={14} className="text-[#EE7772]" />
           {durationLabel}
@@ -505,14 +368,7 @@ export default function CourseDetailPage() {
       </div>
 
       {/* Place list */}
-      <div className="px-4 pb-4">
-        <div data-ui="places-in-template" className="mb-3 flex items-end justify-between pt-4">
-          <div>
-            <p className="text-[10px] font-black uppercase tracking-[0.14em] text-[#B89E91]">Places in Template</p>
-            <p className="mt-0.5 text-sm font-black text-[#3B2A22]">템플릿 속 식당</p>
-          </div>
-          <p className="text-[10px] text-gray-400">한 번 선택 · 두 번 상세보기</p>
-        </div>
+      <div className="px-4 pb-4 pt-4">
         <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
           <SortableContext items={places.map(p => p.id)} strategy={verticalListSortingStrategy}>
             <motion.div layout className="flex flex-col">
@@ -535,25 +391,6 @@ export default function CourseDetailPage() {
         </DndContext>
       </div>
 
-      <div className="mx-4 mb-4">
-        <button
-          type="button"
-          onClick={() => navigate(`/course/${id}/feeds${search ? `?${search}` : ''}`)}
-          className="flex w-full items-center gap-3 rounded-2xl border border-[#F2D8D3] bg-[#FFF8F4] p-3.5 text-left active:scale-[0.99]"
-        >
-          <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-[#FDE1E1] text-[#D94447]">
-            <MessageCircle size={18} />
-          </span>
-          <span className="min-w-0 flex-1">
-            <span className="block text-[14px] font-black text-[#3B2A22]">이 코스로 만든 피드</span>
-            <span className="mt-0.5 block text-[11px] text-[#9D887C]">
-              {relatedFeedCount > 0 ? `올라온 피드 ${relatedFeedCount}개 둘러보기` : '아직 올라온 피드가 없어요'}
-            </span>
-          </span>
-          <ChevronRight size={18} color="#B09A8C" />
-        </button>
-      </div>
-
       </div>
 
       {/* 식당 상세 슬라이드 (뒤로가면 이 화면으로 복귀) */}
@@ -562,7 +399,6 @@ export default function CourseDetailPage() {
           <RestaurantDetailSheet
             restaurantId={detailPlaceId}
             fallbackPlace={places.find(place => place.id === detailPlaceId)}
-            courseId={id}
             onClose={() => setDetailPlaceId(null)}
           />
         )}
@@ -570,48 +406,29 @@ export default function CourseDetailPage() {
 
 
       {/* Bottom bar */}
-      <div className="fixed bottom-4 left-1/2 -translate-x-1/2 w-[calc(100%-32px)] max-w-[398px] bg-white rounded-2xl shadow-lg px-4 py-3 flex gap-2">
+      <div className="page-bottom-action-bar page-bottom-bar">
         {isProfileTemplateCourse ? (
           <button
             onClick={() => navigate(`/course/${id}/edit?from=profile`)}
-            className="h-11 flex-1 rounded-xl bg-[#E85053] text-sm font-medium text-white"
+            className="page-bottom-action-primary"
           >
             편집
           </button>
         ) : fromSaved ? (
-          <>
-            <button
-              onClick={handleDelete}
-              className="flex-1 border border-red-200 text-red-400 rounded-xl h-11 text-sm"
-            >
-              삭제
-            </button>
-            <button
-              onClick={() => navigate(`/course/${id}/share${fromSaved ? '?from=saved' : ''}`)}
-              className="flex-1 bg-[#E85053] text-white rounded-xl h-11 text-sm font-medium"
-            >
-              공유하기
-            </button>
-          </>
+          <button
+            onClick={handleDelete}
+            className="h-[52px] flex-1 rounded-2xl border border-red-200 text-sm text-red-400"
+          >
+            삭제
+          </button>
         ) : (
           <>
-            <button className="w-11 h-11 border border-gray-200 rounded-xl flex items-center justify-center">
+            <button className="page-bottom-action-secondary">
               <Heart size={20} />
             </button>
             <button
-              onClick={toggleBookmark}
-              className="w-11 h-11 border border-gray-200 rounded-xl flex items-center justify-center"
-            >
-              <Bookmark
-                size={20}
-                fill={isBookmarked ? '#E85053' : 'none'}
-                stroke={isBookmarked ? '#E85053' : 'currentColor'}
-              />
-            </button>
-            <button
               onClick={() => navigate(`/coursemap/new?course=${id}`)}
-              className="flex-1 text-white rounded-xl h-11 text-sm font-medium"
-              style={{ backgroundColor: COURSE_THEME.primary }}
+              className="page-bottom-action-primary"
             >
               복사해서 편집
             </button>

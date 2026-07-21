@@ -9,7 +9,6 @@ import {
   MessageCircle,
   Send,
   Share2,
-  ThumbsDown,
   ThumbsUp,
   X,
 } from 'lucide-react';
@@ -118,9 +117,9 @@ export default function UnifiedMunchieCard({
   if (compact) {
     return (
       <article className={`relative overflow-hidden bg-[#FFFDFC] ${homeSummary ? 'rounded-[12px] border border-[#EFD0D4] shadow-[0_5px_14px_rgba(235,80,83,0.07)]' : 'rounded-[18px] border-2 border-[#EAD7CD] shadow-[0_7px_18px_rgba(123,76,53,0.1)]'}`} data-testid={`unified-munchie-card-${post.id}`}>
-        <header className="flex h-8 shrink-0 items-center gap-1 px-2">
+        <header className={`flex shrink-0 items-center gap-1 px-2 ${homeSummary ? 'h-9' : 'h-8'}`}>
           <button type="button" onClick={() => go(`/profile/${post.authorId}`)} className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-white text-[9px] ${homeSummary ? 'border border-[#EB5053]' : 'border border-[#2F2926]'}`}>{post.authorEmoji}</button>
-          <button type="button" onClick={() => go(`/profile/${post.authorId}`)} className={`min-w-0 truncate text-left text-[10px] font-black ${homeSummary ? 'text-[#C93B3E]' : 'text-[#342925]'}`}>{post.authorName}</button>
+          <button type="button" onClick={() => go(`/profile/${post.authorId}`)} className={`min-w-0 truncate text-left text-[10px] font-black ${homeSummary ? 'text-[#3E2922]' : 'text-[#342925]'}`}>{post.authorName}</button>
           <span className={`shrink-0 text-[8px] font-medium ${homeSummary ? 'text-[#A36D6C]' : 'text-[#8B817B]'}`}>{timeAgo(post.createdAt)}</span>
           <span className="flex-1" />
           <button type="button" onClick={() => setShowPostMenu(value => !value)} aria-label="게시물 메뉴" className={`flex h-6 w-6 items-center justify-center ${homeSummary ? 'text-[#D94447]' : 'text-[#413733]'}`}><MoreHorizontal size={15} strokeWidth={3} /></button>
@@ -128,7 +127,7 @@ export default function UnifiedMunchieCard({
         <button type="button" onClick={() => go(compactDetailPath)} className="block w-full text-left" aria-label="피드 상세 보기">
           <OneLineReviewBox compact slim={homeSummary} className="mx-2 mb-1.5 shrink-0 overflow-hidden">
             <AnimatePresence mode="wait" initial={false}>
-              <motion.p key={post.caption} initial={{ opacity: 0, y: 5 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -5 }} className={`${homeSummary ? 'line-clamp-1 leading-none' : 'line-clamp-2 leading-snug'} text-[9px] font-bold text-[#3B2A23]`}>{post.caption}</motion.p>
+              <motion.p key={post.caption} initial={{ opacity: 0, y: 5 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -5 }} className={`${homeSummary ? 'line-clamp-1 leading-none text-[#935B5C]' : 'line-clamp-2 leading-snug text-[#3B2A23]'} text-[9px] font-semibold`}>{post.caption}</motion.p>
             </AnimatePresence>
           </OneLineReviewBox>
           <div className={`relative mx-2 mb-2 overflow-hidden rounded-[12px] border bg-[#F1E7DE] ${homeSummary ? 'border-[#F2B6AB]' : 'border-[#E8D6CC]'}`}>
@@ -166,7 +165,7 @@ export default function UnifiedMunchieCard({
             {post.authorEmoji}
           </button>
           <button type="button" onClick={() => go(`/profile/${post.authorId}`)} className="min-w-0 text-left">
-            <strong className="truncate text-[15px] font-black text-[#30231E]">{post.authorName}</strong>
+            <strong className="truncate text-[15px] font-black text-[#3E2922]">{post.authorName}</strong>
           </button>
           <span className="min-w-0 flex-1 truncate text-[11px] font-medium text-[#8C7B72]">{timeAgo(post.createdAt)}</span>
           <button type="button" onClick={() => setShowPostMenu(value => !value)} aria-label="게시물 메뉴" className="flex h-9 w-9 items-center justify-center text-[#A66C60]"><MoreHorizontal size={21} strokeWidth={3} /></button>
@@ -254,7 +253,6 @@ export default function UnifiedMunchieCard({
                             <span>{timeAgo(entry.createdAt)}</span>
                             {!nested && <button type="button" onClick={() => setReplyingTo({ id: entry.id, authorName: entry.authorName })}>답글 달기</button>}
                             <button type="button" onClick={() => reactToFeedComment(post.id, entry.id, 'like')} className={entry.myReaction === 'like' ? 'text-[#E83D45]' : ''}><ThumbsUp className="inline" size={13} /> {entry.likes ?? 0}</button>
-                            <button type="button" onClick={() => reactToFeedComment(post.id, entry.id, 'dislike')} className={entry.myReaction === 'dislike' ? 'text-[#6354C7]' : ''}><ThumbsDown className="inline" size={13} /> {entry.dislikes ?? 0}</button>
                           </div>
                         </div>
                         <button type="button" onClick={() => setCommentMenuId(current => current === entry.id ? null : entry.id)} aria-label={`${entry.authorName} 댓글 메뉴`} className="flex h-8 w-8 shrink-0 items-center justify-center text-[#88766E]"><MoreHorizontal size={18} /></button>

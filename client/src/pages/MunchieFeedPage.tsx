@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { createPortal } from 'react-dom';
 import { AnimatePresence, motion } from 'framer-motion';
-import { Palette, PenLine, Settings2 } from 'lucide-react';
+import { Palette, Plus, Settings2 } from 'lucide-react';
 import { useLocation } from 'wouter';
 import { FOOD_FILTER_TAGS, hasFoodTag } from '@/constants/foodTags';
 import { getCourseTagStyle } from '@/constants/courseTheme';
@@ -17,11 +17,11 @@ export default function MunchieFeedPage() {
     : feedPosts.filter(post => hasFoodTag(post.tags, activeFilter as TagType));
 
   return (
-    <div className="min-h-dvh bg-[#FFF7F2] pb-28">
+    <div className="min-h-dvh bg-[#FFF7F2] pb-[calc(65px+43px+1rem)]">
       <header className="sticky top-0 z-30 border-b border-[#EAD7CE] bg-[#FFFDFC] px-4 pb-3 pt-8">
         <div className="flex items-start justify-between gap-4">
           <div>
-            <h1 className="text-[25px] font-black leading-none tracking-[-0.03em] text-[#30231E]">MUNCHIE FEED</h1>
+            <h1 className="text-[25px] font-black leading-none tracking-[-0.03em] text-[#DB2837]">MUNCHIE FEED</h1>
             <p className="mt-2 text-[11px] font-semibold text-[#8D776C]">다녀온 맛집 Munchie 피드를 함께 공유해요</p>
           </div>
           <div className="flex gap-2">
@@ -91,13 +91,17 @@ export default function MunchieFeedPage() {
         <motion.button
           type="button"
           onClick={() => navigate('/coursemap/new')}
-          className="fixed bottom-24 z-40 flex h-12 items-center gap-2 rounded-[16px] border-2 border-[#F6B9B1] bg-[#F06F72] px-5 text-[12px] font-black text-white shadow-[0_10px_24px_rgba(238,111,114,0.25)]"
-          style={{ right: 'max(1rem, calc((100vw - min(100vw, 480px)) / 2 + 1rem))' }}
+          aria-label="새 Munchie 피드 작성"
+          className="fixed z-40 flex h-[65px] w-[65px] items-center justify-center rounded-full border-2 border-[#F6B9B1] bg-[#F06F72] text-white shadow-[0_10px_24px_rgba(238,111,114,0.25)]"
+          style={{
+            right: 'max(1.5rem, calc((100vw - min(100vw, 480px)) / 2 + 1.5rem))',
+            bottom: 'calc(var(--lm-tab-bar-height) + 43px)',
+          }}
           initial={{ scale: 0 }}
           animate={{ scale: 1 }}
           whileTap={{ scale: 0.94 }}
         >
-          <PenLine size={16} /> + Munchie Feed
+          <Plus size={38} strokeWidth={2.25} aria-hidden="true" />
         </motion.button>,
         document.body,
       )}
