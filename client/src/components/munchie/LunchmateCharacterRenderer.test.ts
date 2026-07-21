@@ -12,20 +12,37 @@ import {
   resolveLunchmateRenderLayers,
 } from '../../constants/lunchmateItems';
 import {
+  lunchmateChickenAssets,
   lunchmateEffectAssets,
   lunchmateFaceAssets,
   lunchmateFacelessBaseAsset,
   type LunchmateAssetSource,
 } from '../../constants/lunchmateAssets';
+import {
+  LUNCHMATE_STARTER_COSTUME_POSE_MANIFEST,
+  LUNCHMATE_STARTER_PILOT_ITEM_IDS,
+  LUNCHMATE_STARTER_PILOT_LAYER_ORDER,
+  resolveLunchmateChickenCostumePose,
+  resolveLunchmateChickenCostumeRenderLayers,
+  resolveLunchmateStarterCostumePoseLayers,
+} from '../../constants/lunchmateCostumePoseManifest';
 import { resolveLunchmateExpressionPresentation } from '../../constants/lunchmateExpressions';
 import type { LunchmateLayerItem } from '../../types/lunchmateCustomization';
 import {
   motionForLunchmateState,
+  resolveLunchmateChickenAssetKey,
   resolveLunchmateRenderPlan,
 } from './LunchmateCharacterRenderer';
 
 const PUBLIC_ROOT = join(process.cwd(), 'client', 'public');
 const LAYER_ROOT = join(PUBLIC_ROOT, 'assets', 'lunchmate', 'layers');
+const STARTER_PILOT_ROOT = join(
+  PUBLIC_ROOT,
+  'assets',
+  'lunchmate',
+  'costumes',
+  'starter-pilot-v3',
+);
 const COMPONENT_ROOT = join(process.cwd(), 'client', 'src', 'components', 'munchie');
 const RENDERER_SOURCE_PATH = join(COMPONENT_ROOT, 'LunchmateCharacterRenderer.tsx');
 const FOODIE_BUDDY_SOURCE_PATH = join(COMPONENT_ROOT, 'FoodieBuddy.tsx');
@@ -60,6 +77,15 @@ function assertRgbaCanvas(path: string, expectedSize: number) {
 }
 
 describe('Lunchmate layered item manifest', () => {
+  it('registers the two transparent chicken sources without replacing legacy assets', () => {
+    expect(lunchmateChickenAssets.idle.src)
+      .toBe('/assets/lunchmate/chicken/chicken-idle.png?v=chicken-visual-v1');
+    expect(lunchmateChickenAssets.feeding.src)
+      .toBe('/assets/lunchmate/chicken/chicken-feeding.png?v=chicken-visual-v1');
+    assertRgbaCanvas(publicPath(lunchmateChickenAssets.idle.src), 950);
+    assertRgbaCanvas(publicPath(lunchmateChickenAssets.feeding.src), 1254);
+  });
+
   it('registers 31 unique items with the catalog slot counts', () => {
     expect(LUNCHMATE_ITEMS).toHaveLength(31);
     expect(new Set(LUNCHMATE_ITEMS.map(item => item.id)).size).toBe(31);
@@ -218,6 +244,15 @@ describe('Lunchmate expression policy', () => {
 });
 
 describe('LunchmateCharacterRenderer composed expression', () => {
+  it('uses feeding chicken artwork only during the existing delivery phases', () => {
+    expect(resolveLunchmateChickenAssetKey('submitting')).toBe('feeding');
+    expect(resolveLunchmateChickenAssetKey('sharingAnimation')).toBe('feeding');
+    expect(resolveLunchmateChickenAssetKey('reaction')).toBe('idle');
+    expect(resolveLunchmateChickenAssetKey('error')).toBe('idle');
+    expect(resolveLunchmateChickenAssetKey('foodAvailable')).toBe('idle');
+    expect(resolveLunchmateChickenAssetKey('idle')).toBe('idle');
+  });
+
   it('resolves an empty loadout to the fixed faceless composition', () => {
     const plan = resolveLunchmateRenderPlan(EMPTY_LUNCHMATE_LOADOUT, 'idle');
     expect(plan.poseMode).toBe('composedExpression');
@@ -415,11 +450,136 @@ describe('LunchmateCharacterRenderer composed expression', () => {
   });
 });
 
+describe('Lunchmate Starter Costume Pose Pilot v3', () => {
+  const directPoses = ['front', 'feeding', 'sideLeft', 'sitting'] as const;
+
+  it('registers only the four Starter IDs and installs all fixed-canvas overlay assets', () => {
+    expect(LUNCHMATE_STARTER_PILOT_ITEM_IDS).toEqual([
+      'outfit_hoodie_coral',
+      'bag_backpack_green',
+      'eyewear_round_black',
+      'headwear_beret_coral',
+    ]);
+    expect(LUNCHMATE_STARTER_COSTUME_POSE_MANIFEST.version).toBe(3);
+    expect(LUNCHMATE_STARTER_COSTUME_POSE_MANIFEST.referenceCanvas).toBe(720);
+
+    const pngFiles = collectPngFiles(STARTER_PILOT_ROOT);
+    const oneX = pngFiles.filter(path => path.includes(`${sep}1x${sep}`));
+    const twoX = pngFiles.filter(path => path.includes(`${sep}2x${sep}`));
+    expect(oneX).toHaveLength(24);
+    expect(twoX).toHaveLength(24);
+
+    for (const path of oneX) assertRgbaCanvas(path, 360);
+    for (const path of twoX) assertRgbaCanvas(path, 720);
+  });
+
+  it('uses the v3 front, feeding, side-left, and sitting artwork with literal zero translations', () => {
+    for (const itemId of LUNCHMATE_STARTER_PILOT_ITEM_IDS) {
+      for (const pose of directPoses) {
+        const layers = resolveLunchmateStarterCostumePoseLayers(itemId, pose);
+        expect(layers.length, `${itemId}:${pose}`).toBeGreaterThan(0);
+
+        for (const layer of layers) {
+          const twoX = layer.source.srcSet.split(', ')[1].replace(/ 2x$/, '');
+          expect(layer.source.src).toContain(`/starter-pilot-v3/1x/${itemId}/`);
+          expect(twoX).toContain(`/starter-pilot-v3/2x/${itemId}/`);
+          expect(existsSync(publicPath(layer.source.src)), layer.source.src).toBe(true);
+          expect(existsSync(publicPath(twoX)), twoX).toBe(true);
+          expect(layer.translateX).toBe(0);
+          expect(layer.translateY).toBe(0);
+          expect(layer.mirrored).toBe(false);
+        }
+      }
+    }
+  });
+
+  it('mirrors only the side-left canvas for sideRight and reuses front for emotion and grabbed', () => {
+    for (const itemId of LUNCHMATE_STARTER_PILOT_ITEM_IDS) {
+      const front = resolveLunchmateStarterCostumePoseLayers(itemId, 'front');
+      const sideLeft = resolveLunchmateStarterCostumePoseLayers(itemId, 'sideLeft');
+      const sideRight = resolveLunchmateStarterCostumePoseLayers(itemId, 'sideRight');
+      const emotion = resolveLunchmateStarterCostumePoseLayers(itemId, 'emotion');
+      const grabbed = resolveLunchmateStarterCostumePoseLayers(itemId, 'grabbed');
+
+      expect(sideRight.map(layer => layer.source.src)).toEqual(sideLeft.map(layer => layer.source.src));
+      expect(sideRight.every(layer => layer.mirrored)).toBe(true);
+      expect(emotion.map(layer => layer.source.src)).toEqual(front.map(layer => layer.source.src));
+      expect(grabbed.map(layer => layer.source.src)).toEqual(front.map(layer => layer.source.src));
+      expect(emotion.every(layer => !layer.mirrored)).toBe(true);
+      expect(grabbed.every(layer => !layer.mirrored)).toBe(true);
+    }
+  });
+
+  it('maps every current chicken sprite to the required v3 pose family', () => {
+    expect(resolveLunchmateChickenCostumePose('idle')).toBe('front');
+    expect(resolveLunchmateChickenCostumePose('feeding')).toBe('feeding');
+    expect(resolveLunchmateChickenCostumePose('side-walk-left-1')).toBe('sideLeft');
+    expect(resolveLunchmateChickenCostumePose('side-walk-left-2')).toBe('sideLeft');
+    expect(resolveLunchmateChickenCostumePose('side-walk-right-1')).toBe('sideRight');
+    expect(resolveLunchmateChickenCostumePose('side-walk-right-2')).toBe('sideRight');
+    expect(resolveLunchmateChickenCostumePose('sitting')).toBe('sitting');
+    for (const key of ['happy', 'surprised', 'sleepy', 'crying'] as const) {
+      expect(resolveLunchmateChickenCostumePose(key)).toBe('emotion');
+    }
+    expect(resolveLunchmateChickenCostumePose('grabbed')).toBe('grabbed');
+  });
+
+  it('keeps the exact bag/outfit/base/body/bag/face layer order and allows transparent behind assets', () => {
+    expect(LUNCHMATE_STARTER_PILOT_LAYER_ORDER).toEqual(LUNCHMATE_LAYER_ORDER);
+    const layers = resolveLunchmateChickenCostumeRenderLayers(LAYER_PREVIEW_LOADOUT, 'feeding');
+    expect(layers.map(layer => layer.layerName)).toEqual([
+      'bag-back',
+      'outfit-back',
+      'outfit-front',
+      'bag-front',
+      'eyewear',
+      'headwear',
+    ]);
+    expect(layers.filter(layer => layer.layerName.endsWith('back'))).toHaveLength(2);
+    expect(layers.every(layer => layer.translateX === 0 && layer.translateY === 0)).toBe(true);
+  });
+
+  it('falls back to legacy assets for every non-pilot costume without changing the loadout', () => {
+    const legacyLoadout = {
+      outfitId: 'outfit_sailor_navy',
+      headwearId: 'headwear_cap_green',
+      eyewearId: 'eyewear_square_brown',
+      bagId: 'bag_satchel_brown',
+    } as const;
+    const layers = resolveLunchmateChickenCostumeRenderLayers(legacyLoadout, 'sitting');
+
+    expect(layers.map(layer => layer.costumeId)).toEqual([
+      'legacy',
+      'legacy',
+      'legacy',
+      'legacy',
+      'legacy',
+    ]);
+    expect(layers.map(layer => layer.source.src)).toEqual([
+      '/assets/lunchmate/layers/bag/satchel_brown_back.png',
+      '/assets/lunchmate/layers/outfit/sailor_navy.png',
+      '/assets/lunchmate/layers/bag/satchel_brown_front.png',
+      '/assets/lunchmate/layers/eyewear/square_brown.png',
+      '/assets/lunchmate/layers/headwear/cap_green.png',
+    ]);
+  });
+
+  it('uses only mirror scale for sideRight and never applies an extra eyewear scale or placement translation', () => {
+    const rendererSource = readFileSync(RENDERER_SOURCE_PATH, 'utf8');
+    expect(rendererSource).toContain("transform: mirrored ? 'scaleX(-1)' : undefined");
+    expect(rendererSource).not.toContain('scale(1.3)');
+    expect(rendererSource).not.toContain('scale(1.28)');
+    expect(rendererSource).not.toContain('eyewearScale');
+    expect(rendererSource).not.toContain('translateX: 28');
+    expect(rendererSource).not.toContain('translateY: 34');
+  });
+});
+
 describe('Lunchmate food flow and presentation contracts', () => {
   it('keeps one responsive food-flight layer during sharingAnimation', () => {
     const foodieBuddySource = readFileSync(FOODIE_BUDDY_SOURCE_PATH, 'utf8');
     const flightStart = foodieBuddySource.indexOf('{isSharingAnimation && sharedFoodPlaceholder && (');
-    const flightEnd = foodieBuddySource.indexOf('/* 캐릭터 (좌우 배회 + 바운스)', flightStart);
+    const flightEnd = foodieBuddySource.indexOf('/* 정적 idle 캐릭터', flightStart);
     const flightSource = foodieBuddySource.slice(flightStart, flightEnd);
 
     expect(flightSource).toContain('data-lunchmate-food-flight="true"');
@@ -442,14 +602,28 @@ describe('Lunchmate food flow and presentation contracts', () => {
     expect(flowSource).not.toContain('quantity -');
   });
 
-  it('keeps Level Up compact and makes the FoodieRoom preview explicitly room-sized', () => {
+  it('keeps Level Up compact and makes Profile/Room use the static chicken artwork', () => {
     const levelUpSource = readFileSync(LEVEL_UP_SOURCE_PATH, 'utf8');
     const foodieRoomSource = readFileSync(FOODIE_ROOM_SOURCE_PATH, 'utf8');
+    const foodieBuddySource = readFileSync(FOODIE_BUDDY_SOURCE_PATH, 'utf8');
 
     expect(levelUpSource).toContain('levelUpActive');
     expect(levelUpSource).toContain('loadout={loadout}');
     expect(levelUpSource).toContain('renderSize="compact"');
-    expect(foodieRoomSource).toContain('flowState="selectingFood"');
+    expect(foodieRoomSource).toContain('flowState="idle"');
     expect(foodieRoomSource).toContain('renderSize="room"');
+    expect(foodieRoomSource).toContain('artwork="chicken"');
+    expect(foodieRoomSource).toContain('animated={false}');
+    expect(foodieRoomSource).toContain('className="relative h-[270px]');
+    expect(foodieRoomSource).toContain('size={156}');
+    expect(foodieRoomSource).toContain('className="absolute inset-x-0 bottom-11 z-10 flex justify-center"');
+    expect(foodieBuddySource).toContain('artwork="chicken"');
+    expect(foodieBuddySource).toContain('animated={false}');
+    expect(foodieBuddySource).toContain('const LUNCHMATE_RENDER_SIZE = 86');
+    expect(foodieBuddySource).toContain("height: 'clamp(144px, 38vw, 150px)'");
+    expect(foodieBuddySource).toContain("background: 'rgba(255,255,255,0.88)'");
+    expect(foodieBuddySource).not.toContain('👀→');
+    expect(foodieBuddySource).not.toContain('wanderRef');
+    expect(foodieBuddySource).not.toContain('bounceRef');
   });
 });

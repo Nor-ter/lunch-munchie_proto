@@ -5,11 +5,13 @@ function SkinCell({
   skin,
   selected,
   previewPhoto,
+  squarePreview,
   onSelect,
 }: {
   skin: MunchieSkin;
   selected: boolean;
   previewPhoto?: string;
+  squarePreview?: boolean;
   onSelect: () => void;
 }) {
   return (
@@ -24,8 +26,8 @@ function SkinCell({
         }}
       >
         <div
-          className="rounded-xl overflow-hidden flex items-center justify-center"
-          style={{ background: skin.paper, height: 84 }}
+          className={`flex items-center justify-center overflow-hidden rounded-xl ${squarePreview ? 'aspect-square' : ''}`}
+          style={{ background: skin.paper, height: squarePreview ? undefined : 84 }}
         >
           {previewPhoto ? (
             <img src={previewPhoto} alt="" className="w-full h-full object-cover opacity-90" />
@@ -52,20 +54,30 @@ export default function SkinPicker({
   onChange,
   previewPhoto,
   columns = 3,
+  responsiveColumns = false,
 }: {
   value: string | null;
   onChange: (skinId: string) => void;
   previewPhoto?: string;
   columns?: 2 | 3;
+  /** Lunchmate Room content grids use three columns first and four only on wider viewports. */
+  responsiveColumns?: boolean;
 }) {
+  const gridColumns = columns === 2
+    ? 'grid-cols-2'
+    : responsiveColumns
+      ? 'grid-cols-3 min-[450px]:grid-cols-4'
+      : 'grid-cols-3';
+
   return (
-    <div className={`grid gap-3 ${columns === 2 ? 'grid-cols-2' : 'grid-cols-3'}`}>
+    <div className={`grid gap-3 ${gridColumns}`}>
       {MUNCHIE_SKINS.map((skin) => (
         <SkinCell
           key={skin.id}
           skin={skin}
           selected={value === skin.id}
           previewPhoto={previewPhoto}
+          squarePreview={responsiveColumns}
           onSelect={() => onChange(skin.id)}
         />
       ))}

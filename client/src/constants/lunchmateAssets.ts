@@ -20,6 +20,20 @@ export type LunchmateCostumeAssetKey =
   | 'costume_beret'
   | 'costume_raincoat';
 
+export type LunchmateChickenAssetKey =
+  | 'idle'
+  | 'feeding'
+  | 'grabbed'
+  | 'sitting'
+  | 'side-walk-left-1'
+  | 'side-walk-left-2'
+  | 'side-walk-right-1'
+  | 'side-walk-right-2'
+  | 'happy'
+  | 'surprised'
+  | 'sleepy'
+  | 'crying';
+
 function assetSource(fileName: string, revision?: string): LunchmateAssetSource {
   const revisionQuery = revision ? `?v=${revision}` : '';
 
@@ -112,6 +126,33 @@ export const lunchmateEffectAssets = {
     '/assets/lunchmate/layers/effects/2x/jump_lines@2x.png',
   ),
 } as const;
+
+function chickenAssetSource(
+  fileName: string,
+  revision = 'chicken-visual-v1',
+): LunchmateAssetSource {
+  const src = `/assets/lunchmate/chicken/chicken-${fileName}.png?v=${revision}`;
+  return {
+    src,
+    srcSet: `${src} 1x, ${src} 2x`,
+  };
+}
+
+/** Profile/Room chicken artwork selected by the existing Lunchmate flow phases. */
+export const lunchmateChickenAssets = {
+  idle: chickenAssetSource('idle'),
+  feeding: chickenAssetSource('feeding'),
+  grabbed: chickenAssetSource('grabbed', 'chicken-grabbed-v1'),
+  sitting: chickenAssetSource('sitting', 'chicken-sitting-v1'),
+  'side-walk-left-1': chickenAssetSource('side-walk-left-1', 'chicken-motion-v1'),
+  'side-walk-left-2': chickenAssetSource('side-walk-left-2', 'chicken-motion-v1'),
+  'side-walk-right-1': chickenAssetSource('side-walk-right-1', 'chicken-motion-v1'),
+  'side-walk-right-2': chickenAssetSource('side-walk-right-2', 'chicken-motion-v1'),
+  happy: chickenAssetSource('happy', 'chicken-motion-v1'),
+  surprised: chickenAssetSource('surprised', 'chicken-motion-v1'),
+  sleepy: chickenAssetSource('sleepy', 'chicken-motion-v1'),
+  crying: chickenAssetSource('crying', 'chicken-motion-v1'),
+} satisfies Record<LunchmateChickenAssetKey, LunchmateAssetSource>;
 
 // Phase 1F에서는 manifest 등록만 한다. 선택 UI와 profile 저장 연결은 후속 Phase 범위다.
 export const lunchmateCostumeAssets = {

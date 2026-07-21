@@ -1,11 +1,13 @@
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { motion, useReducedMotion, type MotionProps, type Transition } from 'framer-motion';
 import {
+  lunchmateChickenAssets,
   lunchmateEffectAssets,
   lunchmateFaceAssets,
   lunchmateFacelessBaseAsset,
   lunchmateStateAssets,
   type LunchmateAssetSource,
+  type LunchmateChickenAssetKey,
   type LunchmateStateAssetKey,
 } from '../../constants/lunchmateAssets';
 import {
@@ -13,6 +15,11 @@ import {
   resolveLunchmateRenderLayers,
   type LunchmateResolvedLayer,
 } from '../../constants/lunchmateItems';
+import {
+  resolveLunchmateChickenCostumePose,
+  resolveLunchmateChickenCostumeRenderLayers,
+  type LunchmatePoseResolvedLayer,
+} from '../../constants/lunchmateCostumePoseManifest';
 import {
   resolveLunchmateExpressionPresentation,
   type LunchmateEffectId,
@@ -24,6 +31,7 @@ import type { LunchmateLoadout } from '../../types/lunchmateCustomization';
 import type { FoodieBuddyUiState } from './FoodieBuddy';
 
 export type LunchmatePoseMode = 'composedExpression';
+export type LunchmateCharacterArtwork = 'classic' | 'chicken';
 
 interface LunchmateCharacterRendererProps {
   flowState: FoodieBuddyUiState;
@@ -34,6 +42,12 @@ interface LunchmateCharacterRendererProps {
   fallback?: ReactNode;
   loadout?: LunchmateLoadout;
   animated?: boolean;
+  /** Profile/Room의 새 시각 기반. 기존 레이어 Renderer의 기본 동작은 호환을 위해 유지한다. */
+  artwork?: LunchmateCharacterArtwork;
+  /** FoodieRoom의 UI 전용 모션이 선택한 chicken sprite. 기존 flow mapping보다 우선한다. */
+  chickenAssetKeyOverride?: LunchmateChickenAssetKey;
+  /** Room 최초 측정과 sprite 교체 후 bounds 재측정에 사용한다. */
+  onChickenImageLoad?: () => void;
 }
 
 interface LunchmateStateMotion {
@@ -91,9 +105,15 @@ function loadAsset(source: LunchmateAssetSource) {
 function LunchmateLayerImage({
   source,
   layerName,
+  mirrored = false,
+  translateX = 0,
+  translateY = 0,
 }: {
   source: LunchmateAssetSource;
   layerName: string;
+  mirrored?: boolean;
+  translateX?: number;
+  translateY?: number;
 }) {
   const [loadFailed, setLoadFailed] = useState(false);
 
@@ -110,10 +130,18 @@ function LunchmateLayerImage({
       alt=""
       aria-hidden="true"
       data-lunchmate-layer={layerName}
+      data-lunchmate-layer-mirrored={mirrored ? 'true' : undefined}
+      data-lunchmate-translate-x={translateX}
+      data-lunchmate-translate-y={translateY}
       draggable={false}
       onError={() => setLoadFailed(true)}
       className="pointer-events-none absolute inset-0 h-full w-full select-none object-contain"
-      style={{ userSelect: 'none' }}
+      style={{
+        userSelect: 'none',
+        // v3 artwork is aligned on the full canvas. Mirroring is the only
+        // pose transform needed for sideRight; it does not resize eyewear.
+        transform: mirrored ? 'scaleX(-1)' : undefined,
+      }}
     />
   );
 }
@@ -140,6 +168,14 @@ export function resolveLunchmateAssetKey(
     default:
       return 'default';
   }
+}
+
+export function resolveLunchmateChickenAssetKey(
+  flowState: FoodieBuddyUiState,
+): LunchmateChickenAssetKey {
+  return flowState === 'submitting' || flowState === 'sharingAnimation'
+    ? 'feeding'
+    : 'idle';
 }
 
 export function resolveLunchmateRenderPlan(
@@ -196,11 +232,16 @@ export function motionForLunchmateState(
   };
 }
 
+type LunchmateRenderableAccessoryLayer = Exclude<LunchmateResolvedLayer, { layerName: 'base' }>
+  | LunchmatePoseResolvedLayer;
+
 function accessoryLayers(
-  layers: LunchmateResolvedLayer[],
+  layers: ReadonlyArray<LunchmateResolvedLayer | LunchmatePoseResolvedLayer>,
   layerNames: ReadonlySet<LunchmateResolvedLayer['layerName']>,
-) {
-  return layers.filter(layer => layerNames.has(layer.layerName));
+): LunchmateRenderableAccessoryLayer[] {
+  return layers.filter((layer): layer is LunchmateRenderableAccessoryLayer => (
+    layer.layerName !== 'base' && layerNames.has(layer.layerName)
+  ));
 }
 
 const BACK_LAYER_NAMES = new Set<LunchmateResolvedLayer['layerName']>(['bag-back', 'outfit-back']);
@@ -216,6 +257,9 @@ export default function LunchmateCharacterRenderer({
   fallback,
   loadout = EMPTY_LUNCHMATE_LOADOUT,
   animated = true,
+  artwork = 'classic',
+  chickenAssetKeyOverride,
+  onChickenImageLoad,
 }: LunchmateCharacterRendererProps) {
   const reducedMotion = useReducedMotion() ?? false;
   const renderPlan = useMemo(
@@ -223,6 +267,7 @@ export default function LunchmateCharacterRenderer({
     [animated, flowState, levelUpActive, loadout, renderSize],
   );
   const [facelessLoadFailed, setFacelessLoadFailed] = useState(false);
+  const [failedChickenSource, setFailedChickenSource] = useState<string | null>(null);
   const [legacyLoadFailed, setLegacyLoadFailed] = useState(false);
   const [displayedFaceState, setDisplayedFaceState] = useState<LunchmateFaceState>('default');
   const [faceLoadFailed, setFaceLoadFailed] = useState(false);
@@ -254,6 +299,12 @@ export default function LunchmateCharacterRenderer({
     };
   }, [renderPlan.faceState]);
 
+  useEffect(() => {
+    if (artwork !== 'chicken') return;
+    void loadAsset(lunchmateChickenAssets.idle);
+    void loadAsset(lunchmateChickenAssets.feeding);
+  }, [artwork]);
+
   const stateMotion = useMemo(
     () => motionForLunchmateState(
       renderPlan.motionState,
@@ -261,23 +312,36 @@ export default function LunchmateCharacterRenderer({
     ),
     [animated, reducedMotion, renderPlan.motionState],
   );
-  const backLayers = accessoryLayers(renderPlan.renderLayers, BACK_LAYER_NAMES);
-  const frontBodyLayers = accessoryLayers(renderPlan.renderLayers, FRONT_BODY_LAYER_NAMES);
-  const faceAccessoryLayers = accessoryLayers(renderPlan.renderLayers, FACE_ACCESSORY_LAYER_NAMES);
   const displayedFaceAsset = lunchmateFaceAssets[displayedFaceState];
   const effectAsset = renderPlan.effectId && animated
     ? lunchmateEffectAssets[renderPlan.effectId]
     : null;
   const legacyAsset = lunchmateStateAssets.default;
+  const chickenAssetKey = chickenAssetKeyOverride ?? resolveLunchmateChickenAssetKey(flowState);
+  const chickenAsset = lunchmateChickenAssets[chickenAssetKey];
+  const usesChickenArtwork = artwork === 'chicken'
+    && failedChickenSource !== chickenAsset.src;
+  const chickenCostumePose = resolveLunchmateChickenCostumePose(chickenAssetKey);
+  const chickenCostumeLayers = useMemo(
+    () => resolveLunchmateChickenCostumeRenderLayers(loadout, chickenCostumePose),
+    [chickenCostumePose, loadout],
+  );
+  const activeAccessoryLayers = usesChickenArtwork
+    ? chickenCostumeLayers
+    : renderPlan.renderLayers;
+  const backLayers = accessoryLayers(activeAccessoryLayers, BACK_LAYER_NAMES);
+  const frontBodyLayers = accessoryLayers(activeAccessoryLayers, FRONT_BODY_LAYER_NAMES);
+  const faceAccessoryLayers = accessoryLayers(activeAccessoryLayers, FACE_ACCESSORY_LAYER_NAMES);
 
-  const renderAccessories = (layers: LunchmateResolvedLayer[]) => layers.map(layer => (
-    layer.layerName === 'base' ? null : (
-      <LunchmateLayerImage
-        key={`${layer.layerName}:${layer.source.src}`}
-        source={layer.source}
-        layerName={layer.layerName}
-      />
-    )
+  const renderAccessories = (layers: LunchmateRenderableAccessoryLayer[]) => layers.map(layer => (
+    <LunchmateLayerImage
+      key={`${layer.layerName}:${layer.source.src}`}
+      source={layer.source}
+      layerName={layer.layerName}
+      mirrored={'mirrored' in layer ? layer.mirrored : false}
+      translateX={'translateX' in layer ? layer.translateX : 0}
+      translateY={'translateY' in layer ? layer.translateY : 0}
+    />
   ));
 
   return (
@@ -292,6 +356,8 @@ export default function LunchmateCharacterRenderer({
       data-lunchmate-face-state={renderPlan.faceState}
       data-lunchmate-motion-state={renderPlan.motionState}
       data-lunchmate-render-size={renderPlan.renderSize}
+      data-lunchmate-artwork={usesChickenArtwork ? 'chicken' : 'classic'}
+      data-lunchmate-chicken-asset={usesChickenArtwork ? chickenAssetKey : undefined}
     >
       <div
         className="relative h-full w-full overflow-visible"
@@ -299,7 +365,21 @@ export default function LunchmateCharacterRenderer({
       >
         {renderAccessories(backLayers)}
 
-        {facelessLoadFailed ? (
+        {usesChickenArtwork ? (
+          <img
+            src={chickenAsset.src}
+            srcSet={chickenAsset.srcSet}
+            alt={alt ?? '편안하게 서 있는 치킨 런치메이트'}
+            width={size}
+            height={size}
+            data-lunchmate-layer="chicken-base"
+            draggable={false}
+            onLoad={onChickenImageLoad}
+            onError={() => setFailedChickenSource(chickenAsset.src)}
+            className="pointer-events-none absolute inset-0 h-full w-full select-none object-contain opacity-100"
+            style={{ objectPosition: 'center bottom', userSelect: 'none', opacity: 1 }}
+          />
+        ) : facelessLoadFailed ? (
           legacyLoadFailed ? (
             <span
               className="absolute inset-0 flex h-full w-full items-center justify-center"
@@ -340,7 +420,7 @@ export default function LunchmateCharacterRenderer({
 
         {renderAccessories(frontBodyLayers)}
 
-        {!facelessLoadFailed && !faceLoadFailed && (
+        {!usesChickenArtwork && !facelessLoadFailed && !faceLoadFailed && (
           <img
             src={displayedFaceAsset.src}
             srcSet={displayedFaceAsset.srcSet}
@@ -362,7 +442,7 @@ export default function LunchmateCharacterRenderer({
 
         {renderAccessories(faceAccessoryLayers)}
 
-        {effectAsset && (
+        {!usesChickenArtwork && effectAsset && (
           <LunchmateLayerImage
             source={effectAsset}
             layerName="effect"
