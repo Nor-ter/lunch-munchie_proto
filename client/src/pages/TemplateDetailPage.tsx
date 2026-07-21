@@ -8,6 +8,7 @@ import { getTemplateById, getTemplateForCourse } from '@/constants/coursemapTemp
 import TemplateArtwork from '@/components/munchie/TemplateArtwork';
 import TemplateInfoSheet from '@/components/munchie/TemplateInfoSheet';
 import RestaurantDetailSheet from '@/components/munchie/RestaurantDetailSheet';
+import OneLineReviewBox from '@/components/munchie/OneLineReviewBox';
 
 export default function TemplateDetailPage() {
   const { templateId } = useParams<{ templateId: string }>();
@@ -27,8 +28,14 @@ export default function TemplateDetailPage() {
   } = useApp();
   const searchParams = new URLSearchParams(search);
   const courseId = searchParams.get('course') ?? undefined;
-  const source = searchParams.get('from') === 'profile' ? 'profile' : 'feed';
-  const backPath = source === 'profile' ? '/profile' : '/feed?tab=template';
+  const sourceParam = searchParams.get('from');
+  const source = sourceParam === 'profile' || sourceParam === 'saved' ? sourceParam : 'feed';
+  const backPath = source === 'profile' ? '/profile' : source === 'saved' ? '/saved' : '/feed?tab=template';
+  const backLabel = source === 'profile'
+    ? '프로필로 돌아가기'
+    : source === 'saved'
+      ? '저장목록으로 돌아가기'
+      : '템플릿 목록으로 돌아가기';
   const linkedPost = courseId ? feedPosts.find(post => post.courseId === courseId) : undefined;
   const linkedCourse = courseId ? getCourseById(courseId) : undefined;
   const fallbackCourse: Course | undefined = courseId && linkedPost ? {
@@ -47,6 +54,7 @@ export default function TemplateDetailPage() {
     savedCount: 0,
   } : undefined;
   const course = linkedCourse ?? fallbackCourse;
+  const authorReview = linkedPost?.caption.trim() || course?.description.trim() || '';
   const fallbackTemplateIndex = Math.max(feedPosts.findIndex(post => post.courseId === courseId), 0);
   const template = getTemplateById(templateId) ?? (course ? getTemplateForCourse(course.id, fallbackTemplateIndex) : undefined);
   const isSaved = course ? savedCourseIds.includes(course.id) : false;
@@ -79,7 +87,7 @@ export default function TemplateDetailPage() {
             onClick={() => navigate(backPath)}
             className="mt-4 h-11 rounded-full bg-[#E85053] px-6 text-[14px] font-bold text-white"
           >
-            {source === 'profile' ? '프로필로' : '템플릿 목록으로'}
+            {source === 'profile' ? '프로필로' : source === 'saved' ? '저장목록으로' : '템플릿 목록으로'}
           </button>
         </div>
       </main>
@@ -106,7 +114,7 @@ export default function TemplateDetailPage() {
         <div className="flex w-[84px] justify-start">
           <button
             onClick={() => navigate(backPath)}
-            aria-label={source === 'profile' ? '프로필로 돌아가기' : '템플릿 목록으로 돌아가기'}
+            aria-label={backLabel}
             className="flex h-10 w-10 items-center justify-center rounded-full bg-white shadow-sm"
           >
             <ChevronLeft size={20} />
@@ -160,7 +168,6 @@ export default function TemplateDetailPage() {
           ))}
         </div>
         <h1 className="text-[23px] font-bold leading-tight text-[#2D211C]">{course.title}</h1>
-        <p className="mt-2 text-[13px] leading-relaxed text-[#8C776B]">{course.description}</p>
         <div className="mt-4 flex gap-4 border-y border-[#EADFD8] py-3 text-[12px] font-semibold text-[#5E4B42]">
           <span className="flex items-center gap-1.5"><MapPin size={14} color="#E85053" />{course.region}</span>
           <span className="flex items-center gap-1.5"><Clock3 size={14} color="#E85053" />{Math.floor(course.metadata.duration / 60)}시간</span>
@@ -168,7 +175,16 @@ export default function TemplateDetailPage() {
         </div>
       </section>
 
-      <section className="px-5 pt-3">
+      {authorReview && (
+        <section data-ui="template-author-review" className="px-5 pt-3">
+          <p className="mb-1.5 text-[10px] font-black tracking-[0.08em] text-[#B89E91]">작성자의 한줄평</p>
+          <OneLineReviewBox slim>
+            <p className="truncate text-[12px] font-bold leading-5 text-[#3B2A23]">{authorReview}</p>
+          </OneLineReviewBox>
+        </section>
+      )}
+
+      <section data-ui="places-in-template" className="px-5 pt-4">
         <div className="mb-3 flex items-end justify-between">
           <div>
             <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-[#C2AFA4]">Places in template</p>
@@ -241,7 +257,7 @@ export default function TemplateDetailPage() {
       <section className="px-5 pt-5">
         <button
           type="button"
-          onClick={() => navigate(`/course/${course.id}/feeds?from=template-detail&template=${template.id}${source === 'profile' ? '&templateFrom=profile' : ''}`)}
+          onClick={() => navigate(`/course/${course.id}/feeds?from=template-detail&template=${template.id}&templateFrom=${source}`)}
           className="flex w-full items-center gap-3 rounded-2xl border border-[#F2D8D3] bg-white p-3.5 text-left shadow-[0_4px_16px_rgba(91,57,42,0.06)] active:scale-[0.99]"
         >
           <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-[#FDE1E1] text-[#D94447]">
@@ -271,7 +287,7 @@ export default function TemplateDetailPage() {
           <Bookmark size={19} fill={isSaved ? 'currentColor' : 'none'} />
         </button>
         <button
-          onClick={() => navigate(`/course/${course.id}?from=template-detail&template=${template.id}${source === 'profile' ? '&templateFrom=profile' : ''}`)}
+          onClick={() => navigate(`/course/${course.id}?from=template-detail&template=${template.id}&templateFrom=${source}`)}
           className="flex h-13 flex-1 items-center justify-center gap-2 rounded-2xl bg-[#E85053] text-[15px] font-bold text-white shadow-[0_8px_20px_rgba(232,80,83,0.25)] active:scale-[0.99]"
         >
           상세 코스 보기 <ChevronRight size={18} />

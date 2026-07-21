@@ -2,17 +2,17 @@
  * Lunchie Munchie — My Profile
  * 스크랩북 프로필: 내가 만든 코스맵 템플릿 + 내가 쓴 피드를 한눈에 보고 관리한다.
  * - 나의 코스맵: 스킨 카드 그리드, 좋아요 순/최신 순 정렬, 탭하면 상세(편집 가능)
- * - 나의 피드: 수정(한줄평/스킨)·삭제, 악성 댓글 숨기기(메인 피드에 일괄 반영)
+ * - 나의 피드: 홈과 동일한 요약 카드, 상세 화면에서 댓글·수정 관리
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useLocation } from 'wouter';
 import {
-  Menu, MessageCircle, Pencil, EyeOff, Eye, ChevronDown, ChevronUp, X, Camera, Upload,
+  Menu, X, Camera, Upload,
   LogIn, LogOut,
 } from 'lucide-react';
 import { toast } from 'sonner';
-import { useApp, isFeedCommentHidden, type FeedPost } from '@/contexts/AppContext';
+import { useApp, type FeedPost } from '@/contexts/AppContext';
 import { useAuth } from '@/contexts/AuthContext';
 import { fileToResizedDataUrl } from '@/lib/imageUtils';
 import UnifiedMunchieCard from '@/components/munchie/UnifiedMunchieCard';
@@ -92,85 +92,8 @@ function Avatar({ photo, emoji, size }: { photo?: string; emoji: string; size: n
 
 // ── 내 피드 관리 아이템 ───────────────────────────────────────────────────────
 
-function MyFeedItem({
-  post,
-  onEdit,
-}: {
-  post: FeedPost;
-  onEdit: (post: FeedPost) => void;
-}) {
-  const { toggleCommentHidden } = useApp();
-  const [showComments, setShowComments] = useState(false);
-  const visibleCount = post.comments.filter(c => !isFeedCommentHidden(c)).length;
-  const hiddenCount = post.comments.length - visibleCount;
-
-  return (
-    <div className="space-y-2">
-      {/* 메인 먼치피드와 동일한 통합 카드 형식을 그대로 사용한다. */}
-      <UnifiedMunchieCard post={post} compact />
-
-      {/* Actions */}
-      <div className="flex overflow-hidden rounded-xl border border-[#F0D4CA] bg-[#FFF8F4] text-[10px] font-semibold">
-        <button onClick={() => onEdit(post)} className="flex h-9 flex-1 items-center justify-center gap-1 text-[#D94449] active:bg-[#FFE9E2]">
-          <Pencil size={11} /> 수정
-        </button>
-        <button
-          onClick={() => setShowComments(v => !v)}
-          className="flex h-9 flex-1 items-center justify-center gap-1 border-l border-[#F0D4CA] active:bg-[#FFE9E2]"
-          style={{ color: hiddenCount > 0 ? '#E85053' : '#4A4A4A' }}
-        >
-          <MessageCircle size={11} /> 댓글 ({post.comments.length})
-          {showComments ? <ChevronUp size={10} /> : <ChevronDown size={10} />}
-        </button>
-      </div>
-
-      {/* 댓글 관리: 숨기기 토글 → 메인 먼치피드에서 일괄 미노출 */}
-      <AnimatePresence>
-        {showComments && (
-          <motion.div
-            initial={{ height: 0 }}
-            animate={{ height: 'auto' }}
-            exit={{ height: 0 }}
-            className="overflow-hidden rounded-2xl border border-[#F0D4CA] bg-[#FFF8F4]"
-          >
-            <div className="p-3 space-y-2">
-              {post.comments.length === 0 && (
-                <p className="text-[12px] text-[#9B9B9B] text-center py-2">아직 댓글이 없어요</p>
-              )}
-              {post.comments.map(c => (
-                <div key={c.id} className="flex items-start gap-2">
-                  <span className="text-[14px] shrink-0">{c.authorEmoji}</span>
-                  <p
-                    className={`min-w-0 flex-1 text-[12px] leading-snug ${c.hidden ? 'line-through' : ''}`}
-                    style={{ color: c.hidden ? '#B8AFA6' : '#1A1A1A' }}
-                  >
-                    <b className="mr-1">{c.authorName}</b>
-                    {c.text}
-                    {c.hidden && (
-                      <span className="ml-1.5 rounded-full bg-[#EFE7DF] px-1.5 py-0.5 text-[10px] no-underline text-[#8A7A6C]" style={{ textDecoration: 'none', display: 'inline-block' }}>
-                        숨김
-                      </span>
-                    )}
-                  </p>
-                  <button
-                    onClick={() => {
-                      toggleCommentHidden(post.id, c.id);
-                      toast(c.hidden ? '댓글을 다시 표시해요 👀' : '댓글을 숨겼어요 — 메인 피드에 일괄 적용됩니다 🙈');
-                    }}
-                    className="shrink-0 w-7 h-7 rounded-full flex items-center justify-center active:scale-90 transition-transform"
-                    style={{ background: c.hidden ? '#EFE7DF' : '#FBECEC', color: c.hidden ? '#8A7A6C' : '#D83A3D' }}
-                    aria-label={c.hidden ? '댓글 표시' : '댓글 숨기기'}
-                  >
-                    {c.hidden ? <Eye size={13} /> : <EyeOff size={13} />}
-                  </button>
-                </div>
-              ))}
-            </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
-    </div>
-  );
+function MyFeedItem({ post }: { post: FeedPost }) {
+  return <UnifiedMunchieCard post={post} compact homeSummary detailOrigin="profile" />;
 }
 
 // ── ProfilePage ───────────────────────────────────────────────────────────────
@@ -424,11 +347,7 @@ export default function ProfilePage() {
         ) : (
           <div className="grid grid-cols-2 items-start gap-3">
             {myPosts.map(post => (
-              <MyFeedItem
-                key={post.id}
-                post={post}
-                onEdit={(item) => navigate(`/feed/${item.id}/edit?from=profile`)}
-              />
+              <MyFeedItem key={post.id} post={post} />
             ))}
           </div>
         )}

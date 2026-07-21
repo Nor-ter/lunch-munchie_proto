@@ -163,7 +163,7 @@ export default function SavedPage() {
             <div className="grid grid-cols-2 items-start gap-3 pb-4">
               {filteredPosts.map(post => (
                 <div key={post.id} className="relative min-w-0">
-                  <UnifiedMunchieCard post={post} compact />
+                  <UnifiedMunchieCard post={post} compact homeSummary detailOrigin="saved" />
                   <button
                     type="button"
                     onClick={() => unsaveCourse(post.courseId)}

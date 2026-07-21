@@ -18,7 +18,7 @@ export interface PlacedPhoto {
 }
 
 const DECOR_KEY = 'lm_coursemap_decor';
-const MAX_COURSEMAP_PHOTOS = 3;
+export const MAX_MUNCHIE_FEED_PHOTOS = 6;
 
 function readAll(): Record<string, PlacedPhoto[]> {
   try {
@@ -30,13 +30,13 @@ function readAll(): Record<string, PlacedPhoto[]> {
 
 export function getCoursemapDecor(courseId: string): PlacedPhoto[] | null {
   const decor = readAll()[courseId];
-  return decor && decor.length > 0 ? decor.slice(0, MAX_COURSEMAP_PHOTOS) : null;
+  return decor && decor.length > 0 ? decor.slice(0, MAX_MUNCHIE_FEED_PHOTOS) : null;
 }
 
 export function saveCoursemapDecor(courseId: string, placed: PlacedPhoto[]) {
   try {
     const all = readAll();
-    all[courseId] = placed.slice(0, MAX_COURSEMAP_PHOTOS);
+    all[courseId] = placed.slice(0, MAX_MUNCHIE_FEED_PHOTOS);
     localStorage.setItem(DECOR_KEY, JSON.stringify(all));
   } catch {
     /* 대용량 dataURL로 저장 실패해도 게시 흐름은 계속 진행 */

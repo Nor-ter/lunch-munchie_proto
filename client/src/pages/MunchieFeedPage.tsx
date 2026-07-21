@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { createPortal } from 'react-dom';
 import { AnimatePresence, motion } from 'framer-motion';
-import { Palette, MapPinned, PenLine, Settings2 } from 'lucide-react';
+import { Palette, PenLine, Settings2 } from 'lucide-react';
 import { useLocation } from 'wouter';
 import { FOOD_FILTER_TAGS, hasFoodTag } from '@/constants/foodTags';
 import { getCourseTagStyle } from '@/constants/courseTheme';
@@ -18,12 +18,11 @@ export default function MunchieFeedPage() {
 
   return (
     <div className="min-h-dvh bg-[#FFF7F2] pb-28">
-      <header className="sticky top-0 z-30 border-b-2 border-[#EAD7CE] bg-[#FFFDFC] px-4 pb-3 pt-8">
+      <header className="sticky top-0 z-30 border-b border-[#EAD7CE] bg-[#FFFDFC] px-4 pb-3 pt-8">
         <div className="flex items-start justify-between gap-4">
           <div>
-            <p className="text-[9px] font-black uppercase tracking-[0.2em] text-[#FF4D57]">Lunchie Munchie</p>
-            <h1 className="mt-1 text-[25px] font-black leading-none tracking-[-0.03em] text-[#30231E]">MUNCHIE FEED</h1>
-            <p className="mt-1.5 text-[11px] font-semibold text-[#8D776C]">한줄평과 코스맵을 함께 보는 피드</p>
+            <h1 className="text-[25px] font-black leading-none tracking-[-0.03em] text-[#30231E]">MUNCHIE FEED</h1>
+            <p className="mt-2 text-[11px] font-semibold text-[#8D776C]">다녀온 맛집 Munchie 피드를 함께 공유해요</p>
           </div>
           <div className="flex gap-2">
             <button
@@ -65,21 +64,6 @@ export default function MunchieFeedPage() {
       </header>
 
       <main className="space-y-4 px-3 py-4">
-        <button
-          type="button"
-          onClick={() => navigate('/explore/places')}
-          className="flex w-full items-center gap-3 rounded-[18px] border-2 border-[#E6CFC3] bg-[#FFFDFC] px-4 py-3 text-left shadow-[0_7px_18px_rgba(72,45,32,0.05)]"
-        >
-          <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-[#FFF0EA] text-[#F25055]">
-            <MapPinned size={19} />
-          </span>
-          <span className="min-w-0 flex-1">
-            <span className="block text-[12px] font-black text-[#362720]">새로운 맛집 기록을 남겨볼까요?</span>
-            <span className="mt-0.5 block text-[10px] font-semibold text-[#A08B80]">장소·사진·한줄평을 한 번에 기록해보세요</span>
-          </span>
-          <span className="text-[18px] text-[#F25055]">→</span>
-        </button>
-
         <AnimatePresence mode="popLayout">
           {filteredPosts.map(post => (
             <motion.div
@@ -97,8 +81,8 @@ export default function MunchieFeedPage() {
         {filteredPosts.length === 0 && (
           <div className="rounded-[26px] border border-dashed border-[#DCCBC0] bg-white px-6 py-16 text-center">
             <div className="mb-3 text-5xl">🍽️</div>
-            <p className="text-[16px] font-black text-[#2D211C]">아직 코스피드가 없어요</p>
-            <p className="mt-1 text-[12px] font-semibold text-[#9A8579]">첫 번째 한줄평과 코스맵을 만들어보세요</p>
+            <p className="text-[16px] font-black text-[#2D211C]">아직 Munchie 피드가 없어요</p>
+            <p className="mt-1 text-[12px] font-semibold text-[#9A8579]">첫 번째 Munchie 피드를 만들어보세요</p>
           </div>
         )}
       </main>

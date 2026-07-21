@@ -3,16 +3,12 @@ import type { CoursemapTemplate } from '@/constants/coursemapTemplates';
 import { getCoursePlacesFromStops } from '@/lib/courseMapSync';
 import { getCoursemapDecor } from '@/lib/coursemapDecor';
 import type { PlacedPhoto } from '@/lib/coursemapDecor';
-import {
-  FruitCharacterWithBubble,
-  fruitForStop,
-  useSequentialIndex,
-} from '@/components/munchie/FruitCharacter';
+import { TemplateBackgroundLayer, TemplateFrameLayer } from '@/components/munchie/TemplateLayers';
 
 /**
  * 카드와 상세 페이지에서 동일한 템플릿 결과물을 렌더링한다.
- * 4:3 규격(세로 3:4 캔버스) — 최대 3개 장소, 각 장소 상단에 과일 캐릭터가 앉아
- * 말풍선으로 음식점 이름을 순차적으로 보여준다.
+ * 4:3 규격(세로 3:4 캔버스) 안에 작성자가 배치한 사진을 보여준다.
+ * 먼치피드의 모든 유형에서 과일 캐릭터 오버레이는 사용하지 않는다.
  */
 export default function TemplateArtwork({
   course,
@@ -40,7 +36,6 @@ export default function TemplateArtwork({
   // 만들기 플로우에서 직접 꾸민 배치가 있으면 그 배치를 그대로 재현한다
   const decor = decorOverride ?? getCoursemapDecor(course.id);
   const slots = template.slots.slice(0, Math.min(Math.max(places.length, photos.length, 1), 3));
-  const activeStop = useSequentialIndex(decor ? Math.min(decor.length, 3) : slots.length);
 
   // 슬롯 중심을 잇는 점선 루트 (viewBox 300×400 = 3:4)
   const routePoints = slots
@@ -49,24 +44,18 @@ export default function TemplateArtwork({
 
   return (
     <div
-      className={`relative w-full overflow-hidden bg-[#F1E7DE] ${className}`}
+      className={`relative isolate w-full overflow-hidden bg-[#F1E7DE] ${className}`}
       style={{ aspectRatio: '3 / 4' }}
     >
-      <img
-        src={template.image}
-        alt={`${template.name} 코스피드 배경`}
-        className="absolute inset-0 h-full w-full object-cover"
-        draggable={false}
-        loading={eager ? 'eager' : 'lazy'}
-      />
+      <TemplateBackgroundLayer template={template} loading={eager ? 'eager' : 'lazy'} />
 
       {decor ? (
         /* ── 유저가 직접 꾸민 배치 재현 ── */
         <>
-          {decor.slice(0, 3).map((photo, index) => (
+          {decor.map(photo => (
             <div
               key={photo.id}
-              className="absolute"
+              className="absolute z-10"
               style={{
                 left: `${photo.x}%`,
                 top: `${photo.y}%`,
@@ -84,16 +73,6 @@ export default function TemplateArtwork({
                   loading={eager ? 'eager' : 'lazy'}
                 />
               </div>
-              {index < 3 && places[index] && (
-                <span className="absolute -top-4 left-1/2 z-10 -translate-x-1/2">
-                  <FruitCharacterWithBubble
-                    kind={fruitForStop(index)}
-                    label={places[index]?.name ?? ''}
-                    active={activeStop === index}
-                    size={30}
-                  />
-                </span>
-              )}
             </div>
           ))}
         </>
@@ -103,7 +82,7 @@ export default function TemplateArtwork({
         <svg
           viewBox="0 0 300 400"
           preserveAspectRatio="none"
-          className="absolute inset-0 h-full w-full"
+          className="absolute inset-0 z-10 h-full w-full"
           aria-hidden="true"
         >
           <polyline
@@ -118,11 +97,10 @@ export default function TemplateArtwork({
       )}
 
       {slots.map((slot, index) => {
-        const place = places[index];
         return (
           <div
             key={index}
-            className="absolute"
+            className="absolute z-10"
             style={{
               left: `${slot.left}%`,
               top: `${slot.top}%`,
@@ -143,22 +121,13 @@ export default function TemplateArtwork({
                 loading={eager ? 'eager' : 'lazy'}
               />
             </div>
-            {/* 각 음식점 상단의 과일 캐릭터 + 말풍선 */}
-            {place && (
-              <span className="absolute -top-4 left-1/2 z-10 -translate-x-1/2">
-                <FruitCharacterWithBubble
-                  kind={fruitForStop(index)}
-                  label={place.name}
-                  active={activeStop === index}
-                  size={34}
-                />
-              </span>
-            )}
           </div>
         );
       })}
         </>
       )}
+
+      <TemplateFrameLayer template={template} loading={eager ? 'eager' : 'lazy'} />
 
     </div>
   );

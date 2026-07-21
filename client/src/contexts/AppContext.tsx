@@ -9,6 +9,7 @@ import { normalizeDiet, isHardRestriction, type DietTag } from '@shared/const';
 import { intentForHour, type Intent } from '@shared/intent';
 import { normalizeFoodTag, type TagType } from '@/constants/foodTags';
 import { supabase, ensureAnonymousSession } from '@/lib/supabase';
+import { MAX_MUNCHIE_FEED_PHOTOS } from '@/lib/coursemapDecor';
 import type { LunchmateProfileLoadout } from '@/types/lunchmateCustomization';
 import {
   normalizeLunchmateOwnedItemIds,
@@ -193,6 +194,7 @@ export interface FeedComment {
   dislikes?: number;
   myReaction?: 'like' | 'dislike';
   reported?: boolean;
+  parentId?: string;
 }
 
 /** 과거 로컬 저장 데이터의 문자열/숫자 값까지 포함해 숨김 상태를 일관되게 판정한다. */
@@ -614,7 +616,7 @@ interface AppContextValue {
   dislikedFeedIds: string[];
   toggleFeedLike: (postId: string) => void;
   toggleFeedDislike: (postId: string) => void;
-  addFeedComment: (postId: string, text: string) => void;
+  addFeedComment: (postId: string, text: string, parentId?: string) => void;
   reactToFeedComment: (postId: string, commentId: string, reaction: 'like' | 'dislike') => void;
   reportFeedComment: (postId: string, commentId: string) => void;
   /** 내 게시물의 악성 댓글 숨김 토글 — 메인 피드에 일괄 반영 */
@@ -910,7 +912,7 @@ export function AppProvider({
             ? initialAuthUserId ?? p.authorId
             : p.authorId,
           tags: p.tags.map(tag => normalizeFoodTag(tag)),
-          photos: p.photos.slice(0, MAX_COURSE_STOPS),
+          photos: p.photos.slice(0, MAX_MUNCHIE_FEED_PHOTOS),
           comments: Array.isArray(p.comments) ? p.comments : [],
           dislikes: p.dislikes ?? 0,
         }));
@@ -919,7 +921,7 @@ export function AppProvider({
     return MOCK_FEED_POSTS.map((post, index) => ({
       ...post,
       ...(index === 0 && initialAuthUserId ? { authorId: initialAuthUserId } : {}),
-      photos: post.photos.slice(0, MAX_COURSE_STOPS),
+      photos: post.photos.slice(0, MAX_MUNCHIE_FEED_PHOTOS),
     }));
   });
 
@@ -1068,7 +1070,7 @@ export function AppProvider({
   const addFeedPost = useCallback((post: Omit<FeedPost, 'id' | 'likes' | 'saves' | 'comments' | 'createdAt'>) => {
     const full: FeedPost = {
       ...post,
-      photos: post.photos.slice(0, MAX_COURSE_STOPS),
+      photos: post.photos.slice(0, MAX_MUNCHIE_FEED_PHOTOS),
       id: `f_${Date.now()}`,
       likes: 0,
       dislikes: 0,
@@ -1082,7 +1084,7 @@ export function AppProvider({
 
   const updateFeedPost = useCallback((postId: string, updates: Partial<Pick<FeedPost, 'courseId' | 'caption' | 'skinId' | 'photos' | 'tags'>>) => {
     setFeedPosts(posts => posts.map(p => p.id === postId
-      ? { ...p, ...updates, photos: (updates.photos ?? p.photos).slice(0, MAX_COURSE_STOPS) }
+      ? { ...p, ...updates, photos: (updates.photos ?? p.photos).slice(0, MAX_MUNCHIE_FEED_PHOTOS) }
       : p));
   }, []);
 
@@ -1130,7 +1132,7 @@ export function AppProvider({
     });
   }, [likedFeedIds]);
 
-  const addFeedComment = useCallback((postId: string, text: string) => {
+  const addFeedComment = useCallback((postId: string, text: string, parentId?: string) => {
     const comment: FeedComment = {
       id: `cm_${Date.now()}`,
       authorName: profile.name,
@@ -1139,6 +1141,7 @@ export function AppProvider({
       createdAt: new Date().toISOString(),
       likes: 0,
       dislikes: 0,
+      parentId,
     };
     setFeedPosts(posts => posts.map(p =>
       p.id === postId ? { ...p, comments: [...p.comments, comment] } : p,

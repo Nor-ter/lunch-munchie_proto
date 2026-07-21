@@ -14,6 +14,8 @@ export default function CourseFeedsPage() {
   const { getCourseById, feedPosts } = useApp();
   const [sortMode, setSortMode] = useState<SortMode>('latest');
   const course = id ? getCourseById(id) : undefined;
+  const templateFrom = new URLSearchParams(search).get('templateFrom');
+  const detailOrigin = templateFrom === 'profile' || templateFrom === 'saved' ? templateFrom : 'feed';
   const backPath = `/course/${id}${search ? `?${search}` : ''}`;
   const posts = useMemo(() => feedPosts
     .filter(post => post.courseId === id)
@@ -52,7 +54,7 @@ export default function CourseFeedsPage() {
         </button>
         <div className="flex items-center gap-2 text-[#D94447]">
           <MessageCircle size={16} />
-          <p className="text-[11px] font-bold uppercase tracking-[0.16em]">Course feed</p>
+          <p className="text-[11px] font-bold uppercase tracking-[0.16em]">Munchie feed</p>
         </div>
         <h1 className="mt-2 text-[25px] font-black leading-tight text-[#2D211C]">이 코스로 만든 피드</h1>
         <p className="mt-1 line-clamp-2 text-[14px] font-bold text-[#6C574C]">{courseTitle}</p>
@@ -91,7 +93,7 @@ export default function CourseFeedsPage() {
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: Math.min(index * 0.04, 0.28) }}
               >
-                <UnifiedMunchieCard post={post} />
+                <UnifiedMunchieCard post={post} detailOrigin={detailOrigin} />
               </motion.article>
             ))}
           </section>

@@ -25,6 +25,8 @@ export interface CoursemapTemplate {
   bestFor: string;
   /** 최대 3개 — 코스 1·2·3번 장소가 순서대로 채워진다 */
   slots: TemplateSlot[];
+  /** 완전 불투명 프레임에서 중앙 사진 영역만 뚫기 위한 안쪽 경계(%) */
+  frameInset: { top: number; right: number; bottom: number; left: number };
 }
 
 export const COURSEMAP_TEMPLATES: CoursemapTemplate[] = [
@@ -34,6 +36,7 @@ export const COURSEMAP_TEMPLATES: CoursemapTemplate[] = [
     image: '/templates4_3/temp1.jpg',
     description: '네잎클로버와 무지개가 가득한 lucky day 스크랩북 프레임이에요.',
     bestFor: '데이트 · 소풍 · 기분 좋은 하루',
+    frameInset: { top: 18, right: 22, bottom: 16, left: 24 },
     slots: [
       { left: 22, top: 15, width: 40, height: 22, rotate: -3 },
       { left: 42, top: 40, width: 40, height: 22, rotate: 2 },
@@ -46,6 +49,7 @@ export const COURSEMAP_TEMPLATES: CoursemapTemplate[] = [
     image: '/templates4_3/temp2.jpg',
     description: '딸기잼과 체리 라벨이 붙은 새콤달콤 컨트리 프레임이에요.',
     bestFor: '디저트 투어 · 카페 · 달콤한 코스',
+    frameInset: { top: 17, right: 20, bottom: 18, left: 21 },
     slots: [
       { left: 24, top: 14, width: 40, height: 22, rotate: 2 },
       { left: 40, top: 39, width: 40, height: 22, rotate: -3 },
@@ -58,6 +62,7 @@ export const COURSEMAP_TEMPLATES: CoursemapTemplate[] = [
     image: '/templates4_3/temp3.jpg',
     description: '체크 식탁보 위에 단추와 리본을 수놓은 빈티지 피크닉 프레임이에요.',
     bestFor: '맛집 투어 · 브런치 · 레트로 감성',
+    frameInset: { top: 16, right: 18, bottom: 17, left: 18 },
     slots: [
       { left: 25, top: 15, width: 40, height: 22, rotate: -2 },
       { left: 41, top: 40, width: 40, height: 22, rotate: 3 },
@@ -70,6 +75,7 @@ export const COURSEMAP_TEMPLATES: CoursemapTemplate[] = [
     image: '/templates4_3/temp4.jpg',
     description: 'GOOD DAY 티켓과 데님 패치가 붙은 차분한 블루 프레임이에요.',
     bestFor: '혼자 여행 · 전시 · 시티 투어',
+    frameInset: { top: 17, right: 19, bottom: 17, left: 18 },
     slots: [
       { left: 22, top: 13, width: 40, height: 22, rotate: 2 },
       { left: 40, top: 38, width: 40, height: 22, rotate: -2 },
@@ -82,6 +88,7 @@ export const COURSEMAP_TEMPLATES: CoursemapTemplate[] = [
     image: '/templates4_3/temp5.jpg',
     description: 'Collect beautiful moments — 잔잔한 라벤더 기록장 프레임이에요.',
     bestFor: '감성 코스 · 북카페 · 조용한 하루',
+    frameInset: { top: 18, right: 18, bottom: 18, left: 18 },
     slots: [
       { left: 23, top: 17, width: 40, height: 22, rotate: -2 },
       { left: 40, top: 41, width: 40, height: 22, rotate: 2 },
@@ -94,6 +101,7 @@ export const COURSEMAP_TEMPLATES: CoursemapTemplate[] = [
     image: '/templates4_3/temp6.jpg',
     description: 'Be happy! 스마일과 별이 톡톡 튀는 팝 핑크 프레임이에요.',
     bestFor: '액티비티 · 생일 · 신나는 코스',
+    frameInset: { top: 18, right: 20, bottom: 18, left: 21 },
     slots: [
       { left: 23, top: 13, width: 40, height: 22, rotate: 3 },
       { left: 40, top: 38, width: 40, height: 22, rotate: -2 },

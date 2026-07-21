@@ -12,7 +12,7 @@ import { AnimatePresence, motion } from 'framer-motion';
 import { useLocation, useSearch } from 'wouter';
 import {
   Camera, ChevronLeft, ChevronRight, Minus, Pencil, Plus,
-  RotateCw, Search, Share2, Trash2, Type, X, Highlighter, Wand2,
+  RotateCcw, RotateCw, Search, Share2, Trash2, Type, X, Highlighter, Wand2,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { useApp, type Course, type FeedPost, type Restaurant } from '@/contexts/AppContext';
@@ -21,12 +21,13 @@ import {
   setTemplateForCourse,
   type CoursemapTemplate,
 } from '@/constants/coursemapTemplates';
-import { saveCoursemapDecor, type PlacedPhoto } from '@/lib/coursemapDecor';
+import { MAX_MUNCHIE_FEED_PHOTOS, saveCoursemapDecor, type PlacedPhoto } from '@/lib/coursemapDecor';
 import { getCourseMapPoints, getCurvedCourseSegments } from '@/lib/courseMapSync';
 import FruitCharacter, { FRUIT_SEQUENCE, fruitForStop } from '@/components/munchie/FruitCharacter';
 import { fileToResizedDataUrl } from '@/lib/imageUtils';
 import OneLineReviewBox from '@/components/munchie/OneLineReviewBox';
 import UnifiedMunchieCard from '@/components/munchie/UnifiedMunchieCard';
+import { TemplateBackgroundLayer, TemplateFrameLayer } from '@/components/munchie/TemplateLayers';
 
 const STEP_TITLES = [
   '코스맵을 정하세요',
@@ -470,8 +471,8 @@ function DecorateStep({
   } | null>(null);
 
   const addToCanvas = (src: string) => {
-    if (placed.length >= MAX_PINS) {
-      toast.info(`코스맵 사진은 최대 ${MAX_PINS}장까지 사용할 수 있어요`);
+    if (placed.length >= MAX_MUNCHIE_FEED_PHOTOS) {
+      toast.info(`Munchie 피드 사진은 최대 ${MAX_MUNCHIE_FEED_PHOTOS}장까지 사용할 수 있어요`);
       return;
     }
     const id = `placed_${Date.now()}_${Math.round(Math.random() * 999)}`;
@@ -515,7 +516,7 @@ function DecorateStep({
   };
 
   const handleUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
-    const files = Array.from(event.target.files ?? []).slice(0, Math.max(0, MAX_PINS - placed.length));
+    const files = Array.from(event.target.files ?? []).slice(0, Math.max(0, MAX_MUNCHIE_FEED_PHOTOS - placed.length));
     event.target.value = '';
     for (const file of files) {
       try {
@@ -531,17 +532,24 @@ function DecorateStep({
 
   return (
     <div>
+      <div className="mb-2 flex items-end justify-between">
+        <div>
+          <p className="text-[13px] font-black text-[#3B2A22]">템플릿에서 바로 편집</p>
+          <p className="mt-0.5 text-[10px] text-[#9A8579]">사진을 선택하고 끌어서 위치를 옮겨보세요.</p>
+        </div>
+        <span className="text-[10px] font-bold text-[#D76A68]">{placed.length}/{MAX_MUNCHIE_FEED_PHOTOS}</span>
+      </div>
       {/* 캔버스 — 템플릿 + 배치된 사진 */}
       <div
         ref={canvasRef}
-        className="relative mx-auto w-full max-w-[330px] touch-none select-none overflow-hidden rounded-2xl border border-[#E8DED4] shadow-sm"
+        className="relative isolate mx-auto w-full max-w-[330px] touch-none select-none overflow-hidden rounded-2xl border border-[#E8DED4] shadow-sm"
         style={{ aspectRatio: '3/4' }}
         onPointerMove={handlePointerMove}
         onPointerUp={() => { dragState.current = null; resizeState.current = null; }}
         onPointerLeave={() => { dragState.current = null; resizeState.current = null; }}
         onClick={() => setSelectedId(null)}
       >
-        <img src={template.image} alt={template.name} className="absolute inset-0 h-full w-full object-cover" draggable={false} />
+        <TemplateBackgroundLayer template={template} loading="eager" />
         {placed.map((photo, index) => (
           <div
             key={photo.id}
@@ -604,6 +612,7 @@ function DecorateStep({
             아래 사진을 눌러 템플릿 위에 올린 뒤<br />drag & drop으로 꾸며보세요
           </p>
         )}
+        <TemplateFrameLayer template={template} loading="eager" />
       </div>
 
       {/* 선택된 사진 컨트롤 — 크기 조정 · 회전 · 에디터 · 삭제 */}
@@ -617,7 +626,8 @@ function DecorateStep({
           >
             <button type="button" onClick={() => updateSelected(p => ({ w: Math.max(16, p.w - 4) }))} aria-label="작게" className="flex h-8 w-8 items-center justify-center rounded-full bg-[#FFF4EF] text-[#3B2A22] active:scale-90"><Minus size={14} /></button>
             <button type="button" onClick={() => updateSelected(p => ({ w: Math.min(70, p.w + 4) }))} aria-label="크게" className="flex h-8 w-8 items-center justify-center rounded-full bg-[#FFF4EF] text-[#3B2A22] active:scale-90"><Plus size={14} /></button>
-            <button type="button" onClick={() => updateSelected(p => ({ rotate: p.rotate + 15 }))} aria-label="회전" className="flex h-8 w-8 items-center justify-center rounded-full bg-[#FFF4EF] text-[#3B2A22] active:scale-90"><RotateCw size={14} /></button>
+            <button type="button" onClick={() => updateSelected(p => ({ rotate: p.rotate - 15 }))} aria-label="사진 반시계 방향 회전" className="flex h-8 w-8 items-center justify-center rounded-full bg-[#FFF4EF] text-[#3B2A22] active:scale-90"><RotateCcw size={14} /></button>
+            <button type="button" onClick={() => updateSelected(p => ({ rotate: p.rotate + 15 }))} aria-label="사진 시계 방향 회전" className="flex h-8 w-8 items-center justify-center rounded-full bg-[#FFF4EF] text-[#3B2A22] active:scale-90"><RotateCw size={14} /></button>
             <button
               type="button"
               onClick={() => onEditPhoto(selected.id)}
@@ -638,7 +648,7 @@ function DecorateStep({
       </AnimatePresence>
 
       {/* 업로드한 사진목록 */}
-      <p className="mt-4 mb-1.5 text-xs text-gray-400">업로드한 사진목록 — 눌러서 템플릿에 올리기</p>
+      <p className="mt-4 mb-1.5 text-xs text-gray-400">업로드한 사진목록 — 눌러서 템플릿에 올리기 (최대 {MAX_MUNCHIE_FEED_PHOTOS}장)</p>
       <div className="flex gap-2 overflow-x-auto pb-1.5 scrollbar-hide">
         {photoPool.map(src => (
           <button
@@ -1106,13 +1116,13 @@ export default function CoursemapCreatePage() {
 
     addCourse(course);
     setTemplateForCourse(newId, template.id);
-    saveCoursemapDecor(newId, placed.slice(0, MAX_PINS));
+    saveCoursemapDecor(newId, placed.slice(0, MAX_MUNCHIE_FEED_PHOTOS));
     addFeedPost({
       authorId: profile.id,
       authorName: profile.name,
       authorEmoji: profile.emoji,
       courseId: newId,
-      photos: placed.slice(0, MAX_PINS).map(photo => photo.src),
+      photos: placed.slice(0, MAX_MUNCHIE_FEED_PHOTOS).map(photo => photo.src),
       caption: caption.trim(),
       skinId: 'default',
       tags: course.tags,

@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
-import { ArrowRight, Bell, MapPin, MessageCircle, Sparkles, ThumbsDown, ThumbsUp, X } from 'lucide-react';
-import { useLocation } from 'wouter';
+import { ArrowRight, Bell, MapPin, MessageCircle, ThumbsDown, ThumbsUp, X } from 'lucide-react';
+import { useLocation, useSearch } from 'wouter';
 import {
   resolveApiRequestAuth,
   type ApiRequestAuth,
@@ -52,17 +52,32 @@ export async function fetchTodayJourney(
 
 /** 스와이프 카드덱 — 커피/밥/디저트 세 장이 순환하며 앞의 카드가 선택 상태다 */
 const QUICK_MATCH_CARDS = [
-  { key: 'coffee', label: '커피', en: 'Coffee', icon: '☕', intent: 'cafe' },
-  { key: 'foodie', label: '밥', en: 'Foodie', icon: '🍚', intent: 'meal' },
-  { key: 'dessert', label: '디저트', en: 'Dessert', icon: '🍰', intent: 'dessert' },
+  { key: 'coffee', label: '커피', en: 'COFFEE', image: '/assets/characters/quick-match/coffee.png', intent: 'cafe', background: 'linear-gradient(160deg, #FFFDFC 0%, #FFEBDD 100%)', steam: true },
+  { key: 'foodie', label: '밥', en: 'FOODIE', image: '/assets/characters/quick-match/rice.png', intent: 'meal', background: 'linear-gradient(160deg, #FFFDFC 0%, #FFE5E0 100%)', steam: true },
+  { key: 'dessert', label: '디저트', en: 'DESSERT', image: '/assets/characters/quick-match/dessert.png', intent: 'dessert', background: 'linear-gradient(160deg, #FFFDFC 0%, #FFE2E8 100%)', steam: false },
 ] as const;
 
 /** 카드 순환 위치: 0=앞, 1=오른쪽 behind, 2=왼쪽 behind */
 const DECK_POSITIONS = [
   { x: 0, y: 0, scale: 1, rotate: 0, opacity: 1, zIndex: 3 },
-  { x: 60, y: 10, scale: 0.84, rotate: 10, opacity: 0.88, zIndex: 1 },
-  { x: -60, y: 10, scale: 0.84, rotate: -10, opacity: 0.88, zIndex: 1 },
+  { x: 88, y: 12, scale: 0.88, rotate: 9, opacity: 1, zIndex: 1 },
+  { x: -88, y: 12, scale: 0.88, rotate: -9, opacity: 1, zIndex: 1 },
 ] as const;
+
+function SteamWisps() {
+  return (
+    <span className="pointer-events-none absolute left-1/2 top-0 z-10 flex -translate-x-1/2 gap-1" aria-hidden="true">
+      {[0, 1, 2].map(index => (
+        <motion.span
+          key={index}
+          className="block h-5 w-1 rounded-full bg-white/80 blur-[1px]"
+          animate={{ y: [5, -3, -9], x: [0, index === 1 ? 2 : -1, 0], opacity: [0, 0.78, 0], scaleY: [0.7, 1.15, 1.35] }}
+          transition={{ duration: 1.8, delay: index * 0.32, repeat: Infinity, ease: 'easeOut' }}
+        />
+      ))}
+    </span>
+  );
+}
 
 function QuickMatchDeck({
   activeIndex,
@@ -72,7 +87,11 @@ function QuickMatchDeck({
   onChange: (index: number) => void;
 }) {
   return (
-    <div className="relative h-[128px] w-[180px]">
+    <motion.div
+      className="relative h-[174px] w-full max-w-[330px]"
+      whileHover={{ y: -5 }}
+      transition={{ type: 'spring', stiffness: 250, damping: 17 }}
+    >
       {QUICK_MATCH_CARDS.map((card, index) => {
         const position = DECK_POSITIONS[(index - activeIndex + 3) % 3]!;
         const isFront = position.zIndex === 3;
@@ -97,82 +116,65 @@ function QuickMatchDeck({
               opacity: position.opacity,
             }}
             transition={{ type: 'spring', stiffness: 320, damping: 26 }}
-            className="absolute left-1/2 top-1/2 flex h-[112px] w-[86px] -translate-x-1/2 -translate-y-1/2 cursor-grab flex-col items-center justify-center rounded-[20px] border-2 border-white bg-white shadow-[0_10px_24px_rgba(85,49,34,0.14)] active:cursor-grabbing"
-            style={{ zIndex: position.zIndex, touchAction: 'pan-y' }}
+            whileHover={{ scale: position.scale + 0.025 }}
+            whileTap={{ scale: position.scale - 0.03 }}
+            className="absolute left-1/2 top-1/2 flex h-[154px] w-[116px] -translate-x-1/2 -translate-y-1/2 cursor-grab flex-col items-center justify-center overflow-hidden rounded-[11px] border-[0.75px] border-[#EE8C8D] px-2 pb-3 pt-2 shadow-[0_10px_22px_rgba(153,74,62,0.13)] active:cursor-grabbing"
+            style={{ zIndex: position.zIndex, touchAction: 'pan-y', background: card.background }}
           >
-            <span className="text-[32px]">{card.icon}</span>
-            <span className="mt-1 text-[12px] font-black text-[#392A23]">{card.label}</span>
-            <span className="text-[8px] font-bold uppercase tracking-[0.14em] text-[#B79E92]">{card.en}</span>
-            {isFront && (
-              <span className="absolute -top-2 left-1/2 -translate-x-1/2 rounded-full bg-[#FF424B] px-2 py-0.5 text-[8px] font-black text-white shadow-sm">
-                PICK
-              </span>
-            )}
+            <span className="relative flex h-[106px] w-[104px] items-end justify-center">
+              {card.steam && <SteamWisps />}
+              <img src={card.image} alt={`${card.label} 음식`} className="h-[98px] w-[102px] object-contain drop-shadow-[0_7px_8px_rgba(104,55,38,0.13)]" draggable={false} />
+            </span>
+            <span className="mt-0.5 rounded-full bg-white/75 px-2 py-0.5 text-[11px] font-black tracking-[0.05em] text-[#C93B3E]">{card.en}</span>
           </motion.button>
         );
       })}
-    </div>
+    </motion.div>
   );
 }
 
-function LunchieLandingCard({ journeyStops }: { journeyStops: JourneyStop[] }) {
+function LunchieLandingCard() {
   const [, navigate] = useLocation();
   const [activeCard, setActiveCard] = useState(1); // 밥(Foodie) 카드가 기본 선택
 
   const selectedCard = QUICK_MATCH_CARDS[activeCard]!;
 
   return (
-    <motion.section
+    <motion.div
+      data-ui="lunchie-card-panel"
       initial={{ opacity: 0, y: 18 }}
       animate={{ opacity: 1, y: 0 }}
-      className="mx-4 flex flex-col overflow-hidden rounded-[24px] border border-[#E9DDD4] bg-white shadow-[0_10px_26px_rgba(73,44,30,0.07)]"
+      className="relative mx-4 flex min-h-[232px] items-start justify-center overflow-hidden rounded-[22px] border-[0.75px] border-[#F0A0A0] px-4 pb-8 pt-5 shadow-[0_14px_34px_rgba(139,74,61,0.12)]"
+      style={{
+        backgroundColor: '#FFF9F5',
+        backgroundImage: 'radial-gradient(circle at 18% 22%, rgba(255,190,169,.28) 0 18px, transparent 19px), radial-gradient(circle at 84% 76%, rgba(255,214,181,.34) 0 26px, transparent 27px), radial-gradient(rgba(224,113,105,.18) .7px, transparent .7px)',
+        backgroundSize: 'auto, auto, 12px 12px',
+      }}
     >
-      <div className="flex items-end justify-between px-4 pb-1.5 pt-3">
-        <div>
-          <p className="text-[8px] font-black uppercase tracking-[0.18em] text-[#FF4D57]">Quick decision</p>
-          <h2 className="mt-0.5 text-[19px] font-black leading-none text-[#2B211D]">LUNCHIE</h2>
-          <p className="mt-1 text-[10px] font-semibold text-[#8D776C]">런치로 같이 점심 정하기!</p>
-        </div>
-        {journeyStops.length > 0 && (
-          <span className="max-w-[112px] truncate rounded-full bg-[#FFF0EA] px-2.5 py-1 text-[8px] font-black text-[#F25055]">
-            오늘 {journeyStops.length}곳 완료
-          </span>
-        )}
+      <span className="pointer-events-none absolute -left-5 top-8 h-16 w-16 rotate-12 rounded-[18px] bg-[#FFDCCF]/55" aria-hidden="true" />
+      <span className="pointer-events-none absolute -right-3 bottom-8 h-14 w-20 -rotate-12 rounded-full bg-[#FFE5BE]/55" aria-hidden="true" />
+      <span className="pointer-events-none absolute left-5 top-3 h-3 w-14 -rotate-6 rounded-sm bg-[#F5B9A5]/45" aria-hidden="true" />
+      <div className="relative z-[1] w-full">
+        <QuickMatchDeck activeIndex={activeCard} onChange={setActiveCard} />
       </div>
-
-      <div className="relative mx-3 mb-3 flex min-h-[250px] flex-col justify-center overflow-hidden rounded-[20px] bg-[linear-gradient(145deg,#FFF3E9_0%,#FFE8E4_100%)] px-4 py-3">
-        <div className="absolute -right-9 -top-9 h-32 w-32 rounded-full bg-white/40" />
-        <div className="absolute -bottom-12 -left-8 h-36 w-36 rounded-full bg-[#FFC8C5]/35" />
-
-        {/* 카드덱 + 런치킨 */}
-        <div className="relative flex w-full flex-1 items-center justify-center gap-8">
-          <div className="flex min-w-0 flex-1 justify-center">
-            <QuickMatchDeck activeIndex={activeCard} onChange={setActiveCard} />
-          </div>
-          <div className="relative z-10 flex w-[108px] shrink-0 flex-col items-center">
-            <span className="mb-[-4px] rounded-full bg-white px-2.5 py-1 text-[9px] font-black text-[#FF424B] shadow-sm">
-              뭐 먹지?
-            </span>
-            <LunchkinCharacter size={98} />
-          </div>
-        </div>
-        <button
-          type="button"
-          onClick={() => navigate(`/lunchie/settings?intent=${selectedCard.intent}`)}
-          className="relative mt-1 flex h-10 w-full shrink-0 items-center justify-center gap-2 rounded-[13px] bg-[#FF5962] px-4 text-[11px] font-black text-white shadow-[0_8px_18px_rgba(255,77,87,0.22)] active:scale-[0.98]"
-        >
-          <Sparkles size={14} /> Quick Match Start! · {selectedCard.label}
-        </button>
-      </div>
-    </motion.section>
+      <motion.button
+        type="button"
+        onClick={() => navigate(`/lunchie/settings?intent=${selectedCard.intent}`)}
+        whileHover={{ y: -2, scale: 1.025 }}
+        whileTap={{ scale: 0.97 }}
+        className="absolute bottom-4 left-1/2 z-10 flex h-12 w-[64%] -translate-x-1/2 items-center justify-center rounded-[11px] border-[0.75px] border-[#D94447] bg-[#EB5053] px-4 text-[16px] font-black text-white shadow-[0_9px_20px_rgba(201,59,62,0.26)]"
+      >
+        Quick Match!
+      </motion.button>
+    </motion.div>
   );
 }
 
 export default function HomePage() {
   const [, navigate] = useLocation();
+  const search = useSearch();
   const { feedPosts, profile, isMyPost } = useApp();
   const [journeyStops, setJourneyStops] = useState<JourneyStop[]>([]);
-  const [captionOffset, setCaptionOffset] = useState(0);
   const [notificationsOpen, setNotificationsOpen] = useState(false);
   const [readNotificationIds, setReadNotificationIds] = useState<string[]>(() => {
     try { return JSON.parse(localStorage.getItem('lm_read_notifications') ?? '[]'); }
@@ -190,19 +192,12 @@ export default function HomePage() {
   }, [readNotificationIds]);
 
   useEffect(() => {
-    if (feedPosts.length < 2) return undefined;
-    const timer = window.setInterval(() => {
-      setCaptionOffset(current => (current + 1) % feedPosts.length);
-    }, 3000);
-    return () => window.clearInterval(timer);
-  }, [feedPosts.length]);
+    if (new URLSearchParams(search).get('notifications') === '1') {
+      setNotificationsOpen(true);
+    }
+  }, [search]);
 
   const landingPosts = feedPosts;
-  const rotatingCaptions = useMemo(() => landingPosts.map((_, index) => (
-    feedPosts.length > 0
-      ? feedPosts[(captionOffset + index) % feedPosts.length]!.caption
-      : ''
-  )), [captionOffset, feedPosts, landingPosts]);
 
   const notifications = useMemo(() => {
     const journeyItems = journeyStops.map(stop => ({
@@ -218,16 +213,16 @@ export default function HomePage() {
         id: `feed-like-${post.id}-${post.likes}`,
         kind: 'like' as const,
         title: '새 좋아요',
-        body: `내 코스피드에 좋아요 ${post.likes}개가 달렸어요.`,
-        href: `/feed/${post.id}?from=home`,
+        body: `내 Munchie 피드에 좋아요 ${post.likes}개가 달렸어요.`,
+        href: `/feed/${post.id}?from=notifications`,
         at: new Date(post.createdAt).getTime() + post.likes,
       }] : []),
       ...((post.dislikes ?? 0) > 0 ? [{
         id: `feed-dislike-${post.id}-${post.dislikes}`,
         kind: 'dislike' as const,
         title: '새 싫어요',
-        body: `내 코스피드에 싫어요 ${post.dislikes}개가 달렸어요.`,
-        href: `/feed/${post.id}?from=home`,
+        body: `내 Munchie 피드에 싫어요 ${post.dislikes}개가 달렸어요.`,
+        href: `/feed/${post.id}?from=notifications`,
         at: new Date(post.createdAt).getTime() + (post.dislikes ?? 0),
       }] : []),
       ...post.comments.map(comment => ({
@@ -235,76 +230,103 @@ export default function HomePage() {
         kind: 'comment' as const,
         title: `${comment.authorName}님의 새 코멘트`,
         body: comment.text,
-        href: `/feed/${post.id}?from=home`,
+        href: `/feed/${post.id}?from=notifications`,
         at: new Date(comment.createdAt).getTime(),
       })),
     ]);
     return [...journeyItems, ...feedItems].sort((a, b) => b.at - a.at).slice(0, 20);
   }, [feedPosts, isMyPost, journeyStops]);
   const unreadCount = notifications.filter(item => !readNotificationIds.includes(item.id)).length;
+  const visibleNotifications = notifications.filter(
+    item => !readNotificationIds.includes(item.id),
+  );
 
   const openNotification = (notification: (typeof notifications)[number]) => {
-    setReadNotificationIds(current => current.includes(notification.id) ? current : [...current, notification.id]);
+    setReadNotificationIds(current => {
+      const next = current.includes(notification.id) ? current : [...current, notification.id];
+      localStorage.setItem('lm_read_notifications', JSON.stringify(next));
+      return next;
+    });
     setNotificationsOpen(false);
     navigate(notification.href);
   };
 
   return (
-    <div className="min-h-dvh bg-[#FFFDFB] pb-[104px] pt-3">
+    <div className="min-h-dvh bg-[#FFF8F2] pb-[104px] pt-6">
       <header className="px-5 pt-2">
         <div className="relative flex items-center justify-center">
-          <img src="/assets/lunchie-wordmark.png" alt="Lunchie Munchie" className="h-auto w-[172px] object-contain" />
-          <button
+          <img src="/assets/lunchie-wordmark.png" alt="Lunchie Munchie" className="h-auto w-[148px] object-contain" />
+          <motion.button
             type="button"
             onClick={() => setNotificationsOpen(true)}
             aria-label="알림 열기"
-            className="absolute right-0 flex h-11 w-11 items-center justify-center rounded-full border border-[#2C211C] bg-white text-[#2C211C] active:scale-95"
+            whileHover={{ scale: 1.08, y: -2, rotate: [0, -6, 6, -3, 0] }}
+            whileTap={{ scale: 0.9 }}
+            transition={{ type: 'spring', stiffness: 360, damping: 16 }}
+            className="group absolute right-0 flex h-10 w-10 items-center justify-center overflow-visible rounded-full border-[0.75px] border-[#EF777A] bg-[linear-gradient(145deg,#FFFDFC_5%,#FFE1D7_100%)] text-[#D94447] shadow-[0_6px_16px_rgba(209,74,68,0.18)]"
           >
-            <Bell size={18} />
+            <span className="pointer-events-none absolute inset-[3px] rounded-full bg-[radial-gradient(circle_at_32%_22%,rgba(255,255,255,0.95),transparent_48%)]" aria-hidden="true" />
+            <motion.span
+              className="relative z-[1] flex"
+              animate={unreadCount > 0 ? { rotate: [0, 0, -8, 8, -4, 0, 0] } : { rotate: 0 }}
+              transition={unreadCount > 0 ? { duration: 3.2, repeat: Infinity, ease: 'easeInOut' } : undefined}
+            >
+              <Bell size={18} strokeWidth={2.1} />
+            </motion.span>
             {unreadCount > 0 && (
-              <span className="absolute -right-1 -top-1 flex h-5 min-w-5 items-center justify-center rounded-full border-2 border-white bg-[#FF424B] px-1 text-[8px] font-black text-white">
+              <motion.span
+                className="absolute -right-1 -top-1 z-[2] flex h-5 min-w-5 items-center justify-center rounded-full border-[1.5px] border-white bg-[linear-gradient(145deg,#FF6B68,#F23844)] px-1 text-[8px] font-black text-white shadow-[0_3px_8px_rgba(219,55,65,0.3)]"
+                animate={{ scale: [1, 1.08, 1] }}
+                transition={{ duration: 1.8, repeat: Infinity, ease: 'easeInOut' }}
+              >
                 {unreadCount > 9 ? '9+' : unreadCount}
-              </span>
+              </motion.span>
             )}
-          </button>
+          </motion.button>
         </div>
 
-        <div className="mt-8">
-          <p className="text-[8px] font-black uppercase tracking-[0.2em] text-[#FF4D57]">Two ways to enjoy</p>
-          <h1 className="mt-2 text-[29px] font-black leading-[1.3] tracking-[-0.04em] text-[#1F1713]">
-            런치로 같이 점심 정하기!
-            <br />
-            먼치로 함께 맛집 코스 탐방!
+        <div className="mt-9 flex items-center justify-between gap-3">
+          <h1 className="min-w-0 text-[25px] font-black leading-[1.45] tracking-[-0.04em] text-[#3B2A23]">
+            런치로 같이 메뉴 정하기!
+            <br />먼치로 함께 맛집 코스 탐방!
           </h1>
+          <LunchkinCharacter size={78} className="mr-2" />
         </div>
       </header>
 
-      <div className="mt-12">
-        <LunchieLandingCard journeyStops={journeyStops} />
-      </div>
+      <section className="mt-10">
+        <div className="px-4">
+          <h2 className="text-[25px] font-black leading-none tracking-[0.01em] text-[#C93B3E]">LUNCHIE</h2>
+          <p className="mt-1 text-[14px] font-medium text-[#8B5E5D]">런치로 같이 점심 정하기!</p>
+        </div>
+        <div className="mt-3">
+        <LunchieLandingCard />
+        </div>
+      </section>
 
-      <section className="mt-7">
-        <div className="flex items-end justify-between px-5">
+      <section className="mt-12">
+        <div className="flex items-end justify-between px-4">
           <div>
-            <p className="text-[8px] font-black uppercase tracking-[0.18em] text-[#FF4D57]">Munchie stories</p>
-            <h2 className="mt-0.5 text-[18px] font-black leading-none text-[#211713]">MUNCHIE</h2>
-            <p className="mt-1 text-[9px] font-semibold text-[#8D776C]">먼치로 함께 맛집 코스 탐방</p>
+            <h2 className="text-[25px] font-black leading-none text-[#C93B3E]">MUNCHIE</h2>
+            <p className="mt-1 text-[14px] font-medium text-[#8B5E5D]">먼치로 함께 맛집 코스 탐방</p>
           </div>
           <button
             type="button"
             onClick={() => navigate('/feed')}
-            className="flex items-center gap-1 text-[10px] font-black text-[#3B2B24]"
+            className="flex items-center gap-1 text-[14px] font-black text-[#D94447]"
           >
             더보기 <ArrowRight size={17} />
           </button>
         </div>
 
-        <div className="mt-3 flex snap-x snap-mandatory gap-3 overflow-x-auto px-3.5 pb-4 scrollbar-hide">
-          {landingPosts.map((post, index) => (
-            <div key={post.id} className="w-[76%] shrink-0 snap-start">
-              <UnifiedMunchieCard post={post} compact captionOverride={rotatingCaptions[index]} />
-            </div>
-          ))}
+        <div className="mt-5 pl-4">
+          <div className="flex snap-x snap-mandatory gap-3 overflow-x-auto pb-4 pr-4 scrollbar-hide">
+            {landingPosts.map(post => (
+              <div key={post.id} data-ui="munchie-home-card" className="w-[68%] shrink-0 snap-start">
+                <UnifiedMunchieCard post={post} compact homeSummary />
+              </div>
+            ))}
+          </div>
         </div>
       </section>
 
@@ -325,7 +347,6 @@ export default function HomePage() {
             >
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-[10px] font-black uppercase tracking-[0.18em] text-[#FF424B]">Updates</p>
                   <h2 className="mt-1 text-[22px] font-black text-[#251A16]">알림 {unreadCount > 0 && <span className="text-[#FF424B]">{unreadCount}</span>}</h2>
                 </div>
                 <button type="button" onClick={() => setNotificationsOpen(false)} className="flex h-10 w-10 items-center justify-center rounded-full bg-[#F7EFEA]" aria-label="닫기"><X size={18} /></button>
@@ -333,8 +354,7 @@ export default function HomePage() {
               <section className="mt-5 rounded-[22px] border border-[#F1D8CC] bg-[#FFF5EF] p-4">
                 <div className="flex items-center justify-between">
                   <div>
-                    <p className="text-[9px] font-black uppercase tracking-[0.16em] text-[#E97770]">Today’s journey</p>
-                    <h3 className="mt-1 text-[17px] font-black text-[#3E2D25]">오늘의 여정</h3>
+                  <h3 className="mt-1 text-[17px] font-black text-[#3E2D25]">오늘의 여정</h3>
                   </div>
                   <span className="rounded-full bg-white px-2.5 py-1 text-[10px] font-black text-[#DB6C66]">{journeyStops.length}곳</span>
                 </div>
@@ -356,9 +376,9 @@ export default function HomePage() {
                 <button type="button" onClick={() => setReadNotificationIds(notifications.map(item => item.id))} className="mt-3 text-[11px] font-black text-[#F25055]">모두 읽음</button>
               )}
               <div className="mt-5 space-y-2.5">
-                {notifications.length === 0 ? (
-                  <div className="rounded-2xl border border-dashed border-[#E1D2C8] px-5 py-12 text-center text-[12px] font-semibold text-[#A38D82]">새 알림이 없어요.</div>
-                ) : notifications.map(item => {
+                {visibleNotifications.length === 0 ? (
+                  <div className="rounded-2xl border border-dashed border-[#E1D2C8] px-5 py-12 text-center text-[12px] font-semibold text-[#A38D82]">더이상 새로운 알람이 없어요</div>
+                ) : visibleNotifications.map(item => {
                   const unread = !readNotificationIds.includes(item.id);
                   const Icon = item.kind === 'journey' ? MapPin : item.kind === 'like' ? ThumbsUp : item.kind === 'dislike' ? ThumbsDown : MessageCircle;
                   return (

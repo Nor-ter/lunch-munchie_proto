@@ -1,7 +1,7 @@
-import { useEffect, useMemo, useRef, useState, type RefObject } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useParams, useLocation, useSearch } from 'wouter';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Heart, Bookmark, Share2, ChevronLeft, ChevronRight, Star, X, GripVertical, MessageCircle } from 'lucide-react';
+import { Heart, Bookmark, Share2, ChevronLeft, ChevronRight, Star, X, GripVertical, MessageCircle, MapPin, Clock } from 'lucide-react';
 import {
   DndContext,
   closestCenter,
@@ -20,7 +20,6 @@ import {
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { CourseMapView } from '@/components/course/CourseMapView';
-import { getCourseMapPositionPercent } from '@/components/course/CourseMap';
 import { useApp } from '@/contexts/AppContext';
 import { getCourseById as getMockCourseById } from '@/data/mockCourse';
 import { CoursePlace } from '@/types/course';
@@ -28,7 +27,6 @@ import { COURSE_THEME, getCourseSequenceColor } from '@/constants/courseTheme';
 import { getCoursePlacesFromStops } from '@/lib/courseMapSync';
 import RestaurantDetailSheet from '@/components/munchie/RestaurantDetailSheet';
 import FruitCharacter, { fruitForStop } from '@/components/munchie/FruitCharacter';
-import OneLineReviewBox from '@/components/munchie/OneLineReviewBox';
 
 type FromMode = 'explore' | 'saved' | 'feed' | 'template' | 'template-detail' | 'profile';
 
@@ -51,99 +49,6 @@ const BACK_PATH: Record<FromMode, string> = {
 
 function normalizeHashtags(tags: string[]) {
   return tags.map((tag) => tag.replace(/^#/, ''));
-}
-
-function DraggableMapPhoto({
-  place,
-  index,
-  mapRef,
-  onOpen,
-}: {
-  place: CoursePlace;
-  index: number;
-  mapRef: RefObject<HTMLDivElement | null>;
-  onOpen: () => void;
-}) {
-  const didDrag = useRef(false);
-  const dragStart = useRef<{ pointerX: number; pointerY: number; offsetX: number; offsetY: number } | null>(null);
-  const [offset, setOffset] = useState({ x: 0, y: 0 });
-  const boxOnRight = place.coords.x < 55;
-
-  const movePhoto = (event: React.PointerEvent<HTMLButtonElement>) => {
-    if (!dragStart.current || !mapRef.current) return;
-    const deltaX = event.clientX - dragStart.current.pointerX;
-    const deltaY = event.clientY - dragStart.current.pointerY;
-    if (Math.abs(deltaX) + Math.abs(deltaY) > 4) didDrag.current = true;
-
-    const desired = {
-      x: dragStart.current.offsetX + deltaX,
-      y: dragStart.current.offsetY + deltaY,
-    };
-    const mapBounds = mapRef.current.getBoundingClientRect();
-    const photoBounds = event.currentTarget.getBoundingClientRect();
-    const baseLeft = photoBounds.left - offset.x;
-    const baseTop = photoBounds.top - offset.y;
-    const padding = 5;
-
-    setOffset({
-      x: Math.min(mapBounds.right - padding - photoBounds.width - baseLeft, Math.max(mapBounds.left + padding - baseLeft, desired.x)),
-      y: Math.min(mapBounds.bottom - padding - photoBounds.height - baseTop, Math.max(mapBounds.top + padding - baseTop, desired.y)),
-    });
-  };
-
-  const finishDrag = (event: React.PointerEvent<HTMLButtonElement>) => {
-    if (event.currentTarget.hasPointerCapture(event.pointerId)) {
-      event.currentTarget.releasePointerCapture(event.pointerId);
-    }
-    dragStart.current = null;
-    window.setTimeout(() => { didDrag.current = false; }, 0);
-  };
-
-  return (
-    <div
-      className="pointer-events-none absolute"
-      style={{
-        left: `${getCourseMapPositionPercent(place.coords.x, 430)}%`,
-        top: `${getCourseMapPositionPercent(place.coords.y, 300)}%`,
-        transform: 'translate(-50%, -50%)',
-      }}
-    >
-      <FruitCharacter kind={fruitForStop(index)} size={34} />
-      <button
-        type="button"
-        onPointerDown={(event) => {
-          event.currentTarget.setPointerCapture(event.pointerId);
-          dragStart.current = {
-            pointerX: event.clientX,
-            pointerY: event.clientY,
-            offsetX: offset.x,
-            offsetY: offset.y,
-          };
-        }}
-        onPointerMove={movePhoto}
-        onPointerUp={finishDrag}
-        onPointerCancel={finishDrag}
-        onClick={() => { if (!didDrag.current) onOpen(); }}
-        aria-label={`${place.name} 사진 이동 또는 보기`}
-        className="pointer-events-auto absolute flex w-[92px] cursor-grab touch-none flex-col overflow-hidden rounded-xl border border-[#E8D9D0] bg-white shadow-[0_6px_16px_rgba(91,56,39,0.15)] active:cursor-grabbing"
-        style={{
-          top: -22,
-          transform: `translate3d(${offset.x}px, ${offset.y}px, 0)`,
-          zIndex: dragStart.current ? 30 : 10,
-          ...(boxOnRight ? { left: 40 } : { right: 40 }),
-        }}
-      >
-        {place.imageUrl ? (
-          <img src={place.imageUrl} alt="" className="h-12 w-full select-none object-cover" draggable={false} />
-        ) : (
-          <span className="flex h-12 w-full items-center justify-center bg-[#F5F1ED] text-[9px] text-[#A8978D]">사진</span>
-        )}
-        <span className="truncate px-1.5 py-1 text-[8.5px] font-black text-[#3B2A22]">
-          {place.name}
-        </span>
-      </button>
-    </div>
-  );
 }
 
 // ── PlaceItem ─────────────────────────────────────────────────────────────────
@@ -323,11 +228,12 @@ export default function CourseDetailPage() {
   const isBookmarked = id ? savedCourseIds.includes(id) : false;
   const templateId = new URLSearchParams(search).get('template');
   const templateFrom = new URLSearchParams(search).get('templateFrom');
+  const templateOrigin = templateFrom === 'profile' || templateFrom === 'saved' ? templateFrom : 'feed';
   const requestedPostId = new URLSearchParams(search).get('post');
   const isProfileTemplateCourse = from === 'template-detail' && templateFrom === 'profile';
   const canManageCourse = fromSaved || isProfileTemplateCourse;
   const backPath = from === 'template-detail' && templateId && id
-    ? `/template/${templateId}?course=${id}${templateFrom === 'profile' ? '&from=profile' : ''}`
+    ? `/template/${templateId}?course=${id}&from=${templateOrigin}`
     : BACK_PATH[from];
 
   const toggleBookmark = () => {
@@ -356,26 +262,27 @@ export default function CourseDetailPage() {
     imageUrl: photo,
     coords: [{ x: 20, y: 28 }, { x: 70, y: 50 }, { x: 32, y: 76 }][index]!,
   }));
-  const initialTitle = orphanPost?.caption || appCourse?.description || courseData.title;
   const initialHashtags = normalizeHashtags(appCourse?.hashtags ?? orphanPost?.tags ?? courseData.hashtags);
   const initialPlaces = appCourse && syncedPlaces.length > 0
     ? syncedPlaces
     : legacyPhotoPlaces.length > 0
       ? legacyPhotoPlaces
       : courseData.places.map(p => ({ ...p }));
-  const distanceKm = appCourse?.metadata.distance ?? courseData.distanceKm;
-  const durationLabel = appCourse
-    ? `${Math.floor(appCourse.metadata.duration / 60)}h`
-    : `${courseData.durationHours}h`;
-  const saveCount = appCourse?.savedCount ?? courseData.saveCount;
+  const durationHours = appCourse
+    ? appCourse.metadata.duration / 60
+    : courseData.durationHours;
+  const durationLabel = `${Number.isInteger(durationHours) ? durationHours : durationHours.toFixed(1)}시간`;
   const relatedFeedCount = id
     ? feedPosts.filter(post => post.courseId === id).length
     : 0;
   const authorHandle = (orphanPost?.authorName || courseData.authorHandle).replace(/^@/, '');
   const authorMeta = orphanPost ? 'Munchie creator' : `${courseData.followerCount} Followers`;
+  const addressLabel = initialPlaces.find(place => place.address)?.address
+    ?? appCourse?.region
+    ?? courseData.region
+    ?? '주소 정보 없음';
 
   // Local editable state (only used in saved mode)
-  const [title, setTitle] = useState(initialTitle);
   const [hashtags, setHashtags] = useState<string[]>(initialHashtags);
   const [places, setPlaces] = useState<CoursePlace[]>(initialPlaces);
   const [isEditing, setIsEditing] = useState(false);
@@ -384,23 +291,13 @@ export default function CourseDetailPage() {
   // 코스 순서: 터치 → 하이라이트, 밀기 → 식당 상세 슬라이드
   const [selectedPlaceId, setSelectedPlaceId] = useState<string | null>(null);
   const [detailPlaceId, setDetailPlaceId] = useState<string | null>(null);
-  // 지도 위 음식점 박스 클릭 → 레스토랑 이미지 라이트박스
-  const [lightboxPlace, setLightboxPlace] = useState<CoursePlace | null>(null);
-  const mapRef = useRef<HTMLDivElement>(null);
-
-  const titleInputRef = useRef<HTMLInputElement>(null);
   const tagInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
-    if (isEditing) titleInputRef.current?.focus();
-  }, [isEditing]);
-
-  useEffect(() => {
     if (isEditing) return;
-    setTitle(initialTitle);
     setHashtags(initialHashtags);
     setPlaces(initialPlaces);
-  }, [id, isEditing, initialTitle, appCourse, syncedPlaces]);
+  }, [id, isEditing, appCourse, syncedPlaces]);
 
   useEffect(() => {
     if (isAddingTag) tagInputRef.current?.focus();
@@ -503,46 +400,8 @@ export default function CourseDetailPage() {
         )}
       </div>
 
-      {/* Course info */}
+      {/* Hashtags — 한줄평은 지도 아래 상세 정보 영역에서만 보여준다. */}
       <motion.div layout className="px-4 pb-3">
-        {/* One-line review */}
-        <AnimatePresence mode="wait">
-          {fromSaved && isEditing ? (
-            <motion.div
-              key="title-input"
-              layout
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              transition={{ duration: 0.15 }}
-            >
-              <OneLineReviewBox>
-                <input
-                  ref={titleInputRef}
-                  value={title}
-                  onChange={e => setTitle(e.target.value)}
-                  aria-label="한줄평 수정"
-                  className="w-full bg-transparent text-[14px] font-bold leading-relaxed text-[#3B2A23] outline-none"
-                />
-              </OneLineReviewBox>
-            </motion.div>
-          ) : (
-            <motion.div
-              key="title-text"
-              layout
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              transition={{ duration: 0.15 }}
-            >
-              <OneLineReviewBox>
-                <p className="text-[14px] font-bold leading-relaxed text-[#3B2A23]">{title}</p>
-              </OneLineReviewBox>
-            </motion.div>
-          )}
-        </AnimatePresence>
-
-        {/* Hashtags */}
         <AnimatePresence mode="wait">
           {fromSaved && isEditing ? (
             <motion.div
@@ -621,66 +480,37 @@ export default function CourseDetailPage() {
           )}
       </div>
 
-      {/* Map area — 과일 캐릭터 마커 + 음식점 박스 오버레이 */}
-      <div ref={mapRef} className="relative mx-4 mb-4 h-[300px] overflow-hidden rounded-[22px] border-2 border-[#E9D8CF] bg-[#FBF7F1] shadow-[0_8px_22px_rgba(105,67,48,0.08)]">
+      {/* Map area — 지도·경로·순번 마커만 표시한다. */}
+      <div
+        data-ui="course-map-area"
+        className="relative mx-4 mb-4 h-[300px] overflow-hidden rounded-[22px] border border-[#E9D8CF] bg-[#FBF7F1] shadow-[0_8px_22px_rgba(105,67,48,0.08)]"
+      >
         <CourseMapView places={places} width={430} height={300} className="h-full w-full" />
-        <div className="pointer-events-none absolute inset-0 z-10">
-          {places.map((place, i) => (
-            <DraggableMapPhoto
-              key={place.id}
-              place={place}
-              index={i}
-              mapRef={mapRef}
-              onOpen={() => setLightboxPlace(place)}
-            />
-          ))}
-          <span className="absolute bottom-2 left-1/2 -translate-x-1/2 rounded-full bg-white/90 px-3 py-1 text-[9px] font-bold text-[#8D776C] shadow-sm">
-            사진을 드래그해 지도를 확인하세요
-          </span>
-        </div>
       </div>
 
-      {/* Stats bar */}
-      <div className="mx-4 mb-4 grid grid-cols-4 overflow-hidden rounded-2xl border border-[#EADBD2] bg-[#FFFDFC]">
-        {[
-          { value: `${distanceKm}km`, label: '거리' },
-          { value: durationLabel, label: '소요 시간' },
-          { value: `${places.length}`, label: '스팟' },
-          { value: `${saveCount.toLocaleString()}`, label: '저장' },
-        ].map((stat, i, arr) => (
-          <div
-            key={stat.label}
-            className={`flex flex-col items-center py-3 ${i < arr.length - 1 ? 'border-r border-[#EFE2DA]' : ''}`}
-          >
-            <span className="font-bold text-sm">{stat.value}</span>
-            <span className="text-xs text-gray-400">{stat.label}</span>
-          </div>
-        ))}
-      </div>
-
-      <div className="mx-4 mb-4">
-        <button
-          type="button"
-          onClick={() => navigate(`/course/${id}/feeds${search ? `?${search}` : ''}`)}
-          className="flex w-full items-center gap-3 rounded-2xl border border-[#F2D8D3] bg-[#FFF8F4] p-3.5 text-left active:scale-[0.99]"
-        >
-          <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-[#FDE1E1] text-[#D94447]">
-            <MessageCircle size={18} />
-          </span>
-          <span className="min-w-0 flex-1">
-            <span className="block text-[14px] font-black text-[#3B2A22]">이 코스로 만든 피드</span>
-            <span className="mt-0.5 block text-[11px] text-[#9D887C]">
-              {relatedFeedCount > 0 ? `올라온 피드 ${relatedFeedCount}개 둘러보기` : '아직 올라온 피드가 없어요'}
-            </span>
-          </span>
-          <ChevronRight size={18} color="#B09A8C" />
-        </button>
+      {/* Address / time / spots */}
+      <div
+        data-ui="course-meta"
+        className="mx-4 flex items-center gap-4 border-y border-[#EEE0D8] py-3 text-[11px] font-bold text-[#766158]"
+      >
+        <span className="flex min-w-0 flex-1 items-center gap-1.5">
+          <MapPin size={14} className="shrink-0 text-[#EE7772]" />
+          <span className="truncate">{addressLabel}</span>
+        </span>
+        <span className="flex shrink-0 items-center gap-1.5">
+          <Clock size={14} className="text-[#EE7772]" />
+          {durationLabel}
+        </span>
+        <span className="shrink-0">{places.length}개 스팟</span>
       </div>
 
       {/* Place list */}
       <div className="px-4 pb-4">
-        <div className="flex items-center justify-between mb-3">
-          <p className="text-sm font-semibold">코스 순서</p>
+        <div data-ui="places-in-template" className="mb-3 flex items-end justify-between pt-4">
+          <div>
+            <p className="text-[10px] font-black uppercase tracking-[0.14em] text-[#B89E91]">Places in Template</p>
+            <p className="mt-0.5 text-sm font-black text-[#3B2A22]">템플릿 속 식당</p>
+          </div>
           <p className="text-[10px] text-gray-400">한 번 선택 · 두 번 상세보기</p>
         </div>
         <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
@@ -705,55 +535,26 @@ export default function CourseDetailPage() {
         </DndContext>
       </div>
 
+      <div className="mx-4 mb-4">
+        <button
+          type="button"
+          onClick={() => navigate(`/course/${id}/feeds${search ? `?${search}` : ''}`)}
+          className="flex w-full items-center gap-3 rounded-2xl border border-[#F2D8D3] bg-[#FFF8F4] p-3.5 text-left active:scale-[0.99]"
+        >
+          <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-[#FDE1E1] text-[#D94447]">
+            <MessageCircle size={18} />
+          </span>
+          <span className="min-w-0 flex-1">
+            <span className="block text-[14px] font-black text-[#3B2A22]">이 코스로 만든 피드</span>
+            <span className="mt-0.5 block text-[11px] text-[#9D887C]">
+              {relatedFeedCount > 0 ? `올라온 피드 ${relatedFeedCount}개 둘러보기` : '아직 올라온 피드가 없어요'}
+            </span>
+          </span>
+          <ChevronRight size={18} color="#B09A8C" />
+        </button>
       </div>
 
-      {/* 지도 박스 클릭 → 레스토랑 이미지 라이트박스 */}
-      <AnimatePresence>
-        {lightboxPlace && (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            onClick={() => setLightboxPlace(null)}
-            className="fixed inset-0 z-[60] flex items-center justify-center bg-black/70 px-8"
-          >
-            <motion.div
-              initial={{ scale: 0.85, y: 14 }}
-              animate={{ scale: 1, y: 0 }}
-              exit={{ scale: 0.9, y: 10 }}
-              onClick={event => event.stopPropagation()}
-              className="w-full max-w-[340px] overflow-hidden rounded-3xl bg-white"
-            >
-              {lightboxPlace.imageUrl ? (
-                <img src={lightboxPlace.imageUrl} alt={lightboxPlace.name} className="aspect-square w-full object-cover" />
-              ) : (
-                <div className="flex aspect-square w-full items-center justify-center bg-gray-100 text-sm text-gray-400">
-                  등록된 사진이 없어요
-                </div>
-              )}
-              <div className="flex items-center gap-2.5 px-4 py-3.5">
-                <FruitCharacter
-                  kind={fruitForStop(places.findIndex(p => p.id === lightboxPlace.id))}
-                  size={30}
-                />
-                <div className="min-w-0 flex-1">
-                  <p className="truncate text-[15px] font-black text-[#2B211D]">{lightboxPlace.name}</p>
-                  <p className="truncate text-[11px] text-gray-400">
-                    {lightboxPlace.category}{lightboxPlace.address ? ` · ${lightboxPlace.address}` : ''}
-                  </p>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => { setLightboxPlace(null); setDetailPlaceId(lightboxPlace.id); }}
-                  className="shrink-0 rounded-full bg-[#E85053] px-3 py-1.5 text-[11px] font-black text-white active:scale-95"
-                >
-                  상세보기
-                </button>
-              </div>
-            </motion.div>
-          </motion.div>
-        )}
-      </AnimatePresence>
+      </div>
 
       {/* 식당 상세 슬라이드 (뒤로가면 이 화면으로 복귀) */}
       <AnimatePresence>
