@@ -1,18 +1,17 @@
 /**
- * 코스맵 만들기 — 6단계 통합 플로우 (코스맵과 피드를 순차적으로 동시 작성)
+ * 코스맵 만들기 — 4단계 통합 플로우 (코스맵과 피드를 순차적으로 동시 작성)
  * ① 코스맵 정하기 — 해시태그·한줄평 + 숫자핀(최대 3) 지도검색 + 사진박스
- * ② 템플릿 선정 — 룰렛 스와이프, 가운데 템플릿이 자동 선정
- * ③ 템플릿 꾸미기 — 업로드한 사진을 drag & drop, 크기·회전 조정
- * ④ 사진 에디터 — crop(확대)·그리기·텍스트·하이라이터·필터
- * ⑤ 미리보기 — 게시 전 확인 (버튼 비활성)
- * ⑥ 포스팅 완료 — 주먹밥 보상 지급
+ * ② 템플릿 선택·꾸미기 — 템플릿을 즉시 비교하며 사진 배치·크기·회전 조정
+ * ③ 미리보기 — 게시 전 확인 (버튼 비활성)
+ * ④ 포스팅 완료 — 주먹밥 보상 지급
  */
-import { useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { useLocation, useSearch } from 'wouter';
 import {
-  ChevronLeft, ChevronRight, Minus, Pencil, Plus,
-  RotateCcw, RotateCw, Search, Share2, Trash2, Type, X, Highlighter, Wand2,
+  ChevronLeft, ChevronRight, Palette, Pencil, Plus,
+  Eraser, Highlighter, MousePointer2, RotateCcw, RotateCw, Search, Share2,
+  Trash2, Type, X, Wand2, Undo2,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { useApp, type Course, type FeedPost, type Restaurant } from '@/contexts/AppContext';
@@ -21,7 +20,12 @@ import {
   setTemplateForCourse,
   type CoursemapTemplate,
 } from '@/constants/coursemapTemplates';
-import { MAX_MUNCHIE_FEED_PHOTOS, saveCoursemapDecor, type PlacedPhoto } from '@/lib/coursemapDecor';
+import {
+  MAX_MUNCHIE_FEED_PHOTOS,
+  saveCoursemapDecor,
+  type CoursemapCanvasStroke,
+  type PlacedPhoto,
+} from '@/lib/coursemapDecor';
 import { getCourseMapPoints, getCurvedCourseSegments } from '@/lib/courseMapSync';
 import CourseSequenceMarker from '@/components/course/CourseSequenceMarker';
 import { fileToResizedDataUrl } from '@/lib/imageUtils';
@@ -31,13 +35,17 @@ import { TemplateBackgroundLayer, TemplateFrameLayer } from '@/components/munchi
 
 const STEP_TITLES = [
   '코스맵을 정하세요',
-  '템플릿을 선택하세요',
-  '이제 템플릿을 꾸며 보아요',
+  '템플릿을 선택하고 꾸며 보아요',
   '미리보기',
   '포스팅 완료!',
 ];
 
 const MAX_PINS = 3;
+
+const usesDarkToolbarIcon = (color: string) => {
+  const normalized = color.toUpperCase();
+  return normalized === '#FFFFFF' || normalized === '#FFE24A';
+};
 
 interface CoursePin {
   restaurant: Restaurant;
@@ -302,135 +310,145 @@ function PinsStep({
   );
 }
 
-// ── ② 템플릿 룰렛 ─────────────────────────────────────────────────────────────
-
-function TemplateRouletteStep({
-  index, setIndex,
-}: {
-  index: number;
-  setIndex: React.Dispatch<React.SetStateAction<number>>;
-}) {
-  const count = COURSEMAP_TEMPLATES.length;
-  const template = COURSEMAP_TEMPLATES[index]!;
-  const prev = COURSEMAP_TEMPLATES[(index - 1 + count) % count]!;
-  const next = COURSEMAP_TEMPLATES[(index + 1) % count]!;
-
-  return (
-    <div>
-      <div className="relative flex h-[380px] items-center justify-center overflow-hidden">
-        {/* 양옆 미리보기 */}
-        <img
-          src={prev.image} alt=""
-          className="absolute left-[-72px] w-[150px] rounded-2xl opacity-45 shadow-md"
-          style={{ aspectRatio: '3/4', objectFit: 'cover' }}
-          draggable={false}
-        />
-        <img
-          src={next.image} alt=""
-          className="absolute right-[-72px] w-[150px] rounded-2xl opacity-45 shadow-md"
-          style={{ aspectRatio: '3/4', objectFit: 'cover' }}
-          draggable={false}
-        />
-        {/* 가운데 = 선정된 템플릿 (스와이프로 로테이션) */}
-        <AnimatePresence mode="popLayout" initial={false}>
-          <motion.div
-            key={template.id}
-            initial={{ opacity: 0, scale: 0.86, rotate: -3 }}
-            animate={{ opacity: 1, scale: 1, rotate: 0 }}
-            exit={{ opacity: 0, scale: 0.86, rotate: 3 }}
-            transition={{ type: 'spring', stiffness: 300, damping: 26 }}
-            drag="x"
-            dragConstraints={{ left: 0, right: 0 }}
-            dragElastic={0.5}
-            onDragEnd={(_, info) => {
-              if (info.offset.x < -50) setIndex(i => (i + 1) % count);
-              else if (info.offset.x > 50) setIndex(i => (i - 1 + count) % count);
-            }}
-            className="relative z-10 w-[248px] cursor-grab overflow-hidden rounded-3xl border-4 border-white shadow-[0_18px_44px_rgba(63,38,24,0.28)] active:cursor-grabbing"
-            style={{ aspectRatio: '3/4' }}
-          >
-            <img src={template.image} alt={template.name} className="h-full w-full object-cover" draggable={false} />
-            <span className="absolute left-1/2 top-2.5 -translate-x-1/2 rounded-full bg-[#FF424B] px-2.5 py-1 text-[9px] font-black text-white shadow-sm">
-              선택됨
-            </span>
-          </motion.div>
-        </AnimatePresence>
-
-        {/* 좌우 화살표 */}
-        <button
-          type="button"
-          onClick={() => setIndex(i => (i - 1 + count) % count)}
-          className="absolute left-1 z-20 flex h-9 w-9 items-center justify-center rounded-full bg-white/90 shadow-md active:scale-90"
-          aria-label="이전 템플릿"
-        >
-          <ChevronLeft size={18} />
-        </button>
-        <button
-          type="button"
-          onClick={() => setIndex(i => (i + 1) % count)}
-          className="absolute right-1 z-20 flex h-9 w-9 items-center justify-center rounded-full bg-white/90 shadow-md active:scale-90"
-          aria-label="다음 템플릿"
-        >
-          <ChevronRight size={18} />
-        </button>
-      </div>
-
-      <div className="mt-3 text-center">
-        <p className="text-[16px] font-black text-[#2B211D]">{template.name}</p>
-        <p className="mt-1 text-[11.5px] text-gray-400">{template.description}</p>
-        <div className="mt-2.5 flex justify-center gap-1.5">
-          {COURSEMAP_TEMPLATES.map((t, i) => (
-            <button
-              key={t.id}
-              type="button"
-              onClick={() => setIndex(i)}
-              aria-label={`${t.name} 선택`}
-              className="h-1.5 rounded-full transition-all"
-              style={{ width: i === index ? 18 : 6, background: i === index ? '#EB5053' : '#EDDCD2' }}
-            />
-          ))}
-        </div>
-      </div>
-    </div>
-  );
-}
-
-// ── ③ 템플릿 꾸미기 (drag & drop) ─────────────────────────────────────────────
+// ── ② 템플릿 꾸미기 (drag & drop) ─────────────────────────────────────────────
 
 function DecorateStep({
-  template, placed, setPlaced, photoPool, onAddUpload, onEditPhoto,
+  template, templateIndex, setTemplateIndex, placed, setPlaced, canvasStrokes, setCanvasStrokes, photoPool, onAddUpload, onRemoveFromPool, onEditPhoto,
 }: {
   template: CoursemapTemplate;
+  templateIndex: number;
+  setTemplateIndex: React.Dispatch<React.SetStateAction<number>>;
   placed: PlacedPhoto[];
   setPlaced: React.Dispatch<React.SetStateAction<PlacedPhoto[]>>;
+  canvasStrokes: CoursemapCanvasStroke[];
+  setCanvasStrokes: React.Dispatch<React.SetStateAction<CoursemapCanvasStroke[]>>;
   photoPool: string[];
   onAddUpload: (url: string) => void;
+  onRemoveFromPool: (url: string) => void;
   onEditPhoto: (id: string) => void;
 }) {
+  type CanvasTool = 'pointer' | 'pen' | 'highlight' | 'eraser';
   const canvasRef = useRef<HTMLDivElement>(null);
+  const templateRailRef = useRef<HTMLDivElement>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [canvasTool, setCanvasTool] = useState<CanvasTool>('pointer');
+  const [showTemplatePalette, setShowTemplatePalette] = useState(false);
+  const [canvasSwipeFeedback, setCanvasSwipeFeedback] = useState<{ direction: number } | null>(null);
+  const [canvasPenColor, setCanvasPenColor] = useState('#FF424B');
+  const [canvasHighlightColor, setCanvasHighlightColor] = useState('#FFE24A');
   const uploadRef = useRef<HTMLInputElement>(null);
-  const dragState = useRef<{ id: string; pointerId: number } | null>(null);
-  const resizeState = useRef<{
+  const activeCanvasStrokeRef = useRef<string | null>(null);
+  const canvasErasingRef = useRef(false);
+  const templateSwipeRef = useRef<{ pointerId: number; x: number; y: number } | null>(null);
+  const photoPointersRef = useRef(new Map<number, { id: string; x: number; y: number }>());
+  const photoPinchRef = useRef<{ id: string; distance: number; zoom: number } | null>(null);
+  const dragState = useRef<{
     id: string;
     pointerId: number;
-    axis: 'x' | 'y';
-    startClient: number;
-    startSize: number;
+    offsetX: number;
+    offsetY: number;
   } | null>(null);
 
+  const returnToPointerTool = () => {
+    setCanvasTool('pointer');
+    setShowTemplatePalette(false);
+  };
+
+  const handleTemplateSwipeStart = (event: React.PointerEvent<HTMLDivElement>) => {
+    if (canvasTool !== 'pointer' || event.target !== event.currentTarget) return;
+    templateSwipeRef.current = { pointerId: event.pointerId, x: event.clientX, y: event.clientY };
+    event.currentTarget.setPointerCapture?.(event.pointerId);
+  };
+
+  const handleTemplateSwipeEnd = (event: React.PointerEvent<HTMLDivElement>) => {
+    const swipe = templateSwipeRef.current;
+    templateSwipeRef.current = null;
+    if (!swipe || swipe.pointerId !== event.pointerId) return;
+    const deltaX = event.clientX - swipe.x;
+    const deltaY = event.clientY - swipe.y;
+    if (Math.abs(deltaX) < 44 || Math.abs(deltaX) <= Math.abs(deltaY) * 1.2) return;
+    setCanvasSwipeFeedback({ direction: deltaX < 0 ? -1 : 1 });
+    setTemplateIndex(current => (current + (deltaX < 0 ? 1 : -1) + COURSEMAP_TEMPLATES.length) % COURSEMAP_TEMPLATES.length);
+    setSelectedId(null);
+  };
+
+  const selectAndBringToFront = (id: string) => {
+    setSelectedId(id);
+    setPlaced(current => {
+      const selectedPhoto = current.find(photo => photo.id === id);
+      return selectedPhoto ? [...current.filter(photo => photo.id !== id), selectedPhoto] : current;
+    });
+  };
+
+  const canvasPoint = (event: React.PointerEvent) => {
+    const rect = canvasRef.current?.getBoundingClientRect();
+    if (!rect) return null;
+    return {
+      x: Math.max(0, Math.min(100, ((event.clientX - rect.left) / rect.width) * 100)),
+      y: Math.max(0, Math.min(100, ((event.clientY - rect.top) / rect.height) * 100)),
+    };
+  };
+
+  const startCanvasStroke = (event: React.PointerEvent) => {
+    const point = canvasPoint(event);
+    if (!point) return;
+    event.preventDefault();
+    event.stopPropagation();
+    event.currentTarget.setPointerCapture?.(event.pointerId);
+    if (canvasTool === 'eraser') {
+      canvasErasingRef.current = true;
+      setCanvasStrokes(current => current.filter(stroke => !stroke.points.some(strokePoint => Math.hypot(strokePoint.x - point.x, strokePoint.y - point.y) <= 7)));
+      return;
+    }
+    if (canvasTool !== 'pen' && canvasTool !== 'highlight') return;
+    const id = `canvas_stroke_${Date.now()}_${Math.round(Math.random() * 999)}`;
+    activeCanvasStrokeRef.current = id;
+    setCanvasStrokes(current => [...current, {
+      id,
+      color: canvasTool === 'highlight' ? canvasHighlightColor : canvasPenColor,
+      width: canvasTool === 'highlight' ? 4.6 : 1.4,
+      opacity: canvasTool === 'highlight' ? 0.42 : 1,
+      points: [point],
+    }]);
+  };
+
+  const moveCanvasStroke = (event: React.PointerEvent) => {
+    if (canvasTool === 'eraser' && canvasErasingRef.current) {
+      const point = canvasPoint(event);
+      if (!point) return;
+      event.preventDefault();
+      setCanvasStrokes(current => current.filter(stroke => !stroke.points.some(strokePoint => Math.hypot(strokePoint.x - point.x, strokePoint.y - point.y) <= 7)));
+      return;
+    }
+    const id = activeCanvasStrokeRef.current;
+    if (!id) return;
+    const point = canvasPoint(event);
+    if (!point) return;
+    event.preventDefault();
+    setCanvasStrokes(current => current.map(stroke => stroke.id === id
+      ? { ...stroke, points: [...stroke.points, point] }
+      : stroke));
+  };
+
   const addToCanvas = (src: string) => {
+    returnToPointerTool();
+    const existing = placed.find(photo => photo.src === src || photo.originalSrc === src);
+    if (existing) {
+      selectAndBringToFront(existing.id);
+      return;
+    }
     if (placed.length >= MAX_MUNCHIE_FEED_PHOTOS) {
       toast.info(`Munchie 피드 사진은 최대 ${MAX_MUNCHIE_FEED_PHOTOS}장까지 사용할 수 있어요`);
       return;
     }
     const id = `placed_${Date.now()}_${Math.round(Math.random() * 999)}`;
     setPlaced(prev => [...prev, {
-      id, src,
+      id, src, originalSrc: src,
       x: 38 + (prev.length % 3) * 12,
       y: 30 + (prev.length % 3) * 16,
       w: 36,
       h: 27,
+      zoom: 1,
       rotate: (prev.length % 2 === 0 ? -1 : 1) * (2 + prev.length),
     }]);
     setSelectedId(id);
@@ -442,66 +460,231 @@ function DecorateStep({
   };
 
   const handlePointerMove = (event: React.PointerEvent) => {
-    const resize = resizeState.current;
-    const rect = canvasRef.current?.getBoundingClientRect();
-    if (resize && rect && event.pointerId === resize.pointerId) {
-      const delta = resize.axis === 'x'
-        ? ((event.clientX - resize.startClient) / rect.width) * 200
-        : ((event.clientY - resize.startClient) / rect.height) * 200;
-      setPlaced(prev => prev.map(photo => photo.id === resize.id
-        ? resize.axis === 'x'
-          ? { ...photo, w: Math.max(14, Math.min(88, resize.startSize + delta)) }
-          : { ...photo, h: Math.max(10, Math.min(88, resize.startSize + delta)) }
-        : photo));
-      return;
+    const trackedPointer = photoPointersRef.current.get(event.pointerId);
+    if (trackedPointer) {
+      photoPointersRef.current.set(event.pointerId, { ...trackedPointer, x: event.clientX, y: event.clientY });
+      const pinch = photoPinchRef.current;
+      const pinchPointers = Array.from(photoPointersRef.current.values()).filter(pointer => pointer.id === pinch?.id);
+      if (pinch && pinchPointers.length >= 2) {
+        event.preventDefault();
+        const [first, second] = pinchPointers;
+        const distance = Math.hypot(second.x - first.x, second.y - first.y);
+        const zoom = Math.max(1, Math.min(3, pinch.zoom * (distance / Math.max(pinch.distance, 1))));
+        setPlaced(prev => prev.map(photo => photo.id === pinch.id ? { ...photo, zoom } : photo));
+        return;
+      }
     }
+    const rect = canvasRef.current?.getBoundingClientRect();
     const drag = dragState.current;
     if (!drag || !rect || event.pointerId !== drag.pointerId) return;
-    const x = ((event.clientX - rect.left) / rect.width) * 100;
-    const y = ((event.clientY - rect.top) / rect.height) * 100;
+    event.preventDefault();
+    const x = ((event.clientX - rect.left) / rect.width) * 100 + drag.offsetX;
+    const y = ((event.clientY - rect.top) / rect.height) * 100 + drag.offsetY;
     setPlaced(prev => prev.map(photo => photo.id === drag.id
       ? { ...photo, x: Math.max(6, Math.min(94, x)), y: Math.max(6, Math.min(94, y)) }
       : photo));
   };
 
+  const handleCanvasPointerEnd = (event: React.PointerEvent<HTMLDivElement>) => {
+    photoPointersRef.current.delete(event.pointerId);
+    if (photoPointersRef.current.size < 2) photoPinchRef.current = null;
+    dragState.current = null;
+    handleTemplateSwipeEnd(event);
+  };
+
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const handleWheel = (event: WheelEvent) => {
+      const photoElement = (event.target as Element | null)?.closest<HTMLElement>('[data-photo-id]');
+      const photoId = photoElement?.dataset.photoId;
+      if (!photoId || photoId !== selectedId) return;
+      event.preventDefault();
+      event.stopPropagation();
+      const direction = event.deltaY < 0 ? 1 : -1;
+      setPlaced(current => current.map(photo => photo.id === photoId
+        ? { ...photo, zoom: Math.max(1, Math.min(3, (photo.zoom ?? 1) + direction * 0.12)) }
+        : photo));
+    };
+    canvas.addEventListener('wheel', handleWheel, { passive: false });
+    return () => canvas.removeEventListener('wheel', handleWheel);
+  }, [selectedId, setPlaced]);
+
   const handleUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
-    const files = Array.from(event.target.files ?? []).slice(0, Math.max(0, MAX_MUNCHIE_FEED_PHOTOS - placed.length));
+    const files = Array.from(event.target.files ?? []);
+    const knownPhotos = new Set(photoPool);
+    const remainingSlots = Math.max(0, MAX_MUNCHIE_FEED_PHOTOS - knownPhotos.size);
+    let addedCount = 0;
+    let duplicateFound = false;
     event.target.value = '';
     for (const file of files) {
+      if (addedCount >= remainingSlots) break;
       try {
         const url = await fileToResizedDataUrl(file, 900, 0.8);
+        if (knownPhotos.has(url)) {
+          duplicateFound = true;
+          continue;
+        }
+        knownPhotos.add(url);
+        addedCount += 1;
         onAddUpload(url);
+        addToCanvas(url);
       } catch {
         toast.error('사진을 불러오지 못했어요');
       }
     }
+    if (duplicateFound) toast.warning('사진이 이미 목록에 있습니다, 목록에서 추가해주세요');
   };
 
   const selected = placed.find(photo => photo.id === selectedId) ?? null;
+  const previousTemplate = COURSEMAP_TEMPLATES[(templateIndex - 1 + COURSEMAP_TEMPLATES.length) % COURSEMAP_TEMPLATES.length]!;
+  const nextTemplate = COURSEMAP_TEMPLATES[(templateIndex + 1) % COURSEMAP_TEMPLATES.length]!;
+  const canvasPenIsWhite = canvasPenColor.toUpperCase() === '#FFFFFF';
+  const canvasHighlightIsWhite = canvasHighlightColor.toUpperCase() === '#FFFFFF';
+  const canvasPenUsesDarkIcon = usesDarkToolbarIcon(canvasPenColor);
+  const canvasHighlightUsesDarkIcon = usesDarkToolbarIcon(canvasHighlightColor);
+
+  useEffect(() => {
+    if (!showTemplatePalette) return;
+    const frame = requestAnimationFrame(() => {
+      const rail = templateRailRef.current;
+      if (!rail) return;
+      const segmentWidth = rail.scrollWidth / 3;
+      const itemWidth = segmentWidth / Math.max(COURSEMAP_TEMPLATES.length, 1);
+      rail.scrollLeft = segmentWidth + templateIndex * itemWidth - Math.max(0, (rail.clientWidth - itemWidth) / 2);
+    });
+    return () => cancelAnimationFrame(frame);
+    // Opening the rail recenters the current template; selection itself keeps the user's scroll position.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [showTemplatePalette]);
+
+  const normalizeTemplateRailPosition = () => {
+    const rail = templateRailRef.current;
+    if (!rail) return;
+    const segmentWidth = rail.scrollWidth / 3;
+    if (rail.scrollLeft < segmentWidth * 0.5) rail.scrollLeft += segmentWidth;
+    else if (rail.scrollLeft > segmentWidth * 1.5) rail.scrollLeft -= segmentWidth;
+  };
+
+  useEffect(() => {
+    if (!showTemplatePalette) return;
+    const rail = templateRailRef.current;
+    if (!rail) return;
+    let settleTimer: ReturnType<typeof setTimeout> | null = null;
+    const handleScroll = () => {
+      if (settleTimer) clearTimeout(settleTimer);
+      settleTimer = setTimeout(normalizeTemplateRailPosition, 140);
+    };
+    const handleWheel = (event: WheelEvent) => {
+      if (Math.abs(event.deltaY) <= Math.abs(event.deltaX)) return;
+      event.preventDefault();
+      rail.scrollLeft += event.deltaY;
+    };
+    rail.addEventListener('scroll', handleScroll, { passive: true });
+    rail.addEventListener('wheel', handleWheel, { passive: false });
+    return () => {
+      if (settleTimer) clearTimeout(settleTimer);
+      rail.removeEventListener('scroll', handleScroll);
+      rail.removeEventListener('wheel', handleWheel);
+    };
+  }, [showTemplatePalette]);
 
   return (
     <div>
-      <div className="mb-2 flex items-end justify-between">
-        <div>
-          <p className="text-[13px] font-black text-[#3B2A22]">템플릿에서 바로 편집</p>
-          <p className="mt-0.5 text-[10px] text-[#9A8579]">사진을 선택하고 끌어서 위치를 옮겨보세요.</p>
+      <div className="mb-2 flex items-end justify-between px-1">
+        <div className="min-w-0">
+          <div className="flex min-w-0 items-center gap-3">
+            <p className="shrink-0 text-[13px] font-black text-[#3B2A22]">템플릿에서 바로 편집</p>
+            <span className="truncate text-[11px] font-black text-[#EB5053]">{template.name}</span>
+          </div>
+          <p className="mt-0.5 text-[10px] text-[#9A8579]">빈 곳을 좌우로 스와이프해 템플릿을 바꾸고, 사진을 끌어 옮겨보세요.</p>
         </div>
-        <span className="text-[10px] font-bold text-[#D76A68]">{placed.length}/{MAX_MUNCHIE_FEED_PHOTOS}</span>
+        <span className="mr-1 shrink-0 rounded-full bg-[#FFF0EC] px-2.5 py-1 text-[13px] font-black text-[#D94D52]">{placed.length}/{MAX_MUNCHIE_FEED_PHOTOS}</span>
       </div>
+
+      <div className="mx-auto mb-1 w-full max-w-[330px] rounded-2xl border border-[#EFE1D7] bg-white px-2 py-2 shadow-sm">
+        <div className="flex items-center justify-center gap-2">
+          <button type="button" title="사진 선택·이동" onClick={() => { setCanvasTool('pointer'); setShowTemplatePalette(false); }} aria-label="사진 선택 및 이동" aria-pressed={canvasTool === 'pointer' && !showTemplatePalette} className={`flex h-9 w-9 items-center justify-center rounded-full active:scale-90 ${canvasTool === 'pointer' && !showTemplatePalette ? 'bg-[#3B2A22] text-white' : 'bg-[#FFF2ED] text-[#D94D52]'}`}><MousePointer2 size={16} /></button>
+          <button type="button" title="모든 템플릿" onClick={() => { setShowTemplatePalette(current => !current); setCanvasTool('pointer'); }} aria-label="모든 템플릿 보기" aria-expanded={showTemplatePalette} aria-pressed={showTemplatePalette} className={`flex h-9 w-9 items-center justify-center rounded-full active:scale-90 ${showTemplatePalette ? 'bg-[#3B2A22] text-white' : 'bg-[#FFF2ED] text-[#D94D52]'}`}><Palette size={16} /></button>
+          <button type="button" title="그리기" onClick={() => { setCanvasTool('pen'); setShowTemplatePalette(false); setSelectedId(null); }} aria-label="템플릿 전체에 그리기" aria-pressed={canvasTool === 'pen'} className={`flex h-9 w-9 items-center justify-center rounded-full border-2 active:scale-90 ${canvasTool === 'pen' ? '' : 'border-transparent bg-[#FFF2ED] text-[#D94D52]'}`} style={canvasTool === 'pen' ? { backgroundColor: canvasPenColor, borderColor: canvasPenIsWhite ? '#111111' : canvasPenColor, color: canvasPenUsesDarkIcon ? '#111111' : '#FFFFFF' } : undefined}><Pencil size={16} /></button>
+          <button type="button" title="하이라이터" onClick={() => { setCanvasTool('highlight'); setShowTemplatePalette(false); setSelectedId(null); }} aria-label="템플릿 하이라이터" aria-pressed={canvasTool === 'highlight'} className={`flex h-9 w-9 items-center justify-center rounded-full border-2 active:scale-90 ${canvasTool === 'highlight' ? '' : 'border-transparent bg-[#FFF2ED] text-[#D94D52]'}`} style={canvasTool === 'highlight' ? { backgroundColor: canvasHighlightColor, borderColor: canvasHighlightIsWhite ? '#111111' : canvasHighlightColor, color: canvasHighlightUsesDarkIcon ? '#111111' : '#FFFFFF' } : undefined}><Highlighter size={16} /></button>
+          <button type="button" title="지우개" onClick={() => { setCanvasTool('eraser'); setShowTemplatePalette(false); setSelectedId(null); }} aria-label="템플릿 지우개" aria-pressed={canvasTool === 'eraser'} className={`flex h-9 w-9 items-center justify-center rounded-full active:scale-90 ${canvasTool === 'eraser' ? 'bg-[#3B2A22] text-white' : 'bg-[#FFF2ED] text-[#D94D52]'}`}><Eraser size={16} /></button>
+          <button type="button" title="한 획 되돌리기" onClick={() => setCanvasStrokes(current => current.slice(0, -1))} aria-label="전체 그림 한 획 되돌리기" disabled={canvasStrokes.length === 0} className="flex h-9 w-9 items-center justify-center rounded-full bg-[#FFF2ED] text-[#6E5B50] active:scale-90 disabled:opacity-35"><Undo2 size={16} /></button>
+        </div>
+        {canvasTool === 'pen' && (
+          <div className="mt-2 flex items-center justify-center gap-2" aria-label="템플릿 펜 색상 선택">
+            {['#FF424B', '#2B211D', '#FFFFFF', '#2E8BFF', '#35B96F', '#FFE24A'].map(color => (
+              <button key={color} type="button" onClick={() => setCanvasPenColor(color)} aria-label={`펜 색상 ${color}`} className={`h-6 w-6 rounded-full border-2 ${canvasPenColor === color ? 'scale-110 border-[#FF424B]' : 'border-[#E9D8CF]'}`} style={{ backgroundColor: color }} />
+            ))}
+          </div>
+        )}
+        {canvasTool === 'highlight' && (
+          <div className="mt-2 flex items-center justify-center gap-2" aria-label="템플릿 하이라이터 색상 선택">
+            {['#FFE24A', '#FF8FB1', '#8FE3B0', '#79C7FF', '#C6A0FF', '#FFAD66'].map(color => (
+              <button key={color} type="button" onClick={() => setCanvasHighlightColor(color)} aria-label={`하이라이터 색상 ${color}`} className={`h-6 w-6 rounded-full border-2 ${canvasHighlightColor === color ? 'scale-110 border-[#D94D52]' : 'border-[#E9D8CF]'}`} style={{ backgroundColor: color }} />
+            ))}
+          </div>
+        )}
+      </div>
+
+      <AnimatePresence>
+        {showTemplatePalette && (
+          <motion.div initial={{ opacity: 0, y: -6 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -6 }} className="mx-auto mb-2 w-full max-w-[330px] rounded-2xl border border-[#ECDDD3] bg-white p-3 shadow-lg">
+            <div className="mb-2 flex items-center justify-between">
+              <p className="text-[11px] font-black text-[#3B2A22]">모든 템플릿</p>
+              <span className="text-[9px] font-semibold text-[#9A8579]">눌러서 바로 적용</span>
+            </div>
+            <div ref={templateRailRef} data-ui="infinite-template-rail" className="flex cursor-grab touch-pan-x overflow-x-auto overscroll-x-contain pb-1 active:cursor-grabbing scrollbar-hide" style={{ WebkitOverflowScrolling: 'touch' }}>
+              {[0, 1, 2].map(copyIndex => (
+                <div key={copyIndex} data-template-segment={copyIndex} className="flex shrink-0 gap-2 pr-2">
+                  {COURSEMAP_TEMPLATES.map((option, index) => (
+                    <button key={`${copyIndex}_${option.id}`} type="button" data-template-copy={copyIndex} onClick={() => { setCanvasSwipeFeedback(null); setTemplateIndex(index); setSelectedId(null); }} aria-label={`${option.name} 템플릿 적용`} className={`w-[92px] shrink-0 overflow-hidden rounded-xl border-2 bg-[#F8F1EB] p-1 text-left ${index === templateIndex ? 'border-[#FF424B]' : 'border-transparent'}`}>
+                      <span className="block aspect-[3/4] overflow-hidden rounded-lg"><img src={option.image} alt="" className="h-full w-full object-cover" draggable={false} /></span>
+                      <span className={`mt-1 block truncate text-center text-[9px] font-black ${index === templateIndex ? 'text-[#D94D52]' : 'text-[#6E5B50]'}`}>{option.name}</span>
+                    </button>
+                  ))}
+                </div>
+              ))}
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
       {/* 캔버스 — 템플릿 + 배치된 사진 */}
-      <div
-        ref={canvasRef}
-        className="relative isolate mx-auto w-full max-w-[330px] touch-none select-none overflow-hidden rounded-2xl border border-[#E8DED4] shadow-sm"
-        style={{ aspectRatio: '3/4' }}
-        onPointerMove={handlePointerMove}
-        onPointerUp={() => { dragState.current = null; resizeState.current = null; }}
-        onPointerLeave={() => { dragState.current = null; resizeState.current = null; }}
-        onClick={() => setSelectedId(null)}
-      >
+      <div className="relative mx-auto w-full max-w-[360px] overflow-visible py-2">
+        <div data-template-peek="previous" aria-hidden="true" className="pointer-events-none absolute -left-2 bottom-5 top-5 z-0 w-[330px] max-w-[calc(100%_-_28px)] -rotate-2 overflow-hidden rounded-2xl border-2 border-white bg-[#F1E7DE] opacity-90 shadow-[0_8px_20px_rgba(75,46,32,0.22)]">
+          <TemplateBackgroundLayer template={previousTemplate} loading="eager" />
+        </div>
+        <div data-template-peek="next" aria-hidden="true" className="pointer-events-none absolute -right-2 bottom-5 top-5 z-0 w-[330px] max-w-[calc(100%_-_28px)] rotate-2 overflow-hidden rounded-2xl border-2 border-white bg-[#F1E7DE] opacity-90 shadow-[0_8px_20px_rgba(75,46,32,0.22)]">
+          <TemplateBackgroundLayer template={nextTemplate} loading="eager" />
+        </div>
+        <span aria-hidden="true" className="pointer-events-none absolute -left-1 top-1/2 z-20 flex h-7 w-7 -translate-y-1/2 items-center justify-center rounded-full border border-[#F2D8CC] bg-white/95 text-[#E35355] shadow-md"><ChevronLeft size={16} /></span>
+        <span aria-hidden="true" className="pointer-events-none absolute -right-1 top-1/2 z-20 flex h-7 w-7 -translate-y-1/2 items-center justify-center rounded-full border border-[#F2D8CC] bg-white/95 text-[#E35355] shadow-md"><ChevronRight size={16} /></span>
+        <motion.div
+          key={template.id}
+          ref={canvasRef}
+          initial={canvasSwipeFeedback ? { x: canvasSwipeFeedback.direction * 8, rotate: canvasSwipeFeedback.direction * 0.35 } : false}
+          animate={canvasSwipeFeedback
+            ? { x: [canvasSwipeFeedback.direction * 8, canvasSwipeFeedback.direction * -2, 0], rotate: [canvasSwipeFeedback.direction * 0.35, canvasSwipeFeedback.direction * -0.1, 0] }
+            : { x: 0, rotate: 0 }}
+          transition={{ duration: 0.18, ease: 'easeOut' }}
+          onAnimationComplete={() => setCanvasSwipeFeedback(null)}
+          className="relative isolate z-10 mx-auto w-[calc(100%_-_28px)] max-w-[330px] touch-none select-none overflow-hidden rounded-2xl border-2 border-white shadow-[0_10px_26px_rgba(75,46,32,0.24)]"
+          style={{ aspectRatio: '3/4' }}
+          aria-label="템플릿 편집 캔버스"
+          data-template-index={templateIndex}
+          data-swipe-feedback={canvasSwipeFeedback ? 'active' : 'idle'}
+          onPointerDown={handleTemplateSwipeStart}
+          onPointerMove={handlePointerMove}
+          onPointerUp={handleCanvasPointerEnd}
+          onPointerCancel={event => { photoPointersRef.current.delete(event.pointerId); photoPinchRef.current = null; dragState.current = null; templateSwipeRef.current = null; }}
+          onClick={() => setSelectedId(null)}
+        >
         <TemplateBackgroundLayer template={template} loading="eager" />
-        {placed.map((photo, index) => (
+        {placed.map(photo => (
           <div
             key={photo.id}
+            data-photo-id={photo.id}
             className="absolute cursor-grab active:cursor-grabbing"
             style={{
               left: `${photo.x}%`,
@@ -509,59 +692,67 @@ function DecorateStep({
               width: `${photo.w}%`,
               height: `${photo.h ?? photo.w}%`,
               transform: `translate(-50%, -50%) rotate(${photo.rotate}deg)`,
-              zIndex: photo.id === selectedId ? 20 : 10,
+              zIndex: 10,
             }}
             onPointerDown={event => {
+              if (event.button !== 0) return;
+              event.preventDefault();
               event.stopPropagation();
-              setSelectedId(photo.id);
-              dragState.current = { id: photo.id, pointerId: event.pointerId };
-              (event.currentTarget as HTMLElement).setPointerCapture?.(event.pointerId);
+              selectAndBringToFront(photo.id);
+              photoPointersRef.current.set(event.pointerId, { id: photo.id, x: event.clientX, y: event.clientY });
+              const samePhotoPointers = Array.from(photoPointersRef.current.values()).filter(pointer => pointer.id === photo.id);
+              if (samePhotoPointers.length >= 2) {
+                const [first, second] = samePhotoPointers;
+                photoPinchRef.current = {
+                  id: photo.id,
+                  distance: Math.hypot(second.x - first.x, second.y - first.y),
+                  zoom: photo.zoom ?? 1,
+                };
+                dragState.current = null;
+                event.currentTarget.setPointerCapture?.(event.pointerId);
+                return;
+              }
+              const rect = canvasRef.current?.getBoundingClientRect();
+              if (!rect) return;
+              const pointerX = ((event.clientX - rect.left) / rect.width) * 100;
+              const pointerY = ((event.clientY - rect.top) / rect.height) * 100;
+              dragState.current = {
+                id: photo.id,
+                pointerId: event.pointerId,
+                offsetX: photo.x - pointerX,
+                offsetY: photo.y - pointerY,
+              };
+              event.currentTarget.setPointerCapture?.(event.pointerId);
             }}
             onClick={event => event.stopPropagation()}
           >
-            <div
-              className="overflow-hidden rounded-[8px] border-[3px] bg-white shadow-[0_6px_16px_rgba(63,38,24,0.2)]"
-              style={{ borderColor: photo.id === selectedId ? '#FF424B' : 'white' }}
-            >
-              <img src={photo.src} alt="" className="h-full w-full object-cover" draggable={false} />
+            <div className={`h-full w-full overflow-hidden rounded-[8px] bg-transparent shadow-[0_6px_16px_rgba(63,38,24,0.2)] ${photo.id === selectedId ? 'ring-2 ring-[#FF424B]' : ''}`}>
+              <img src={photo.src} alt="" className="h-full w-full object-cover transition-transform duration-100" style={{ transform: `scale(${photo.zoom ?? 1})` }} draggable={false} />
             </div>
-            {index < 3 && (
-              <span className="pointer-events-none absolute -top-3.5 left-1/2 z-10 -translate-x-1/2">
-                <CourseSequenceMarker index={index} selected={photo.id === selectedId} />
-              </span>
-            )}
-            {photo.id === selectedId && (
-              <>
-                <button
-                  type="button"
-                  aria-label="사진 가로 크기 조정"
-                  className="absolute -right-2 top-1/2 z-30 h-10 w-4 -translate-y-1/2 cursor-ew-resize rounded-full border-2 border-white bg-[#FF424B] shadow"
-                  onPointerDown={event => {
-                    event.stopPropagation();
-                    resizeState.current = { id: photo.id, pointerId: event.pointerId, axis: 'x', startClient: event.clientX, startSize: photo.w };
-                    (event.currentTarget as HTMLElement).setPointerCapture?.(event.pointerId);
-                  }}
-                />
-                <button
-                  type="button"
-                  aria-label="사진 세로 크기 조정"
-                  className="absolute -bottom-2 left-1/2 z-30 h-4 w-10 -translate-x-1/2 cursor-ns-resize rounded-full border-2 border-white bg-[#FF424B] shadow"
-                  onPointerDown={event => {
-                    event.stopPropagation();
-                    resizeState.current = { id: photo.id, pointerId: event.pointerId, axis: 'y', startClient: event.clientY, startSize: photo.h ?? photo.w };
-                    (event.currentTarget as HTMLElement).setPointerCapture?.(event.pointerId);
-                  }}
-                />
-              </>
-            )}
           </div>
         ))}
         {placed.length === 0 && (
-          <p className="absolute inset-x-6 top-1/2 -translate-y-1/2 rounded-xl bg-white/75 px-3 py-2.5 text-center text-[11.5px] font-semibold text-[#8D776C] backdrop-blur-sm">
+          <p className="pointer-events-none absolute inset-x-6 top-1/2 -translate-y-1/2 rounded-xl bg-white/75 px-3 py-2.5 text-center text-[11.5px] font-semibold text-[#8D776C] backdrop-blur-sm">
             아래 사진을 눌러 템플릿 위에 올린 뒤<br />drag & drop으로 꾸며보세요
           </p>
         )}
         <TemplateFrameLayer template={template} loading="eager" />
+        <svg viewBox="0 0 100 100" preserveAspectRatio="none" className="pointer-events-none absolute inset-0 z-40 h-full w-full" aria-hidden="true">
+          {canvasStrokes.map(stroke => (
+            <polyline key={stroke.id} points={stroke.points.map(point => `${point.x},${point.y}`).join(' ')} fill="none" stroke={stroke.color} opacity={stroke.opacity ?? 1} strokeWidth={stroke.width} strokeLinecap="round" strokeLinejoin="round" />
+          ))}
+        </svg>
+        {canvasTool !== 'pointer' && (
+          <div
+            className={`absolute inset-0 z-40 touch-none ${canvasTool === 'eraser' ? 'cursor-cell' : 'cursor-crosshair'}`}
+            aria-label={canvasTool === 'eraser' ? '템플릿 그림 지우기 영역' : canvasTool === 'highlight' ? '템플릿 하이라이터 영역' : '템플릿 전체 그리기 영역'}
+            onPointerDown={startCanvasStroke}
+            onPointerMove={moveCanvasStroke}
+            onPointerUp={() => { activeCanvasStrokeRef.current = null; canvasErasingRef.current = false; }}
+            onPointerCancel={() => { activeCanvasStrokeRef.current = null; canvasErasingRef.current = false; }}
+          />
+        )}
+        </motion.div>
       </div>
 
       {/* 선택된 사진 컨트롤 — 크기 조정 · 회전 · 에디터 · 삭제 */}
@@ -571,27 +762,25 @@ function DecorateStep({
             initial={{ opacity: 0, y: 6 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: 6 }}
-            className="mx-auto mt-3 flex w-fit items-center gap-1.5 rounded-full border border-[#EFE3D8] bg-white px-2 py-1.5 shadow-sm"
+            className="mx-auto mt-3 w-full max-w-[330px] rounded-2xl border border-[#EFE3D8] bg-white px-3 py-2.5 shadow-sm"
           >
-            <button type="button" onClick={() => updateSelected(p => ({ w: Math.max(16, p.w - 4) }))} aria-label="작게" className="flex h-8 w-8 items-center justify-center rounded-full bg-[#FFF4EF] text-[#3B2A22] active:scale-90"><Minus size={14} /></button>
-            <button type="button" onClick={() => updateSelected(p => ({ w: Math.min(70, p.w + 4) }))} aria-label="크게" className="flex h-8 w-8 items-center justify-center rounded-full bg-[#FFF4EF] text-[#3B2A22] active:scale-90"><Plus size={14} /></button>
-            <button type="button" onClick={() => updateSelected(p => ({ rotate: p.rotate - 15 }))} aria-label="사진 반시계 방향 회전" className="flex h-8 w-8 items-center justify-center rounded-full bg-[#FFF4EF] text-[#3B2A22] active:scale-90"><RotateCcw size={14} /></button>
-            <button type="button" onClick={() => updateSelected(p => ({ rotate: p.rotate + 15 }))} aria-label="사진 시계 방향 회전" className="flex h-8 w-8 items-center justify-center rounded-full bg-[#FFF4EF] text-[#3B2A22] active:scale-90"><RotateCw size={14} /></button>
-            <button
-              type="button"
-              onClick={() => onEditPhoto(selected.id)}
-              className="flex h-8 items-center gap-1 rounded-full bg-[#FF424B] px-3 text-[11px] font-black text-white active:scale-95"
-            >
-              <Wand2 size={12} /> 사진 에디터
-            </button>
-            <button
-              type="button"
-              onClick={() => { setPlaced(prev => prev.filter(p => p.id !== selected.id)); setSelectedId(null); }}
-              aria-label="삭제"
-              className="flex h-8 w-8 items-center justify-center rounded-full bg-[#FFF4EF] text-[#D94447] active:scale-90"
-            >
-              <Trash2 size={14} />
-            </button>
+            <div className="grid grid-cols-2 gap-3">
+              <label className="min-w-0 text-[10px] font-bold text-[#6E5B50]">
+                <span className="mb-1 block">가로</span>
+                <input type="range" min="14" max="88" value={selected.w} onChange={event => updateSelected(() => ({ w: Number(event.target.value) }))} className="block w-full accent-[#FF424B]" />
+              </label>
+              <label className="min-w-0 text-[10px] font-bold text-[#6E5B50]">
+                <span className="mb-1 block">세로</span>
+                <input type="range" min="10" max="88" value={selected.h ?? selected.w} onChange={event => updateSelected(() => ({ h: Number(event.target.value) }))} className="block w-full accent-[#FF424B]" />
+              </label>
+            </div>
+            <div className="mt-2 flex items-center justify-center gap-1.5">
+              <button type="button" onClick={() => updateSelected(p => ({ rotate: p.rotate - 15 }))} aria-label="사진 반시계 방향 회전" className="flex h-8 w-8 items-center justify-center rounded-full bg-[#FFF4EF] text-[#3B2A22] active:scale-90"><RotateCcw size={14} /></button>
+              <button type="button" onClick={() => updateSelected(p => ({ rotate: p.rotate + 15 }))} aria-label="사진 시계 방향 회전" className="flex h-8 w-8 items-center justify-center rounded-full bg-[#FFF4EF] text-[#3B2A22] active:scale-90"><RotateCw size={14} /></button>
+              <button type="button" onClick={() => onEditPhoto(selected.id)} className="flex h-8 items-center gap-1 rounded-full bg-[#FF424B] px-3 text-[11px] font-black text-white active:scale-95"><Wand2 size={12} /> 포토 에디터</button>
+              <button type="button" onClick={() => { returnToPointerTool(); setPlaced(prev => prev.filter(p => p.id !== selected.id)); setSelectedId(null); }} aria-label="삭제" className="flex h-8 w-8 items-center justify-center rounded-full bg-[#FFF4EF] text-[#D94447] active:scale-90"><Trash2 size={14} /></button>
+            </div>
+            <p className="mt-1.5 text-center text-[9px] font-semibold text-[#9A8579]">선택한 사진 위에서 휠 또는 두 손가락으로 확대·축소 ({(selected.zoom ?? 1).toFixed(1)}×)</p>
           </motion.div>
         )}
       </AnimatePresence>
@@ -600,23 +789,27 @@ function DecorateStep({
       <p className="mt-4 mb-1.5 text-xs text-gray-400">업로드한 사진목록 — 눌러서 템플릿에 올리기 (최대 {MAX_MUNCHIE_FEED_PHOTOS}장)</p>
       <div className="flex gap-2 overflow-x-auto pb-1.5 scrollbar-hide">
         {photoPool.map(src => (
+          <div key={src.slice(0, 80)} className="relative h-16 w-16 shrink-0">
           <button
-            key={src.slice(0, 80)}
             type="button"
-            onClick={() => addToCanvas(src)}
-            className="h-16 w-16 shrink-0 overflow-hidden rounded-xl border border-[#EFE3D8] active:scale-95"
+            onClick={() => { returnToPointerTool(); addToCanvas(src); }}
+            className="h-full w-full overflow-hidden rounded-xl border border-[#EFE3D8] active:scale-95"
           >
             <img src={src} alt="" className="h-full w-full object-cover" draggable={false} />
           </button>
+          <button type="button" onClick={() => { returnToPointerTool(); onRemoveFromPool(src); setPlaced(prev => prev.filter(photo => photo.src !== src && photo.originalSrc !== src)); }} aria-label="사진 목록에서 삭제" className="absolute right-1 top-1 flex h-5 w-5 items-center justify-center rounded-full border border-white/80 bg-[#D94447] text-white shadow"><X size={11} /></button>
+          </div>
         ))}
-        <button
-          type="button"
-          onClick={() => uploadRef.current?.click()}
-          className="flex h-16 w-16 shrink-0 flex-col items-center justify-center gap-0.5 rounded-xl border-2 border-dashed border-[#E0D2C6] text-[#B0A090] active:scale-95"
-        >
-          <Plus size={18} />
-          <span className="text-[8px] font-bold">사진 추가</span>
-        </button>
+        {photoPool.length < MAX_MUNCHIE_FEED_PHOTOS && (
+          <button
+            type="button"
+            onClick={() => { returnToPointerTool(); uploadRef.current?.click(); }}
+            className="flex h-16 w-16 shrink-0 flex-col items-center justify-center gap-0.5 rounded-xl border-2 border-dashed border-[#E0D2C6] text-[#B0A090] active:scale-95"
+          >
+            <Plus size={18} />
+            <span className="text-[8px] font-bold">사진 추가</span>
+          </button>
+        )}
         <input ref={uploadRef} type="file" accept="image/*" multiple className="hidden" onChange={handleUpload} />
       </div>
       <p className="mt-1 text-[10px] text-gray-300">사진을 끌어 옮기고, 선택한 사진의 오른쪽·아래 edge를 끌어 가로·세로 크기를 자유롭게 바꿔보세요</p>
@@ -635,7 +828,7 @@ const FILTER_PRESETS = [
   { id: 'cool', name: '시원', css: 'hue-rotate(-12deg) saturate(1.1) brightness(1.04)' },
 ] as const;
 
-type EditorTool = 'none' | 'pen' | 'highlight';
+type EditorTool = 'pointer' | 'pen' | 'highlight' | 'text' | 'eraser';
 
 interface EditorStroke {
   tool: 'pen' | 'highlight';
@@ -643,49 +836,261 @@ interface EditorStroke {
   points: { x: number; y: number }[];
 }
 
-function PhotoEditorModal({ src, onSave, onClose }: {
+interface EditorText {
+  id: string;
+  value: string;
+  x: number;
+  y: number;
+}
+
+function photoFrameSizeForCropAspect(photo: PlacedPhoto, cropAspect: number) {
+  const frameWidthToHeight = Math.max(0.2, Math.min(5, cropAspect)) * (4 / 3);
+  let w = Math.max(14, Math.min(88, photo.w));
+  let h = w / frameWidthToHeight;
+  if (h > 88) { h = 88; w = h * frameWidthToHeight; }
+  if (h < 10) { h = 10; w = h * frameWidthToHeight; }
+  if (w > 88) { w = 88; h = w / frameWidthToHeight; }
+  if (w < 14) { w = 14; h = w / frameWidthToHeight; }
+  return { w, h };
+}
+
+function PhotoEditorModal({ src, originalSrc, cropAspect, onSave, onBack }: {
   src: string;
-  onSave: (dataUrl: string) => void;
-  onClose: () => void;
+  originalSrc: string;
+  cropAspect: number;
+  onSave: (dataUrl: string, cropAspect: number) => void;
+  onBack: (cropAspect: number) => void;
 }) {
+  const initialSafeCropAspect = Math.max(0.2, Math.min(5, cropAspect));
+  const initialCropGuide = initialSafeCropAspect >= 1
+    ? { width: 100, height: 100 / initialSafeCropAspect }
+    : { width: initialSafeCropAspect * 100, height: 100 };
+  const [workingSrc, setWorkingSrc] = useState(src);
   const [filterId, setFilterId] = useState<(typeof FILTER_PRESETS)[number]['id']>('none');
   const [zoom, setZoom] = useState(1);
-  const [tool, setTool] = useState<EditorTool>('none');
+  const [cropOffset, setCropOffset] = useState({ x: 0, y: 0 });
+  const [cropGuideOffset, setCropGuideOffset] = useState({ x: 0, y: 0 });
+  const [cropGuide, setCropGuide] = useState(initialCropGuide);
+  const [imageAspect, setImageAspect] = useState(1);
+  const [tool, setTool] = useState<EditorTool>('pointer');
+  const [penColor, setPenColor] = useState('#FF424B');
+  const [highlightColor, setHighlightColor] = useState('#FFE24A');
   const [strokes, setStrokes] = useState<EditorStroke[]>([]);
-  const [texts, setTexts] = useState<{ id: string; value: string; x: number; y: number }[]>([]);
+  const [texts, setTexts] = useState<EditorText[]>([]);
   const [textDraft, setTextDraft] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const boxRef = useRef<HTMLDivElement>(null);
   const drawingRef = useRef(false);
+  const zoomPointersRef = useRef(new Map<number, { x: number; y: number }>());
+  const pinchRef = useRef<{ distance: number; zoom: number } | null>(null);
+  const panRef = useRef<{ pointerId: number; x: number; y: number; offsetX: number; offsetY: number } | null>(null);
+  const guideDragRef = useRef<{ pointerId: number; x: number; y: number; offsetX: number; offsetY: number } | null>(null);
+  const guideResizeRef = useRef<{ pointerId: number; edge: 'top' | 'right' | 'bottom' | 'left'; left: number; right: number; top: number; bottom: number } | null>(null);
+  const textDragRef = useRef<{ id: string; pointerId: number } | null>(null);
 
   const filter = FILTER_PRESETS.find(preset => preset.id === filterId)!;
+  const penIsWhite = penColor.toUpperCase() === '#FFFFFF';
+  const highlightIsWhite = highlightColor.toUpperCase() === '#FFFFFF';
+  const penUsesDarkIcon = usesDarkToolbarIcon(penColor);
+  const highlightUsesDarkIcon = usesDarkToolbarIcon(highlightColor);
+  const safeCropAspect = Math.max(0.2, Math.min(5, cropGuide.width / Math.max(cropGuide.height, 0.001)));
+  const clampGuideOffset = (offset: { x: number; y: number }) => ({
+    x: Math.max(-(100 - cropGuide.width) / 2, Math.min((100 - cropGuide.width) / 2, offset.x)),
+    y: Math.max(-(100 - cropGuide.height) / 2, Math.min((100 - cropGuide.height) / 2, offset.y)),
+  });
+  const clampZoom = (value: number) => Math.min(3, Math.max(1, value));
+  const cropBounds = (targetZoom: number) => {
+    const baseWidth = imageAspect >= 1 ? imageAspect : 1;
+    const baseHeight = imageAspect >= 1 ? 1 : 1 / Math.max(imageAspect, 0.0001);
+    return {
+      x: Math.max(0, (baseWidth * targetZoom - 1) * 50),
+      y: Math.max(0, (baseHeight * targetZoom - 1) * 50),
+    };
+  };
+  const clampCropOffset = (offset: { x: number; y: number }, targetZoom: number) => {
+    const bounds = cropBounds(targetZoom);
+    return {
+      x: Math.max(-bounds.x, Math.min(bounds.x, offset.x)),
+      y: Math.max(-bounds.y, Math.min(bounds.y, offset.y)),
+    };
+  };
+  const applyZoom = (value: number) => {
+    const nextZoom = clampZoom(value);
+    setZoom(nextZoom);
+    setCropOffset(current => clampCropOffset(current, nextZoom));
+  };
+  const selectTool = (nextTool: EditorTool) => {
+    setTool(nextTool);
+    setTextDraft(nextTool === 'text' ? '' : null);
+    drawingRef.current = false;
+    zoomPointersRef.current.clear();
+    pinchRef.current = null;
+    panRef.current = null;
+    guideDragRef.current = null;
+    guideResizeRef.current = null;
+  };
+  const resetEdits = () => {
+    setWorkingSrc(originalSrc);
+    setFilterId('none');
+    setZoom(1);
+    setCropOffset({ x: 0, y: 0 });
+    setCropGuideOffset({ x: 0, y: 0 });
+    setCropGuide(initialCropGuide);
+    setStrokes([]);
+    setTexts([]);
+    selectTool('pointer');
+  };
+
+  useEffect(() => {
+    const box = boxRef.current;
+    if (!box) return;
+    const handleWheel = (event: WheelEvent) => {
+      event.preventDefault();
+      event.stopPropagation();
+      if (tool !== 'pointer') return;
+      const direction = event.deltaY < 0 ? 0.1 : -0.1;
+      setZoom(current => {
+        const nextZoom = clampZoom(current + direction);
+        setCropOffset(offset => clampCropOffset(offset, nextZoom));
+        return nextZoom;
+      });
+    };
+    box.addEventListener('wheel', handleWheel, { passive: false });
+    return () => box.removeEventListener('wheel', handleWheel);
+  }, [imageAspect, tool]);
+
+  const pointerDistance = () => {
+    const points = Array.from(zoomPointersRef.current.values());
+    if (points.length < 2) return 0;
+    return Math.hypot(points[0]!.x - points[1]!.x, points[0]!.y - points[1]!.y);
+  };
 
   const pointFromEvent = (event: React.PointerEvent) => {
     const rect = boxRef.current?.getBoundingClientRect();
     if (!rect) return null;
     return {
-      x: ((event.clientX - rect.left) / rect.width) * 100,
-      y: ((event.clientY - rect.top) / rect.height) * 100,
+      x: Math.max(0, Math.min(100, ((event.clientX - rect.left) / rect.width) * 100)),
+      y: Math.max(0, Math.min(100, ((event.clientY - rect.top) / rect.height) * 100)),
     };
   };
 
-  const handlePointerDown = (event: React.PointerEvent) => {
-    if (tool === 'none') return;
+  const startGuideResize = (event: React.PointerEvent<HTMLButtonElement>, edge: 'top' | 'right' | 'bottom' | 'left') => {
+    event.preventDefault();
+    event.stopPropagation();
+    event.currentTarget.setPointerCapture?.(event.pointerId);
+    const centerX = 50 + cropGuideOffset.x;
+    const centerY = 50 + cropGuideOffset.y;
+    guideResizeRef.current = {
+      pointerId: event.pointerId,
+      edge,
+      left: centerX - cropGuide.width / 2,
+      right: centerX + cropGuide.width / 2,
+      top: centerY - cropGuide.height / 2,
+      bottom: centerY + cropGuide.height / 2,
+    };
+  };
+
+  const moveGuideResize = (event: React.PointerEvent<HTMLButtonElement>) => {
+    const resize = guideResizeRef.current;
+    if (!resize || resize.pointerId !== event.pointerId) return;
     const point = pointFromEvent(event);
     if (!point) return;
-    drawingRef.current = true;
+    event.preventDefault();
+    event.stopPropagation();
+    let { left, right, top, bottom } = resize;
+    if (resize.edge === 'left') left = Math.max(0, Math.min(right - 20, point.x));
+    if (resize.edge === 'right') right = Math.min(100, Math.max(left + 20, point.x));
+    if (resize.edge === 'top') top = Math.max(0, Math.min(bottom - 20, point.y));
+    if (resize.edge === 'bottom') bottom = Math.min(100, Math.max(top + 20, point.y));
+    setCropGuide({ width: right - left, height: bottom - top });
+    setCropGuideOffset({ x: (left + right) / 2 - 50, y: (top + bottom) / 2 - 50 });
+  };
+
+  const endGuideResize = (event: React.PointerEvent<HTMLButtonElement>) => {
+    event.preventDefault();
+    event.stopPropagation();
+    guideResizeRef.current = null;
+  };
+
+  const eraseAt = (point: { x: number; y: number }) => {
+    const radius = 7;
+    setStrokes(current => current.filter(stroke => !stroke.points.some(strokePoint => (
+      Math.hypot(strokePoint.x - point.x, strokePoint.y - point.y) <= radius
+    ))));
+    setTexts(current => current.filter(text => Math.hypot(text.x - point.x, text.y - point.y) > radius + 2));
+  };
+
+  const handlePointerDown = (event: React.PointerEvent) => {
     (event.currentTarget as HTMLElement).setPointerCapture?.(event.pointerId);
+    if (tool === 'pointer') {
+      zoomPointersRef.current.set(event.pointerId, { x: event.clientX, y: event.clientY });
+      if (zoomPointersRef.current.size === 2) {
+        pinchRef.current = { distance: pointerDistance(), zoom };
+        panRef.current = null;
+        guideDragRef.current = null;
+      } else {
+        const point = pointFromEvent(event);
+        const guideCenterX = 50 + cropGuideOffset.x;
+        const guideCenterY = 50 + cropGuideOffset.y;
+        const insideGuide = !!point
+          && Math.abs(point.x - guideCenterX) <= cropGuide.width / 2
+          && Math.abs(point.y - guideCenterY) <= cropGuide.height / 2;
+        if (insideGuide) {
+          guideDragRef.current = { pointerId: event.pointerId, x: event.clientX, y: event.clientY, offsetX: cropGuideOffset.x, offsetY: cropGuideOffset.y };
+          panRef.current = null;
+        } else {
+          panRef.current = { pointerId: event.pointerId, x: event.clientX, y: event.clientY, offsetX: cropOffset.x, offsetY: cropOffset.y };
+          guideDragRef.current = null;
+        }
+      }
+      return;
+    }
+    const point = pointFromEvent(event);
+    if (!point) return;
+    if (tool === 'eraser') {
+      drawingRef.current = true;
+      eraseAt(point);
+      return;
+    }
+    if (tool === 'text') return;
+    drawingRef.current = true;
     setStrokes(prev => [...prev, {
       tool,
-      color: tool === 'highlight' ? '#FFE24A' : '#FF424B',
+      color: tool === 'highlight' ? highlightColor : penColor,
       points: [point],
     }]);
   };
 
   const handlePointerMove = (event: React.PointerEvent) => {
-    if (!drawingRef.current || tool === 'none') return;
+    if (tool === 'pointer') {
+      if (!zoomPointersRef.current.has(event.pointerId)) return;
+      zoomPointersRef.current.set(event.pointerId, { x: event.clientX, y: event.clientY });
+      const pinch = pinchRef.current;
+      if (pinch && zoomPointersRef.current.size >= 2 && pinch.distance > 0) {
+        applyZoom(pinch.zoom * (pointerDistance() / pinch.distance));
+      } else if (guideDragRef.current?.pointerId === event.pointerId && boxRef.current) {
+        const size = boxRef.current.getBoundingClientRect().width || 1;
+        setCropGuideOffset(clampGuideOffset({
+          x: guideDragRef.current.offsetX + ((event.clientX - guideDragRef.current.x) / size) * 100,
+          y: guideDragRef.current.offsetY + ((event.clientY - guideDragRef.current.y) / size) * 100,
+        }));
+      } else if (panRef.current?.pointerId === event.pointerId && boxRef.current) {
+        const size = boxRef.current.getBoundingClientRect().width || 1;
+        setCropOffset(clampCropOffset({
+          x: panRef.current.offsetX + ((event.clientX - panRef.current.x) / size) * 100,
+          y: panRef.current.offsetY + ((event.clientY - panRef.current.y) / size) * 100,
+        }, zoom));
+      }
+      return;
+    }
+    if (!drawingRef.current) return;
     const point = pointFromEvent(event);
     if (!point) return;
+    if (tool === 'eraser') {
+      eraseAt(point);
+      return;
+    }
+    if (tool === 'text') return;
     setStrokes(prev => {
       const next = [...prev];
       const last = next[next.length - 1];
@@ -694,12 +1099,34 @@ function PhotoEditorModal({ src, onSave, onClose }: {
     });
   };
 
+  const handlePointerEnd = (event: React.PointerEvent) => {
+    zoomPointersRef.current.delete(event.pointerId);
+    if (zoomPointersRef.current.size < 2) pinchRef.current = null;
+    if (panRef.current?.pointerId === event.pointerId) panRef.current = null;
+    if (guideDragRef.current?.pointerId === event.pointerId) guideDragRef.current = null;
+    drawingRef.current = false;
+  };
+
+  const moveText = (event: React.PointerEvent, id: string) => {
+    if (textDragRef.current?.id !== id || textDragRef.current.pointerId !== event.pointerId) return;
+    const point = pointFromEvent(event);
+    if (!point) return;
+    event.preventDefault();
+    event.stopPropagation();
+    setTexts(current => current.map(text => text.id === id ? {
+      ...text,
+      x: Math.max(4, Math.min(96, point.x)),
+      y: Math.max(4, Math.min(96, point.y)),
+    } : text));
+  };
+
   const commitText = () => {
     const value = textDraft?.trim();
     if (value) {
       setTexts(prev => [...prev, { id: `text_${Date.now()}`, value, x: 50, y: 50 }]);
     }
     setTextDraft(null);
+    setTool('pointer');
   };
 
   const handleSave = async () => {
@@ -710,7 +1137,7 @@ function PhotoEditorModal({ src, onSave, onClose }: {
       await new Promise<void>((resolve, reject) => {
         image.onload = () => resolve();
         image.onerror = () => reject(new Error('image load failed'));
-        image.src = src;
+        image.src = workingSrc;
       });
       const SIZE = 800;
       const canvas = document.createElement('canvas');
@@ -722,7 +1149,13 @@ function PhotoEditorModal({ src, onSave, onClose }: {
       const coverScale = (SIZE / Math.min(image.naturalWidth, image.naturalHeight)) * zoom;
       const drawW = image.naturalWidth * coverScale;
       const drawH = image.naturalHeight * coverScale;
-      ctx.drawImage(image, (SIZE - drawW) / 2, (SIZE - drawH) / 2, drawW, drawH);
+      ctx.drawImage(
+        image,
+        (SIZE - drawW) / 2 + (cropOffset.x / 100) * SIZE,
+        (SIZE - drawH) / 2 + (cropOffset.y / 100) * SIZE,
+        drawW,
+        drawH,
+      );
       ctx.filter = 'none';
 
       for (const stroke of strokes) {
@@ -753,7 +1186,21 @@ function PhotoEditorModal({ src, onSave, onClose }: {
         ctx.fillText(text.value, (text.x / 100) * SIZE, (text.y / 100) * SIZE);
       }
 
-      onSave(canvas.toDataURL('image/jpeg', 0.85));
+      const cropX = ((50 + cropGuideOffset.x - cropGuide.width / 2) / 100) * SIZE;
+      const cropY = ((50 + cropGuideOffset.y - cropGuide.height / 2) / 100) * SIZE;
+      const cropW = (cropGuide.width / 100) * SIZE;
+      const cropH = (cropGuide.height / 100) * SIZE;
+      const outputCanvas = document.createElement('canvas');
+      if (safeCropAspect >= 1) {
+        outputCanvas.width = SIZE;
+        outputCanvas.height = Math.max(1, Math.round(SIZE / safeCropAspect));
+      } else {
+        outputCanvas.width = Math.max(1, Math.round(SIZE * safeCropAspect));
+        outputCanvas.height = SIZE;
+      }
+      const outputContext = outputCanvas.getContext('2d')!;
+      outputContext.drawImage(canvas, cropX, cropY, cropW, cropH, 0, 0, outputCanvas.width, outputCanvas.height);
+      onSave(outputCanvas.toDataURL('image/jpeg', 0.85), safeCropAspect);
     } catch {
       toast.error('사진을 저장하지 못했어요');
     } finally {
@@ -768,12 +1215,13 @@ function PhotoEditorModal({ src, onSave, onClose }: {
       exit={{ opacity: 0 }}
       className="fixed inset-0 z-[70] flex flex-col bg-[#171210]"
     >
-      {/* 헤더 — Revert / Save */}
-      <div className="flex items-center justify-between px-4 pb-2 pt-11">
-        <button type="button" onClick={onClose} className="rounded-full border border-white/25 px-3.5 py-1.5 text-[12px] font-bold text-white/85 active:scale-95">
-          Revert
-        </button>
-        <p className="text-[13px] font-black text-white">사진 에디터</p>
+      {/* 헤더 — Back / Reset / Save */}
+      <div className="relative flex items-center justify-between px-4 pb-2 pt-11">
+        <div className="flex items-center gap-1.5">
+          <button type="button" onClick={() => onBack(safeCropAspect)} aria-label="사진 편집 뒤로가기" title="뒤로가기" className="flex h-9 w-9 items-center justify-center rounded-full border border-white/25 text-white/85 active:scale-90"><ChevronLeft size={18} /></button>
+          <button type="button" onClick={resetEdits} aria-label="사진 편집 초기화" title="초기화" className="flex h-9 w-9 items-center justify-center rounded-full border border-white/25 text-white/85 active:scale-90"><RotateCcw size={16} /></button>
+        </div>
+        <p className="pointer-events-none absolute left-1/2 -translate-x-1/2 text-[13px] font-black text-white">사진 에디터</p>
         <button
           type="button"
           onClick={handleSave}
@@ -792,14 +1240,27 @@ function PhotoEditorModal({ src, onSave, onClose }: {
           style={{ aspectRatio: '1/1' }}
           onPointerDown={handlePointerDown}
           onPointerMove={handlePointerMove}
-          onPointerUp={() => { drawingRef.current = false; }}
-          onPointerLeave={() => { drawingRef.current = false; }}
+          onPointerUp={handlePointerEnd}
+          onPointerCancel={handlePointerEnd}
+          onDoubleClick={() => { applyZoom(1); setCropOffset({ x: 0, y: 0 }); }}
         >
           <img
-            src={src}
+            src={workingSrc}
             alt=""
-            className="pointer-events-none absolute inset-0 h-full w-full object-cover"
-            style={{ filter: filter.css === 'none' ? undefined : filter.css, transform: `scale(${zoom})` }}
+            className="pointer-events-none absolute max-w-none select-none"
+            style={{
+              filter: filter.css === 'none' ? undefined : filter.css,
+              left: `calc(50% + ${cropOffset.x}%)`,
+              top: `calc(50% + ${cropOffset.y}%)`,
+              width: imageAspect >= 1 ? `${imageAspect * 100}%` : '100%',
+              height: imageAspect >= 1 ? '100%' : `${(1 / Math.max(imageAspect, 0.0001)) * 100}%`,
+              transform: `translate(-50%, -50%) scale(${zoom})`,
+            }}
+            onLoad={event => {
+              const nextAspect = event.currentTarget.naturalWidth / Math.max(event.currentTarget.naturalHeight, 1);
+              setImageAspect(nextAspect);
+              setCropOffset({ x: 0, y: 0 });
+            }}
             draggable={false}
           />
           <svg viewBox="0 0 100 100" preserveAspectRatio="none" className="pointer-events-none absolute inset-0 h-full w-full">
@@ -819,12 +1280,49 @@ function PhotoEditorModal({ src, onSave, onClose }: {
           {texts.map(text => (
             <span
               key={text.id}
-              className="pointer-events-none absolute -translate-x-1/2 -translate-y-1/2 text-[22px] font-black text-[#2B211D]"
+              role="button"
+              tabIndex={0}
+              aria-label={`${text.value} 텍스트 위치 이동`}
+              className={`absolute z-20 -translate-x-1/2 -translate-y-1/2 touch-none select-none text-[22px] font-black text-[#2B211D] ${tool === 'eraser' ? 'cursor-crosshair' : tool === 'pointer' ? 'cursor-move' : 'cursor-default'}`}
               style={{ left: `${text.x}%`, top: `${text.y}%`, textShadow: '0 0 6px white, 0 0 6px white' }}
+              onPointerDown={event => {
+                event.preventDefault();
+                event.stopPropagation();
+                if (tool === 'eraser') {
+                  setTexts(current => current.filter(item => item.id !== text.id));
+                  return;
+                }
+                if (tool !== 'pointer') return;
+                textDragRef.current = { id: text.id, pointerId: event.pointerId };
+                event.currentTarget.setPointerCapture?.(event.pointerId);
+              }}
+              onPointerMove={event => moveText(event, text.id)}
+              onPointerUp={event => { event.stopPropagation(); textDragRef.current = null; }}
+              onPointerCancel={() => { textDragRef.current = null; }}
             >
               {text.value}
             </span>
           ))}
+          <div
+            aria-label="템플릿에 표시되는 사진 영역"
+            data-crop-aspect={safeCropAspect.toFixed(4)}
+            className={`pointer-events-none absolute z-30 -translate-x-1/2 -translate-y-1/2 rounded-[5px] border-2 border-white/90 ${tool === 'pointer' ? 'shadow-[0_0_0_1px_rgba(0,0,0,0.22)]' : ''}`}
+            style={{
+              left: `${50 + cropGuideOffset.x}%`,
+              top: `${50 + cropGuideOffset.y}%`,
+              width: `${cropGuide.width}%`,
+              height: `${cropGuide.height}%`,
+              boxShadow: '0 0 0 999px rgba(12, 9, 8, 0.62), 0 0 0 1px rgba(0, 0, 0, 0.22)',
+            }}
+          />
+          {tool === 'pointer' && (
+            <>
+              <button type="button" aria-label="크롭 영역 위쪽 크기 조절" className="absolute z-50 h-3 w-12 -translate-x-1/2 -translate-y-1/2 cursor-ns-resize touch-none rounded-full border-2 border-[#2B211D]/35 bg-white shadow" style={{ left: `${50 + cropGuideOffset.x}%`, top: `${50 + cropGuideOffset.y - cropGuide.height / 2}%` }} onPointerDown={event => startGuideResize(event, 'top')} onPointerMove={moveGuideResize} onPointerUp={endGuideResize} onPointerCancel={endGuideResize} />
+              <button type="button" aria-label="크롭 영역 오른쪽 크기 조절" className="absolute z-50 h-12 w-3 -translate-x-1/2 -translate-y-1/2 cursor-ew-resize touch-none rounded-full border-2 border-[#2B211D]/35 bg-white shadow" style={{ left: `${50 + cropGuideOffset.x + cropGuide.width / 2}%`, top: `${50 + cropGuideOffset.y}%` }} onPointerDown={event => startGuideResize(event, 'right')} onPointerMove={moveGuideResize} onPointerUp={endGuideResize} onPointerCancel={endGuideResize} />
+              <button type="button" aria-label="크롭 영역 아래쪽 크기 조절" className="absolute z-50 h-3 w-12 -translate-x-1/2 -translate-y-1/2 cursor-ns-resize touch-none rounded-full border-2 border-[#2B211D]/35 bg-white shadow" style={{ left: `${50 + cropGuideOffset.x}%`, top: `${50 + cropGuideOffset.y + cropGuide.height / 2}%` }} onPointerDown={event => startGuideResize(event, 'bottom')} onPointerMove={moveGuideResize} onPointerUp={endGuideResize} onPointerCancel={endGuideResize} />
+              <button type="button" aria-label="크롭 영역 왼쪽 크기 조절" className="absolute z-50 h-12 w-3 -translate-x-1/2 -translate-y-1/2 cursor-ew-resize touch-none rounded-full border-2 border-[#2B211D]/35 bg-white shadow" style={{ left: `${50 + cropGuideOffset.x - cropGuide.width / 2}%`, top: `${50 + cropGuideOffset.y}%` }} onPointerDown={event => startGuideResize(event, 'left')} onPointerMove={moveGuideResize} onPointerUp={endGuideResize} onPointerCancel={endGuideResize} />
+            </>
+          )}
         </div>
       </div>
 
@@ -852,51 +1350,73 @@ function PhotoEditorModal({ src, onSave, onClose }: {
 
       {/* 사진 꾸미기 도구 */}
       <div className="px-6 pb-2">
-        <p className="mb-1.5 text-[10px] font-bold uppercase tracking-wider text-white/45">사진 꾸미기</p>
-        <div className="flex gap-2">
-          {/* Crop(확대) */}
-          <div className="flex flex-1 items-center gap-2 rounded-xl bg-white/12 px-3 py-2">
-            <span className="text-[10px] font-black text-white/75">Crop</span>
-            <input
-              type="range" min="1" max="2" step="0.05" value={zoom}
-              onChange={event => setZoom(Number(event.target.value))}
-              className="flex-1 accent-[#FF424B]"
-              aria-label="확대"
-            />
-          </div>
+        <div className="mb-2 flex items-center justify-between gap-3">
+          <p className="text-[10px] font-bold uppercase tracking-wider text-white/45">사진 꾸미기</p>
+          <p className="text-right text-[9.5px] font-semibold text-white/55">흰색 영역 드래그 · 휠/핀치 확대</p>
+        </div>
+        <div className="flex justify-center gap-2">
           <button
             type="button"
-            onClick={() => setTool(prev => prev === 'pen' ? 'none' : 'pen')}
-            className={`flex h-9 w-9 items-center justify-center rounded-xl active:scale-90 ${tool === 'pen' ? 'bg-[#FF424B] text-white' : 'bg-white/12 text-white/75'}`}
+            onClick={() => selectTool('pointer')}
+            className={`flex h-9 w-9 items-center justify-center rounded-xl active:scale-90 ${tool === 'pointer' ? 'bg-white text-[#2B211D]' : 'bg-white/12 text-white/75'}`}
+            aria-label="사진 선택 및 이동"
+            aria-pressed={tool === 'pointer'}
+          >
+            <MousePointer2 size={15} />
+          </button>
+          <button
+            type="button"
+            onClick={() => selectTool(tool === 'pen' ? 'pointer' : 'pen')}
+            className={`flex h-9 w-9 items-center justify-center rounded-xl border-2 active:scale-90 ${tool === 'pen' ? '' : 'border-transparent bg-white/12 text-white/75'}`}
+            style={tool === 'pen' ? { backgroundColor: penColor, borderColor: penIsWhite ? '#111111' : penColor, color: penUsesDarkIcon ? '#111111' : '#FFFFFF' } : undefined}
             aria-label="그리기"
+            aria-pressed={tool === 'pen'}
           >
             <Pencil size={15} />
           </button>
           <button
             type="button"
-            onClick={() => setTool(prev => prev === 'highlight' ? 'none' : 'highlight')}
-            className={`flex h-9 w-9 items-center justify-center rounded-xl active:scale-90 ${tool === 'highlight' ? 'bg-[#FFE24A] text-[#2B211D]' : 'bg-white/12 text-white/75'}`}
+            onClick={() => selectTool(tool === 'highlight' ? 'pointer' : 'highlight')}
+            className={`flex h-9 w-9 items-center justify-center rounded-xl border-2 active:scale-90 ${tool === 'highlight' ? '' : 'border-transparent bg-white/12 text-white/75'}`}
+            style={tool === 'highlight' ? { backgroundColor: highlightColor, borderColor: highlightIsWhite ? '#111111' : highlightColor, color: highlightUsesDarkIcon ? '#111111' : '#FFFFFF' } : undefined}
             aria-label="하이라이터"
+            aria-pressed={tool === 'highlight'}
           >
             <Highlighter size={15} />
           </button>
           <button
             type="button"
-            onClick={() => setTextDraft(prev => prev === null ? '' : null)}
-            className={`flex h-9 w-9 items-center justify-center rounded-xl active:scale-90 ${textDraft !== null ? 'bg-white text-[#2B211D]' : 'bg-white/12 text-white/75'}`}
+            onClick={() => selectTool(tool === 'text' ? 'pointer' : 'text')}
+            className={`flex h-9 w-9 items-center justify-center rounded-xl active:scale-90 ${tool === 'text' ? 'bg-white text-[#2B211D]' : 'bg-white/12 text-white/75'}`}
             aria-label="텍스트"
+            aria-pressed={tool === 'text'}
           >
             <Type size={15} />
           </button>
           <button
             type="button"
-            onClick={() => { setStrokes([]); setTexts([]); }}
-            className="flex h-9 w-9 items-center justify-center rounded-xl bg-white/12 text-white/75 active:scale-90"
-            aria-label="지우기"
+            onClick={() => selectTool(tool === 'eraser' ? 'pointer' : 'eraser')}
+            className={`flex h-9 w-9 items-center justify-center rounded-xl active:scale-90 ${tool === 'eraser' ? 'bg-white text-[#2B211D]' : 'bg-white/12 text-white/75'}`}
+            aria-label="지우개"
+            aria-pressed={tool === 'eraser'}
           >
-            <Trash2 size={15} />
+            <Eraser size={15} />
           </button>
         </div>
+        {tool === 'pen' && (
+          <div className="mt-2 flex items-center justify-center gap-2" aria-label="펜 색상 선택">
+            {['#FF424B', '#2B211D', '#FFFFFF', '#2E8BFF', '#35B96F', '#FFE24A'].map(color => (
+              <button key={color} type="button" onClick={() => setPenColor(color)} aria-label={`펜 색상 ${color}`} className={`h-6 w-6 rounded-full border-2 ${penColor === color ? 'scale-110 border-[#FF424B]' : 'border-white/40'}`} style={{ backgroundColor: color }} />
+            ))}
+          </div>
+        )}
+        {tool === 'highlight' && (
+          <div className="mt-2 flex items-center justify-center gap-2" aria-label="하이라이터 색상 선택">
+            {['#FFE24A', '#FF8FB1', '#8FE3B0', '#79C7FF', '#C6A0FF', '#FFAD66'].map(color => (
+              <button key={color} type="button" onClick={() => setHighlightColor(color)} aria-label={`하이라이터 색상 ${color}`} className={`h-6 w-6 rounded-full border-2 ${highlightColor === color ? 'scale-110 border-white' : 'border-white/40'}`} style={{ backgroundColor: color }} />
+            ))}
+          </div>
+        )}
       </div>
 
       {/* 필터효과 */}
@@ -914,7 +1434,7 @@ function PhotoEditorModal({ src, onSave, onClose }: {
                 className="block h-14 w-14 overflow-hidden rounded-xl border-2"
                 style={{ borderColor: filterId === preset.id ? '#FF424B' : 'transparent' }}
               >
-                <img src={src} alt="" className="h-full w-full object-cover" style={{ filter: preset.css === 'none' ? undefined : preset.css }} draggable={false} />
+                <img src={workingSrc} alt="" className="h-full w-full object-cover" style={{ filter: preset.css === 'none' ? undefined : preset.css }} draggable={false} />
               </span>
               <span className={`mt-0.5 block text-[9px] font-bold ${filterId === preset.id ? 'text-white' : 'text-white/50'}`}>
                 {preset.name}
@@ -962,7 +1482,9 @@ export default function CoursemapCreatePage() {
   const [caption, setCaption] = useState('');
   const [templateIndex, setTemplateIndex] = useState(0);
   const [placed, setPlaced] = useState<PlacedPhoto[]>([]);
+  const [canvasStrokes, setCanvasStrokes] = useState<CoursemapCanvasStroke[]>([]);
   const [uploads, setUploads] = useState<string[]>([]);
+  const [hiddenPhotoSources, setHiddenPhotoSources] = useState<string[]>([]);
   const [editingPhotoId, setEditingPhotoId] = useState<string | null>(null);
   const [rewardCount, setRewardCount] = useState<number | null>(null);
   const [publishedCourseId, setPublishedCourseId] = useState<string | null>(null);
@@ -971,8 +1493,8 @@ export default function CoursemapCreatePage() {
   const template = COURSEMAP_TEMPLATES[templateIndex]!;
   const photoPool = useMemo(() => {
     const pinPhotos = filledPins.map(pin => pin.photo).filter((photo): photo is string => !!photo);
-    return Array.from(new Set([...pinPhotos, ...uploads]));
-  }, [pins, uploads]);
+    return Array.from(new Set([...pinPhotos, ...uploads])).filter(photo => !hiddenPhotoSources.includes(photo));
+  }, [hiddenPhotoSources, pins, uploads]);
   const previewCourse: Course = {
     id: '__munchie_preview__',
     title: caption.trim() || '새 먼치맵',
@@ -1017,19 +1539,18 @@ export default function CoursemapCreatePage() {
 
   const canNext =
     step === 0 ? filledPins.length > 0 && caption.trim().length > 0 :
-    step === 2 ? placed.length > 0 :
+    step === 1 ? placed.length > 0 :
     true;
 
   const nextLabel =
     step === 0 ? '다음 →' :
-    step === 1 ? '다음 →' :
-    step === 2 ? '미리보기' :
-    step === 3 ? '포스팅' : '';
+    step === 1 ? '미리보기' :
+    step === 2 ? '포스팅' : '';
 
   const nextHint =
     step === 0 && filledPins.length === 0 ? '장소를 1곳 이상 찍어주세요' :
     step === 0 && !caption.trim() ? '한줄평을 입력해주세요' :
-    step === 2 && placed.length === 0 ? '사진을 1장 이상 올려주세요' :
+    step === 1 && placed.length === 0 ? '사진을 1장 이상 올려주세요' :
     null;
 
   const publish = () => {
@@ -1065,7 +1586,7 @@ export default function CoursemapCreatePage() {
 
     addCourse(course);
     setTemplateForCourse(newId, template.id);
-    saveCoursemapDecor(newId, placed.slice(0, MAX_MUNCHIE_FEED_PHOTOS));
+    saveCoursemapDecor(newId, placed.slice(0, MAX_MUNCHIE_FEED_PHOTOS), canvasStrokes);
     addFeedPost({
       authorId: profile.id,
       authorName: profile.name,
@@ -1085,7 +1606,7 @@ export default function CoursemapCreatePage() {
     } catch { riceballs = 1; }
     setRewardCount(riceballs);
     setPublishedCourseId(newId);
-    setStep(4);
+    setStep(3);
   };
 
   const goNext = () => {
@@ -1093,12 +1614,12 @@ export default function CoursemapCreatePage() {
       if (nextHint) toast.error(nextHint);
       return;
     }
-    if (step === 3) { publish(); return; }
+    if (step === 2) { publish(); return; }
     setStep(current => current + 1);
   };
 
   const goBack = () => {
-    if (step === 0 || step === 4) navigate('/feed?tab=feed');
+    if (step === 0 || step === 3) navigate('/feed?tab=feed');
     else setStep(current => current - 1);
   };
 
@@ -1114,7 +1635,7 @@ export default function CoursemapCreatePage() {
             aria-label="뒤로"
             className="flex h-9 w-9 items-center justify-center rounded-full bg-white shadow"
           >
-            {step === 4 ? <X size={18} /> : <ChevronLeft size={20} />}
+            {step === 3 ? <X size={18} /> : <ChevronLeft size={20} />}
           </button>
           <div className="text-center">
             <p className="text-[11px] font-black uppercase tracking-[0.16em] text-[#F25055]">Munchie 코스맵 만들기</p>
@@ -1151,21 +1672,28 @@ export default function CoursemapCreatePage() {
           )}
 
           {step === 1 && (
-            <TemplateRouletteStep index={templateIndex} setIndex={setTemplateIndex} />
+            <DecorateStep
+                template={template}
+                templateIndex={templateIndex}
+                setTemplateIndex={setTemplateIndex}
+                placed={placed}
+                setPlaced={setPlaced}
+                canvasStrokes={canvasStrokes}
+                setCanvasStrokes={setCanvasStrokes}
+                photoPool={photoPool}
+                onAddUpload={url => {
+                  setHiddenPhotoSources(prev => prev.filter(photo => photo !== url));
+                  setUploads(prev => prev.includes(url) ? prev : [...prev, url]);
+                }}
+                onRemoveFromPool={url => {
+                  setHiddenPhotoSources(prev => prev.includes(url) ? prev : [...prev, url]);
+                  setUploads(prev => prev.filter(photo => photo !== url));
+                }}
+                onEditPhoto={id => setEditingPhotoId(id)}
+              />
           )}
 
           {step === 2 && (
-            <DecorateStep
-              template={template}
-              placed={placed}
-              setPlaced={setPlaced}
-              photoPool={photoPool}
-              onAddUpload={url => setUploads(prev => [...prev, url])}
-              onEditPhoto={id => setEditingPhotoId(id)}
-            />
-          )}
-
-          {step === 3 && (
             <div>
               <div className="mb-4 text-center">
                 <p className="text-[16px] font-black text-[#1A1A1A]">이대로 포스팅할까요?</p>
@@ -1178,12 +1706,13 @@ export default function CoursemapCreatePage() {
                   courseOverride={previewCourse}
                   templateOverride={template}
                   decorOverride={placed}
+                  strokesOverride={canvasStrokes}
                 />
               </div>
             </div>
           )}
 
-          {step === 4 && (
+          {step === 3 && (
             <div className="pt-6 text-center">
               <motion.div
                 initial={{ scale: 0 }}
@@ -1240,7 +1769,7 @@ export default function CoursemapCreatePage() {
       </AnimatePresence>
 
       {/* 하단 CTA */}
-      {step < 4 && (
+      {step < 3 && (
         <div className="page-bottom-bar fixed bottom-4 left-1/2 z-30 w-[calc(100%-32px)] max-w-[398px] -translate-x-1/2">
           <div className="flex w-full gap-2.5">
             {step > 0 && (
@@ -1265,14 +1794,23 @@ export default function CoursemapCreatePage() {
         </div>
       )}
 
-      {/* ④ 사진 에디터 모달 */}
+      {/* 사진 에디터 모달 */}
       <AnimatePresence>
         {editingPhoto && (
           <PhotoEditorModal
             src={editingPhoto.src}
-            onClose={() => setEditingPhotoId(null)}
-            onSave={dataUrl => {
-              setPlaced(prev => prev.map(photo => photo.id === editingPhoto.id ? { ...photo, src: dataUrl } : photo));
+            originalSrc={editingPhoto.originalSrc ?? editingPhoto.src}
+            cropAspect={(editingPhoto.w * 3) / ((editingPhoto.h ?? editingPhoto.w) * 4)}
+            onBack={nextCropAspect => {
+              setPlaced(prev => prev.map(photo => photo.id === editingPhoto.id
+                ? { ...photo, ...photoFrameSizeForCropAspect(photo, nextCropAspect) }
+                : photo));
+              setEditingPhotoId(null);
+            }}
+            onSave={(dataUrl, nextCropAspect) => {
+              setPlaced(prev => prev.map(photo => photo.id === editingPhoto.id
+                ? { ...photo, src: dataUrl, zoom: 1, ...photoFrameSizeForCropAspect(photo, nextCropAspect) }
+                : photo));
               setEditingPhotoId(null);
               toast.success('사진을 꾸몄어요 ✨');
             }}

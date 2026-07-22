@@ -1,8 +1,8 @@
 import { useApp, type Course } from '@/contexts/AppContext';
 import type { CoursemapTemplate } from '@/constants/coursemapTemplates';
 import { getCoursePlacesFromStops } from '@/lib/courseMapSync';
-import { getCoursemapDecor } from '@/lib/coursemapDecor';
-import type { PlacedPhoto } from '@/lib/coursemapDecor';
+import { getCoursemapCanvasStrokes, getCoursemapDecor } from '@/lib/coursemapDecor';
+import type { CoursemapCanvasStroke, PlacedPhoto } from '@/lib/coursemapDecor';
 import { TemplateBackgroundLayer, TemplateFrameLayer } from '@/components/munchie/TemplateLayers';
 
 /**
@@ -17,6 +17,7 @@ export default function TemplateArtwork({
   eager = false,
   photoSources,
   decorOverride,
+  strokesOverride,
 }: {
   course: Course;
   template: CoursemapTemplate;
@@ -25,6 +26,7 @@ export default function TemplateArtwork({
   photoSources?: string[];
   /** 작성 미리보기에서도 게시 후와 동일한 배치를 렌더링한다. */
   decorOverride?: PlacedPhoto[];
+  strokesOverride?: CoursemapCanvasStroke[];
 }) {
   const { getRestaurantById } = useApp();
   const syncedPlaces = getCoursePlacesFromStops(course, getRestaurantById);
@@ -35,6 +37,7 @@ export default function TemplateArtwork({
   ]).filter((photo): photo is string => !!photo).slice(0, 3);
   // 만들기 플로우에서 직접 꾸민 배치가 있으면 그 배치를 그대로 재현한다
   const decor = decorOverride ?? getCoursemapDecor(course.id);
+  const canvasStrokes = strokesOverride ?? getCoursemapCanvasStrokes(course.id);
   const slots = template.slots.slice(0, Math.min(Math.max(places.length, photos.length, 1), 3));
 
   // 슬롯 중심을 잇는 점선 루트 (viewBox 300×400 = 3:4)
@@ -68,7 +71,8 @@ export default function TemplateArtwork({
                 <img
                   src={photo.src}
                   alt=""
-                  className="h-full w-full object-cover"
+                  className="h-full w-full object-cover transition-transform duration-150"
+                  style={{ transform: `scale(${photo.zoom ?? 1})` }}
                   draggable={false}
                   loading={eager ? 'eager' : 'lazy'}
                 />
@@ -128,6 +132,23 @@ export default function TemplateArtwork({
       )}
 
       <TemplateFrameLayer template={template} loading={eager ? 'eager' : 'lazy'} />
+
+      {canvasStrokes.length > 0 && (
+        <svg viewBox="0 0 100 100" preserveAspectRatio="none" className="pointer-events-none absolute inset-0 z-40 h-full w-full" aria-hidden="true">
+          {canvasStrokes.map(stroke => (
+            <polyline
+              key={stroke.id}
+              points={stroke.points.map(point => `${point.x},${point.y}`).join(' ')}
+              fill="none"
+              stroke={stroke.color}
+              opacity={stroke.opacity ?? 1}
+              strokeWidth={stroke.width}
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            />
+          ))}
+        </svg>
+      )}
 
     </div>
   );

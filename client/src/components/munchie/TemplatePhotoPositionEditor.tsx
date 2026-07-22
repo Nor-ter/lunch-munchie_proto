@@ -1,5 +1,5 @@
 import { useRef, useState, type ChangeEvent, type Dispatch, type PointerEvent, type SetStateAction } from 'react';
-import { Minus, Plus, RotateCcw, RotateCw, Trash2, Upload } from 'lucide-react';
+import { Plus, RotateCcw, RotateCw, Trash2, Upload, X } from 'lucide-react';
 import { toast } from 'sonner';
 import type { CoursemapTemplate } from '@/constants/coursemapTemplates';
 import { MAX_MUNCHIE_FEED_PHOTOS, type PlacedPhoto } from '@/lib/coursemapDecor';
@@ -15,10 +15,12 @@ export function createTemplatePhotoPlacement(
   return {
     id: `placed_${Date.now()}_${index}_${Math.round(Math.random() * 999)}`,
     src,
+    originalSrc: src,
     x: slot ? slot.left + slot.width / 2 : 38 + index * 12,
     y: slot ? slot.top + slot.height / 2 : 30 + index * 16,
     w: slot?.width ?? 36,
     h: slot?.height ?? 27,
+    zoom: 1,
     rotate: slot?.rotate ?? (index % 2 === 0 ? -2 : 2),
   };
 }
@@ -36,14 +38,24 @@ export default function TemplatePhotoPositionEditor({
 }) {
   const canvasRef = useRef<HTMLDivElement>(null);
   const uploadRef = useRef<HTMLInputElement>(null);
-  const dragRef = useRef<{ id: string; pointerId: number } | null>(null);
+  const dragRef = useRef<{ id: string; pointerId: number; offsetX: number; offsetY: number } | null>(null);
   const [selectedId, setSelectedId] = useState<string | null>(placed[0]?.id ?? null);
+  const [hiddenSources, setHiddenSources] = useState<string[]>([]);
   const selected = placed.find(photo => photo.id === selectedId) ?? null;
+  const visiblePhotoPool = photoPool.filter(src => !hiddenSources.includes(src));
+
+  const selectAndBringToFront = (id: string) => {
+    setSelectedId(id);
+    setPlaced(current => {
+      const selectedPhoto = current.find(photo => photo.id === id);
+      return selectedPhoto ? [...current.filter(photo => photo.id !== id), selectedPhoto] : current;
+    });
+  };
 
   const addPhoto = (src: string) => {
     const existing = placed.find(photo => photo.src === src);
     if (existing) {
-      setSelectedId(existing.id);
+      selectAndBringToFront(existing.id);
       return;
     }
     if (placed.length >= MAX_MUNCHIE_FEED_PHOTOS) {
@@ -64,8 +76,9 @@ export default function TemplatePhotoPositionEditor({
     const drag = dragRef.current;
     const bounds = canvasRef.current?.getBoundingClientRect();
     if (!drag || !bounds || event.pointerId !== drag.pointerId) return;
-    const x = ((event.clientX - bounds.left) / bounds.width) * 100;
-    const y = ((event.clientY - bounds.top) / bounds.height) * 100;
+    event.preventDefault();
+    const x = ((event.clientX - bounds.left) / bounds.width) * 100 + drag.offsetX;
+    const y = ((event.clientY - bounds.top) / bounds.height) * 100 + drag.offsetY;
     setPlaced(current => current.map(photo => photo.id === drag.id ? {
       ...photo,
       x: Math.max(5, Math.min(95, x)),
@@ -127,21 +140,29 @@ export default function TemplatePhotoPositionEditor({
               width: `${photo.w}%`,
               height: `${photo.h ?? photo.w}%`,
               transform: `translate(-50%, -50%) rotate(${photo.rotate}deg)`,
-              zIndex: photo.id === selectedId ? 20 : 10,
+              zIndex: 10,
             }}
             onPointerDown={event => {
+              if (event.button !== 0) return;
+              event.preventDefault();
               event.stopPropagation();
-              setSelectedId(photo.id);
-              dragRef.current = { id: photo.id, pointerId: event.pointerId };
+              selectAndBringToFront(photo.id);
+              const bounds = canvasRef.current?.getBoundingClientRect();
+              if (!bounds) return;
+              const pointerX = ((event.clientX - bounds.left) / bounds.width) * 100;
+              const pointerY = ((event.clientY - bounds.top) / bounds.height) * 100;
+              dragRef.current = {
+                id: photo.id,
+                pointerId: event.pointerId,
+                offsetX: photo.x - pointerX,
+                offsetY: photo.y - pointerY,
+              };
               event.currentTarget.setPointerCapture?.(event.pointerId);
             }}
             onClick={event => event.stopPropagation()}
           >
-            <div
-              className="h-full w-full overflow-hidden rounded-[9px] border-[3px] bg-white shadow-[0_6px_16px_rgba(63,38,24,0.2)]"
-              style={{ borderColor: photo.id === selectedId ? '#EB5053' : '#FFFFFF' }}
-            >
-              <img src={photo.src} alt="" className="h-full w-full object-cover" draggable={false} />
+            <div className={`h-full w-full overflow-hidden rounded-[9px] bg-transparent shadow-[0_6px_16px_rgba(63,38,24,0.2)] ${photo.id === selectedId ? 'ring-2 ring-[#EB5053]' : ''}`}>
+              <img src={photo.src} alt="" className="h-full w-full object-cover" style={{ transform: `scale(${photo.zoom ?? 1})` }} draggable={false} />
             </div>
           </div>
         ))}
@@ -159,36 +180,34 @@ export default function TemplatePhotoPositionEditor({
       </div>
 
       {selected && (
-        <div className="mx-auto mt-3 flex w-fit items-center gap-1.5 rounded-full border border-[#EFE3D8] bg-white px-2 py-1.5 shadow-sm">
-          <button type="button" onClick={() => updateSelected({ w: Math.max(16, selected.w - 4), h: Math.max(12, (selected.h ?? selected.w) - 3) })} aria-label="사진 작게" className="flex h-8 w-8 items-center justify-center rounded-full bg-[#FFF4EF] active:scale-90"><Minus size={14} /></button>
-          <button type="button" onClick={() => updateSelected({ w: Math.min(78, selected.w + 4), h: Math.min(78, (selected.h ?? selected.w) + 3) })} aria-label="사진 크게" className="flex h-8 w-8 items-center justify-center rounded-full bg-[#FFF4EF] active:scale-90"><Plus size={14} /></button>
-          <button type="button" onClick={() => updateSelected({ rotate: selected.rotate - 8 })} aria-label="사진 반시계 방향 회전" className="flex h-8 w-8 items-center justify-center rounded-full bg-[#FFF4EF] active:scale-90"><RotateCcw size={14} /></button>
-          <button type="button" onClick={() => updateSelected({ rotate: selected.rotate + 8 })} aria-label="사진 시계 방향 회전" className="flex h-8 w-8 items-center justify-center rounded-full bg-[#FFF4EF] active:scale-90"><RotateCw size={14} /></button>
-          <button
-            type="button"
-            onClick={() => {
-              setPlaced(current => current.filter(photo => photo.id !== selected.id));
-              setSelectedId(null);
-            }}
-            aria-label="사진 삭제"
-            className="flex h-8 w-8 items-center justify-center rounded-full bg-[#FFF0F0] text-[#D94447] active:scale-90"
-          ><Trash2 size={14} /></button>
+        <div className="mx-auto mt-3 w-full max-w-[350px] rounded-2xl border border-[#EFE3D8] bg-white px-3 py-2.5 shadow-sm">
+          <div className="grid grid-cols-2 gap-3">
+            <label className="min-w-0 text-[10px] font-bold text-[#6E5B50]"><span className="mb-1 block">가로</span><input type="range" min="14" max="88" value={selected.w} onChange={event => updateSelected({ w: Number(event.target.value) })} className="block w-full accent-[#EB5053]" /></label>
+            <label className="min-w-0 text-[10px] font-bold text-[#6E5B50]"><span className="mb-1 block">세로</span><input type="range" min="10" max="88" value={selected.h ?? selected.w} onChange={event => updateSelected({ h: Number(event.target.value) })} className="block w-full accent-[#EB5053]" /></label>
+          </div>
+          <div className="mt-2 flex items-center justify-center gap-1.5">
+            <button type="button" onClick={() => updateSelected({ rotate: selected.rotate - 8 })} aria-label="사진 반시계 방향 회전" className="flex h-8 w-8 items-center justify-center rounded-full bg-[#FFF4EF] active:scale-90"><RotateCcw size={14} /></button>
+            <button type="button" onClick={() => updateSelected({ rotate: selected.rotate + 8 })} aria-label="사진 시계 방향 회전" className="flex h-8 w-8 items-center justify-center rounded-full bg-[#FFF4EF] active:scale-90"><RotateCw size={14} /></button>
+            <button type="button" onClick={() => { setPlaced(current => current.filter(photo => photo.id !== selected.id)); setSelectedId(null); }} aria-label="사진 삭제" className="flex h-8 w-8 items-center justify-center rounded-full bg-[#FFF0F0] text-[#D94447] active:scale-90"><Trash2 size={14} /></button>
+          </div>
         </div>
       )}
 
       <div className="mt-4 flex gap-2 overflow-x-auto pb-1.5 scrollbar-hide">
-        {photoPool.map(src => {
+        {visiblePhotoPool.map(src => {
           const active = placed.some(photo => photo.src === src);
           return (
+            <div key={src.slice(0, 90)} className="relative h-16 w-16 shrink-0">
             <button
-              key={src.slice(0, 90)}
               type="button"
               onClick={() => addPhoto(src)}
               aria-label={active ? '배치된 사진 선택' : '사진을 템플릿에 추가'}
-              className={`h-16 w-16 shrink-0 overflow-hidden rounded-xl border-2 active:scale-95 ${active ? 'border-[#EB5053]' : 'border-[#EFE3D8]'}`}
+              className={`h-full w-full overflow-hidden rounded-xl border-2 active:scale-95 ${active ? 'border-[#EB5053]' : 'border-[#EFE3D8]'}`}
             >
               <img src={src} alt="" className="h-full w-full object-cover" draggable={false} />
             </button>
+            <button type="button" onClick={() => { setHiddenSources(current => [...current, src]); setPlaced(current => current.filter(photo => photo.src !== src)); }} aria-label="사진 목록에서 삭제" className="absolute right-1 top-1 flex h-5 w-5 items-center justify-center rounded-full border border-white/80 bg-[#D94447] text-white shadow"><X size={11} /></button>
+            </div>
           );
         })}
         <button

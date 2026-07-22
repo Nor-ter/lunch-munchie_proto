@@ -1,7 +1,6 @@
 import { useState } from 'react';
-import { createPortal } from 'react-dom';
 import { AnimatePresence, motion } from 'framer-motion';
-import { Palette, Plus, Settings2 } from 'lucide-react';
+import { Palette, Plus } from 'lucide-react';
 import { useLocation } from 'wouter';
 import { FOOD_FILTER_TAGS, hasFoodTag } from '@/constants/foodTags';
 import { getCourseTagStyle } from '@/constants/courseTheme';
@@ -35,11 +34,11 @@ export default function MunchieFeedPage() {
             </button>
             <button
               type="button"
-              onClick={() => navigate('/profile')}
-              aria-label="Munchie 설정"
-              className="flex h-10 w-10 items-center justify-center rounded-full border-2 border-[#D5DED3] bg-[#F7FAF6] text-[#708776] active:scale-95"
+              onClick={() => navigate('/coursemap/new')}
+              aria-label="새 Munchie 피드 작성"
+              className="flex h-10 w-10 items-center justify-center rounded-full border-2 border-[#F6B9B1] bg-[#F06F72] text-white shadow-[0_6px_14px_rgba(238,111,114,0.2)] active:scale-95"
             >
-              <Settings2 size={18} />
+              <Plus size={22} strokeWidth={2.5} />
             </button>
           </div>
         </div>
@@ -86,25 +85,6 @@ export default function MunchieFeedPage() {
           </div>
         )}
       </main>
-
-      {createPortal(
-        <motion.button
-          type="button"
-          onClick={() => navigate('/coursemap/new')}
-          aria-label="새 Munchie 피드 작성"
-          className="fixed z-40 flex h-[65px] w-[65px] items-center justify-center rounded-full border-2 border-[#F6B9B1] bg-[#F06F72] text-white shadow-[0_10px_24px_rgba(238,111,114,0.25)]"
-          style={{
-            right: 'max(1.5rem, calc((100vw - min(100vw, 480px)) / 2 + 1.5rem))',
-            bottom: 'calc(var(--lm-tab-bar-height) + 43px)',
-          }}
-          initial={{ scale: 0 }}
-          animate={{ scale: 1 }}
-          whileTap={{ scale: 0.94 }}
-        >
-          <Plus size={38} strokeWidth={2.25} aria-hidden="true" />
-        </motion.button>,
-        document.body,
-      )}
     </div>
   );
 }

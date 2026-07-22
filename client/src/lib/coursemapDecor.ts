@@ -7,6 +7,8 @@
 export interface PlacedPhoto {
   id: string;
   src: string;
+  /** First uploaded source, retained so Photo Editor Reset can restore it. */
+  originalSrc?: string;
   /** 캔버스 좌상단 기준 중심 좌표 (%) */
   x: number;
   y: number;
@@ -14,13 +16,28 @@ export interface PlacedPhoto {
   w: number;
   /** 캔버스 높이 대비 사진 높이 (%). 기존 데이터는 w를 사용한다. */
   h?: number;
+  /** Scale inside the photo frame. Legacy records default to 1. */
+  zoom?: number;
   rotate: number;
+}
+
+export interface CoursemapCanvasStroke {
+  id: string;
+  color: string;
+  width: number;
+  opacity?: number;
+  points: { x: number; y: number }[];
+}
+
+interface StoredCoursemapDecor {
+  photos: PlacedPhoto[];
+  strokes?: CoursemapCanvasStroke[];
 }
 
 const DECOR_KEY = 'lm_coursemap_decor';
 export const MAX_MUNCHIE_FEED_PHOTOS = 6;
 
-function readAll(): Record<string, PlacedPhoto[]> {
+function readAll(): Record<string, PlacedPhoto[] | StoredCoursemapDecor> {
   try {
     return JSON.parse(localStorage.getItem(DECOR_KEY) ?? '{}');
   } catch {
@@ -30,13 +47,28 @@ function readAll(): Record<string, PlacedPhoto[]> {
 
 export function getCoursemapDecor(courseId: string): PlacedPhoto[] | null {
   const decor = readAll()[courseId];
-  return decor && decor.length > 0 ? decor.slice(0, MAX_MUNCHIE_FEED_PHOTOS) : null;
+  const photos = Array.isArray(decor) ? decor : decor?.photos;
+  return photos && photos.length > 0 ? photos.slice(0, MAX_MUNCHIE_FEED_PHOTOS) : null;
 }
 
-export function saveCoursemapDecor(courseId: string, placed: PlacedPhoto[]) {
+export function getCoursemapCanvasStrokes(courseId: string): CoursemapCanvasStroke[] {
+  const decor = readAll()[courseId];
+  return Array.isArray(decor) ? [] : (decor?.strokes ?? []);
+}
+
+export function saveCoursemapDecor(
+  courseId: string,
+  placed: PlacedPhoto[],
+  strokes?: CoursemapCanvasStroke[],
+) {
   try {
     const all = readAll();
-    all[courseId] = placed.slice(0, MAX_MUNCHIE_FEED_PHOTOS);
+    const current = all[courseId];
+    const currentStrokes = Array.isArray(current) ? [] : (current?.strokes ?? []);
+    all[courseId] = {
+      photos: placed.slice(0, MAX_MUNCHIE_FEED_PHOTOS),
+      strokes: strokes ?? currentStrokes,
+    };
     localStorage.setItem(DECOR_KEY, JSON.stringify(all));
   } catch {
     /* 대용량 dataURL로 저장 실패해도 게시 흐름은 계속 진행 */

@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState, type PointerEvent as ReactPointerEvent, type WheelEvent as ReactWheelEvent } from 'react';
+import { useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react';
 import { motion } from 'framer-motion';
 import { useLocation, useParams } from 'wouter';
 import { ChevronLeft, Download, ImagePlus, Instagram, Link2, Minus, Plus, RotateCcw, RotateCw, Share2 } from 'lucide-react';
@@ -65,6 +65,26 @@ export default function StorySharePage() {
   })), [photos]);
   const [storyPhotos, setStoryPhotos] = useState<StoryPhoto[]>(initialStoryPhotos);
   const [activePhotoId, setActivePhotoId] = useState<string | null>(initialStoryPhotos[0]?.id ?? null);
+
+  useEffect(() => {
+    const card = cardRef.current;
+    if (!card) return;
+    const handleWheel = (event: WheelEvent) => {
+      const photoElement = (event.target as HTMLElement).closest<HTMLElement>('[data-story-photo-id]');
+      const photoId = photoElement?.dataset.storyPhotoId;
+      if (!photoId || !card.contains(photoElement)) return;
+      event.preventDefault();
+      event.stopPropagation();
+      setStoryPhotos(current => current.map(photo => {
+        if (photo.id !== photoId) return photo;
+        const delta = event.deltaY < 0 ? 4 : -4;
+        const size = Math.min(92, Math.max(18, photo.size + delta));
+        return { ...photo, size, y: Math.min(photo.y, maxPhotoY(size)) };
+      }));
+    };
+    card.addEventListener('wheel', handleWheel, { passive: false });
+    return () => card.removeEventListener('wheel', handleWheel);
+  }, [course?.id]);
 
   if (!course) {
     return (
@@ -178,14 +198,6 @@ export default function StorySharePage() {
     if (pointersRef.current.size === 0) gestureRef.current = null;
   };
 
-  const resizePhotoWithWheel = (photo: StoryPhoto, event: ReactWheelEvent<HTMLDivElement>) => {
-    event.preventDefault();
-    event.stopPropagation();
-    const delta = event.deltaY < 0 ? 4 : -4;
-    const size = Math.min(92, Math.max(18, photo.size + delta));
-    updatePhoto(photo.id, { size, y: Math.min(photo.y, maxPhotoY(size)) });
-  };
-
   const addPhoto = async (file?: File) => {
     if (!file || storyPhotos.length >= 5) return;
     try {
@@ -201,7 +213,7 @@ export default function StorySharePage() {
   };
 
   return (
-    <main className="mx-auto min-h-dvh max-w-[430px] bg-[#FFF8F3] pb-32">
+    <main className="mx-auto min-h-dvh max-w-[430px] overscroll-contain bg-[#FFF8F3] pb-32">
       <header className="sticky top-0 z-30 flex items-center border-b border-[#F0E1D9] bg-[#FFFDFC]/95 px-4 py-3 backdrop-blur">
         <button type="button" onClick={() => navigate('/feed')} aria-label="먼치피드 홈으로 돌아가기" className="flex h-9 w-9 items-center justify-center rounded-full border border-[#EADBD3] bg-white text-[#6B554B] shadow-sm">
           <ChevronLeft size={20} />
@@ -244,6 +256,7 @@ export default function StorySharePage() {
                   <div
                     key={photo.id}
                     data-story-photo
+                    data-story-photo-id={photo.id}
                     role="button"
                     tabIndex={0}
                     aria-label="스토리 사진 편집 선택"
@@ -251,7 +264,6 @@ export default function StorySharePage() {
                     onPointerMove={event => movePhotoGesture(photo.id, event)}
                     onPointerUp={endPhotoGesture}
                     onPointerCancel={endPhotoGesture}
-                    onWheel={event => resizePhotoWithWheel(photo, event)}
                     onKeyDown={event => {
                       if (event.key === 'Delete' || event.key === 'Backspace') removePhoto(photo.id);
                       if (event.key === 'ArrowLeft') updatePhoto(photo.id, { x: Math.max(0, photo.x - 1) });
