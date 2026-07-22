@@ -44,7 +44,7 @@ export default function CourseDetailPage() {
   }
 
   const handleShare = () => {
-    navigate(`/courses/${course.id}/share`);
+    navigate(`/course/${course.id}/share`);
   };
 
   const toggleStopBookmark = (placeId: string) => {
@@ -193,10 +193,10 @@ export default function CourseDetailPage() {
 
       {/* Sticky Footer */}
       <div
-        className="fixed bottom-0 left-1/2 -translate-x-1/2 w-full max-w-[480px] bg-white px-5 py-4 z-40"
+        className="page-bottom-bar fixed bottom-0 left-1/2 z-40 w-full max-w-[480px] -translate-x-1/2 bg-white px-5"
         style={{ boxShadow: '0 -4px 16px rgba(0,0,0,0.08)' }}
       >
-        <div className="flex gap-3">
+        <div className="flex w-full gap-3">
           <button
             onClick={handleSave}
             className="lm-btn-outline flex items-center justify-center gap-2 flex-[3]"

@@ -1,181 +1,107 @@
-/**
- * Munchie Feed — Munchie Mode의 단일 표면 (기존 코스 탐색을 피드로 통합)
- * 피드 탭: 사진+한줄평 정성 기록 (Credit) / 코스맵 탭: 스크랩북 코스맵 탐색 (Core Product)
- */
 import { useState } from 'react';
 import { createPortal } from 'react-dom';
-import { motion, AnimatePresence } from 'framer-motion';
-import { useLocation, useSearch } from 'wouter';
-import { ChevronRight, LayoutGrid, SlidersHorizontal, PenLine, Plus, MapPinned } from 'lucide-react';
-import { useApp, TagType } from '@/contexts/AppContext';
-import { getCourseTagStyle } from '@/constants/courseTheme';
+import { AnimatePresence, motion } from 'framer-motion';
+import { Palette, Plus, Settings2 } from 'lucide-react';
+import { useLocation } from 'wouter';
 import { FOOD_FILTER_TAGS, hasFoodTag } from '@/constants/foodTags';
-import FeedPostCard from '@/components/munchie/FeedPostCard';
-import TemplateCoursemapCard from '@/components/munchie/TemplateCoursemapCard';
+import { getCourseTagStyle } from '@/constants/courseTheme';
+import { type TagType, useApp } from '@/contexts/AppContext';
+import UnifiedMunchieCard from '@/components/munchie/UnifiedMunchieCard';
 
 export default function MunchieFeedPage() {
   const [, navigate] = useLocation();
-  const search = useSearch();
-  const { feedPosts, courses } = useApp();
+  const { feedPosts } = useApp();
   const [activeFilter, setActiveFilter] = useState<TagType | 'all'>('all');
-  const [view, setView] = useState<'feed' | 'maps'>(() =>
-    new URLSearchParams(search).get('tab') === 'template' ? 'maps' : 'feed'
-  );
-
-  const filtered = activeFilter === 'all'
+  const filteredPosts = activeFilter === 'all'
     ? feedPosts
-    : feedPosts.filter(p => hasFoodTag(p.tags, activeFilter as TagType));
-
-  const filteredCourses = activeFilter === 'all'
-    ? courses
-    : courses.filter(c => hasFoodTag(c.tags, activeFilter as TagType));
-
-  const changeView = (nextView: 'feed' | 'maps') => {
-    setView(nextView);
-    navigate(`/feed?tab=${nextView === 'maps' ? 'template' : 'feed'}`, { replace: true });
-  };
+    : feedPosts.filter(post => hasFoodTag(post.tags, activeFilter as TagType));
 
   return (
-    <div className="min-h-dvh bg-[#FCF4EE]">
-      {/* Header */}
-      <div className="bg-white px-5 pt-12 pb-4">
-        <div className="flex items-center justify-between mb-3">
+    <div className="min-h-dvh bg-[#FFF7F2] pb-[calc(65px+43px+1rem)]">
+      <header className="sticky top-0 z-30 border-b border-[#EAD7CE] bg-[#FFFDFC] px-4 pb-3 pt-8">
+        <div className="flex items-start justify-between gap-4">
           <div>
-            <h1 className="font-bold text-[26px] text-[#1A1A1A]">Munchie Mode</h1>
-            <p className="text-[12px] mt-0.5 text-[#9B9B9B]">
-              {view === 'feed' ? '사진과 한줄평으로 남기는 정성 기록' : '스크랩북 템플릿을 탐색해보아요'}
-            </p>
+            <h1 className="text-[25px] font-black leading-none tracking-[-0.03em] text-[#DB2837]">MUNCHIE FEED</h1>
+            <p className="mt-2 text-[11px] font-semibold text-[#8D776C]">다녀온 맛집 Munchie 피드를 함께 공유해요</p>
           </div>
-          <div className="flex items-center gap-2">
-            {/* 실제 식당 탐색(Google Places) 진입 — web-maps-places-workflow.md Phase 3 */}
+          <div className="flex gap-2">
             <button
-              onClick={() => navigate('/explore/places')}
-              className="w-10 h-10 rounded-full bg-[#F5F5F5] flex items-center justify-center"
-              aria-label="실제 식당 탐색"
+              type="button"
+              onClick={() => navigate('/templates')}
+              aria-label="전체 템플릿 보기"
+              className="flex h-10 w-10 items-center justify-center rounded-full border-2 border-[#F0C2B5] bg-[#FFF4EE] text-[#DB6E67] active:scale-95"
             >
-              <MapPinned size={18} color="#4A4A4A" />
+              <Palette size={18} />
             </button>
-            <button className="w-10 h-10 rounded-full bg-[#F5F5F5] flex items-center justify-center">
-              <SlidersHorizontal size={18} color="#4A4A4A" />
+            <button
+              type="button"
+              onClick={() => navigate('/profile')}
+              aria-label="Munchie 설정"
+              className="flex h-10 w-10 items-center justify-center rounded-full border-2 border-[#D5DED3] bg-[#F7FAF6] text-[#708776] active:scale-95"
+            >
+              <Settings2 size={18} />
             </button>
           </div>
         </div>
 
-        {/* 피드 / 코스맵 세그먼트 (먼치모드 통합) */}
-        <div className="mb-3 flex rounded-full bg-[#F5F0EA] p-1">
-          {([['feed', 'Munchie Feed'], ['maps', 'Munchie Template']] as const).map(([key, label]) => (
+        <div className="mt-3 flex gap-1.5 overflow-x-auto pb-0.5 scrollbar-hide">
+          {FOOD_FILTER_TAGS.map(filter => (
             <button
-              key={key}
-              onClick={() => changeView(key)}
-              className="relative flex-1 h-9 rounded-full text-[13px] font-bold transition-colors"
-              style={{ color: view === key ? '#FFFFFF' : '#8A7A6C' }}
+              type="button"
+              key={filter.value}
+              onClick={() => setActiveFilter(filter.value)}
+              className="h-8 shrink-0 rounded-[10px] px-3 text-[10px] font-black transition-transform active:scale-95"
+              style={filter.value === 'all'
+                ? activeFilter === filter.value
+                  ? { background: '#EE7775', color: '#FFFFFF' }
+                  : { background: '#FFF9F5', color: '#6E5B51', border: '1.5px solid #CDBDB4' }
+                : getCourseTagStyle(filter.value, activeFilter === filter.value)}
             >
-              {view === key && (
-                <motion.span
-                  layoutId="feed-seg"
-                  className="absolute inset-0 rounded-full"
-                  style={{ background: '#EB5053' }}
-                  transition={{ type: 'spring', stiffness: 400, damping: 32 }}
-                />
-              )}
-              <span className="relative z-10">{label}</span>
+              {filter.label}
             </button>
           ))}
         </div>
+      </header>
 
-        {/* Filter chips */}
-        <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-hide -mx-5 px-5">
-          {FOOD_FILTER_TAGS.map(f => (
-            <button
-              key={f.value}
-              onClick={() => setActiveFilter(f.value)}
-              className="flex-shrink-0 px-4 py-2 rounded-full text-[12px] font-semibold transition-all active:scale-95"
-              style={f.value === 'all'
-                ? activeFilter === f.value
-                  ? { background: '#1A1A1A', color: '#FFFFFF' }
-                  : { background: '#F5F5F5', color: '#4A4A4A' }
-                : getCourseTagStyle(f.value, activeFilter === f.value)}
+      <main className="space-y-4 px-3 py-4">
+        <AnimatePresence mode="popLayout">
+          {filteredPosts.map(post => (
+            <motion.div
+              key={post.id}
+              layout
+              initial={{ opacity: 0, y: 18 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -12 }}
             >
-              {f.label}
-            </button>
+              <UnifiedMunchieCard post={post} />
+            </motion.div>
           ))}
-        </div>
-      </div>
+        </AnimatePresence>
 
-      {view === 'feed' ? (
-        /* Feed */
-        <div className="px-4 py-5 space-y-7">
-          <AnimatePresence mode="popLayout">
-            {filtered.map(post => (
-              <motion.div
-                key={post.id}
-                layout
-                initial={{ opacity: 0, y: 16 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: -10 }}
-              >
-                <FeedPostCard post={post} />
-              </motion.div>
-            ))}
-          </AnimatePresence>
-
-          {filtered.length === 0 && (
-            <div className="text-center py-16">
-              <div className="text-5xl mb-3">📔</div>
-              <p className="font-bold text-[16px] text-[#1A1A1A] mb-1">아직 기록이 없어요</p>
-              <p className="text-[13px] text-[#9B9B9B]">첫 번째 먼치 피드를 남겨보세요</p>
-            </div>
-          )}
-        </div>
-      ) : (
-        /* 코스맵 그리드 — 디자이너 템플릿의 빈칸에 식당 사진이 채워진다 (3열) */
-        <div className="px-4 py-5">
-          <button
-            type="button"
-            onClick={() => navigate('/templates')}
-            className="mb-5 flex w-full items-center gap-3 rounded-2xl border border-[#F2D8D3] bg-white p-3.5 text-left shadow-[0_5px_18px_rgba(91,57,42,0.06)] active:scale-[0.99]"
-          >
-            <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-[#FDE1E1] text-[#D94447]">
-              <LayoutGrid size={19} />
-            </span>
-            <span className="min-w-0 flex-1">
-              <span className="block text-[14px] font-black text-[#3B2A22]">템플릿 디자인 둘러보기</span>
-              <span className="mt-0.5 block text-[11px] text-[#9D887C]">사진을 넣기 전 기본 양식 보기</span>
-            </span>
-            <ChevronRight size={18} color="#B09A8C" />
-          </button>
-          <div className="grid grid-cols-3 gap-x-2.5 gap-y-5">
-            {filteredCourses.map((course, i) => (
-              <TemplateCoursemapCard key={course.id} course={course} index={i} from="template" />
-            ))}
+        {filteredPosts.length === 0 && (
+          <div className="rounded-[26px] border border-dashed border-[#DCCBC0] bg-white px-6 py-16 text-center">
+            <div className="mb-3 text-5xl">🍽️</div>
+            <p className="text-[16px] font-black text-[#2D211C]">아직 Munchie 피드가 없어요</p>
+            <p className="mt-1 text-[12px] font-semibold text-[#9A8579]">첫 번째 Munchie 피드를 만들어보세요</p>
           </div>
-          {filteredCourses.length === 0 && (
-            <div className="text-center py-16">
-              <div className="text-5xl mb-3">🗺️</div>
-              <p className="font-bold text-[16px] text-[#1A1A1A] mb-1">코스맵이 없어요</p>
-              <p className="text-[13px] text-[#9B9B9B]">다른 필터를 선택해보세요</p>
-            </div>
-          )}
-        </div>
-      )}
+        )}
+      </main>
 
-      {/* FAB — 피드 탭: 피드 작성 / 코스맵 탭: 새 코스 만들기 */}
       {createPortal(
         <motion.button
-          onClick={() => navigate(view === 'feed' ? '/feed/new' : '/course/new/edit')}
-          className="fixed bottom-24 flex items-center gap-2 px-4 h-12 rounded-full shadow-xl text-white font-bold text-[13px] z-40"
+          type="button"
+          onClick={() => navigate('/coursemap/new')}
+          aria-label="새 Munchie 피드 작성"
+          className="fixed z-40 flex h-[65px] w-[65px] items-center justify-center rounded-full border-2 border-[#F6B9B1] bg-[#F06F72] text-white shadow-[0_10px_24px_rgba(238,111,114,0.25)]"
           style={{
-            background: '#EB5053',
-            right: 'max(1rem, calc((100vw - min(100vw, 480px)) / 2 + 1rem))',
+            right: 'max(1.5rem, calc((100vw - min(100vw, 480px)) / 2 + 1.5rem))',
+            bottom: 'calc(var(--lm-tab-bar-height) + 43px)',
           }}
-          whileHover={{ scale: 1.05 }}
-          whileTap={{ scale: 0.95 }}
           initial={{ scale: 0 }}
           animate={{ scale: 1 }}
-          transition={{ type: 'spring', stiffness: 300, damping: 20, delay: 0.2 }}
+          whileTap={{ scale: 0.94 }}
         >
-          {view === 'feed' ? <PenLine size={16} /> : <Plus size={16} />}
-          {view === 'feed' ? '피드 작성' : '새 코스 만들기'}
+          <Plus size={38} strokeWidth={2.25} aria-hidden="true" />
         </motion.button>,
         document.body,
       )}

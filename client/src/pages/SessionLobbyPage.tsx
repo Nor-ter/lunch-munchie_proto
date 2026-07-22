@@ -13,7 +13,6 @@ import {
   ChevronDown,
   Copy,
   Crown,
-  Play,
   QrCode,
   Share2,
   UserPlus,
@@ -76,7 +75,7 @@ export default function SessionLobbyPage() {
 
   if (!currentSession || !presentation) {
     return (
-      <ScreenContainer className="flex min-h-dvh items-center justify-center px-5">
+      <ScreenContainer className="lunchie-lobby flex min-h-dvh items-center justify-center px-5">
         <AppCard className="w-full max-w-sm p-6 text-center">
           <LunchieLogo size={48} className="mb-4 flex justify-center" />
           <h1 className="text-[18px] font-black text-[var(--lm-text)]">진행 중인 세션이 없어요</h1>
@@ -154,7 +153,7 @@ export default function SessionLobbyPage() {
   const collapseTransition = { duration: reduceMotion ? 0 : 0.2 };
 
   return (
-    <ScreenContainer className="flex min-h-dvh flex-col overflow-x-hidden px-5">
+    <ScreenContainer className="lunchie-lobby flex min-h-dvh flex-col overflow-x-hidden px-5">
       <header className="flex items-center gap-3 pb-5 pt-[max(32px,env(safe-area-inset-top))]">
         <IconButton aria-label="홈으로 돌아가기" onClick={() => navigate('/')} className="shrink-0">
           <ArrowLeft size={20} aria-hidden="true" />
@@ -167,7 +166,7 @@ export default function SessionLobbyPage() {
         </div>
         <StatusBadge
           className={presentation.isWaiting
-            ? 'bg-[#FFF0EE] text-[var(--lm-primary)]'
+            ? 'inline-flex h-[36px] min-w-[78px] shrink-0 items-center justify-center rounded-full bg-[#FFF0EE] px-[12px] text-[13.5px] text-[var(--lm-primary)]'
             : 'bg-[#EAF7EC] text-[#278836]'}
         >
           {presentation.statusLabel}
@@ -220,14 +219,14 @@ export default function SessionLobbyPage() {
                       <button
                         type="button"
                         onClick={() => void handleCopy()}
-                        className="flex min-h-11 items-center justify-center gap-2 rounded-xl bg-[#F7F3F0] px-3 text-[13px] font-bold text-[var(--lm-text)] outline-none transition-colors hover:bg-[#F1EAE5] focus-visible:ring-2 focus-visible:ring-[var(--lm-primary)] focus-visible:ring-offset-2"
+                        className="flex min-h-11 items-center justify-center gap-2 rounded-xl bg-[#FCB3A8] px-3 text-[13px] font-bold text-[var(--lm-text)] outline-none transition-colors hover:bg-[#F9A79B] focus-visible:ring-2 focus-visible:ring-[var(--lm-primary)] focus-visible:ring-offset-2"
                       >
                         <Copy size={16} aria-hidden="true" /> 링크 복사
                       </button>
                       <button
                         type="button"
                         onClick={() => void handleShare()}
-                        className="flex min-h-11 items-center justify-center gap-2 rounded-xl bg-[#F7F3F0] px-3 text-[13px] font-bold text-[var(--lm-text)] outline-none transition-colors hover:bg-[#F1EAE5] focus-visible:ring-2 focus-visible:ring-[var(--lm-primary)] focus-visible:ring-offset-2"
+                        className="flex min-h-11 items-center justify-center gap-2 rounded-xl bg-[#FCB3A8] px-3 text-[13px] font-bold text-[var(--lm-text)] outline-none transition-colors hover:bg-[#F9A79B] focus-visible:ring-2 focus-visible:ring-[var(--lm-primary)] focus-visible:ring-offset-2"
                       >
                         <Share2 size={16} aria-hidden="true" /> 공유하기
                       </button>
@@ -359,12 +358,11 @@ export default function SessionLobbyPage() {
 
       <footer className="sticky bottom-0 z-20 -mx-5 mt-auto bg-[linear-gradient(180deg,rgba(252,244,238,0),#FCF4EE_24%)] px-5 pb-[max(16px,env(safe-area-inset-bottom))] pt-7">
         <PrimaryButton
-          className="w-full"
+          className="lunchie-session-primary-action"
           onClick={handlePrimaryAction}
           disabled={presentation.isWaiting && (!presentation.canStart || isStarting)}
           aria-describedby={presentation.disabledReason ? 'lobby-cta-reason' : undefined}
         >
-          <Play size={19} fill="currentColor" aria-hidden="true" />
           {isStarting ? '투표를 여는 중…' : presentation.ctaLabel}
         </PrimaryButton>
         {presentation.disabledReason && (

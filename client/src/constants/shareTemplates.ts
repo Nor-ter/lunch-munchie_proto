@@ -2,7 +2,7 @@ export interface ShareTemplateDesign {
   id: string;
   name: string;
   desc: string;
-  aspect: '9:16';
+  aspect: '4:3' | '9:16';
   background: string;
 }
 

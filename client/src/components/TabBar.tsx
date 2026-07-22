@@ -14,17 +14,37 @@ function iconProps(active: boolean) {
   };
 }
 
-function MapIcon({ active }: { active: boolean }) {
+function MunchIcon({ active }: { active: boolean }) {
   return (
-    <svg {...iconProps(active)} viewBox="0 0 40 40">
-      <path d="M5 12.5 L14 8.5 L25 12.5 L35 8.5 V29 L25 33 L14 29 L5 33 Z" strokeWidth="2.7" />
-      <path d="M14 8.5 V29" strokeWidth="2.4" />
-      <path d="M25 12.5 V33" strokeWidth="2.4" />
-      <path
-        d="M20 4.7 C15.9 4.7 12.7 7.8 12.7 11.7 C12.7 16.7 20 23 20 23 C20 23 27.3 16.7 27.3 11.7 C27.3 7.8 24.1 4.7 20 4.7 Z"
-        strokeWidth="2.7"
+    <svg {...iconProps(active)} viewBox="0 0 40 40" aria-hidden="true">
+      <rect
+        x="7"
+        y="5.5"
+        width="26"
+        height="29"
+        rx="4"
+        strokeWidth="2.2"
+        fill={active ? "white" : "none"}
       />
-      <circle cx="20" cy="11.8" r="2.4" fill="white" strokeWidth="0" />
+      <path
+        d="M8.2 15.2 H31.8 M8.2 24.4 H31.8"
+        stroke={active ? "#FF424B" : "white"}
+        strokeWidth="2.2"
+      />
+      <path
+        d="M12 10.4 H28"
+        stroke={active ? "#FF424B" : "white"}
+        strokeWidth="2.2"
+      />
+      <rect
+        x="11.8"
+        y="27.7"
+        width="16.4"
+        height="2.7"
+        rx="1.35"
+        fill={active ? "#FF424B" : "white"}
+        stroke="none"
+      />
     </svg>
   );
 }
@@ -80,7 +100,7 @@ function FaceIcon({ active }: { active: boolean }) {
       src="/assets/Logo%20003%203.png"
       alt=""
       aria-hidden="true"
-      className="h-[38px] w-[38px] object-contain"
+      className="tab-profile-icon object-contain"
       style={{ opacity: active ? 1 : 0.62 }}
     />
   );
@@ -88,7 +108,7 @@ function FaceIcon({ active }: { active: boolean }) {
 
 const TABS = [
   { path: "/", label: "홈", Icon: HomeIcon },
-  { path: "/feed", label: "먼치", Icon: MapIcon },
+  { path: "/feed", label: "먼치", Icon: MunchIcon },
   { path: "/lunchie/settings", label: "런치", Icon: LightningIcon },
   { path: "/saved", label: "저장", Icon: BookmarkIcon },
   { path: "/profile", label: "프로필", Icon: FaceIcon },
@@ -96,23 +116,25 @@ const TABS = [
 
 export default function TabBar() {
   const [location, navigate] = useLocation();
+  const isFlat = location === "/" || location === "/feed" || location === "/saved" || location === "/profile";
 
   return (
-    <div className="tab-bar">
-      <div className="flex h-[68px] items-center justify-around px-[34px]">
+    <div className={`tab-bar ${isFlat ? "tab-bar--flat" : ""}`}>
+      <div className="tab-bar-content grid grid-cols-5 items-center px-[22px]">
         {TABS.map((tab) => {
           const isActive =
             location === tab.path || (tab.path !== "/" && location.startsWith(tab.path));
+          const isProfile = tab.path === "/profile";
 
           return (
             <button
               key={tab.path}
               onClick={() => navigate(tab.path)}
               aria-label={tab.label}
-              className="flex h-12 w-12 items-center justify-center transition-all active:scale-95"
+              className={`flex items-center justify-center justify-self-center transition-all active:scale-95 ${isProfile ? "h-[51px] w-[51px]" : "h-12 w-12"}`}
             >
               <motion.div
-                animate={isActive ? { scale: 1.06 } : { scale: 1 }}
+                animate={isActive && !isProfile ? { scale: 1.06 } : { scale: 1 }}
                 whileTap={{ scale: 0.92 }}
                 transition={{ type: "spring", stiffness: 400, damping: 20 }}
               >

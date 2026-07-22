@@ -18,6 +18,16 @@ const supabasePublishableKey = (
   || import.meta.env.VITE_SUPABASE_ANON_KEY
 )?.trim();
 
+const hasAnySupabaseConfiguration = Boolean(
+  supabaseUrl || supabasePublishableKey,
+);
+
+// 인증 설정이 전혀 없는 로컬 프로토타입은 mock/OSM 데이터로 계속 실행한다.
+// AuthBootstrap/AuthContext가 이 상태에서는 인증 메서드를 호출하지 않으므로,
+// 정적으로 이 모듈을 import하는 화면들이 부팅 중 예외를 던지지 않게 하는 용도다.
+const LOCAL_DISABLED_SUPABASE_URL = 'http://127.0.0.1:54321';
+const LOCAL_DISABLED_SUPABASE_KEY = 'local-development-placeholder';
+
 function requireSupabaseEnvironmentVariable(
   value: string | undefined,
   variableName: 'VITE_SUPABASE_URL' | 'VITE_SUPABASE_PUBLISHABLE_KEY',
@@ -41,12 +51,16 @@ function requireValidSupabaseUrl(value: string): string {
 }
 
 const validatedSupabaseUrl = requireValidSupabaseUrl(
-  requireSupabaseEnvironmentVariable(supabaseUrl, 'VITE_SUPABASE_URL'),
+  hasAnySupabaseConfiguration
+    ? requireSupabaseEnvironmentVariable(supabaseUrl, 'VITE_SUPABASE_URL')
+    : LOCAL_DISABLED_SUPABASE_URL,
 );
-const validatedSupabasePublishableKey = requireSupabaseEnvironmentVariable(
-  supabasePublishableKey,
-  'VITE_SUPABASE_PUBLISHABLE_KEY',
-);
+const validatedSupabasePublishableKey = hasAnySupabaseConfiguration
+  ? requireSupabaseEnvironmentVariable(
+      supabasePublishableKey,
+      'VITE_SUPABASE_PUBLISHABLE_KEY',
+    )
+  : LOCAL_DISABLED_SUPABASE_KEY;
 
 export const supabase = createClient(
   validatedSupabaseUrl,

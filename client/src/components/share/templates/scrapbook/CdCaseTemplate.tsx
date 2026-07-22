@@ -24,7 +24,7 @@ interface Props {
 /** 포토카드 CD 케이스 — 깅엄 패브릭 위 쥬얼 케이스에 스팟 폴라로이드를 담는다 */
 const CdCaseTemplate = forwardRef<HTMLDivElement, Props>(({ course, palette }, ref) => {
   const p = palette ?? SCRAP_PALETTES.pink;
-  const photos = course.places.slice(0, 4);
+  const photos = course.places.slice(0, 3);
   const dateLabel = course.date ?? new Date().toISOString().slice(0, 10).replace(/-/g, '/');
 
   return (
@@ -201,7 +201,7 @@ const CdCaseTemplate = forwardRef<HTMLDivElement, Props>(({ course, palette }, r
 
         {/* 트랙리스트처럼 스팟 나열 */}
         <div style={{ marginTop: 10, textAlign: 'left' }}>
-          {course.places.slice(0, 4).map((place, i) => (
+          {course.places.slice(0, 3).map((place, i) => (
             <div
               key={place.id}
               style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 5 }}

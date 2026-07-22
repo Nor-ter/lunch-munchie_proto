@@ -13,7 +13,7 @@ interface Props {
 /** 캡처링 모먼츠 — 코르크 보드에 핀으로 꽂힌 빈티지 티켓, 오벌 슬롯에 스팟 사진 */
 const TicketTemplate = forwardRef<HTMLDivElement, Props>(({ course, palette }, ref) => {
   const p = palette ?? SCRAP_PALETTES.vintage;
-  const places = course.places.slice(0, 4);
+  const places = course.places.slice(0, 3);
   const dateLabel = course.date ?? new Date().toISOString().slice(0, 10).replace(/-/g, '/');
 
   return (

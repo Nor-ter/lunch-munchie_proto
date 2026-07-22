@@ -251,7 +251,7 @@ export default function TourMapPage() {
 
   const sourceRests = likedRests.length >= 2 ? likedRests : restaurants;
 
-  const stops: TourStop[] = sourceRests.slice(0, 5).map((r, i) => ({
+  const stops: TourStop[] = sourceRests.slice(0, 3).map((r, i) => ({
     id: r.id,
     name: r.name,
     image: r.image,

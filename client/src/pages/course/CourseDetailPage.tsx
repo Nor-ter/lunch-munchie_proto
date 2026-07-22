@@ -1,8 +1,7 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useParams, useLocation, useSearch } from 'wouter';
 import { motion, AnimatePresence } from 'framer-motion';
-import { toast } from 'sonner';
-import { Heart, Bookmark, Share2, ChevronLeft, ChevronRight, Star, X, GripVertical, Palette, MessageCircle } from 'lucide-react';
+import { Heart, ChevronLeft, ChevronRight, Star, X, GripVertical, Clock } from 'lucide-react';
 import {
   DndContext,
   closestCenter,
@@ -24,11 +23,8 @@ import { CourseMapView } from '@/components/course/CourseMapView';
 import { useApp } from '@/contexts/AppContext';
 import { getCourseById as getMockCourseById } from '@/data/mockCourse';
 import { CoursePlace } from '@/types/course';
-import { COURSE_THEME, getCourseSequenceColor } from '@/constants/courseTheme';
+import { getCourseSequenceColor } from '@/constants/courseTheme';
 import { getCoursePlacesFromStops } from '@/lib/courseMapSync';
-import { getSkinById } from '@/constants/skins';
-import SkinFrame from '@/components/munchie/SkinFrame';
-import SkinPicker from '@/components/munchie/SkinPicker';
 import RestaurantDetailSheet from '@/components/munchie/RestaurantDetailSheet';
 
 type FromMode = 'explore' | 'saved' | 'feed' | 'template' | 'template-detail' | 'profile';
@@ -49,10 +45,6 @@ const BACK_PATH: Record<FromMode, string> = {
   'template-detail': '/feed?tab=template',
   explore: '/feed', // 먼치모드 통합 — 구 explore 진입도 피드로 복귀
 };
-
-function normalizeHashtags(tags: string[]) {
-  return tags.map((tag) => tag.replace(/^#/, ''));
-}
 
 // ── PlaceItem ─────────────────────────────────────────────────────────────────
 
@@ -75,7 +67,7 @@ function PlaceItem({
   /** 터치로 하이라이트된 상태 */
   selected?: boolean;
   onSelect?: (id: string) => void;
-  /** 왼쪽으로 밀거나 화살표 탭 시 식당 상세 열기 */
+  /** 오른쪽으로 밀거나 화살표 탭 시 식당 상세 열기 */
   onOpenDetail?: (id: string) => void;
   hasDetail?: boolean;
 }) {
@@ -93,12 +85,13 @@ function PlaceItem({
       className={`flex gap-3 ${isDragging ? 'opacity-50' : ''}`}
     >
       <div className="flex flex-col items-center">
-        <div
-          className="w-7 h-7 rounded-full text-white text-xs flex items-center justify-center shrink-0"
-          style={{ background: color.base }}
+        <span
+          className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-[12px] font-black leading-none text-white"
+          style={{ backgroundColor: color.base }}
+          aria-label={`${index + 1}번째 장소`}
         >
           {index + 1}
-        </div>
+        </span>
         {!isLast && (
           <div
             className="flex-1 border-l-2 border-dashed ml-[1px] my-1"
@@ -109,20 +102,40 @@ function PlaceItem({
 
       <motion.div
         layout
+        role={canPeek ? 'button' : undefined}
+        tabIndex={canPeek ? 0 : undefined}
+        aria-label={canPeek ? (selected ? `${place.name} 상세보기` : `${place.name} 선택`) : undefined}
+        aria-pressed={canPeek ? selected : undefined}
         drag={canPeek && selected ? 'x' : false}
-        dragConstraints={{ left: -90, right: 0 }}
+        dragConstraints={{ left: 0, right: 90 }}
         dragElastic={0.12}
         dragSnapToOrigin
         onDragEnd={(_, info) => {
-          if (info.offset.x < -55) onOpenDetail?.(place.id);
+          if (info.offset.x > 55) onOpenDetail?.(place.id);
         }}
-        onClick={() => canPeek && onSelect?.(place.id)}
+        onClick={() => {
+          if (!canPeek) return;
+          if (selected) {
+            onOpenDetail?.(place.id);
+            return;
+          }
+          onSelect?.(place.id);
+        }}
+        onKeyDown={(event) => {
+          if (!canPeek || (event.key !== 'Enter' && event.key !== ' ')) return;
+          event.preventDefault();
+          if (selected) {
+            onOpenDetail?.(place.id);
+            return;
+          }
+          onSelect?.(place.id);
+        }}
         className={`flex-1 border rounded-xl p-3 flex gap-3 items-center transition-colors ${!isLast ? 'mb-2' : ''} ${
           canPeek ? 'cursor-pointer' : ''
         }`}
         style={selected
           ? { borderColor: color.base, background: color.faint, touchAction: 'pan-y' }
-          : { borderColor: '#F3F4F6', touchAction: 'pan-y' }}
+          : { borderColor: '#EADBD2', background: '#FFFDFC', touchAction: 'pan-y' }}
       >
         <AnimatePresence>
           {isEditing && (
@@ -152,17 +165,6 @@ function PlaceItem({
           </p>
           <p className="text-xs text-gray-400">{place.category}</p>
           {place.address && <p className="text-[11px] text-gray-400 truncate">{place.address}</p>}
-          {/* 하이라이트 시: 밀어서 상세보기 힌트 */}
-          {selected && !isEditing && (
-            <motion.p
-              initial={{ opacity: 0, y: 3 }}
-              animate={{ opacity: 1, y: 0 }}
-              className="mt-1 text-[10px] font-bold"
-              style={{ color: color.text }}
-            >
-              ← 밀어서 식당 상세·후기 보기
-            </motion.p>
-          )}
         </div>
         {canPeek && selected && (
           <motion.button
@@ -205,117 +207,66 @@ export default function CourseDetailPage() {
   // 프로필 진입도 내 코스맵이므로 편집 가능 모드
   const fromSaved = from === 'saved' || from === 'profile';
   const {
-    savedCourseIds,
-    saveCourse,
-    unsaveCourse,
     getCourseById: getAppCourseById,
     getRestaurantById,
     feedPosts,
-    courseSkins,
-    setCourseSkin,
   } = useApp();
-  const skin = id ? getSkinById(courseSkins[id]) : undefined;
-  const [skinSheetOpen, setSkinSheetOpen] = useState(false);
-  const isBookmarked = id ? savedCourseIds.includes(id) : false;
   const templateId = new URLSearchParams(search).get('template');
   const templateFrom = new URLSearchParams(search).get('templateFrom');
+  const templateOrigin = templateFrom === 'profile' || templateFrom === 'saved' ? templateFrom : 'feed';
+  const requestedPostId = new URLSearchParams(search).get('post');
   const isProfileTemplateCourse = from === 'template-detail' && templateFrom === 'profile';
-  const canManageCourse = fromSaved || isProfileTemplateCourse;
   const backPath = from === 'template-detail' && templateId && id
-    ? `/template/${templateId}?course=${id}${templateFrom === 'profile' ? '&from=profile' : ''}`
+    ? `/template/${templateId}?course=${id}&from=${templateOrigin}`
     : BACK_PATH[from];
 
-  const toggleBookmark = () => {
-    if (!id) return;
-    if (isBookmarked) unsaveCourse(id);
-    else saveCourse(id);
-  };
-
   const appCourse = id ? getAppCourseById(id) : undefined;
+  const orphanPost = id
+    ? feedPosts.find(post => post.id === requestedPostId && post.courseId === id)
+      ?? feedPosts.find(post => post.courseId === id)
+    : undefined;
   const courseData = getMockCourseById(id);
   const syncedPlaces = useMemo(
     () => (appCourse ? getCoursePlacesFromStops(appCourse, getRestaurantById) : []),
     [appCourse, getRestaurantById],
   );
-  const initialTitle = appCourse?.title ?? courseData.title;
-  const initialHashtags = normalizeHashtags(appCourse?.hashtags ?? courseData.hashtags);
+  const legacyPhotoPlaces: CoursePlace[] = (orphanPost?.photos ?? []).slice(0, 3).map((photo, index) => ({
+    id: `legacy-${orphanPost!.id}-${index}`,
+    name: `코스 스팟 ${index + 1}`,
+    rating: 0,
+    distance: '기록 사진',
+    category: orphanPost?.tags[index] ?? 'Munchie',
+    priceLevel: 1,
+    imageUrl: photo,
+    coords: [{ x: 20, y: 28 }, { x: 70, y: 50 }, { x: 32, y: 76 }][index]!,
+  }));
   const initialPlaces = appCourse && syncedPlaces.length > 0
     ? syncedPlaces
-    : courseData.places.map(p => ({ ...p }));
-  const distanceKm = appCourse?.metadata.distance ?? courseData.distanceKm;
-  const durationLabel = appCourse
-    ? `${Math.floor(appCourse.metadata.duration / 60)}h`
-    : `${courseData.durationHours}h`;
-  const saveCount = appCourse?.savedCount ?? courseData.saveCount;
-  const relatedFeedCount = id
-    ? feedPosts.filter(post => post.courseId === id).length
-    : 0;
+    : legacyPhotoPlaces.length > 0
+      ? legacyPhotoPlaces
+      : courseData.places.map(p => ({ ...p }));
+  const durationHours = appCourse
+    ? appCourse.metadata.duration / 60
+    : courseData.durationHours;
+  const durationLabel = `${Number.isInteger(durationHours) ? durationHours : durationHours.toFixed(1)}시간`;
+  const authorHandle = (orphanPost?.authorName || courseData.authorHandle).replace(/^@/, '');
+  const authorMeta = orphanPost ? 'Munchie creator' : `${courseData.followerCount} Followers`;
 
   // Local editable state (only used in saved mode)
-  const [title, setTitle] = useState(initialTitle);
-  const [hashtags, setHashtags] = useState<string[]>(initialHashtags);
   const [places, setPlaces] = useState<CoursePlace[]>(initialPlaces);
   const [isEditing, setIsEditing] = useState(false);
-  const [newTag, setNewTag] = useState('');
-  const [isAddingTag, setIsAddingTag] = useState(false);
   // 코스 순서: 터치 → 하이라이트, 밀기 → 식당 상세 슬라이드
   const [selectedPlaceId, setSelectedPlaceId] = useState<string | null>(null);
   const [detailPlaceId, setDetailPlaceId] = useState<string | null>(null);
 
-  const titleInputRef = useRef<HTMLInputElement>(null);
-  const tagInputRef = useRef<HTMLInputElement>(null);
-
-  useEffect(() => {
-    if (isEditing) titleInputRef.current?.focus();
-  }, [isEditing]);
-
   useEffect(() => {
     if (isEditing) return;
-    setTitle(initialTitle);
-    setHashtags(initialHashtags);
     setPlaces(initialPlaces);
-  }, [id, isEditing, initialTitle, appCourse, syncedPlaces]);
-
-  useEffect(() => {
-    if (isAddingTag) tagInputRef.current?.focus();
-  }, [isAddingTag]);
-
-  const commitTag = () => {
-    const trimmed = newTag.trim().replace(/^#/, '');
-    if (trimmed && !hashtags.includes(trimmed)) {
-      setHashtags(prev => [...prev, trimmed]);
-    }
-    setNewTag('');
-    setIsAddingTag(false);
-  };
+  }, [id, isEditing, appCourse, syncedPlaces]);
 
   const handleDelete = () => {
     if (window.confirm('이 코스를 삭제할까요?')) {
       navigate(backPath);
-    }
-  };
-
-  const shareCourseMap = async () => {
-    if (!id) return;
-    const url = `${window.location.origin}/course/${id}`;
-    const shareData = {
-      title: `Lunchie Munchie — ${title}`,
-      text: `${title} 코스맵을 확인해보세요!`,
-      url,
-    };
-
-    try {
-      if (navigator.share) {
-        await navigator.share(shareData);
-        toast.success('코스맵을 공유했어요!');
-        return;
-      }
-      await navigator.clipboard.writeText(url);
-      toast.success('공유 링크를 복사했어요! 🔗');
-    } catch (error) {
-      // 네이티브 공유 시트를 닫은 경우에는 실패 메시지를 표시하지 않는다.
-      if (error instanceof DOMException && error.name === 'AbortError') return;
-      toast.error('코스맵을 공유하지 못했어요');
     }
   };
 
@@ -337,36 +288,41 @@ export default function CourseDetailPage() {
 
   return (
     <motion.div
-      className="max-w-[430px] mx-auto min-h-screen pb-[112px]"
-      style={{ backgroundColor: 'var(--lm-bg)' }}
+      className="page-with-bottom-action mx-auto min-h-screen max-w-[430px] bg-[#FFF8F3]"
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.3 }}
     >
       {/* Back button */}
-      <div className="px-4 pt-4 pb-3">
+      <div className="flex items-center justify-between px-4 pb-3 pt-4">
         <button
           onClick={() => navigate(backPath)}
           aria-label="이전 화면으로 돌아가기"
-          className="w-9 h-9 bg-white rounded-full shadow flex items-center justify-center"
+          className="flex h-9 w-9 items-center justify-center rounded-full border border-[#EBD8CE] bg-white text-[#8B6A5D] shadow-sm"
         >
           <ChevronLeft size={20} />
         </button>
+        <div className="text-center">
+          <p className="text-[10px] font-black uppercase tracking-[0.18em] text-[#E67E78]">Munchie</p>
+          <p className="text-[16px] font-black text-[#49362E]">코스맵 보기</p>
+        </div>
+        <div className="h-9 w-9" aria-hidden="true" />
       </div>
 
-      {/* White card — 스킨 적용 시 스크랩북 프레임으로 감싼다 */}
-      <SkinFrame skin={skin} className="mx-4" radius={26}>
-      <div className={skin ? undefined : 'bg-white rounded-3xl shadow-sm overflow-hidden'}>
+      {/* Every course map uses the same basic card. Stored legacy skins are intentionally ignored. */}
+      <div className="mx-4 overflow-hidden rounded-3xl border border-[#EBD9CF] bg-[#FFFDFC] shadow-[0_10px_28px_rgba(105,67,48,0.08)]">
 
       {/* Author */}
       <div className="px-4 pt-4 pb-2 flex items-center justify-between">
         <div className="flex items-center gap-2">
-          <div className="w-10 h-10 rounded-full bg-gray-200 shrink-0" />
+          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[#F3EDE8] text-lg">
+            {orphanPost?.authorEmoji || '🍽️'}
+          </div>
           <div>
             <div className="flex items-center gap-1.5">
-              <span className="font-medium text-sm">@{courseData.authorHandle}</span>
+              <span className="font-medium text-sm">@{authorHandle}</span>
             </div>
-            <span className="text-xs text-gray-500">{courseData.followerCount} Followers</span>
+            <span className="text-xs text-gray-500">{authorMeta}</span>
           </div>
         </div>
 
@@ -391,171 +347,28 @@ export default function CourseDetailPage() {
         )}
       </div>
 
-      {/* Course info */}
-      <motion.div layout className="px-4 pb-3">
-        {/* Title */}
-        <AnimatePresence mode="wait">
-          {fromSaved && isEditing ? (
-            <motion.input
-              key="title-input"
-              ref={titleInputRef}
-              layout
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              transition={{ duration: 0.15 }}
-              value={title}
-              onChange={e => setTitle(e.target.value)}
-              className="text-xl font-bold w-full border-b border-gray-300 outline-none pb-0.5 bg-transparent"
-            />
-          ) : (
-            <motion.h1
-              key="title-text"
-              layout
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              transition={{ duration: 0.15 }}
-              className="text-xl font-bold"
-            >
-              {title}
-            </motion.h1>
-          )}
-        </AnimatePresence>
-
-        {/* Hashtags */}
-        <AnimatePresence mode="wait">
-          {fromSaved && isEditing ? (
-            <motion.div
-              key="tags-edit"
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              transition={{ duration: 0.15 }}
-              className="flex flex-wrap gap-1.5 mt-1.5"
-            >
-              {hashtags.map(tag => (
-                <span key={tag} className="flex items-center gap-1 border border-gray-200 rounded-full px-2.5 py-0.5 text-xs text-gray-500">
-                  #{tag}
-                  <button onClick={() => setHashtags(prev => prev.filter(t => t !== tag))}>
-                    <X size={10} className="text-gray-400" />
-                  </button>
-                </span>
-              ))}
-              {isAddingTag ? (
-                <input
-                  ref={tagInputRef}
-                  value={newTag}
-                  onChange={e => setNewTag(e.target.value)}
-                  onKeyDown={e => e.key === 'Enter' && commitTag()}
-                  onBlur={commitTag}
-                  className="border border-[#E85053] rounded-full px-2.5 py-0.5 text-xs outline-none w-20"
-                  placeholder="#태그"
-                />
-              ) : (
-                <button
-                  onClick={() => setIsAddingTag(true)}
-                  className="border border-dashed border-gray-300 rounded-full px-2.5 py-0.5 text-xs text-gray-400"
-                >
-                  + 추가
-                </button>
-              )}
-            </motion.div>
-          ) : (
-            <motion.div
-              key="tags-view"
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              transition={{ duration: 0.15 }}
-              className="space-x-1 mt-1"
-            >
-              {hashtags.map(tag => (
-                <span key={tag} className="text-xs text-gray-400">#{tag}</span>
-              ))}
-            </motion.div>
-          )}
-        </AnimatePresence>
-      </motion.div>
-
-      {/* Map actions — 지도 위에 분리해 지도를 가리지 않는다. */}
-      <div className="mx-4 mb-2 flex justify-end gap-2">
-          <button
-            onClick={shareCourseMap}
-            aria-label="코스맵 공유"
-            className="w-9 h-9 bg-white rounded-full shadow flex items-center justify-center"
-          >
-            <Share2 size={18} />
-          </button>
-          <button
-            onClick={() => navigate(`/course/${id}/share${fromSaved ? '?from=saved' : ''}`)}
-            aria-label="코스맵 템플릿 만들기"
-            className="w-9 h-9 bg-white rounded-full shadow flex items-center justify-center"
-          >
-            <Palette size={18} />
-          </button>
-          {!canManageCourse && (
-            <button
-              onClick={toggleBookmark}
-              className="w-9 h-9 bg-white rounded-full shadow flex items-center justify-center"
-            >
-              <Bookmark
-                size={18}
-                fill={isBookmarked ? '#E85053' : 'none'}
-                stroke={isBookmarked ? '#E85053' : 'currentColor'}
-              />
-            </button>
-          )}
+      {/* Map area — 지도·경로·순번 마커만 표시한다. */}
+      <div
+        data-ui="course-map-area"
+        className="relative mx-4 mb-4 h-[270px] overflow-hidden rounded-[22px] border border-[#E9D8CF] bg-[#FBF7F1] shadow-[0_8px_22px_rgba(105,67,48,0.08)]"
+      >
+        <CourseMapView places={places} width={430} height={270} className="h-full w-full" />
       </div>
 
-      {/* Map area */}
-      <div className="relative mx-4 mb-4 h-[220px] rounded-2xl overflow-hidden">
-        <CourseMapView places={places} width={430} height={220} className="w-full h-full" />
-      </div>
-
-      {/* Stats bar */}
-      <div className="mx-4 mb-4 border border-gray-100 rounded-xl grid grid-cols-4">
-        {[
-          { value: `${distanceKm}km`, label: '거리' },
-          { value: durationLabel, label: '소요 시간' },
-          { value: `${places.length}`, label: '스팟' },
-          { value: `${saveCount.toLocaleString()}`, label: '저장' },
-        ].map((stat, i, arr) => (
-          <div
-            key={stat.label}
-            className={`py-3 flex flex-col items-center ${i < arr.length - 1 ? 'border-r border-gray-100' : ''}`}
-          >
-            <span className="font-bold text-sm">{stat.value}</span>
-            <span className="text-xs text-gray-400">{stat.label}</span>
-          </div>
-        ))}
-      </div>
-
-      <div className="mx-4 mb-4">
-        <button
-          type="button"
-          onClick={() => navigate(`/course/${id}/feeds${search ? `?${search}` : ''}`)}
-          className="flex w-full items-center gap-3 rounded-2xl border border-[#F2D8D3] bg-[#FFF8F4] p-3.5 text-left active:scale-[0.99]"
-        >
-          <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-[#FDE1E1] text-[#D94447]">
-            <MessageCircle size={18} />
-          </span>
-          <span className="min-w-0 flex-1">
-            <span className="block text-[14px] font-black text-[#3B2A22]">이 코스로 만든 피드</span>
-            <span className="mt-0.5 block text-[11px] text-[#9D887C]">
-              {relatedFeedCount > 0 ? `올라온 피드 ${relatedFeedCount}개 둘러보기` : '아직 올라온 피드가 없어요'}
-            </span>
-          </span>
-          <ChevronRight size={18} color="#B09A8C" />
-        </button>
+      {/* Time / spots */}
+      <div
+        data-ui="course-meta"
+        className="mx-4 flex items-center justify-start gap-3 border-y border-[#EEE0D8] py-3 text-[11px] font-bold text-[#766158]"
+      >
+        <span className="flex shrink-0 items-center gap-1.5">
+          <Clock size={14} className="text-[#EE7772]" />
+          {durationLabel}
+        </span>
+        <span className="shrink-0">{places.length}개 스팟</span>
       </div>
 
       {/* Place list */}
-      <div className="px-4 pb-4">
-        <div className="flex items-center justify-between mb-3">
-          <p className="text-sm font-semibold">코스 순서</p>
-          <p className="text-[10px] text-gray-400">터치해서 식당 자세히 보기</p>
-        </div>
+      <div className="px-4 pb-4 pt-4">
         <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
           <SortableContext items={places.map(p => p.id)} strategy={verticalListSortingStrategy}>
             <motion.div layout className="flex flex-col">
@@ -567,7 +380,7 @@ export default function CourseDetailPage() {
                   isLast={i === places.length - 1}
                   isEditing={fromSaved && isEditing}
                   onRemove={id => setPlaces(prev => prev.filter(p => p.id !== id))}
-                  hasDetail={!!getRestaurantById(place.id)}
+                  hasDetail
                   selected={selectedPlaceId === place.id}
                   onSelect={pid => setSelectedPlaceId(prev => (prev === pid ? null : pid))}
                   onOpenDetail={pid => setDetailPlaceId(pid)}
@@ -578,119 +391,44 @@ export default function CourseDetailPage() {
         </DndContext>
       </div>
 
-      {/* 템플릿 스킨 바꾸기 — 내 코스(저장/프로필 진입)에서만 */}
-      {canManageCourse && (
-        <div className="px-4 pb-4">
-          <button
-            onClick={() => setSkinSheetOpen(true)}
-            className="w-full h-11 rounded-xl border border-dashed flex items-center justify-center gap-2 text-sm font-semibold active:scale-[0.99] transition-transform"
-            style={{ borderColor: skin?.accent ?? '#E85053', color: skin?.accent ?? '#E85053' }}
-          >
-            <Palette size={16} /> {skin ? `스킨 · ${skin.name}` : '템플릿 스킨 입히기'}
-          </button>
-        </div>
-      )}
       </div>
-      </SkinFrame>
 
       {/* 식당 상세 슬라이드 (뒤로가면 이 화면으로 복귀) */}
       <AnimatePresence>
         {detailPlaceId && (
           <RestaurantDetailSheet
             restaurantId={detailPlaceId}
+            fallbackPlace={places.find(place => place.id === detailPlaceId)}
             onClose={() => setDetailPlaceId(null)}
           />
         )}
       </AnimatePresence>
 
-      {/* 스킨 선택 바텀시트 */}
-      <AnimatePresence>
-        {skinSheetOpen && (
-          <>
-            <motion.div
-              className="fixed inset-0 bg-black/40 z-50"
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              onClick={() => setSkinSheetOpen(false)}
-            />
-            <motion.div
-              className="fixed bottom-0 left-0 right-0 mx-auto w-full max-w-[430px] bg-white rounded-t-3xl z-50 px-5 pt-4 pb-8"
-              initial={{ y: '100%' }}
-              animate={{ y: 0 }}
-              exit={{ y: '100%' }}
-              transition={{ type: 'tween', ease: [0.32, 0.72, 0, 1], duration: 0.3 }}
-            >
-              <div className="mx-auto mb-4 h-1 w-10 rounded-full bg-gray-200" />
-              <div className="mb-4 flex items-center justify-between">
-                <p className="font-bold text-[16px]">템플릿 스킨 선택</p>
-                <button
-                  onClick={() => { if (id) setCourseSkin(id, null); }}
-                  className="text-[12px] text-gray-400 underline underline-offset-2"
-                >
-                  기본으로
-                </button>
-              </div>
-              <SkinPicker
-                value={id ? courseSkins[id] ?? null : null}
-                onChange={(skinId) => { if (id) setCourseSkin(id, skinId); }}
-                previewPhoto={places[0]?.imageUrl}
-                columns={3}
-              />
-              <button
-                onClick={() => setSkinSheetOpen(false)}
-                className="mt-5 w-full h-12 rounded-2xl bg-[#E85053] text-white font-bold text-[14px]"
-              >
-                완료
-              </button>
-            </motion.div>
-          </>
-        )}
-      </AnimatePresence>
 
       {/* Bottom bar */}
-      <div className="fixed bottom-4 left-1/2 -translate-x-1/2 w-[calc(100%-32px)] max-w-[398px] bg-white rounded-2xl shadow-lg px-4 py-3 flex gap-2">
+      <div className="page-bottom-action-bar page-bottom-bar">
         {isProfileTemplateCourse ? (
           <button
             onClick={() => navigate(`/course/${id}/edit?from=profile`)}
-            className="h-11 flex-1 rounded-xl bg-[#E85053] text-sm font-medium text-white"
+            className="page-bottom-action-primary"
           >
             편집
           </button>
         ) : fromSaved ? (
-          <>
-            <button
-              onClick={handleDelete}
-              className="flex-1 border border-red-200 text-red-400 rounded-xl h-11 text-sm"
-            >
-              삭제
-            </button>
-            <button
-              onClick={() => navigate(`/course/${id}/share${fromSaved ? '?from=saved' : ''}`)}
-              className="flex-1 bg-[#E85053] text-white rounded-xl h-11 text-sm font-medium"
-            >
-              공유하기
-            </button>
-          </>
+          <button
+            onClick={handleDelete}
+            className="h-[52px] flex-1 rounded-2xl border border-red-200 text-sm text-red-400"
+          >
+            삭제
+          </button>
         ) : (
           <>
-            <button className="w-11 h-11 border border-gray-200 rounded-xl flex items-center justify-center">
+            <button className="page-bottom-action-secondary">
               <Heart size={20} />
             </button>
             <button
-              onClick={toggleBookmark}
-              className="w-11 h-11 border border-gray-200 rounded-xl flex items-center justify-center"
-            >
-              <Bookmark
-                size={20}
-                fill={isBookmarked ? '#E85053' : 'none'}
-                stroke={isBookmarked ? '#E85053' : 'currentColor'}
-              />
-            </button>
-            <button
-              onClick={() => navigate(`/course/${id}/edit?from=explore`)}
-              className="flex-1 text-white rounded-xl h-11 text-sm font-medium"
-              style={{ backgroundColor: COURSE_THEME.primary }}
+              onClick={() => navigate(`/coursemap/new?course=${id}`)}
+              className="page-bottom-action-primary"
             >
               복사해서 편집
             </button>

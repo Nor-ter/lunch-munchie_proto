@@ -1,9 +1,86 @@
 import { useState } from 'react';
 import { motion } from 'framer-motion';
 import { useLocation } from 'wouter';
-import { ChevronLeft, Eye, ImageIcon } from 'lucide-react';
+import { ChevronLeft, ChevronRight, ImageOff } from 'lucide-react';
+import { COURSEMAP_TEMPLATES } from '@/constants/coursemapTemplates';
 import { SHARE_TEMPLATES, type ShareTemplateDesign } from '@/constants/shareTemplates';
 import ShareTemplateInfoSheet from '@/components/munchie/ShareTemplateInfoSheet';
+
+const FEED_TEMPLATES: ShareTemplateDesign[] = COURSEMAP_TEMPLATES.map(template => ({
+  id: `feed-${template.id}`,
+  name: template.name,
+  desc: '맛집 피드용 빈 프레임',
+  aspect: '4:3',
+  background: template.image,
+}));
+
+function TemplateSection({
+  eyebrow,
+  title,
+  description,
+  templates,
+  previewKind,
+  onSelect,
+}: {
+  eyebrow: string;
+  title: string;
+  description: string;
+  templates: ShareTemplateDesign[];
+  previewKind: 'feed' | 'story';
+  onSelect: (template: ShareTemplateDesign) => void;
+}) {
+  return (
+    <section className="mt-8">
+      <div className="flex items-end justify-between gap-4 px-4">
+        <div>
+          <p className="text-[9px] font-black uppercase tracking-[0.18em] text-[#E66F70]">{eyebrow}</p>
+          <h2 className="mt-1 text-[19px] font-black text-[#30231E]">{title}</h2>
+          <p className="mt-1 text-[11px] font-semibold text-[#927D72]">{description}</p>
+        </div>
+        <span className="mb-0.5 flex shrink-0 items-center gap-1 text-[10px] font-bold text-[#B1988C]">
+          밀어서 보기 <ChevronRight size={13} />
+        </span>
+      </div>
+
+      <div
+        aria-label={`${title} 슬라이드`}
+        className="mt-3 grid grid-flow-col grid-rows-2 auto-cols-[calc((100%_-_2.75rem)/2)] gap-3 overflow-x-auto px-4 pb-4 scrollbar-hide snap-x snap-mandatory"
+      >
+        {templates.map((template, index) => (
+          <motion.button
+            key={template.id}
+            type="button"
+            onClick={() => onSelect(template)}
+            aria-label={`${template.name} 빈 템플릿 보기`}
+            className="snap-start rounded-[20px] border border-[#EBD9D0] bg-[#FFFDFC] p-2 text-left shadow-[0_8px_20px_rgba(91,57,42,0.08)]"
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: Math.min(index, 3) * 0.04 }}
+            whileTap={{ scale: 0.98 }}
+          >
+            <div className={`flex w-full items-center justify-center overflow-hidden rounded-[14px] bg-[#F8F1EB] ${previewKind === 'feed' ? 'h-[192px]' : 'h-[252px]'}`}>
+              <img
+                src={template.background}
+                alt={`${template.name} 사진 없는 기본 템플릿`}
+                className={previewKind === 'feed'
+                  ? 'h-full w-full object-contain'
+                  : 'h-[238px] w-auto max-w-full object-contain'}
+                loading={index < 4 ? 'eager' : 'lazy'}
+              />
+            </div>
+            <div className="px-1 pb-0.5 pt-2">
+              <div className="flex items-center justify-between gap-1.5">
+                <p className="min-w-0 truncate text-[12px] font-black text-[#3B2A22]">{template.name}</p>
+                <span className="shrink-0 rounded-full bg-[#FFF0EB] px-1.5 py-0.5 text-[8px] font-black text-[#D96B69]">{template.aspect}</span>
+              </div>
+              <p className="mt-1 flex items-center gap-1 text-[9px] font-semibold text-[#A28C81]"><ImageOff size={10} /> 사진 없는 기본형</p>
+            </div>
+          </motion.button>
+        ))}
+      </div>
+    </section>
+  );
+}
 
 export default function TemplatesBrowsePage() {
   const [, navigate] = useLocation();
@@ -11,62 +88,44 @@ export default function TemplatesBrowsePage() {
 
   return (
     <motion.main
-      className="mx-auto min-h-dvh max-w-[430px] bg-[#FCF4EE] pb-10"
-      initial={{ opacity: 0, y: 14 }}
+      className="mx-auto min-h-dvh max-w-[430px] bg-[#FFF8F3] pb-12"
+      initial={{ opacity: 0, y: 12 }}
       animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.25 }}
+      transition={{ duration: 0.22 }}
     >
-      <header className="px-5 pb-5 pt-5">
+      <header className="border-b border-[#EEDFD6] bg-[#FFFDFC] px-4 pb-5 pt-5">
         <button
-          onClick={() => navigate('/feed?tab=template')}
-          aria-label="템플릿 피드로 돌아가기"
-          className="mb-5 flex h-10 w-10 items-center justify-center rounded-full bg-white shadow-sm"
+          type="button"
+          onClick={() => navigate('/feed')}
+          aria-label="먼치피드로 돌아가기"
+          className="flex h-9 w-9 items-center justify-center rounded-full border border-[#E7D8CF] bg-white text-[#6C574C] shadow-sm"
         >
-          <ChevronLeft size={20} />
+          <ChevronLeft size={19} />
         </button>
-        <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-[#D06A6C]">Template library</p>
-        <h1 className="mt-1 text-[28px] font-black leading-tight text-[#2D211C]">템플릿 둘러보기</h1>
-        <p className="mt-2 max-w-[320px] text-[13px] leading-relaxed text-[#8C776B]">
-          코스 생성 화면과 동일한 {SHARE_TEMPLATES.length}개 디자인을 미리 둘러보세요.
+        <p className="mt-5 text-[9px] font-black uppercase tracking-[0.2em] text-[#E66F70]">Munchie templates</p>
+        <h1 className="mt-1 text-[26px] font-black tracking-[-0.03em] text-[#2D211C]">템플릿 한눈에 보기</h1>
+        <p className="mt-2 text-[12px] font-semibold leading-relaxed text-[#8C776B]">
+          사진을 넣기 전의 기본 디자인을 용도별로 확인해보세요.
         </p>
       </header>
 
-      <section className="grid grid-cols-2 gap-x-3 gap-y-6 px-4">
-        {SHARE_TEMPLATES.map((template, index) => (
-          <motion.button
-            key={template.id}
-            type="button"
-            onClick={() => setSelectedTemplate(template)}
-            aria-label={`${template.name} 기본 양식 보기`}
-            className="text-left"
-            initial={{ opacity: 0, y: 12 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: index * 0.05 }}
-            whileTap={{ scale: 0.98 }}
-          >
-            <div className="relative overflow-hidden rounded-[20px] bg-white p-1.5 shadow-[0_10px_26px_rgba(91,57,42,0.12)]">
-              <img
-                src={template.background}
-                alt={`${template.name} 기본 디자인`}
-                className="aspect-[9/16] w-full rounded-[15px] object-cover"
-                loading={index < 2 ? 'eager' : 'lazy'}
-              />
-              <span className="absolute bottom-3 right-3 flex h-8 w-8 items-center justify-center rounded-full bg-white/90 text-[#D94447] shadow-sm backdrop-blur">
-                <Eye size={15} />
-              </span>
-            </div>
-            <div className="px-1 pt-2.5">
-              <div className="flex items-center justify-between gap-2">
-                <p className="truncate text-[15px] font-black text-[#3B2A22]">{template.name}</p>
-                <span className="flex shrink-0 items-center gap-1 text-[10px] font-semibold text-[#AD9284]">
-                  <ImageIcon size={10} /> {template.aspect}
-                </span>
-              </div>
-              <p className="mt-1 line-clamp-2 text-[11px] leading-relaxed text-[#9D887C]">{template.desc}</p>
-            </div>
-          </motion.button>
-        ))}
-      </section>
+      <TemplateSection
+        eyebrow="Munchie feed"
+        title="맛집 피드 템플릿"
+        description="4:3 피드 카드 · 2×2로 둘러보기"
+        templates={FEED_TEMPLATES}
+        previewKind="feed"
+        onSelect={setSelectedTemplate}
+      />
+
+      <TemplateSection
+        eyebrow="Story share"
+        title="스토리 공유 템플릿"
+        description="9:16 스토리 카드 · 2×2로 둘러보기"
+        templates={SHARE_TEMPLATES}
+        previewKind="story"
+        onSelect={setSelectedTemplate}
+      />
 
       <ShareTemplateInfoSheet template={selectedTemplate} onClose={() => setSelectedTemplate(null)} />
     </motion.main>

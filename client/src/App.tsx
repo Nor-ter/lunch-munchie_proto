@@ -9,22 +9,19 @@ import { Route, Switch, useLocation, useParams, Redirect } from "wouter";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import ErrorBoundary from "./components/ErrorBoundary";
 import { ThemeProvider } from "./contexts/ThemeContext";
-import { AuthProvider } from "./contexts/AuthContext";
+import { AuthProvider, isWebAuthConfigured } from "./contexts/AuthContext";
 import { AppProvider } from "./contexts/AppContext";
-import { supabase } from "./lib/supabase";
 import AuthBootstrap from "./components/auth/AuthBootstrap";
 import { MapProvider } from "./components/map/MapProvider";
 import TabBar from "./components/TabBar";
 import OnboardingPage from "./pages/OnboardingPage";
 import HomePage from "./pages/HomePage";
 import MunchieFeedPage from "./pages/MunchieFeedPage";
-import FeedComposePage from "./pages/FeedComposePage";
 import FeedDetailPage from "./pages/FeedDetailPage";
 import FeedEditPage from "./pages/FeedEditPage";
 import CourseNavigatePage from "./pages/CourseNavigatePage";
 import NewCourseDetailPage from "./pages/course/CourseDetailPage";
-import CourseEditPage from "./pages/course/CourseEditPage";
-import CourseSharePage from "./pages/course/CourseSharePage";
+import CoursemapCreatePage from "./pages/course/CoursemapCreatePage";
 import SavedPage from "./pages/SavedPage";
 import ProfilePage from "./pages/ProfilePage";
 import OtherProfilePage from "./pages/OtherProfilePage";
@@ -46,12 +43,24 @@ import TemplateDetailPage from "./pages/TemplateDetailPage";
 import TemplatesBrowsePage from "./pages/TemplatesBrowsePage";
 import CourseFeedsPage from "./pages/course/CourseFeedsPage";
 import PlaceExplorePage from "./pages/PlaceExplorePage";
+import StorySharePage from "./pages/StorySharePage";
 
-const NO_TABBAR = ['/onboarding', '/tour-mode', '/course/', '/template/', '/templates', '/lunchie', '/session', '/join', '/feed/', '/explore/places', '/auth'];
+const NO_TABBAR = ['/onboarding', '/tour-mode', '/course/', '/coursemap', '/template/', '/templates', '/lunchie', '/session', '/join', '/feed/', '/explore/places', '/auth'];
 
 function CoursesRedirect() {
   const params = useParams<{ id: string }>();
   return <Redirect to={`/course/${params.id}`} />;
+}
+
+function IntegratedCourseEditorRedirect() {
+  const params = useParams<{ id: string }>();
+  const [, navigate] = useLocation();
+
+  useEffect(() => {
+    navigate(`/coursemap/new?course=${params.id}`, { replace: true });
+  }, [navigate, params.id]);
+
+  return null;
 }
 
 function AppShell() {
@@ -59,7 +68,7 @@ function AppShell() {
   const showTabBar = !NO_TABBAR.some(p => location.startsWith(p));
   return (
     <div className="app-shell">
-      <div className={showTabBar ? "min-h-dvh pb-20" : "min-h-dvh"}>
+      <div className={showTabBar ? "app-content-with-tab-bar min-h-dvh" : "min-h-dvh"}>
         <SlideTransitionRoutes>
           <Switch>
             <Route path="/onboarding" component={OnboardingPage} />
@@ -70,15 +79,16 @@ function AppShell() {
             <Route path="/explore">{() => <Redirect to="/feed" />}</Route>
             <Route path="/explore/places" component={PlaceExplorePage} />
             <Route path="/feed" component={MunchieFeedPage} />
-            <Route path="/feed/new" component={FeedComposePage} />
+            <Route path="/feed/new">{() => <Redirect to="/coursemap/new" />}</Route>
             <Route path="/feed/:id/edit" component={FeedEditPage} />
             <Route path="/feed/:id" component={FeedDetailPage} />
             <Route path="/templates" component={TemplatesBrowsePage} />
             <Route path="/template/:templateId" component={TemplateDetailPage} />
             <Route path="/courses/:id/navigate" component={CourseNavigatePage} />
             <Route path="/courses/:id" component={CoursesRedirect} />
-            <Route path="/course/:id/edit" component={CourseEditPage} />
-            <Route path="/course/:id/share" component={CourseSharePage} />
+            <Route path="/coursemap/new" component={CoursemapCreatePage} />
+            <Route path="/course/:id/edit" component={IntegratedCourseEditorRedirect} />
+            <Route path="/course/:id/share" component={StorySharePage} />
             <Route path="/course/:id/feeds" component={CourseFeedsPage} />
             <Route path="/course/:id" component={NewCourseDetailPage} />
             <Route path="/saved" component={SavedPage} />
@@ -114,16 +124,30 @@ const IDENTITY_CHANGE_EVENTS = new Set(["SIGNED_IN", "SIGNED_OUT", "USER_UPDATED
 
 export default function App() {
   useEffect(() => {
-    const {
-      data: { subscription },
-    } = supabase.auth.onAuthStateChange((event, session) => {
-      if (IDENTITY_CHANGE_EVENTS.has(event)) {
-        window.setTimeout(() => {
-          queryClient.clear();
-        }, 0);
-      }
+    if (!isWebAuthConfigured()) return;
+
+    let active = true;
+    let unsubscribe: (() => void) | undefined;
+
+    void import("./lib/supabase").then(({ supabase }) => {
+      if (!active) return;
+
+      const {
+        data: { subscription },
+      } = supabase.auth.onAuthStateChange((event) => {
+        if (IDENTITY_CHANGE_EVENTS.has(event)) {
+          window.setTimeout(() => {
+            queryClient.clear();
+          }, 0);
+        }
+      });
+      unsubscribe = () => subscription.unsubscribe();
     });
-    return () => subscription.unsubscribe();
+
+    return () => {
+      active = false;
+      unsubscribe?.();
+    };
   }, []);
 
   return (

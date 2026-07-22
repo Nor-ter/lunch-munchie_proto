@@ -1,7 +1,7 @@
 import { useLocation, useParams, useSearch } from 'wouter';
 import { ChevronLeft, Pencil } from 'lucide-react';
 import { useApp } from '@/contexts/AppContext';
-import FeedPostCard from '@/components/munchie/FeedPostCard';
+import UnifiedMunchieCard from '@/components/munchie/UnifiedMunchieCard';
 
 export default function FeedDetailPage() {
   const { id } = useParams<{ id: string }>();
@@ -9,8 +9,13 @@ export default function FeedDetailPage() {
   const [, navigate] = useLocation();
   const { feedPosts, isMyPost } = useApp();
   const post = feedPosts.find(item => item.id === id);
-  const fromProfile = new URLSearchParams(search).get('from') === 'profile';
-  const backPath = fromProfile ? '/profile' : '/feed?tab=feed';
+  const origin = new URLSearchParams(search).get('from');
+  const fromProfile = origin === 'profile';
+  const fromSaved = origin === 'saved';
+  const fromNotifications = origin === 'notifications';
+  const detailOrigin = fromProfile ? 'profile' : fromSaved ? 'saved' : 'feed';
+  const backPath = fromNotifications ? '/?notifications=1' : fromProfile ? '/profile' : fromSaved ? '/saved' : '/feed?tab=feed';
+  const backLabel = fromNotifications ? '알림으로 돌아가기' : fromProfile ? '프로필로 돌아가기' : fromSaved ? '저장목록으로 돌아가기' : '먼치피드로 돌아가기';
 
   if (!post) {
     return (
@@ -26,13 +31,13 @@ export default function FeedDetailPage() {
   return (
     <main className="mx-auto min-h-dvh max-w-[430px] bg-[#FCF4EE] pb-8">
       <header className="sticky top-0 z-30 flex items-center justify-between bg-[#FCF4EE]/95 px-4 pb-3 pt-4 backdrop-blur">
-        <button onClick={() => navigate(backPath)} aria-label="프로필로 돌아가기" className="flex h-10 w-10 items-center justify-center rounded-full bg-white shadow-sm">
+        <button onClick={() => navigate(backPath)} aria-label={backLabel} className="flex h-10 w-10 items-center justify-center rounded-full bg-white shadow-sm">
           <ChevronLeft size={20} />
         </button>
         <p className="text-[15px] font-black text-[#2D211C]">Munchie Feed</p>
         {isMyPost(post) ? (
           <button
-            onClick={() => navigate(`/feed/${post.id}/edit?from=${fromProfile ? 'profile' : 'feed'}`)}
+            onClick={() => navigate(`/feed/${post.id}/edit?from=${detailOrigin}`)}
             aria-label="피드 수정"
             className="flex h-10 w-10 items-center justify-center rounded-full bg-[#FDE1E1] text-[#D94447]"
           >
@@ -41,7 +46,7 @@ export default function FeedDetailPage() {
         ) : <span className="h-10 w-10" />}
       </header>
       <section className="px-4 pt-2">
-        <FeedPostCard post={post} />
+        <UnifiedMunchieCard post={post} detailOrigin={detailOrigin} />
       </section>
     </main>
   );

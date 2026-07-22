@@ -889,6 +889,7 @@ function FinalBattleResultScreen({
   onContinue: (winner?: any) => void;
   onRejectBoth?: () => void;
 }) {
+  const finalActionSizeClass = 'flex w-full items-center justify-center rounded-2xl py-4 text-[15px] font-bold';
   const [selected, setSelected] = useState<1 | 2 | null>(null);
   const { currentSession, profile } = useApp();
   const [finalSlateId] = useState(() => `final_${currentSession?.id ?? 'x'}_${Date.now()}`);
@@ -935,17 +936,17 @@ function FinalBattleResultScreen({
               logEvent({ event_type: 'SWIPE', action: 'CHOOSE', user_id: profile.id, slate_id: finalSlateId, slate_type: 'FINAL', restaurant_id: finalist1.id, round: duelRound, session_id: currentSession?.id ?? null, context: { decision_ms: Date.now() - mountAtRef.current } });
               onContinue(finalist1);
             }}
-            className="w-full py-4 rounded-2xl font-bold text-white text-[15px] active:scale-[0.98] shadow-xl transition-opacity"
+            className={`${finalActionSizeClass} text-white active:scale-[0.98] shadow-xl transition-opacity`}
             style={{ background: '#F09D09' }}
           >
-            이 곳으로 결정! 🎉
+            이곳으로 결정!
           </button>
           {onRejectBoth && (
             <button
               onClick={onRejectBoth}
-              className="w-full mt-2.5 py-3 rounded-2xl font-bold text-white/70 text-[13px] active:scale-[0.98] transition-all bg-white/10"
+              className={`${finalActionSizeClass} mt-2.5 bg-white/10 text-white/70 active:scale-[0.98] transition-all`}
             >
-              별로예요 · 새로 추천받기 🔄
+              별로예요 · 새로 추천받기
             </button>
           )}
         </div>
@@ -1131,17 +1132,17 @@ function FinalBattleResultScreen({
             onContinue(winner);
           }}
           disabled={selected === null}
-          className="w-full py-4 rounded-2xl font-bold text-white text-[15px] active:scale-[0.98] shadow-xl transition-opacity disabled:opacity-40"
+          className={`${finalActionSizeClass} text-white active:scale-[0.98] shadow-xl transition-opacity disabled:opacity-40`}
           style={{ background: '#F09D09' }}
         >
-          {selected === null ? '음식점을 선택해주세요 👆' : '이 곳으로 결정! 🎉'}
+          {selected === null ? '음식점을 선택해주세요' : '이곳으로 결정!'}
         </button>
         {onRejectBoth && (
           <button
             onClick={onRejectBoth}
-            className="w-full mt-2.5 py-3 rounded-2xl font-bold text-white/70 text-[13px] active:scale-[0.98] transition-all bg-white/10"
+            className={`${finalActionSizeClass} mt-2.5 bg-white/10 text-white/70 active:scale-[0.98] transition-all`}
           >
-            둘 다 별로 · 다른 곳 보기 🔄
+            둘 다 별로!
           </button>
         )}
       </div>
@@ -1335,7 +1336,7 @@ function WaitingOrDecidedScreen({ onContinue, onReroll }: { onContinue: (winner?
             ))}
             <button onClick={() => castVote(REJECT)}
               className="w-full rounded-2xl border border-dashed border-white/40 py-3 text-white/80 text-[13px] font-bold active:scale-[0.98] transition-all">
-              둘 다 별로 · 다른 곳 보기 🔄
+              둘 다 별로!
             </button>
           </div>
         </div>
@@ -1864,18 +1865,20 @@ export default function QuickMatchPage() {
       <div className="px-8 pb-10 pt-4 flex items-center justify-center gap-8">
         <motion.button
           onClick={() => handleAction('dislike')}
-          className="w-20 h-20 rounded-full bg-white shadow-xl flex items-center justify-center active:scale-90"
+          aria-label="싫어요"
+          className="flex h-[75px] w-[75px] items-center justify-center rounded-full bg-white shadow-xl active:scale-90"
           whileTap={{ scale: 0.85 }}
         >
-          <X size={32} color="#EB5053" strokeWidth={2.5} />
+          <X size={30} color="#EB5053" strokeWidth={2.5} />
         </motion.button>
         <motion.button
           onClick={() => handleAction('like')}
-          className="w-20 h-20 rounded-full shadow-xl flex items-center justify-center active:scale-90"
+          aria-label="좋아요"
+          className="flex h-[75px] w-[75px] items-center justify-center rounded-full shadow-xl active:scale-90"
           style={{ background: '#EB5053' }}
           whileTap={{ scale: 0.85 }}
         >
-          <Heart size={32} color="white" fill="white" />
+          <Heart size={30} color="white" fill="white" />
         </motion.button>
       </div>
     </div>

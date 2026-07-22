@@ -16,6 +16,7 @@
 import { useEffect, useMemo } from 'react';
 import { Map, AdvancedMarker, Polyline, useMap } from '@vis.gl/react-google-maps';
 import { BRAND } from '@/constants/brand';
+import { getCourseSequenceColor } from '@/constants/courseTheme';
 
 /** 지도에 찍을 최소 마커 단위 (course_items ⨝ restaurants 대응) */
 export interface MapPoint {
@@ -37,7 +38,7 @@ interface Props {
 
 // 장소가 없을 때의 기본 시야 (Melbourne — Places 검증에서 쓴 것과 동일 기준점)
 const FALLBACK_CENTER = { lat: -37.8136, lng: 144.9631 };
-const FIT_PADDING_PX = 48;
+const FIT_PADDING_PX = 72;
 
 /** <Map> 자식으로 마운트 — points가 바뀔 때마다 카메라를 전체가 보이게 fit한다. */
 function FitBounds({ points }: { points: MapPoint[] }) {
@@ -95,7 +96,7 @@ export function CourseMap({ points, width, height, onPressPoint, routeCoordinate
                 width: 28,
                 height: 28,
                 borderRadius: '50%',
-                background: BRAND.primary,
+                background: getCourseSequenceColor(idx).base,
                 border: '2px solid white',
                 color: 'white',
                 fontSize: 13,

@@ -1,21 +1,16 @@
-import { motion } from "framer-motion";
-import { useLocation } from "wouter";
-import { useState, useEffect } from "react";
-import { ArrowRight, MapPin, Clock, Star } from "lucide-react";
+import { useEffect, useMemo, useState } from 'react';
+import { createPortal } from 'react-dom';
+import { AnimatePresence, motion } from 'framer-motion';
+import { ArrowRight, Bell, MapPin, MessageCircle, ThumbsDown, ThumbsUp, X } from 'lucide-react';
+import { useLocation, useSearch } from 'wouter';
 import {
-  useApp,
-  Course,
-  isFeedCommentHidden,
   resolveApiRequestAuth,
   type ApiRequestAuth,
-} from "@/contexts/AppContext";
-import { getCourseSequenceColor } from "@/constants/courseTheme";
-import { MUNCHIE_SKINS } from "@/constants/skins";
-import { getCreatorName } from "@/constants/creators";
-import SkinFrame from "@/components/munchie/SkinFrame";
-import { logEvent } from "@/lib/eventLogger";
-import { toast } from "sonner";
-import { useRotatingFeedback } from "@/hooks/useRotatingFeedback";
+  useApp,
+} from '@/contexts/AppContext';
+import LunchkinCharacter from '@/components/munchie/LunchkinCharacter';
+import UnifiedMunchieCard from '@/components/munchie/UnifiedMunchieCard';
+import HeaderIconButton, { HeaderActionRow } from '@/components/ui/HeaderIconButton';
 
 type JourneyStop = {
   restaurant_id: string;
@@ -23,7 +18,7 @@ type JourneyStop = {
   category: string | null;
   intent: string | null;
   at: number;
-  satisfaction: "POS" | "NEU" | "NEG" | null;
+  satisfaction: 'POS' | 'NEU' | 'NEG' | null;
 };
 
 interface JourneyRequestDependencies {
@@ -39,27 +34,17 @@ export async function fetchTodayJourney(
     const auth = await (
       dependencies.resolveRequestAuth ?? resolveApiRequestAuth
     )();
-    if (auth.status === "blocked") {
-      return [];
-    }
+    if (auth.status === 'blocked') return [];
 
     const request = dependencies.request ?? fetch;
-    const requestInit: RequestInit | undefined =
-      auth.status === "authenticated"
-        ? {
-            headers: {
-              Authorization: `Bearer ${auth.accessToken}`,
-            },
-          }
-        : undefined;
+    const requestInit: RequestInit | undefined = auth.status === 'authenticated'
+      ? { headers: { Authorization: `Bearer ${auth.accessToken}` } }
+      : undefined;
     const response = await request(
       `/api/journey/today?userId=${encodeURIComponent(userId)}`,
       requestInit,
     );
-    if (!response.ok) {
-      return [];
-    }
-
+    if (!response.ok) return [];
     const data = await response.json();
     return data.stops ?? [];
   } catch {
@@ -67,388 +52,365 @@ export async function fetchTodayJourney(
   }
 }
 
-const INTENT_LABEL: Record<string, string> = { meal: "밥", cafe: "음료", dessert: "디저트" };
-const INTENT_ICON: Record<string, string> = { meal: "🍚", cafe: "☕", dessert: "🍰" };
-const INTENT_ORDER = ["meal", "cafe", "dessert"] as const;
+/** 스와이프 카드덱 — 커피/밥/디저트 세 장이 순환하며 앞의 카드가 선택 상태다 */
+const QUICK_MATCH_CARDS = [
+  { key: 'coffee', label: '커피', en: 'COFFEE', image: '/assets/characters/quick-match/coffee.png', intent: 'cafe', background: 'linear-gradient(160deg, #FFFDFC 0%, #FFEBDD 100%)', steam: true },
+  { key: 'foodie', label: '밥', en: 'FOODIE', image: '/assets/characters/quick-match/rice.png', intent: 'meal', background: 'linear-gradient(160deg, #FFFDFC 0%, #FFE5E0 100%)', steam: true },
+  { key: 'dessert', label: '디저트', en: 'DESSERT', image: '/assets/characters/quick-match/dessert.png', intent: 'dessert', background: 'linear-gradient(160deg, #FFFDFC 0%, #FFE2E8 100%)', steam: false },
+] as const;
 
-function FeedbackRow({
-  stop,
-  onAnswer,
-  defaultOpen,
-}: {
-  stop: JourneyStop;
-  onAnswer: (action: "POS" | "NEU" | "NEG") => void;
-  defaultOpen?: boolean;
-}) {
-  const [open, setOpen] = useState(!!defaultOpen);
-  const emoji = stop.satisfaction === "POS" ? "👍" : stop.satisfaction === "NEG" ? "👎" : stop.satisfaction === "NEU" ? "😐" : null;
+/** 카드 순환 위치: 0=앞, 1=오른쪽 behind, 2=왼쪽 behind */
+const DECK_POSITIONS = [
+  { x: 0, y: -8, scale: 1, rotate: 0, opacity: 1, zIndex: 3 },
+  { x: 76, y: 4, scale: 0.88, rotate: 9, opacity: 1, zIndex: 1 },
+  { x: -76, y: 4, scale: 0.88, rotate: -9, opacity: 1, zIndex: 1 },
+] as const;
 
-  if (!open) {
-    return (
-      <button onClick={() => setOpen(true)} className="flex-shrink-0 text-[15px] leading-none active:scale-90">
-        {emoji ?? <span className="whitespace-nowrap rounded-full bg-[#FFF5F5] px-2 py-1 text-[10px] font-bold text-[#EB5053]">평가하기</span>}
-      </button>
-    );
-  }
-
+function SteamWisps() {
   return (
-    <div className="mt-1.5 flex w-full gap-1.5">
-      {([[
-        "POS", "👍 좋았어요", "#EAF7EC", "#2E9E42",
-      ], [
-        "NEU", "😐 그냥", "#F1EFE8", "#6E6E6E",
-      ], [
-        "NEG", "👎 별로", "#FBECEC", "#D83A3D",
-      ]] as const).map(([action, label, background, color]) => (
-        <button
-          key={action}
-          onClick={() => {
-            onAnswer(action);
-            setOpen(false);
-          }}
-          className="flex-1 rounded-lg py-1.5 text-[11px] font-bold transition-transform active:scale-95"
-          style={{ background, color }}
-        >
-          {label}
-        </button>
+    <span className="pointer-events-none absolute left-1/2 top-0 z-10 flex -translate-x-1/2 gap-1" aria-hidden="true">
+      {[0, 1, 2].map(index => (
+        <motion.span
+          key={index}
+          className="block h-5 w-1 rounded-full bg-white/80 blur-[1px]"
+          animate={{ y: [5, -3, -9], x: [0, index === 1 ? 2 : -1, 0], opacity: [0, 0.78, 0], scaleY: [0.7, 1.15, 1.35] }}
+          transition={{ duration: 1.8, delay: index * 0.32, repeat: Infinity, ease: 'easeOut' }}
+        />
       ))}
-    </div>
+    </span>
   );
 }
 
-// data-jp-v3의 오늘의 여정 + Lunchie Mode 통합 진입 카드.
-function JourneyCard() {
-  const { profile } = useApp();
-  const [, navigate] = useLocation();
-  const [stops, setStops] = useState<JourneyStop[] | null>(null);
-
-  useEffect(() => {
-    let active = true;
-    fetchTodayJourney(profile.id)
-      .then(data => { if (active) setStops(data); })
-      .catch(() => { if (active) setStops([]); });
-    return () => { active = false; };
-  }, [profile.id]);
-
-  const answer = (stop: JourneyStop, action: "POS" | "NEU" | "NEG") => {
-    logEvent({
-      event_type: "SURVEY",
-      action,
-      user_id: profile.id,
-      restaurant_id: stop.restaurant_id,
-      session_id: null,
-    });
-    setStops(previous => previous?.map(item => (
-      item.restaurant_id === stop.restaurant_id && item.at === stop.at
-        ? { ...item, satisfaction: action }
-        : item
-    )) ?? previous);
-    toast.success("피드백 고마워요! 🙌");
-  };
-
-  const hasStops = !!stops && stops.length > 0;
-  const timeOf = (at: number) => new Date(at).toLocaleString("ko-KR", {
-    month: "long",
-    day: "numeric",
-    hour: "numeric",
-    minute: "2-digit",
-  });
-
+function QuickMatchDeck({
+  activeIndex,
+  onChange,
+}: {
+  activeIndex: number;
+  onChange: (index: number) => void;
+}) {
   return (
     <motion.div
-      className="mx-4 mb-4 mt-[31px] overflow-hidden rounded-3xl"
-      style={{ background: "white", boxShadow: "0 2px 12px rgba(0,0,0,0.05)" }}
+      className="relative mx-auto h-[158px] w-full max-w-[330px]"
+      whileHover={{ y: -5 }}
+      transition={{ type: 'spring', stiffness: 250, damping: 17 }}
     >
-      <div className="p-4">
-        <p className="mb-1 text-[13px] font-bold text-[#1A1A1A]">오늘의 여정</p>
-        {stops === null ? null : hasStops ? (
-          <div className="mt-2 space-y-1">
-            {stops.map((stop, index) => (
-              <div key={`${stop.restaurant_id}-${stop.at}`} className="flex flex-wrap items-center gap-2 border-b border-[#F5F0EC] py-1.5 text-[13px] last:border-b-0">
-                <span className="text-[#EB5053]">●</span>
-                <div className="min-w-0 flex-1">
-                  <div className="flex flex-wrap items-center gap-1.5">
-                    <span className="font-semibold text-[#1A1A1A]">{stop.name}</span>
-                    {stop.intent && (
-                      <span className="rounded-full bg-[#FFF5F5] px-1.5 py-0.5 text-[10px] font-bold text-[#EB5053]">
-                        {INTENT_LABEL[stop.intent] ?? stop.intent}
-                      </span>
-                    )}
-                  </div>
-                  <p className="mt-0.5 text-[11px] text-[#9B9B9B]">
-                    {stop.category ?? ""}{stop.category ? " · " : ""}{timeOf(stop.at)}
-                  </p>
-                </div>
-                <FeedbackRow
-                  stop={stop}
-                  onAnswer={action => answer(stop, action)}
-                  defaultOpen={index === stops.length - 1 && !stop.satisfaction}
-                />
-              </div>
-            ))}
-          </div>
-        ) : (
-          <p className="mb-1 mt-1 text-[13px] text-[#9B9B9B]">오늘의 여정을 시작해보세요</p>
-        )}
-      </div>
-
-      <div className="px-4 pb-4">
-        {hasStops && <p className="mb-2 text-[12px] font-bold text-[#1A1A1A]">다음 여정은?</p>}
-        <div className="flex gap-2">
-          {INTENT_ORDER.map(intent => (
+      {QUICK_MATCH_CARDS.map((card, index) => {
+        const position = DECK_POSITIONS[(index - activeIndex + 3) % 3]!;
+        const isFront = position.zIndex === 3;
+        return (
+          <div
+            key={card.key}
+            className="pointer-events-none absolute inset-0 flex items-center justify-center"
+            style={{ zIndex: position.zIndex }}
+          >
             <motion.button
-              key={intent}
-              whileTap={{ scale: 0.95 }}
-              onClick={() => navigate(`/lunchie/settings?intent=${intent}`)}
-              className="flex flex-1 flex-col items-center gap-1 rounded-2xl py-3"
-              style={{ background: "linear-gradient(180deg, #FB4448 0%, #F47F80 100%)" }}
+              type="button"
+              aria-label={`${card.label} 카드${isFront ? ' (선택됨)' : ''}`}
+              drag={isFront ? 'x' : false}
+              dragConstraints={{ left: 0, right: 0 }}
+              dragElastic={0.45}
+              onDragEnd={(_, info) => {
+                if (info.offset.x < -45) onChange((activeIndex + 2) % 3);
+                else if (info.offset.x > 45) onChange((activeIndex + 1) % 3);
+              }}
+              onClick={() => !isFront && onChange(index)}
+              animate={{
+                x: position.x,
+                y: position.y,
+                scale: position.scale,
+                rotate: position.rotate,
+                opacity: position.opacity,
+              }}
+              transition={{ type: 'spring', stiffness: 320, damping: 26 }}
+              whileHover={{ scale: position.scale + 0.025 }}
+              whileTap={{ scale: position.scale - 0.03 }}
+              className="pointer-events-auto flex h-[132px] w-[108px] cursor-grab flex-col items-center justify-center overflow-hidden rounded-[11px] border-[0.75px] border-[#EE8C8D] px-1.5 pb-1.5 pt-1 shadow-[0_10px_22px_rgba(153,74,62,0.13)] active:cursor-grabbing"
+              style={{ touchAction: 'pan-y', background: card.background }}
             >
-              <span className="text-[22px] leading-none">{INTENT_ICON[intent]}</span>
-              <span className="text-[11px] font-bold text-white">{INTENT_LABEL[intent]}</span>
+              <span className="relative flex h-[92px] w-[96px] items-end justify-center">
+                {card.steam && <SteamWisps />}
+                <img src={card.image} alt={`${card.label} 음식`} className="h-[86px] w-[94px] object-contain drop-shadow-[0_7px_8px_rgba(104,55,38,0.13)]" draggable={false} />
+              </span>
+              <span className="mt-0.5 rounded-full bg-white/75 px-2 py-0.5 text-[11px] font-black tracking-[0.05em] text-[#C93B3E]">{card.en}</span>
             </motion.button>
-          ))}
-        </div>
-        <p className="mt-2 text-center text-[10px] text-[#B0B0B0]">그룹과 함께 스와이프로 빠르게 골라요 · Quick Match</p>
-      </div>
+          </div>
+        );
+      })}
     </motion.div>
   );
 }
 
-/** 스크랩북 스킨을 입힌 코스 카드 — 홈 Munchie Mode 좌우 스와이프 캐러셀용 */
-function SkinCourseCard({ course, skinIndex }: { course: Course; skinIndex: number }) {
+function LunchieLandingCard() {
   const [, navigate] = useLocation();
-  const { getRestaurantById, feedPosts } = useApp();
-  const skin = MUNCHIE_SKINS[skinIndex % 4]; // 핑크/옐로우/빈티지/블루 순환
+  const [activeCard, setActiveCard] = useState(1); // 밥(Foodie) 카드가 기본 선택
 
-  const stopRestaurants = course.stops
-    .map(s => getRestaurantById(s.placeId))
-    .filter((r): r is NonNullable<typeof r> => !!r);
-  const rating = stopRestaurants.length
-    ? (stopRestaurants.reduce((sum, r) => sum + r.rating, 0) / stopRestaurants.length).toFixed(1)
-    : '4.5';
-  const collagePhotos = [course.heroImage, ...stopRestaurants.map(r => r.image)].slice(0, 2);
-  // 작성자의 한줄평 다음, 인기 피드의 답글을 최신순으로 순환한다.
-  const coursePosts = feedPosts
-    .filter(p => p.courseId === course.id)
-    .sort((a, b) => (b.likes + b.saves) - (a.likes + a.saves) || b.createdAt.localeCompare(a.createdAt));
-  const latestCaption = [...coursePosts].sort((a, b) => b.createdAt.localeCompare(a.createdAt))[0]?.caption;
-  const rotatingFeedback = useRotatingFeedback([
-    ...(latestCaption ? [latestCaption] : []),
-    ...coursePosts.flatMap(post => post.comments
-      .filter(comment => !isFeedCommentHidden(comment))
-      .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
-      .map(comment => comment.text)),
-  ]);
+  const selectedCard = QUICK_MATCH_CARDS[activeCard]!;
 
   return (
     <motion.div
-      className="w-[236px] flex-shrink-0 snap-center cursor-pointer"
-      whileTap={{ scale: 0.97 }}
-      onClick={() => navigate(`/course/${course.id}?from=feed`)}
+      data-ui="lunchie-card-panel"
+      initial={{ opacity: 0, y: 18 }}
+      animate={{ opacity: 1, y: 0 }}
+      className="relative mx-4 flex flex-col items-center overflow-hidden rounded-[22px] border-[0.75px] border-[#F0A0A0] px-4 pb-2 pt-2 shadow-[0_14px_34px_rgba(139,74,61,0.12)]"
+      style={{
+        backgroundColor: '#FFF9F5',
+        backgroundImage: 'radial-gradient(circle at 18% 22%, rgba(255,190,169,.28) 0 18px, transparent 19px), radial-gradient(circle at 84% 76%, rgba(255,214,181,.34) 0 26px, transparent 27px), radial-gradient(rgba(224,113,105,.18) .7px, transparent .7px)',
+        backgroundSize: 'auto, auto, 12px 12px',
+      }}
     >
-      <SkinFrame skin={skin} radius={22} padding={9}>
-        <div className="px-3 pt-3 pb-3.5">
-          {/* 폴라로이드 콜라주 */}
-          <div className="relative h-[118px]">
-            {collagePhotos.map((src, i) => (
-              <div
-                key={i}
-                className="absolute bg-white p-[5px] pb-[14px] shadow-md"
-                style={{
-                  width: 118,
-                  left: i === 0 ? 6 : 84,
-                  top: i === 0 ? 2 : 10,
-                  transform: `rotate(${i === 0 ? -4 : 5}deg)`,
-                  zIndex: i === 0 ? 1 : 2,
-                  borderRadius: 4,
-                }}
-              >
-                <img src={src} alt="" className="h-[80px] w-full object-cover" draggable={false} />
-              </div>
-            ))}
-          </div>
-
-          {/* 제목 + 평점 */}
-          <div className="mt-2 flex items-center gap-1.5">
-            <h3
-              className="font-bold text-[14px] leading-tight truncate"
-              style={{ color: skin.text, fontFamily: skin.titleFont }}
-            >
-              {course.title}
-            </h3>
-            <span className="flex items-center gap-0.5 text-[11px] font-bold shrink-0" style={{ color: skin.accent }}>
-              <Star size={10} fill="currentColor" /> {rating}
-            </span>
-          </div>
-
-          {/* 스탯 */}
-          <div className="mt-1.5 flex items-center gap-2.5 text-[10px]" style={{ color: skin.sub }}>
-            <span>◎ {course.metadata.placeCount} Stops</span>
-            <span className="flex items-center gap-0.5"><Clock size={9} /> {Math.floor(course.metadata.duration / 60)}h</span>
-            <span className="flex items-center gap-0.5"><MapPin size={9} /> {course.metadata.distance}km</span>
-          </div>
-
-          {/* 한줄평 (이 코스로 남긴 최근 피드) */}
-          {rotatingFeedback && (
-            <motion.p
-              key={rotatingFeedback}
-              initial={{ opacity: 0, y: 3 }}
-              animate={{ opacity: 1, y: 0 }}
-              className="mt-2 flex h-[42px] items-center overflow-hidden rounded-lg px-2 py-1.5 text-[10.5px] leading-snug"
-              style={{ background: `${skin.accent}12`, color: skin.text }}
-            >
-              <span className="line-clamp-2">💬 {rotatingFeedback}</span>
-            </motion.p>
-          )}
-
-          {/* 스팟 번호 서클 */}
-          <div className="mt-2.5 flex items-center">
-            {stopRestaurants.slice(0, 4).map((r, i) => {
-              const color = getCourseSequenceColor(i);
-              return (
-                <div key={`${r.id}-${i}`} className="flex items-center">
-                  <div className="relative">
-                    <div className="w-9 h-9 rounded-full overflow-hidden border-2" style={{ borderColor: color.base }}>
-                      <img src={r.image} alt="" className="w-full h-full object-cover" draggable={false} />
-                    </div>
-                    <span
-                      className="absolute -top-1 -left-1 w-[15px] h-[15px] rounded-full text-white text-[9px] font-bold flex items-center justify-center"
-                      style={{ background: color.base }}
-                    >
-                      {i + 1}
-                    </span>
-                  </div>
-                  {i < Math.min(stopRestaurants.length, 4) - 1 && (
-                    <span className="w-3 border-t-2 border-dotted" style={{ borderColor: color.lighter }} />
-                  )}
-                </div>
-              );
-            })}
-          </div>
-
-          {/* 작성자 */}
-          <div className="mt-2.5 flex items-center gap-1.5">
-            <div className="w-6 h-6 rounded-full flex items-center justify-center text-[12px]" style={{ background: `${skin.accent}1A` }}>
-              🙂
-            </div>
-            <span className="text-[10px] font-semibold" style={{ color: skin.text }}>
-              {getCreatorName(course.creatorId)}
-            </span>
-            <span className="text-[10px]" style={{ color: skin.sub }}>
-              팔로워 2,380명
-            </span>
-          </div>
-        </div>
-      </SkinFrame>
+      <span className="pointer-events-none absolute -left-5 top-8 h-16 w-16 rotate-12 rounded-[18px] bg-[#FFDCCF]/55" aria-hidden="true" />
+      <span className="pointer-events-none absolute -right-3 bottom-8 h-14 w-20 -rotate-12 rounded-full bg-[#FFE5BE]/55" aria-hidden="true" />
+      <span className="pointer-events-none absolute left-5 top-3 h-3 w-14 -rotate-6 rounded-sm bg-[#F5B9A5]/45" aria-hidden="true" />
+      <div className="relative z-[1] w-full shrink-0">
+        <QuickMatchDeck activeIndex={activeCard} onChange={setActiveCard} />
+      </div>
+      <motion.button
+        type="button"
+        onClick={() => navigate(`/lunchie/settings?intent=${selectedCard.intent}`)}
+        whileHover={{ y: -2, scale: 1.025 }}
+        whileTap={{ scale: 0.97 }}
+        className="relative z-10 mt-1 flex h-12 w-[64%] shrink-0 items-center justify-center rounded-[11px] border-[0.75px] border-[#D94447] bg-[#EB5053] px-4 text-[16px] font-black text-white shadow-[0_9px_20px_rgba(201,59,62,0.26)]"
+      >
+        Quick Match!
+      </motion.button>
     </motion.div>
   );
 }
-
-const stagger = {
-  hidden: { opacity: 0 },
-  visible: { opacity: 1, transition: { staggerChildren: 0.08 } },
-};
-
-const fadeUp = {
-  hidden: { opacity: 0, y: 16 },
-  visible: {
-    opacity: 1,
-    y: 0,
-    transition: { type: "spring" as const, stiffness: 280, damping: 26 },
-  },
-};
 
 export default function HomePage() {
   const [, navigate] = useLocation();
-  const { courses } = useApp();
+  const search = useSearch();
+  const { feedPosts, profile, isMyPost } = useApp();
+  const [journeyStops, setJourneyStops] = useState<JourneyStop[]>([]);
+  const [notificationsOpen, setNotificationsOpen] = useState(false);
+  const [readNotificationIds, setReadNotificationIds] = useState<string[]>(() => {
+    try { return JSON.parse(localStorage.getItem('lm_read_notifications') ?? '[]'); }
+    catch { return []; }
+  });
+
+  useEffect(() => {
+    let active = true;
+    fetchTodayJourney(profile.id).then(stops => { if (active) setJourneyStops(stops); });
+    return () => { active = false; };
+  }, [profile.id]);
+
+  useEffect(() => {
+    localStorage.setItem('lm_read_notifications', JSON.stringify(readNotificationIds));
+  }, [readNotificationIds]);
+
+  useEffect(() => {
+    if (new URLSearchParams(search).get('notifications') === '1') {
+      setNotificationsOpen(true);
+    }
+  }, [search]);
+
+  const landingPosts = feedPosts;
+
+  const notifications = useMemo(() => {
+    const journeyItems = journeyStops.map(stop => ({
+      id: `journey-${stop.restaurant_id}-${stop.at}`,
+      kind: 'journey' as const,
+      title: '오늘의 여정',
+      body: `${stop.name}${stop.satisfaction ? '에서의 기록이 추가됐어요.' : '이(가) 다음 여정으로 등록됐어요.'}`,
+      href: '/profile',
+      at: stop.at,
+    }));
+    const feedItems = feedPosts.filter(isMyPost).flatMap(post => [
+      ...(post.likes > 0 ? [{
+        id: `feed-like-${post.id}-${post.likes}`,
+        kind: 'like' as const,
+        title: '새 좋아요',
+        body: `내 Munchie 피드에 좋아요 ${post.likes}개가 달렸어요.`,
+        href: `/feed/${post.id}?from=notifications`,
+        at: new Date(post.createdAt).getTime() + post.likes,
+      }] : []),
+      ...((post.dislikes ?? 0) > 0 ? [{
+        id: `feed-dislike-${post.id}-${post.dislikes}`,
+        kind: 'dislike' as const,
+        title: '새 싫어요',
+        body: `내 Munchie 피드에 싫어요 ${post.dislikes}개가 달렸어요.`,
+        href: `/feed/${post.id}?from=notifications`,
+        at: new Date(post.createdAt).getTime() + (post.dislikes ?? 0),
+      }] : []),
+      ...post.comments.map(comment => ({
+        id: `feed-comment-${comment.id}`,
+        kind: 'comment' as const,
+        title: `${comment.authorName}님의 새 코멘트`,
+        body: comment.text,
+        href: `/feed/${post.id}?from=notifications`,
+        at: new Date(comment.createdAt).getTime(),
+      })),
+    ]);
+    return [...journeyItems, ...feedItems].sort((a, b) => b.at - a.at).slice(0, 20);
+  }, [feedPosts, isMyPost, journeyStops]);
+  const unreadCount = notifications.filter(item => !readNotificationIds.includes(item.id)).length;
+  const visibleNotifications = notifications.filter(
+    item => !readNotificationIds.includes(item.id),
+  );
+
+  const openNotification = (notification: (typeof notifications)[number]) => {
+    setReadNotificationIds(current => {
+      const next = current.includes(notification.id) ? current : [...current, notification.id];
+      localStorage.setItem('lm_read_notifications', JSON.stringify(next));
+      return next;
+    });
+    setNotificationsOpen(false);
+    navigate(notification.href);
+  };
 
   return (
-    <motion.div
-      className="min-h-dvh pb-[86px]"
-      style={{ background: "#FCF4EE" }}
-      variants={stagger}
-      initial="hidden"
-      animate="visible"
-    >
-      {/* Header */}
-      <motion.div
-        variants={fadeUp}
-        className="pb-2"
-        style={{
-          paddingLeft: "clamp(24px, 10.2vw, 41px)",
-          paddingRight: "clamp(24px, 10.2vw, 41px)",
-          paddingTop: 64,
-        }}
-      >
-        <div className="mb-[27px] flex items-center justify-center">
-          <span
-            className="text-center text-[19px] font-black leading-none"
-            style={{
-              color: "#FF393D",
-              textShadow: "0 4px 10px rgba(235,80,83,0.18)",
-            }}
+    <div className="min-h-dvh bg-[#FFF8F2] pb-6">
+      <header className="relative">
+        <HeaderActionRow data-ui="home-notification-area" className="header-action-row--raised">
+          <HeaderIconButton
+            onClick={() => setNotificationsOpen(true)}
+            aria-label="알림 열기"
+            aria-expanded={notificationsOpen}
+            className="overflow-visible text-[#4A4A4A]"
           >
-            Lunchie Munchie
-          </span>
+            <motion.span
+              className="flex"
+              animate={unreadCount > 0 ? { rotate: [0, 0, -8, 8, -4, 0, 0] } : { rotate: 0 }}
+              transition={unreadCount > 0 ? { duration: 3.2, repeat: Infinity, ease: 'easeInOut' } : undefined}
+            >
+              <Bell size={18} strokeWidth={2.1} />
+            </motion.span>
+            {unreadCount > 0 && (
+              <motion.span
+                className="absolute -right-1 -top-1 z-[2] flex h-5 min-w-5 items-center justify-center rounded-full border-[1.5px] border-white bg-[linear-gradient(145deg,#FF6B68,#F23844)] px-1 text-[8px] font-black text-white shadow-[0_3px_8px_rgba(219,55,65,0.3)]"
+                animate={{ scale: [1, 1.08, 1] }}
+                transition={{ duration: 1.8, repeat: Infinity, ease: 'easeInOut' }}
+              >
+                {unreadCount > 9 ? '9+' : unreadCount}
+              </motion.span>
+            )}
+          </HeaderIconButton>
+        </HeaderActionRow>
+
+        <div data-ui="home-heading-group" className="mx-5 mt-[30px] flex items-center justify-evenly">
+          <LunchkinCharacter size={60} />
+          <h1 data-ui="home-heading" className="w-fit min-w-0 max-w-[calc(100%-84px)] shrink text-center text-[22px] font-bold leading-[1.45] tracking-[-0.04em] text-[#935B5C]">
+            <span className="block">런치로 같이 메뉴 정하기!</span>
+            <span className="block">먼치로 함께 맛집 코스 탐방!</span>
+          </h1>
         </div>
+      </header>
 
-        <h1 className="text-[28px] font-bold leading-[1.25] text-black" style={{ paddingLeft: 20 }}>
-          스크랩으로 기록하고,
-          <br />
-          함께 나누는 맛집 코스
-        </h1>
-        <p
-          className="mt-[13px] text-[11px] leading-none"
-          style={{ color: "#6E6A67", paddingLeft: 20 }}
-        >
-          코스를 발견하고, 스킨을 입혀 추억을 공유해요.
-        </p>
-      </motion.div>
+      <section className="mt-[30px]">
+        <div className="px-4">
+          <h2 className="text-[25px] font-black leading-none tracking-[0.01em] text-[#C93B3E]">LUNCHIE</h2>
+          <p className="mt-1 text-[14px] font-medium text-[#8B5E5D]">런치로 같이 점심 정하기!</p>
+        </div>
+        <div className="mt-3">
+        <LunchieLandingCard />
+        </div>
+      </section>
 
-      {/* 오늘의 여정 + Lunchie Mode — data-jp-v3 UI/로직 */}
-      <JourneyCard />
-
-      {/* Munchie Mode */}
-      <motion.div
-        variants={fadeUp}
-        className="mt-[55px]"
-        style={{
-          paddingLeft: "clamp(24px, 10.2vw, 41px)",
-          paddingRight: "clamp(24px, 10.2vw, 41px)",
-        }}
-      >
-        <div className="mb-[6px] flex items-end justify-between">
-          <p className="text-[20px] font-black leading-none text-black" style={{ paddingLeft: 20 }}>
-            Munchie Mode
-          </p>
+      <section className="mt-[35px]">
+        <div className="flex items-end justify-between px-4">
+          <div>
+            <h2 className="text-[25px] font-black leading-none text-[#C93B3E]">MUNCHIE</h2>
+            <p className="mt-1 text-[14px] font-medium text-[#8B5E5D]">먼치로 함께 맛집 코스 탐방</p>
+          </div>
           <button
-            onClick={() => navigate("/feed")}
-            className="flex items-center gap-[6px] text-[16px] font-bold leading-none text-black active:opacity-60"
+            type="button"
+            onClick={() => navigate('/feed')}
+            className="flex items-center gap-1 text-[14px] font-black text-[#D94447]"
           >
-            더보기 <ArrowRight size={20} strokeWidth={2.4} />
+            더보기 <ArrowRight size={17} />
           </button>
         </div>
-        <p className="mb-[12px] text-[10px] leading-none text-black" style={{ paddingLeft: 20 }}>
-          이번주 사람들이 많이 저장한 코스
-        </p>
-      </motion.div>
 
-      {/* 스킨 카드 캐러셀 — 좌우 스와이프 */}
-      <motion.div variants={fadeUp}>
-        <div
-          className="flex gap-4 overflow-x-auto snap-x snap-mandatory scrollbar-hide pt-3 pb-4"
-          style={{
-            paddingLeft: "clamp(24px, 10.2vw, 41px)",
-            paddingRight: "clamp(24px, 10.2vw, 41px)",
-            scrollbarWidth: "none",
-          }}
-        >
-          {courses.slice(0, 4).map((course, i) => (
-            <SkinCourseCard key={course.id} course={course} skinIndex={i} />
-          ))}
+        <div className="mt-5 pl-4">
+          <div className="flex snap-x snap-mandatory gap-3 overflow-x-auto pb-4 pr-4 scrollbar-hide">
+            {landingPosts.map(post => (
+              <div key={post.id} data-ui="munchie-home-card" className="w-[68%] shrink-0 snap-start">
+                <UnifiedMunchieCard post={post} compact homeSummary />
+              </div>
+            ))}
+          </div>
         </div>
-      </motion.div>
+      </section>
 
-    </motion.div>
+      {typeof document !== 'undefined' && createPortal(
+        <AnimatePresence>
+          {notificationsOpen && (
+            <>
+            <motion.button
+              type="button"
+              aria-label="알림 닫기"
+              className="fixed inset-0 z-50 bg-black/35"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1, pointerEvents: 'auto' }}
+              exit={{ opacity: 0, pointerEvents: 'none' }}
+              onClick={() => setNotificationsOpen(false)}
+            />
+            <motion.aside
+              initial={{ x: '100%' }}
+              animate={{ x: 0, pointerEvents: 'auto' }}
+              exit={{ x: '100%', pointerEvents: 'none' }}
+              transition={{ type: 'tween', duration: 0.28, ease: [0.32, 0.72, 0, 1] }}
+              className="fixed bottom-0 right-0 top-0 z-[60] w-[min(88vw,390px)] overflow-y-auto bg-[#FFFDFB] px-4 pb-8 pt-12 shadow-[-18px_0_45px_rgba(47,29,20,0.18)]"
+            >
+              <div className="flex items-center justify-between">
+                <div>
+                  <h2 className="mt-1 text-[22px] font-black text-[#251A16]">알림 {unreadCount > 0 && <span className="text-[#FF424B]">{unreadCount}</span>}</h2>
+                </div>
+                <button type="button" onClick={() => setNotificationsOpen(false)} className="flex h-10 w-10 items-center justify-center rounded-full bg-[#F7EFEA]" aria-label="닫기"><X size={18} /></button>
+              </div>
+              <section className="mt-5 rounded-[22px] border border-[#F1D8CC] bg-[#FFF5EF] p-4">
+                <div className="flex items-center justify-between">
+                  <div>
+                  <h3 className="mt-1 text-[17px] font-black text-[#3E2D25]">오늘의 여정</h3>
+                  </div>
+                  <span className="rounded-full bg-white px-2.5 py-1 text-[10px] font-black text-[#DB6C66]">{journeyStops.length}곳</span>
+                </div>
+                {journeyStops.length > 0 ? (
+                  <div className="mt-3 space-y-2">
+                    {journeyStops.map((stop, index) => (
+                      <div key={`${stop.restaurant_id}-${stop.at}`} className="flex items-center gap-2.5 rounded-2xl bg-white px-3 py-2.5">
+                        <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-[#F6B5AC] text-[11px] font-black text-white">{index + 1}</span>
+                        <span className="min-w-0 flex-1 truncate text-[12px] font-bold text-[#4B382F]">{stop.name}</span>
+                        <span className="text-[10px] font-semibold text-[#A68C7F]">{stop.category ?? '맛집'}</span>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="mt-3 rounded-2xl bg-white px-3 py-4 text-center text-[11px] font-semibold text-[#9D8579]">오늘 등록된 여정이 아직 없어요.</p>
+                )}
+              </section>
+              {unreadCount > 0 && (
+                <button type="button" onClick={() => setReadNotificationIds(notifications.map(item => item.id))} className="mt-3 text-[11px] font-black text-[#F25055]">모두 읽음</button>
+              )}
+              <div className="mt-5 space-y-2.5">
+                {visibleNotifications.length === 0 ? (
+                  <div className="rounded-2xl border border-dashed border-[#E1D2C8] px-5 py-12 text-center text-[12px] font-semibold text-[#A38D82]">더이상 새로운 알람이 없어요</div>
+                ) : visibleNotifications.map(item => {
+                  const unread = !readNotificationIds.includes(item.id);
+                  const Icon = item.kind === 'journey' ? MapPin : item.kind === 'like' ? ThumbsUp : item.kind === 'dislike' ? ThumbsDown : MessageCircle;
+                  return (
+                    <button
+                      type="button"
+                      key={item.id}
+                      onClick={() => openNotification(item)}
+                      className={`flex w-full items-start gap-3 rounded-2xl border p-3.5 text-left ${unread ? 'border-[#F7C7BE] bg-[#FFF2EE]' : 'border-[#EDE3DC] bg-white'}`}
+                    >
+                      <span className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-full ${unread ? 'bg-[#FF424B] text-white' : 'bg-[#F5EEEA] text-[#8A7469]'}`}><Icon size={15} /></span>
+                      <span className="min-w-0 flex-1">
+                        <span className="block text-[12px] font-black text-[#352720]">{item.title}</span>
+                        <span className="mt-1 block line-clamp-2 text-[11px] font-semibold leading-relaxed text-[#887369]">{item.body}</span>
+                      </span>
+                      {unread && <span className="mt-1.5 h-2 w-2 shrink-0 rounded-full bg-[#FF424B]" />}
+                    </button>
+                  );
+                })}
+              </div>
+            </motion.aside>
+            </>
+          )}
+        </AnimatePresence>,
+        document.body,
+      )}
+    </div>
   );
 }

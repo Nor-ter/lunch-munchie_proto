@@ -1,7 +1,9 @@
 /**
- * 코스맵 템플릿 — 디자이너 에셋(public/templates/*.jpg, 1080×1920 기준)의
- * 빈 포토슬롯 좌표(%)에 유저가 올린 식당 사진을 채워 넣는다.
- * 좌표는 원본 이미지 대비 퍼센트라 카드 크기와 무관하게 유지된다.
+ * 코스맵 템플릿 — 4:3 규격(화면에는 세로로 세워 3:4로 노출).
+ * templates4_3 스크랩북 프레임(temp1~6)을 배경으로 깔고,
+ * 중앙 종이 영역 안에 최대 3개의 포토슬롯 + 과일 캐릭터(키위/사과/딸기)를 얹는다.
+ * 슬롯 좌표는 3:4 캔버스 대비 퍼센트라 카드 크기와 무관하게 유지된다.
+ * 테두리 장식을 가리지 않도록 슬롯은 항상 중앙 종이 영역 안쪽에만 배치한다.
  */
 
 export interface TemplateSlot {
@@ -9,7 +11,7 @@ export interface TemplateSlot {
   top: number;
   width: number;
   height: number;
-  /** 슬롯 회전(도) — 비스듬히 붙은 폴라로이드/티켓용 */
+  /** 슬롯 회전(도) — 비스듬히 붙은 폴라로이드용 */
   rotate?: number;
   /** CSS border-radius (오벌 슬롯은 '50%') */
   radius?: string;
@@ -21,89 +23,90 @@ export interface CoursemapTemplate {
   image: string;
   description: string;
   bestFor: string;
+  /** 최대 3개 — 코스 1·2·3번 장소가 순서대로 채워진다 */
   slots: TemplateSlot[];
-  /** 원본에 박혀 있는 "코스맵 이름/날짜" 플레이스홀더를 덮는 라벨 스티커 위치 */
-  label?: {
-    left: number;
-    top: number;
-    width: number;
-    height: number;
-    color: string;
-    bg?: string;
-    rotate?: number;
-  };
+  /** 완전 불투명 프레임에서 중앙 사진 영역만 뚫기 위한 안쪽 경계(%) */
+  frameInset: { top: number; right: number; bottom: number; left: number };
 }
 
 export const COURSEMAP_TEMPLATES: CoursemapTemplate[] = [
   {
-    id: 'fourcut',
-    name: '네컷',
-    image: '/templates/fourcut-01.jpg',
-    description: '하루의 인상적인 장면을 네 장의 사진으로 또렷하게 기록하는 포토 프레임이에요.',
-    bestFor: '데이트 · 카페 투어 · 하루 기록',
+    id: 'lucky-green',
+    name: '럭키 그린',
+    image: '/templates4_3/temp1.jpg',
+    description: '네잎클로버와 무지개가 가득한 lucky day 스크랩북 프레임이에요.',
+    bestFor: '데이트 · 소풍 · 기분 좋은 하루',
+    frameInset: { top: 18, right: 22, bottom: 16, left: 24 },
     slots: [
-      { left: 10.6, top: 22.1, width: 34.8, height: 30.3 },
-      { left: 54.0, top: 22.1, width: 34.8, height: 30.3 },
-      { left: 10.6, top: 60.9, width: 34.8, height: 30.3 },
-      { left: 54.0, top: 60.9, width: 34.8, height: 30.3 },
+      { left: 22, top: 15, width: 40, height: 22, rotate: -3 },
+      { left: 42, top: 40, width: 40, height: 22, rotate: 2 },
+      { left: 24, top: 64, width: 40, height: 22, rotate: -2 },
     ],
   },
   {
-    id: 'roadmap',
-    name: '로드맵',
-    image: '/templates/roadmap-01.jpg',
-    description: '장소를 따라 움직이는 코스의 흐름을 한눈에 보여주는 여행 지도 스타일이에요.',
-    bestFor: '동네 산책 · 미식 투어 · 여행 코스',
+    id: 'sweet-strawberry',
+    name: '스위트 스트로베리',
+    image: '/templates4_3/temp2.jpg',
+    description: '딸기잼과 체리 라벨이 붙은 새콤달콤 컨트리 프레임이에요.',
+    bestFor: '디저트 투어 · 카페 · 달콤한 코스',
+    frameInset: { top: 17, right: 20, bottom: 18, left: 21 },
     slots: [
-      { left: 35.9, top: 19.2, width: 14.3, height: 8.0 },
-      { left: 64.2, top: 26.7, width: 14.3, height: 8.0 },
-      { left: 35.9, top: 40.6, width: 14.3, height: 8.0 },
-      { left: 41.2, top: 60.1, width: 14.3, height: 8.0 },
-    ],
-    label: { left: 22, top: 75.2, width: 56, height: 11.8, color: '#4A3B2E', bg: '#F3ECDC' },
-  },
-  {
-    id: 'tray',
-    name: '먼치트레이',
-    image: '/templates/tray-01.jpg',
-    description: '다양한 메뉴와 장소를 한 상 가득 차려낸 듯 보여주는 런치 트레이 디자인이에요.',
-    bestFor: '맛집 투어 · 메뉴 모음 · 여러 스팟',
-    slots: [
-      { left: 11.5, top: 38.8, width: 20.5, height: 14.7, radius: '16%' },
-      { left: 37.0, top: 38.5, width: 26.0, height: 15.2, radius: '14%' },
-      { left: 67.5, top: 38.8, width: 20.5, height: 14.7, radius: '16%' },
-      { left: 11.5, top: 56.0, width: 34.5, height: 14.0, radius: '12%' },
-      { left: 50.0, top: 56.0, width: 38.5, height: 14.0, radius: '12%' },
-    ],
-    label: { left: 6, top: 87.5, width: 55, height: 6.5, color: '#5A4A3A', bg: 'rgba(255,253,246,0.92)' },
-  },
-  {
-    id: 'cd',
-    name: '씨디 케이스',
-    image: '/templates/cd-01.jpg',
-    description: '좋아하는 장소를 플레이리스트처럼 모아두는 레트로 앨범 커버 스타일이에요.',
-    bestFor: '감성 코스 · 야간 투어 · 취향 기록',
-    slots: [
-      { left: 43.5, top: 29.8, width: 21.5, height: 8.8 },
-      { left: 17.1, top: 38.8, width: 24.1, height: 12.8, rotate: -2 },
-      { left: 65.9, top: 41.7, width: 22.0, height: 15.6, rotate: 2 },
-      { left: 18.1, top: 54.2, width: 24.5, height: 13.5, rotate: -2 },
-      { left: 43.5, top: 58.8, width: 23.3, height: 12.8 },
+      { left: 24, top: 14, width: 40, height: 22, rotate: 2 },
+      { left: 40, top: 39, width: 40, height: 22, rotate: -3 },
+      { left: 25, top: 63, width: 40, height: 22, rotate: 2 },
     ],
   },
   {
-    id: 'ticket',
-    name: '티켓',
-    image: '/templates/ticket-01.jpg',
-    description: '다녀온 하루를 오래 간직할 수 있는 한 장의 기념 티켓으로 만드는 디자인이에요.',
-    bestFor: '특별한 날 · 여행 · 데이트 코스',
+    id: 'vintage-picnic',
+    name: '빈티지 피크닉',
+    image: '/templates4_3/temp3.jpg',
+    description: '체크 식탁보 위에 단추와 리본을 수놓은 빈티지 피크닉 프레임이에요.',
+    bestFor: '맛집 투어 · 브런치 · 레트로 감성',
+    frameInset: { top: 16, right: 18, bottom: 17, left: 18 },
     slots: [
-      { left: 39.8, top: 32.0, width: 34.3, height: 12.5, radius: '50%', rotate: -2 },
-      { left: 38.9, top: 44.6, width: 34.3, height: 11.5, radius: '50%', rotate: -2 },
-      { left: 38.0, top: 56.5, width: 34.3, height: 11.5, radius: '50%', rotate: -2 },
-      { left: 37.0, top: 69.2, width: 34.3, height: 11.5, radius: '50%', rotate: -2 },
+      { left: 25, top: 15, width: 40, height: 22, rotate: -2 },
+      { left: 41, top: 40, width: 40, height: 22, rotate: 3 },
+      { left: 26, top: 64, width: 40, height: 22, rotate: -2 },
     ],
-    label: { left: 30, top: 82.3, width: 43, height: 8, color: '#6B2F2A', bg: '#F5E9DC', rotate: -2 },
+  },
+  {
+    id: 'denim-blue',
+    name: '데님 블루',
+    image: '/templates4_3/temp4.jpg',
+    description: 'GOOD DAY 티켓과 데님 패치가 붙은 차분한 블루 프레임이에요.',
+    bestFor: '혼자 여행 · 전시 · 시티 투어',
+    frameInset: { top: 17, right: 19, bottom: 17, left: 18 },
+    slots: [
+      { left: 22, top: 13, width: 40, height: 22, rotate: 2 },
+      { left: 40, top: 38, width: 40, height: 22, rotate: -2 },
+      { left: 23, top: 62, width: 40, height: 22, rotate: 2 },
+    ],
+  },
+  {
+    id: 'lavender-note',
+    name: '라벤더 노트',
+    image: '/templates4_3/temp5.jpg',
+    description: 'Collect beautiful moments — 잔잔한 라벤더 기록장 프레임이에요.',
+    bestFor: '감성 코스 · 북카페 · 조용한 하루',
+    frameInset: { top: 18, right: 18, bottom: 18, left: 18 },
+    slots: [
+      { left: 23, top: 17, width: 40, height: 22, rotate: -2 },
+      { left: 40, top: 41, width: 40, height: 22, rotate: 2 },
+      { left: 24, top: 65, width: 40, height: 22, rotate: -3 },
+    ],
+  },
+  {
+    id: 'happy-pink',
+    name: '해피 핑크',
+    image: '/templates4_3/temp6.jpg',
+    description: 'Be happy! 스마일과 별이 톡톡 튀는 팝 핑크 프레임이에요.',
+    bestFor: '액티비티 · 생일 · 신나는 코스',
+    frameInset: { top: 18, right: 20, bottom: 18, left: 21 },
+    slots: [
+      { left: 23, top: 13, width: 40, height: 22, rotate: 3 },
+      { left: 40, top: 38, width: 40, height: 22, rotate: -2 },
+      { left: 24, top: 62, width: 40, height: 22, rotate: 2 },
+    ],
   },
 ];
 
@@ -113,4 +116,37 @@ export function getTemplateByIndex(index: number): CoursemapTemplate {
 
 export function getTemplateById(id?: string): CoursemapTemplate | undefined {
   return COURSEMAP_TEMPLATES.find((template) => template.id === id);
+}
+
+// ── 코스별 템플릿 선택 저장 ───────────────────────────────────────────────────
+// 코스맵 만들기 플로우에서 유저가 고른 템플릿을 코스에 고정해,
+// 홈/피드/뷰어/에디터 어디에서든 같은 코스는 같은 코스맵으로 보이게 한다.
+
+const TEMPLATE_CHOICE_KEY = 'lm_course_template_choice';
+
+function readChoices(): Record<string, string> {
+  try {
+    return JSON.parse(localStorage.getItem(TEMPLATE_CHOICE_KEY) ?? '{}');
+  } catch {
+    return {};
+  }
+}
+
+export function setTemplateForCourse(courseId: string, templateId: string) {
+  try {
+    const choices = readChoices();
+    choices[courseId] = templateId;
+    localStorage.setItem(TEMPLATE_CHOICE_KEY, JSON.stringify(choices));
+  } catch {
+    /* 저장 실패 시에도 화면 흐름은 계속 진행 */
+  }
+}
+
+/** 유저가 고른 템플릿 → 없으면 코스 인덱스 기반 기본 템플릿 */
+export function getTemplateForCourse(
+  courseId: string,
+  fallbackIndex = 0,
+): CoursemapTemplate {
+  const chosen = getTemplateById(readChoices()[courseId]);
+  return chosen ?? getTemplateByIndex(fallbackIndex);
 }

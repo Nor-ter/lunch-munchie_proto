@@ -20,7 +20,11 @@ interface Props {
  * 코스) 기존 추상 그리드 SVG로 폴백한다.
  */
 export function CourseMapView({ places, width, height, className }: Props) {
+  // 키가 없으면 MapProvider가 APIProvider 없이 children만 렌더하므로,
+  // GoogleCourseMap을 그리면 앱이 죽는다 — 이때도 SVG 폴백을 쓴다.
+  const hasMapsKey = !!import.meta.env.VITE_GOOGLE_MAPS_API_KEY;
   const hasGeo =
+    hasMapsKey &&
     places.length > 0 &&
     places.every((p) => typeof p.latitude === 'number' && typeof p.longitude === 'number');
 
@@ -32,7 +36,7 @@ export function CourseMapView({ places, width, height, className }: Props) {
         : [],
     [hasGeo, places],
   );
-  const { coordinates: routeCoordinates, distanceMeters, isError } = useDirections(
+  const { coordinates: routeCoordinates } = useDirections(
     routePoints,
     'walking',
   );
@@ -49,25 +53,9 @@ export function CourseMapView({ places, width, height, className }: Props) {
     subtitle: p.address ?? p.category,
   }));
 
-  // 도보 거리 배지 — 실제 경로가 도착했을 때만. 실패 시 직선 폴백임을 알린다.
-  const distanceLabel =
-    distanceMeters != null
-      ? `도보 약 ${Math.round(distanceMeters / 100) / 10}km`
-      : isError && points.length >= 2
-        ? '직선 표시 중'
-        : null;
-
   return (
-    <div className={className} style={{ position: 'relative', width, height, borderRadius: 12, overflow: 'hidden' }}>
+    <div className={className} style={{ position: 'relative', width, maxWidth: '100%', height, borderRadius: 12, overflow: 'hidden' }}>
       <GoogleCourseMap points={points} width="100%" height={height} routeCoordinates={routeCoordinates} />
-      {distanceLabel && (
-        <span
-          className="absolute left-2 top-2 rounded-full bg-black/65 px-2.5 py-1 text-[11px] font-semibold text-white"
-          style={{ pointerEvents: 'none' }}
-        >
-          {distanceLabel}
-        </span>
-      )}
     </div>
   );
 }

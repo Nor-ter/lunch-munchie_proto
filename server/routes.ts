@@ -198,10 +198,11 @@ function mockCoursesResponse() {
     metadata: {
       distance: c.total_distance,
       duration: c.total_duration,
-      placeCount: c.stops.length,
+      placeCount: Math.min(c.stops.length, 3),
     },
     stops: [...c.stops]
       .sort((a, b) => a.order - b.order)
+      .slice(0, 3)
       .map(s => ({
         placeId: s.placeId,
         order: s.order,
@@ -603,13 +604,17 @@ router.get("/courses", async (req: any, res: any) => {
   if (dbRes.ok) {
     const { allCourses, allCourseItems } = dbRes.value;
     const formattedCourses = allCourses.map(c => {
-      const stops = allCourseItems.filter(ci => ci.course_id === c.id).map(ci => ({
-        placeId: ci.restaurant_id,
-        order: ci.order_index,
-        startTime: ci.start_time,
-        endTime: ci.end_time,
-        isBookmarked: ci.is_bookmarked
-      }));
+      const stops = allCourseItems
+        .filter(ci => ci.course_id === c.id)
+        .sort((a, b) => a.order_index - b.order_index)
+        .slice(0, 3)
+        .map(ci => ({
+          placeId: ci.restaurant_id,
+          order: ci.order_index,
+          startTime: ci.start_time,
+          endTime: ci.end_time,
+          isBookmarked: ci.is_bookmarked
+        }));
 
       return {
         id: c.id,
@@ -624,7 +629,7 @@ router.get("/courses", async (req: any, res: any) => {
           duration: c.total_duration,
           placeCount: stops.length
         },
-        stops: stops.sort((a, b) => a.order - b.order),
+        stops,
         createdAt: new Date(c.created_at).toISOString().split('T')[0],
         isPublic: c.is_public,
         creatorId: c.author_id,

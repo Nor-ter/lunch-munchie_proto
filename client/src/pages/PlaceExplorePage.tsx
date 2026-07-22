@@ -7,7 +7,7 @@
  * **1회만** 호출) → Edge Function이 이미 Supabase restaurants에 upsert한 행을 그대로 받아
  * registerRestaurants()로 로컬에 즉시 반영(같은 세션에서 바로 코스 생성 가능하게) →
  * 지도(CourseMap)에 순번 마커 + (2곳 이상이면) useDirections로 실제 도보 경로 폴리라인 +
- * 리스트 → "코스 만들기"(기존 CourseEditPage 새 코스 생성과 동일한 필드 매핑, addCourse 재사용).
+ * 리스트 → 통합 Munchie 피드 에디터에서 코스맵과 피드를 동시에 만든다.
  */
 import { useMemo, useState } from 'react';
 import { useLocation } from 'wouter';

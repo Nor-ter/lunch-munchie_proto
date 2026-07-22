@@ -1,9 +1,9 @@
 export const COURSE_THEME = {
-  primary: '#E85053',
-  primaryLight: '#FDE1E1',
-  mapBg: '#F8F5F0',
-  mapGrid: '#E8E3DC',
-  black: '#1A1A1A',
+  primary: '#E67E78',
+  primaryLight: '#FCE8E2',
+  mapBg: '#FBF7F1',
+  mapGrid: '#EDE3D9',
+  black: '#46352D',
 } as const;
 
 export const COURSE_MAP_ROUTE_STYLE = {
@@ -22,52 +22,54 @@ export const COURSE_MAP_ROUTE_STYLE = {
 export const COURSE_COLOR_PALETTE = [
   {
     name: 'Red',
-    dark: '#C62F32',
-    base: '#E85053',
-    light: '#F37D7F',
-    lighter: '#F8B3B4',
-    faint: '#FDE1E1',
-    text: '#C62F32',
+    dark: '#B95F5A',
+    base: '#E67E78',
+    light: '#EFA49E',
+    lighter: '#F5C8C2',
+    faint: '#FCEBE7',
+    text: '#A9514D',
   },
   {
     name: 'Orange',
-    dark: '#C37400',
-    base: '#F09D09',
-    light: '#F5B64A',
-    lighter: '#F9D48D',
-    faint: '#FDEED1',
-    text: '#C37400',
+    dark: '#A47B47',
+    base: '#D9AC6D',
+    light: '#E4C08D',
+    lighter: '#EFD8B8',
+    faint: '#FBF3E5',
+    text: '#8A663A',
   },
   {
     name: 'Pink',
-    dark: '#D9B0B5',
-    base: '#F39DA8',
-    light: '#F5DDE0',
-    lighter: '#F9ECEE',
-    faint: '#FEF6F7',
-    text: '#8B555E',
+    dark: '#AD747F',
+    base: '#DFA1AA',
+    light: '#E8BAC1',
+    lighter: '#F0D4D8',
+    faint: '#FCF1F3',
+    text: '#925F68',
   },
   {
     name: 'Green',
-    dark: '#2E8F35',
-    base: '#3CBA44',
-    light: '#6DDA73',
-    lighter: '#B3E9B6',
-    faint: '#E6F7E7',
-    text: '#2E8F35',
+    dark: '#567966',
+    base: '#7FA18D',
+    light: '#9FBAAA',
+    lighter: '#C9D9CF',
+    faint: '#EFF5F1',
+    text: '#4F705E',
   },
   {
     name: 'Blue',
-    dark: '#2B5273',
-    base: '#3E719B',
-    light: '#6FA4C6',
-    lighter: '#B3CEE0',
-    faint: '#E6F0F6',
-    text: '#2B5273',
+    dark: '#5D7180',
+    base: '#849CAA',
+    light: '#A5B7C1',
+    lighter: '#CED9DF',
+    faint: '#F0F4F6',
+    text: '#536875',
   },
 ] as const;
 
 export type CoursePaletteColor = (typeof COURSE_COLOR_PALETTE)[number];
+
+const COURSE_SEQUENCE_MARKER_COLORS = ['#FC3F4E', '#FE9800', '#F39DA8'] as const;
 
 export const COURSE_TAG_ORDER = [
   '맛집',
@@ -94,8 +96,10 @@ COURSE_TAG_COLOR_MAP['전시/문화'] = COURSE_TAG_COLOR_MAP['데이트코스']!
 COURSE_TAG_COLOR_MAP['액티비티'] = COURSE_TAG_COLOR_MAP['데이트코스']!;
 COURSE_TAG_COLOR_MAP['맛집 투어'] = COURSE_TAG_COLOR_MAP['맛집']!;
 
-export function getCourseSequenceColor(index: number): CoursePaletteColor {
-  return COURSE_COLOR_PALETTE[index % COURSE_COLOR_PALETTE.length]!;
+export function getCourseSequenceColor(index: number) {
+  const paletteColor = COURSE_COLOR_PALETTE[index % COURSE_COLOR_PALETTE.length]!;
+  const markerColor = COURSE_SEQUENCE_MARKER_COLORS[index];
+  return markerColor ? { ...paletteColor, base: markerColor } : paletteColor;
 }
 
 export function getCourseTagColor(tag: string): CoursePaletteColor | undefined {
