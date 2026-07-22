@@ -1041,7 +1041,11 @@ export function AppProvider({
     };
   }, []);
 
-  useEffect(() => { localStorage.setItem('lm_courses', JSON.stringify(courses)); }, [courses]);
+  useEffect(() => {
+    // 업로드 사진(data URL)이 heroImage에 포함되면 저장 용량을 넘을 수 있다.
+    // 영속 저장 실패가 게시 완료 화면까지 중단시키지 않도록 메모리 상태는 유지한다.
+    try { localStorage.setItem('lm_courses', JSON.stringify(courses)); } catch { /* noop */ }
+  }, [courses]);
   useEffect(() => { localStorage.setItem('lm_saved', JSON.stringify(savedCourseIds)); }, [savedCourseIds]);
   useEffect(() => { localStorage.setItem('lm_hidden_profile_templates', JSON.stringify(hiddenTemplateCourseIds)); }, [hiddenTemplateCourseIds]);
   useEffect(() => {

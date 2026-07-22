@@ -1554,59 +1554,70 @@ export default function CoursemapCreatePage() {
     null;
 
   const publish = () => {
-    const newId = `course_${Date.now()}`;
-    const linked = filledPins.map(pin => pin.restaurant);
-    const tagPool = Array.from(new Set(linked.flatMap(restaurant => restaurant.tags)));
-    const title = `${linked[0]!.name}${linked.length > 1 ? ` 외 ${linked.length - 1}곳` : ''} 코스`;
-    const course: Course = {
-      id: newId,
-      title,
-      description: caption.trim(),
-      heroImage: photoPool[0] ?? linked[0]!.image ?? '',
-      tags: (tagPool.length > 0 ? tagPool : ['맛집']).slice(0, 2) as Course['tags'],
-      hashtags,
-      region: linked[0]!.address.split(' ').slice(0, 2).join(' '),
-      metadata: {
-        distance: Math.round(linked.length * 0.5 * 10) / 10,
-        duration: linked.length * 60,
-        placeCount: linked.length,
-      },
-      stops: filledPins.map((pin, index) => ({
-        placeId: pin.restaurant.id,
-        order: index + 1,
-        startTime: '',
-        endTime: '',
-        isBookmarked: false,
-      })),
-      createdAt: new Date().toISOString().slice(0, 10),
-      isPublic: true,
-      creatorId: profile.id,
-      savedCount: 0,
-    };
+    if (filledPins.length === 0 || placed.length === 0) {
+      toast.error('장소와 사진을 확인한 뒤 다시 포스팅해주세요');
+      return;
+    }
 
-    addCourse(course);
-    setTemplateForCourse(newId, template.id);
-    saveCoursemapDecor(newId, placed.slice(0, MAX_MUNCHIE_FEED_PHOTOS), canvasStrokes);
-    addFeedPost({
-      authorId: profile.id,
-      authorName: profile.name,
-      authorEmoji: profile.emoji,
-      courseId: newId,
-      photos: placed.slice(0, MAX_MUNCHIE_FEED_PHOTOS).map(photo => photo.src),
-      caption: caption.trim(),
-      skinId: 'default',
-      tags: course.tags,
-    });
-
-    // 보상 — 주먹밥 +1 (프로필 런치메이트 밥 주기용)
-    let riceballs = 0;
     try {
-      riceballs = Number(localStorage.getItem('lm_riceball_count') ?? '0') + 1;
-      localStorage.setItem('lm_riceball_count', String(riceballs));
-    } catch { riceballs = 1; }
-    setRewardCount(riceballs);
-    setPublishedCourseId(newId);
-    setStep(3);
+      const newId = `course_${Date.now()}`;
+      const linked = filledPins.map(pin => pin.restaurant);
+      const tagPool = Array.from(new Set(linked.flatMap(restaurant => restaurant.tags)));
+      const title = `${linked[0]!.name}${linked.length > 1 ? ` 외 ${linked.length - 1}곳` : ''} 코스`;
+      const publishedPhotos = placed.slice(0, MAX_MUNCHIE_FEED_PHOTOS);
+      const course: Course = {
+        id: newId,
+        title,
+        description: caption.trim(),
+        heroImage: photoPool[0] ?? linked[0]!.image ?? '',
+        tags: (tagPool.length > 0 ? tagPool : ['맛집']).slice(0, 2) as Course['tags'],
+        hashtags,
+        region: linked[0]!.address.split(' ').slice(0, 2).join(' '),
+        metadata: {
+          distance: Math.round(linked.length * 0.5 * 10) / 10,
+          duration: linked.length * 60,
+          placeCount: linked.length,
+        },
+        stops: filledPins.map((pin, index) => ({
+          placeId: pin.restaurant.id,
+          order: index + 1,
+          startTime: '',
+          endTime: '',
+          isBookmarked: false,
+        })),
+        createdAt: new Date().toISOString().slice(0, 10),
+        isPublic: true,
+        creatorId: profile.id,
+        savedCount: 0,
+      };
+
+      addCourse(course);
+      setTemplateForCourse(newId, template.id);
+      saveCoursemapDecor(newId, publishedPhotos, canvasStrokes);
+      addFeedPost({
+        authorId: profile.id,
+        authorName: profile.name,
+        authorEmoji: profile.emoji,
+        courseId: newId,
+        photos: publishedPhotos.map(photo => photo.src),
+        caption: caption.trim(),
+        skinId: 'default',
+        tags: course.tags,
+      });
+
+      // 보상 — 주먹밥 +1 (프로필 런치메이트 밥 주기용)
+      let riceballs = 0;
+      try {
+        riceballs = Number(localStorage.getItem('lm_riceball_count') ?? '0') + 1;
+        localStorage.setItem('lm_riceball_count', String(riceballs));
+      } catch { riceballs = 1; }
+      setRewardCount(riceballs);
+      setPublishedCourseId(newId);
+      setStep(3);
+    } catch (error) {
+      console.error('[CoursemapCreatePage] 포스팅 실패', error);
+      toast.error('포스팅에 실패했어요. 잠시 후 다시 시도해주세요');
+    }
   };
 
   const goNext = () => {

@@ -66,7 +66,9 @@ export function saveCoursemapDecor(
     const current = all[courseId];
     const currentStrokes = Array.isArray(current) ? [] : (current?.strokes ?? []);
     all[courseId] = {
-      photos: placed.slice(0, MAX_MUNCHIE_FEED_PHOTOS),
+      // originalSrc는 에디터 세션의 Reset에만 필요하다. 게시 후 저장본에서는 제거해
+      // 대용량 data URL이 src와 originalSrc에 중복 저장되는 것을 막는다.
+      photos: placed.slice(0, MAX_MUNCHIE_FEED_PHOTOS).map(({ originalSrc: _originalSrc, ...photo }) => photo),
       strokes: strokes ?? currentStrokes,
     };
     localStorage.setItem(DECOR_KEY, JSON.stringify(all));
