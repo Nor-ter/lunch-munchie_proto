@@ -4,13 +4,17 @@
  *                         ② Lunchie Mode — Quick Match(그룹 대결) 결과에서 저장한 맛집 목록
  */
 import { useState } from 'react';
+import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import { useLocation } from 'wouter';
-import { MapPin, Bookmark, BookmarkX, Star, Zap, Map as MapIcon } from 'lucide-react';
+import { useLocation, useSearch } from 'wouter';
+import { MapPin, Bookmark, BookmarkX, Star, Zap, Map as MapIcon, LayoutList } from 'lucide-react';
 import { useApp, TagType } from '@/contexts/AppContext';
 import { getCourseTagStyle } from '@/constants/courseTheme';
 import { FOOD_FILTER_TAGS, hasFoodTag } from '@/constants/foodTags';
 import UnifiedMunchieCard from '@/components/munchie/UnifiedMunchieCard';
+import { SavedMunchieMap } from '@/components/saved/SavedMunchieMap';
+import { useSavedFeedMapPoints } from '@/hooks/useSavedFeedMapPoints';
+import { getSavedViewFromSearch, type SavedViewMode } from '@/lib/savedNavigation';
 
 type Tab = 'coursemaps' | 'restaurants';
 
@@ -73,12 +77,16 @@ function RestaurantSavedCard({
 
 export default function SavedPage() {
   const [, navigate] = useLocation();
+  const search = useSearch();
   const {
     feedPosts, savedCourseIds, unsaveCourse,
     savedRestaurantIds, unsaveRestaurant,
   } = useApp();
   const [tab, setTab] = useState<Tab>('coursemaps');
   const [activeFilter, setActiveFilter] = useState<TagType | 'all'>('all');
+  const [munchieView, setMunchieView] = useState<SavedViewMode>(
+    () => getSavedViewFromSearch(search),
+  );
 
   const savedPosts = Array.from(
     feedPosts
@@ -92,6 +100,11 @@ export default function SavedPage() {
   const filteredPosts = activeFilter === 'all'
     ? savedPosts
     : savedPosts.filter(post => hasFoodTag(post.tags, activeFilter as TagType));
+  const savedFeedMapPoints = useSavedFeedMapPoints(filteredPosts);
+  const selectMunchieView = (view: SavedViewMode) => {
+    setMunchieView(view);
+    navigate(`/saved?view=${view}`, { replace: true });
+  };
 
   return (
     <div className="min-h-dvh bg-[#FCF4EE] pb-24">
@@ -160,21 +173,41 @@ export default function SavedPage() {
       {tab === 'coursemaps' && (
         <div className="px-3">
           {filteredPosts.length > 0 ? (
-            <div className="grid grid-cols-2 items-start gap-3 pb-4">
-              {filteredPosts.map(post => (
-                <div key={post.id} className="relative min-w-0">
-                  <UnifiedMunchieCard post={post} compact homeSummary detailOrigin="saved" />
-                  <button
-                    type="button"
-                    onClick={() => unsaveCourse(post.courseId)}
-                    className="absolute bottom-1.5 right-1.5 flex h-6 w-6 items-center justify-center rounded-full border border-[#F0C9BE] bg-[#FFFDFC]/95 text-[#D94449] shadow-sm"
-                    aria-label="먼치픽 저장 해제"
-                  >
-                    <BookmarkX size={12} />
-                  </button>
-                </div>
-              ))}
-            </div>
+            <AnimatePresence mode="wait" initial={false}>
+              {munchieView === 'list' ? (
+                <motion.div
+                  key="saved-list"
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  exit={{ opacity: 0 }}
+                  className="grid grid-cols-2 items-start gap-3 pb-16"
+                >
+                  {filteredPosts.map(post => (
+                    <div key={post.id} className="relative min-w-0">
+                      <UnifiedMunchieCard post={post} compact homeSummary detailOrigin="saved" />
+                      <button
+                        type="button"
+                        onClick={() => unsaveCourse(post.courseId)}
+                        className="absolute bottom-1.5 right-1.5 flex h-6 w-6 items-center justify-center rounded-full border border-[#F0C9BE] bg-[#FFFDFC]/95 text-[#D94449] shadow-sm"
+                        aria-label="먼치픽 저장 해제"
+                      >
+                        <BookmarkX size={12} />
+                      </button>
+                    </div>
+                  ))}
+                </motion.div>
+              ) : (
+                <motion.div
+                  key="saved-map"
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  exit={{ opacity: 0 }}
+                  className="h-[calc(100dvh-275px)] min-h-[440px] pb-14"
+                >
+                  <SavedMunchieMap points={savedFeedMapPoints} />
+                </motion.div>
+              )}
+            </AnimatePresence>
           ) : (
             <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="text-center py-16">
               <div className="text-5xl mb-3">🔖</div>
@@ -221,6 +254,48 @@ export default function SavedPage() {
             </motion.div>
           )}
         </div>
+      )}
+
+      {tab === 'coursemaps' && savedPosts.length > 0 && createPortal(
+        <div
+          className="fixed z-50 flex h-12 items-center rounded-full border border-[#E1D0C6] bg-[#FFFDFC]/95 p-1 shadow-[0_10px_26px_rgba(72,43,31,0.2)] backdrop-blur"
+          style={{
+            left: '50%',
+            bottom: 'calc(var(--lm-tab-bar-height) + 12px)',
+            transform: 'translateX(-50%)',
+          }}
+          role="group"
+          aria-label="저장 먼치픽 보기 방식"
+        >
+          {([
+            ['map', 'Map', MapIcon],
+            ['list', 'List', LayoutList],
+          ] as const).map(([mode, label, Icon]) => {
+            const selected = munchieView === mode;
+            return (
+              <button
+                key={mode}
+                type="button"
+                onClick={() => selectMunchieView(mode)}
+                aria-pressed={selected}
+                className="relative flex h-10 min-w-[78px] items-center justify-center gap-1.5 rounded-full px-4 text-[12px] font-black transition-colors"
+                style={{ color: selected ? '#FFFFFF' : '#765E53' }}
+              >
+                {selected && (
+                  <motion.span
+                    layoutId="saved-view-toggle"
+                    className="absolute inset-0 rounded-full bg-[#3F3029]"
+                    transition={{ type: 'spring', stiffness: 420, damping: 34 }}
+                  />
+                )}
+                <span className="relative z-10 flex items-center gap-1.5">
+                  <Icon size={14} /> {label}
+                </span>
+              </button>
+            );
+          })}
+        </div>,
+        document.body,
       )}
 
     </div>

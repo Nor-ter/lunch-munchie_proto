@@ -2,6 +2,7 @@ import { useLocation, useParams, useSearch } from 'wouter';
 import { ChevronLeft, Pencil } from 'lucide-react';
 import { useApp } from '@/contexts/AppContext';
 import UnifiedMunchieCard from '@/components/munchie/UnifiedMunchieCard';
+import { getSavedReturnPath } from '@/lib/savedNavigation';
 
 export default function FeedDetailPage() {
   const { id } = useParams<{ id: string }>();
@@ -20,7 +21,7 @@ export default function FeedDetailPage() {
     : fromProfile
       ? profileReturnId ? `/profile/${profileReturnId}` : '/profile'
       : fromSaved
-        ? '/saved'
+        ? getSavedReturnPath(search)
         : '/feed?tab=feed';
   const backLabel = fromNotifications ? '알림으로 돌아가기' : fromProfile ? '프로필로 돌아가기' : fromSaved ? '저장목록으로 돌아가기' : '먼치피드로 돌아가기';
 
