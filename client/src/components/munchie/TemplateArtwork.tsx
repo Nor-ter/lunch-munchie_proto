@@ -36,7 +36,7 @@ export default function TemplateArtwork({
     course.heroImage,
   ]).filter((photo): photo is string => !!photo).slice(0, 3);
   // 만들기 플로우에서 직접 꾸민 배치가 있으면 그 배치를 그대로 재현한다
-  const decor = decorOverride ?? getCoursemapDecor(course.id);
+  const decor = decorOverride ?? getCoursemapDecor(course.id, photos);
   const canvasStrokes = strokesOverride ?? getCoursemapCanvasStrokes(course.id);
   const slots = template.slots.slice(0, Math.min(Math.max(places.length, photos.length, 1), 3));
 
@@ -67,7 +67,7 @@ export default function TemplateArtwork({
                 transform: `translate(-50%, -50%) rotate(${photo.rotate}deg)`,
               }}
             >
-              <div className="overflow-hidden rounded-[8px] border-[3px] border-white bg-white shadow-[0_6px_16px_rgba(63,38,24,0.18)]">
+              <div className="h-full w-full overflow-hidden rounded-[8px] border-[3px] border-white bg-white shadow-[0_6px_16px_rgba(63,38,24,0.18)]">
                 <img
                   src={photo.src}
                   alt=""

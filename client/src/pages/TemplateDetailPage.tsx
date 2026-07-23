@@ -8,6 +8,7 @@ import { getTemplateById, getTemplateForCourse } from '@/constants/coursemapTemp
 import TemplateArtwork from '@/components/munchie/TemplateArtwork';
 import TemplateInfoSheet from '@/components/munchie/TemplateInfoSheet';
 import OneLineReviewBox from '@/components/munchie/OneLineReviewBox';
+import { fromFeedPhotoPlacements } from '@/lib/coursemapDecor';
 
 export default function TemplateDetailPage() {
   const { templateId } = useParams<{ templateId: string }>();
@@ -53,6 +54,7 @@ export default function TemplateDetailPage() {
   const authorReview = linkedPost?.caption.trim() || course?.description.trim() || '';
   const fallbackTemplateIndex = Math.max(feedPosts.findIndex(post => post.courseId === courseId), 0);
   const template = getTemplateById(templateId) ?? (course ? getTemplateForCourse(course.id, fallbackTemplateIndex) : undefined);
+  const linkedDecor = linkedPost ? fromFeedPhotoPlacements(linkedPost.photoPlacements, linkedPost.photos) ?? undefined : undefined;
   const isSaved = course ? savedCourseIds.includes(course.id) : false;
 
   const editTemplate = () => {
@@ -145,7 +147,7 @@ export default function TemplateDetailPage() {
           className="mx-auto rounded-[28px] bg-white p-2.5 shadow-[0_18px_45px_rgba(91,57,42,0.16)]"
           style={{ width: 'min(100%, 350px, calc((100dvh - 330px) * 0.75))' }}
         >
-          <TemplateArtwork course={course} template={template} photoSources={linkedPost?.photos} className="rounded-[20px]" eager />
+          <TemplateArtwork course={course} template={template} photoSources={linkedPost?.photos} decorOverride={linkedDecor} strokesOverride={linkedPost?.canvasStrokes} className="rounded-[20px]" eager />
         </div>
       </section>
 

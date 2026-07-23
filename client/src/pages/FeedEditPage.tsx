@@ -5,8 +5,8 @@ import { useLocation, useParams, useSearch } from 'wouter';
 import { useApp } from '@/contexts/AppContext';
 import OneLineReviewBox from '@/components/munchie/OneLineReviewBox';
 import TemplatePhotoPositionEditor, { createTemplatePhotoPlacement } from '@/components/munchie/TemplatePhotoPositionEditor';
-import { getTemplateForCourse } from '@/constants/coursemapTemplates';
-import { getCoursemapDecor, MAX_MUNCHIE_FEED_PHOTOS, saveCoursemapDecor, type PlacedPhoto } from '@/lib/coursemapDecor';
+import { getTemplateById, getTemplateForCourse } from '@/constants/coursemapTemplates';
+import { fromFeedPhotoPlacements, getCoursemapDecor, MAX_MUNCHIE_FEED_PHOTOS, saveCoursemapDecor, toFeedPhotoPlacements, type PlacedPhoto } from '@/lib/coursemapDecor';
 
 
 export default function FeedEditPage() {
@@ -20,9 +20,11 @@ export default function FeedEditPage() {
   const detailPath = `/feed/${id}?from=${source}`;
   const course = post ? getCourseById(post.courseId) : undefined;
   const templateIndex = Math.max(feedPosts.findIndex(item => item.courseId === post?.courseId), 0);
-  const template = getTemplateForCourse(post?.courseId ?? id ?? 'preview', templateIndex);
+  const template = getTemplateById(post?.skinId) ?? getTemplateForCourse(post?.courseId ?? id ?? 'preview', templateIndex);
   const [placed, setPlaced] = useState<PlacedPhoto[]>(() => {
-    const savedDecor = post ? getCoursemapDecor(post.courseId) : null;
+    const embeddedDecor = post ? fromFeedPhotoPlacements(post.photoPlacements, post.photos) : null;
+    if (embeddedDecor) return embeddedDecor;
+    const savedDecor = post ? getCoursemapDecor(post.courseId, post.photos) : null;
     if (savedDecor) return savedDecor;
     return (post?.photos ?? []).slice(0, MAX_MUNCHIE_FEED_PHOTOS).map((src, index) => (
       createTemplatePhotoPlacement(src, index, template)
@@ -47,7 +49,11 @@ export default function FeedEditPage() {
   const save = () => {
     if (!caption.trim() || placed.length === 0) return;
     const nextPlaced = placed.slice(0, MAX_MUNCHIE_FEED_PHOTOS);
-    updateFeedPost(post.id, { photos: nextPlaced.map(photo => photo.src), caption: caption.trim() });
+    updateFeedPost(post.id, {
+      photos: nextPlaced.map(photo => photo.src),
+      photoPlacements: toFeedPhotoPlacements(nextPlaced),
+      caption: caption.trim(),
+    });
     saveCoursemapDecor(post.courseId, nextPlaced);
     toast.success('Munchie 피드를 수정했어요.');
     navigate(detailPath, { replace: true });

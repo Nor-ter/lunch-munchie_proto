@@ -23,6 +23,7 @@ import {
 import {
   MAX_MUNCHIE_FEED_PHOTOS,
   saveCoursemapDecor,
+  toFeedPhotoPlacements,
   type CoursemapCanvasStroke,
   type PlacedPhoto,
 } from '@/lib/coursemapDecor';
@@ -1528,7 +1529,9 @@ export default function CoursemapCreatePage() {
     courseId: previewCourse.id,
     photos: placed.map(photo => photo.src),
     caption: caption.trim(),
-    skinId: 'default',
+    skinId: template.id,
+    photoPlacements: toFeedPhotoPlacements(placed),
+    canvasStrokes,
     likes: 0,
     dislikes: 0,
     saves: 0,
@@ -1600,8 +1603,10 @@ export default function CoursemapCreatePage() {
         authorEmoji: profile.emoji,
         courseId: newId,
         photos: publishedPhotos.map(photo => photo.src),
+        photoPlacements: toFeedPhotoPlacements(publishedPhotos),
+        canvasStrokes,
         caption: caption.trim(),
-        skinId: 'default',
+        skinId: template.id,
         tags: course.tags,
       });
 

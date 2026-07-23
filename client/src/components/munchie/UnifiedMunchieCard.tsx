@@ -15,8 +15,8 @@ import {
 import { toast } from 'sonner';
 import { useLocation } from 'wouter';
 import { isFeedCommentHidden, type Course, type FeedPost, useApp } from '@/contexts/AppContext';
-import { getTemplateForCourse, type CoursemapTemplate } from '@/constants/coursemapTemplates';
-import type { CoursemapCanvasStroke, PlacedPhoto } from '@/lib/coursemapDecor';
+import { getTemplateById, getTemplateForCourse, type CoursemapTemplate } from '@/constants/coursemapTemplates';
+import { fromFeedPhotoPlacements, type CoursemapCanvasStroke, type PlacedPhoto } from '@/lib/coursemapDecor';
 import TemplateArtwork from '@/components/munchie/TemplateArtwork';
 import OneLineReviewBox from '@/components/munchie/OneLineReviewBox';
 
@@ -90,7 +90,10 @@ export default function UnifiedMunchieCard({
   };
 
   const courseIndex = Math.max(courses.findIndex(item => item.id === course.id), 0);
-  const template = templateOverride ?? getTemplateForCourse(course.id, courseIndex);
+  const template = templateOverride ?? getTemplateById(post.skinId) ?? getTemplateForCourse(course.id, courseIndex);
+  const embeddedDecor = fromFeedPhotoPlacements(post.photoPlacements, post.photos) ?? undefined;
+  const renderedDecor = decorOverride ?? embeddedDecor;
+  const renderedStrokes = strokesOverride ?? post.canvasStrokes;
   const visibleComments = post.comments.filter(item => !isFeedCommentHidden(item));
   const rootComments = visibleComments.filter(item => !item.parentId);
   const liked = likedFeedIds.includes(post.id);
@@ -133,7 +136,7 @@ export default function UnifiedMunchieCard({
             </AnimatePresence>
           </OneLineReviewBox>
           <div className={`relative mx-2 mb-2 overflow-hidden rounded-[12px] border bg-[#F1E7DE] ${homeSummary ? 'border-[#F2B6AB]' : 'border-[#E8D6CC]'}`}>
-            <TemplateArtwork course={course} template={template} photoSources={post.photos} decorOverride={decorOverride} strokesOverride={strokesOverride} eager />
+            <TemplateArtwork course={course} template={template} photoSources={post.photos} decorOverride={renderedDecor} strokesOverride={renderedStrokes} eager />
             {!homeSummary && <div className="absolute bottom-1 left-1 flex gap-1">
               <span className="flex h-6 items-center gap-0.5 rounded-lg border border-[#F2C4BA] bg-[#FFF8F4] px-1.5 text-[7px] font-black text-[#E76B68]"><ThumbsUp size={10} />{post.likes}</span>
               <span
@@ -183,7 +186,7 @@ export default function UnifiedMunchieCard({
         </AnimatePresence>
 
         <button type="button" onClick={() => go(`/template/${template.id}?course=${course.id}&from=${detailOrigin}`)} className="mx-3 block w-[calc(100%-1.5rem)] overflow-hidden rounded-[14px] border border-[#EED9D0] bg-[#F1E7DE]" aria-label="Munchie 피드 이미지 상세 보기">
-          <TemplateArtwork course={course} template={template} photoSources={post.photos} decorOverride={decorOverride} strokesOverride={strokesOverride} eager />
+          <TemplateArtwork course={course} template={template} photoSources={post.photos} decorOverride={renderedDecor} strokesOverride={renderedStrokes} eager />
         </button>
 
         <div className="mx-3 flex items-center justify-between py-2.5 text-[#A27469]">

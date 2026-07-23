@@ -9,7 +9,7 @@ import { normalizeDiet, isHardRestriction, type DietTag } from '@shared/const';
 import { intentForHour, type Intent } from '@shared/intent';
 import { normalizeFoodTag, type TagType } from '@/constants/foodTags';
 import { isWebAuthConfigured } from '@/contexts/AuthContext';
-import { MAX_MUNCHIE_FEED_PHOTOS } from '@/lib/coursemapDecor';
+import { MAX_MUNCHIE_FEED_PHOTOS, type CoursemapCanvasStroke, type FeedPhotoPlacement } from '@/lib/coursemapDecor';
 import type { LunchmateProfileLoadout } from '@/types/lunchmateCustomization';
 import {
   normalizeLunchmateOwnedItemIds,
@@ -212,6 +212,10 @@ export interface FeedPost {
   authorEmoji: string;
   courseId: string;
   photos: string[];
+  /** 템플릿 위 사진 위치·크기·회전·확대 정보 */
+  photoPlacements?: FeedPhotoPlacement[];
+  /** 템플릿 위 펜/하이라이터 드로잉 */
+  canvasStrokes?: CoursemapCanvasStroke[];
   caption: string;
   skinId: string;
   likes: number;
@@ -610,7 +614,7 @@ interface AppContextValue {
   /** Munchie Feed */
   feedPosts: FeedPost[];
   addFeedPost: (post: Omit<FeedPost, 'id' | 'likes' | 'saves' | 'comments' | 'createdAt'>) => FeedPost;
-  updateFeedPost: (postId: string, updates: Partial<Pick<FeedPost, 'courseId' | 'caption' | 'skinId' | 'photos' | 'tags'>>) => void;
+  updateFeedPost: (postId: string, updates: Partial<Pick<FeedPost, 'courseId' | 'caption' | 'skinId' | 'photos' | 'photoPlacements' | 'canvasStrokes' | 'tags'>>) => void;
   deleteFeedPost: (postId: string) => void;
   likedFeedIds: string[];
   dislikedFeedIds: string[];
@@ -1100,7 +1104,7 @@ export function AppProvider({
     return full;
   }, []);
 
-  const updateFeedPost = useCallback((postId: string, updates: Partial<Pick<FeedPost, 'courseId' | 'caption' | 'skinId' | 'photos' | 'tags'>>) => {
+  const updateFeedPost = useCallback((postId: string, updates: Partial<Pick<FeedPost, 'courseId' | 'caption' | 'skinId' | 'photos' | 'photoPlacements' | 'canvasStrokes' | 'tags'>>) => {
     setFeedPosts(posts => posts.map(p => p.id === postId
       ? { ...p, ...updates, photos: (updates.photos ?? p.photos).slice(0, MAX_MUNCHIE_FEED_PHOTOS) }
       : p));

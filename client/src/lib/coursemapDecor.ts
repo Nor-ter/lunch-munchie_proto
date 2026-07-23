@@ -21,6 +21,33 @@ export interface PlacedPhoto {
   rotate: number;
 }
 
+/**
+ * 피드에 저장하는 가벼운 배치 정보. 사진 원본(data URL)은 FeedPost.photos에 이미
+ * 있으므로 중복 저장하지 않고 배열 인덱스로 연결한다.
+ */
+export type FeedPhotoPlacement = Omit<PlacedPhoto, 'src' | 'originalSrc'> & {
+  photoIndex: number;
+};
+
+export function toFeedPhotoPlacements(placed: PlacedPhoto[]): FeedPhotoPlacement[] {
+  return placed.slice(0, MAX_MUNCHIE_FEED_PHOTOS).map(({ src: _src, originalSrc: _originalSrc, ...photo }, photoIndex) => ({
+    ...photo,
+    photoIndex,
+  }));
+}
+
+export function fromFeedPhotoPlacements(
+  placements: FeedPhotoPlacement[] | undefined,
+  photos: string[],
+): PlacedPhoto[] | null {
+  if (!placements?.length) return null;
+  const hydrated = placements.slice(0, MAX_MUNCHIE_FEED_PHOTOS).flatMap(({ photoIndex, ...placement }) => {
+    const src = photos[photoIndex];
+    return src ? [{ ...placement, src }] : [];
+  });
+  return hydrated.length > 0 ? hydrated : null;
+}
+
 export interface CoursemapCanvasStroke {
   id: string;
   color: string;
@@ -30,7 +57,10 @@ export interface CoursemapCanvasStroke {
 }
 
 interface StoredCoursemapDecor {
-  photos: PlacedPhoto[];
+  /** 구버전 저장 형식 */
+  photos?: PlacedPhoto[];
+  /** data URL을 중복하지 않는 현재 저장 형식 */
+  photoPlacements?: FeedPhotoPlacement[];
   strokes?: CoursemapCanvasStroke[];
 }
 
@@ -45,8 +75,11 @@ function readAll(): Record<string, PlacedPhoto[] | StoredCoursemapDecor> {
   }
 }
 
-export function getCoursemapDecor(courseId: string): PlacedPhoto[] | null {
+export function getCoursemapDecor(courseId: string, photoSources: string[] = []): PlacedPhoto[] | null {
   const decor = readAll()[courseId];
+  if (!Array.isArray(decor) && decor?.photoPlacements) {
+    return fromFeedPhotoPlacements(decor.photoPlacements, photoSources);
+  }
   const photos = Array.isArray(decor) ? decor : decor?.photos;
   return photos && photos.length > 0 ? photos.slice(0, MAX_MUNCHIE_FEED_PHOTOS) : null;
 }
@@ -66,9 +99,7 @@ export function saveCoursemapDecor(
     const current = all[courseId];
     const currentStrokes = Array.isArray(current) ? [] : (current?.strokes ?? []);
     all[courseId] = {
-      // originalSrc는 에디터 세션의 Reset에만 필요하다. 게시 후 저장본에서는 제거해
-      // 대용량 data URL이 src와 originalSrc에 중복 저장되는 것을 막는다.
-      photos: placed.slice(0, MAX_MUNCHIE_FEED_PHOTOS).map(({ originalSrc: _originalSrc, ...photo }) => photo),
+      photoPlacements: toFeedPhotoPlacements(placed),
       strokes: strokes ?? currentStrokes,
     };
     localStorage.setItem(DECOR_KEY, JSON.stringify(all));
