@@ -9,6 +9,8 @@ interface Props {
   width: number;
   height: number;
   className?: string;
+  selectedPlaceId?: string | null;
+  onSelectPlace?: (placeId: string) => void;
 }
 
 /**
@@ -19,7 +21,7 @@ interface Props {
  * 연결된 Restaurant에 실 위경도가 있을 때만 Google 지도를 쓰고, 없으면(순수 mock 폴백
  * 코스) 기존 추상 그리드 SVG로 폴백한다.
  */
-export function CourseMapView({ places, width, height, className }: Props) {
+export function CourseMapView({ places, width, height, className, selectedPlaceId, onSelectPlace }: Props) {
   // 키가 없으면 MapProvider가 APIProvider 없이 children만 렌더하므로,
   // GoogleCourseMap을 그리면 앱이 죽는다 — 이때도 SVG 폴백을 쓴다.
   const hasMapsKey = !!import.meta.env.VITE_GOOGLE_MAPS_API_KEY;
@@ -42,7 +44,16 @@ export function CourseMapView({ places, width, height, className }: Props) {
   );
 
   if (!hasGeo) {
-    return <SvgCourseMap places={places} width={width} height={height} className={className} />;
+    return (
+      <SvgCourseMap
+        places={places}
+        width={width}
+        height={height}
+        className={className}
+        selectedPlaceId={selectedPlaceId}
+        onSelectPlace={onSelectPlace}
+      />
+    );
   }
 
   const points: MapPoint[] = places.map((p) => ({
@@ -55,7 +66,14 @@ export function CourseMapView({ places, width, height, className }: Props) {
 
   return (
     <div className={className} style={{ position: 'relative', width, maxWidth: '100%', height, borderRadius: 12, overflow: 'hidden' }}>
-      <GoogleCourseMap points={points} width="100%" height={height} routeCoordinates={routeCoordinates} />
+      <GoogleCourseMap
+        points={points}
+        width="100%"
+        height={height}
+        routeCoordinates={routeCoordinates}
+        selectedPointId={selectedPlaceId}
+        onPressPoint={(point) => onSelectPlace?.(point.id)}
+      />
     </div>
   );
 }

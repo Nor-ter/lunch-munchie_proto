@@ -12,6 +12,8 @@ interface CourseMapProps {
   height?: number;
   showLabels?: boolean;
   className?: string;
+  selectedPlaceId?: string | null;
+  onSelectPlace?: (placeId: string) => void;
 }
 
 const GRID_STEPS = [10, 20, 30, 40, 50, 60, 70, 80, 90];
@@ -28,6 +30,8 @@ export function CourseMap({
   height = 200,
   showLabels = true,
   className = '',
+  selectedPlaceId,
+  onSelectPlace,
 }: CourseMapProps) {
   const drawableWidth = Math.max(1, width - COURSE_MAP_INSET * 2);
   const drawableHeight = Math.max(1, height - COURSE_MAP_INSET * 2);
@@ -103,15 +107,61 @@ export function CourseMap({
       </g>
 
       {/* Nodes */}
-      {places.map((place, i) => (
-        <g key={place.id}>
+      {places.map((place, i) => {
+        const selected = selectedPlaceId === place.id;
+        const color = getCourseSequenceColor(i);
+
+        return (
+        <g
+          key={place.id}
+          role={onSelectPlace ? 'button' : undefined}
+          tabIndex={onSelectPlace ? 0 : undefined}
+          aria-label={onSelectPlace ? `${place.name} 지도에서 선택` : undefined}
+          aria-pressed={onSelectPlace ? selected : undefined}
+          onClick={() => onSelectPlace?.(place.id)}
+          onKeyDown={(event) => {
+            if (!onSelectPlace || (event.key !== 'Enter' && event.key !== ' ')) return;
+            event.preventDefault();
+            onSelectPlace(place.id);
+          }}
+          className={onSelectPlace ? 'cursor-pointer outline-none' : undefined}
+          data-selected={selected ? 'true' : 'false'}
+        >
+          {selected && (
+            <>
+              <circle
+                cx={toX(place.coords.x)}
+                cy={toY(place.coords.y)}
+                r={20}
+                fill={color.base}
+                opacity={0.2}
+                className="animate-pulse"
+              />
+              <circle
+                cx={toX(place.coords.x)}
+                cy={toY(place.coords.y)}
+                r={15}
+                fill="white"
+                stroke={color.base}
+                strokeWidth={2}
+              />
+            </>
+          )}
+          {onSelectPlace && (
+            <circle
+              cx={toX(place.coords.x)}
+              cy={toY(place.coords.y)}
+              r={22}
+              fill="transparent"
+            />
+          )}
           <circle
             cx={toX(place.coords.x)}
             cy={toY(place.coords.y)}
-            r={COURSE_MAP_ROUTE_STYLE.nodeRadius}
-            fill={getCourseSequenceColor(i).base}
+            r={selected ? COURSE_MAP_ROUTE_STYLE.nodeRadius + 2 : COURSE_MAP_ROUTE_STYLE.nodeRadius}
+            fill={color.base}
             stroke={COURSE_MAP_ROUTE_STYLE.borderColor}
-            strokeWidth={COURSE_MAP_ROUTE_STYLE.nodeBorderWidth}
+            strokeWidth={selected ? COURSE_MAP_ROUTE_STYLE.nodeBorderWidth + 1 : COURSE_MAP_ROUTE_STYLE.nodeBorderWidth}
           />
           {showLabels && (
             <text
@@ -121,12 +171,14 @@ export function CourseMap({
               fontSize={COURSE_MAP_ROUTE_STYLE.nodeLabelSize}
               textAnchor="middle"
               dominantBaseline="central"
+              pointerEvents="none"
             >
               {i + 1}
             </text>
           )}
         </g>
-      ))}
+        );
+      })}
 
       {/* MAP label */}
       <text x={8} y={14} fill="#9E9E9E" fontSize={10}>
