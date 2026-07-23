@@ -8,6 +8,7 @@ import {
   type CropHandle,
   type ImageSize,
 } from "@/lib/imageUtils";
+import { acquireDocumentScrollLock } from "@/lib/documentScrollLock";
 
 interface PhotoCropEditorProps {
   src: string;
@@ -71,8 +72,7 @@ export default function PhotoCropEditor({
   const [error, setError] = useState("");
 
   useEffect(() => {
-    const previous = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
+    const releaseScrollLock = acquireDocumentScrollLock();
     const stage = stageRef.current;
     const updateSize = () => {
       const rect = stage?.getBoundingClientRect();
@@ -82,7 +82,7 @@ export default function PhotoCropEditor({
     const observer = stage ? new ResizeObserver(updateSize) : null;
     if (stage && observer) observer.observe(stage);
     return () => {
-      document.body.style.overflow = previous;
+      releaseScrollLock();
       observer?.disconnect();
     };
   }, []);

@@ -51,7 +51,7 @@ export function getOrderedCourseStops(course: Course) {
   return [...course.stops].sort((a, b) => a.order - b.order);
 }
 
-export function getCourseMapPoints(restaurants: Restaurant[]): CourseMapPoint[] {
+export function getCourseMapPoints(restaurants: Array<Pick<Restaurant, 'lat' | 'lng'>>): CourseMapPoint[] {
   if (restaurants.length === 0) return [];
   if (restaurants.length === 1) return [{ x: 50, y: 50 }];
 

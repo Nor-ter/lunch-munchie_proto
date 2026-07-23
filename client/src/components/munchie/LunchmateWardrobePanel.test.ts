@@ -181,7 +181,7 @@ describe('Lunchmate wardrobe UI contracts', () => {
     expect(PROFILE_SOURCE).toContain('className="flex items-start gap-4"');
     expect(PROFILE_SOURCE).toContain('className="min-w-0 flex-1 pt-11"');
     expect(PROFILE_SOURCE).toContain('className="flex min-w-0 items-center gap-2 whitespace-nowrap"');
-    expect(PROFILE_SOURCE).toContain('className="mt-1.5 whitespace-nowrap text-[13px]');
+    expect(PROFILE_SOURCE).toContain('className="mt-1.5 line-clamp-2 text-[13px]');
     expect(PROFILE_SOURCE).toContain('className="mt-5 grid grid-cols-3"');
   });
 
@@ -228,8 +228,8 @@ describe('Lunchmate wardrobe UI contracts', () => {
   it('routes Profile banner customization directly to FoodieRoom', () => {
     expect(PROFILE_SOURCE).toContain("navigate('/profile/foodie-room', {");
     expect(PROFILE_SOURCE).toContain('onCustomize={openFoodieRoom}');
-    expect(FOODIE_BUDDY_SOURCE).toContain('aria-label="런치메이트룸 열기"');
-    expect(FOODIE_BUDDY_SOURCE).toContain('🎨 런치메이트룸');
+    expect(FOODIE_BUDDY_SOURCE).toContain('aria-label="런치메이트 룸 열기"');
+    expect(FOODIE_BUDDY_SOURCE).toContain('data-icon="hanger"');
     expect(PROFILE_SOURCE).not.toContain("activeSheet === 'foodie'");
     expect(PROFILE_SOURCE).not.toContain("setActiveSheet('foodie')");
     expect(PROFILE_SOURCE).not.toContain('푸디 캐릭터 꾸미기');

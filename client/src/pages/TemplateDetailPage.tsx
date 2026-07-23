@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { motion } from 'framer-motion';
 import { useLocation, useParams, useSearch } from 'wouter';
-import { Bookmark, ChevronDown, ChevronLeft, Clock3, Pencil, Trash2 } from 'lucide-react';
+import { Bookmark, ChevronDown, ChevronLeft, Clock3, MapPin, Pencil, Share2, ThumbsUp, Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { useApp, type Course } from '@/contexts/AppContext';
 import { getTemplateById, getTemplateForCourse } from '@/constants/coursemapTemplates';
@@ -163,15 +163,20 @@ export default function TemplateDetailPage() {
         )}
         <div className={`${course.tags.length > 0 ? 'mt-3' : ''} flex flex-nowrap items-center justify-start gap-3 border-y border-[#EADFD8] py-3 text-[12px] font-semibold text-[#5E4B42]`}>
           <span className="flex shrink-0 items-center gap-1.5"><Clock3 size={14} color="#E85053" />{Math.floor(course.metadata.duration / 60)}시간</span>
-          <span className="shrink-0">{course.metadata.placeCount}개 스팟</span>
+          <span className="flex shrink-0 items-center gap-1" aria-label={`스팟 ${course.metadata.placeCount}개`}>
+            <MapPin size={14} color="#E85053" aria-hidden="true" />
+            {course.metadata.placeCount}
+          </span>
+          <span className="flex shrink-0 items-center gap-1"><ThumbsUp size={13} color="#E85053" />{linkedPost?.likes ?? 0}</span>
+          <span className="flex shrink-0 items-center gap-1"><Share2 size={13} color="#E85053" />{linkedPost?.shares ?? 0}</span>
         </div>
       </section>
 
       {authorReview && (
         <section data-ui="template-author-review" className="px-3 pt-1">
           <p className="mb-1.5 text-[10px] font-black tracking-[0.08em] text-[#B89E91]">작성자의 한줄평</p>
-          <OneLineReviewBox compact>
-            <p className="break-words text-[12px] font-bold leading-5 text-[#3B2A23]">{authorReview}</p>
+          <OneLineReviewBox compact className="!min-h-[40px] !px-6 !py-2">
+            <p className="break-words text-[13px] font-bold leading-5 text-[#3B2A23]">{authorReview}</p>
           </OneLineReviewBox>
         </section>
       )}

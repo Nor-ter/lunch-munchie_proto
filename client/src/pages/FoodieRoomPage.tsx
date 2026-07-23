@@ -133,7 +133,7 @@ export default function FoodieRoomPage() {
           <ChevronLeft size={21} strokeWidth={2.4} aria-hidden="true" />
         </button>
         <div className="min-w-0 flex-1">
-          <h1 className="text-[21px] font-black leading-tight">런치메이트룸</h1>
+          <h1 className="text-[21px] font-black leading-tight">런치메이트 룸</h1>
           <p className="mt-0.5 text-[10px] font-semibold text-[#A18C80]">나만의 런치메이트 공간</p>
         </div>
         <span className="rounded-full bg-[#FFE7DF] px-2.5 py-1 text-[10px] font-black text-[#D94B4E]">
@@ -212,7 +212,7 @@ export default function FoodieRoomPage() {
                     flowState="idle"
                     size={156}
                     renderSize="room"
-                    alt="런치메이트룸에서 움직이는 런치메이트"
+                    alt="런치메이트 룸에서 움직이는 런치메이트"
                     fallback={<span className="text-[92px] leading-none">{profile.foodieChar ?? '🐥'}</span>}
                     loadout={draftLoadout}
                     artwork="chicken"
@@ -236,10 +236,10 @@ export default function FoodieRoomPage() {
         )}
       </section>
 
-      <section className="mt-5 px-4" aria-label="런치메이트룸 기능">
+      <section className="mt-5 px-4" aria-label="런치메이트 룸 기능">
         <div
           role="tablist"
-          aria-label="런치메이트룸 메뉴"
+          aria-label="런치메이트 룸 메뉴"
           className="grid grid-cols-4 rounded-2xl bg-[#F2E7DF] p-1"
         >
           {ROOM_TABS.map((tab, index) => {
@@ -287,7 +287,7 @@ export default function FoodieRoomPage() {
             <div>
               <h2 className="text-[16px] font-black">방 꾸미기</h2>
               <p className="mt-1 text-[11px] leading-relaxed text-[#927E73]">
-                선택한 방 스킨은 프로필과 런치메이트룸에 바로 적용돼요.
+                선택한 방 스킨은 프로필과 런치메이트 룸에 바로 적용돼요.
               </p>
               <div className="mt-4">
                 <SkinPicker

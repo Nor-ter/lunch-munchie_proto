@@ -11,12 +11,18 @@ import { normalizeFoodTag, type TagType } from '@/constants/foodTags';
 import { isWebAuthConfigured } from '@/contexts/AuthContext';
 import { MAX_MUNCHIE_FEED_PHOTOS, type CoursemapCanvasStroke, type FeedPhotoPlacement } from '@/lib/coursemapDecor';
 import type { LunchmateProfileLoadout } from '@/types/lunchmateCustomization';
+import type { LunchboxInventory } from '@/constants/lunchboxFoods';
+import {
+  mergeLegacyRiceballCount,
+  normalizeLunchboxInventory,
+} from '@/constants/lunchboxFoods';
 import {
   normalizeLunchmateOwnedItemIds,
   normalizeLunchmateProfileLoadout,
   normalizeLunchmateRewardClaims,
   type LunchmateRewardClaim,
 } from '@/utils/lunchmateProfile';
+import { getLunchmateProgressSnapshot } from '@/utils/lunchmateProgress';
 export type { TagType } from '@/constants/foodTags';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -155,6 +161,8 @@ export interface UserProfile {
   id: string;
   name: string;
   emoji: string;
+  /** 마이프로필에 표시되는 한 줄 자기소개 */
+  bio?: string;
   /** 업로드한 프로필 사진(data URL) — 있으면 emoji 대신 이 사진을 아바타로 보여준다 */
   avatarPhoto?: string;
   dietary: string[];
@@ -173,6 +181,10 @@ export interface UserProfile {
   lunchmateOwnedItemIds?: string[];
   /** 현재 브라우저 preview에서 지급한 레벨별 코스튬 이력 */
   lunchmateRewardClaims?: LunchmateRewardClaim[];
+  /** 먼치 피드 보상으로 획득한 음식별 런치박스 수량 */
+  lunchboxInventory?: LunchboxInventory;
+  /** 런치메이트 레벨과 EXP에 사용하는 누적 맛추억 */
+  lunchmateXp?: number;
 }
 
 export interface SwipeRecord {
@@ -210,6 +222,9 @@ export interface FeedPost {
   authorId?: string;
   authorName: string;
   authorEmoji: string;
+  /** 코스맵 작성자의 런치메이트 레벨 라벨 */
+  authorLevel?: number;
+  authorLevelName?: string;
   courseId: string;
   photos: string[];
   /** 템플릿 위 사진 위치·크기·회전·확대 정보 */
@@ -219,6 +234,8 @@ export interface FeedPost {
   caption: string;
   skinId: string;
   likes: number;
+  /** 링크/스토리 공유가 성공한 누적 횟수. 이전 저장 데이터는 0으로 표시한다. */
+  shares?: number;
   dislikes?: number;
   saves: number;
   comments: FeedComment[];
@@ -553,6 +570,7 @@ const DEFAULT_PROFILE: UserProfile = {
   id: 'me',
   name: '지민',
   emoji: '😊',
+  bio: '오늘도 맛있는 하루를 위해',
   dietary: [],
   categoryPrefs: [
     { category: '카페', score: 0.9, rank: 1 },
@@ -566,6 +584,8 @@ const DEFAULT_PROFILE: UserProfile = {
   joinedAt: new Date().toISOString(),
   lunchmateOwnedItemIds: normalizeLunchmateOwnedItemIds(undefined),
   lunchmateRewardClaims: [],
+  lunchboxInventory: normalizeLunchboxInventory(undefined),
+  lunchmateXp: 0,
 };
 
 // ─── Context ──────────────────────────────────────────────────────────────────
@@ -577,6 +597,8 @@ interface AppContextValue {
   unsaveCourse: (courseId: string) => void;
   addCourse: (course: Course) => void;
   updateCourse: (courseId: string, updates: Partial<Course>) => void;
+  /** 코스맵과 그 코스에 연결된 먼치 피드를 함께 삭제한다. */
+  deleteCourseWithFeed: (courseId: string) => void;
   /** 프로필의 나의 템플릿에서만 숨긴 코스 ID — 원본 코스와 피드는 유지한다. */
   hiddenTemplateCourseIds: string[];
   deleteProfileTemplate: (courseId: string) => void;
@@ -613,9 +635,10 @@ interface AppContextValue {
 
   /** Munchie Feed */
   feedPosts: FeedPost[];
-  addFeedPost: (post: Omit<FeedPost, 'id' | 'likes' | 'saves' | 'comments' | 'createdAt'>) => FeedPost;
+  addFeedPost: (post: Omit<FeedPost, 'id' | 'likes' | 'shares' | 'saves' | 'comments' | 'createdAt'>) => FeedPost;
   updateFeedPost: (postId: string, updates: Partial<Pick<FeedPost, 'courseId' | 'caption' | 'skinId' | 'photos' | 'photoPlacements' | 'canvasStrokes' | 'tags'>>) => void;
   deleteFeedPost: (postId: string) => void;
+  incrementFeedShare: (postId: string) => void;
   likedFeedIds: string[];
   dislikedFeedIds: string[];
   toggleFeedLike: (postId: string) => void;
@@ -644,7 +667,19 @@ interface AppContextValue {
   apiAvailable: boolean;
 }
 
-const AppContext = createContext<AppContextValue | null>(null);
+// Vite Fast Refresh가 이 모듈만 교체하면 Provider와 consumer가 서로 다른
+// Context 인스턴스를 참조할 수 있다. 개발 중에는 전역에 같은 인스턴스를
+// 보존해 `useApp must be used within AppProvider` 오류 화면을 방지한다.
+const APP_CONTEXT_HMR_KEY = '__lunchieAppContext';
+const appContextGlobal = globalThis as typeof globalThis & {
+  [APP_CONTEXT_HMR_KEY]?: React.Context<AppContextValue | null>;
+};
+const AppContext = appContextGlobal[APP_CONTEXT_HMR_KEY]
+  ?? createContext<AppContextValue | null>(null);
+
+if (import.meta.env.DEV) {
+  appContextGlobal[APP_CONTEXT_HMR_KEY] = AppContext;
+}
 
 export type ApiRequestAuth =
   | {
@@ -960,6 +995,11 @@ export function AppProvider({
           lunchmateLoadout: normalizeLunchmateProfileLoadout(parsed.lunchmateLoadout),
           lunchmateOwnedItemIds: normalizeLunchmateOwnedItemIds(parsed.lunchmateOwnedItemIds),
           lunchmateRewardClaims: normalizeLunchmateRewardClaims(parsed.lunchmateRewardClaims),
+          // 새 인벤토리가 먼저 생성된 브라우저도 과거 주먹밥 키의 더 큰 보유량을 놓치지 않는다.
+          lunchboxInventory: mergeLegacyRiceballCount(
+            parsed.lunchboxInventory,
+            localStorage.getItem('lm_riceball_count'),
+          ),
         };
         if (migratedId) localStorage.setItem('lm_profile', JSON.stringify(normalizedProfile));
         return initialAuthUserId
@@ -1058,7 +1098,25 @@ export function AppProvider({
   }, [currentSession]);
   useEffect(() => { localStorage.setItem('lm_swipes', JSON.stringify(swipeRecords)); }, [swipeRecords]);
   useEffect(() => { localStorage.setItem('lm_saved_restaurants', JSON.stringify(savedRestaurantIds)); }, [savedRestaurantIds]);
-  useEffect(() => { localStorage.setItem('lm_profile', JSON.stringify(profile)); }, [profile]);
+  useEffect(() => {
+    try {
+      localStorage.setItem('lm_profile', JSON.stringify(profile));
+      localStorage.removeItem('lm_riceball_count');
+    } catch (error) {
+      // 업로드 사진(data URL)이나 다른 로컬 데이터로 저장소가 가득 차도
+      // AppProvider를 중단시키지 않는다. 사진만 제외하고 인벤토리·설정은 보존한다.
+      if (profile.avatarPhoto) {
+        try {
+          const { avatarPhoto: _avatarPhoto, ...compactProfile } = profile;
+          localStorage.setItem('lm_profile', JSON.stringify(compactProfile));
+          localStorage.removeItem('lm_riceball_count');
+          console.warn('[AppContext] 프로필 사진을 제외하고 로컬 프로필을 저장했습니다.', error);
+          return;
+        } catch { /* 메모리 상태는 계속 유지한다. */ }
+      }
+      console.warn('[AppContext] 로컬 프로필 저장 공간이 부족합니다.', error);
+    }
+  }, [profile]);
   useEffect(() => {
     // 업로드 사진(data URL)이 크면 quota 초과가 날 수 있다 — 실패해도 앱은 계속 동작.
     try { localStorage.setItem('lm_feed_v2', JSON.stringify(feedPosts)); } catch { /* noop */ }
@@ -1085,16 +1143,38 @@ export function AppProvider({
       : course));
   }, []);
 
+  const deleteCourseWithFeed = useCallback((courseId: string) => {
+    const removedPostIds = new Set(
+      feedPosts.filter(post => post.courseId === courseId).map(post => post.id),
+    );
+    setCourses(previous => previous.filter(course => course.id !== courseId));
+    setSavedCourseIds(previous => previous.filter(id => id !== courseId));
+    setHiddenTemplateCourseIds(previous => previous.filter(id => id !== courseId));
+    setCourseSkins(previous => {
+      if (!(courseId in previous)) return previous;
+      const next = { ...previous };
+      delete next[courseId];
+      return next;
+    });
+    setFeedPosts(previous => previous.filter(post => post.courseId !== courseId));
+    setLikedFeedIds(ids => ids.filter(id => !removedPostIds.has(id)));
+    setDislikedFeedIds(ids => ids.filter(id => !removedPostIds.has(id)));
+  }, [feedPosts]);
+
   const deleteProfileTemplate = useCallback((courseId: string) => {
     setHiddenTemplateCourseIds(previous => previous.includes(courseId) ? previous : [...previous, courseId]);
   }, []);
 
-  const addFeedPost = useCallback((post: Omit<FeedPost, 'id' | 'likes' | 'saves' | 'comments' | 'createdAt'>) => {
+  const addFeedPost = useCallback((post: Omit<FeedPost, 'id' | 'likes' | 'shares' | 'saves' | 'comments' | 'createdAt'>) => {
+    const authorProgress = getLunchmateProgressSnapshot(profile.lunchmateXp ?? 0);
     const full: FeedPost = {
       ...post,
+      authorLevel: authorProgress.level,
+      authorLevelName: authorProgress.levelName,
       photos: post.photos.slice(0, MAX_MUNCHIE_FEED_PHOTOS),
       id: `f_${Date.now()}`,
       likes: 0,
+      shares: 0,
       dislikes: 0,
       saves: 0,
       comments: [],
@@ -1112,6 +1192,14 @@ export function AppProvider({
 
   const deleteFeedPost = useCallback((postId: string) => {
     setFeedPosts(posts => posts.filter(p => p.id !== postId));
+    setLikedFeedIds(ids => ids.filter(id => id !== postId));
+    setDislikedFeedIds(ids => ids.filter(id => id !== postId));
+  }, [profile.lunchmateXp]);
+
+  const incrementFeedShare = useCallback((postId: string) => {
+    setFeedPosts(posts => posts.map(post => post.id === postId
+      ? { ...post, shares: (post.shares ?? 0) + 1 }
+      : post));
   }, []);
 
   const toggleCommentHidden = useCallback((postId: string, commentId: string) => {
@@ -1456,7 +1544,21 @@ export function AppProvider({
 
   const updateProfile = useCallback((updates: Partial<UserProfile>) => {
     setProfile(prev => ({ ...prev, ...updates }));
-  }, []);
+    if (updates.name !== undefined || updates.emoji !== undefined || updates.lunchmateXp !== undefined) {
+      const nextProgress = updates.lunchmateXp === undefined
+        ? null
+        : getLunchmateProgressSnapshot(updates.lunchmateXp);
+      setFeedPosts(posts => posts.map(post => post.authorId === profile.id
+        ? {
+            ...post,
+            authorName: updates.name ?? post.authorName,
+            authorEmoji: updates.emoji ?? post.authorEmoji,
+            authorLevel: nextProgress?.level ?? post.authorLevel,
+            authorLevelName: nextProgress?.levelName ?? post.authorLevelName,
+          }
+        : post));
+    }
+  }, [profile.id]);
 
   const getRestaurantById = useCallback((id: string) => restaurants.find(r => r.id === id), [restaurants]);
   const getCourseById = useCallback((id: string) => courses.find(c => c.id === id), [courses]);
@@ -1471,13 +1573,13 @@ export function AppProvider({
 
   return (
     <AppContext.Provider value={{
-      courses, savedCourseIds, saveCourse, unsaveCourse, addCourse, updateCourse,
+      courses, savedCourseIds, saveCourse, unsaveCourse, addCourse, updateCourse, deleteCourseWithFeed,
       hiddenTemplateCourseIds, deleteProfileTemplate,
       currentSession, setCurrentSession, createSession, joinSession, fetchSession, toggleReady, startSession,
       swipeRecords, addSwipe, clearSessionSwipes, rerollSession, likedRestaurantIds,
       savedRestaurantIds, saveRestaurant, unsaveRestaurant,
       profile, updateProfile,
-      feedPosts, addFeedPost, updateFeedPost, deleteFeedPost,
+      feedPosts, addFeedPost, updateFeedPost, deleteFeedPost, incrementFeedShare,
       likedFeedIds, dislikedFeedIds, toggleFeedLike, toggleFeedDislike, addFeedComment,
       reactToFeedComment, reportFeedComment, toggleCommentHidden, isMyPost,
       courseSkins, setCourseSkin,

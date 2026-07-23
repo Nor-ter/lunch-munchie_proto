@@ -7,6 +7,7 @@ import {
   type RefObject,
 } from 'react';
 import { createPortal } from 'react-dom';
+import { acquireDocumentScrollLock } from '@/lib/documentScrollLock';
 import { AnimatePresence, motion } from 'framer-motion';
 import { Check, LockKeyhole, X } from 'lucide-react';
 import type { FoodieBuddyUiState } from '@/components/munchie/FoodieBuddy';
@@ -190,11 +191,15 @@ export default function LunchboxBottomSheet({
   };
 
   const handleFoodPointerDown = (
-    event: ReactPointerEvent<HTMLSpanElement>,
+    event: ReactPointerEvent<HTMLElement>,
     item: LunchboxFoodItem,
+    allowTouchDrag = true,
   ) => {
     if (!canDragLunchboxFood(item, flowState)) return;
     if (event.pointerType === 'mouse' && event.button !== 0) return;
+    // 모바일에서는 선택 전 세로 제스처를 목록 스크롤에 양보한다.
+    // 한 번 탭해 선택된 반찬칸만 touch drag를 시작할 수 있다.
+    if (event.pointerType === 'touch' && !allowTouchDrag) return;
 
     event.currentTarget.setPointerCapture(event.pointerId);
     pointerDragRef.current = {
@@ -206,7 +211,7 @@ export default function LunchboxBottomSheet({
     };
   };
 
-  const handleFoodPointerMove = (event: ReactPointerEvent<HTMLSpanElement>) => {
+  const handleFoodPointerMove = (event: ReactPointerEvent<HTMLElement>) => {
     const activeDrag = pointerDragRef.current;
     if (!activeDrag || activeDrag.pointerId !== event.pointerId) return;
 
@@ -230,7 +235,7 @@ export default function LunchboxBottomSheet({
     onFoodDragMove?.(payload);
   };
 
-  const handleFoodPointerUp = (event: ReactPointerEvent<HTMLSpanElement>) => {
+  const handleFoodPointerUp = (event: ReactPointerEvent<HTMLElement>) => {
     const activeDrag = pointerDragRef.current;
     if (!activeDrag || activeDrag.pointerId !== event.pointerId) return;
 
@@ -250,7 +255,7 @@ export default function LunchboxBottomSheet({
     clearPointerDrag();
   };
 
-  const handleFoodPointerCancel = (event: ReactPointerEvent<HTMLSpanElement>) => {
+  const handleFoodPointerCancel = (event: ReactPointerEvent<HTMLElement>) => {
     if (pointerDragRef.current?.pointerId !== event.pointerId) return;
     if (pointerDragRef.current.dragging) onFoodDragCancel?.();
     clearPointerDrag();
@@ -306,11 +311,7 @@ export default function LunchboxBottomSheet({
   useEffect(() => {
     if (!open) return;
 
-    const previousOverflow = document.body.style.overflow;
-    const appShell = document.querySelector<HTMLElement>('.app-shell');
-    const appShellWasInert = appShell?.hasAttribute('inert') ?? false;
-    document.body.style.overflow = 'hidden';
-    appShell?.setAttribute('inert', '');
+    const releaseScrollLock = acquireDocumentScrollLock({ inertSelector: '.app-shell' });
     const focusFrame = window.requestAnimationFrame(() => closeButtonRef.current?.focus());
     const handleKeyDown = (event: KeyboardEvent) => {
       if (event.key === 'Escape') {
@@ -346,8 +347,7 @@ export default function LunchboxBottomSheet({
     return () => {
       window.cancelAnimationFrame(focusFrame);
       window.removeEventListener('keydown', handleKeyDown);
-      document.body.style.overflow = previousOverflow;
-      if (!appShellWasInert) appShell?.removeAttribute('inert');
+      releaseScrollLock();
     };
   }, [open, onClose]);
 
@@ -404,7 +404,7 @@ export default function LunchboxBottomSheet({
                     나의 런치박스 🍱
                   </h2>
                   <p className="mt-1 text-[11px] leading-relaxed text-[#9B8376]">
-                    음식을 캐릭터에게 끌어주거나, 선택 후 한입 나누기를 눌러주세요.
+                    위아래로 밀어 메뉴를 보고, 탭한 음식은 통째로 끌어주세요.
                   </p>
                 </div>
                 <button
@@ -422,90 +422,91 @@ export default function LunchboxBottomSheet({
             {items.length > 0 ? (
               <>
                 <div
-                  className="min-h-0 flex-1 touch-pan-y overflow-y-auto overscroll-contain px-5 py-3"
+                  className="min-h-0 flex-1 touch-pan-y overflow-y-auto overscroll-contain px-5 py-3 [-webkit-overflow-scrolling:touch]"
                   role="radiogroup"
                   aria-label="한입 나누기 음식 선택"
+                  data-lunchbox-scroll-region="true"
                 >
-                  <div className="space-y-2.5">
-                    {items.map(item => {
-                      const selected = selectedId === item.id;
-                      const unavailable = item.quantity <= 0;
-                      const draggable = canDragLunchboxFood(item, flowState);
-                      return (
-                        <button
-                          key={item.id}
-                          type="button"
-                          role="radio"
-                          aria-checked={selected}
-                          aria-label={unavailable
-                            ? `${item.name}, 품절`
-                            : `${item.name}, 탭하여 선택하거나 런치메이트에게 드래그`}
-                          disabled={unavailable || isSubmitting}
-                          onClick={() => {
-                            if (suppressClickItemIdRef.current === item.id) {
-                              suppressClickItemIdRef.current = null;
-                              return;
-                            }
-                            setSelectedId(item.id);
-                            onFoodSelect(item);
-                          }}
-                          data-lunchbox-food-draggable={draggable ? 'true' : 'false'}
-                          className={`relative flex w-full items-center gap-3 rounded-2xl border p-3 text-left transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#E85053] ${
-                            selected
-                              ? 'border-[#E85053] bg-[#FFF4F2] shadow-sm'
-                              : 'border-[#EFE4DB] bg-[#FDFAF7]'
-                          } ${unavailable ? 'cursor-not-allowed opacity-50' : 'active:scale-[0.99]'}`}
-                        >
-                          <span
-                            className={`flex h-14 w-14 shrink-0 touch-none items-center justify-center overflow-hidden rounded-2xl bg-[#F5E7DC] text-[30px] ${
-                              draggable ? 'cursor-grab active:cursor-grabbing' : ''
-                            }`}
+                  <div
+                    className="relative overflow-hidden rounded-[28px] border-[5px] border-[#B52D32] bg-[#171313] p-2.5 shadow-[0_12px_24px_rgba(57,20,20,0.24)]"
+                    data-lunchbox-bento-tray="true"
+                  >
+                    <div className="pointer-events-none absolute inset-[5px] rounded-[20px] border border-[#E1A25A]/45" />
+                    <div className="mb-2 flex items-center justify-between px-1.5 text-[9px] font-black tracking-[0.18em] text-[#E9B66F]">
+                      <span>MY BENTO</span>
+                      <span className="tracking-normal text-[#F2DDD0]/55">お弁当</span>
+                    </div>
+                    <div className="grid grid-cols-2 gap-2">
+                      {items.map(item => {
+                        const selected = selectedId === item.id;
+                        const unavailable = item.quantity <= 0;
+                        const draggable = canDragLunchboxFood(item, flowState);
+                        return (
+                          <button
+                            key={item.id}
+                            type="button"
+                            role="radio"
+                            aria-checked={selected}
+                            aria-label={unavailable
+                              ? `${item.name}, 품절`
+                              : `${item.name}, 탭하여 선택하거나 런치메이트에게 드래그`}
+                            disabled={unavailable || isSubmitting}
+                            onClick={() => {
+                              if (suppressClickItemIdRef.current === item.id) {
+                                suppressClickItemIdRef.current = null;
+                                return;
+                              }
+                              setSelectedId(item.id);
+                              onFoodSelect(item);
+                            }}
                             onPointerDown={draggable
-                              ? event => handleFoodPointerDown(event, item)
+                              ? event => handleFoodPointerDown(event, item, selected)
                               : undefined}
                             onPointerMove={draggable ? handleFoodPointerMove : undefined}
                             onPointerUp={draggable ? handleFoodPointerUp : undefined}
                             onPointerCancel={draggable ? handleFoodPointerCancel : undefined}
-                            aria-hidden="true"
+                            data-lunchbox-food-draggable={draggable ? 'true' : 'false'}
+                            data-lunchbox-bento-compartment="true"
+                            data-lunchbox-touch-mode={selected ? 'drag' : 'scroll'}
+                            className={`relative flex min-h-[104px] flex-col items-center justify-center overflow-hidden rounded-[18px] border px-2 py-2.5 text-center transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#FFD18F] ${selected ? 'touch-none' : 'touch-pan-y'} ${
+                              selected
+                                ? 'border-[#FF5C62] bg-[#5A2023] shadow-[inset_0_0_0_2px_rgba(255,92,98,0.35)]'
+                                : 'border-[#594747] bg-[#292020] shadow-[inset_0_0_12px_rgba(0,0,0,0.35)]'
+                            } ${unavailable ? 'cursor-not-allowed opacity-45' : 'cursor-grab active:scale-[0.97] active:cursor-grabbing'}`}
                           >
-                            {item.image ? (
-                              <img src={item.image} alt="" className="h-full w-full object-cover" />
-                            ) : (
-                              <span aria-hidden="true">{item.placeholder ?? '🍽️'}</span>
+                            <span className="absolute right-2 top-2 flex h-5 min-w-5 items-center justify-center rounded-full bg-[#F8E8D8] px-1 text-[9px] font-black text-[#6E292B]">
+                              {unavailable ? <LockKeyhole size={10} /> : item.quantity}
+                            </span>
+                            {item.unseenQuantity > 0 && (
+                              <span className="absolute left-2 top-2 rounded-full bg-[#E85053] px-1.5 py-0.5 text-[8px] font-black leading-none text-white">
+                                NEW {item.unseenQuantity}
+                              </span>
                             )}
-                          </span>
-                          <span className="min-w-0 flex-1">
-                            <span className="flex items-center gap-1.5">
-                              <span className="truncate text-[14px] font-black text-[#362720]">{item.name}</span>
-                              {item.unseenQuantity > 0 && (
-                                <span className="shrink-0 rounded-full bg-[#E85053] px-1.5 py-0.5 text-[9px] font-black leading-none text-white">
-                                  NEW {item.unseenQuantity}
-                                </span>
+                            <span className="flex h-12 w-12 items-center justify-center overflow-hidden text-[38px] drop-shadow-[0_3px_3px_rgba(0,0,0,0.45)]" aria-hidden="true">
+                              {item.image ? (
+                                <img src={item.image} alt="" className="h-full w-full object-contain" />
+                              ) : (
+                                item.placeholder ?? '🍽️'
                               )}
                             </span>
-                            <span className="mt-1 block truncate text-[11px] text-[#8C776C]">
-                              {item.sourceLabel}
+                            <span className="mt-1 max-w-full truncate text-[11px] font-black text-[#FFF5EC]">
+                              {item.name}
                             </span>
-                            <span className="mt-1 flex items-center gap-2 text-[10px] font-bold">
-                              <span className={unavailable ? 'text-[#A99A91]' : 'text-[#5F4B40]'}>
-                                {unavailable ? '품절' : `보유 ${item.quantity}개`}
+                            <span className="mt-0.5 text-[9px] font-bold text-[#E9B66F]">
+                              {unavailable ? '품절' : `보유 ${item.quantity}개 · +${item.xpPreview} XP`}
+                            </span>
+                            {selected && (
+                              <span className="absolute bottom-2 right-2 flex h-5 w-5 items-center justify-center rounded-full bg-[#F04F55] text-white" aria-hidden="true">
+                                <Check size={12} />
                               </span>
-                              <span className="text-[#D78B42]">XP 미리보기 +{item.xpPreview}</span>
-                            </span>
-                          </span>
-                          <span
-                            className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-full border-2 ${
-                              selected
-                                ? 'border-[#E85053] bg-[#E85053] text-white'
-                                : 'border-[#DCCFC5] bg-white text-transparent'
-                            }`}
-                            aria-hidden="true"
-                          >
-                            {unavailable ? <LockKeyhole size={11} className="text-[#A99A91]" /> : <Check size={13} />}
-                          </span>
-                        </button>
-                      );
-                    })}
+                            )}
+                          </button>
+                        );
+                      })}
+                    </div>
+                    <p className="pb-0.5 pt-2 text-center text-[9px] font-bold text-[#E9B66F]/75">
+                      ↕ 위아래로 밀어 더 많은 음식을 확인하세요
+                    </p>
                   </div>
                 </div>
                 <footer className="sticky bottom-0 z-10 shrink-0 border-t border-[#F1E7E0] bg-white px-5 pb-[calc(0.75rem+env(safe-area-inset-bottom,0px))] pt-3">
@@ -537,7 +538,7 @@ export default function LunchboxBottomSheet({
                           : '한입 나누기'}
                   </button>
                   <p className="mt-2 text-center text-[10px] text-[#B09D92]">
-                    저장되지 않는 맛추억 미리보기예요.
+                    맛추억 XP는 미리보기이며, 나눈 음식은 1개 차감돼요.
                   </p>
                 </footer>
               </>

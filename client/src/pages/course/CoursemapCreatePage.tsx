@@ -3,7 +3,7 @@
  * ① 코스맵 정하기 — 해시태그·한줄평 + 숫자핀(최대 3) 지도검색 + 사진박스
  * ② 템플릿 선택·꾸미기 — 템플릿을 즉시 비교하며 사진 배치·크기·회전 조정
  * ③ 미리보기 — 게시 전 확인 (버튼 비활성)
- * ④ 포스팅 완료 — 주먹밥 보상 지급
+ * ④ 포스팅 완료 — 랜덤 런치박스 음식 보상 지급
  */
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
@@ -33,6 +33,10 @@ import { fileToResizedDataUrl } from '@/lib/imageUtils';
 import OneLineReviewBox from '@/components/munchie/OneLineReviewBox';
 import UnifiedMunchieCard from '@/components/munchie/UnifiedMunchieCard';
 import { TemplateBackgroundLayer, TemplateFrameLayer } from '@/components/munchie/TemplateLayers';
+import {
+  grantRandomLunchboxFood,
+  type LunchboxFoodDefinition,
+} from '@/constants/lunchboxFoods';
 
 const STEP_TITLES = [
   '코스맵을 정하세요',
@@ -313,7 +317,7 @@ function PinsStep({
 
 // ── ② 템플릿 꾸미기 (drag & drop) ─────────────────────────────────────────────
 
-function DecorateStep({
+export function DecorateStep({
   template, templateIndex, setTemplateIndex, placed, setPlaced, canvasStrokes, setCanvasStrokes, photoPool, onAddUpload, onRemoveFromPool, onEditPhoto,
 }: {
   template: CoursemapTemplate;
@@ -844,7 +848,7 @@ interface EditorText {
   y: number;
 }
 
-function photoFrameSizeForCropAspect(photo: PlacedPhoto, cropAspect: number) {
+export function photoFrameSizeForCropAspect(photo: PlacedPhoto, cropAspect: number) {
   const frameWidthToHeight = Math.max(0.2, Math.min(5, cropAspect)) * (4 / 3);
   let w = Math.max(14, Math.min(88, photo.w));
   let h = w / frameWidthToHeight;
@@ -855,7 +859,7 @@ function photoFrameSizeForCropAspect(photo: PlacedPhoto, cropAspect: number) {
   return { w, h };
 }
 
-function PhotoEditorModal({ src, originalSrc, cropAspect, onSave, onBack }: {
+export function PhotoEditorModal({ src, originalSrc, cropAspect, onSave, onBack }: {
   src: string;
   originalSrc: string;
   cropAspect: number;
@@ -1455,7 +1459,7 @@ export default function CoursemapCreatePage() {
   const search = useSearch();
   const sourceCourseId = new URLSearchParams(search).get('course');
   const {
-    profile, getCourseById, getRestaurantById, addCourse, addFeedPost,
+    profile, updateProfile, getCourseById, getRestaurantById, addCourse, addFeedPost,
   } = useApp();
 
   // 복사해서 가져오기 — 기존 코스의 장소·해시태그를 초기값으로
@@ -1487,7 +1491,10 @@ export default function CoursemapCreatePage() {
   const [uploads, setUploads] = useState<string[]>([]);
   const [hiddenPhotoSources, setHiddenPhotoSources] = useState<string[]>([]);
   const [editingPhotoId, setEditingPhotoId] = useState<string | null>(null);
-  const [rewardCount, setRewardCount] = useState<number | null>(null);
+  const [reward, setReward] = useState<{
+    food: LunchboxFoodDefinition;
+    quantity: number;
+  } | null>(null);
   const [publishedCourseId, setPublishedCourseId] = useState<string | null>(null);
 
   const filledPins = pins.filter((pin): pin is CoursePin => !!pin);
@@ -1610,13 +1617,10 @@ export default function CoursemapCreatePage() {
         tags: course.tags,
       });
 
-      // 보상 — 주먹밥 +1 (프로필 런치메이트 밥 주기용)
-      let riceballs = 0;
-      try {
-        riceballs = Number(localStorage.getItem('lm_riceball_count') ?? '0') + 1;
-        localStorage.setItem('lm_riceball_count', String(riceballs));
-      } catch { riceballs = 1; }
-      setRewardCount(riceballs);
+      // 보상은 프로필과 같은 인벤토리에 기록해 런치박스 보유 수량을 즉시 동기화한다.
+      const grantedReward = grantRandomLunchboxFood(profile.lunchboxInventory);
+      updateProfile({ lunchboxInventory: grantedReward.inventory });
+      setReward({ food: grantedReward.food, quantity: grantedReward.quantity });
       setPublishedCourseId(newId);
       setStep(3);
     } catch (error) {
@@ -1741,7 +1745,7 @@ export default function CoursemapCreatePage() {
               <p className="mt-3 text-[20px] font-black text-[#1A1A1A]">포스팅 완료!</p>
               <p className="mt-1 text-[12.5px] text-gray-400">먼치 피드에 코스맵이 올라갔어요</p>
 
-              {/* 보상 — 주먹밥 획득 */}
+              {/* 보상 — 랜덤 음식 획득 */}
               <motion.div
                 initial={{ opacity: 0, y: 14 }}
                 animate={{ opacity: 1, y: 0 }}
@@ -1753,12 +1757,14 @@ export default function CoursemapCreatePage() {
                   transition={{ duration: 1.6, repeat: Infinity, repeatDelay: 0.8 }}
                   className="text-5xl"
                 >
-                  🍙
+                  {reward?.food.placeholder ?? '🍱'}
                 </motion.div>
-                <p className="mt-2 text-[15px] font-black text-[#FF424B]">주먹밥 +1 획득!</p>
+                <p className="mt-2 text-[15px] font-black text-[#FF424B]">
+                  {reward ? `${reward.food.name} +1 획득!` : '랜덤 음식 +1 획득!'}
+                </p>
                 <p className="mt-1 text-[11.5px] leading-relaxed text-[#8D776C]">
-                  프로필의 런치메이트에게 밥을 줄 수 있어요
-                  {rewardCount != null && <><br />보유 주먹밥 <b className="text-[#3B2A22]">{rewardCount}개</b></>}
+                  프로필의 나의 런치박스에 바로 담았어요
+                  {reward && <><br />보유 {reward.food.name} <b className="text-[#3B2A22]">{reward.quantity}개</b></>}
                 </p>
               </motion.div>
 

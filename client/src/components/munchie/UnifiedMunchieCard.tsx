@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { AnimatePresence, motion } from 'framer-motion';
 import {
@@ -6,10 +6,12 @@ import {
   Flag,
   Map,
   MoreHorizontal,
+  Pencil,
   MessageCircle,
   Send,
   Share2,
   ThumbsUp,
+  Trash2,
   X,
 } from 'lucide-react';
 import { toast } from 'sonner';
@@ -19,6 +21,7 @@ import { getTemplateById, getTemplateForCourse, type CoursemapTemplate } from '@
 import { fromFeedPhotoPlacements, type CoursemapCanvasStroke, type PlacedPhoto } from '@/lib/coursemapDecor';
 import TemplateArtwork from '@/components/munchie/TemplateArtwork';
 import OneLineReviewBox from '@/components/munchie/OneLineReviewBox';
+import { acquireDocumentScrollLock } from '@/lib/documentScrollLock';
 
 function timeAgo(iso: string) {
   const days = Math.max(0, Math.floor((Date.now() - new Date(iso).getTime()) / 86_400_000));
@@ -61,17 +64,27 @@ export default function UnifiedMunchieCard({
     savedCourseIds,
     saveCourse,
     unsaveCourse,
+    deleteFeedPost,
+    isMyPost,
   } = useApp();
   const [comment, setComment] = useState('');
   const [commentExpanded, setCommentExpanded] = useState(false);
   const [replyingTo, setReplyingTo] = useState<{ id: string; authorName: string } | null>(null);
   const [commentMenuId, setCommentMenuId] = useState<string | null>(null);
   const [showPostMenu, setShowPostMenu] = useState(false);
+  const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
   const [postReported, setPostReported] = useState(() => {
     try { return JSON.parse(localStorage.getItem('lm_reported_feed_ids') ?? '[]').includes(post.id); }
     catch { return false; }
   });
   const linkedCourse = courseOverride ?? getCourseById(post.courseId);
+  const ownPost = isMyPost(post);
+  const authorProfilePath = ownPost ? '/profile' : `/profile/${post.authorId}`;
+
+  useEffect(() => {
+    if (!deleteConfirmOpen) return;
+    return acquireDocumentScrollLock({ inertSelector: '.app-shell' });
+  }, [deleteConfirmOpen]);
   // 오래된 피드가 API 코스 목록에 없더라도 한줄평과 사진은 사라지면 안 된다.
   const course: Course = linkedCourse ?? {
     id: post.courseId,
@@ -118,13 +131,78 @@ export default function UnifiedMunchieCard({
     setShowPostMenu(false);
     toast.success('게시물을 신고했어요. 검토 후 필요한 조치를 진행할게요.');
   };
+  const editPost = () => {
+    setShowPostMenu(false);
+    go(`/feed/${post.id}/edit?from=${detailOrigin}`);
+  };
+  const requestPostDelete = () => {
+    setShowPostMenu(false);
+    setDeleteConfirmOpen(true);
+  };
+  const confirmPostDelete = () => {
+    setDeleteConfirmOpen(false);
+    deleteFeedPost(post.id);
+    toast.success('게시물을 삭제했어요.');
+  };
+
+  const deleteConfirmation = typeof document !== 'undefined' && createPortal(
+    <AnimatePresence>
+      {deleteConfirmOpen && (
+        <motion.div
+          className="fixed inset-0 z-[140] flex items-center justify-center bg-[#2D1D18]/45 px-5"
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          role="presentation"
+          onClick={() => setDeleteConfirmOpen(false)}
+        >
+          <motion.section
+            role="alertdialog"
+            aria-modal="true"
+            aria-labelledby={`delete-post-title-${post.id}`}
+            initial={{ opacity: 0, y: 12, scale: 0.96 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: 8, scale: 0.97 }}
+            onClick={event => event.stopPropagation()}
+            className="relative w-full max-w-[330px] rounded-[24px] border border-[#F0D7CE] bg-[#FFFDFC] px-5 pb-5 pt-6 text-center shadow-[0_22px_60px_rgba(63,36,26,0.25)]"
+          >
+            <button
+              type="button"
+              onClick={() => setDeleteConfirmOpen(false)}
+              aria-label="게시물 삭제 창 닫기"
+              className="absolute right-3 top-3 flex h-8 w-8 items-center justify-center rounded-full bg-[#F7ECE7] text-[#80675C]"
+            >
+              <X size={16} />
+            </button>
+            <span className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-[#FFF0F0] text-[#D94447]">
+              <Trash2 size={22} />
+            </span>
+            <h2 id={`delete-post-title-${post.id}`} className="mt-3 text-[17px] font-black text-[#30221C]">
+              게시물을 삭제하시겠습니까?
+            </h2>
+            <p className="mt-1.5 text-[11px] font-semibold text-[#9A8277]">삭제한 게시물은 다시 복구할 수 없어요.</p>
+            <div className="mt-5 grid grid-cols-2 gap-2.5">
+              <button type="button" onClick={() => setDeleteConfirmOpen(false)} className="h-11 rounded-[14px] border border-[#DFD0C8] bg-white text-[13px] font-black text-[#69564D]">
+                취소
+              </button>
+              <button type="button" onClick={confirmPostDelete} className="h-11 rounded-[14px] bg-[#E85053] text-[13px] font-black text-white">
+                확인
+              </button>
+            </div>
+          </motion.section>
+        </motion.div>
+      )}
+    </AnimatePresence>,
+    document.body,
+  );
 
   if (compact) {
     return (
+      <>
       <article className={`relative overflow-hidden bg-[#FFFDFC] ${homeSummary ? 'rounded-[12px] border border-[#EFD0D4] shadow-[0_5px_14px_rgba(235,80,83,0.07)]' : 'rounded-[18px] border-2 border-[#EAD7CD] shadow-[0_7px_18px_rgba(123,76,53,0.1)]'}`} data-testid={`unified-munchie-card-${post.id}`}>
         <header className={`flex shrink-0 items-center gap-1 px-2 ${homeSummary ? 'h-9' : 'h-8'}`}>
-          <button type="button" onClick={() => go(`/profile/${post.authorId}`)} className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-white text-[9px] ${homeSummary ? 'border border-[#EB5053]' : 'border border-[#2F2926]'}`}>{post.authorEmoji}</button>
-          <button type="button" onClick={() => go(`/profile/${post.authorId}`)} className={`min-w-0 truncate text-left text-[10px] font-black ${homeSummary ? 'text-[#3E2922]' : 'text-[#342925]'}`}>{post.authorName}</button>
+          <button type="button" onClick={() => go(authorProfilePath)} className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-white text-[9px] ${homeSummary ? 'border border-[#EB5053]' : 'border border-[#2F2926]'}`}>{post.authorEmoji}</button>
+          <button type="button" onClick={() => go(authorProfilePath)} className={`min-w-0 truncate text-left text-[10px] font-black ${homeSummary ? 'text-[#3E2922]' : 'text-[#342925]'}`}>{post.authorName}</button>
           <span className={`shrink-0 text-[8px] font-medium ${homeSummary ? 'text-[#A36D6C]' : 'text-[#8B817B]'}`}>{timeAgo(post.createdAt)}</span>
           <span className="flex-1" />
           <button type="button" onClick={() => setShowPostMenu(value => !value)} aria-label="게시물 메뉴" className={`flex h-6 w-6 items-center justify-center ${homeSummary ? 'text-[#D94447]' : 'text-[#413733]'}`}><MoreHorizontal size={15} strokeWidth={3} /></button>
@@ -153,12 +231,23 @@ export default function UnifiedMunchieCard({
         <AnimatePresence>
           {showPostMenu && (
             <motion.div initial={{ opacity: 0, y: -4 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -4 }} className="absolute right-2 top-8 z-30 w-[112px] overflow-hidden rounded-xl border border-[#DACBC3] bg-white shadow-[0_8px_22px_rgba(57,38,29,0.16)]">
-              <button type="button" onClick={() => { setShowPostMenu(false); go(`/profile/${post.authorId}`); }} className="block h-9 w-full px-3 text-left text-[10px] font-bold text-[#51443E]">작성자 보기</button>
-              <button type="button" disabled={postReported} onClick={reportPost} className="block h-9 w-full border-t border-[#EEE3DD] px-3 text-left text-[10px] font-bold text-[#D84D52] disabled:text-[#A99D97]">{postReported ? '신고 완료' : '게시물 신고'}</button>
+              {ownPost ? (
+                <>
+                  <button type="button" onClick={editPost} className="flex h-9 w-full items-center gap-1.5 px-3 text-left text-[10px] font-bold text-[#51443E]"><Pencil size={12} />게시물 수정</button>
+                  <button type="button" onClick={requestPostDelete} className="flex h-9 w-full items-center gap-1.5 border-t border-[#EEE3DD] px-3 text-left text-[10px] font-bold text-[#D84D52]"><Trash2 size={12} />게시물 삭제</button>
+                </>
+              ) : (
+                <>
+                  <button type="button" onClick={() => { setShowPostMenu(false); go(`/profile/${post.authorId}`); }} className="block h-9 w-full px-3 text-left text-[10px] font-bold text-[#51443E]">작성자 보기</button>
+                  <button type="button" disabled={postReported} onClick={reportPost} className="block h-9 w-full border-t border-[#EEE3DD] px-3 text-left text-[10px] font-bold text-[#D84D52] disabled:text-[#A99D97]">{postReported ? '신고 완료' : '게시물 신고'}</button>
+                </>
+              )}
             </motion.div>
           )}
         </AnimatePresence>
       </article>
+      {deleteConfirmation}
+      </>
     );
   }
 
@@ -166,10 +255,10 @@ export default function UnifiedMunchieCard({
     <>
       <article className="relative overflow-hidden rounded-[20px] border border-[#E9D6CC] bg-[#FFFDFC] shadow-[0_10px_26px_rgba(117,73,51,0.09)]" data-testid={`unified-munchie-card-${post.id}`}>
         <header className="flex items-center gap-2.5 px-3 pb-2.5 pt-3">
-          <button type="button" onClick={() => go(`/profile/${post.authorId}`)} className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-[#F0BCAE] bg-[#FFF1EB] text-base">
+          <button type="button" onClick={() => go(authorProfilePath)} className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-[#F0BCAE] bg-[#FFF1EB] text-base">
             {post.authorEmoji}
           </button>
-          <button type="button" onClick={() => go(`/profile/${post.authorId}`)} className="min-w-0 text-left">
+          <button type="button" onClick={() => go(authorProfilePath)} className="min-w-0 text-left">
             <strong className="truncate text-[15px] font-black text-[#3E2922]">{post.authorName}</strong>
           </button>
           <span className="min-w-0 flex-1 truncate text-[11px] font-medium text-[#8C7B72]">{timeAgo(post.createdAt)}</span>
@@ -179,8 +268,17 @@ export default function UnifiedMunchieCard({
         <AnimatePresence>
           {showPostMenu && (
             <motion.div initial={{ opacity: 0, y: -5 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -5 }} className="absolute right-3 top-12 z-30 w-[126px] overflow-hidden rounded-xl border border-[#E3D2C9] bg-white shadow-[0_10px_24px_rgba(57,38,29,0.16)]">
-              <button type="button" onClick={() => { setShowPostMenu(false); go(`/profile/${post.authorId}`); }} className="block h-10 w-full px-3 text-left text-[11px] font-bold text-[#51443E]">작성자 보기</button>
-              <button type="button" disabled={postReported} onClick={reportPost} className="block h-10 w-full border-t border-[#EEE3DD] px-3 text-left text-[11px] font-bold text-[#D84D52] disabled:text-[#A99D97]">{postReported ? '신고 완료' : '게시물 신고'}</button>
+              {ownPost ? (
+                <>
+                  <button type="button" onClick={editPost} className="flex h-10 w-full items-center gap-2 px-3 text-left text-[11px] font-bold text-[#51443E]"><Pencil size={13} />게시물 수정</button>
+                  <button type="button" onClick={requestPostDelete} className="flex h-10 w-full items-center gap-2 border-t border-[#EEE3DD] px-3 text-left text-[11px] font-bold text-[#D84D52]"><Trash2 size={13} />게시물 삭제</button>
+                </>
+              ) : (
+                <>
+                  <button type="button" onClick={() => { setShowPostMenu(false); go(`/profile/${post.authorId}`); }} className="block h-10 w-full px-3 text-left text-[11px] font-bold text-[#51443E]">작성자 보기</button>
+                  <button type="button" disabled={postReported} onClick={reportPost} className="block h-10 w-full border-t border-[#EEE3DD] px-3 text-left text-[11px] font-bold text-[#D84D52] disabled:text-[#A99D97]">{postReported ? '신고 완료' : '게시물 신고'}</button>
+                </>
+              )}
             </motion.div>
           )}
         </AnimatePresence>
@@ -219,6 +317,8 @@ export default function UnifiedMunchieCard({
         </div>
 
       </article>
+
+      {deleteConfirmation}
 
       {typeof document !== 'undefined' && createPortal(
         <AnimatePresence>

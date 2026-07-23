@@ -1,7 +1,6 @@
 import { type Ref } from 'react';
 import { motion, useReducedMotion } from 'framer-motion';
 import { Sparkles } from 'lucide-react';
-import { getLunchmateLevelIcon } from '@/constants/lunchmateLevelIcons';
 import { getSkinById, MUNCHIE_SKINS, type MunchieSkin } from '@/constants/skins';
 import type { LunchmateProgressSnapshot } from '@/utils/lunchmateProgress';
 import LunchmateCharacterRenderer from '@/components/munchie/LunchmateCharacterRenderer';
@@ -53,6 +52,26 @@ export function foodieLevel(score: number): { level: FoodieLevel; index: number;
 
 const BUBBLES = ['냠냠 😋', '오늘 뭐 먹지?', '코스맵 더 줘!', '맛집 가고 싶다…', '먹부림 최고 🍴'];
 const LUNCHMATE_RENDER_SIZE = 86;
+
+function HangerIcon({ size = 17 }: { size?: number }) {
+  return (
+    <svg
+      data-icon="hanger"
+      width={size}
+      height={size}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2.2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <path d="M12 9V7a2 2 0 1 0-2-2" />
+      <path d="m12 9-8.2 6.7a1 1 0 0 0 .6 1.8h15.2a1 1 0 0 0 .6-1.8L12 9Z" />
+    </svg>
+  );
+}
 
 export type FoodieBuddyUiState =
   | 'idle'
@@ -146,17 +165,39 @@ export default function FoodieBuddy({
   const isFeeding = effectiveUiState === 'submitting' || isSharingAnimation;
   const isReaction = effectiveUiState === 'reaction';
   const unseenCountLabel = normalizedUnseenCount > 9 ? '9+' : String(normalizedUnseenCount);
-  const displayedLevel = progressSnapshot?.level ?? index + 1;
-  const displayedLevelName = progressSnapshot?.levelName ?? level.name;
-  const { Icon: LevelIcon } = getLunchmateLevelIcon(displayedLevel);
   const displayedIsMax = progressSnapshot?.isMaxLevel ?? fallbackIsMax;
   const displayedProgress = progressSnapshot
     ? Math.min(1, Math.max(0, progressSnapshot.progressPercent / 100))
     : progress;
-  const previousDisplayedProgress = progressSnapshot
-    && previousProgressSnapshot?.level === progressSnapshot.level
-    ? Math.min(1, Math.max(0, previousProgressSnapshot.progressPercent / 100))
-    : 0;
+  const isCompletingKimbapLine = Boolean(
+    isReaction
+    && progressSnapshot
+    && previousProgressSnapshot
+    && progressSnapshot.level > previousProgressSnapshot.level,
+  );
+  const kimbapSnapshot = isCompletingKimbapLine ? previousProgressSnapshot : progressSnapshot;
+  const kimbapStackSize = 5;
+  const kimbapProgress = kimbapSnapshot?.isMaxLevel
+    ? 1
+    : Math.min(1, Math.max(0, (kimbapSnapshot?.progressPercent ?? displayedProgress * 100) / 100));
+  const kimbapCountForProgress = (value: number) => {
+    if (value >= 1) return kimbapStackSize;
+    if (value <= 0) return 0;
+    return Math.min(kimbapStackSize - 1, Math.ceil(value * (kimbapStackSize - 1)));
+  };
+  const filledKimbapCount = isCompletingKimbapLine
+    ? kimbapStackSize
+    : levelUpActive
+      ? 0
+    : kimbapCountForProgress(kimbapProgress);
+  const previousKimbapProgress = previousProgressSnapshot?.isMaxLevel
+    ? 1
+    : Math.min(1, Math.max(0, (previousProgressSnapshot?.progressPercent ?? 0) / 100));
+  const previousFilledKimbapCount = isCompletingKimbapLine
+    ? kimbapCountForProgress(previousKimbapProgress)
+    : progressSnapshot && previousProgressSnapshot?.level === progressSnapshot.level
+      ? kimbapCountForProgress(previousKimbapProgress)
+      : 0;
   const progressLabel = progressSnapshot
     ? progressSnapshot.isMaxLevel
       ? `${progressSnapshot.totalXp} 맛추억 · MAX`
@@ -164,9 +205,6 @@ export default function FoodieBuddy({
     : next
       ? `다음 진화까지 ${next.min - score}점`
       : 'MAX 🎖️';
-  const reactionProgressLabel = progressSnapshot
-    ? `+${lastXpGain} XP · ${progressLabel}`
-    : `맛추억 미리보기 +${lastXpGain} XP`;
   // idle 말풍선은 점수 기반으로 고정하고, mock flow 상태에서만 짧은 안내로 교체한다.
   const bubble = isFoodDragOver
     ? '여기에 놓아주세요!'
@@ -214,69 +252,115 @@ export default function FoodieBuddy({
           style={{ height: 30, background: 'rgba(255,255,255,0.55)', borderTop: `1.5px dashed ${skin.accent}55` }}
         />
 
-        {/* 레벨 배지 + 진화 게이지 */}
-        <button
+        {/* EXP 수치 + 왼쪽 세로 김밥 스택 */}
+        <motion.button
           ref={progressButtonRef}
           type="button"
           onClick={onProgressOpen}
           tabIndex={onProgressOpen ? 0 : -1}
           aria-disabled={!onProgressOpen}
           aria-label="맛추억 미리보기 상세"
-          className={`absolute left-2.5 top-2.5 z-20 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white ${
+          className={`absolute bottom-2.5 left-2.5 top-2.5 z-20 flex w-[38px] flex-col items-center rounded-[17px] border border-white/80 bg-white/75 px-1 py-1.5 shadow-sm backdrop-blur-[2px] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white ${
             onProgressOpen ? 'pointer-events-auto cursor-pointer' : 'pointer-events-none'
           }`}
+          animate={isCompletingKimbapLine || levelUpActive
+            ? motionIsReduced
+              ? { x: 0, rotate: 0 }
+              : { x: [0, -2, 2, -2, 2, 0], rotate: [0, -1.2, 1.2, -1, 1, 0] }
+            : { x: 0, rotate: 0 }}
+          transition={{ duration: motionIsReduced ? 0 : 0.42, ease: 'easeInOut' }}
         >
-          <span
-            className="inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-[11px] font-black"
-            style={{ background: 'rgba(255,255,255,0.9)', color: skin.accent }}
-          >
-            <LevelIcon size={12} strokeWidth={2.6} aria-hidden="true" />
-            Lv.{displayedLevel} {displayedLevelName}
+          <span className="text-[8px] font-black tracking-[0.08em]" style={{ color: skin.accent }}>
+            EXP
           </span>
+          <span className="mt-0.5 text-[7px] font-black leading-none text-[#49372E]">
+            {progressSnapshot?.isMaxLevel ? 'MAX' : `${progressSnapshot?.xpIntoCurrentLevel ?? 0}/${progressSnapshot?.xpRequiredForNextLevel ?? 0}`}
+          </span>
+
           <div
-            className="relative mt-1.5 h-[7px] w-[112px] overflow-hidden rounded-full"
-            style={{
-              background: 'rgba(255,255,255,0.88)',
-              boxShadow: 'inset 0 0 0 1px rgba(73,55,46,0.14)',
-            }}
+            role="progressbar"
+            aria-label={`김밥 EXP ${progressLabel}`}
+            aria-valuemin={0}
+            aria-valuemax={kimbapSnapshot?.isMaxLevel ? 1 : kimbapSnapshot?.xpRequiredForNextLevel ?? 100}
+            aria-valuenow={kimbapSnapshot?.isMaxLevel ? 1 : kimbapSnapshot?.xpIntoCurrentLevel ?? 0}
+            className="relative mt-1 min-h-0 w-[30px] flex-1"
           >
-            <motion.div
-              className="h-full rounded-full"
-              style={{
-                background: skin.accent,
-                boxShadow: '0 0 0 1px rgba(73,55,46,0.18)',
-              }}
-              initial={{ width: 0 }}
-              animate={{ width: `${displayedProgress * 100}%` }}
-              transition={{ duration: 0.8, ease: 'easeOut' }}
-            />
-            {isReaction && (
+            <span aria-hidden="true" className="absolute bottom-0 left-1/2 h-[5px] w-[26px] -translate-x-1/2 rounded-full bg-[#49372E]/15" />
+
+            {Array.from({ length: filledKimbapCount }, (_, index) => {
+              const newlyFilled = index >= previousFilledKimbapCount;
+              return (
+                <motion.span
+                  key={`${kimbapSnapshot?.level ?? 0}-${index}`}
+                  aria-hidden="true"
+                  className="absolute left-1/2 block h-[20px] w-[28px] -translate-x-1/2 drop-shadow-[0_2px_1px_rgba(52,38,28,0.18)]"
+                  style={{ bottom: 3 + index * 15, zIndex: index + 1 }}
+                  initial={newlyFilled && !motionIsReduced ? { y: -18, scale: 0.6, opacity: 0 } : false}
+                  animate={{ y: 0, scale: 1, opacity: 1 }}
+                  transition={{
+                    delay: newlyFilled ? Math.min(0.3, (index - previousFilledKimbapCount) * 0.08) : 0,
+                    type: 'spring',
+                    stiffness: 380,
+                    damping: 16,
+                  }}
+                >
+                  <span className="absolute bottom-0 left-[1px] right-[1px] h-[14px] rounded-b-[8px] bg-[#171715]" />
+                  <span className="absolute left-0 top-0 h-[11px] w-full rounded-[50%] border-[2px] border-[#171715] bg-[#FFFDF1]">
+                    <span className="absolute left-[5px] top-[2px] h-[4px] w-[6px] rounded-full bg-[#79AF45]" />
+                    <span className="absolute left-[10px] top-[1px] h-[5px] w-[6px] rounded-full bg-[#F4C443]" />
+                    <span className="absolute right-[5px] top-[2px] h-[4px] w-[6px] rounded-full bg-[#B17842]" />
+                    <span className="absolute bottom-[1px] left-[7px] h-[4px] w-[6px] rounded-full bg-[#E66A47]" />
+                    <span className="absolute bottom-[1px] right-[7px] h-[4px] w-[6px] rounded-full bg-[#9C532E]" />
+                  </span>
+                </motion.span>
+              );
+            })}
+
+            {(isCompletingKimbapLine || levelUpActive) && (
               <motion.div
-                className="absolute inset-y-0 left-0 rounded-full bg-[#F5A623]"
-                initial={{ width: `${previousDisplayedProgress * 100}%` }}
-                animate={{ width: `${displayedProgress * 100}%` }}
-                transition={{ duration: 0.55, ease: 'easeOut' }}
+                aria-hidden="true"
+                className="pointer-events-none absolute inset-0 rounded-[14px] border-2 border-[#FFD34E]"
+                initial={{ opacity: 0, scale: 0.92 }}
+                animate={motionIsReduced ? { opacity: [0, 1, 0] } : { opacity: [0, 1, 0.35, 1, 0], scale: [0.92, 1.08, 1, 1.04, 1.1] }}
+                transition={{ duration: motionIsReduced ? 0.35 : 0.8, ease: 'easeOut' }}
               />
             )}
           </div>
-          <p
-            className="mt-1 inline-flex rounded-full bg-white/90 px-1.5 py-0.5 text-[10px] font-bold shadow-sm"
-            style={{ color: '#49372E' }}
-          >
-            {isReaction ? reactionProgressLabel : progressLabel}
-          </p>
-        </button>
+
+          {isReaction && lastXpGain > 0 && !isCompletingKimbapLine && (
+            <motion.span
+              className="absolute -right-5 top-8 rounded-full bg-[#E85053] px-1.5 py-0.5 text-[8px] font-black text-white shadow-sm"
+              initial={{ opacity: 0, y: 6, scale: 0.7 }}
+              animate={{ opacity: [0, 1, 1, 0], y: [6, 0, -3, -9], scale: [0.7, 1.08, 1, 0.9] }}
+              transition={{ duration: 1.05, ease: 'easeOut' }}
+            >
+              +{lastXpGain}
+            </motion.span>
+          )}
+
+          {(isCompletingKimbapLine || levelUpActive) && (
+            <motion.span
+              aria-hidden="true"
+              className="pointer-events-none absolute -right-3 top-4 text-[#FFD34E] drop-shadow-sm"
+              initial={{ opacity: 0, rotate: -30, scale: 0.4 }}
+              animate={{ opacity: [0, 1, 0.4, 1, 0], rotate: [-30, 10, -8, 16, 28], scale: [0.4, 1.25, 0.85, 1.1, 0.6] }}
+              transition={{ duration: 0.85, ease: 'easeOut' }}
+            >
+              <Sparkles size={16} fill="currentColor" />
+            </motion.span>
+          )}
+        </motion.button>
 
         {/* 배너 전체가 아닌 이 명시적인 버튼만 Room으로 이동한다. */}
         <button
           type="button"
           onClick={openFoodieRoom}
           disabled={profileMotion.grab.isActive}
-          className="absolute right-2.5 top-2.5 z-20 rounded-full px-2.5 py-1 text-[10px] font-bold shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white disabled:cursor-default"
+          className="absolute right-2.5 top-2.5 z-20 flex h-8 w-8 items-center justify-center rounded-full shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white disabled:cursor-default"
           style={{ background: 'rgba(255,255,255,0.85)', color: skin.sub }}
-          aria-label="런치메이트룸 열기"
+          aria-label="런치메이트 룸 열기"
         >
-          🎨 런치메이트룸
+          <HangerIcon />
         </button>
 
         {/* 런치박스 영역 — 새 음식 상태와 Sheet 진입점을 기존 배너 안에 겹쳐 표시한다. */}

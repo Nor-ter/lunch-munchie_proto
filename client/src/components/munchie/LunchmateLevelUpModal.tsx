@@ -10,6 +10,7 @@ import type {
   LunchmateSlot,
 } from '@/types/lunchmateCustomization';
 import type { LunchmateLevelUpEvent } from '@/utils/lunchmateProgress';
+import { acquireDocumentScrollLock } from '@/lib/documentScrollLock';
 
 const SLOT_LABELS: Readonly<Record<LunchmateSlot, string>> = {
   outfit: '의상',
@@ -62,11 +63,7 @@ export default function LunchmateLevelUpModal({
   useEffect(() => {
     if (!open) return;
 
-    const previousOverflow = document.body.style.overflow;
-    const appShell = document.querySelector<HTMLElement>('.app-shell');
-    const appShellWasInert = appShell?.hasAttribute('inert') ?? false;
-    document.body.style.overflow = 'hidden';
-    appShell?.setAttribute('inert', '');
+    const releaseScrollLock = acquireDocumentScrollLock({ inertSelector: '.app-shell' });
     const focusFrame = window.requestAnimationFrame(() => confirmButtonRef.current?.focus());
 
     const handleKeyDown = (keyboardEvent: KeyboardEvent) => {
@@ -85,8 +82,7 @@ export default function LunchmateLevelUpModal({
     return () => {
       window.cancelAnimationFrame(focusFrame);
       window.removeEventListener('keydown', handleKeyDown);
-      document.body.style.overflow = previousOverflow;
-      if (!appShellWasInert) appShell?.removeAttribute('inert');
+      releaseScrollLock();
     };
   }, [open, onClose]);
 

@@ -805,8 +805,9 @@ describe('Profile motion integration contract', () => {
     expect(FOODIE_BUDDY_SOURCE).not.toContain(
       'className="absolute inset-0 z-0 rounded-3xl bg-transparent',
     );
-    expect(FOODIE_BUDDY_SOURCE.match(/aria-label="런치메이트룸 열기"/g))
+    expect(FOODIE_BUDDY_SOURCE.match(/aria-label="런치메이트 룸 열기"/g))
       .toHaveLength(1);
+    expect(FOODIE_BUDDY_SOURCE).toContain('data-icon="hanger"');
     expect(FOODIE_BUDDY_SOURCE).toContain('onClick={openFoodieRoom}');
     expect(FOODIE_BUDDY_SOURCE).toContain('type="button"');
     expect(FOODIE_BUDDY_SOURCE).toContain(

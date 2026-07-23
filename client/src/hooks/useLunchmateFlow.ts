@@ -8,7 +8,7 @@ import {
   type LunchmateLevelUpEvent,
 } from '@/utils/lunchmateProgress';
 
-const FAIL_ONCE_FOOD_ID = 'preview-strawberry-cake';
+const FAIL_ONCE_FOOD_ID = 'strawberry-cake';
 
 class LunchmateMockError extends Error {}
 
@@ -53,17 +53,27 @@ async function shareBiteMock(item: LunchboxFoodItem, attempt: number, signal: Ab
 
 interface UseLunchmateFlowOptions {
   initialState?: FoodieBuddyUiState;
+  initialXp?: number;
   onSuccessClose: () => void;
+  onShareSuccess?: (item: LunchboxFoodItem) => void;
+  onXpChange?: (totalXp: number) => void;
 }
 
 export function useLunchmateFlow({
   initialState = 'foodAvailable',
+  initialXp = 0,
   onSuccessClose,
+  onShareSuccess,
+  onXpChange,
 }: UseLunchmateFlowOptions) {
+  const normalizedInitialXp = Math.min(
+    LUNCHMATE_PREVIEW_MAX_XP,
+    Number.isFinite(initialXp) ? Math.max(0, initialXp) : 0,
+  );
   const [state, setState] = useState<FoodieBuddyUiState>(initialState);
   const [selectedFood, setSelectedFood] = useState<LunchboxFoodItem | null>(null);
-  const [previewXp, setPreviewXp] = useState(0);
-  const [previousPreviewXp, setPreviousPreviewXp] = useState(0);
+  const [previewXp, setPreviewXp] = useState(normalizedInitialXp);
+  const [previousPreviewXp, setPreviousPreviewXp] = useState(normalizedInitialXp);
   const [lastXpGain, setLastXpGain] = useState(0);
   const [resultMessage, setResultMessage] = useState<string>();
   const [errorMessage, setErrorMessage] = useState<string>();
@@ -71,7 +81,7 @@ export function useLunchmateFlow({
   const attemptsRef = useRef(new Map<string, number>());
   const activeControllerRef = useRef<AbortController | null>(null);
   const isRunningRef = useRef(false);
-  const previewXpRef = useRef(0);
+  const previewXpRef = useRef(normalizedInitialXp);
 
   useEffect(() => () => activeControllerRef.current?.abort(), []);
 
@@ -105,6 +115,21 @@ export function useLunchmateFlow({
     setLevelUpEvent(null);
   }, []);
 
+  const resetProgress = useCallback(() => {
+    activeControllerRef.current?.abort();
+    activeControllerRef.current = null;
+    isRunningRef.current = false;
+    previewXpRef.current = 0;
+    setPreviewXp(0);
+    setPreviousPreviewXp(0);
+    setLastXpGain(0);
+    setSelectedFood(null);
+    setResultMessage(undefined);
+    setErrorMessage(undefined);
+    setLevelUpEvent(null);
+    setState(initialState);
+  }, [initialState]);
+
   const shareFood = useCallback(async (item: LunchboxFoodItem) => {
     if (isRunningRef.current || item.quantity <= 0) return;
 
@@ -125,6 +150,7 @@ export function useLunchmateFlow({
       const nextLevelUpEvent = getLunchmateLevelUpEvent(previousXp, nextXp);
       setLastXpGain(result.xpGained);
       setResultMessage(result.message);
+      onShareSuccess?.(item);
       onSuccessClose();
 
       // Sheet exit(0.3s) 뒤에 전달 표현을 시작해 overlay에 가려지지 않게 한다.
@@ -134,6 +160,7 @@ export function useLunchmateFlow({
       previewXpRef.current = nextXp;
       setPreviousPreviewXp(previousXp);
       setPreviewXp(nextXp);
+      onXpChange?.(nextXp);
       setState('reaction');
 
       await waitForMock(650, controller.signal);
@@ -152,7 +179,7 @@ export function useLunchmateFlow({
         isRunningRef.current = false;
       }
     }
-  }, [onSuccessClose]);
+  }, [onShareSuccess, onSuccessClose, onXpChange]);
 
   return {
     state,
@@ -169,5 +196,6 @@ export function useLunchmateFlow({
     shareFood,
     cancel,
     acknowledgeLevelUp,
+    resetProgress,
   };
 }

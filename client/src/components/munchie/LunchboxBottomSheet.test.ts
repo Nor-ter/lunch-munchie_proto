@@ -122,6 +122,12 @@ describe('Lunchbox pointer feeding integration contract', () => {
     expect(SHEET_SOURCE).toContain('onFoodSelect(item)');
     expect(SHEET_SOURCE).toContain('selectedItem && onShare(selectedItem)');
     expect(SHEET_SOURCE).toContain("data-lunchbox-food-draggable={draggable ? 'true' : 'false'}");
+    expect(SHEET_SOURCE).toContain('data-lunchbox-bento-tray="true"');
+    expect(SHEET_SOURCE).toContain('data-lunchbox-bento-compartment="true"');
+    expect(SHEET_SOURCE).toContain('handleFoodPointerDown(event, item, selected)');
+    expect(SHEET_SOURCE).toContain("event.pointerType === 'touch' && !allowTouchDrag");
+    expect(SHEET_SOURCE).toContain("data-lunchbox-touch-mode={selected ? 'drag' : 'scroll'}");
+    expect(SHEET_SOURCE).toContain('data-lunchbox-scroll-region="true"');
   });
 
   it('selects before sharing a valid drop and guards duplicate execution', () => {
@@ -145,13 +151,13 @@ describe('Lunchbox pointer feeding integration contract', () => {
     expect(FOODIE_BUDDY_SOURCE).toContain("resultMessage ?? '맛있는 한입 고마워! 😋'");
   });
 
-  it('keeps fixture quantities and the preview-only flow immutable', () => {
-    expect(PROFILE_SOURCE).toContain("id: 'preview-onigiri'");
-    expect(PROFILE_SOURCE).toContain('quantity: 2');
-    expect(PROFILE_SOURCE).toContain("id: 'preview-strawberry-cake'");
-    expect(PROFILE_SOURCE).toContain('quantity: 1');
-    expect(PROFILE_SOURCE).toContain("id: 'preview-ramen'");
-    expect(PROFILE_SOURCE).toContain('quantity: 0');
+  it('renders and consumes profile inventory only after a successful share', () => {
+    expect(PROFILE_SOURCE).toContain('getLunchboxFoodItems(lunchboxInventory)');
+    expect(PROFILE_SOURCE).toContain('items={lunchboxFoodItems}');
+    expect(PROFILE_SOURCE).toContain('markLunchboxFoodSeen(lunchboxInventory)');
+    expect(PROFILE_SOURCE).toContain('consumeLunchboxFood(lunchboxInventory, item.id)');
+    expect(PROFILE_SOURCE).toContain('onShareSuccess: consumeSharedFood');
+    expect(FLOW_SOURCE).toContain('onShareSuccess?.(item)');
     expect(FLOW_SOURCE).not.toContain('quantity -');
     expect(FLOW_SOURCE).not.toContain('localStorage');
     expect(FLOW_SOURCE).toContain('setPreviewXp(nextXp)');
@@ -187,7 +193,7 @@ describe('Lunchbox pointer feeding integration contract', () => {
 
   it('keeps the feeding guidance and lowers only the backdrop contrast while dragging', () => {
     expect(SHEET_SOURCE).toContain(
-      '음식을 캐릭터에게 끌어주거나, 선택 후 한입 나누기를 눌러주세요.',
+      '위아래로 밀어 메뉴를 보고, 탭한 음식은 통째로 끌어주세요.',
     );
     expect(SHEET_SOURCE).toContain("dragPreview ? 'bg-black/[0.32]' : 'bg-black/40'");
   });

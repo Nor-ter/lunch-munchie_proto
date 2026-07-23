@@ -621,7 +621,8 @@ describe('Lunchmate food flow and presentation contracts', () => {
     expect(foodieBuddySource).toContain('animated={false}');
     expect(foodieBuddySource).toContain('const LUNCHMATE_RENDER_SIZE = 86');
     expect(foodieBuddySource).toContain("height: 'clamp(144px, 38vw, 150px)'");
-    expect(foodieBuddySource).toContain("background: 'rgba(255,255,255,0.88)'");
+    expect(foodieBuddySource).toContain("background: 'rgba(255,255,255,0.85)'");
+    expect(foodieBuddySource).toContain('aria-label={`김밥 EXP ${progressLabel}`}');
     expect(foodieBuddySource).not.toContain('👀→');
     expect(foodieBuddySource).not.toContain('wanderRef');
     expect(foodieBuddySource).not.toContain('bounceRef');

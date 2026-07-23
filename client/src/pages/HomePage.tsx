@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { AnimatePresence, motion } from 'framer-motion';
+import { AnimatePresence, motion, useReducedMotion } from 'framer-motion';
 import { ArrowRight, Bell, MapPin, MessageCircle, ThumbsDown, ThumbsUp, X } from 'lucide-react';
 import { useLocation, useSearch } from 'wouter';
 import {
@@ -8,9 +8,11 @@ import {
   type ApiRequestAuth,
   useApp,
 } from '@/contexts/AppContext';
-import LunchkinCharacter from '@/components/munchie/LunchkinCharacter';
+import LunchmateCharacterRenderer from '@/components/munchie/LunchmateCharacterRenderer';
 import UnifiedMunchieCard from '@/components/munchie/UnifiedMunchieCard';
 import HeaderIconButton, { HeaderActionRow } from '@/components/ui/HeaderIconButton';
+import { lunchmateLoadoutFromProfile } from '@/utils/lunchmateProfile';
+import type { LunchmateLoadout } from '@/types/lunchmateCustomization';
 
 type JourneyStop = {
   restaurant_id: string;
@@ -78,6 +80,44 @@ function SteamWisps() {
         />
       ))}
     </span>
+  );
+}
+
+function HomeLunchmate({ loadout }: { loadout: LunchmateLoadout }) {
+  const reducedMotion = useReducedMotion() ?? false;
+  const [blinking, setBlinking] = useState(false);
+
+  useEffect(() => {
+    if (reducedMotion) return;
+
+    let blinkTimer = 0;
+    let reopenTimer = 0;
+    const scheduleBlink = () => {
+      blinkTimer = window.setTimeout(() => {
+        setBlinking(true);
+        reopenTimer = window.setTimeout(() => {
+          setBlinking(false);
+          scheduleBlink();
+        }, 150);
+      }, 2_800 + Math.random() * 1_800);
+    };
+    scheduleBlink();
+
+    return () => {
+      window.clearTimeout(blinkTimer);
+      window.clearTimeout(reopenTimer);
+    };
+  }, [reducedMotion]);
+
+  return (
+    <LunchmateCharacterRenderer
+      flowState="idle"
+      artwork="chicken"
+      chickenAssetKeyOverride={blinking ? 'sleepy' : 'idle'}
+      loadout={loadout}
+      size={66}
+      alt="내 코스튬을 입고 눈을 깜빡이는 런치메이트"
+    />
   );
 }
 
@@ -169,7 +209,7 @@ function LunchieLandingCard() {
         onClick={() => navigate(`/lunchie/settings?intent=${selectedCard.intent}`)}
         whileHover={{ y: -2, scale: 1.025 }}
         whileTap={{ scale: 0.97 }}
-        className="relative z-10 mt-1 flex h-12 w-[64%] shrink-0 items-center justify-center rounded-[11px] border-[0.75px] border-[#D94447] bg-[#EB5053] px-4 text-[16px] font-black text-white shadow-[0_9px_20px_rgba(201,59,62,0.26)]"
+        className="relative z-10 mt-[-6px] flex h-12 w-[64%] shrink-0 items-center justify-center rounded-[11px] border-[0.75px] border-[#D94447] bg-[#EB5053] px-4 text-[16px] font-black text-white shadow-[0_9px_20px_rgba(201,59,62,0.26)]"
       >
         Quick Match!
       </motion.button>
@@ -181,6 +221,10 @@ export default function HomePage() {
   const [, navigate] = useLocation();
   const search = useSearch();
   const { feedPosts, profile, isMyPost } = useApp();
+  const homeLunchmateLoadout = useMemo(
+    () => lunchmateLoadoutFromProfile(profile.lunchmateLoadout),
+    [profile.lunchmateLoadout],
+  );
   const [journeyStops, setJourneyStops] = useState<JourneyStop[]>([]);
   const [notificationsOpen, setNotificationsOpen] = useState(false);
   const [readNotificationIds, setReadNotificationIds] = useState<string[]>(() => {
@@ -288,7 +332,7 @@ export default function HomePage() {
         </HeaderActionRow>
 
         <div data-ui="home-heading-group" className="mx-5 mt-[30px] flex items-center justify-evenly">
-          <LunchkinCharacter size={60} />
+          <HomeLunchmate loadout={homeLunchmateLoadout} />
           <h1 data-ui="home-heading" className="w-fit min-w-0 max-w-[calc(100%-84px)] shrink text-center text-[22px] font-bold leading-[1.45] tracking-[-0.04em] text-[#935B5C]">
             <span className="block">런치로 같이 메뉴 정하기!</span>
             <span className="block">먼치로 함께 맛집 코스 탐방!</span>

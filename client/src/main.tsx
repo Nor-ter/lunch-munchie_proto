@@ -1,6 +1,9 @@
 import { createRoot } from "react-dom/client";
 import App from "./App";
 import "./index.css";
+import { clearStaleDocumentScrollLock } from "./lib/documentScrollLock";
+
+clearStaleDocumentScrollLock();
 
 const analyticsEndpoint = import.meta.env.VITE_ANALYTICS_ENDPOINT;
 const analyticsWebsiteId = import.meta.env.VITE_ANALYTICS_WEBSITE_ID;

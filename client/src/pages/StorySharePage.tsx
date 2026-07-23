@@ -31,7 +31,7 @@ const maxPhotoY = (size: number) => REVIEW_AREA_TOP - (photoHeightPercent(size) 
 export default function StorySharePage() {
   const { id } = useParams<{ id: string }>();
   const [, navigate] = useLocation();
-  const { getCourseById, getRestaurantById, feedPosts } = useApp();
+  const { getCourseById, getRestaurantById, feedPosts, incrementFeedShare } = useApp();
   const { captureCard, copyLink, downloadImage, saveImageToDevice } = useCourseShare();
   const [selectedIndex, setSelectedIndex] = useState(0);
   const [sharing, setSharing] = useState(false);
@@ -99,6 +99,7 @@ export default function StorySharePage() {
     try {
       setSharing(true);
       const delivery = await saveImageToDevice(cardRef, `munchie-story-${course.id}.png`, { preferNativeShare: true });
+      if (delivery === 'share' && post) incrementFeedShare(post.id);
       toast.success(delivery === 'share' ? '인스타그램을 선택해 스토리에 공유하세요.' : '스토리 이미지가 저장됐어요.');
     } catch (error) {
       if (error instanceof DOMException && error.name === 'AbortError') return;
@@ -124,6 +125,7 @@ export default function StorySharePage() {
   const copyCourseLink = async () => {
     try {
       await copyLink(course.id);
+      if (post) incrementFeedShare(post.id);
       toast.success('먼치맵 링크를 복사했어요.');
     } catch {
       toast.error('링크를 복사하지 못했어요.');
