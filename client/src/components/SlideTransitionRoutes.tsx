@@ -1,4 +1,11 @@
-import { type ReactNode, type ReactElement, cloneElement, isValidElement, useRef } from "react";
+import {
+  type ReactNode,
+  type ReactElement,
+  cloneElement,
+  isValidElement,
+  useLayoutEffect,
+  useRef,
+} from "react";
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import { useLocation } from "wouter";
 
@@ -23,6 +30,63 @@ function getSlideDirection(from: string | undefined, to: string): number {
 
 const slideEase = [0.32, 0.72, 0, 1] as const;
 const DURATION = 0.42;
+const FEED_SCROLL_STORAGE_KEY = "lm:scroll:/feed";
+
+function readFeedScrollTop() {
+  if (typeof window === "undefined") return 0;
+  const value = Number(window.sessionStorage.getItem(FEED_SCROLL_STORAGE_KEY));
+  return Number.isFinite(value) && value > 0 ? value : 0;
+}
+
+function saveFeedScrollTop(value: number) {
+  if (typeof window === "undefined") return;
+  window.sessionStorage.setItem(FEED_SCROLL_STORAGE_KEY, String(Math.max(0, value)));
+}
+
+export function isFeedListLocation(location: string) {
+  const pathname = location.split(/[?#]/, 1)[0];
+  return pathname === "/feed";
+}
+
+/**
+ * 각 라우트 인스턴스가 자기 스크롤 컨테이너를 소유한다.
+ * 피드 → 상세 → 피드 복귀 시 새 피드 인스턴스가 이전 scrollTop을 복원하며,
+ * 나가는 화면과 들어오는 화면이 AnimatePresence 안에 동시에 있어도 ref가 섞이지 않는다.
+ */
+function RouteScrollLayer({ location, children }: { location: string; children: ReactNode }) {
+  const scrollRef = useRef<HTMLDivElement>(null);
+  // 템플릿 상세의 뒤로가기는 `/feed?tab=template`로 복귀한다.
+  // 쿼리와 무관하게 피드 목록은 하나의 스크롤 위치를 공유해야 한다.
+  const isFeed = isFeedListLocation(location);
+
+  useLayoutEffect(() => {
+    if (!isFeed) return;
+    const node = scrollRef.current;
+    if (!node) return;
+
+    const savedScrollTop = readFeedScrollTop();
+    node.scrollTop = savedScrollTop;
+    const restoreFrame = window.requestAnimationFrame(() => {
+      node.scrollTop = savedScrollTop;
+    });
+
+    return () => {
+      window.cancelAnimationFrame(restoreFrame);
+      saveFeedScrollTop(node.scrollTop);
+    };
+  }, [isFeed]);
+
+  return (
+    <div
+      ref={scrollRef}
+      data-scroll-route={location}
+      onScroll={isFeed ? (event) => saveFeedScrollTop(event.currentTarget.scrollTop) : undefined}
+      style={{ position: "absolute", inset: 0, overflowY: "auto" }}
+    >
+      {children}
+    </div>
+  );
+}
 
 // 들어오는 면은 화면 밖에서 0으로, 나가는 면은 반대쪽으로 살짝(패럴랙스) 밀려나며 동시에 진행된다.
 // 핵심: enter/exit를 항상 정의하고 방향은 AnimatePresence의 custom(현재 전환 방향)으로 구동한다.
@@ -84,9 +148,9 @@ export default function SlideTransitionRoutes({ children }: SlideTransitionRoute
               motion.div(transform 보유)가 곧 스크롤 컨테이너이면, 그 안의
               position:fixed 요소(FAB 등)의 containing block이 이 motion.div가 되어
               뷰포트에 고정되지 못하고 페이지 스크롤을 따라 같이 움직여버린다. */}
-          <div style={{ position: "absolute", inset: 0, overflowY: "auto" }}>
+          <RouteScrollLayer location={location}>
             {frozen}
-          </div>
+          </RouteScrollLayer>
         </motion.div>
       </AnimatePresence>
     </div>
