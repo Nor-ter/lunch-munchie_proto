@@ -10,7 +10,10 @@ import { intentForHour, type Intent } from '@shared/intent';
 import { normalizeFoodTag, type TagType } from '@/constants/foodTags';
 import { isWebAuthConfigured } from '@/contexts/AuthContext';
 import { MAX_MUNCHIE_FEED_PHOTOS } from '@/lib/coursemapDecor';
-import type { LunchmateProfileLoadout } from '@/types/lunchmateCustomization';
+import type {
+  LunchmateProfileLoadout,
+  LunchmateRoomLoadout,
+} from '@/types/lunchmateCustomization';
 import {
   normalizeLunchmateOwnedItemIds,
   normalizeLunchmateProfileLoadout,
@@ -167,6 +170,8 @@ export interface UserProfile {
   foodieChar?: string;
   /** 푸디 캐릭터 방 스킨 (먼치 스킨 id) */
   foodieSkin?: string;
+  /** 런치메이트룸의 독립 wall/floor/furniture/props 선택. 없으면 foodieSkin preset 사용. */
+  lunchmateRoomLoadout?: LunchmateRoomLoadout;
   /** 런치메이트룸에서 적용한 네 slot 코스튬 조합 */
   lunchmateLoadout?: LunchmateProfileLoadout;
   /** 보유한 런치메이트 코스튬 manifest ID 목록 */
@@ -965,6 +970,8 @@ export function AppProvider({
     } catch { /* fall through */ }
     return { ...DEFAULT_PROFILE, id: initialAuthUserId ?? generateUserId() };
   });
+  const initialStoredProfileRef = useRef(localStorage.getItem('lm_profile'));
+  const isInitialProfilePersistenceRef = useRef(true);
 
   useEffect(() => {
     setIsLoading(true);
@@ -1050,7 +1057,22 @@ export function AppProvider({
   }, [currentSession]);
   useEffect(() => { localStorage.setItem('lm_swipes', JSON.stringify(swipeRecords)); }, [swipeRecords]);
   useEffect(() => { localStorage.setItem('lm_saved_restaurants', JSON.stringify(savedRestaurantIds)); }, [savedRestaurantIds]);
-  useEffect(() => { localStorage.setItem('lm_profile', JSON.stringify(profile)); }, [profile]);
+  useEffect(() => {
+    if (isInitialProfilePersistenceRef.current) {
+      isInitialProfilePersistenceRef.current = false;
+      try {
+        const initiallyStoredProfile = initialStoredProfileRef.current
+          ? JSON.parse(initialStoredProfileRef.current) as Partial<UserProfile>
+          : null;
+        // 동일 사용자의 legacy profile read는 쓰기를 유발하지 않는다.
+        // 신규 profile, legacy "me" migration, auth uid adoption은 기존처럼 즉시 저장한다.
+        if (initiallyStoredProfile?.id === profile.id) return;
+      } catch {
+        // 손상된 값은 아래의 정상 profile로 교체한다.
+      }
+    }
+    localStorage.setItem('lm_profile', JSON.stringify(profile));
+  }, [profile]);
   useEffect(() => {
     // 업로드 사진(data URL)이 크면 quota 초과가 날 수 있다 — 실패해도 앱은 계속 동작.
     try { localStorage.setItem('lm_feed_v2', JSON.stringify(feedPosts)); } catch { /* noop */ }

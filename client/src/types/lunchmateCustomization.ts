@@ -22,6 +22,14 @@ export interface LunchmateProfileLoadout {
   bag: string | null;
 }
 
+/** lm_profile에 선택적으로 저장하는 방 네 category 조합. */
+export interface LunchmateRoomLoadout {
+  wallpaperId: string;
+  floorId: string;
+  furnitureId: string | null;
+  propsId: string | null;
+}
+
 export interface LunchmateLayerPart {
   default: LunchmateAssetSource;
   stateOverrides?: Partial<Record<LunchmateStateAssetKey, LunchmateAssetSource>>;

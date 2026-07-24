@@ -1,0 +1,139 @@
+{
+  "version": 1,
+  "collection": "lunchmate-room-customization-v1",
+  "artDirection": "soft hand-painted 2D, paper and fabric texture, straight-on miniature room",
+  "legacyCompatibility": {
+    "keepFoodieSkin": true,
+    "defaultPresetAssetKey": "pink-picnic",
+    "rule": "If lunchmateRoomLoadout is absent or invalid, derive it from the current foodieSkin preset without rewriting storage."
+  },
+  "render": {
+    "stage": {
+      "size1x": [720, 480],
+      "size2x": [1440, 960],
+      "characterFeetAnchor1x": [360, 405]
+    },
+    "profile": {
+      "size1x": [720, 260],
+      "size2x": [1440, 520],
+      "characterFeetAnchor1x": [360, 220]
+    },
+    "layerOrder": [
+      "wallpaper",
+      "floor",
+      "furniture",
+      "props",
+      "lunchmateCharacter",
+      "statusAndInteractionUi"
+    ]
+  },
+  "categories": {
+    "wallpapers": [
+      {"id": "wallpaper_pink_blush", "labelKo": "블러시 핑크", "assetKey": "pink-picnic"},
+      {"id": "wallpaper_butter_tile", "labelKo": "버터 타일", "assetKey": "yellow-lunch-tray"},
+      {"id": "wallpaper_vintage_pin_dot", "labelKo": "빈티지 핀도트", "assetKey": "vintage-frame"},
+      {"id": "wallpaper_blue_note", "labelKo": "파우더 블루", "assetKey": "blue-note"},
+      {"id": "wallpaper_garden_ivory", "labelKo": "가든 아이보리", "assetKey": "flower-garden"},
+      {"id": "wallpaper_modern_lilac", "labelKo": "모던 라일락", "assetKey": "modern-minimal"}
+    ],
+    "floors": [
+      {"id": "floor_pale_wood", "labelKo": "피치 우드", "assetKey": "pink-picnic"},
+      {"id": "floor_honey_wood", "labelKo": "허니 우드", "assetKey": "yellow-lunch-tray"},
+      {"id": "floor_walnut", "labelKo": "월넛 우드", "assetKey": "vintage-frame"},
+      {"id": "floor_light_wood", "labelKo": "라이트 우드", "assetKey": "blue-note"},
+      {"id": "floor_sunroom_stone", "labelKo": "선룸 스톤", "assetKey": "flower-garden"},
+      {"id": "floor_minimal_wood", "labelKo": "크림 우드", "assetKey": "modern-minimal"}
+    ],
+    "furniture": [
+      {"id": "furniture_picnic_cabinet", "labelKo": "피크닉 수납장", "assetKey": "pink-picnic"},
+      {"id": "furniture_yellow_kitchenette", "labelKo": "미니 키친", "assetKey": "yellow-lunch-tray"},
+      {"id": "furniture_vintage_record_cabinet", "labelKo": "레코드 수납장", "assetKey": "vintage-frame"},
+      {"id": "furniture_blue_study_desk", "labelKo": "블루 공부책상", "assetKey": "blue-note"},
+      {"id": "furniture_garden_shelf_chair", "labelKo": "가든 쉼터", "assetKey": "flower-garden"},
+      {"id": "furniture_minimal_console", "labelKo": "미니멀 콘솔", "assetKey": "modern-minimal"}
+    ],
+    "props": [
+      {"id": "props_pink_picnic", "labelKo": "핑크 피크닉", "assetKey": "pink-picnic"},
+      {"id": "props_yellow_lunch", "labelKo": "옐로우 런치", "assetKey": "yellow-lunch-tray"},
+      {"id": "props_vintage_frames", "labelKo": "빈티지 프레임", "assetKey": "vintage-frame"},
+      {"id": "props_blue_note", "labelKo": "블루 노트", "assetKey": "blue-note"},
+      {"id": "props_flower_garden", "labelKo": "플라워 가든", "assetKey": "flower-garden"},
+      {"id": "props_modern_minimal", "labelKo": "모던 미니멀", "assetKey": "modern-minimal"}
+    ]
+  },
+  "presets": [
+    {
+      "assetKey": "pink-picnic",
+      "labelKo": "핑크 피크닉",
+      "legacySuggestedId": "pinkPicnic",
+      "loadout": {
+        "wallpaperId": "wallpaper_pink_blush",
+        "floorId": "floor_pale_wood",
+        "furnitureId": "furniture_picnic_cabinet",
+        "propsId": "props_pink_picnic"
+      }
+    },
+    {
+      "assetKey": "yellow-lunch-tray",
+      "labelKo": "옐로우 런치트레이",
+      "legacySuggestedId": "yellowLunchTray",
+      "loadout": {
+        "wallpaperId": "wallpaper_butter_tile",
+        "floorId": "floor_honey_wood",
+        "furnitureId": "furniture_yellow_kitchenette",
+        "propsId": "props_yellow_lunch"
+      }
+    },
+    {
+      "assetKey": "vintage-frame",
+      "labelKo": "빈티지 프레임",
+      "legacySuggestedId": "vintageFrame",
+      "loadout": {
+        "wallpaperId": "wallpaper_vintage_pin_dot",
+        "floorId": "floor_walnut",
+        "furnitureId": "furniture_vintage_record_cabinet",
+        "propsId": "props_vintage_frames"
+      }
+    },
+    {
+      "assetKey": "blue-note",
+      "labelKo": "블루 노트",
+      "legacySuggestedId": "blueNote",
+      "loadout": {
+        "wallpaperId": "wallpaper_blue_note",
+        "floorId": "floor_light_wood",
+        "furnitureId": "furniture_blue_study_desk",
+        "propsId": "props_blue_note"
+      }
+    },
+    {
+      "assetKey": "flower-garden",
+      "labelKo": "플라워 가든",
+      "legacySuggestedId": "flowerGarden",
+      "loadout": {
+        "wallpaperId": "wallpaper_garden_ivory",
+        "floorId": "floor_sunroom_stone",
+        "furnitureId": "furniture_garden_shelf_chair",
+        "propsId": "props_flower_garden"
+      }
+    },
+    {
+      "assetKey": "modern-minimal",
+      "labelKo": "모던 미니멀",
+      "legacySuggestedId": "modernMinimal",
+      "loadout": {
+        "wallpaperId": "wallpaper_modern_lilac",
+        "floorId": "floor_minimal_wood",
+        "furnitureId": "furniture_minimal_console",
+        "propsId": "props_modern_minimal"
+      }
+    }
+  ],
+  "paths": {
+    "stage1x": "{category}/1x/{assetKey}.png",
+    "stage2x": "{category}/2x/{assetKey}.png",
+    "profile1x": "{category}/profile-1x/{assetKey}.png",
+    "profile2x": "{category}/profile-2x/{assetKey}.png",
+    "thumbnail": "thumbnails/{category}/{assetKey}.png"
+  }
+}

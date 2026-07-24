@@ -27,14 +27,14 @@ describe('lm_profile lunchmate reward claim compatibility', () => {
   it('removes malformed claims and keeps one valid claim per Level', () => {
     expect(normalizeLunchmateRewardClaims([
       { level: 3, itemId: 'headwear_beret_coral' },
-      { level: 2, itemId: 'outfit_sailor_navy' },
+      { level: 2, itemId: 'outfit_sailor_blue' },
       { level: 2, itemId: 'outfit_hoodie_coral' },
       { level: 1, itemId: 'outfit_hoodie_coral' },
       { level: 4.5, itemId: 'eyewear_round_black' },
       { level: 4, itemId: 'missing-item' },
       null,
     ])).toEqual([
-      { level: 2, itemId: 'outfit_sailor_navy' },
+      { level: 2, itemId: 'outfit_sailor_blue' },
       { level: 3, itemId: 'headwear_beret_coral' },
     ]);
   });
@@ -79,13 +79,13 @@ describe('lm_profile lunchmate reward claim compatibility', () => {
     const grant = resolveLunchmateLevelRewardGrant({
       targetLevel: 2,
       ownedItemIds: starterItemIds,
-      rewardClaims: [{ level: 2, itemId: 'outfit_sailor_navy' }],
+      rewardClaims: [{ level: 2, itemId: 'outfit_sailor_blue' }],
       stableSeedKey,
     });
 
-    expect(grant.item?.id).toBe('outfit_sailor_navy');
-    expect(grant.ownedItemIds).toContain('outfit_sailor_navy');
-    expect(grant.claims).toEqual([{ level: 2, itemId: 'outfit_sailor_navy' }]);
+    expect(grant.item?.id).toBe('outfit_sailor_blue');
+    expect(grant.ownedItemIds).toContain('outfit_sailor_blue');
+    expect(grant.claims).toEqual([{ level: 2, itemId: 'outfit_sailor_blue' }]);
     expect(grant.shouldPersist).toBe(true);
   });
 
@@ -217,8 +217,8 @@ describe('lm_profile lunchmate loadout compatibility', () => {
   });
 
   it('keeps loadout validation independent from the owned item list', () => {
-    expect(normalizeLunchmateProfileLoadout({ outfit: 'outfit_sailor_navy' }).outfit)
-      .toBe('outfit_sailor_navy');
+    expect(normalizeLunchmateProfileLoadout({ outfit: 'outfit_sailor_blue' }).outfit)
+      .toBe('outfit_sailor_blue');
   });
 
   it('creates only the lm_profile loadout update using the persisted field names', () => {

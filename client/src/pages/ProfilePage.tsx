@@ -178,6 +178,7 @@ export default function ProfilePage() {
       !validDrag
       || !droppedOnFoodie
       || payload.item.quantity <= 0
+      || lunchmateFlow.selectedFood?.id !== payload.item.id
       || lunchmateFlow.isBusy
       || feedingDropGuardRef.current
     ) return;
@@ -191,12 +192,21 @@ export default function ProfilePage() {
     clearFoodDragState,
     isOverFoodieDropTarget,
     lunchmateFlow.isBusy,
+    lunchmateFlow.selectedFood,
     lunchmateFlow.selectFood,
     submitLunchmateFood,
   ]);
   const openLunchbox = useCallback(() => {
     if (lunchmateFlow.beginSelecting()) setActiveSheet('lunchbox');
   }, [lunchmateFlow.beginSelecting]);
+  const selectLunchboxFood = useCallback((item: LunchboxFoodItem) => {
+    if (lunchmateFlow.isBusy || item.quantity <= 0) return;
+    clearFoodDragState();
+    lunchmateFlow.selectFood(item);
+    // Bottom Sheet의 선택 피드백이 끝난 뒤 이 콜백이 호출된다.
+    // 임시 선택 음식은 Profile 배너의 drag handle에서 유지한다.
+    closeActiveSheet();
+  }, [clearFoodDragState, closeActiveSheet, lunchmateFlow.isBusy, lunchmateFlow.selectFood]);
   const closeLunchbox = useCallback(() => {
     clearFoodDragState();
     lunchmateFlow.cancel();
@@ -338,6 +348,7 @@ export default function ProfilePage() {
           score={foodieScore}
           char={profile.foodieChar}
           skinId={profile.foodieSkin}
+          roomLoadout={profile.lunchmateRoomLoadout}
           loadout={lunchmateLoadout}
           onCustomize={openFoodieRoom}
           uiState={lunchmateFlow.state}
@@ -356,6 +367,11 @@ export default function ProfilePage() {
           isLunchboxOpen={activeSheet === 'lunchbox'}
           isFoodDragging={draggedFoodId !== null}
           isFoodDragOver={isFoodDragOver}
+          selectedFood={lunchmateFlow.isBusy ? null : lunchmateFlow.selectedFood}
+          onFoodDragStart={handleFoodDragStart}
+          onFoodDragMove={handleFoodDragMove}
+          onFoodDrop={handleFoodDrop}
+          onFoodDragCancel={clearFoodDragState}
         />
         <div className="relative z-20 -mt-9 px-3">
           <div className="flex items-start gap-4">
@@ -429,12 +445,7 @@ export default function ProfilePage() {
         items={LUNCHMATE_PREVIEW_FIXTURE.foodItems}
         flowState={lunchmateFlow.state}
         errorMessage={lunchmateFlow.errorMessage}
-        onFoodSelect={lunchmateFlow.selectFood}
-        onShare={submitLunchmateFood}
-        onFoodDragStart={handleFoodDragStart}
-        onFoodDragMove={handleFoodDragMove}
-        onFoodDrop={handleFoodDrop}
-        onFoodDragCancel={clearFoodDragState}
+        onFoodSelect={selectLunchboxFood}
         dropTargetRef={foodieDropTargetRef}
         onClose={closeLunchbox}
         onAfterClose={() => lunchboxButtonRef.current?.focus()}

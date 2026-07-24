@@ -113,18 +113,17 @@ describe('Lunchbox visual viewport layout', () => {
 });
 
 describe('Lunchbox pointer feeding integration contract', () => {
-  it('keeps tap selection and CTA sharing while adding touch-safe pointer handlers', () => {
-    expect(SHEET_SOURCE).toContain('setPointerCapture(event.pointerId)');
-    expect(SHEET_SOURCE).toContain('touch-none');
-    expect(SHEET_SOURCE).toContain('onPointerMove');
-    expect(SHEET_SOURCE).toContain('onPointerUp');
+  it('keeps the Bottom Sheet to a short tap selection before returning to Profile', () => {
     expect(SHEET_SOURCE).toContain('setSelectedId(item.id)');
     expect(SHEET_SOURCE).toContain('onFoodSelect(item)');
-    expect(SHEET_SOURCE).toContain('selectedItem && onShare(selectedItem)');
-    expect(SHEET_SOURCE).toContain("data-lunchbox-food-draggable={draggable ? 'true' : 'false'}");
+    expect(SHEET_SOURCE).toContain('window.setTimeout');
+    expect(SHEET_SOURCE).toContain('180');
+    expect(SHEET_SOURCE).toContain("data-lunchbox-food-selectable={selectable ? 'true' : 'false'}");
+    expect(SHEET_SOURCE).not.toContain('onShare:');
+    expect(SHEET_SOURCE).not.toContain('handleFoodPointerDown');
   });
 
-  it('selects before sharing a valid drop and guards duplicate execution', () => {
+  it('renders the selected food on Profile and shares only after a valid Profile drop', () => {
     const dropStart = PROFILE_SOURCE.indexOf('const handleFoodDrop');
     const dropEnd = PROFILE_SOURCE.indexOf('const openLunchbox', dropStart);
     const dropHandler = PROFILE_SOURCE.slice(dropStart, dropEnd);
@@ -133,12 +132,20 @@ describe('Lunchbox pointer feeding integration contract', () => {
       .toBeLessThan(dropHandler.indexOf('submitLunchmateFood(payload.item)'));
     expect(dropHandler).toContain('feedingDropGuardRef.current');
     expect(dropHandler).toContain('isOverFoodieDropTarget(payload)');
-    expect(PROFILE_SOURCE).toContain('onShare={submitLunchmateFood}');
+    expect(dropHandler).toContain('lunchmateFlow.selectedFood?.id !== payload.item.id');
+    expect(PROFILE_SOURCE).toContain('selectedFood={lunchmateFlow.isBusy ? null : lunchmateFlow.selectedFood}');
     expect(PROFILE_SOURCE).toContain('onFoodDrop={handleFoodDrop}');
+    // 86px character + 15px 여유씩인 116px target이 drop hit area 역할을 한다.
+    expect(FOODIE_BUDDY_SOURCE).toContain('w-[116px]');
+    expect(FOODIE_BUDDY_SOURCE).toContain('w-[86px]');
+    expect(FOODIE_BUDDY_SOURCE).toContain('data-profile-food-drag-handle="true"');
+    expect(FOODIE_BUDDY_SOURCE).toContain('setPointerCapture(event.pointerId)');
+    expect(FOODIE_BUDDY_SOURCE).toContain('isLunchboxDragGesture(');
+    expect(FOODIE_BUDDY_SOURCE).toContain('onFoodDrop?.({');
   });
 
-  it('reuses the status phrase for drag, drag-over, feeding, success, and error', () => {
-    expect(FOODIE_BUDDY_SOURCE).toContain('런치메이트에게 가져다주세요');
+  it('uses the banner handle guidance for selected food, drop, feeding, success, and error', () => {
+    expect(FOODIE_BUDDY_SOURCE).toContain('나에게 끌어다 줘!');
     expect(FOODIE_BUDDY_SOURCE).toContain('여기에 놓아주세요!');
     expect(FOODIE_BUDDY_SOURCE).toContain('맛있게 먹는 중…');
     expect(FOODIE_BUDDY_SOURCE).toContain("effectiveUiState === 'error'");
@@ -167,28 +174,34 @@ describe('Lunchbox pointer feeding integration contract', () => {
     expect(PROFILE_SOURCE).toContain('dropTargetRef={foodieDropTargetRef}');
   });
 
-  it('keeps only the food list scrollable with sticky header and CTA', () => {
+  it('keeps only the food list scrollable with sticky header and selection feedback', () => {
     expect(SHEET_SOURCE).toContain('className="sticky top-0 z-10 shrink-0 bg-white px-5 pt-4"');
     expect(SHEET_SOURCE).toContain('className="min-h-0 flex-1 touch-pan-y overflow-y-auto');
     expect(SHEET_SOURCE).toContain('className="sticky bottom-0 z-10 shrink-0 border-t');
     expect(SHEET_SOURCE).toContain('env(safe-area-inset-bottom,0px)');
   });
 
-  it('renders the fixed drag preview outside the overflow-hidden Sheet panel', () => {
-    const panelEnd = SHEET_SOURCE.indexOf('</motion.section>');
-    const previewStart = SHEET_SOURCE.indexOf('{dragPreview && (');
-    const previewSource = SHEET_SOURCE.slice(previewStart);
-
-    expect(previewStart).toBeGreaterThan(panelEnd);
-    expect(previewSource).toContain('pointer-events-none fixed z-[103]');
-    expect(previewSource).toContain('h-14 w-14');
-    expect(previewSource).toContain('data-lunchbox-drag-preview="true"');
+  it('renders the fixed drag preview from Profile instead of inside the Sheet', () => {
+    expect(SHEET_SOURCE).not.toContain('data-lunchbox-drag-preview="true"');
+    expect(FOODIE_BUDDY_SOURCE).toContain('pointer-events-none fixed z-[120]');
+    expect(FOODIE_BUDDY_SOURCE).toContain('h-[70px] w-[70px]');
+    expect(FOODIE_BUDDY_SOURCE).toContain('data-profile-food-drag-preview="true"');
   });
 
-  it('keeps the feeding guidance and lowers only the backdrop contrast while dragging', () => {
+  it('presents selected food as food on a plate rather than another white action tile', () => {
+    expect(FOODIE_BUDDY_SOURCE).toContain('data-profile-food-drag-handle="true"');
+    expect(FOODIE_BUDDY_SOURCE).toContain('bg-transparent p-0');
+    expect(FOODIE_BUDDY_SOURCE).toContain('h-[68px] w-[68px]');
+    expect(FOODIE_BUDDY_SOURCE).toContain('rounded-[50%] border border-white/70 bg-[#FFF7ED]/90');
+    expect(FOODIE_BUDDY_SOURCE).not.toContain('data-profile-food-drag-hint="true"');
+    expect(FOODIE_BUDDY_SOURCE).toContain('profileFoodDragPreview ? 0 : 1');
+  });
+
+  it('keeps the selection guidance in the Sheet without an in-Sheet drag backdrop', () => {
     expect(SHEET_SOURCE).toContain(
-      '음식을 캐릭터에게 끌어주거나, 선택 후 한입 나누기를 눌러주세요.',
+      '음식을 선택하면 프로필에서 런치메이트에게 직접 전해줄 수 있어요.',
     );
-    expect(SHEET_SOURCE).toContain("dragPreview ? 'bg-black/[0.32]' : 'bg-black/40'");
+    expect(SHEET_SOURCE).toContain('bg-black/40');
+    expect(SHEET_SOURCE).not.toContain('dragPreview ?');
   });
 });

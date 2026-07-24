@@ -54,7 +54,7 @@ describe('getLunchmateLevelReward', () => {
   });
 
   it('selects from every slot for Level 6 and above', () => {
-    const onlyRemainingItem = LUNCHMATE_ITEMS_BY_ID.eyewear_halfmoon_blue;
+    const onlyRemainingItem = LUNCHMATE_ITEMS_BY_ID.eyewear_heart_coral;
     expect(onlyRemainingItem).toBeDefined();
     const ownedItemIds = LUNCHMATE_ITEMS
       .filter(item => item.id !== onlyRemainingItem?.id)

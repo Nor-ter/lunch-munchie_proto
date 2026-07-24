@@ -3,7 +3,6 @@ import {
   useLayoutEffect,
   useRef,
   useState,
-  type PointerEvent as ReactPointerEvent,
   type RefObject,
 } from 'react';
 import { createPortal } from 'react-dom';
@@ -143,11 +142,6 @@ interface LunchboxBottomSheetProps {
   flowState: FoodieBuddyUiState;
   errorMessage?: string;
   onFoodSelect: (item: LunchboxFoodItem) => void;
-  onShare: (item: LunchboxFoodItem) => void;
-  onFoodDragStart?: (payload: LunchboxFoodDragPayload) => void;
-  onFoodDragMove?: (payload: LunchboxFoodDragPayload) => void;
-  onFoodDrop?: (payload: LunchboxFoodDragPayload) => void;
-  onFoodDragCancel?: () => void;
   dropTargetRef?: RefObject<HTMLElement | null>;
   onClose: () => void;
   onAfterClose?: () => void;
@@ -159,102 +153,37 @@ export default function LunchboxBottomSheet({
   flowState,
   errorMessage,
   onFoodSelect,
-  onShare,
-  onFoodDragStart,
-  onFoodDragMove,
-  onFoodDrop,
-  onFoodDragCancel,
   dropTargetRef,
   onClose,
   onAfterClose,
 }: LunchboxBottomSheetProps) {
   const [selectedId, setSelectedId] = useState<string | null>(null);
-  const [dragPreview, setDragPreview] = useState<LunchboxFoodDragPayload | null>(null);
   const [sheetLayout, setSheetLayout] = useState<LunchboxSheetLayout | null>(null);
   const closeButtonRef = useRef<HTMLButtonElement>(null);
   const panelRef = useRef<HTMLElement>(null);
-  const pointerDragRef = useRef<{
-    pointerId: number;
-    item: LunchboxFoodItem;
-    startX: number;
-    startY: number;
-    dragging: boolean;
-  } | null>(null);
-  const suppressClickItemIdRef = useRef<string | null>(null);
-  const selectedItem = items.find(item => item.id === selectedId && item.quantity > 0);
+  const selectionTimeoutRef = useRef<number | null>(null);
   const isSubmitting = flowState === 'submitting';
 
-  const clearPointerDrag = () => {
-    pointerDragRef.current = null;
-    setDragPreview(null);
-  };
-
-  const handleFoodPointerDown = (
-    event: ReactPointerEvent<HTMLSpanElement>,
-    item: LunchboxFoodItem,
-  ) => {
+  const selectFoodForProfileDrag = (item: LunchboxFoodItem) => {
     if (!canDragLunchboxFood(item, flowState)) return;
-    if (event.pointerType === 'mouse' && event.button !== 0) return;
 
-    event.currentTarget.setPointerCapture(event.pointerId);
-    pointerDragRef.current = {
-      pointerId: event.pointerId,
-      item,
-      startX: event.clientX,
-      startY: event.clientY,
-      dragging: false,
-    };
-  };
-
-  const handleFoodPointerMove = (event: ReactPointerEvent<HTMLSpanElement>) => {
-    const activeDrag = pointerDragRef.current;
-    if (!activeDrag || activeDrag.pointerId !== event.pointerId) return;
-
-    const payload: LunchboxFoodDragPayload = {
-      item: activeDrag.item,
-      clientX: event.clientX,
-      clientY: event.clientY,
-    };
-
-    if (!activeDrag.dragging && isLunchboxDragGesture(
-      { clientX: activeDrag.startX, clientY: activeDrag.startY },
-      payload,
-    )) {
-      activeDrag.dragging = true;
-      onFoodDragStart?.(payload);
+    setSelectedId(item.id);
+    if (selectionTimeoutRef.current !== null) {
+      window.clearTimeout(selectionTimeoutRef.current);
     }
-
-    if (!activeDrag.dragging) return;
-    event.preventDefault();
-    setDragPreview(payload);
-    onFoodDragMove?.(payload);
+    // 선택 상태를 짧게 보여준 뒤 Sheet를 닫는다. 실제 feeding은 Profile 배너의
+    // 음식 handle을 캐릭터 위로 drop했을 때만 실행된다.
+    selectionTimeoutRef.current = window.setTimeout(() => {
+      selectionTimeoutRef.current = null;
+      onFoodSelect(item);
+    }, 180);
   };
 
-  const handleFoodPointerUp = (event: ReactPointerEvent<HTMLSpanElement>) => {
-    const activeDrag = pointerDragRef.current;
-    if (!activeDrag || activeDrag.pointerId !== event.pointerId) return;
-
-    if (activeDrag.dragging) {
-      suppressClickItemIdRef.current = activeDrag.item.id;
-      window.setTimeout(() => {
-        if (suppressClickItemIdRef.current === activeDrag.item.id) {
-          suppressClickItemIdRef.current = null;
-        }
-      }, 0);
-      onFoodDrop?.({
-        item: activeDrag.item,
-        clientX: event.clientX,
-        clientY: event.clientY,
-      });
+  useEffect(() => () => {
+    if (selectionTimeoutRef.current !== null) {
+      window.clearTimeout(selectionTimeoutRef.current);
     }
-    clearPointerDrag();
-  };
-
-  const handleFoodPointerCancel = (event: ReactPointerEvent<HTMLSpanElement>) => {
-    if (pointerDragRef.current?.pointerId !== event.pointerId) return;
-    if (pointerDragRef.current.dragging) onFoodDragCancel?.();
-    clearPointerDrag();
-  };
+  }, []);
 
   useLayoutEffect(() => {
     if (!open || typeof window === 'undefined') {
@@ -351,13 +280,6 @@ export default function LunchboxBottomSheet({
     };
   }, [open, onClose]);
 
-  useEffect(() => {
-    if (open) return;
-    if (pointerDragRef.current?.dragging) onFoodDragCancel?.();
-    pointerDragRef.current = null;
-    setDragPreview(null);
-  }, [onFoodDragCancel, open]);
-
   if (typeof document === 'undefined') return null;
 
   return createPortal(
@@ -370,9 +292,7 @@ export default function LunchboxBottomSheet({
       {open && (
         <>
           <motion.div
-            className={`fixed inset-0 z-[100] h-[100dvh] w-screen ${
-              dragPreview ? 'bg-black/[0.32]' : 'bg-black/40'
-            }`}
+            className="fixed inset-0 z-[100] h-[100dvh] w-screen bg-black/40"
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
@@ -404,7 +324,7 @@ export default function LunchboxBottomSheet({
                     나의 런치박스 🍱
                   </h2>
                   <p className="mt-1 text-[11px] leading-relaxed text-[#9B8376]">
-                    음식을 캐릭터에게 끌어주거나, 선택 후 한입 나누기를 눌러주세요.
+                    음식을 선택하면 프로필에서 런치메이트에게 직접 전해줄 수 있어요.
                   </p>
                 </div>
                 <button
@@ -430,7 +350,7 @@ export default function LunchboxBottomSheet({
                     {items.map(item => {
                       const selected = selectedId === item.id;
                       const unavailable = item.quantity <= 0;
-                      const draggable = canDragLunchboxFood(item, flowState);
+                      const selectable = canDragLunchboxFood(item, flowState);
                       return (
                         <button
                           key={item.id}
@@ -439,17 +359,10 @@ export default function LunchboxBottomSheet({
                           aria-checked={selected}
                           aria-label={unavailable
                             ? `${item.name}, 품절`
-                            : `${item.name}, 탭하여 선택하거나 런치메이트에게 드래그`}
+                            : `${item.name}, 탭하여 프로필에서 런치메이트에게 전하기`}
                           disabled={unavailable || isSubmitting}
-                          onClick={() => {
-                            if (suppressClickItemIdRef.current === item.id) {
-                              suppressClickItemIdRef.current = null;
-                              return;
-                            }
-                            setSelectedId(item.id);
-                            onFoodSelect(item);
-                          }}
-                          data-lunchbox-food-draggable={draggable ? 'true' : 'false'}
+                          onClick={() => selectFoodForProfileDrag(item)}
+                          data-lunchbox-food-selectable={selectable ? 'true' : 'false'}
                           className={`relative flex w-full items-center gap-3 rounded-2xl border p-3 text-left transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#E85053] ${
                             selected
                               ? 'border-[#E85053] bg-[#FFF4F2] shadow-sm'
@@ -457,15 +370,7 @@ export default function LunchboxBottomSheet({
                           } ${unavailable ? 'cursor-not-allowed opacity-50' : 'active:scale-[0.99]'}`}
                         >
                           <span
-                            className={`flex h-14 w-14 shrink-0 touch-none items-center justify-center overflow-hidden rounded-2xl bg-[#F5E7DC] text-[30px] ${
-                              draggable ? 'cursor-grab active:cursor-grabbing' : ''
-                            }`}
-                            onPointerDown={draggable
-                              ? event => handleFoodPointerDown(event, item)
-                              : undefined}
-                            onPointerMove={draggable ? handleFoodPointerMove : undefined}
-                            onPointerUp={draggable ? handleFoodPointerUp : undefined}
-                            onPointerCancel={draggable ? handleFoodPointerCancel : undefined}
+                            className="flex h-14 w-14 shrink-0 items-center justify-center overflow-hidden rounded-2xl bg-[#F5E7DC] text-[30px]"
                             aria-hidden="true"
                           >
                             {item.image ? (
@@ -522,22 +427,10 @@ export default function LunchboxBottomSheet({
                       </motion.p>
                     )}
                   </AnimatePresence>
-                  <button
-                    type="button"
-                    disabled={!selectedItem || isSubmitting}
-                    onClick={() => selectedItem && onShare(selectedItem)}
-                    className="h-12 w-full rounded-2xl bg-[#E85053] text-[14px] font-black text-white transition-all active:scale-[0.99] disabled:cursor-not-allowed disabled:bg-[#E6DED8] disabled:text-[#A99A91] disabled:active:scale-100"
-                  >
-                    {isSubmitting
-                      ? '한입 준비 중…'
-                      : flowState === 'error'
-                        ? '다시 한입 나누기'
-                        : selectedItem
-                          ? `${selectedItem.name} 한입 나누기`
-                          : '한입 나누기'}
-                  </button>
-                  <p className="mt-2 text-center text-[10px] text-[#B09D92]">
-                    저장되지 않는 맛추억 미리보기예요.
+                  <p className="text-center text-[10px] text-[#B09D92]" aria-live="polite">
+                    {selectedId
+                      ? '선택했어요. 프로필 배너에서 캐릭터에게 끌어다 주세요!'
+                      : '저장되지 않는 맛추억 미리보기예요.'}
                   </p>
                 </footer>
               </>
@@ -556,24 +449,6 @@ export default function LunchboxBottomSheet({
               </div>
             )}
           </motion.section>
-          {dragPreview && (
-            <div
-              className="pointer-events-none fixed z-[103] flex h-14 w-14 items-center justify-center rounded-2xl border-2 border-white bg-[#FFF4EA] text-[30px] shadow-xl"
-              style={{
-                left: dragPreview.clientX,
-                top: dragPreview.clientY,
-                transform: 'translate(-50%, -50%)',
-              }}
-              data-lunchbox-drag-preview="true"
-              aria-hidden="true"
-            >
-              {dragPreview.item.image ? (
-                <img src={dragPreview.item.image} alt="" className="h-full w-full rounded-2xl object-cover" />
-              ) : (
-                dragPreview.item.placeholder ?? '🍽️'
-              )}
-            </div>
-          )}
         </>
       )}
     </AnimatePresence>,

@@ -519,9 +519,9 @@ describe('Lunchmate Room motion rules', () => {
 
 describe('FoodieRoom motion integration contract', () => {
   it('renders one opaque chicken PNG inside separate position and pose wrappers', () => {
-    expect(FOODIE_ROOM_SOURCE).toContain('className="relative h-[270px]');
+    expect(FOODIE_ROOM_SOURCE).toContain('className="relative aspect-[3/2]');
     expect(FOODIE_ROOM_SOURCE).toContain(
-      'className="absolute inset-x-0 bottom-11 z-10 flex justify-center"',
+      'className="absolute inset-x-0 bottom-[15.625%] z-10 flex justify-center"',
     );
     expect(FOODIE_ROOM_SOURCE).toContain('size={156}');
     expect(FOODIE_ROOM_SOURCE).toContain(

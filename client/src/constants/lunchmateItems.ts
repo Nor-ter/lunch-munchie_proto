@@ -14,6 +14,52 @@ function layerPart(relativePath: string): LunchmateLayerPart {
   return { default: lunchmateLayerAssetSource(relativePath) };
 }
 
+/**
+ * Costume collections are rendered pose-aware for chicken artwork. These
+ * front sources retain a safe manifest fallback without changing legacy item
+ * paths or any persisted loadout data.
+ */
+function costumeCollectionLayerPart(
+  collection:
+    | 'collection-wave1-v1'
+    | 'collection-wave2-v1'
+    | 'collection-wave3-v2'
+    | 'eyewear-collection-wave1-v1',
+  relativePath: string,
+): LunchmateLayerPart {
+  const revisions = {
+    'collection-wave1-v1': 'collection-repaired-v2',
+    'collection-wave2-v1': 'collection-repaired-v2',
+    'collection-wave3-v2': 'collection-wave3-v2',
+    'eyewear-collection-wave1-v1': 'eyewear-collection-wave1-v1',
+  } as const;
+  const revision = `?v=${revisions[collection]}`;
+  const oneX = `/assets/lunchmate/costumes/${collection}/1x/${relativePath}.png${revision}`;
+  const twoX = `/assets/lunchmate/costumes/${collection}/2x/${relativePath}@2x.png${revision}`;
+  return {
+    default: {
+      src: oneX,
+      srcSet: `${oneX} 1x, ${twoX} 2x`,
+    },
+  };
+}
+
+function collectionWave1LayerPart(relativePath: string): LunchmateLayerPart {
+  return costumeCollectionLayerPart('collection-wave1-v1', relativePath);
+}
+
+function collectionWave2LayerPart(relativePath: string): LunchmateLayerPart {
+  return costumeCollectionLayerPart('collection-wave2-v1', relativePath);
+}
+
+function collectionWave3LayerPart(relativePath: string): LunchmateLayerPart {
+  return costumeCollectionLayerPart('collection-wave3-v2', relativePath);
+}
+
+function eyewearCollectionWave1LayerPart(relativePath: string): LunchmateLayerPart {
+  return costumeCollectionLayerPart('eyewear-collection-wave1-v1', relativePath);
+}
+
 export const LUNCHMATE_ITEMS = [
   {
     id: 'outfit_hoodie_coral',
@@ -24,41 +70,6 @@ export const LUNCHMATE_ITEMS = [
     back: layerPart('outfit/hoodie_back'),
   },
   {
-    id: 'outfit_sailor_navy',
-    slot: 'outfit',
-    name: '네이비 세일러복',
-    rarity: 'common',
-    front: layerPart('outfit/sailor_navy'),
-  },
-  {
-    id: 'outfit_overalls_denim',
-    slot: 'outfit',
-    name: '데님 멜빵바지',
-    rarity: 'common',
-    front: layerPart('outfit/overalls_denim'),
-  },
-  {
-    id: 'outfit_chef_coat',
-    slot: 'outfit',
-    name: '꼬마 셰프 코트',
-    rarity: 'common',
-    front: layerPart('outfit/chef_coat'),
-  },
-  {
-    id: 'outfit_varsity_coral',
-    slot: 'outfit',
-    name: '코랄 바시티 재킷',
-    rarity: 'rare',
-    front: layerPart('outfit/varsity_coral'),
-  },
-  {
-    id: 'outfit_striped_sweater_mint',
-    slot: 'outfit',
-    name: '민트 줄무늬 스웨터',
-    rarity: 'common',
-    front: layerPart('outfit/striped_sweater_mint'),
-  },
-  {
     id: 'outfit_raincoat_yellow',
     slot: 'outfit',
     name: '노랑 레인코트',
@@ -67,11 +78,92 @@ export const LUNCHMATE_ITEMS = [
     back: layerPart('outfit/raincoat_yellow_back'),
   },
   {
-    id: 'outfit_cardigan_picnic',
+    id: 'outfit_strawberry_picnic',
     slot: 'outfit',
-    name: '피크닉 가디건',
+    name: '스트로베리 피크닉',
     rarity: 'rare',
-    front: layerPart('outfit/cardigan_picnic'),
+    front: collectionWave1LayerPart('outfit_strawberry_picnic/front-body'),
+    back: collectionWave1LayerPart('outfit_strawberry_picnic/front-behind'),
+  },
+  {
+    id: 'outfit_sailor_blue',
+    slot: 'outfit',
+    name: '블루 세일러복',
+    rarity: 'rare',
+    front: collectionWave1LayerPart('outfit_sailor_blue/front-body'),
+    back: collectionWave1LayerPart('outfit_sailor_blue/front-behind'),
+  },
+  {
+    id: 'outfit_bakery_apron_cream',
+    slot: 'outfit',
+    name: '베이커리 에이프런',
+    rarity: 'rare',
+    front: collectionWave2LayerPart('outfit_bakery_apron_cream/front-body'),
+    back: collectionWave2LayerPart('outfit_bakery_apron_cream/front-behind'),
+  },
+  {
+    id: 'outfit_cardigan_mint',
+    slot: 'outfit',
+    name: '민트 코티지 가디건',
+    rarity: 'rare',
+    front: collectionWave2LayerPart('outfit_cardigan_mint/front-body'),
+    back: collectionWave2LayerPart('outfit_cardigan_mint/front-behind'),
+  },
+  {
+    id: 'outfit_denim_overalls',
+    slot: 'outfit',
+    name: '데님 플레이 오버롤',
+    rarity: 'rare',
+    front: collectionWave2LayerPart('outfit_denim_overalls/front-body'),
+    back: collectionWave2LayerPart('outfit_denim_overalls/front-behind'),
+  },
+  {
+    id: 'outfit_pajamas_lilac',
+    slot: 'outfit',
+    name: '라일락 드림 파자마',
+    rarity: 'rare',
+    front: collectionWave2LayerPart('outfit_pajamas_lilac/front-body'),
+    back: collectionWave2LayerPart('outfit_pajamas_lilac/front-behind'),
+  },
+  {
+    id: 'outfit_varsity_cherry_coral',
+    slot: 'outfit',
+    name: '체리 바시티',
+    rarity: 'rare',
+    front: collectionWave2LayerPart('outfit_varsity_cherry_coral/front-body'),
+    back: collectionWave2LayerPart('outfit_varsity_cherry_coral/front-behind'),
+  },
+  {
+    id: 'outfit_space_explorer_cream',
+    slot: 'outfit',
+    name: '스페이스 익스플로러',
+    rarity: 'rare',
+    front: collectionWave3LayerPart('outfit_space_explorer_cream/front-body'),
+    back: collectionWave3LayerPart('outfit_space_explorer_cream/front-behind'),
+  },
+  {
+    id: 'outfit_artist_smock_rose',
+    slot: 'outfit',
+    name: '리틀 아티스트 스목',
+    rarity: 'rare',
+    front: collectionWave3LayerPart('outfit_artist_smock_rose/front-body'),
+    back: collectionWave3LayerPart('outfit_artist_smock_rose/front-behind'),
+  },
+  {
+    id: 'outfit_garden_overalls_sage',
+    slot: 'outfit',
+    name: '가든 헬퍼 오버롤',
+    rarity: 'rare',
+    front: collectionWave3LayerPart('outfit_garden_overalls_sage/front-body'),
+    back: collectionWave3LayerPart('outfit_garden_overalls_sage/front-behind'),
+  },
+  {
+    id: 'outfit_detective_cape_cocoa',
+    slot: 'outfit',
+    name: '코지 디텍티브 케이프',
+    rarity: 'rare',
+    front: collectionWave3LayerPart('outfit_detective_cape_cocoa/front-body'),
+    back: collectionWave3LayerPart('outfit_detective_cape_cocoa/front-behind'),
   },
   {
     id: 'headwear_beret_coral',
@@ -81,60 +173,88 @@ export const LUNCHMATE_ITEMS = [
     front: layerPart('headwear/beret'),
   },
   {
-    id: 'headwear_cap_green',
+    id: 'headwear_gingham_bow',
     slot: 'headwear',
-    name: '초록 캡모자',
-    rarity: 'common',
-    front: layerPart('headwear/cap_green'),
-  },
-  {
-    id: 'headwear_bucket_hat_yellow',
-    slot: 'headwear',
-    name: '노랑 버킷햇',
-    rarity: 'common',
-    front: layerPart('headwear/bucket_hat_yellow'),
-  },
-  {
-    id: 'headwear_chef_hat_white',
-    slot: 'headwear',
-    name: '셰프 모자',
-    rarity: 'common',
-    front: layerPart('headwear/chef_hat'),
-  },
-  {
-    id: 'headwear_beanie_mint',
-    slot: 'headwear',
-    name: '민트 비니',
-    rarity: 'common',
-    front: layerPart('headwear/beanie_mint'),
-  },
-  {
-    id: 'headwear_crown_star_gold',
-    slot: 'headwear',
-    name: '별 왕관',
-    rarity: 'special',
-    front: layerPart('headwear/crown_star'),
-  },
-  {
-    id: 'headwear_flower_headband_pink',
-    slot: 'headwear',
-    name: '꽃 헤드밴드',
+    name: '깅엄 리본',
     rarity: 'rare',
-    front: layerPart('headwear/flower_headband'),
+    front: collectionWave1LayerPart('headwear_gingham_bow/front'),
   },
   {
-    id: 'headwear_bunny_ears_pink',
+    id: 'headwear_sailor_cap_navy',
     slot: 'headwear',
-    name: '토끼 귀',
+    name: '네이비 세일러 캡',
     rarity: 'rare',
-    front: layerPart('headwear/bunny_ears'),
+    front: collectionWave1LayerPart('headwear_sailor_cap_navy/front'),
   },
   {
-    id: 'headwear_newsboy_cap_lavender',
+    id: 'headwear_chef_puff_cream',
     slot: 'headwear',
-    name: '라벤더 헌팅캡',
+    name: '크림 셰프 퍼프',
     rarity: 'rare',
-    front: layerPart('headwear/newsboy_cap_lavender'),
+    front: collectionWave2LayerPart('headwear_chef_puff_cream/front'),
+  },
+  {
+    id: 'headwear_frog_bucket_hat',
+    slot: 'headwear',
+    name: '개구리 버킷햇',
+    rarity: 'rare',
+    front: collectionWave2LayerPart('headwear_frog_bucket_hat/front'),
+  },
+  {
+    id: 'headwear_bow_cream_back',
+    slot: 'headwear',
+    name: '크림 백리본',
+    rarity: 'rare',
+    front: collectionWave2LayerPart('headwear_bow_cream_back/front'),
+  },
+  {
+    id: 'headwear_bow_side_navy',
+    slot: 'headwear',
+    name: '네이비 사이드 리본',
+    rarity: 'rare',
+    front: collectionWave2LayerPart('headwear_bow_side_navy/front'),
+  },
+  {
+    id: 'headwear_nightcap_lilac',
+    slot: 'headwear',
+    name: '라일락 나이트캡',
+    rarity: 'rare',
+    front: collectionWave2LayerPart('headwear_nightcap_lilac/front'),
+  },
+  {
+    id: 'headwear_bow_pink_loop',
+    slot: 'headwear',
+    name: '핑크 루프 리본',
+    rarity: 'rare',
+    front: collectionWave2LayerPart('headwear_bow_pink_loop/front'),
+  },
+  {
+    id: 'headwear_space_hood_periwinkle',
+    slot: 'headwear',
+    name: '페리윙클 스페이스 후드',
+    rarity: 'rare',
+    front: collectionWave3LayerPart('headwear_space_hood_periwinkle/front'),
+  },
+  {
+    id: 'headwear_beret_teal',
+    slot: 'headwear',
+    name: '틸 베레모',
+    rarity: 'rare',
+    front: collectionWave3LayerPart('headwear_beret_teal/front'),
+  },
+  {
+    id: 'headwear_tulip_headband_coral',
+    slot: 'headwear',
+    name: '코랄 튤립 헤드밴드',
+    rarity: 'rare',
+    front: collectionWave3LayerPart('headwear_tulip_headband_coral/front'),
+  },
+  {
+    id: 'headwear_detective_cap_forest',
+    slot: 'headwear',
+    name: '포레스트 디텍티브 캡',
+    rarity: 'rare',
+    front: collectionWave3LayerPart('headwear_detective_cap_forest/front'),
   },
   {
     id: 'eyewear_round_black',
@@ -144,46 +264,32 @@ export const LUNCHMATE_ITEMS = [
     front: layerPart('eyewear/round_glasses'),
   },
   {
-    id: 'eyewear_square_brown',
-    slot: 'eyewear',
-    name: '브라운 사각 안경',
-    rarity: 'common',
-    front: layerPart('eyewear/square_brown'),
-  },
-  {
     id: 'eyewear_heart_coral',
     slot: 'eyewear',
     name: '코랄 하트 안경',
     rarity: 'rare',
-    front: layerPart('eyewear/heart_coral'),
+    front: eyewearCollectionWave1LayerPart('eyewear_heart_coral/front'),
   },
   {
-    id: 'eyewear_aviator_gold',
+    id: 'eyewear_sunglasses_cocoa',
     slot: 'eyewear',
-    name: '골드 보잉 선글라스',
-    rarity: 'rare',
-    front: layerPart('eyewear/aviator_gold'),
+    name: '코코아 클래식 선글라스',
+    rarity: 'common',
+    front: eyewearCollectionWave1LayerPart('eyewear_sunglasses_cocoa/front'),
   },
   {
-    id: 'eyewear_star_yellow',
+    id: 'eyewear_star_honey',
     slot: 'eyewear',
-    name: '노랑 별 안경',
+    name: '허니 스타 선글라스',
     rarity: 'special',
-    front: layerPart('eyewear/star_yellow'),
+    front: eyewearCollectionWave1LayerPart('eyewear_star_honey/front'),
   },
   {
-    id: 'eyewear_cateye_pink',
+    id: 'eyewear_cat_eye_lilac',
     slot: 'eyewear',
-    name: '핑크 캣아이 안경',
-    rarity: 'common',
-    front: layerPart('eyewear/cateye_pink'),
-  },
-  {
-    id: 'eyewear_halfmoon_blue',
-    slot: 'eyewear',
-    name: '블루 반달 안경',
-    rarity: 'common',
-    front: layerPart('eyewear/halfmoon_blue'),
+    name: '라일락 캣아이 선글라스',
+    rarity: 'rare',
+    front: eyewearCollectionWave1LayerPart('eyewear_cat_eye_lilac/front'),
   },
   {
     id: 'bag_backpack_green',
@@ -194,52 +300,100 @@ export const LUNCHMATE_ITEMS = [
     back: layerPart('bag/backpack_back'),
   },
   {
-    id: 'bag_satchel_brown',
+    id: 'bag_picnic_basket',
     slot: 'bag',
-    name: '브라운 사첼백',
-    rarity: 'common',
-    front: layerPart('bag/satchel_brown_front'),
-    back: layerPart('bag/satchel_brown_back'),
-  },
-  {
-    id: 'bag_tote_pink',
-    slot: 'bag',
-    name: '핑크 토트백',
-    rarity: 'common',
-    front: layerPart('bag/tote_pink_front'),
-    back: layerPart('bag/tote_pink_back'),
-  },
-  {
-    id: 'bag_camera_blue',
-    slot: 'bag',
-    name: '블루 카메라백',
+    name: '피크닉 바스켓',
     rarity: 'rare',
-    front: layerPart('bag/camera_blue_front'),
-    back: layerPart('bag/camera_blue_back'),
+    front: collectionWave1LayerPart('bag_picnic_basket/front-front'),
+    back: collectionWave1LayerPart('bag_picnic_basket/front-behind'),
   },
   {
-    id: 'bag_bear_backpack_brown',
+    id: 'bag_anchor_pouch_navy',
     slot: 'bag',
-    name: '곰돌이 백팩',
-    rarity: 'special',
-    front: layerPart('bag/bear_backpack_front'),
-    back: layerPart('bag/bear_backpack_back'),
-  },
-  {
-    id: 'bag_lunchbox_yellow',
-    slot: 'bag',
-    name: '노랑 런치박스백',
+    name: '네이비 앵커 파우치',
     rarity: 'rare',
-    front: layerPart('bag/lunchbox_yellow_front'),
-    back: layerPart('bag/lunchbox_yellow_back'),
+    front: collectionWave1LayerPart('bag_anchor_pouch_navy/front-front'),
+    back: collectionWave1LayerPart('bag_anchor_pouch_navy/front-behind'),
   },
   {
-    id: 'bag_drawstring_mint',
+    id: 'bag_baguette_tote',
     slot: 'bag',
-    name: '민트 조리개백',
-    rarity: 'common',
-    front: layerPart('bag/drawstring_mint_front'),
-    back: layerPart('bag/drawstring_mint_back'),
+    name: '바게트 토트',
+    rarity: 'rare',
+    front: collectionWave2LayerPart('bag_baguette_tote/front-front'),
+    back: collectionWave2LayerPart('bag_baguette_tote/front-behind'),
+  },
+  {
+    id: 'bag_cloud_pouch',
+    slot: 'bag',
+    name: '구름 파우치',
+    rarity: 'rare',
+    front: collectionWave2LayerPart('bag_cloud_pouch/front-front'),
+    back: collectionWave2LayerPart('bag_cloud_pouch/front-behind'),
+  },
+  {
+    id: 'bag_acorn_satchel',
+    slot: 'bag',
+    name: '도토리 사첼',
+    rarity: 'rare',
+    front: collectionWave2LayerPart('bag_acorn_satchel/front-front'),
+    back: collectionWave2LayerPart('bag_acorn_satchel/front-behind'),
+  },
+  {
+    id: 'bag_camera_crossbody',
+    slot: 'bag',
+    name: '카메라 크로스백',
+    rarity: 'rare',
+    front: collectionWave2LayerPart('bag_camera_crossbody/front-front'),
+    back: collectionWave2LayerPart('bag_camera_crossbody/front-behind'),
+  },
+  {
+    id: 'bag_star_pouch',
+    slot: 'bag',
+    name: '별 파우치',
+    rarity: 'rare',
+    front: collectionWave2LayerPart('bag_star_pouch/front-front'),
+    back: collectionWave2LayerPart('bag_star_pouch/front-behind'),
+  },
+  {
+    id: 'bag_cherry_crossbody',
+    slot: 'bag',
+    name: '체리 크로스백',
+    rarity: 'rare',
+    front: collectionWave2LayerPart('bag_cherry_crossbody/front-front'),
+    back: collectionWave2LayerPart('bag_cherry_crossbody/front-behind'),
+  },
+  {
+    id: 'bag_moon_pouch_honey',
+    slot: 'bag',
+    name: '허니 문 파우치',
+    rarity: 'rare',
+    front: collectionWave3LayerPart('bag_moon_pouch_honey/front-front'),
+    back: collectionWave3LayerPart('bag_moon_pouch_honey/front-behind'),
+  },
+  {
+    id: 'bag_palette_crossbody',
+    slot: 'bag',
+    name: '팔레트 크로스백',
+    rarity: 'rare',
+    front: collectionWave3LayerPart('bag_palette_crossbody/front-front'),
+    back: collectionWave3LayerPart('bag_palette_crossbody/front-behind'),
+  },
+  {
+    id: 'bag_watering_can_terracotta',
+    slot: 'bag',
+    name: '테라코타 물뿌리개',
+    rarity: 'rare',
+    front: collectionWave3LayerPart('bag_watering_can_terracotta/front-front'),
+    back: collectionWave3LayerPart('bag_watering_can_terracotta/front-behind'),
+  },
+  {
+    id: 'bag_magnifying_satchel',
+    slot: 'bag',
+    name: '돋보기 사첼',
+    rarity: 'rare',
+    front: collectionWave3LayerPart('bag_magnifying_satchel/front-front'),
+    back: collectionWave3LayerPart('bag_magnifying_satchel/front-behind'),
   },
 ] as const satisfies readonly LunchmateLayerItem[];
 
