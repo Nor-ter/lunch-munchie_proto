@@ -36,6 +36,7 @@ import type { FoodieRoomNavigationState } from '@/pages/FoodieRoomPage';
 import type { LunchmateLayerItem } from '@/types/lunchmateCustomization';
 import {
   lunchmateLoadoutFromProfile,
+  lunchmateTotalXpFromProfile,
   resolveLunchmateLevelRewardGrant,
 } from '@/utils/lunchmateProfile';
 
@@ -139,8 +140,14 @@ export default function ProfilePage() {
   const [draggedFoodId, setDraggedFoodId] = useState<string | null>(null);
   const [isFoodDragOver, setIsFoodDragOver] = useState(false);
   const closeActiveSheet = useCallback(() => setActiveSheet(null), []);
+  const lunchmateTotalXp = lunchmateTotalXpFromProfile(profile);
+  const persistLunchmateTotalXp = useCallback((nextTotalXp: number) => {
+    updateProfile({ lunchmateTotalXp: nextTotalXp });
+  }, [updateProfile]);
   const lunchmateFlow = useLunchmateFlow({
     initialState: LUNCHMATE_PREVIEW_FIXTURE.uiState,
+    initialTotalXp: lunchmateTotalXp,
+    onTotalXpChange: persistLunchmateTotalXp,
     onSuccessClose: closeActiveSheet,
   });
   const clearFoodDragState = useCallback(() => {

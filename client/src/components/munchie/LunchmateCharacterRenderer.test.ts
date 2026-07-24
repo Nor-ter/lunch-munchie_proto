@@ -1148,7 +1148,8 @@ describe('Lunchmate food flow and presentation contracts', () => {
     expect(sharingIndex).toBeGreaterThan(-1);
     expect(sharingIndex).toBeLessThan(reactionIndex);
     expect(reactionIndex).toBeLessThan(idleIndex);
-    expect(flowSource.match(/setPreviewXp\(nextXp\)/g)).toHaveLength(1);
+    expect(flowSource.match(/setPreviewXp\(progressUpdate\.nextTotalXp\)/g)).toHaveLength(1);
+    expect(flowSource.match(/onTotalXpChange\(progressUpdate\.nextTotalXp\)/g)).toHaveLength(1);
     expect(flowSource).not.toContain('quantity -');
   });
 

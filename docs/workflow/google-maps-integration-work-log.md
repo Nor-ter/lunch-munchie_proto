@@ -395,3 +395,10 @@
 ### 16.3 GATE
 - **PASS (메인 에이전트 1회 검토)**: DB/API/Supabase/migration/package 변경 없음. foodieSkin, costume/loadout, feeding/XP/Level Up/reward, tap/drag 계약 회귀 없음. 신규 env·키·외부 입력 없음.
 - 기존 미완료 보안 TODO인 Google 키 GCP 제한 전수 확인과 Android 패키지명+SHA-1 Application restriction은 그대로 남아 있다.
+## 2026-07-24 — Lunchmate 무제한 레벨/XP 진행
+
+- 증상: preview XP가 40에서 clamp되고 고정 4레벨 정의의 마지막이 `MAX`로 표시됨.
+- 원인: `useLunchmateFlow`의 `Math.min(LUNCHMATE_PREVIEW_MAX_XP, ...)`와 `lunchmateProgress`의 유한 레벨 배열.
+- 수정: 레벨별 필요 XP를 20부터 10씩 증가(최대 100)시키는 공용 계산으로 교체하고, XP clamp 제거 및 다중 레벨 이벤트 큐를 적용.
+- 검증: 성장/reward/profile 단위 테스트 47개, typecheck, production build 통과. 전체 테스트는 403개 중 402개 통과; 기존 옷장 manifest count 기대값 불일치 1개 실패.
+- 보안 게이트: DB/API/env/Google 키/asset manifest 변경 없음. `.env`, `.env.*`, `env.enc` gitignore 유지.

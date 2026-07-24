@@ -231,7 +231,7 @@ export interface FoodieBuddyProps {
   progressButtonRef?: Ref<HTMLButtonElement>;
   /** 성공한 mock 음식의 전달 표현용 placeholder */
   sharedFoodPlaceholder?: string;
-  /** 전달되면 배너 Level/XP/Progress/MAX 표시에 사용하는 단일 preview 원본 */
+  /** 전달되면 배너 Level/XP/Progress 표시에 사용하는 단일 preview 원본 */
   progressSnapshot?: LunchmateProgressSnapshot;
   /** 한입 결과에서 같은 Level Definition 기반 progress 전환을 표현한다. */
   previousProgressSnapshot?: LunchmateProgressSnapshot;
@@ -317,9 +317,7 @@ export default function FoodieBuddy({
     ? Math.min(1, Math.max(0, previousProgressSnapshot.progressPercent / 100))
     : 0;
   const progressLabel = progressSnapshot
-    ? progressSnapshot.isMaxLevel
-      ? `${progressSnapshot.totalXp} 맛추억 · MAX`
-      : `${progressSnapshot.totalXp} / ${progressSnapshot.nextLevelTotalXp} 맛추억`
+    ? `${progressSnapshot.xpIntoCurrentLevel} / ${progressSnapshot.xpRequiredForNextLevel} 맛추억`
     : next
       ? `다음 진화까지 ${next.min - score}점`
       : 'MAX 🎖️';

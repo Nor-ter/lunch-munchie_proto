@@ -21,6 +21,7 @@ import type { LunchmateLoadout } from '@/types/lunchmateCustomization';
 import {
   createLunchmateProfileLoadoutUpdate,
   lunchmateLoadoutFromProfile,
+  lunchmateTotalXpFromProfile,
   normalizeLunchmateLoadout,
   normalizeLunchmateOwnedItemIds,
 } from '@/utils/lunchmateProfile';
@@ -85,16 +86,12 @@ export default function FoodieRoomPage() {
   const ownedItemIds = normalizeLunchmateOwnedItemIds(profile.lunchmateOwnedItemIds);
 
   const hasProfileSnapshot = isFoodieRoomNavigationState(navigationState);
-  const progressSnapshot = hasProfileSnapshot
-    ? navigationState.progressSnapshot
-    : getLunchmateProgressSnapshot(0);
+  const progressSnapshot = getLunchmateProgressSnapshot(lunchmateTotalXpFromProfile(profile));
   const skin = getSkinById(profile.foodieSkin) ?? MUNCHIE_SKINS[0];
   const roomTheme = getLunchmateRoomTheme(skin.id);
   const roomLoadout = normalizeLunchmateRoomLoadout(profile.lunchmateRoomLoadout, skin.id);
   const { Icon: RoomLevelIcon } = getLunchmateLevelIcon(progressSnapshot.level);
-  const nextRewardLevel = progressSnapshot.isMaxLevel
-    ? progressSnapshot.level
-    : progressSnapshot.level + 1;
+  const nextRewardLevel = progressSnapshot.level + 1;
   const { Icon: NextRewardIcon } = getLunchmateLevelIcon(nextRewardLevel);
 
   const handleBack = () => {
@@ -350,7 +347,10 @@ export default function FoodieRoomPage() {
                   <div className="h-full rounded-full bg-[#E85053]" style={{ width: `${progressSnapshot.progressPercent}%` }} />
                 </div>
                 <p className="mt-2 text-[10px] font-semibold text-[#9A8377]">
-                  {progressSnapshot.isMaxLevel ? '현재 Preview 최고 Level이에요' : `다음 Level까지 ${progressSnapshot.xpRemainingToNextLevel} XP`}
+                  다음 Level까지 {progressSnapshot.xpRemainingToNextLevel} XP
+                </p>
+                <p className="mt-1 text-[10px] font-semibold text-[#A18C80]">
+                  {progressSnapshot.xpIntoCurrentLevel} / {progressSnapshot.xpRequiredForNextLevel} XP
                 </p>
               </div>
               <div className={`mt-4 ${ROOM_CONTENT_GRID_CLASS}`} aria-label="레벨별 성장 보상">

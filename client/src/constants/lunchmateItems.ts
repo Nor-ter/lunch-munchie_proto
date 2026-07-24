@@ -28,7 +28,7 @@ function costumeCollectionLayerPart(
   relativePath: string,
 ): LunchmateLayerPart {
   const revisions = {
-    'collection-wave1-v1': 'collection-repaired-v2',
+    'collection-wave1-v1': 'blue-sailor-face-clean-v1',
     'collection-wave2-v1': 'collection-repaired-v2',
     'collection-wave3-v2': 'collection-wave3-v2',
     'eyewear-collection-wave1-v1': 'eyewear-collection-wave1-v1',

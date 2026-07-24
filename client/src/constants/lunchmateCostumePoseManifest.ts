@@ -71,9 +71,9 @@ export interface LunchmatePoseResolvedLayer {
 const STARTER_PILOT_ROOT = '/assets/lunchmate/costumes/starter-pilot-v3';
 const STARTER_PILOT_ASSET_REVISION = 'side-hoodie-rollback-v5';
 const COLLECTION_WAVE1_ROOT = '/assets/lunchmate/costumes/collection-wave1-v1';
-// Wave 1 and Wave 2 keep their established runtime roots and item IDs, but
-// their PNG contents were fully replaced by collection-repaired-v2.
-const COLLECTION_WAVE1_ASSET_REVISION = 'collection-repaired-v2';
+// Wave 1 retains its established runtime root and item IDs. Its current
+// revision also clears the blue sailor body overlay's leaked face pixels.
+const COLLECTION_WAVE1_ASSET_REVISION = 'blue-sailor-face-clean-v1';
 const COLLECTION_WAVE2_ROOT = '/assets/lunchmate/costumes/collection-wave2-v1';
 const COLLECTION_WAVE2_ASSET_REVISION = 'collection-repaired-v2';
 const COLLECTION_WAVE3_ROOT = '/assets/lunchmate/costumes/collection-wave3-v2';

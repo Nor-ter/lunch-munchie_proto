@@ -161,7 +161,8 @@ describe('Lunchbox pointer feeding integration contract', () => {
     expect(PROFILE_SOURCE).toContain('quantity: 0');
     expect(FLOW_SOURCE).not.toContain('quantity -');
     expect(FLOW_SOURCE).not.toContain('localStorage');
-    expect(FLOW_SOURCE).toContain('setPreviewXp(nextXp)');
+    expect(FLOW_SOURCE).toContain('setPreviewXp(progressUpdate.nextTotalXp)');
+    expect(FLOW_SOURCE).toContain('onTotalXpChange(progressUpdate.nextTotalXp)');
   });
 
   it('remeasures on visual viewport changes and cleans up every observer', () => {

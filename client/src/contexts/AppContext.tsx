@@ -15,6 +15,7 @@ import type {
   LunchmateRoomLoadout,
 } from '@/types/lunchmateCustomization';
 import {
+  lunchmateTotalXpFromProfile,
   normalizeLunchmateOwnedItemIds,
   normalizeLunchmateProfileLoadout,
   normalizeLunchmateRewardClaims,
@@ -178,6 +179,8 @@ export interface UserProfile {
   lunchmateOwnedItemIds?: string[];
   /** 현재 브라우저 preview에서 지급한 레벨별 코스튬 이력 */
   lunchmateRewardClaims?: LunchmateRewardClaim[];
+  /** Lunchmate 성장의 canonical 누적 XP. 레벨과 진행률은 이 값에서 파생한다. */
+  lunchmateTotalXp?: number;
 }
 
 export interface SwipeRecord {
@@ -567,6 +570,7 @@ const DEFAULT_PROFILE: UserProfile = {
   joinedAt: new Date().toISOString(),
   lunchmateOwnedItemIds: normalizeLunchmateOwnedItemIds(undefined),
   lunchmateRewardClaims: [],
+  lunchmateTotalXp: 0,
 };
 
 // ─── Context ──────────────────────────────────────────────────────────────────
@@ -956,13 +960,20 @@ export function AppProvider({
           parsed.id = generateUserId();
           migratedId = true;
         }
-        const normalizedProfile = {
+        const normalizedProfile: UserProfile = {
           ...parsed,
           lunchmateLoadout: normalizeLunchmateProfileLoadout(parsed.lunchmateLoadout),
           lunchmateOwnedItemIds: normalizeLunchmateOwnedItemIds(parsed.lunchmateOwnedItemIds),
           lunchmateRewardClaims: normalizeLunchmateRewardClaims(parsed.lunchmateRewardClaims),
+          lunchmateTotalXp: lunchmateTotalXpFromProfile(parsed),
         };
-        if (migratedId) localStorage.setItem('lm_profile', JSON.stringify(normalizedProfile));
+        const migratedLunchmateTotalXp = !Object.prototype.hasOwnProperty.call(
+          parsed,
+          'lunchmateTotalXp',
+        ) || parsed.lunchmateTotalXp !== normalizedProfile.lunchmateTotalXp;
+        if (migratedId || migratedLunchmateTotalXp) {
+          localStorage.setItem('lm_profile', JSON.stringify(normalizedProfile));
+        }
         return initialAuthUserId
           ? { ...normalizedProfile, id: initialAuthUserId }
           : normalizedProfile;
