@@ -767,7 +767,7 @@ export function createEventsHandler(
       const feat = getItemFeatures(String(e.restaurant_id));
       if (!feat) continue;
       const uid = String(e.user_id);
-      const vec = buildItemVector(feat);
+      const vec = buildItemVector({ ...feat, id: String(e.restaurant_id) }); // id → 피처 스토어 우선 조회
       if (e.event_type === "SWIPE" && (e.action === "LIKE" || e.action === "NOPE")) {
         updateTaste(uid, vec, e.action === "LIKE" ? 1 : 0); // 스와이프=약한 라벨 (둘 다 별로의 FINAL NOPE도 여기)
       } else if (e.event_type === "SWIPE" && e.action === "CHOOSE") {
@@ -775,7 +775,7 @@ export function createEventsHandler(
         // 신뢰도 가중: 빠르고 단호할수록 강하게(decision_ms).
         const c = e.context as { opponent_id?: string; decision_ms?: number } | null | undefined;
         const oppFeat = c?.opponent_id ? getItemFeatures(String(c.opponent_id)) : undefined;
-        if (oppFeat) updatePairwise(uid, vec, buildItemVector(oppFeat), pairwiseWeight(c?.decision_ms));
+        if (oppFeat) updatePairwise(uid, vec, buildItemVector({ ...oppFeat, id: String(c!.opponent_id) }), pairwiseWeight(c?.decision_ms));
       } else if (e.event_type === "WINNER" && feat.category) {
         updateTaste(uid, vec, 1, 2); // v4: 우승=강한 긍정(직접 선택)
         const ctx = e.context as { consumed_at?: number } | null | undefined;
