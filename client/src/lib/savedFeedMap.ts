@@ -14,6 +14,16 @@ export interface SavedFeedMapPoint {
   post: FeedPost;
 }
 
+export interface SavedFeedCourseMapGroup {
+  id: string;
+  feedId: string;
+  courseId: string;
+  latitude: number;
+  longitude: number;
+  points: SavedFeedMapPoint[];
+  post: FeedPost;
+}
+
 interface SavedFeedMapSource {
   posts: FeedPost[];
   getCourseById: (courseId: string) => Course | undefined;
@@ -61,5 +71,33 @@ export function buildSavedFeedMapPoints({
           post,
         }];
       });
+  });
+}
+
+/** 여러 장소로 구성된 저장 코스를 평균 좌표 하나로 묶어 전체 지도에 표시한다. */
+export function groupSavedFeedMapPointsByCourse(
+  points: SavedFeedMapPoint[],
+): SavedFeedCourseMapGroup[] {
+  const byFeed = new Map<string, SavedFeedMapPoint[]>();
+
+  points.forEach((point) => {
+    const grouped = byFeed.get(point.feedId);
+    if (grouped) grouped.push(point);
+    else byFeed.set(point.feedId, [point]);
+  });
+
+  return Array.from(byFeed.values()).map((coursePoints) => {
+    const first = coursePoints[0]!;
+    const latitude = coursePoints.reduce((total, point) => total + point.latitude, 0) / coursePoints.length;
+    const longitude = coursePoints.reduce((total, point) => total + point.longitude, 0) / coursePoints.length;
+    return {
+      id: first.feedId,
+      feedId: first.feedId,
+      courseId: first.courseId,
+      latitude,
+      longitude,
+      points: coursePoints,
+      post: first.post,
+    };
   });
 }

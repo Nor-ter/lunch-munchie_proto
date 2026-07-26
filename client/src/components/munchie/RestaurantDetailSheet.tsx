@@ -1,5 +1,5 @@
 import { motion } from 'framer-motion';
-import { ChevronLeft, Star, MapPin, Clock } from 'lucide-react';
+import { ChevronLeft, Star, MapPin, Clock, X } from 'lucide-react';
 import { useApp, type Restaurant } from '@/contexts/AppContext';
 import type { CoursePlace } from '@/types/course';
 import { getFoodPhotos } from '@/lib/foodPhotos';
@@ -13,10 +13,12 @@ export default function RestaurantDetailSheet({
   restaurantId,
   onClose,
   fallbackPlace,
+  presentation = 'fullscreen',
 }: {
   restaurantId: string;
   onClose: () => void;
   fallbackPlace?: CoursePlace;
+  presentation?: 'fullscreen' | 'modal';
 }) {
   const { getRestaurantById } = useApp();
   const linkedRestaurant = getRestaurantById(restaurantId);
@@ -44,6 +46,7 @@ export default function RestaurantDetailSheet({
   } : undefined);
 
   if (!restaurant) return null;
+  const isModal = presentation === 'modal';
   const menuPhotos = Array.from(new Set([
     ...(restaurant.menuItems ?? []).map(item => item.image).filter((image): image is string => !!image),
     ...(restaurant.photos ?? []),
@@ -52,21 +55,28 @@ export default function RestaurantDetailSheet({
 
   return (
     <motion.div
-      className="fixed inset-0 z-[60] mx-auto w-full max-w-[430px] overflow-y-auto bg-[#FFF8F3]"
-      initial={{ x: '100%' }}
-      animate={{ x: 0 }}
-      exit={{ x: '100%' }}
-      transition={{ type: 'tween', ease: [0.32, 0.72, 0, 1], duration: 0.32 }}
+      role={isModal ? 'dialog' : undefined}
+      aria-modal={isModal || undefined}
+      aria-label={isModal ? `${restaurant.name} 상세정보` : undefined}
+      className={isModal
+        ? 'fixed inset-x-[10%] inset-y-[10dvh] z-[70] mx-auto w-auto max-w-[360px] overflow-y-auto rounded-[28px] border border-white/80 bg-[#FFF8F3] shadow-[0_0_0_100vmax_rgba(45,29,24,0.38),0_24px_60px_rgba(45,29,24,0.32)]'
+        : 'fixed inset-0 z-[60] mx-auto w-full max-w-[430px] overflow-y-auto bg-[#FFF8F3]'}
+      initial={isModal ? { opacity: 0, scale: 0.94, y: 12 } : { x: '100%' }}
+      animate={isModal ? { opacity: 1, scale: 1, y: 0 } : { x: 0 }}
+      exit={isModal ? { opacity: 0, scale: 0.96, y: 8 } : { x: '100%' }}
+      transition={isModal
+        ? { type: 'spring', stiffness: 360, damping: 32 }
+        : { type: 'tween', ease: [0.32, 0.72, 0, 1], duration: 0.32 }}
     >
       {/* Hero */}
-      <div className="relative h-[220px] overflow-hidden bg-[#F5EEE8]">
+      <div className={`relative overflow-hidden bg-[#F5EEE8] ${isModal ? 'h-[160px]' : 'h-[220px]'}`}>
         <img src={restaurant.image} alt={restaurant.name} className="h-full w-full object-cover" />
         <button
           onClick={onClose}
-          aria-label="뒤로가기"
+          aria-label={isModal ? '상세정보 닫기' : '뒤로가기'}
           className="absolute top-4 left-4 w-9 h-9 rounded-full bg-white/90 shadow flex items-center justify-center active:scale-95"
         >
-          <ChevronLeft size={20} />
+          {isModal ? <X size={18} /> : <ChevronLeft size={20} />}
         </button>
       </div>
 
