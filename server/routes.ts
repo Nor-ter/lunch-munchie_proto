@@ -138,18 +138,54 @@ function osmRestaurants(): Record<string, any>[] | null {
 
 // DB 연결이 불가능할 때(예: Supabase 일시정지/포트 차단) 코스맵 프로토타입이
 // 그대로 동작하도록, 멜버른 샘플 데이터를 API 응답 형태로 변환하는 폴백 헬퍼.
+// 드라이브 인제스천 사진(server/data/drive_ingest.json) → restaurant_id별 URL 목록.
+// OSM 데이터엔 사진이 거의 없어(2115곳 중 2109곳 없음) 앱이 카테고리 스톡 이미지를 돌려쓴다.
+// 팀이 직접 찍은 실제 사진을 그 자리에 넣는다. 메뉴판 사진은 인제스천 단계에서 이미 제외됨.
+const __ingestPath = join(dirname(fileURLToPath(import.meta.url)), "data", "drive_ingest.json");
+let __drivePhotos: Map<string, string[]> | undefined;
+function drivePhotosByRestaurant(): Map<string, string[]> {
+  if (__drivePhotos) return __drivePhotos;
+  const m = new Map<string, string[]>();
+  try {
+    if (existsSync(__ingestPath)) {
+      const d = JSON.parse(readFileSync(__ingestPath, "utf8")) as { photos?: { restaurant_id?: string; url?: string; kind?: string; quality?: number }[] };
+      // 대표 사진 우선순위: 음식(dish/table) → 외관 → 내부. 품질 높은 순.
+      const rank: Record<string, number> = { dish: 0, table: 1, storefront: 2, interior: 3, other: 4 };
+      for (const p of d.photos ?? []) {
+        if (!p.restaurant_id || !p.url || p.kind === "menu") continue;
+        const arr = m.get(p.restaurant_id) ?? [];
+        arr.push(p.url);
+        m.set(p.restaurant_id, arr);
+      }
+      for (const k of Array.from(m.keys())) {
+        const meta = (d.photos ?? []).filter(p => p.restaurant_id === k && p.kind !== "menu");
+        meta.sort((a, b) => (rank[a.kind ?? "other"] ?? 9) - (rank[b.kind ?? "other"] ?? 9) || (b.quality ?? 0) - (a.quality ?? 0));
+        m.set(k, meta.map(p => p.url!).filter(Boolean));
+      }
+      if (m.size) console.log(`[data] 드라이브 사진 로드: ${m.size}곳 / ${(d.photos ?? []).length}장`);
+    }
+  } catch { /* 없으면 사진 없이 진행 */ }
+  __drivePhotos = m;
+  return m;
+}
+
 function mockRestaurantsResponse() {
   const osm = osmRestaurants();
   if (osm) {
-    return osm.map(r => ({
-      id: r.id, name: r.name, category: r.category,
-      tags: r.tags || [], rating: r.rating, reviewCount: r.review_count,
-      distance: "", address: r.address, image: (r.photos && r.photos[0]) || "",
-      photos: r.photos || [], menuItems: r.menu_items || [],
-      lat: r.latitude, lng: r.longitude, priceRange: r.price_level,
-      openHours: r.business_hours, dietary: r.dietary_options || [],
-      description: r.short_description,
-    }));
+    const dp = drivePhotosByRestaurant();
+    return osm.map(r => {
+      const drive = dp.get(r.id) ?? [];
+      const photos = [...drive, ...(r.photos || [])];
+      return {
+        id: r.id, name: r.name, category: r.category,
+        tags: r.tags || [], rating: r.rating, reviewCount: r.review_count,
+        distance: "", address: r.address, image: photos[0] || "",
+        photos, menuItems: r.menu_items || [],
+        lat: r.latitude, lng: r.longitude, priceRange: r.price_level,
+        openHours: r.business_hours, dietary: r.dietary_options || [],
+        description: r.short_description,
+      };
+    });
   }
   return MOCK_RESTAURANTS.map(r => ({
     id: r.id,

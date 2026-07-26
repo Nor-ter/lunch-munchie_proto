@@ -975,7 +975,13 @@ export function AppProvider({
       .then(([resData, courseData]) => {
         if (Array.isArray(resData) && resData.length > 0) {
           setRestaurants(previous => {
-            const merged = new Map(previous.map(restaurant => [restaurant.id, restaurant]));
+            // 실데이터가 도착하면 mock 시드는 걷어낸다. 예전엔 previous(=MOCK_RESTAURANTS)에
+            // 더하기만 해서 id가 안 겹치는 mock(서울 샘플)이 덱에 영구히 섞였다.
+            // 세션 중 등록된 로컬 식당(registerRestaurants)은 보존한다.
+            const mockIds = new Set(MOCK_RESTAURANTS.map(r => r.id));
+            const merged = new Map(
+              previous.filter(r => !mockIds.has(r.id)).map(restaurant => [restaurant.id, restaurant]),
+            );
             resData.forEach((restaurant: Restaurant) => merged.set(restaurant.id, {
               ...restaurant,
               tags: restaurant.tags.map(tag => normalizeFoodTag(tag)),
