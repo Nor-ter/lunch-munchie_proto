@@ -8,21 +8,34 @@ export const FEATURE_KEYS = ["spicy", "salty", "sweet", "oily", "light", "price"
 export const FEATURE_DIM = FEATURE_KEYS.length;
 
 // 카테고리 → 맛 프로파일 [맵기, 짭짤, 단맛, 기름짐, 가벼움] (0~1). 키워드 부분일치.
+// 한글/영문 둘 다 매칭한다 — 서빙 카탈로그(melbourne_osm)는 영문 카테고리를 쓰므로
+// 한글 패턴만 있으면 전 식당이 NEUTRAL로 떨어져 아이템 신호가 0이 된다(콜드스타트).
 const TASTE_PROFILES: { match: RegExp; p: [number, number, number, number, number] }[] = [
-  { match: /한식|고기/, p: [0.7, 0.6, 0.3, 0.5, 0.3] },
-  { match: /중식/, p: [0.5, 0.7, 0.4, 0.8, 0.2] },
-  { match: /일식|스시|라멘/, p: [0.2, 0.5, 0.3, 0.3, 0.7] },
-  { match: /이탈리안|피자/, p: [0.2, 0.6, 0.3, 0.6, 0.3] },
-  { match: /타이|태국/, p: [0.8, 0.6, 0.5, 0.5, 0.4] },
-  { match: /스테이크/, p: [0.2, 0.7, 0.2, 0.8, 0.1] },
-  { match: /치킨/, p: [0.5, 0.7, 0.3, 0.9, 0.1] },
-  { match: /디저트/, p: [0.0, 0.2, 0.95, 0.5, 0.4] },
-  { match: /베이커리|빵/, p: [0.0, 0.3, 0.8, 0.5, 0.5] },
-  { match: /카페/, p: [0.0, 0.2, 0.6, 0.3, 0.7] },
-  { match: /브런치/, p: [0.1, 0.5, 0.5, 0.5, 0.5] },
-  { match: /비건|샐러드/, p: [0.2, 0.3, 0.3, 0.2, 0.9] },
-  { match: /타파스|스페인/, p: [0.3, 0.7, 0.2, 0.6, 0.4] },
-  { match: /파인다이닝/, p: [0.2, 0.5, 0.4, 0.5, 0.5] },
+  { match: /한식|고기|korean|bbq|barbecue/i, p: [0.7, 0.6, 0.3, 0.5, 0.3] },
+  { match: /중식|chinese|dumpling|hot ?pot/i, p: [0.5, 0.7, 0.4, 0.8, 0.2] },
+  { match: /일식|스시|라멘|japanese|sushi|ramen|udon|izakaya/i, p: [0.2, 0.5, 0.3, 0.3, 0.7] },
+  { match: /이탈리안|피자|italian|pizza|pasta/i, p: [0.2, 0.6, 0.3, 0.6, 0.3] },
+  { match: /타이|태국|thai/i, p: [0.8, 0.6, 0.5, 0.5, 0.4] },
+  { match: /인도|indian|curry/i, p: [0.75, 0.6, 0.35, 0.6, 0.3] },
+  { match: /베트남|vietnamese|pho/i, p: [0.3, 0.5, 0.3, 0.3, 0.75] },
+  { match: /멕시칸|mexican|taco|burrito/i, p: [0.7, 0.6, 0.3, 0.6, 0.35] },
+  { match: /스테이크|steak/i, p: [0.2, 0.7, 0.2, 0.8, 0.1] },
+  { match: /치킨|chicken|fried/i, p: [0.5, 0.7, 0.3, 0.9, 0.1] },
+  { match: /버거|burger|fast ?food/i, p: [0.25, 0.7, 0.3, 0.8, 0.15] },
+  { match: /디저트|dessert|ice ?cream|gelato/i, p: [0.0, 0.2, 0.95, 0.5, 0.4] },
+  { match: /베이커리|빵|bakery|pastry|patisserie/i, p: [0.0, 0.3, 0.8, 0.5, 0.5] },
+  { match: /카페|cafe|coffee|tea|juice|bubble/i, p: [0.0, 0.2, 0.6, 0.3, 0.7] },
+  { match: /브런치|brunch|breakfast/i, p: [0.1, 0.5, 0.5, 0.5, 0.5] },
+  { match: /비건|샐러드|vegan|vegetarian|salad|poke/i, p: [0.2, 0.3, 0.3, 0.2, 0.9] },
+  { match: /타파스|스페인|tapas|spanish/i, p: [0.3, 0.7, 0.2, 0.6, 0.4] },
+  { match: /해산물|seafood|fish/i, p: [0.2, 0.55, 0.25, 0.35, 0.65] },
+  { match: /파인다이닝|fine ?dining/i, p: [0.2, 0.5, 0.4, 0.5, 0.5] },
+  { match: /펍|pub|bar|wine/i, p: [0.3, 0.7, 0.3, 0.6, 0.3] },
+  { match: /말레이|malaysian|indonesian|asian|nasi|laksa/i, p: [0.6, 0.6, 0.4, 0.6, 0.35] },
+  { match: /프렌치|french|bistro/i, p: [0.15, 0.6, 0.35, 0.6, 0.4] },
+  { match: /american|diner|sandwich|deli/i, p: [0.25, 0.65, 0.35, 0.7, 0.25] },
+  { match: /confectionery|candy|chocolate|donut|waffle|cake/i, p: [0.0, 0.2, 0.95, 0.5, 0.4] },
+  { match: /그리스|greek|turkish|kebab|lebanese|middle ?eastern/i, p: [0.4, 0.6, 0.35, 0.5, 0.45] },
 ];
 const NEUTRAL: [number, number, number, number, number] = [0.4, 0.4, 0.4, 0.4, 0.5];
 
