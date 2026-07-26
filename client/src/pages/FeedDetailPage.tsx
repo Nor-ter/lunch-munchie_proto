@@ -15,13 +15,16 @@ export default function FeedDetailPage() {
   const fromSaved = origin === 'saved';
   const fromNotifications = origin === 'notifications';
   const profileReturnId = new URLSearchParams(search).get('profileId');
+  const savedView = fromSaved && new URLSearchParams(search).get('savedView') === 'map'
+    ? 'map'
+    : undefined;
   const detailOrigin = fromProfile ? 'profile' : fromSaved ? 'saved' : 'feed';
   const backPath = fromNotifications
     ? '/?notifications=1'
     : fromProfile
       ? profileReturnId ? `/profile/${profileReturnId}` : '/profile'
       : fromSaved
-        ? getSavedReturnPath(search)
+        ? getSavedReturnPath(search, id)
         : '/feed?tab=feed';
   const backLabel = fromNotifications ? '알림으로 돌아가기' : fromProfile ? '프로필로 돌아가기' : fromSaved ? '저장목록으로 돌아가기' : '먼치피드로 돌아가기';
 
@@ -54,7 +57,7 @@ export default function FeedDetailPage() {
         ) : <span className="h-10 w-10" />}
       </header>
       <section className="px-4 pt-2">
-        <UnifiedMunchieCard post={post} detailOrigin={detailOrigin} />
+        <UnifiedMunchieCard post={post} detailOrigin={detailOrigin} savedView={savedView} />
       </section>
     </main>
   );

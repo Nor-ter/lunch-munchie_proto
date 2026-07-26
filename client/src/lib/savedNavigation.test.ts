@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  getSavedCourseDetailPath,
   getSavedFeedDetailPath,
   getSavedReturnPath,
   getSavedViewFromSearch,
@@ -12,6 +13,13 @@ describe('saved map/list return navigation', () => {
 
   it('returns map-origin feed details to map view', () => {
     expect(getSavedReturnPath('from=saved&savedView=map')).toBe('/saved?view=map');
+    expect(getSavedReturnPath('from=saved&savedView=map', 'f2'))
+      .toBe('/saved?view=map&selectedFeed=f2');
+  });
+
+  it('carries map origin from a saved feed detail into its course detail', () => {
+    expect(getSavedCourseDetailPath('c2', 'f2', 'map'))
+      .toBe('/course/c2?from=saved&post=f2&savedView=map');
   });
 
   it('uses list view for list-origin and legacy saved feed links', () => {

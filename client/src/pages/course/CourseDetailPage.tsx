@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useParams, useLocation, useSearch } from 'wouter';
 import { motion, AnimatePresence } from 'framer-motion';
-import { ThumbsUp, ChevronLeft, ChevronRight, Star, X, GripVertical, Clock, MapPin, Plus, Search, Share2, Trash2 } from 'lucide-react';
+import { Bookmark, ThumbsUp, ChevronLeft, ChevronRight, Star, X, GripVertical, Clock, MapPin, Plus, Search, Share2, Trash2 } from 'lucide-react';
 import {
   DndContext,
   closestCenter,
@@ -57,6 +57,26 @@ const BACK_PATH: Record<FromMode, string> = {
   'template-detail': '/feed?tab=template',
   explore: '/feed', // 먼치모드 통합 — 구 explore 진입도 피드로 복귀
 };
+
+export function resolveCourseDetailBackPath(
+  from: FromMode,
+  templateFrom: string | null,
+  postId?: string | null,
+  savedView?: string | null,
+): string {
+  if (from === 'saved' && postId) {
+    const savedViewQuery = savedView === 'map' ? '&savedView=map' : '';
+    return `/feed/${encodeURIComponent(postId)}?from=saved${savedViewQuery}`;
+  }
+  if (from !== 'template-detail') return BACK_PATH[from];
+  if (templateFrom === 'profile') return BACK_PATH.profile;
+  if (templateFrom === 'saved') return BACK_PATH.saved;
+  return '/feed';
+}
+
+export function shouldShowSavedCopyEdit(from: FromMode): boolean {
+  return from === 'saved';
+}
 
 function restaurantToCoursePlace(restaurant: Restaurant): CoursePlace {
   return {
@@ -265,12 +285,17 @@ export default function CourseDetailPage() {
   const search = useSearch();
   // 프로필 진입도 내 코스맵이므로 편집 가능 모드
   const fromSaved = from === 'saved' || from === 'profile';
+  const isSavedOrigin = shouldShowSavedCopyEdit(from);
   const {
     getCourseById: getAppCourseById,
     getRestaurantById,
     feedPosts,
     likedFeedIds,
     toggleFeedLike,
+    incrementFeedShare,
+    savedCourseIds,
+    saveCourse,
+    unsaveCourse,
     restaurants,
     registerRestaurants,
     updateCourse,
@@ -279,14 +304,11 @@ export default function CourseDetailPage() {
     profile,
     isMyPost,
   } = useApp();
-  const templateId = new URLSearchParams(search).get('template');
   const templateFrom = new URLSearchParams(search).get('templateFrom');
-  const templateOrigin = templateFrom === 'profile' || templateFrom === 'saved' ? templateFrom : 'feed';
   const requestedPostId = new URLSearchParams(search).get('post');
+  const savedView = new URLSearchParams(search).get('savedView');
   const isProfileTemplateCourse = from === 'template-detail' && templateFrom === 'profile';
-  const backPath = from === 'template-detail' && templateId && id
-    ? `/template/${templateId}?course=${id}&from=${templateOrigin}`
-    : BACK_PATH[from];
+  const backPath = resolveCourseDetailBackPath(from, templateFrom, requestedPostId, savedView);
 
   const appCourse = id ? getAppCourseById(id) : undefined;
   const orphanPost = id
@@ -335,6 +357,7 @@ export default function CourseDetailPage() {
   const authorLevelIcon = getLunchmateLevelIcon(authorLevel);
   const AuthorLevelIcon = authorLevelIcon.Icon;
   const isCoursePostLiked = orphanPost ? likedFeedIds.includes(orphanPost.id) : false;
+  const isCourseSaved = id ? savedCourseIds.includes(id) : false;
 
   // Local editable state (only used in saved mode)
   const [places, setPlaces] = useState<CoursePlace[]>(initialPlaces);
@@ -364,6 +387,52 @@ export default function CourseDetailPage() {
       || restaurant.address.toLowerCase().includes(placeSearchInput.trim().toLowerCase())
     )).slice(0, 5)
     : [];
+
+  const handleCourseShare = async () => {
+    if (!id) return;
+    const shareUrl = `${window.location.origin}/course/${encodeURIComponent(id)}`;
+    const shareTitle = appCourse?.title || courseData.title || 'Lunchie Munchie 코스맵';
+    const recordShare = () => {
+      if (orphanPost) incrementFeedShare(orphanPost.id);
+    };
+    const copyShareLink = async () => {
+      try {
+        await navigator.clipboard.writeText(shareUrl);
+        recordShare();
+        toast.success('코스 링크를 복사했어요.');
+      } catch {
+        toast.error('코스 링크를 공유하지 못했어요.');
+      }
+    };
+
+    if (!navigator.share) {
+      await copyShareLink();
+      return;
+    }
+
+    try {
+      await navigator.share({
+        title: `Lunchie Munchie — ${shareTitle}`,
+        text: `${shareTitle} 코스를 함께 둘러보세요.`,
+        url: shareUrl,
+      });
+      recordShare();
+    } catch (error) {
+      if (error instanceof Error && error.name === 'AbortError') return;
+      await copyShareLink();
+    }
+  };
+
+  const toggleCourseSaved = () => {
+    if (!id) return;
+    if (isCourseSaved) {
+      unsaveCourse(id);
+      toast.success('저장을 해제했어요.');
+    } else {
+      saveCourse(id);
+      toast.success('코스를 저장했어요.');
+    }
+  };
 
   useEffect(() => {
     if (isEditing) return;
@@ -491,7 +560,7 @@ export default function CourseDetailPage() {
     }
   };
 
-  const hasBottomAction = isProfileTemplateCourse || (fromSaved && isEditing) || !fromSaved;
+  const hasBottomAction = isProfileTemplateCourse || isSavedOrigin || (fromSaved && isEditing) || !fromSaved;
 
   const placeSearchPanel = editingPlaceIndex !== null ? (
     <motion.div
@@ -636,7 +705,16 @@ export default function CourseDetailPage() {
           </div>
         )}
 
-        {fromSaved && isOwnCourseAuthor ? (
+        {from === 'feed' || isSavedOrigin ? (
+          <button
+            type="button"
+            onClick={handleCourseShare}
+            aria-label="코스 공유하기"
+            className="flex h-9 w-9 items-center justify-center rounded-full border border-[#F0C8C8] bg-white text-[#D94E55] active:scale-[0.98]"
+          >
+            <Share2 size={17} />
+          </button>
+        ) : fromSaved && isOwnCourseAuthor ? (
           <button
             onClick={toggleEditMode}
             className="border border-gray-300 text-sm px-3 py-1 rounded-full"
@@ -700,10 +778,6 @@ export default function CourseDetailPage() {
         <span className="flex shrink-0 items-center gap-1" aria-label={`좋아요 ${orphanPost?.likes ?? 0}개`}>
           <ThumbsUp size={13} className="text-[#E85053]" />
           {orphanPost?.likes ?? 0}
-        </span>
-        <span className="flex shrink-0 items-center gap-1" aria-label={`공유 ${orphanPost?.shares ?? 0}회`}>
-          <Share2 size={13} className="text-[#E85053]" />
-          {orphanPost?.shares ?? 0}
         </span>
       </div>
 
@@ -786,6 +860,28 @@ export default function CourseDetailPage() {
           >
             삭제
           </button>
+        ) : isSavedOrigin ? (
+          <>
+            <button
+              type="button"
+              onClick={() => orphanPost && toggleFeedLike(orphanPost.id)}
+              disabled={!orphanPost}
+              aria-label={isCoursePostLiked ? '좋아요 취소' : '좋아요'}
+              aria-pressed={isCoursePostLiked}
+              className={`page-bottom-action-secondary transition-colors disabled:opacity-40 ${
+                isCoursePostLiked ? 'bg-[#FFE2DF] text-[#D94E55]' : ''
+              }`}
+            >
+              <ThumbsUp size={20} fill={isCoursePostLiked ? 'currentColor' : 'none'} />
+            </button>
+            <button
+              type="button"
+              onClick={() => navigate(`/coursemap/new?course=${id}`)}
+              className="page-bottom-action-primary"
+            >
+              복사해서 편집
+            </button>
+          </>
         ) : (
           <>
             <button
@@ -801,10 +897,13 @@ export default function CourseDetailPage() {
               <ThumbsUp size={20} fill={isCoursePostLiked ? 'currentColor' : 'none'} />
             </button>
             <button
-              onClick={() => navigate(`/coursemap/new?course=${id}`)}
-              className="page-bottom-action-primary"
+              type="button"
+              onClick={toggleCourseSaved}
+              aria-label={isCourseSaved ? '저장 해제' : '저장하기'}
+              className="page-bottom-action-primary gap-2"
             >
-              복사해서 편집
+              <Bookmark size={18} fill={isCourseSaved ? 'currentColor' : 'none'} />
+              {isCourseSaved ? '저장됨' : '저장하기'}
             </button>
           </>
         )}
