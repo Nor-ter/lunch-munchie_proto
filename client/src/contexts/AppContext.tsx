@@ -10,13 +10,17 @@ import { intentForHour, type Intent } from '@shared/intent';
 import { normalizeFoodTag, type TagType } from '@/constants/foodTags';
 import { isWebAuthConfigured } from '@/contexts/AuthContext';
 import { MAX_MUNCHIE_FEED_PHOTOS, type CoursemapCanvasStroke, type FeedPhotoPlacement } from '@/lib/coursemapDecor';
-import type { LunchmateProfileLoadout } from '@/types/lunchmateCustomization';
+import type {
+  LunchmateProfileLoadout,
+  LunchmateRoomLoadout,
+} from '@/types/lunchmateCustomization';
 import type { LunchboxInventory } from '@/constants/lunchboxFoods';
 import {
   mergeLegacyRiceballCount,
   normalizeLunchboxInventory,
 } from '@/constants/lunchboxFoods';
 import {
+  lunchmateTotalXpFromProfile,
   normalizeLunchmateOwnedItemIds,
   normalizeLunchmateProfileLoadout,
   normalizeLunchmateRewardClaims,
@@ -175,6 +179,8 @@ export interface UserProfile {
   foodieChar?: string;
   /** 푸디 캐릭터 방 스킨 (먼치 스킨 id) */
   foodieSkin?: string;
+  /** 런치메이트룸의 독립 wall/floor/furniture/props 선택. 없으면 foodieSkin preset 사용. */
+  lunchmateRoomLoadout?: LunchmateRoomLoadout;
   /** 런치메이트룸에서 적용한 네 slot 코스튬 조합 */
   lunchmateLoadout?: LunchmateProfileLoadout;
   /** 보유한 런치메이트 코스튬 manifest ID 목록 */
@@ -183,8 +189,10 @@ export interface UserProfile {
   lunchmateRewardClaims?: LunchmateRewardClaim[];
   /** 먼치 피드 보상으로 획득한 음식별 런치박스 수량 */
   lunchboxInventory?: LunchboxInventory;
-  /** 런치메이트 레벨과 EXP에 사용하는 누적 맛추억 */
+  /** 이전 버전에서 런치메이트 레벨과 EXP에 사용한 누적 맛추억 */
   lunchmateXp?: number;
+  /** Lunchmate 성장의 canonical 누적 XP. 레벨과 진행률은 이 값에서 파생한다. */
+  lunchmateTotalXp?: number;
 }
 
 export interface SwipeRecord {
@@ -586,6 +594,7 @@ const DEFAULT_PROFILE: UserProfile = {
   lunchmateRewardClaims: [],
   lunchboxInventory: normalizeLunchboxInventory(undefined),
   lunchmateXp: 0,
+  lunchmateTotalXp: 0,
 };
 
 // ─── Context ──────────────────────────────────────────────────────────────────
@@ -990,7 +999,7 @@ export function AppProvider({
           parsed.id = generateUserId();
           migratedId = true;
         }
-        const normalizedProfile = {
+        const normalizedProfile: UserProfile = {
           ...parsed,
           lunchmateLoadout: normalizeLunchmateProfileLoadout(parsed.lunchmateLoadout),
           lunchmateOwnedItemIds: normalizeLunchmateOwnedItemIds(parsed.lunchmateOwnedItemIds),
@@ -1000,8 +1009,15 @@ export function AppProvider({
             parsed.lunchboxInventory,
             localStorage.getItem('lm_riceball_count'),
           ),
+          lunchmateTotalXp: lunchmateTotalXpFromProfile(parsed),
         };
-        if (migratedId) localStorage.setItem('lm_profile', JSON.stringify(normalizedProfile));
+        const migratedLunchmateTotalXp = !Object.prototype.hasOwnProperty.call(
+          parsed,
+          'lunchmateTotalXp',
+        ) || parsed.lunchmateTotalXp !== normalizedProfile.lunchmateTotalXp;
+        if (migratedId || migratedLunchmateTotalXp) {
+          localStorage.setItem('lm_profile', JSON.stringify(normalizedProfile));
+        }
         return initialAuthUserId
           ? { ...normalizedProfile, id: initialAuthUserId }
           : normalizedProfile;
@@ -1009,6 +1025,8 @@ export function AppProvider({
     } catch { /* fall through */ }
     return { ...DEFAULT_PROFILE, id: initialAuthUserId ?? generateUserId() };
   });
+  const initialStoredProfileRef = useRef(localStorage.getItem('lm_profile'));
+  const isInitialProfilePersistenceRef = useRef(true);
 
   useEffect(() => {
     setIsLoading(true);
@@ -1099,6 +1117,19 @@ export function AppProvider({
   useEffect(() => { localStorage.setItem('lm_swipes', JSON.stringify(swipeRecords)); }, [swipeRecords]);
   useEffect(() => { localStorage.setItem('lm_saved_restaurants', JSON.stringify(savedRestaurantIds)); }, [savedRestaurantIds]);
   useEffect(() => {
+    if (isInitialProfilePersistenceRef.current) {
+      isInitialProfilePersistenceRef.current = false;
+      try {
+        const initiallyStoredProfile = initialStoredProfileRef.current
+          ? JSON.parse(initialStoredProfileRef.current) as Partial<UserProfile>
+          : null;
+        // 동일 사용자의 legacy profile read는 쓰기를 유발하지 않는다.
+        // 신규 profile, legacy "me" migration, auth uid adoption은 기존처럼 즉시 저장한다.
+        if (initiallyStoredProfile?.id === profile.id) return;
+      } catch {
+        // 손상된 값은 아래의 정상 profile로 교체한다.
+      }
+    }
     try {
       localStorage.setItem('lm_profile', JSON.stringify(profile));
       localStorage.removeItem('lm_riceball_count');
@@ -1166,7 +1197,7 @@ export function AppProvider({
   }, []);
 
   const addFeedPost = useCallback((post: Omit<FeedPost, 'id' | 'likes' | 'shares' | 'saves' | 'comments' | 'createdAt'>) => {
-    const authorProgress = getLunchmateProgressSnapshot(profile.lunchmateXp ?? 0);
+    const authorProgress = getLunchmateProgressSnapshot(lunchmateTotalXpFromProfile(profile));
     const full: FeedPost = {
       ...post,
       authorLevel: authorProgress.level,
@@ -1182,7 +1213,7 @@ export function AppProvider({
     };
     setFeedPosts(prev => [full, ...prev]);
     return full;
-  }, []);
+  }, [profile]);
 
   const updateFeedPost = useCallback((postId: string, updates: Partial<Pick<FeedPost, 'courseId' | 'caption' | 'skinId' | 'photos' | 'photoPlacements' | 'canvasStrokes' | 'tags'>>) => {
     setFeedPosts(posts => posts.map(p => p.id === postId
@@ -1194,7 +1225,7 @@ export function AppProvider({
     setFeedPosts(posts => posts.filter(p => p.id !== postId));
     setLikedFeedIds(ids => ids.filter(id => id !== postId));
     setDislikedFeedIds(ids => ids.filter(id => id !== postId));
-  }, [profile.lunchmateXp]);
+  }, []);
 
   const incrementFeedShare = useCallback((postId: string) => {
     setFeedPosts(posts => posts.map(post => post.id === postId
@@ -1544,10 +1575,16 @@ export function AppProvider({
 
   const updateProfile = useCallback((updates: Partial<UserProfile>) => {
     setProfile(prev => ({ ...prev, ...updates }));
-    if (updates.name !== undefined || updates.emoji !== undefined || updates.lunchmateXp !== undefined) {
-      const nextProgress = updates.lunchmateXp === undefined
+    if (
+      updates.name !== undefined
+      || updates.emoji !== undefined
+      || updates.lunchmateXp !== undefined
+      || updates.lunchmateTotalXp !== undefined
+    ) {
+      const updatedXp = updates.lunchmateTotalXp ?? updates.lunchmateXp;
+      const nextProgress = updatedXp === undefined
         ? null
-        : getLunchmateProgressSnapshot(updates.lunchmateXp);
+        : getLunchmateProgressSnapshot(updatedXp);
       setFeedPosts(posts => posts.map(post => post.authorId === profile.id
         ? {
             ...post,

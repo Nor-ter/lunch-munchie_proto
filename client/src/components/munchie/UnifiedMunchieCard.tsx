@@ -22,6 +22,7 @@ import { fromFeedPhotoPlacements, type CoursemapCanvasStroke, type PlacedPhoto }
 import TemplateArtwork from '@/components/munchie/TemplateArtwork';
 import OneLineReviewBox from '@/components/munchie/OneLineReviewBox';
 import { acquireDocumentScrollLock } from '@/lib/documentScrollLock';
+import { resolveFeedAuthorId } from '@/lib/profileFeed';
 
 function timeAgo(iso: string) {
   const days = Math.max(0, Math.floor((Date.now() - new Date(iso).getTime()) / 86_400_000));
@@ -41,6 +42,7 @@ export default function UnifiedMunchieCard({
   decorOverride,
   strokesOverride,
   detailOrigin = 'feed',
+  profileReturnId,
 }: {
   post: FeedPost;
   compact?: boolean;
@@ -51,6 +53,7 @@ export default function UnifiedMunchieCard({
   decorOverride?: PlacedPhoto[];
   strokesOverride?: CoursemapCanvasStroke[];
   detailOrigin?: 'feed' | 'saved' | 'profile';
+  profileReturnId?: string;
 }) {
   const [, navigate] = useLocation();
   const {
@@ -79,7 +82,7 @@ export default function UnifiedMunchieCard({
   });
   const linkedCourse = courseOverride ?? getCourseById(post.courseId);
   const ownPost = isMyPost(post);
-  const authorProfilePath = ownPost ? '/profile' : `/profile/${post.authorId}`;
+  const authorProfilePath = ownPost ? '/profile' : `/profile/${resolveFeedAuthorId(post)}`;
 
   useEffect(() => {
     if (!deleteConfirmOpen) return;
@@ -111,7 +114,10 @@ export default function UnifiedMunchieCard({
   const rootComments = visibleComments.filter(item => !item.parentId);
   const liked = likedFeedIds.includes(post.id);
   const saved = savedCourseIds.includes(course.id);
-  const compactDetailPath = `/feed/${post.id}?from=${detailOrigin}`;
+  const profileReturnQuery = detailOrigin === 'profile' && profileReturnId
+    ? `&profileId=${encodeURIComponent(profileReturnId)}`
+    : '';
+  const compactDetailPath = `/feed/${post.id}?from=${detailOrigin}${profileReturnQuery}`;
 
   const go = (path: string) => interactive && navigate(path);
   const submitComment = () => {
@@ -238,7 +244,7 @@ export default function UnifiedMunchieCard({
                 </>
               ) : (
                 <>
-                  <button type="button" onClick={() => { setShowPostMenu(false); go(`/profile/${post.authorId}`); }} className="block h-9 w-full px-3 text-left text-[10px] font-bold text-[#51443E]">작성자 보기</button>
+                  <button type="button" onClick={() => { setShowPostMenu(false); go(authorProfilePath); }} className="block h-9 w-full px-3 text-left text-[10px] font-bold text-[#51443E]">작성자 보기</button>
                   <button type="button" disabled={postReported} onClick={reportPost} className="block h-9 w-full border-t border-[#EEE3DD] px-3 text-left text-[10px] font-bold text-[#D84D52] disabled:text-[#A99D97]">{postReported ? '신고 완료' : '게시물 신고'}</button>
                 </>
               )}
@@ -275,7 +281,7 @@ export default function UnifiedMunchieCard({
                 </>
               ) : (
                 <>
-                  <button type="button" onClick={() => { setShowPostMenu(false); go(`/profile/${post.authorId}`); }} className="block h-10 w-full px-3 text-left text-[11px] font-bold text-[#51443E]">작성자 보기</button>
+                  <button type="button" onClick={() => { setShowPostMenu(false); go(authorProfilePath); }} className="block h-10 w-full px-3 text-left text-[11px] font-bold text-[#51443E]">작성자 보기</button>
                   <button type="button" disabled={postReported} onClick={reportPost} className="block h-10 w-full border-t border-[#EEE3DD] px-3 text-left text-[11px] font-bold text-[#D84D52] disabled:text-[#A99D97]">{postReported ? '신고 완료' : '게시물 신고'}</button>
                 </>
               )}

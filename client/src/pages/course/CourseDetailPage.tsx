@@ -26,6 +26,7 @@ import { getCourseById as getMockCourseById } from '@/data/mockCourse';
 import { CoursePlace } from '@/types/course';
 import { getCourseSequenceColor } from '@/constants/courseTheme';
 import { getCourseMapPoints, getCoursePlacesFromStops } from '@/lib/courseMapSync';
+import { resolveFeedAuthorId } from '@/lib/profileFeed';
 import RestaurantDetailSheet from '@/components/munchie/RestaurantDetailSheet';
 import { usePlacesSearch } from '@/hooks/usePlacesSearch';
 import { getPlaceDetails } from '@/services/placesApi';
@@ -36,6 +37,7 @@ import { acquireDocumentScrollLock } from '@/lib/documentScrollLock';
 import { FollowButton } from '@/components/follow/FollowButton';
 import { getLunchmateLevelIcon } from '@/constants/lunchmateLevelIcons';
 import { getLunchmateProgressSnapshot } from '@/utils/lunchmateProgress';
+import { lunchmateTotalXpFromProfile } from '@/utils/lunchmateProfile';
 
 type FromMode = 'explore' | 'saved' | 'feed' | 'template' | 'template-detail' | 'profile';
 
@@ -316,11 +318,14 @@ export default function CourseDetailPage() {
     : courseData.durationHours;
   const durationLabel = `${Number.isInteger(durationHours) ? durationHours : durationHours.toFixed(1)}시간`;
   const authorHandle = (orphanPost?.authorName || courseData.authorHandle).replace(/^@/, '');
-  const authorId = orphanPost?.authorId ?? appCourse?.creatorId ?? '';
+  const authorMeta = orphanPost ? 'Munchie creator' : `${courseData.followerCount} Followers`;
+  const authorId = orphanPost
+    ? resolveFeedAuthorId(orphanPost)
+    : appCourse?.creatorId ?? '';
   const isOwnCourseAuthor = orphanPost
     ? isMyPost(orphanPost)
     : authorId === profile.id || from === 'profile';
-  const ownAuthorProgress = getLunchmateProgressSnapshot(profile.lunchmateXp ?? 0);
+  const ownAuthorProgress = getLunchmateProgressSnapshot(lunchmateTotalXpFromProfile(profile));
   const authorLevel = isOwnCourseAuthor
     ? ownAuthorProgress.level
     : orphanPost?.authorLevel ?? 1;
@@ -586,24 +591,50 @@ export default function CourseDetailPage() {
 
       {/* Author */}
       <div className="px-4 pt-4 pb-2 flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[#F3EDE8] text-lg">
-            {orphanPost?.authorEmoji || '🍽️'}
-          </div>
-          <div>
-            <div className="flex items-center gap-1.5">
-              <span className="font-medium text-sm">@{authorHandle}</span>
+        {authorId ? (
+          <button
+            type="button"
+            onClick={() => navigate(`/profile/${authorId}`)}
+            aria-label={`${authorHandle} 프로필 보기`}
+            className="flex items-center gap-2 rounded-xl text-left outline-none transition-transform active:scale-[0.98] focus-visible:ring-2 focus-visible:ring-[#ED7773] focus-visible:ring-offset-2"
+          >
+            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[#F3EDE8] text-lg">
+              {orphanPost?.authorEmoji || '🍽️'}
             </div>
-            <span
-              className="mt-0.5 inline-flex items-center gap-1 rounded-full bg-[#FFF3EC] px-2 py-0.5 text-[9px] font-black"
-              style={{ color: authorLevelIcon.color }}
-              aria-label={`작성자 레벨 Lv.${authorLevel} ${authorLevelName}`}
-            >
-              <AuthorLevelIcon size={10} strokeWidth={2.5} aria-hidden="true" />
-              Lv.{authorLevel} {authorLevelName}
-            </span>
+            <div>
+              <div className="flex items-center gap-1.5">
+                <span className="font-medium text-sm">@{authorHandle}</span>
+              </div>
+              <span className="text-xs text-gray-500">{authorMeta}</span>
+              <span
+                className="mt-0.5 flex w-fit items-center gap-1 rounded-full bg-[#FFF3EC] px-2 py-0.5 text-[9px] font-black"
+                style={{ color: authorLevelIcon.color }}
+                aria-label={`작성자 레벨 Lv.${authorLevel} ${authorLevelName}`}
+              >
+                <AuthorLevelIcon size={10} strokeWidth={2.5} aria-hidden="true" />
+                Lv.{authorLevel} {authorLevelName}
+              </span>
+            </div>
+          </button>
+        ) : (
+          <div className="flex items-center gap-2">
+            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[#F3EDE8] text-lg">
+              {orphanPost?.authorEmoji || '🍽️'}
+            </div>
+            <div>
+              <span className="block font-medium text-sm">@{authorHandle}</span>
+              <span className="text-xs text-gray-500">{authorMeta}</span>
+              <span
+                className="mt-0.5 flex w-fit items-center gap-1 rounded-full bg-[#FFF3EC] px-2 py-0.5 text-[9px] font-black"
+                style={{ color: authorLevelIcon.color }}
+                aria-label={`작성자 레벨 Lv.${authorLevel} ${authorLevelName}`}
+              >
+                <AuthorLevelIcon size={10} strokeWidth={2.5} aria-hidden="true" />
+                Lv.{authorLevel} {authorLevelName}
+              </span>
+            </div>
           </div>
-        </div>
+        )}
 
         {fromSaved && isOwnCourseAuthor ? (
           <button
@@ -629,7 +660,28 @@ export default function CourseDetailPage() {
         data-ui="course-map-area"
         className="relative mx-4 mb-4 h-[270px] overflow-hidden rounded-[22px] border border-[#E9D8CF] bg-[#FBF7F1] shadow-[0_8px_22px_rgba(105,67,48,0.08)]"
       >
-        <CourseMapView places={places} width={430} height={270} className="h-full w-full" />
+        <CourseMapView
+          places={places}
+          width={430}
+          height={270}
+          className="h-full w-full"
+          selectedPlaceId={selectedPlaceId}
+          onSelectPlace={setSelectedPlaceId}
+        />
+        <AnimatePresence>
+          {selectedPlaceId && (
+            <motion.div
+              key={selectedPlaceId}
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="pointer-events-none absolute bottom-3 left-1/2 max-w-[calc(100%-1.5rem)] -translate-x-1/2 truncate rounded-full border border-white/80 bg-[#4A352D]/90 px-3 py-1.5 text-[11px] font-bold text-white shadow-lg backdrop-blur"
+              aria-live="polite"
+            >
+              {places.find((place) => place.id === selectedPlaceId)?.name} 선택됨
+            </motion.div>
+          )}
+        </AnimatePresence>
       </div>
 
       {/* Time / spots */}

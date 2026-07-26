@@ -8,17 +8,17 @@ const buddySource = readFileSync(join(import.meta.dirname, '..', 'components', '
 const progressSource = readFileSync(join(import.meta.dirname, '..', 'components', 'munchie', 'LunchmateProgressSheet.tsx'), 'utf8');
 
 describe('Profile information and level synchronization', () => {
-  it('saves and renders the editable profile bio', () => {
-    expect(profileSource).toContain('value={editBio}');
-    expect(profileSource).toContain('bio: editBio.trim()');
-    expect(profileSource).toContain("profile.bio?.trim() || '오늘도 맛있는 하루를 위해'");
+  it('keeps the sk profile copy and compact badge presentation', () => {
+    expect(profileSource).not.toContain('value={editBio}');
+    expect(profileSource).toContain("updateProfile({ name: editName })");
+    expect(profileSource).toContain('오늘도 맛있는 하루를 위해');
+    expect(profileSource).toContain('🏅 배지');
   });
 
-  it('persists lunchmate XP and replaces the badge with a clickable level label', () => {
-    expect(profileSource).toContain('initialXp: profile.lunchmateXp ?? 0');
-    expect(profileSource).toContain('updateProfile({ lunchmateXp: totalXp })');
-    expect(profileSource).toContain('레벨 정보 보기, Lv.');
-    expect(profileSource).not.toContain('🏅 배지');
+  it('persists canonical lunchmate XP while keeping the clickable kimbap level UI', () => {
+    expect(profileSource).toContain('initialTotalXp: lunchmateTotalXp');
+    expect(profileSource).toContain('updateProfile({ lunchmateTotalXp: nextTotalXp })');
+    expect(profileSource).toContain('progressButtonRef={progressButtonRef}');
     expect(buddySource).toContain('aria-label={`김밥 EXP ${progressLabel}`}');
     expect(buddySource).toContain('Array.from({ length: filledKimbapCount }');
   });

@@ -356,3 +356,49 @@
 - Apple Sign-In — Apple Developer 멤버십 취득 후 재개(App Store Guideline 4.8, 제출 전 필수).
 - GCP 콘솔 직접 점검(API restriction, 무제한 키, Android SHA-1) — 기존부터 이어지는 항목, 미해결.
 - `authApi.ts`/`LoginSheet.tsx`/`AccountBanner.tsx` 자동화 테스트 없음(수동 검증만) — 여전한 갭.
+
+---
+
+## 15. Lunchmate 미니룸 테마 에셋 교체 (2026-07-24)
+
+### 15.1 구현
+- 기존 `lm_profile.foodieSkin` 여섯 ID와 저장 흐름은 유지하고, 별도 `skinId → assetKey` 매핑을 추가했다. 예외 매핑은 `yellow-munchtray → yellow-lunch-tray`이며 저장값 마이그레이션은 없다.
+- 제공 ZIP의 `stages`/`profile`/`thumbnails` 1x·2x PNG를 정적 에셋으로 설치했다. FoodieRoom은 3:2 stage, Profile은 compact profile crop, 선택기는 2열 thumbnail card를 사용한다.
+- 캐릭터 렌더러와 costume/face/feeding/sitting/drag/tap/reduced-motion 흐름은 변경하지 않고 배경만 가장 아래 레이어로 교체했다.
+
+### 15.2 검증
+- `pnpm check` PASS.
+- 전체 Vitest 31 files / 377 tests PASS.
+- production `pnpm build` PASS, `git diff --check` PASS.
+- 360×800 Chrome 확인: 카드 범위 32–328px, 각 142px로 잘림 없음. `yellow-munchtray` 선택 직후 stage가 `yellow-lunch-tray`로 변경되고 localStorage 저장값은 기존 ID로 유지됨. `/profile` 복귀 후 720×260 compact crop과 동일 테마 복원 확인.
+
+### 15.3 GATE
+- **PASS (메인 에이전트 1회 검토)**: DB/API/localStorage schema, XP/reward, Lunchbox/feeding, pointer 처리, loadout 계약 변경 없음. 신규 env/키/네트워크 입력 없음. 클라이언트에 서버 키나 `service_role` 추가 없음. `.env`, `.env.*`, `env.enc` ignore 유지.
+- 기존 미완료 보안 TODO인 Google 키의 GCP 콘솔 제한 전수 확인과 Android 패키지명+SHA-1 Application restriction은 이번 순수 프론트 에셋 작업과 무관하며 그대로 남아 있다.
+
+---
+
+## 16. Lunchmate 방 독립 커스터마이징 (2026-07-24)
+
+### 16.1 구현
+- `lm_profile`에 optional `lunchmateRoomLoadout`만 추가했다. 필드가 없는 legacy 프로필은 현재 `foodieSkin` preset을 render-time에 파생하며 읽기만으로 필드나 storage를 마이그레이션하지 않는다.
+- manifest의 벽지/바닥/가구/소품 24개 ID를 검증하는 정규화 계층과 공용 `LunchmateRoomRenderer`를 추가했다. stage와 Profile crop 모두 wallpaper → floor → furniture → props 순서이며 character/status/interaction보다 아래에 렌더한다.
+- 추천 테마와 네 개별 카테고리를 pill + 2열 카드 UI로 제공한다. preset 선택은 실제 기존 `foodieSkin`과 네 필드를 함께, 개별 선택은 해당 필드만 기존 `updateProfile` merge 경로로 즉시 저장한다. 가구/소품의 `null`은 없음으로 유지한다.
+- runtime asset만 `room-customization/`에 설치했고 ZIP의 `source/`, `previews/`, 생성 문서는 번들하지 않았다.
+
+### 16.2 검증
+- 집중 Vitest 8 files / 182 tests PASS, 전체 32 files / 392 tests PASS. 마지막 legacy 최초-write guard 추가 후 관련 2 files / 19 tests도 PASS.
+- `pnpm check`, production `pnpm build`, `git diff --check` PASS. 마지막 guard 후 전체 재실행은 잔여 Vitest worker 부하로 120초 timeout이 났고, 관련 suite 재검증과 최종 `git diff --check`는 통과했다.
+- 360×800 Chrome: document width=viewport width=360으로 page overflow 없음, 다섯 pill은 내부 horizontal scroll. 혼합 선택 후 `wallpaper_blue_note` + `floor_walnut` + `furnitureId=null` + `props_blue_note`가 즉시 저장되고 stage/Profile에 동일 조합 적용 확인.
+- 모든 room image의 computed `pointer-events:none`, Profile DOM에서 background가 character보다 앞(아래 layer)에 위치함을 확인했다.
+
+### 16.3 GATE
+- **PASS (메인 에이전트 1회 검토)**: DB/API/Supabase/migration/package 변경 없음. foodieSkin, costume/loadout, feeding/XP/Level Up/reward, tap/drag 계약 회귀 없음. 신규 env·키·외부 입력 없음.
+- 기존 미완료 보안 TODO인 Google 키 GCP 제한 전수 확인과 Android 패키지명+SHA-1 Application restriction은 그대로 남아 있다.
+## 2026-07-24 — Lunchmate 무제한 레벨/XP 진행
+
+- 증상: preview XP가 40에서 clamp되고 고정 4레벨 정의의 마지막이 `MAX`로 표시됨.
+- 원인: `useLunchmateFlow`의 `Math.min(LUNCHMATE_PREVIEW_MAX_XP, ...)`와 `lunchmateProgress`의 유한 레벨 배열.
+- 수정: 레벨별 필요 XP를 20부터 10씩 증가(최대 100)시키는 공용 계산으로 교체하고, XP clamp 제거 및 다중 레벨 이벤트 큐를 적용.
+- 검증: 성장/reward/profile 단위 테스트 47개, typecheck, production build 통과. 전체 테스트는 403개 중 402개 통과; 기존 옷장 manifest count 기대값 불일치 1개 실패.
+- 보안 게이트: DB/API/env/Google 키/asset manifest 변경 없음. `.env`, `.env.*`, `env.enc` gitignore 유지.

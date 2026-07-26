@@ -7,12 +7,52 @@ import {
 import {
   createLunchmateProfileLoadoutUpdate,
   lunchmateLoadoutFromProfile,
+  lunchmateTotalXpFromProfile,
   normalizeLunchmateLoadout,
   normalizeLunchmateOwnedItemIds,
   normalizeLunchmateProfileLoadout,
   normalizeLunchmateRewardClaims,
   resolveLunchmateLevelRewardGrant,
 } from './lunchmateProfile';
+
+describe('lm_profile Lunchmate total XP compatibility', () => {
+  it('uses an explicitly stored total XP, including zero, without claim recovery', () => {
+    const claims = [{ level: 4, itemId: 'eyewear_heart_coral' }];
+    expect(lunchmateTotalXpFromProfile({ lunchmateTotalXp: 55, lunchmateRewardClaims: claims }))
+      .toBe(55);
+    expect(lunchmateTotalXpFromProfile({ lunchmateTotalXp: 0, lunchmateRewardClaims: claims }))
+      .toBe(0);
+  });
+
+  it('recovers a missing total XP from the highest valid reward claim', () => {
+    expect(lunchmateTotalXpFromProfile({
+      lunchmateRewardClaims: [
+        { level: 2, itemId: 'outfit_sailor_blue' },
+        { level: 4, itemId: 'eyewear_heart_coral' },
+        { level: 99, itemId: 'missing-item' },
+      ],
+    })).toBe(90);
+  });
+
+  it('uses zero when a legacy profile has no valid claim evidence', () => {
+    expect(lunchmateTotalXpFromProfile({})).toBe(0);
+    expect(lunchmateTotalXpFromProfile({
+      lunchmateOwnedItemIds: [...LUNCHMATE_STARTER_ITEM_IDS],
+      lunchmateRewardClaims: [{ level: 4, itemId: 'missing-item' }],
+    })).toBe(0);
+  });
+
+  it.each([
+    [-10, 0],
+    ['55', 0],
+    [Number.NaN, 0],
+    [Number.POSITIVE_INFINITY, 0],
+    [55.8, 55],
+    [{ value: 55 }, 0],
+  ])('normalizes an explicitly stored malformed value %j to %s', (value, expected) => {
+    expect(lunchmateTotalXpFromProfile({ lunchmateTotalXp: value })).toBe(expected);
+  });
+});
 
 describe('lm_profile lunchmate reward claim compatibility', () => {
   const starterItemIds = [...LUNCHMATE_STARTER_ITEM_IDS];
@@ -27,14 +67,14 @@ describe('lm_profile lunchmate reward claim compatibility', () => {
   it('removes malformed claims and keeps one valid claim per Level', () => {
     expect(normalizeLunchmateRewardClaims([
       { level: 3, itemId: 'headwear_beret_coral' },
-      { level: 2, itemId: 'outfit_sailor_navy' },
+      { level: 2, itemId: 'outfit_sailor_blue' },
       { level: 2, itemId: 'outfit_hoodie_coral' },
       { level: 1, itemId: 'outfit_hoodie_coral' },
       { level: 4.5, itemId: 'eyewear_round_black' },
       { level: 4, itemId: 'missing-item' },
       null,
     ])).toEqual([
-      { level: 2, itemId: 'outfit_sailor_navy' },
+      { level: 2, itemId: 'outfit_sailor_blue' },
       { level: 3, itemId: 'headwear_beret_coral' },
     ]);
   });
@@ -79,13 +119,13 @@ describe('lm_profile lunchmate reward claim compatibility', () => {
     const grant = resolveLunchmateLevelRewardGrant({
       targetLevel: 2,
       ownedItemIds: starterItemIds,
-      rewardClaims: [{ level: 2, itemId: 'outfit_sailor_navy' }],
+      rewardClaims: [{ level: 2, itemId: 'outfit_sailor_blue' }],
       stableSeedKey,
     });
 
-    expect(grant.item?.id).toBe('outfit_sailor_navy');
-    expect(grant.ownedItemIds).toContain('outfit_sailor_navy');
-    expect(grant.claims).toEqual([{ level: 2, itemId: 'outfit_sailor_navy' }]);
+    expect(grant.item?.id).toBe('outfit_sailor_blue');
+    expect(grant.ownedItemIds).toContain('outfit_sailor_blue');
+    expect(grant.claims).toEqual([{ level: 2, itemId: 'outfit_sailor_blue' }]);
     expect(grant.shouldPersist).toBe(true);
   });
 
@@ -217,8 +257,8 @@ describe('lm_profile lunchmate loadout compatibility', () => {
   });
 
   it('keeps loadout validation independent from the owned item list', () => {
-    expect(normalizeLunchmateProfileLoadout({ outfit: 'outfit_sailor_navy' }).outfit)
-      .toBe('outfit_sailor_navy');
+    expect(normalizeLunchmateProfileLoadout({ outfit: 'outfit_sailor_blue' }).outfit)
+      .toBe('outfit_sailor_blue');
   });
 
   it('creates only the lm_profile loadout update using the persisted field names', () => {

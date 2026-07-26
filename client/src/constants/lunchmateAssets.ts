@@ -34,6 +34,13 @@ export type LunchmateChickenAssetKey =
   | 'sleepy'
   | 'crying';
 
+/** Profile front idle/tap interaction only. These assets share the 950px chicken canvas. */
+export type LunchmateChickenFaceState =
+  | 'default'
+  | 'surprised'
+  | 'crying'
+  | 'angry';
+
 function assetSource(fileName: string, revision?: string): LunchmateAssetSource {
   const revisionQuery = revision ? `?v=${revision}` : '';
 
@@ -138,6 +145,15 @@ function chickenAssetSource(
   };
 }
 
+function chickenFaceSystemAssetSource(fileName: string): LunchmateAssetSource {
+  const src = `/assets/lunchmate/chicken/face-system/${fileName}.png?v=chicken-face-system-v1`;
+  return {
+    src,
+    // The supplied source is a shared 950px transparent canvas for every density.
+    srcSet: `${src} 1x, ${src} 2x`,
+  };
+}
+
 /** Profile/Room chicken artwork selected by the existing Lunchmate flow phases. */
 export const lunchmateChickenAssets = {
   idle: chickenAssetSource('idle'),
@@ -153,6 +169,19 @@ export const lunchmateChickenAssets = {
   sleepy: chickenAssetSource('sleepy', 'chicken-motion-v1'),
   crying: chickenAssetSource('crying', 'chicken-motion-v1'),
 } satisfies Record<LunchmateChickenAssetKey, LunchmateAssetSource>;
+
+/**
+ * The chicken face system is deliberately separate from the legacy Lunchmate
+ * expression layers. It is used only by the Profile front-idle/tap route.
+ */
+export const lunchmateChickenFacelessBaseAsset = chickenFaceSystemAssetSource('chicken-faceless');
+
+export const lunchmateChickenFaceAssets = {
+  default: chickenFaceSystemAssetSource('face-default'),
+  surprised: chickenFaceSystemAssetSource('face-surprised'),
+  crying: chickenFaceSystemAssetSource('face-crying'),
+  angry: chickenFaceSystemAssetSource('face-angry'),
+} satisfies Record<LunchmateChickenFaceState, LunchmateAssetSource>;
 
 // Phase 1F에서는 manifest 등록만 한다. 선택 UI와 profile 저장 연결은 후속 Phase 범위다.
 export const lunchmateCostumeAssets = {

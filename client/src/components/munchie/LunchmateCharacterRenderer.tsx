@@ -2,12 +2,15 @@ import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { motion, useReducedMotion, type MotionProps, type Transition } from 'framer-motion';
 import {
   lunchmateChickenAssets,
+  lunchmateChickenFaceAssets,
+  lunchmateChickenFacelessBaseAsset,
   lunchmateEffectAssets,
   lunchmateFaceAssets,
   lunchmateFacelessBaseAsset,
   lunchmateStateAssets,
   type LunchmateAssetSource,
   type LunchmateChickenAssetKey,
+  type LunchmateChickenFaceState,
   type LunchmateStateAssetKey,
 } from '../../constants/lunchmateAssets';
 import {
@@ -46,6 +49,10 @@ interface LunchmateCharacterRendererProps {
   artwork?: LunchmateCharacterArtwork;
   /** FoodieRoom의 UI 전용 모션이 선택한 chicken sprite. 기존 flow mapping보다 우선한다. */
   chickenAssetKeyOverride?: LunchmateChickenAssetKey;
+  /** Profile front idle에서만 faceless chicken과 단일 face layer를 합성한다. */
+  chickenFaceSystem?: boolean;
+  /** Profile tap 반응이 요청한 face layer. chickenFaceSystem과 함께만 사용한다. */
+  chickenFaceOverride?: LunchmateChickenFaceState;
   /** Room 최초 측정과 sprite 교체 후 bounds 재측정에 사용한다. */
   onChickenImageLoad?: () => void;
 }
@@ -65,6 +72,14 @@ export interface LunchmateRenderPlan {
   renderSize: LunchmateRenderSize;
   renderLayers: LunchmateResolvedLayer[];
   handheld: null;
+}
+
+export function shouldUseLunchmateChickenFaceSystem(
+  artwork: LunchmateCharacterArtwork,
+  chickenAssetKey: LunchmateChickenAssetKey,
+  chickenFaceSystem = false,
+) {
+  return artwork === 'chicken' && chickenFaceSystem && chickenAssetKey === 'idle';
 }
 
 const STATE_ALT: Record<LunchmateStateAssetKey, string> = {
@@ -259,6 +274,8 @@ export default function LunchmateCharacterRenderer({
   animated = true,
   artwork = 'classic',
   chickenAssetKeyOverride,
+  chickenFaceSystem = false,
+  chickenFaceOverride = 'default',
   onChickenImageLoad,
 }: LunchmateCharacterRendererProps) {
   const reducedMotion = useReducedMotion() ?? false;
@@ -271,6 +288,7 @@ export default function LunchmateCharacterRenderer({
   const [legacyLoadFailed, setLegacyLoadFailed] = useState(false);
   const [displayedFaceState, setDisplayedFaceState] = useState<LunchmateFaceState>('default');
   const [faceLoadFailed, setFaceLoadFailed] = useState(false);
+  const [failedChickenFaceSource, setFailedChickenFaceSource] = useState<string | null>(null);
 
   useEffect(() => {
     let active = true;
@@ -303,7 +321,13 @@ export default function LunchmateCharacterRenderer({
     if (artwork !== 'chicken') return;
     void loadAsset(lunchmateChickenAssets.idle);
     void loadAsset(lunchmateChickenAssets.feeding);
-  }, [artwork]);
+    if (chickenFaceSystem) {
+      void loadAsset(lunchmateChickenFacelessBaseAsset);
+      Object.values(lunchmateChickenFaceAssets).forEach((source) => {
+        void loadAsset(source);
+      });
+    }
+  }, [artwork, chickenFaceSystem]);
 
   const stateMotion = useMemo(
     () => motionForLunchmateState(
@@ -319,8 +343,20 @@ export default function LunchmateCharacterRenderer({
   const legacyAsset = lunchmateStateAssets.default;
   const chickenAssetKey = chickenAssetKeyOverride ?? resolveLunchmateChickenAssetKey(flowState);
   const chickenAsset = lunchmateChickenAssets[chickenAssetKey];
+  const usesChickenFaceSystem = shouldUseLunchmateChickenFaceSystem(
+    artwork,
+    chickenAssetKey,
+    chickenFaceSystem,
+  );
+  const chickenBaseAsset = usesChickenFaceSystem
+    ? lunchmateChickenFacelessBaseAsset
+    : chickenAsset;
+  const requestedChickenFaceAsset = lunchmateChickenFaceAssets[chickenFaceOverride];
+  const activeChickenFaceAsset = failedChickenFaceSource === requestedChickenFaceAsset.src
+    ? lunchmateChickenFaceAssets.default
+    : requestedChickenFaceAsset;
   const usesChickenArtwork = artwork === 'chicken'
-    && failedChickenSource !== chickenAsset.src;
+    && failedChickenSource !== chickenBaseAsset.src;
   const chickenCostumePose = resolveLunchmateChickenCostumePose(chickenAssetKey);
   const chickenCostumeLayers = useMemo(
     () => resolveLunchmateChickenCostumeRenderLayers(loadout, chickenCostumePose),
@@ -358,6 +394,7 @@ export default function LunchmateCharacterRenderer({
       data-lunchmate-render-size={renderPlan.renderSize}
       data-lunchmate-artwork={usesChickenArtwork ? 'chicken' : 'classic'}
       data-lunchmate-chicken-asset={usesChickenArtwork ? chickenAssetKey : undefined}
+      data-lunchmate-chicken-face-system={usesChickenArtwork && usesChickenFaceSystem ? 'true' : undefined}
     >
       <div
         className="relative h-full w-full overflow-visible"
@@ -367,15 +404,16 @@ export default function LunchmateCharacterRenderer({
 
         {usesChickenArtwork ? (
           <img
-            src={chickenAsset.src}
-            srcSet={chickenAsset.srcSet}
+            src={chickenBaseAsset.src}
+            srcSet={chickenBaseAsset.srcSet}
             alt={alt ?? '편안하게 서 있는 치킨 런치메이트'}
             width={size}
             height={size}
             data-lunchmate-layer="chicken-base"
+            data-lunchmate-chicken-base={usesChickenFaceSystem ? 'faceless' : 'sprite'}
             draggable={false}
             onLoad={onChickenImageLoad}
-            onError={() => setFailedChickenSource(chickenAsset.src)}
+            onError={() => setFailedChickenSource(chickenBaseAsset.src)}
             className="pointer-events-none absolute inset-0 h-full w-full select-none object-contain opacity-100"
             style={{ objectPosition: 'center bottom', userSelect: 'none', opacity: 1 }}
           />
@@ -419,6 +457,21 @@ export default function LunchmateCharacterRenderer({
         )}
 
         {renderAccessories(frontBodyLayers)}
+
+        {usesChickenArtwork && usesChickenFaceSystem && (
+          <img
+            src={activeChickenFaceAsset.src}
+            srcSet={activeChickenFaceAsset.srcSet}
+            alt=""
+            aria-hidden="true"
+            data-lunchmate-layer="chicken-face"
+            data-lunchmate-chicken-face={chickenFaceOverride}
+            draggable={false}
+            onError={() => setFailedChickenFaceSource(activeChickenFaceAsset.src)}
+            className="pointer-events-none absolute inset-0 h-full w-full select-none object-contain opacity-100"
+            style={{ objectPosition: 'center bottom', userSelect: 'none', opacity: 1 }}
+          />
+        )}
 
         {!usesChickenArtwork && !facelessLoadFailed && !faceLoadFailed && (
           <img

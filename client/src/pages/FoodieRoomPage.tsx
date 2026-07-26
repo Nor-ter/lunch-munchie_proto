@@ -5,14 +5,23 @@ import { useHistoryState } from 'wouter/use-browser-location';
 import { ChevronLeft } from 'lucide-react';
 import { useApp } from '@/contexts/AppContext';
 import LunchmateCharacterRenderer from '@/components/munchie/LunchmateCharacterRenderer';
+import LunchmateRoomRenderer from '@/components/munchie/LunchmateRoomRenderer';
 import LunchmateWardrobePanel from '@/components/munchie/LunchmateWardrobePanel';
 import SkinPicker from '@/components/munchie/SkinPicker';
 import { getLunchmateLevelIcon } from '@/constants/lunchmateLevelIcons';
 import { getSkinById, MUNCHIE_SKINS } from '@/constants/skins';
+import {
+  createLunchmateRoomCategoryUpdate,
+  createLunchmateRoomPresetUpdate,
+  getLunchmateRoomTheme,
+  normalizeLunchmateRoomLoadout,
+} from '@/constants/lunchmateRoomThemes';
+import type { LunchmateRoomLoadout } from '@/types/lunchmateCustomization';
 import type { LunchmateLoadout } from '@/types/lunchmateCustomization';
 import {
   createLunchmateProfileLoadoutUpdate,
   lunchmateLoadoutFromProfile,
+  lunchmateTotalXpFromProfile,
   normalizeLunchmateLoadout,
   normalizeLunchmateOwnedItemIds,
 } from '@/utils/lunchmateProfile';
@@ -77,14 +86,12 @@ export default function FoodieRoomPage() {
   const ownedItemIds = normalizeLunchmateOwnedItemIds(profile.lunchmateOwnedItemIds);
 
   const hasProfileSnapshot = isFoodieRoomNavigationState(navigationState);
-  const progressSnapshot = hasProfileSnapshot
-    ? navigationState.progressSnapshot
-    : getLunchmateProgressSnapshot(0);
+  const progressSnapshot = getLunchmateProgressSnapshot(lunchmateTotalXpFromProfile(profile));
   const skin = getSkinById(profile.foodieSkin) ?? MUNCHIE_SKINS[0];
+  const roomTheme = getLunchmateRoomTheme(skin.id);
+  const roomLoadout = normalizeLunchmateRoomLoadout(profile.lunchmateRoomLoadout, skin.id);
   const { Icon: RoomLevelIcon } = getLunchmateLevelIcon(progressSnapshot.level);
-  const nextRewardLevel = progressSnapshot.isMaxLevel
-    ? progressSnapshot.level
-    : progressSnapshot.level + 1;
+  const nextRewardLevel = progressSnapshot.level + 1;
   const { Icon: NextRewardIcon } = getLunchmateLevelIcon(nextRewardLevel);
 
   const handleBack = () => {
@@ -117,8 +124,20 @@ export default function FoodieRoomPage() {
     setAppliedNotice(true);
   };
 
-  const handleSkinChange = (skinId: string) => {
-    updateProfile({ foodieSkin: skinId });
+  const handleRoomPresetChange = (skinId: string) => {
+    updateProfile(createLunchmateRoomPresetUpdate(skinId));
+  };
+
+  const handleRoomCategoryChange = (
+    field: keyof LunchmateRoomLoadout,
+    value: string | null,
+  ) => {
+    updateProfile(createLunchmateRoomCategoryUpdate(
+      profile.lunchmateRoomLoadout,
+      skin.id,
+      field,
+      value,
+    ));
   };
 
   return (
@@ -145,21 +164,16 @@ export default function FoodieRoomPage() {
         <h2 id="foodie-room-preview-title" className="sr-only">런치메이트 미리보기</h2>
         <div
           ref={roomMotion.stageRef}
-          className="relative h-[270px] overflow-hidden rounded-[28px] p-3 shadow-sm"
-          style={{ background: skin.frame, boxShadow: skin.frameShadow }}
+          className="relative aspect-[3/2] overflow-hidden rounded-[28px] bg-[#F7EEE8] shadow-sm"
           data-lunchmate-room-motion={roomMotion.status}
         >
-          <div
-            className="absolute inset-3 overflow-hidden rounded-[22px]"
-            style={{ background: skin.paper }}
-          >
-            <div
-              className="absolute inset-x-0 bottom-0 h-[64px] border-t border-dashed"
-              style={{ background: 'rgba(255,255,255,0.62)', borderColor: `${skin.accent}55` }}
-            />
-          </div>
+          <LunchmateRoomRenderer
+            foodieSkin={skin.id}
+            loadout={roomLoadout}
+            variant="stage"
+          />
 
-          <div className="absolute left-6 top-6 z-10">
+          <div className="absolute left-4 top-4 z-30">
             <span
               className="inline-flex items-center gap-1.5 rounded-full bg-white/90 px-3 py-1.5 text-[12px] font-black shadow-sm"
               style={{ color: skin.accent }}
@@ -172,11 +186,11 @@ export default function FoodieRoomPage() {
             </p>
           </div>
 
-          <div className="absolute right-6 top-6 z-10 rounded-full bg-white/85 px-2.5 py-1 text-[9px] font-bold" style={{ color: skin.text }}>
-            {skin.emoji} {skin.name}
+          <div className="absolute right-4 top-4 z-30 rounded-full bg-white/90 px-2.5 py-1 text-[9px] font-bold shadow-sm" style={{ color: skin.text }}>
+            {roomTheme.labelKo}
           </div>
 
-          <div className="absolute inset-x-0 bottom-11 z-10 flex justify-center">
+          <div className="absolute inset-x-0 bottom-[15.625%] z-10 flex justify-center">
             <div
               ref={roomMotion.characterRef}
               className="will-change-transform"
@@ -225,7 +239,7 @@ export default function FoodieRoomPage() {
             </div>
           </div>
 
-          <p className="absolute bottom-5 left-1/2 z-10 -translate-x-1/2 whitespace-nowrap rounded-full bg-white/85 px-2.5 py-1 text-[9px] font-semibold text-[#8E796E]">
+          <p className="absolute inset-x-0 bottom-0 z-30 bg-gradient-to-t from-[#33251F]/45 to-transparent px-3 pb-2 pt-6 text-center text-[9px] font-semibold text-white drop-shadow-sm">
             레이어 조합을 확인하는 미리보기예요
           </p>
         </div>
@@ -287,14 +301,14 @@ export default function FoodieRoomPage() {
             <div>
               <h2 className="text-[16px] font-black">방 꾸미기</h2>
               <p className="mt-1 text-[11px] leading-relaxed text-[#927E73]">
-                선택한 방 스킨은 프로필과 런치메이트 룸에 바로 적용돼요.
+                선택한 방 구성은 프로필과 런치메이트룸에 바로 적용돼요.
               </p>
               <div className="mt-4">
                 <SkinPicker
-                  value={profile.foodieSkin ?? 'pink-picnic'}
-                  onChange={handleSkinChange}
-                  columns={3}
-                  responsiveColumns
+                  skinId={skin.id}
+                  loadout={roomLoadout}
+                  onPresetChange={handleRoomPresetChange}
+                  onCategoryChange={handleRoomCategoryChange}
                 />
               </div>
             </div>
@@ -333,7 +347,10 @@ export default function FoodieRoomPage() {
                   <div className="h-full rounded-full bg-[#E85053]" style={{ width: `${progressSnapshot.progressPercent}%` }} />
                 </div>
                 <p className="mt-2 text-[10px] font-semibold text-[#9A8377]">
-                  {progressSnapshot.isMaxLevel ? '현재 Preview 최고 Level이에요' : `다음 Level까지 ${progressSnapshot.xpRemainingToNextLevel} XP`}
+                  다음 Level까지 {progressSnapshot.xpRemainingToNextLevel} XP
+                </p>
+                <p className="mt-1 text-[10px] font-semibold text-[#A18C80]">
+                  {progressSnapshot.xpIntoCurrentLevel} / {progressSnapshot.xpRequiredForNextLevel} XP
                 </p>
               </div>
               <div className={`mt-4 ${ROOM_CONTENT_GRID_CLASS}`} aria-label="레벨별 성장 보상">

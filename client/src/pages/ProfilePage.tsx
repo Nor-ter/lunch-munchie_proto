@@ -2,7 +2,7 @@
  * Lunchie Munchie — My Profile
  * 스크랩북 프로필: 내가 만든 코스맵 템플릿 + 내가 쓴 피드를 한눈에 보고 관리한다.
  * - 나의 코스맵: 스킨 카드 그리드, 좋아요 순/최신 순 정렬, 탭하면 상세(편집 가능)
- * - 나의 먼치피드: 홈과 동일한 요약 카드, 상세 화면에서 댓글·수정 관리
+ * - 나의 피드: 홈과 동일한 요약 카드, 상세 화면에서 댓글·수정 관리
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -36,18 +36,51 @@ import type { FoodieRoomNavigationState } from '@/pages/FoodieRoomPage';
 import type { LunchmateLayerItem } from '@/types/lunchmateCustomization';
 import {
   lunchmateLoadoutFromProfile,
+  lunchmateTotalXpFromProfile,
   resolveLunchmateLevelRewardGrant,
 } from '@/utils/lunchmateProfile';
-import {
-  consumeLunchboxFood,
-  getLunchboxFoodItems,
-  markLunchboxFoodSeen,
-  normalizeLunchboxInventory,
-} from '@/constants/lunchboxFoods';
-import { getLunchmateLevelIcon } from '@/constants/lunchmateLevelIcons';
 
 const EMOJIS = ['😊', '🍱', '🍜', '🍣', '🥩', '🍕', '🌮', '🍔', '🥗', '☕', '🎂', '🍰'];
 const DIETARY_OPTIONS = ['비건', '채식', '글루텐프리', '할랄', '유제품 제외', '견과류 알러지', '해산물 제외'];
+
+/** Phase 1A 표시 전용 fixture — AppContext/localStorage의 실제 사용자 데이터와 섞지 않는다. */
+const LUNCHMATE_PREVIEW_FIXTURE = {
+  uiState: 'foodAvailable',
+  unseenFoodCount: 2,
+  foodItems: [
+    {
+      id: 'preview-onigiri',
+      name: '참치마요 주먹밥',
+      placeholder: '🍙',
+      quantity: 2,
+      unseenQuantity: 1,
+      sourceLabel: '코스 기록 완료 보상',
+      xpPreview: 5,
+    },
+    {
+      id: 'preview-strawberry-cake',
+      name: '딸기 한입 케이크',
+      placeholder: '🍰',
+      quantity: 1,
+      unseenQuantity: 1,
+      sourceLabel: '먼치 피드 기록 보상',
+      xpPreview: 8,
+    },
+    {
+      id: 'preview-ramen',
+      name: '따끈한 라멘',
+      placeholder: '🍜',
+      quantity: 0,
+      unseenQuantity: 0,
+      sourceLabel: '다음 기록에서 획득 가능',
+      xpPreview: 6,
+    },
+  ],
+} as const satisfies {
+  uiState: FoodieBuddyUiState;
+  unseenFoodCount: number;
+  foodItems: readonly LunchboxFoodItem[];
+};
 
 type ProfileSheet = 'settings' | 'avatar' | 'lunchbox' | 'progress' | 'levelUp';
 
@@ -79,18 +112,6 @@ export default function ProfilePage() {
     () => lunchmateLoadoutFromProfile(profile.lunchmateLoadout),
     [profile.lunchmateLoadout],
   );
-  const lunchboxInventory = useMemo(
-    () => normalizeLunchboxInventory(profile.lunchboxInventory),
-    [profile.lunchboxInventory],
-  );
-  const lunchboxFoodItems = useMemo(
-    () => getLunchboxFoodItems(lunchboxInventory),
-    [lunchboxInventory],
-  );
-  const unseenFoodCount = useMemo(
-    () => lunchboxFoodItems.reduce((sum, item) => sum + item.unseenQuantity, 0),
-    [lunchboxFoodItems],
-  );
 
   const [activeSheet, setActiveSheet] = useState<ProfileSheet | null>(() => {
     const params = new URLSearchParams(window.location.search);
@@ -109,7 +130,6 @@ export default function ProfilePage() {
   const [authActionPending, setAuthActionPending] = useState(false);
   const [levelUpRewardItem, setLevelUpRewardItem] = useState<LunchmateLayerItem | null>(null);
   const [editName, setEditName] = useState(profile.name);
-  const [editBio, setEditBio] = useState(profile.bio ?? '오늘도 맛있는 하루를 위해');
   const avatarFileRef = useRef<HTMLInputElement>(null);
   const lunchboxButtonRef = useRef<HTMLButtonElement>(null);
   const foodieDropTargetRef = useRef<HTMLDivElement>(null);
@@ -120,30 +140,16 @@ export default function ProfilePage() {
   const [draggedFoodId, setDraggedFoodId] = useState<string | null>(null);
   const [isFoodDragOver, setIsFoodDragOver] = useState(false);
   const closeActiveSheet = useCallback(() => setActiveSheet(null), []);
-  const consumeSharedFood = useCallback((item: LunchboxFoodItem) => {
-    const result = consumeLunchboxFood(lunchboxInventory, item.id);
-    if (result.consumed) {
-      updateProfile({ lunchboxInventory: result.inventory });
-    }
-  }, [lunchboxInventory, updateProfile]);
-  const persistLunchmateXp = useCallback((totalXp: number) => {
-    updateProfile({ lunchmateXp: totalXp });
+  const lunchmateTotalXp = lunchmateTotalXpFromProfile(profile);
+  const persistLunchmateTotalXp = useCallback((nextTotalXp: number) => {
+    updateProfile({ lunchmateTotalXp: nextTotalXp });
   }, [updateProfile]);
   const lunchmateFlow = useLunchmateFlow({
-    initialState: 'foodAvailable' satisfies FoodieBuddyUiState,
-    initialXp: profile.lunchmateXp ?? 0,
+    initialState: LUNCHMATE_PREVIEW_FIXTURE.uiState,
+    initialTotalXp: lunchmateTotalXp,
+    onTotalXpChange: persistLunchmateTotalXp,
     onSuccessClose: closeActiveSheet,
-    onShareSuccess: consumeSharedFood,
-    onXpChange: persistLunchmateXp,
   });
-  const resetLunchmateProgress = useCallback(() => {
-    lunchmateFlow.resetProgress();
-    updateProfile({ lunchmateXp: 0 });
-    closeActiveSheet();
-    toast.success('레벨을 초기화했어요. Lv.1부터 다시 시작해요!');
-  }, [closeActiveSheet, lunchmateFlow.resetProgress, updateProfile]);
-  const profileLevelIcon = getLunchmateLevelIcon(lunchmateFlow.progressSnapshot.level);
-  const ProfileLevelIcon = profileLevelIcon.Icon;
   const clearFoodDragState = useCallback(() => {
     activeFoodDragIdRef.current = null;
     setDraggedFoodId(null);
@@ -196,17 +202,18 @@ export default function ProfilePage() {
     submitLunchmateFood,
   ]);
   const openLunchbox = useCallback(() => {
-    if (!lunchmateFlow.beginSelecting()) return;
-    setActiveSheet('lunchbox');
-    if (unseenFoodCount > 0) {
-      updateProfile({ lunchboxInventory: markLunchboxFoodSeen(lunchboxInventory) });
-    }
-  }, [lunchboxInventory, lunchmateFlow.beginSelecting, unseenFoodCount, updateProfile]);
+    if (lunchmateFlow.beginSelecting()) setActiveSheet('lunchbox');
+  }, [lunchmateFlow.beginSelecting]);
   const closeLunchbox = useCallback(() => {
     clearFoodDragState();
-    lunchmateFlow.cancel();
+    if (!lunchmateFlow.selectedFood) lunchmateFlow.cancel();
     closeActiveSheet();
-  }, [clearFoodDragState, closeActiveSheet, lunchmateFlow.cancel]);
+  }, [
+    clearFoodDragState,
+    closeActiveSheet,
+    lunchmateFlow.cancel,
+    lunchmateFlow.selectedFood,
+  ]);
   const openProgress = useCallback(() => {
     if (!lunchmateFlow.isBusy) setActiveSheet('progress');
   }, [lunchmateFlow.isBusy]);
@@ -268,10 +275,7 @@ export default function ProfilePage() {
 
 
   const saveSettings = () => {
-    updateProfile({
-      name: editName.trim() || profile.name,
-      bio: editBio.trim() || '오늘도 맛있는 하루를 위해',
-    });
+    updateProfile({ name: editName });
     setActiveSheet(null);
     toast.success('프로필 업데이트 완료! ✅');
   };
@@ -323,11 +327,7 @@ export default function ProfilePage() {
       {/* 상단 메뉴 */}
       <HeaderActionRow className="header-action-row--raised">
         <HeaderIconButton
-          onClick={() => {
-            setEditName(profile.name);
-            setEditBio(profile.bio ?? '오늘도 맛있는 하루를 위해');
-            setActiveSheet('settings');
-          }}
+          onClick={() => { setEditName(profile.name); setActiveSheet('settings'); }}
           aria-label="프로필 설정"
         >
           <Menu size={18} color="#4A4A4A" />
@@ -350,13 +350,15 @@ export default function ProfilePage() {
           score={foodieScore}
           char={profile.foodieChar}
           skinId={profile.foodieSkin}
+          roomLoadout={profile.lunchmateRoomLoadout}
           loadout={lunchmateLoadout}
           onCustomize={openFoodieRoom}
           uiState={lunchmateFlow.state}
-          unseenFoodCount={unseenFoodCount}
+          unseenFoodCount={LUNCHMATE_PREVIEW_FIXTURE.unseenFoodCount}
           onLunchboxOpen={openLunchbox}
           lunchboxButtonRef={lunchboxButtonRef}
           onProgressOpen={openProgress}
+          progressButtonRef={progressButtonRef}
           sharedFoodPlaceholder={lunchmateFlow.selectedFood?.placeholder}
           progressSnapshot={lunchmateFlow.progressSnapshot}
           previousProgressSnapshot={lunchmateFlow.previousProgressSnapshot}
@@ -367,6 +369,11 @@ export default function ProfilePage() {
           isLunchboxOpen={activeSheet === 'lunchbox'}
           isFoodDragging={draggedFoodId !== null}
           isFoodDragOver={isFoodDragOver}
+          selectedFood={lunchmateFlow.isBusy ? null : lunchmateFlow.selectedFood}
+          onFoodDragStart={handleFoodDragStart}
+          onFoodDragMove={handleFoodDragMove}
+          onFoodDrop={handleFoodDrop}
+          onFoodDragCancel={clearFoodDragState}
         />
         <div className="relative z-20 -mt-9 px-3">
           <div className="flex items-start gap-4">
@@ -385,19 +392,12 @@ export default function ProfilePage() {
                 <p className="min-w-0 truncate text-[19px] font-black text-[#3B2A22]">
                   @{profile.name}
                 </p>
-                <button
-                  ref={progressButtonRef}
-                  type="button"
-                  onClick={openProgress}
-                  className="inline-flex shrink-0 items-center gap-1 rounded-full bg-white/85 px-2 py-1 text-[9px] font-black text-[#C7864B] shadow-sm active:scale-95"
-                  aria-label={`레벨 정보 보기, Lv.${lunchmateFlow.progressSnapshot.level} ${lunchmateFlow.progressSnapshot.levelName}`}
-                >
-                  <ProfileLevelIcon size={11} strokeWidth={2.5} aria-hidden="true" />
-                  Lv.{lunchmateFlow.progressSnapshot.level} {lunchmateFlow.progressSnapshot.levelName}
-                </button>
+                <span className="shrink-0 rounded-full bg-white/80 px-1.5 py-0.5 text-[9px] font-bold text-[#C7864B]">
+                  🏅 배지
+                </span>
               </div>
-              <p className="mt-1.5 line-clamp-2 text-[13px] font-medium leading-5 text-[#8A6E60]">
-                {profile.bio?.trim() || '오늘도 맛있는 하루를 위해'}
+              <p className="mt-1.5 whitespace-nowrap text-[13px] font-medium text-[#8A6E60]">
+                오늘도 맛있는 하루를 위해
               </p>
             </div>
           </div>
@@ -422,9 +422,9 @@ export default function ProfilePage() {
         onOpenChange={(open) => !open && setFollowListMode(null)}
       />
 
-      {/* 나의 먼치피드 */}
+      {/* 나의 피드 */}
       <div className="px-4 mt-8">
-        <h2 className="font-black text-[18px] text-[#1A1A1A] mb-3">나의 먼치피드 {myPosts.length}</h2>
+        <h2 className="font-black text-[18px] text-[#1A1A1A] mb-3">나의 피드 {myPosts.length}</h2>
         {myPosts.length === 0 ? (
           <button
             onClick={() => navigate('/coursemap/new')}
@@ -444,7 +444,7 @@ export default function ProfilePage() {
 
       <LunchboxBottomSheet
         open={activeSheet === 'lunchbox'}
-        items={lunchboxFoodItems}
+        items={LUNCHMATE_PREVIEW_FIXTURE.foodItems}
         flowState={lunchmateFlow.state}
         errorMessage={lunchmateFlow.errorMessage}
         onFoodSelect={lunchmateFlow.selectFood}
@@ -462,7 +462,6 @@ export default function ProfilePage() {
         open={activeSheet === 'progress'}
         snapshot={lunchmateFlow.progressSnapshot}
         onClose={closeActiveSheet}
-        onReset={resetLunchmateProgress}
         onAfterClose={() => progressButtonRef.current?.focus()}
       />
 
@@ -514,19 +513,6 @@ export default function ProfilePage() {
                 onChange={e => setEditName(e.target.value)}
                 className="w-full h-11 rounded-xl bg-[#FAF6F1] border border-[#F0E8E0] px-3 text-[14px] font-bold outline-none focus:border-[#E85053]"
               />
-
-              <p className="mb-1.5 mt-4 text-[12px] font-semibold text-[#9B9B9B]">자기소개</p>
-              <div className="relative">
-                <textarea
-                  value={editBio}
-                  onChange={event => setEditBio(event.target.value.slice(0, 60))}
-                  rows={3}
-                  maxLength={60}
-                  placeholder="나를 소개하는 한마디를 적어주세요"
-                  className="w-full resize-none rounded-xl border border-[#F0E8E0] bg-[#FAF6F1] px-3 py-3 pr-10 text-[13px] font-semibold leading-5 outline-none focus:border-[#E85053]"
-                />
-                <span className="absolute bottom-2.5 right-3 text-[9px] font-semibold text-[#B4A59D]">{editBio.length}/60</span>
-              </div>
 
               <p className="mt-4 mb-1.5 text-[12px] font-semibold text-[#9B9B9B]">식단 제한 (그룹 세션에 자동 적용)</p>
               <div className="flex flex-wrap gap-2">

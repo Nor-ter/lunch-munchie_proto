@@ -73,7 +73,7 @@ export default function LunchmateProgressSheet({
   const progressPercent = snapshot.progressPercent;
   const currentLevelIcon = getLunchmateLevelIcon(snapshot.level);
   const CurrentLevelIcon = currentLevelIcon.Icon;
-  const nextRewardLevel = snapshot.isMaxLevel ? snapshot.level : snapshot.level + 1;
+  const nextRewardLevel = snapshot.level + 1;
   const NextRewardIcon = getLunchmateLevelIcon(nextRewardLevel).Icon;
 
   return createPortal(
@@ -148,12 +148,10 @@ export default function LunchmateProgressSheet({
 
                 <div className="mt-5 flex items-end justify-between gap-3">
                   <p className="text-[11px] font-bold text-[#6F5A4E]">
-                    {snapshot.isMaxLevel ? '최고 레벨에 도달했어요' : `다음 레벨까지 ${snapshot.xpRemainingToNextLevel} 맛추억`}
+                    다음 레벨까지 {snapshot.xpRemainingToNextLevel} 맛추억
                   </p>
                   <p className="text-[10px] font-semibold text-[#A18C80]">
-                    {snapshot.isMaxLevel
-                      ? `${snapshot.totalXp} 맛추억`
-                      : `${snapshot.totalXp} / ${snapshot.nextLevelTotalXp} 맛추억`}
+                    {snapshot.xpIntoCurrentLevel} / {snapshot.xpRequiredForNextLevel} 맛추억
                   </p>
                 </div>
                 <div

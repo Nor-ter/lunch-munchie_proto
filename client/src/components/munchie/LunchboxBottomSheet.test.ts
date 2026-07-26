@@ -143,24 +143,22 @@ describe('Lunchbox pointer feeding integration contract', () => {
     expect(PROFILE_SOURCE).toContain('onFoodDrop={handleFoodDrop}');
   });
 
-  it('reuses the status phrase for drag, drag-over, feeding, success, and error', () => {
-    expect(FOODIE_BUDDY_SOURCE).toContain('런치메이트에게 가져다주세요');
+  it('shows the selected food prompt, drag-over, feeding, success, and error states', () => {
+    expect(FOODIE_BUDDY_SOURCE).toContain('을 나에게 끌어다 줘!');
     expect(FOODIE_BUDDY_SOURCE).toContain('여기에 놓아주세요!');
     expect(FOODIE_BUDDY_SOURCE).toContain('맛있게 먹는 중…');
     expect(FOODIE_BUDDY_SOURCE).toContain("effectiveUiState === 'error'");
     expect(FOODIE_BUDDY_SOURCE).toContain("resultMessage ?? '맛있는 한입 고마워! 😋'");
   });
 
-  it('renders and consumes profile inventory only after a successful share', () => {
-    expect(PROFILE_SOURCE).toContain('getLunchboxFoodItems(lunchboxInventory)');
-    expect(PROFILE_SOURCE).toContain('items={lunchboxFoodItems}');
-    expect(PROFILE_SOURCE).toContain('markLunchboxFoodSeen(lunchboxInventory)');
-    expect(PROFILE_SOURCE).toContain('consumeLunchboxFood(lunchboxInventory, item.id)');
-    expect(PROFILE_SOURCE).toContain('onShareSuccess: consumeSharedFood');
-    expect(FLOW_SOURCE).toContain('onShareSuccess?.(item)');
+  it('keeps preview food isolated while persisting canonical total XP', () => {
+    expect(PROFILE_SOURCE).toContain('items={LUNCHMATE_PREVIEW_FIXTURE.foodItems}');
+    expect(PROFILE_SOURCE).toContain('initialTotalXp: lunchmateTotalXp');
+    expect(PROFILE_SOURCE).toContain('onTotalXpChange: persistLunchmateTotalXp');
+    expect(PROFILE_SOURCE).toContain('updateProfile({ lunchmateTotalXp: nextTotalXp })');
     expect(FLOW_SOURCE).not.toContain('quantity -');
     expect(FLOW_SOURCE).not.toContain('localStorage');
-    expect(FLOW_SOURCE).toContain('setPreviewXp(nextXp)');
+    expect(FLOW_SOURCE).toContain('setPreviewXp(progressUpdate.nextTotalXp)');
   });
 
   it('remeasures on visual viewport changes and cleans up every observer', () => {

@@ -24,7 +24,8 @@ describe('CourseDetailPage feed like synchronization', () => {
   });
 
   it('shows the author level, a pin-only spot count, and the working follow control', () => {
-    expect(source).not.toContain('Munchie creator');
+    expect(source).toContain("const authorMeta = orphanPost ? 'Munchie creator'");
+    expect(source).toContain('resolveFeedAuthorId(orphanPost)');
     expect(source).toContain('작성자 레벨 Lv.');
     expect(source).toContain('aria-label={`스팟 ${places.length}개`}');
     expect(source).toContain('<MapPin size={14}');

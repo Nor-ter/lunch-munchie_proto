@@ -13,6 +13,8 @@ import {
 } from '../../constants/lunchmateItems';
 import {
   lunchmateChickenAssets,
+  lunchmateChickenFaceAssets,
+  lunchmateChickenFacelessBaseAsset,
   lunchmateEffectAssets,
   lunchmateFaceAssets,
   lunchmateFacelessBaseAsset,
@@ -22,6 +24,14 @@ import {
   LUNCHMATE_STARTER_COSTUME_POSE_MANIFEST,
   LUNCHMATE_STARTER_PILOT_ITEM_IDS,
   LUNCHMATE_STARTER_PILOT_LAYER_ORDER,
+  LUNCHMATE_COLLECTION_WAVE1_ITEM_IDS,
+  LUNCHMATE_COSTUME_COLLECTION_WAVE1_POSE_MANIFEST,
+  LUNCHMATE_COLLECTION_WAVE2_ITEM_IDS,
+  LUNCHMATE_COSTUME_COLLECTION_WAVE2_POSE_MANIFEST,
+  LUNCHMATE_COLLECTION_WAVE3_ITEM_IDS,
+  LUNCHMATE_COSTUME_COLLECTION_WAVE3_POSE_MANIFEST,
+  LUNCHMATE_EYEWEAR_COLLECTION_WAVE1_ITEM_IDS,
+  LUNCHMATE_EYEWEAR_COLLECTION_WAVE1_POSE_MANIFEST,
   resolveLunchmateChickenCostumePose,
   resolveLunchmateChickenCostumeRenderLayers,
   resolveLunchmateStarterCostumePoseLayers,
@@ -32,6 +42,7 @@ import {
   motionForLunchmateState,
   resolveLunchmateChickenAssetKey,
   resolveLunchmateRenderPlan,
+  shouldUseLunchmateChickenFaceSystem,
 } from './LunchmateCharacterRenderer';
 
 const PUBLIC_ROOT = join(process.cwd(), 'client', 'public');
@@ -42,6 +53,34 @@ const STARTER_PILOT_ROOT = join(
   'lunchmate',
   'costumes',
   'starter-pilot-v3',
+);
+const COLLECTION_WAVE1_ROOT = join(
+  PUBLIC_ROOT,
+  'assets',
+  'lunchmate',
+  'costumes',
+  'collection-wave1-v1',
+);
+const COLLECTION_WAVE2_ROOT = join(
+  PUBLIC_ROOT,
+  'assets',
+  'lunchmate',
+  'costumes',
+  'collection-wave2-v1',
+);
+const COLLECTION_WAVE3_ROOT = join(
+  PUBLIC_ROOT,
+  'assets',
+  'lunchmate',
+  'costumes',
+  'collection-wave3-v2',
+);
+const EYEWEAR_COLLECTION_WAVE1_ROOT = join(
+  PUBLIC_ROOT,
+  'assets',
+  'lunchmate',
+  'costumes',
+  'eyewear-collection-wave1-v1',
 );
 const COMPONENT_ROOT = join(process.cwd(), 'client', 'src', 'components', 'munchie');
 const RENDERER_SOURCE_PATH = join(COMPONENT_ROOT, 'LunchmateCharacterRenderer.tsx');
@@ -86,13 +125,13 @@ describe('Lunchmate layered item manifest', () => {
     assertRgbaCanvas(publicPath(lunchmateChickenAssets.feeding.src), 1254);
   });
 
-  it('registers 31 unique items with the catalog slot counts', () => {
-    expect(LUNCHMATE_ITEMS).toHaveLength(31);
-    expect(new Set(LUNCHMATE_ITEMS.map(item => item.id)).size).toBe(31);
-    expect(LUNCHMATE_ITEMS_BY_SLOT.outfit).toHaveLength(8);
-    expect(LUNCHMATE_ITEMS_BY_SLOT.headwear).toHaveLength(9);
-    expect(LUNCHMATE_ITEMS_BY_SLOT.eyewear).toHaveLength(7);
-    expect(LUNCHMATE_ITEMS_BY_SLOT.bag).toHaveLength(7);
+  it('registers 44 unique items with the catalog slot counts', () => {
+    expect(LUNCHMATE_ITEMS).toHaveLength(44);
+    expect(new Set(LUNCHMATE_ITEMS.map(item => item.id)).size).toBe(44);
+    expect(LUNCHMATE_ITEMS_BY_SLOT.outfit).toHaveLength(13);
+    expect(LUNCHMATE_ITEMS_BY_SLOT.headwear).toHaveLength(13);
+    expect(LUNCHMATE_ITEMS_BY_SLOT.eyewear).toHaveLength(5);
+    expect(LUNCHMATE_ITEMS_BY_SLOT.bag).toHaveLength(13);
   });
 
   it('keeps all bag backs and the two outfit back layers', () => {
@@ -103,11 +142,11 @@ describe('Lunchmate layered item manifest', () => {
 
   it('maps every wardrobe 1x and 2x source to a copied PNG', () => {
     const sources = LUNCHMATE_ITEMS.flatMap(itemSources);
-    expect(sources).toHaveLength(40);
+    expect(sources).toHaveLength(70);
 
     for (const source of sources) {
       const oneX = publicPath(source.src);
-      const twoXPath = source.src.replace(/\.png$/, '@2x.png');
+      const twoXPath = source.srcSet.split(', ')[1].replace(/ 2x$/, '');
       const twoX = publicPath(twoXPath);
       expect(existsSync(oneX), source.src).toBe(true);
       expect(existsSync(twoX), twoXPath).toBe(true);
@@ -115,7 +154,7 @@ describe('Lunchmate layered item manifest', () => {
     }
   });
 
-  it('keeps exactly 40 wardrobe 1x and 40 wardrobe 2x RGBA canvases', () => {
+  it('keeps exactly 9 wardrobe 1x and 9 wardrobe 2x RGBA canvases', () => {
     const expressionDirectoryParts = [
       `${sep}face${sep}`,
       `${sep}effects${sep}`,
@@ -125,11 +164,34 @@ describe('Lunchmate layered item manifest', () => {
     ));
     const oneX = pngFiles.filter(path => !path.endsWith('@2x.png'));
     const twoX = pngFiles.filter(path => path.endsWith('@2x.png'));
-    expect(oneX).toHaveLength(40);
-    expect(twoX).toHaveLength(40);
+    expect(oneX).toHaveLength(9);
+    expect(twoX).toHaveLength(9);
 
     for (const path of pngFiles) {
       assertRgbaCanvas(path, path.endsWith('@2x.png') ? 720 : 360);
+    }
+  });
+});
+
+describe('Profile chicken face system assets', () => {
+  it('registers the shared 950px faceless base and four single-face layers', () => {
+    expect(lunchmateChickenFacelessBaseAsset.src).toBe(
+      '/assets/lunchmate/chicken/face-system/chicken-faceless.png?v=chicken-face-system-v1',
+    );
+    expect(Object.keys(lunchmateChickenFaceAssets)).toEqual([
+      'default',
+      'surprised',
+      'crying',
+      'angry',
+    ]);
+
+    for (const source of [
+      lunchmateChickenFacelessBaseAsset,
+      ...Object.values(lunchmateChickenFaceAssets),
+    ]) {
+      expect(existsSync(publicPath(source.src)), source.src).toBe(true);
+      assertRgbaCanvas(publicPath(source.src), 950);
+      expect(source.srcSet).toBe(`${source.src} 1x, ${source.src} 2x`);
     }
   });
 });
@@ -244,6 +306,13 @@ describe('Lunchmate expression policy', () => {
 });
 
 describe('LunchmateCharacterRenderer composed expression', () => {
+  it('limits the faceless chicken composition to the explicit Profile idle route', () => {
+    expect(shouldUseLunchmateChickenFaceSystem('chicken', 'idle', true)).toBe(true);
+    expect(shouldUseLunchmateChickenFaceSystem('chicken', 'feeding', true)).toBe(false);
+    expect(shouldUseLunchmateChickenFaceSystem('classic', 'idle', true)).toBe(false);
+    expect(shouldUseLunchmateChickenFaceSystem('chicken', 'idle', false)).toBe(false);
+  });
+
   it('uses feeding chicken artwork only during the existing delivery phases', () => {
     expect(resolveLunchmateChickenAssetKey('submitting')).toBe('feeding');
     expect(resolveLunchmateChickenAssetKey('sharingAnimation')).toBe('feeding');
@@ -448,6 +517,23 @@ describe('LunchmateCharacterRenderer composed expression', () => {
     expect(rendererSource).toContain('aria-hidden="true"');
     expect(rendererSource).toContain('onError={() => setLoadFailed(true)}');
   });
+
+  it('renders one chicken face after front costume layers and before eyewear/headwear', () => {
+    const rendererSource = readFileSync(RENDERER_SOURCE_PATH, 'utf8');
+    const backIndex = rendererSource.indexOf('{renderAccessories(backLayers)}');
+    const chickenBaseIndex = rendererSource.indexOf('data-lunchmate-chicken-base={usesChickenFaceSystem');
+    const frontIndex = rendererSource.indexOf('{renderAccessories(frontBodyLayers)}');
+    const chickenFaceIndex = rendererSource.indexOf('data-lunchmate-layer="chicken-face"');
+    const faceAccessoryIndex = rendererSource.indexOf('{renderAccessories(faceAccessoryLayers)}');
+
+    expect(chickenBaseIndex).toBeGreaterThan(backIndex);
+    expect(frontIndex).toBeGreaterThan(chickenBaseIndex);
+    expect(chickenFaceIndex).toBeGreaterThan(frontIndex);
+    expect(faceAccessoryIndex).toBeGreaterThan(chickenFaceIndex);
+    expect(rendererSource.match(/data-lunchmate-layer="chicken-face"/g)).toHaveLength(1);
+    expect(rendererSource).toContain('src={chickenBaseAsset.src}');
+    expect(rendererSource).toContain('src={activeChickenFaceAsset.src}');
+  });
 });
 
 describe('Lunchmate Starter Costume Pose Pilot v3', () => {
@@ -491,6 +577,14 @@ describe('Lunchmate Starter Costume Pose Pilot v3', () => {
         }
       }
     }
+  });
+
+  it('uses the aligned front hoodie body during feeding so utensils stay visually outside the sleeves', () => {
+    const front = resolveLunchmateStarterCostumePoseLayers('outfit_hoodie_coral', 'front');
+    const feeding = resolveLunchmateStarterCostumePoseLayers('outfit_hoodie_coral', 'feeding');
+
+    expect(feeding.map(layer => layer.source.src)).toEqual(front.map(layer => layer.source.src));
+    expect(feeding.every(layer => layer.translateX === 0 && layer.translateY === 0)).toBe(true);
   });
 
   it('mirrors only the side-left canvas for sideRight and reuses front for emotion and grabbed', () => {
@@ -539,29 +633,16 @@ describe('Lunchmate Starter Costume Pose Pilot v3', () => {
     expect(layers.every(layer => layer.translateX === 0 && layer.translateY === 0)).toBe(true);
   });
 
-  it('falls back to legacy assets for every non-pilot costume without changing the loadout', () => {
-    const legacyLoadout = {
-      outfitId: 'outfit_sailor_navy',
-      headwearId: 'headwear_cap_green',
-      eyewearId: 'eyewear_square_brown',
-      bagId: 'bag_satchel_brown',
+  it('does not render removed legacy catalog IDs as costume layers', () => {
+    const removedLoadout = {
+      outfitId: 'removed_outfit',
+      headwearId: 'removed_headwear',
+      eyewearId: 'removed_eyewear',
+      bagId: 'removed_bag',
     } as const;
-    const layers = resolveLunchmateChickenCostumeRenderLayers(legacyLoadout, 'sitting');
+    const layers = resolveLunchmateChickenCostumeRenderLayers(removedLoadout, 'sitting');
 
-    expect(layers.map(layer => layer.costumeId)).toEqual([
-      'legacy',
-      'legacy',
-      'legacy',
-      'legacy',
-      'legacy',
-    ]);
-    expect(layers.map(layer => layer.source.src)).toEqual([
-      '/assets/lunchmate/layers/bag/satchel_brown_back.png',
-      '/assets/lunchmate/layers/outfit/sailor_navy.png',
-      '/assets/lunchmate/layers/bag/satchel_brown_front.png',
-      '/assets/lunchmate/layers/eyewear/square_brown.png',
-      '/assets/lunchmate/layers/headwear/cap_green.png',
-    ]);
+    expect(layers).toEqual([]);
   });
 
   it('uses only mirror scale for sideRight and never applies an extra eyewear scale or placement translation', () => {
@@ -572,6 +653,475 @@ describe('Lunchmate Starter Costume Pose Pilot v3', () => {
     expect(rendererSource).not.toContain('eyewearScale');
     expect(rendererSource).not.toContain('translateX: 28');
     expect(rendererSource).not.toContain('translateY: 34');
+  });
+});
+
+describe('Lunchmate Costume Collection Wave 1', () => {
+  const directPoses = ['front', 'feeding', 'sideLeft', 'sitting'] as const;
+  const itemIds = [
+    'outfit_strawberry_picnic',
+    'headwear_gingham_bow',
+    'bag_picnic_basket',
+    'outfit_sailor_blue',
+    'headwear_sailor_cap_navy',
+    'bag_anchor_pouch_navy',
+  ] as const;
+
+  it('registers the six Wave 1 IDs and every copied 360/720 RGBA overlay', () => {
+    expect(LUNCHMATE_COLLECTION_WAVE1_ITEM_IDS).toEqual(itemIds);
+    expect(LUNCHMATE_COSTUME_COLLECTION_WAVE1_POSE_MANIFEST.version).toBe(2);
+    expect(LUNCHMATE_COSTUME_COLLECTION_WAVE1_POSE_MANIFEST.referenceCanvas).toBe(720);
+
+    const pngFiles = collectPngFiles(COLLECTION_WAVE1_ROOT);
+    const oneX = pngFiles.filter(path => path.includes(`${sep}1x${sep}`));
+    const twoX = pngFiles.filter(path => path.includes(`${sep}2x${sep}`));
+    expect(oneX).toHaveLength(40);
+    expect(twoX).toHaveLength(40);
+
+    for (const path of oneX) assertRgbaCanvas(path, 360);
+    for (const path of twoX) assertRgbaCanvas(path, 720);
+  });
+
+  it('uses the ZIP front, feeding, side-left, and sitting artwork with literal zero translations', () => {
+    for (const itemId of itemIds) {
+      for (const pose of directPoses) {
+        const layers = resolveLunchmateStarterCostumePoseLayers(itemId, pose);
+        expect(layers.length, `${itemId}:${pose}`).toBeGreaterThan(0);
+
+        for (const layer of layers) {
+          const twoX = layer.source.srcSet.split(', ')[1].replace(/ 2x$/, '');
+          expect(layer.source.src).toContain(`/collection-wave1-v1/1x/${itemId}/`);
+          expect(twoX).toContain(`/collection-wave1-v1/2x/${itemId}/`);
+          expect(layer.source.src).toContain('?v=collection-repaired-v2');
+          expect(existsSync(publicPath(layer.source.src)), layer.source.src).toBe(true);
+          expect(existsSync(publicPath(twoX)), twoX).toBe(true);
+          expect(layer.translateX).toBe(0);
+          expect(layer.translateY).toBe(0);
+          expect(layer.mirrored).toBe(false);
+        }
+      }
+    }
+  });
+
+  it('mirrors sideLeft for sideRight and reuses front for emotion and grabbed', () => {
+    for (const itemId of itemIds) {
+      const front = resolveLunchmateStarterCostumePoseLayers(itemId, 'front');
+      const sideLeft = resolveLunchmateStarterCostumePoseLayers(itemId, 'sideLeft');
+      const sideRight = resolveLunchmateStarterCostumePoseLayers(itemId, 'sideRight');
+      const emotion = resolveLunchmateStarterCostumePoseLayers(itemId, 'emotion');
+      const grabbed = resolveLunchmateStarterCostumePoseLayers(itemId, 'grabbed');
+
+      expect(sideRight.map(layer => layer.source.src)).toEqual(sideLeft.map(layer => layer.source.src));
+      expect(sideRight.every(layer => layer.mirrored)).toBe(true);
+      expect(emotion.map(layer => layer.source.src)).toEqual(front.map(layer => layer.source.src));
+      expect(grabbed.map(layer => layer.source.src)).toEqual(front.map(layer => layer.source.src));
+    }
+  });
+
+  it('keeps all three Wave 1 slots independently combinable in placements.json layer order', () => {
+    const strawberryPicnic = {
+      outfitId: 'outfit_strawberry_picnic',
+      headwearId: 'headwear_gingham_bow',
+      eyewearId: null,
+      bagId: 'bag_picnic_basket',
+    } as const;
+    const blueSailor = {
+      outfitId: 'outfit_sailor_blue',
+      headwearId: 'headwear_sailor_cap_navy',
+      eyewearId: null,
+      bagId: 'bag_anchor_pouch_navy',
+    } as const;
+
+    for (const loadout of [strawberryPicnic, blueSailor]) {
+      for (const pose of directPoses) {
+        const layers = resolveLunchmateChickenCostumeRenderLayers(loadout, pose);
+        expect(layers.map(layer => layer.layerName)).toEqual([
+          'bag-back',
+          'outfit-back',
+          'outfit-front',
+          'bag-front',
+          'headwear',
+        ]);
+        expect(layers.every(layer => layer.costumeId !== 'legacy')).toBe(true);
+        expect(layers.every(layer => layer.translateX === 0 && layer.translateY === 0)).toBe(true);
+      }
+    }
+  });
+
+  it('resolves both repaired Wave 1 outfits and bags independently in all direct poses', () => {
+    const outfitIds = itemIds.filter(id => id.startsWith('outfit_'));
+    const bagIds = itemIds.filter(id => id.startsWith('bag_'));
+
+    for (const pose of directPoses) {
+      for (const outfitId of outfitIds) {
+        const layers = resolveLunchmateChickenCostumeRenderLayers({
+          outfitId,
+          headwearId: null,
+          eyewearId: null,
+          bagId: null,
+        }, pose);
+        expect(layers.map(layer => layer.layerName), `${outfitId}:${pose}`).toEqual([
+          'outfit-back',
+          'outfit-front',
+        ]);
+      }
+
+      for (const bagId of bagIds) {
+        const layers = resolveLunchmateChickenCostumeRenderLayers({
+          outfitId: null,
+          headwearId: null,
+          eyewearId: null,
+          bagId,
+        }, pose);
+        expect(layers.map(layer => layer.layerName), `${bagId}:${pose}`).toEqual([
+          'bag-back',
+          'bag-front',
+        ]);
+      }
+    }
+  });
+
+  it('keeps the approved Profile and Room character sizes at their theme anchors', () => {
+    const foodieBuddySource = readFileSync(FOODIE_BUDDY_SOURCE_PATH, 'utf8');
+    const foodieRoomSource = readFileSync(FOODIE_ROOM_SOURCE_PATH, 'utf8');
+    expect(foodieBuddySource).toContain('const LUNCHMATE_RENDER_SIZE = 86');
+    expect(foodieBuddySource).toContain('size={LUNCHMATE_RENDER_SIZE}');
+    expect(foodieRoomSource).toContain('size={156}');
+    expect(foodieRoomSource).toContain('bottom-[15.625%]');
+  });
+});
+
+describe('Lunchmate Costume Collection Wave 2', () => {
+  const directPoses = ['front', 'feeding', 'sideLeft', 'sitting'] as const;
+  const itemIds = [
+    'outfit_bakery_apron_cream',
+    'headwear_chef_puff_cream',
+    'bag_baguette_tote',
+    'outfit_raincoat_yellow',
+    'headwear_frog_bucket_hat',
+    'bag_cloud_pouch',
+    'outfit_cardigan_mint',
+    'headwear_bow_cream_back',
+    'bag_acorn_satchel',
+    'outfit_denim_overalls',
+    'headwear_bow_side_navy',
+    'bag_camera_crossbody',
+    'outfit_pajamas_lilac',
+    'headwear_nightcap_lilac',
+    'bag_star_pouch',
+    'outfit_varsity_cherry_coral',
+    'headwear_bow_pink_loop',
+    'bag_cherry_crossbody',
+  ] as const;
+
+  const setLoadouts = [
+    ['outfit_bakery_apron_cream', 'headwear_chef_puff_cream', 'bag_baguette_tote'],
+    ['outfit_raincoat_yellow', 'headwear_frog_bucket_hat', 'bag_cloud_pouch'],
+    ['outfit_cardigan_mint', 'headwear_bow_cream_back', 'bag_acorn_satchel'],
+    ['outfit_denim_overalls', 'headwear_bow_side_navy', 'bag_camera_crossbody'],
+    ['outfit_pajamas_lilac', 'headwear_nightcap_lilac', 'bag_star_pouch'],
+    ['outfit_varsity_cherry_coral', 'headwear_bow_pink_loop', 'bag_cherry_crossbody'],
+  ] as const;
+
+  it('registers all six sets and every copied 360/720 RGBA overlay', () => {
+    expect(LUNCHMATE_COLLECTION_WAVE2_ITEM_IDS).toEqual(itemIds);
+    expect(LUNCHMATE_COSTUME_COLLECTION_WAVE2_POSE_MANIFEST.version).toBe(2);
+    expect(LUNCHMATE_COSTUME_COLLECTION_WAVE2_POSE_MANIFEST.referenceCanvas).toBe(720);
+
+    const pngFiles = collectPngFiles(COLLECTION_WAVE2_ROOT);
+    const oneX = pngFiles.filter(path => path.includes(`${sep}1x${sep}`));
+    const twoX = pngFiles.filter(path => path.includes(`${sep}2x${sep}`));
+    expect(oneX).toHaveLength(120);
+    expect(twoX).toHaveLength(120);
+
+    for (const path of oneX) assertRgbaCanvas(path, 360);
+    for (const path of twoX) assertRgbaCanvas(path, 720);
+  });
+
+  it('uses each direct pose from placements.json with no compensating translation', () => {
+    for (const itemId of itemIds) {
+      for (const pose of directPoses) {
+        const layers = resolveLunchmateStarterCostumePoseLayers(itemId, pose);
+        expect(layers.length, `${itemId}:${pose}`).toBeGreaterThan(0);
+        for (const layer of layers) {
+          const twoX = layer.source.srcSet.split(', ')[1].replace(/ 2x$/, '');
+          expect(layer.source.src).toContain(`/collection-wave2-v1/1x/${itemId}/`);
+          expect(twoX).toContain(`/collection-wave2-v1/2x/${itemId}/`);
+          expect(layer.source.src).toContain('?v=collection-repaired-v2');
+          expect(existsSync(publicPath(layer.source.src)), layer.source.src).toBe(true);
+          expect(existsSync(publicPath(twoX)), twoX).toBe(true);
+          expect(layer.translateX).toBe(0);
+          expect(layer.translateY).toBe(0);
+          expect(layer.mirrored).toBe(false);
+        }
+      }
+    }
+  });
+
+  it('mirrors sideLeft for sideRight and keeps emotion/grabbed on the front artwork', () => {
+    for (const itemId of itemIds) {
+      const front = resolveLunchmateStarterCostumePoseLayers(itemId, 'front');
+      const sideLeft = resolveLunchmateStarterCostumePoseLayers(itemId, 'sideLeft');
+      const sideRight = resolveLunchmateStarterCostumePoseLayers(itemId, 'sideRight');
+      const emotion = resolveLunchmateStarterCostumePoseLayers(itemId, 'emotion');
+      const grabbed = resolveLunchmateStarterCostumePoseLayers(itemId, 'grabbed');
+
+      expect(sideRight.map(layer => layer.source.src)).toEqual(sideLeft.map(layer => layer.source.src));
+      expect(sideRight.every(layer => layer.mirrored)).toBe(true);
+      expect(emotion.map(layer => layer.source.src)).toEqual(front.map(layer => layer.source.src));
+      expect(grabbed.map(layer => layer.source.src)).toEqual(front.map(layer => layer.source.src));
+    }
+  });
+
+  it('keeps every set independently composable in bag/outfit/base/body/bag/face/headwear order', () => {
+    for (const [outfitId, headwearId, bagId] of setLoadouts) {
+      const loadout = { outfitId, headwearId, eyewearId: null, bagId };
+      for (const pose of directPoses) {
+        const layers = resolveLunchmateChickenCostumeRenderLayers(loadout, pose);
+        expect(layers.map(layer => layer.layerName)).toEqual([
+          'bag-back',
+          'outfit-back',
+          'outfit-front',
+          'bag-front',
+          'headwear',
+        ]);
+        expect(layers.every(layer => layer.costumeId !== 'legacy')).toBe(true);
+        expect(layers.every(layer => layer.translateX === 0 && layer.translateY === 0)).toBe(true);
+      }
+    }
+  });
+
+  it('resolves every repaired outfit and bag independently in all direct poses', () => {
+    const outfitIds = itemIds.filter(id => id.startsWith('outfit_'));
+    const bagIds = itemIds.filter(id => id.startsWith('bag_'));
+
+    for (const pose of directPoses) {
+      for (const outfitId of outfitIds) {
+        const layers = resolveLunchmateChickenCostumeRenderLayers({
+          outfitId,
+          headwearId: null,
+          eyewearId: null,
+          bagId: null,
+        }, pose);
+        expect(layers.map(layer => layer.layerName), `${outfitId}:${pose}`).toEqual([
+          'outfit-back',
+          'outfit-front',
+        ]);
+      }
+
+      for (const bagId of bagIds) {
+        const layers = resolveLunchmateChickenCostumeRenderLayers({
+          outfitId: null,
+          headwearId: null,
+          eyewearId: null,
+          bagId,
+        }, pose);
+        expect(layers.map(layer => layer.layerName), `${bagId}:${pose}`).toEqual([
+          'bag-back',
+          'bag-front',
+        ]);
+      }
+    }
+  });
+
+  it('keeps the repaired Bakery apron complete on both direct side poses', () => {
+    for (const pose of ['front', 'sideLeft'] as const) {
+      const layers = resolveLunchmateStarterCostumePoseLayers('outfit_bakery_apron_cream', pose);
+      expect(layers.map(layer => layer.layerName)).toEqual(['outfit-back', 'outfit-front']);
+      expect(layers[1].source.src).toContain(`outfit_bakery_apron_cream/${pose === 'front' ? 'front' : 'side-left'}-body.png`);
+    }
+  });
+
+  it('reuses the established raincoat ID without duplicating the catalog entry', () => {
+    expect(LUNCHMATE_ITEMS.filter(item => item.id === 'outfit_raincoat_yellow')).toHaveLength(1);
+    expect(resolveLunchmateStarterCostumePoseLayers('outfit_raincoat_yellow', 'feeding')
+      .every(layer => layer.source.src.includes('/collection-wave2-v1/'))).toBe(true);
+  });
+});
+
+describe('Lunchmate Costume Collection Wave 3', () => {
+  const directPoses = ['front', 'feeding', 'sideLeft', 'sitting'] as const;
+  const itemIds = [
+    'outfit_space_explorer_cream',
+    'headwear_space_hood_periwinkle',
+    'bag_moon_pouch_honey',
+    'outfit_artist_smock_rose',
+    'headwear_beret_teal',
+    'bag_palette_crossbody',
+    'outfit_garden_overalls_sage',
+    'headwear_tulip_headband_coral',
+    'bag_watering_can_terracotta',
+    'outfit_detective_cape_cocoa',
+    'headwear_detective_cap_forest',
+    'bag_magnifying_satchel',
+  ] as const;
+
+  const mixedLoadouts = [
+    ['outfit_space_explorer_cream', 'headwear_beret_teal', 'bag_watering_can_terracotta'],
+    ['outfit_artist_smock_rose', 'headwear_detective_cap_forest', 'bag_moon_pouch_honey'],
+    ['outfit_garden_overalls_sage', 'headwear_space_hood_periwinkle', 'bag_palette_crossbody'],
+    ['outfit_detective_cape_cocoa', 'headwear_tulip_headband_coral', 'bag_magnifying_satchel'],
+  ] as const;
+
+  it('registers all 12 Wave 3 v2 IDs and 160 fixed RGBA overlays', () => {
+    expect(LUNCHMATE_COLLECTION_WAVE3_ITEM_IDS).toEqual(itemIds);
+    expect(LUNCHMATE_COSTUME_COLLECTION_WAVE3_POSE_MANIFEST.version).toBe(2);
+    expect(LUNCHMATE_COSTUME_COLLECTION_WAVE3_POSE_MANIFEST.referenceCanvas).toBe(720);
+
+    const pngFiles = collectPngFiles(COLLECTION_WAVE3_ROOT);
+    const oneX = pngFiles.filter(path => path.includes(`${sep}1x${sep}`));
+    const twoX = pngFiles.filter(path => path.includes(`${sep}2x${sep}`));
+    expect(oneX).toHaveLength(80);
+    expect(twoX).toHaveLength(80);
+    for (const path of oneX) assertRgbaCanvas(path, 360);
+    for (const path of twoX) assertRgbaCanvas(path, 720);
+  });
+
+  it('resolves the four direct poses, reuse poses, and mirrored walking direction with zero placement offsets', () => {
+    for (const itemId of itemIds) {
+      for (const pose of directPoses) {
+        const layers = resolveLunchmateStarterCostumePoseLayers(itemId, pose);
+        expect(layers.length, `${itemId}:${pose}`).toBeGreaterThan(0);
+        for (const layer of layers) {
+          const twoX = layer.source.srcSet.split(', ')[1].replace(/ 2x$/, '');
+          expect(layer.source.src).toContain(`/collection-wave3-v2/1x/${itemId}/`);
+          expect(twoX).toContain(`/collection-wave3-v2/2x/${itemId}/`);
+          expect(layer.source.src).toContain('?v=collection-wave3-v2');
+          expect(existsSync(publicPath(layer.source.src)), layer.source.src).toBe(true);
+          expect(existsSync(publicPath(twoX)), twoX).toBe(true);
+          expect(layer.translateX).toBe(0);
+          expect(layer.translateY).toBe(0);
+          expect(layer.mirrored).toBe(false);
+        }
+      }
+
+      const sideLeft = resolveLunchmateStarterCostumePoseLayers(itemId, 'sideLeft');
+      const sideRight = resolveLunchmateStarterCostumePoseLayers(itemId, 'sideRight');
+      const front = resolveLunchmateStarterCostumePoseLayers(itemId, 'front');
+      expect(sideRight.map(layer => layer.source.src)).toEqual(sideLeft.map(layer => layer.source.src));
+      expect(sideRight.every(layer => layer.mirrored)).toBe(true);
+      expect(resolveLunchmateStarterCostumePoseLayers(itemId, 'emotion').map(layer => layer.source.src))
+        .toEqual(front.map(layer => layer.source.src));
+      expect(resolveLunchmateStarterCostumePoseLayers(itemId, 'grabbed').map(layer => layer.source.src))
+        .toEqual(front.map(layer => layer.source.src));
+    }
+  });
+
+  it('keeps every slot independently wearable and cross-set combinations in the established layer order', () => {
+    const outfitIds = itemIds.filter(id => id.startsWith('outfit_'));
+    const headwearIds = itemIds.filter(id => id.startsWith('headwear_'));
+    const bagIds = itemIds.filter(id => id.startsWith('bag_'));
+
+    for (const pose of directPoses) {
+      for (const outfitId of outfitIds) {
+        expect(resolveLunchmateChickenCostumeRenderLayers({ outfitId, headwearId: null, eyewearId: null, bagId: null }, pose)
+          .map(layer => layer.layerName)).toEqual(['outfit-back', 'outfit-front']);
+      }
+      for (const headwearId of headwearIds) {
+        expect(resolveLunchmateChickenCostumeRenderLayers({ outfitId: null, headwearId, eyewearId: null, bagId: null }, pose)
+          .map(layer => layer.layerName)).toEqual(['headwear']);
+      }
+      for (const bagId of bagIds) {
+        expect(resolveLunchmateChickenCostumeRenderLayers({ outfitId: null, headwearId: null, eyewearId: null, bagId }, pose)
+          .map(layer => layer.layerName)).toEqual(['bag-back', 'bag-front']);
+      }
+    }
+
+    for (const [outfitId, headwearId, bagId] of mixedLoadouts) {
+      for (const pose of directPoses) {
+        expect(resolveLunchmateChickenCostumeRenderLayers({ outfitId, headwearId, eyewearId: null, bagId }, pose)
+          .map(layer => layer.layerName)).toEqual([
+            'bag-back',
+            'outfit-back',
+            'outfit-front',
+            'bag-front',
+            'headwear',
+          ]);
+      }
+    }
+  });
+
+  it('retains the approved Profile and FoodieRoom rendering sizes', () => {
+    const foodieBuddySource = readFileSync(FOODIE_BUDDY_SOURCE_PATH, 'utf8');
+    const foodieRoomSource = readFileSync(FOODIE_ROOM_SOURCE_PATH, 'utf8');
+    expect(foodieBuddySource).toContain('const LUNCHMATE_RENDER_SIZE = 86');
+    expect(foodieRoomSource).toContain('size={156}');
+    expect(foodieRoomSource).toContain('bottom-[15.625%]');
+  });
+});
+
+describe('Lunchmate Eyewear Collection Wave 1', () => {
+  const directPoses = ['front', 'feeding', 'sideLeft', 'sitting'] as const;
+  const itemIds = [
+    'eyewear_sunglasses_cocoa',
+    'eyewear_heart_coral',
+    'eyewear_star_honey',
+    'eyewear_cat_eye_lilac',
+  ] as const;
+
+  it('registers all four 360/720 RGBA eyewear overlays without duplicating the established heart ID', () => {
+    expect(LUNCHMATE_EYEWEAR_COLLECTION_WAVE1_ITEM_IDS).toEqual(itemIds);
+    expect(LUNCHMATE_EYEWEAR_COLLECTION_WAVE1_POSE_MANIFEST.version).toBe(1);
+    expect(LUNCHMATE_EYEWEAR_COLLECTION_WAVE1_POSE_MANIFEST.referenceCanvas).toBe(720);
+    expect(LUNCHMATE_ITEMS.filter(item => item.id === 'eyewear_heart_coral')).toHaveLength(1);
+
+    const pngFiles = collectPngFiles(EYEWEAR_COLLECTION_WAVE1_ROOT);
+    const oneX = pngFiles.filter(path => path.includes(`${sep}1x${sep}`));
+    const twoX = pngFiles.filter(path => path.includes(`${sep}2x${sep}`));
+    expect(oneX).toHaveLength(16);
+    expect(twoX).toHaveLength(16);
+    for (const path of oneX) assertRgbaCanvas(path, 360);
+    for (const path of twoX) assertRgbaCanvas(path, 720);
+  });
+
+  it('resolves direct poses after the face with side-right mirror and literal zero translations', () => {
+    for (const itemId of itemIds) {
+      for (const pose of directPoses) {
+        const layers = resolveLunchmateStarterCostumePoseLayers(itemId, pose);
+        expect(layers).toHaveLength(1);
+        const layer = layers[0];
+        const twoX = layer.source.srcSet.split(', ')[1].replace(/ 2x$/, '');
+        expect(layer.layerName).toBe('eyewear');
+        expect(layer.source.src).toContain(`/eyewear-collection-wave1-v1/1x/${itemId}/`);
+        expect(twoX).toContain(`/eyewear-collection-wave1-v1/2x/${itemId}/`);
+        expect(layer.source.src).toContain('?v=eyewear-collection-wave1-v1');
+        expect(existsSync(publicPath(layer.source.src)), layer.source.src).toBe(true);
+        expect(existsSync(publicPath(twoX)), twoX).toBe(true);
+        expect(layer.translateX).toBe(0);
+        expect(layer.translateY).toBe(0);
+        expect(layer.mirrored).toBe(false);
+      }
+
+      const front = resolveLunchmateStarterCostumePoseLayers(itemId, 'front');
+      const sideLeft = resolveLunchmateStarterCostumePoseLayers(itemId, 'sideLeft');
+      const sideRight = resolveLunchmateStarterCostumePoseLayers(itemId, 'sideRight');
+      expect(sideRight.map(layer => layer.source.src)).toEqual(sideLeft.map(layer => layer.source.src));
+      expect(sideRight.every(layer => layer.mirrored)).toBe(true);
+      expect(resolveLunchmateStarterCostumePoseLayers(itemId, 'emotion').map(layer => layer.source.src))
+        .toEqual(front.map(layer => layer.source.src));
+      expect(resolveLunchmateStarterCostumePoseLayers(itemId, 'grabbed').map(layer => layer.source.src))
+        .toEqual(front.map(layer => layer.source.src));
+    }
+  });
+
+  it('combines each eyewear item with independent Wave 3 outfit, bag, and headwear layers', () => {
+    for (const eyewearId of itemIds) {
+      for (const pose of directPoses) {
+        expect(resolveLunchmateChickenCostumeRenderLayers({
+          outfitId: 'outfit_artist_smock_rose',
+          headwearId: 'headwear_tulip_headband_coral',
+          eyewearId,
+          bagId: 'bag_magnifying_satchel',
+        }, pose).map(layer => layer.layerName)).toEqual([
+          'bag-back',
+          'outfit-back',
+          'outfit-front',
+          'bag-front',
+          'eyewear',
+          'headwear',
+        ]);
+      }
+    }
   });
 });
 
@@ -598,7 +1148,8 @@ describe('Lunchmate food flow and presentation contracts', () => {
     expect(sharingIndex).toBeGreaterThan(-1);
     expect(sharingIndex).toBeLessThan(reactionIndex);
     expect(reactionIndex).toBeLessThan(idleIndex);
-    expect(flowSource.match(/setPreviewXp\(nextXp\)/g)).toHaveLength(1);
+    expect(flowSource.match(/setPreviewXp\(progressUpdate\.nextTotalXp\)/g)).toHaveLength(1);
+    expect(flowSource.match(/onTotalXpChange\(progressUpdate\.nextTotalXp\)/g)).toHaveLength(1);
     expect(flowSource).not.toContain('quantity -');
   });
 
@@ -614,17 +1165,34 @@ describe('Lunchmate food flow and presentation contracts', () => {
     expect(foodieRoomSource).toContain('renderSize="room"');
     expect(foodieRoomSource).toContain('artwork="chicken"');
     expect(foodieRoomSource).toContain('animated={false}');
-    expect(foodieRoomSource).toContain('className="relative h-[270px]');
+    expect(foodieRoomSource).toContain('className="relative aspect-[3/2]');
     expect(foodieRoomSource).toContain('size={156}');
-    expect(foodieRoomSource).toContain('className="absolute inset-x-0 bottom-11 z-10 flex justify-center"');
+    expect(foodieRoomSource).toContain('className="absolute inset-x-0 bottom-[15.625%] z-10 flex justify-center"');
     expect(foodieBuddySource).toContain('artwork="chicken"');
     expect(foodieBuddySource).toContain('animated={false}');
     expect(foodieBuddySource).toContain('const LUNCHMATE_RENDER_SIZE = 86');
+    expect(foodieBuddySource).toContain('chickenFaceSystem={profileFaceSystemEnabled}');
+    expect(foodieBuddySource).toContain("chickenFaceOverride={profileTapFace ?? 'default'}");
     expect(foodieBuddySource).toContain("height: 'clamp(144px, 38vw, 150px)'");
     expect(foodieBuddySource).toContain("background: 'rgba(255,255,255,0.85)'");
     expect(foodieBuddySource).toContain('aria-label={`김밥 EXP ${progressLabel}`}');
     expect(foodieBuddySource).not.toContain('👀→');
     expect(foodieBuddySource).not.toContain('wanderRef');
     expect(foodieBuddySource).not.toContain('bounceRef');
+  });
+
+  it('keeps tap reactions local, streaked, and blocked by feeding interactions', () => {
+    const foodieBuddySource = readFileSync(FOODIE_BUDDY_SOURCE_PATH, 'utf8');
+
+    expect(foodieBuddySource).toContain('const PROFILE_TAP_STREAK_RESET_MS = 2_000');
+    expect(foodieBuddySource).toContain("surprised: 600");
+    expect(foodieBuddySource).toContain("crying: 900");
+    expect(foodieBuddySource).toContain("angry: 1_100");
+    expect(foodieBuddySource).toContain("profileTapFace === 'angry' && !motionIsReduced");
+    expect(foodieBuddySource).toContain('profileTapInteractionBlocked');
+    expect(foodieBuddySource).toContain('isLunchboxDragGesture(');
+    expect(foodieBuddySource).toContain('createLunchmateProfileTapInteractionController(setProfileTapFace)');
+    expect(foodieBuddySource).toContain('profileTapController.pointerUp({');
+    expect(foodieBuddySource).toContain('suspended: isFeeding || isFoodDragging || isLunchboxOpen || isProfileTapReactionActive');
   });
 });

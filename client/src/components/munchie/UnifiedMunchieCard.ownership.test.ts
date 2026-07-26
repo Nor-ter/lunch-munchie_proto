@@ -24,7 +24,7 @@ describe('UnifiedMunchieCard ownership menu', () => {
   });
 
   it('routes own and other author profile clicks to different destinations', () => {
-    expect(source).toContain("const authorProfilePath = ownPost ? '/profile' : `/profile/${post.authorId}`");
+    expect(source).toContain("const authorProfilePath = ownPost ? '/profile' : `/profile/${resolveFeedAuthorId(post)}`");
     expect(source).toContain('onClick={() => go(authorProfilePath)}');
   });
 });

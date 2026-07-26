@@ -2,13 +2,13 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import type { LunchboxFoodItem } from '@/components/munchie/LunchboxBottomSheet';
 import type { FoodieBuddyUiState } from '@/components/munchie/FoodieBuddy';
 import {
-  getLunchmateLevelUpEvent,
+  createLunchmateProgressUpdate,
   getLunchmateProgressSnapshot,
-  LUNCHMATE_PREVIEW_MAX_XP,
+  normalizeLunchmateTotalXp,
   type LunchmateLevelUpEvent,
 } from '@/utils/lunchmateProgress';
 
-const FAIL_ONCE_FOOD_ID = 'strawberry-cake';
+const FAIL_ONCE_FOOD_ID = 'preview-strawberry-cake';
 
 class LunchmateMockError extends Error {}
 
@@ -53,37 +53,39 @@ async function shareBiteMock(item: LunchboxFoodItem, attempt: number, signal: Ab
 
 interface UseLunchmateFlowOptions {
   initialState?: FoodieBuddyUiState;
-  initialXp?: number;
+  initialTotalXp?: number;
+  onTotalXpChange: (totalXp: number) => void;
   onSuccessClose: () => void;
-  onShareSuccess?: (item: LunchboxFoodItem) => void;
-  onXpChange?: (totalXp: number) => void;
 }
 
 export function useLunchmateFlow({
   initialState = 'foodAvailable',
-  initialXp = 0,
+  initialTotalXp = 0,
+  onTotalXpChange,
   onSuccessClose,
-  onShareSuccess,
-  onXpChange,
 }: UseLunchmateFlowOptions) {
-  const normalizedInitialXp = Math.min(
-    LUNCHMATE_PREVIEW_MAX_XP,
-    Number.isFinite(initialXp) ? Math.max(0, initialXp) : 0,
-  );
+  const normalizedInitialTotalXp = normalizeLunchmateTotalXp(initialTotalXp);
   const [state, setState] = useState<FoodieBuddyUiState>(initialState);
   const [selectedFood, setSelectedFood] = useState<LunchboxFoodItem | null>(null);
-  const [previewXp, setPreviewXp] = useState(normalizedInitialXp);
-  const [previousPreviewXp, setPreviousPreviewXp] = useState(normalizedInitialXp);
+  const [previewXp, setPreviewXp] = useState(normalizedInitialTotalXp);
+  const [previousPreviewXp, setPreviousPreviewXp] = useState(normalizedInitialTotalXp);
   const [lastXpGain, setLastXpGain] = useState(0);
   const [resultMessage, setResultMessage] = useState<string>();
   const [errorMessage, setErrorMessage] = useState<string>();
-  const [levelUpEvent, setLevelUpEvent] = useState<LunchmateLevelUpEvent | null>(null);
+  const [levelUpEvents, setLevelUpEvents] = useState<LunchmateLevelUpEvent[]>([]);
   const attemptsRef = useRef(new Map<string, number>());
   const activeControllerRef = useRef<AbortController | null>(null);
   const isRunningRef = useRef(false);
-  const previewXpRef = useRef(normalizedInitialXp);
+  const previewXpRef = useRef(normalizedInitialTotalXp);
 
   useEffect(() => () => activeControllerRef.current?.abort(), []);
+  useEffect(() => {
+    const nextTotalXp = normalizeLunchmateTotalXp(initialTotalXp);
+    if (isRunningRef.current || previewXpRef.current === nextTotalXp) return;
+    previewXpRef.current = nextTotalXp;
+    setPreviousPreviewXp(nextTotalXp);
+    setPreviewXp(nextTotalXp);
+  }, [initialTotalXp]);
 
   const beginSelecting = useCallback(() => {
     if (isRunningRef.current) return false;
@@ -112,23 +114,8 @@ export function useLunchmateFlow({
   }, [initialState]);
 
   const acknowledgeLevelUp = useCallback(() => {
-    setLevelUpEvent(null);
+    setLevelUpEvents(events => events.slice(1));
   }, []);
-
-  const resetProgress = useCallback(() => {
-    activeControllerRef.current?.abort();
-    activeControllerRef.current = null;
-    isRunningRef.current = false;
-    previewXpRef.current = 0;
-    setPreviewXp(0);
-    setPreviousPreviewXp(0);
-    setLastXpGain(0);
-    setSelectedFood(null);
-    setResultMessage(undefined);
-    setErrorMessage(undefined);
-    setLevelUpEvent(null);
-    setState(initialState);
-  }, [initialState]);
 
   const shareFood = useCallback(async (item: LunchboxFoodItem) => {
     if (isRunningRef.current || item.quantity <= 0) return;
@@ -145,28 +132,30 @@ export function useLunchmateFlow({
 
     try {
       const result = await shareBiteMock(item, attempt, controller.signal);
-      const previousXp = previewXpRef.current;
-      const nextXp = Math.min(LUNCHMATE_PREVIEW_MAX_XP, previousXp + result.xpGained);
-      const nextLevelUpEvent = getLunchmateLevelUpEvent(previousXp, nextXp);
+      const progressUpdate = createLunchmateProgressUpdate(
+        previewXpRef.current,
+        result.xpGained,
+      );
+      previewXpRef.current = progressUpdate.nextTotalXp;
+      setPreviousPreviewXp(progressUpdate.previousTotalXp);
+      setPreviewXp(progressUpdate.nextTotalXp);
+      onTotalXpChange(progressUpdate.nextTotalXp);
       setLastXpGain(result.xpGained);
       setResultMessage(result.message);
-      onShareSuccess?.(item);
       onSuccessClose();
 
       // Sheet exit(0.3s) 뒤에 전달 표현을 시작해 overlay에 가려지지 않게 한다.
       await waitForMock(300, controller.signal);
       setState('sharingAnimation');
       await waitForMock(500, controller.signal);
-      previewXpRef.current = nextXp;
-      setPreviousPreviewXp(previousXp);
-      setPreviewXp(nextXp);
-      onXpChange?.(nextXp);
       setState('reaction');
 
       await waitForMock(650, controller.signal);
       setState('idle');
       setSelectedFood(null);
-      if (nextLevelUpEvent) setLevelUpEvent(nextLevelUpEvent);
+      if (progressUpdate.levelUpEvents.length > 0) {
+        setLevelUpEvents(events => [...events, ...progressUpdate.levelUpEvents]);
+      }
     } catch (error) {
       if (error instanceof DOMException && error.name === 'AbortError') return;
       setErrorMessage(error instanceof LunchmateMockError
@@ -179,7 +168,7 @@ export function useLunchmateFlow({
         isRunningRef.current = false;
       }
     }
-  }, [onShareSuccess, onSuccessClose, onXpChange]);
+  }, [onSuccessClose, onTotalXpChange]);
 
   return {
     state,
@@ -189,13 +178,12 @@ export function useLunchmateFlow({
     lastXpGain,
     resultMessage,
     errorMessage,
-    levelUpEvent,
+    levelUpEvent: levelUpEvents[0] ?? null,
     isBusy: state === 'submitting' || state === 'sharingAnimation' || state === 'reaction',
     beginSelecting,
     selectFood,
     shareFood,
     cancel,
     acknowledgeLevelUp,
-    resetProgress,
   };
 }

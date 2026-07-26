@@ -2,6 +2,7 @@ import { useLocation, useParams, useSearch } from 'wouter';
 import { ChevronLeft, Pencil } from 'lucide-react';
 import { useApp } from '@/contexts/AppContext';
 import UnifiedMunchieCard from '@/components/munchie/UnifiedMunchieCard';
+import { getSavedReturnPath } from '@/lib/savedNavigation';
 
 export default function FeedDetailPage() {
   const { id } = useParams<{ id: string }>();
@@ -13,8 +14,15 @@ export default function FeedDetailPage() {
   const fromProfile = origin === 'profile';
   const fromSaved = origin === 'saved';
   const fromNotifications = origin === 'notifications';
+  const profileReturnId = new URLSearchParams(search).get('profileId');
   const detailOrigin = fromProfile ? 'profile' : fromSaved ? 'saved' : 'feed';
-  const backPath = fromNotifications ? '/?notifications=1' : fromProfile ? '/profile' : fromSaved ? '/saved' : '/feed?tab=feed';
+  const backPath = fromNotifications
+    ? '/?notifications=1'
+    : fromProfile
+      ? profileReturnId ? `/profile/${profileReturnId}` : '/profile'
+      : fromSaved
+        ? getSavedReturnPath(search)
+        : '/feed?tab=feed';
   const backLabel = fromNotifications ? '알림으로 돌아가기' : fromProfile ? '프로필로 돌아가기' : fromSaved ? '저장목록으로 돌아가기' : '먼치피드로 돌아가기';
 
   if (!post) {

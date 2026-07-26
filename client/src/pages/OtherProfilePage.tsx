@@ -6,18 +6,24 @@ import { FollowerListSheet, type FollowListMode } from '@/components/follow/Foll
 import { ProfileStats } from '@/components/follow/ProfileStats';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { useUser } from '@/hooks/useUser';
+import { useProfileFeed } from '@/hooks/useProfileFeed';
+import UnifiedMunchieCard from '@/components/munchie/UnifiedMunchieCard';
 
 export default function OtherProfilePage() {
   const { id = '' } = useParams<{ id: string }>();
   const [, navigate] = useLocation();
-  const user = useUser(id);
+  const remoteUser = useUser(id);
+  const { posts, fallbackAuthor } = useProfileFeed(id);
   const [listMode, setListMode] = useState<FollowListMode | null>(null);
+  const user = remoteUser.data ?? fallbackAuthor?.user;
+  const avatarFallback = fallbackAuthor?.emoji ?? user?.username.slice(0, 1).toUpperCase();
+  const totalLikes = posts.reduce((sum, post) => sum + post.likes, 0);
 
-  if (user.isLoading) {
+  if (remoteUser.isLoading && !fallbackAuthor) {
     return <main className="flex min-h-dvh items-center justify-center bg-[#FCF4EE] text-sm text-[#9B9B9B]">프로필을 불러오는 중…</main>;
   }
 
-  if (!user.data) {
+  if (!user) {
     return (
       <main className="flex min-h-dvh items-center justify-center bg-[#FCF4EE] px-6 text-center">
         <div>
@@ -42,27 +48,58 @@ export default function OtherProfilePage() {
       <section className="mx-4 mt-3 rounded-[28px] bg-[#F8DCD2] p-6">
         <div className="flex items-center gap-4">
           <Avatar className="size-20 border-4 border-white/70">
-            {user.data.profile_image_url && <AvatarImage src={user.data.profile_image_url} alt="" />}
-            <AvatarFallback className="bg-white/70 text-xl font-black">{user.data.username.slice(0, 1).toUpperCase()}</AvatarFallback>
+            {user.profile_image_url && <AvatarImage src={user.profile_image_url} alt={`${user.username} 프로필`} />}
+            <AvatarFallback className="bg-white/70 text-xl font-black">{avatarFallback}</AvatarFallback>
           </Avatar>
           <div className="min-w-0 flex-1">
-            <p className="truncate text-lg font-black text-[#3B2A22]">@{user.data.username}</p>
-            {user.data.location && <p className="mt-1 flex items-center gap-1 text-xs text-[#8A6E60]"><MapPin size={12} />{user.data.location}</p>}
-            {user.data.bio && <p className="mt-2 text-sm text-[#6F5549]">{user.data.bio}</p>}
+            <p className="truncate text-lg font-black text-[#3B2A22]">@{user.username}</p>
+            <p className="mt-1 break-all text-[11px] font-semibold text-[#9A7667]" data-testid="profile-user-id">
+              ID {user.id}
+            </p>
+            {user.location && <p className="mt-1 flex items-center gap-1 text-xs text-[#8A6E60]"><MapPin size={12} />{user.location}</p>}
+            {user.bio && <p className="mt-2 text-sm text-[#6F5549]">{user.bio}</p>}
           </div>
-          <FollowButton userId={user.data.id} />
+          {remoteUser.data && <FollowButton userId={user.id} />}
         </div>
-        <div className="mt-6 grid grid-cols-2">
+        <div className="mt-6 grid grid-cols-3">
           <ProfileStats
-            userId={user.data.id}
+            userId={user.id}
             onPressFollowers={() => setListMode('followers')}
             onPressFollowing={() => setListMode('following')}
           />
+          <div className="text-center">
+            <p className="font-black text-[17px] text-[#3B2A22]">{totalLikes.toLocaleString()}</p>
+            <p className="mt-0.5 text-[10px] text-[#8A6E60]">좋아요</p>
+          </div>
         </div>
       </section>
 
-      <section className="px-5 py-10 text-center text-sm text-[#9B9B9B]">공개 코스와 피드는 다음 연결 단계에서 표시됩니다.</section>
-      <FollowerListSheet open={listMode !== null} userId={user.data.id} mode={listMode ?? 'followers'} onOpenChange={(open) => !open && setListMode(null)} />
+      <section className="px-4 pb-4 pt-8">
+        <div className="mb-3 flex items-end justify-between">
+          <h2 className="text-[18px] font-black text-[#2D211C]">{user.username}님의 피드</h2>
+          <span className="text-[12px] font-bold text-[#A37E6F]">{posts.length}</span>
+        </div>
+        {posts.length > 0 ? (
+          <div className="grid grid-cols-2 items-start gap-3" data-testid="profile-feed-grid">
+            {posts.map((post) => (
+              <UnifiedMunchieCard
+                key={post.id}
+                post={post}
+                compact
+                homeSummary
+                detailOrigin="profile"
+                profileReturnId={user.id}
+              />
+            ))}
+          </div>
+        ) : (
+          <div className="rounded-2xl border-2 border-dashed border-[#E5CFC5] py-9 text-center">
+            <p className="mb-1 text-3xl">📔</p>
+            <p className="text-[13px] font-bold text-[#8A7A6C]">아직 올린 피드가 없어요</p>
+          </div>
+        )}
+      </section>
+      <FollowerListSheet open={listMode !== null} userId={user.id} mode={listMode ?? 'followers'} onOpenChange={(open) => !open && setListMode(null)} />
     </main>
   );
 }

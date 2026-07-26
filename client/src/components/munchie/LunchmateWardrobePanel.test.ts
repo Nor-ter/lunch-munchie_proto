@@ -27,10 +27,10 @@ const STARTER_ITEM_ID_SET: ReadonlySet<string> = new Set(LUNCHMATE_STARTER_ITEM_
 
 describe('Lunchmate wardrobe preview fixtures', () => {
   it('keeps the manifest counts for all four slots', () => {
-    expect(LUNCHMATE_ITEMS_BY_SLOT.outfit).toHaveLength(8);
-    expect(LUNCHMATE_ITEMS_BY_SLOT.headwear).toHaveLength(9);
-    expect(LUNCHMATE_ITEMS_BY_SLOT.eyewear).toHaveLength(7);
-    expect(LUNCHMATE_ITEMS_BY_SLOT.bag).toHaveLength(7);
+    expect(LUNCHMATE_ITEMS_BY_SLOT.outfit).toHaveLength(13);
+    expect(LUNCHMATE_ITEMS_BY_SLOT.headwear).toHaveLength(13);
+    expect(LUNCHMATE_ITEMS_BY_SLOT.eyewear).toHaveLength(5);
+    expect(LUNCHMATE_ITEMS_BY_SLOT.bag).toHaveLength(13);
   });
 
   it('uses the four shared starter item IDs', () => {
@@ -64,7 +64,7 @@ describe('Lunchmate wardrobe preview fixtures', () => {
     const locked = selectPreviewWardrobeItem(
       owned,
       'outfit',
-      'outfit_sailor_navy',
+      'outfit_sailor_blue',
       STARTER_ITEM_ID_SET,
     );
     expect(owned.outfitId).toBe('outfit_hoodie_coral');
@@ -85,14 +85,14 @@ describe('Lunchmate wardrobe preview fixtures', () => {
 
   it('builds locked card candidates without treating them as selections', () => {
     const draft = { ...PREVIEW_INITIAL_LOADOUT };
-    const candidate = createWardrobeCandidateLoadout(draft, 'outfit', 'outfit_sailor_navy');
+    const candidate = createWardrobeCandidateLoadout(draft, 'outfit', 'outfit_sailor_blue');
     const selected = selectPreviewWardrobeItem(
       draft,
       'outfit',
-      'outfit_sailor_navy',
+      'outfit_sailor_blue',
       STARTER_ITEM_ID_SET,
     );
-    expect(candidate.outfitId).toBe('outfit_sailor_navy');
+    expect(candidate.outfitId).toBe('outfit_sailor_blue');
     expect(selected).toBe(draft);
   });
 
@@ -134,10 +134,11 @@ describe('Lunchmate wardrobe UI contracts', () => {
     expect(PANEL_SOURCE).toContain('레벨업으로 획득');
   });
 
-  it('uses three columns at 375px and switches to four only at 450px', () => {
+  it('keeps wardrobe grids responsive and room theme cards two-column on mobile', () => {
     expect(PANEL_SOURCE).toContain('grid grid-cols-3 gap-3 min-[450px]:grid-cols-4');
     expect(FOODIE_ROOM_SOURCE).toContain("const ROOM_CONTENT_GRID_CLASS = 'grid grid-cols-3 gap-3 min-[450px]:grid-cols-4'");
-    expect(SKIN_PICKER_SOURCE).toContain("'grid-cols-3 min-[450px]:grid-cols-4'");
+    expect(SKIN_PICKER_SOURCE).toContain('className="mt-3 grid grid-cols-2 gap-x-3 gap-y-4"');
+    expect(SKIN_PICKER_SOURCE).toContain('className="min-w-0 rounded-2xl text-left');
   });
 
   it('stores only from 적용하기 and initializes both loadouts from lm_profile', () => {
@@ -181,7 +182,7 @@ describe('Lunchmate wardrobe UI contracts', () => {
     expect(PROFILE_SOURCE).toContain('className="flex items-start gap-4"');
     expect(PROFILE_SOURCE).toContain('className="min-w-0 flex-1 pt-11"');
     expect(PROFILE_SOURCE).toContain('className="flex min-w-0 items-center gap-2 whitespace-nowrap"');
-    expect(PROFILE_SOURCE).toContain('className="mt-1.5 line-clamp-2 text-[13px]');
+    expect(PROFILE_SOURCE).toContain('className="mt-1.5 whitespace-nowrap text-[13px]');
     expect(PROFILE_SOURCE).toContain('className="mt-5 grid grid-cols-3"');
   });
 
@@ -244,25 +245,29 @@ describe('Lunchmate wardrobe UI contracts', () => {
     expect(FOODIE_BUDDY_SOURCE).toContain('event.stopPropagation();');
   });
 
-  it('moves SkinPicker into the FoodieRoom room tab and merges only foodieSkin', () => {
-    const skinHandlerStart = FOODIE_ROOM_SOURCE.indexOf('const handleSkinChange');
+  it('moves SkinPicker into the FoodieRoom room tab and uses the existing profile merge path', () => {
+    const skinHandlerStart = FOODIE_ROOM_SOURCE.indexOf('const handleRoomPresetChange');
     const renderStart = FOODIE_ROOM_SOURCE.indexOf('return (', skinHandlerStart);
     const skinHandler = FOODIE_ROOM_SOURCE.slice(skinHandlerStart, renderStart);
 
     expect(FOODIE_ROOM_SOURCE).toContain("activeTab === 'room'");
     expect(FOODIE_ROOM_SOURCE).toContain('<SkinPicker');
-    expect(FOODIE_ROOM_SOURCE).toContain("value={profile.foodieSkin ?? 'pink-picnic'}");
-    expect(FOODIE_ROOM_SOURCE).toContain('onChange={handleSkinChange}');
-    expect(skinHandler).toContain('updateProfile({ foodieSkin: skinId })');
+    expect(FOODIE_ROOM_SOURCE).toContain('skinId={skin.id}');
+    expect(FOODIE_ROOM_SOURCE).toContain('loadout={roomLoadout}');
+    expect(FOODIE_ROOM_SOURCE).toContain('onPresetChange={handleRoomPresetChange}');
+    expect(skinHandler).toContain('updateProfile(createLunchmateRoomPresetUpdate(skinId))');
+    expect(skinHandler).toContain('updateProfile(createLunchmateRoomCategoryUpdate(');
     expect(skinHandler).not.toContain('lunchmateLoadout');
     expect(skinHandler).not.toContain('lunchmateOwnedItemIds');
-    expect(SKIN_PICKER_SOURCE).toContain('<button type="button"');
+    expect(SKIN_PICKER_SOURCE).toContain('type="button"');
+    expect(SKIN_PICKER_SOURCE).toContain('onSelect={() => onPresetChange(theme.skinId)}');
   });
 
   it('updates the Room preview from profile skin state and preserves Profile back navigation', () => {
     expect(FOODIE_ROOM_SOURCE)
       .toContain('const skin = getSkinById(profile.foodieSkin) ?? MUNCHIE_SKINS[0]');
-    expect(FOODIE_ROOM_SOURCE).toContain('style={{ background: skin.frame, boxShadow: skin.frameShadow }}');
+    expect(FOODIE_ROOM_SOURCE).toContain('const roomTheme = getLunchmateRoomTheme(skin.id)');
+    expect(FOODIE_ROOM_SOURCE).toContain('variant="stage"');
     expect(FOODIE_ROOM_SOURCE).toContain("navigate('/profile', { replace: true })");
   });
 });

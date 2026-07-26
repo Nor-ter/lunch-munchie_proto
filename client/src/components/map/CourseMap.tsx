@@ -32,6 +32,7 @@ interface Props {
   width: number | string;
   height: number | string;
   onPressPoint?: (point: MapPoint) => void;
+  selectedPointId?: string | null;
   /** Directions(실제 도보 경로) 좌표. 없으면 마커를 잇는 직선으로 폴백. */
   routeCoordinates?: { latitude: number; longitude: number }[];
 }
@@ -59,7 +60,7 @@ function FitBounds({ points }: { points: MapPoint[] }) {
   return null;
 }
 
-export function CourseMap({ points, width, height, onPressPoint, routeCoordinates }: Props) {
+export function CourseMap({ points, width, height, onPressPoint, selectedPointId, routeCoordinates }: Props) {
   const path = useMemo(() => {
     const coords =
       routeCoordinates && routeCoordinates.length >= 2
@@ -84,33 +85,46 @@ export function CourseMap({ points, width, height, onPressPoint, routeCoordinate
           <Polyline path={path} strokeColor={BRAND.primary} strokeWeight={4} strokeOpacity={0.9} />
         )}
 
-        {points.map((point, idx) => (
-          <AdvancedMarker
-            key={point.id}
-            position={{ lat: point.latitude, lng: point.longitude }}
-            title={point.subtitle ? `${point.name} · ${point.subtitle}` : point.name}
-            onClick={() => onPressPoint?.(point)}
-          >
-            <div
-              style={{
-                width: 28,
-                height: 28,
-                borderRadius: '50%',
-                background: getCourseSequenceColor(idx).base,
-                border: '2px solid white',
-                color: 'white',
-                fontSize: 13,
-                fontWeight: 700,
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                boxShadow: '0 1px 2px rgba(0,0,0,0.25)',
-              }}
+        {points.map((point, idx) => {
+          const selected = selectedPointId === point.id;
+          const size = selected ? 38 : 28;
+          const color = getCourseSequenceColor(idx).base;
+
+          return (
+            <AdvancedMarker
+              key={point.id}
+              position={{ lat: point.latitude, lng: point.longitude }}
+              title={point.subtitle ? `${point.name} · ${point.subtitle}` : point.name}
+              onClick={() => onPressPoint?.(point)}
+              zIndex={selected ? 10 : 1}
             >
-              {idx + 1}
-            </div>
-          </AdvancedMarker>
-        ))}
+              <div
+                aria-label={`${point.name}${selected ? ', 선택됨' : ''}`}
+                data-selected={selected ? 'true' : 'false'}
+                style={{
+                  width: size,
+                  height: size,
+                  borderRadius: '50%',
+                  background: color,
+                  border: selected ? '4px solid white' : '2px solid white',
+                  color: 'white',
+                  fontSize: selected ? 15 : 13,
+                  fontWeight: 800,
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  boxShadow: selected
+                    ? `0 0 0 7px ${color}33, 0 5px 14px rgba(66, 35, 26, 0.35)`
+                    : '0 1px 2px rgba(0,0,0,0.25)',
+                  transform: selected ? 'translateY(-3px)' : undefined,
+                  transition: 'width 160ms ease, height 160ms ease, transform 160ms ease, box-shadow 160ms ease',
+                }}
+              >
+                {idx + 1}
+              </div>
+            </AdvancedMarker>
+          );
+        })}
       </Map>
     </div>
   );

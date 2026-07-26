@@ -9,6 +9,10 @@ import type {
   LunchmateSlot,
 } from '../types/lunchmateCustomization';
 import { getLunchmateLevelReward } from './lunchmateRewards';
+import {
+  getTotalXpRequiredForLunchmateLevel,
+  normalizeLunchmateTotalXp,
+} from './lunchmateProgress';
 
 export interface LunchmateRewardClaim {
   level: number;
@@ -71,6 +75,24 @@ export function normalizeLunchmateRewardClaims(value: unknown): LunchmateRewardC
   }
 
   return Array.from(claimsByLevel.values()).sort((left, right) => left.level - right.level);
+}
+
+/**
+ * 저장 필드가 있으면 그 값을 신뢰 가능한 정수로 정규화한다.
+ * 필드가 실제로 없었던 legacy profile만 유효한 최고 reward claim의 레벨 시작 XP로 복원한다.
+ */
+export function lunchmateTotalXpFromProfile(value: unknown): number {
+  if (!isRecord(value)) return 0;
+  if (Object.prototype.hasOwnProperty.call(value, 'lunchmateTotalXp')) {
+    return normalizeLunchmateTotalXp(value.lunchmateTotalXp);
+  }
+  if (Object.prototype.hasOwnProperty.call(value, 'lunchmateXp')) {
+    return normalizeLunchmateTotalXp(value.lunchmateXp);
+  }
+
+  const highestClaimedLevel = normalizeLunchmateRewardClaims(value.lunchmateRewardClaims)
+    .reduce((highestLevel, claim) => Math.max(highestLevel, claim.level), 1);
+  return getTotalXpRequiredForLunchmateLevel(highestClaimedLevel);
 }
 
 function stringArraysEqual(left: readonly string[], right: readonly string[]): boolean {
