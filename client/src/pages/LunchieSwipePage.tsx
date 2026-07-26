@@ -10,7 +10,6 @@ import { useLocation } from 'wouter';
 import { ArrowLeft, Heart, X, Star, MapPin, Clock, Phone, Navigation, Share2, Download, Link2, Home, Bookmark, RotateCcw } from 'lucide-react';
 import { toast } from 'sonner';
 import { useApp, type Restaurant, type MenuItem } from '@/contexts/AppContext';
-import { getFoodPhotos } from '@/lib/foodPhotos';
 import { useCourseShare } from '@/hooks/useCourseShare';
 import WinnerShareCard from '@/components/lunchie/WinnerShareCard';
 import FoodImage from '@/components/FoodImage';
@@ -170,7 +169,9 @@ function SwipeCard({
   const crackGray = useTransform(x, [-220, 0], [0.85, 0]);
   const crackDark = useTransform(x, [-220, 0], [0.55, 1]);
   const crackFilter = useMotionTemplate`grayscale(${crackGray}) brightness(${crackDark})`;
-  const foodPhotos = getFoodPhotos(restaurant.category);
+  // 그 식당의 실제 사진만 쓴다. 없으면 빈 배열 → FoodImage가 이모지 플레이스홀더를 보여준다.
+  // 카테고리 스톡 사진 폴백은 제거했다(버거집에 피자가 뜨는 등 실제와 다른 사진은 거짓 정보다).
+  const foodPhotos = restaurant.photos ?? [];
   const photoIndex = foodPhotos.length ? ((photoStep % foodPhotos.length) + foodPhotos.length) % foodPhotos.length : 0;
 
   const handleDragEnd = useCallback((_: unknown, info: { offset: { x: number } }) => {
@@ -437,10 +438,9 @@ function SwipeCard({
                     <div key={cat} className="mb-1">
                       <p className="text-[10px] font-bold text-white/40 uppercase tracking-wide pt-3 pb-1.5">{cat}</p>
                       {items.map((item, idx) => (
-                        <button
+                        <div
                           key={idx}
-                          onClick={(e) => { e.stopPropagation(); setDetailIndex(restaurant.menuItems.indexOf(item)); }}
-                          className="w-full flex items-center gap-3 py-2.5 border-b border-white/10 last:border-b-0 text-left active:bg-white/5"
+                          className="w-full flex items-center gap-3 py-2.5 border-b border-white/10 last:border-b-0 text-left"
                         >
                           {item.image ? (
                             <img src={item.image} alt="" className="w-11 h-11 rounded-lg object-cover flex-shrink-0 bg-white/10" />
@@ -465,7 +465,7 @@ function SwipeCard({
                           <span className="text-white/90 text-[13px] font-bold flex-shrink-0 tabular-nums">
                             {item.price != null ? `$${item.price}` : ''}
                           </span>
-                        </button>
+                        </div>
                       ))}
                     </div>
                   ))}
@@ -494,7 +494,7 @@ function SwipeCard({
                     aria-label="다음 메뉴"
                   />
                   <div className="absolute top-3 left-1/2 -translate-x-1/2 flex gap-1.5 pointer-events-none">
-                    {foodPhotos.map((_, j) => (
+                    {foodPhotos.map((_: string, j: number) => (
                       <div key={j} className="w-1.5 h-1.5 rounded-full"
                         style={{ background: j === photoIndex ? 'white' : 'rgba(255,255,255,0.4)' }} />
                     ))}
@@ -602,7 +602,8 @@ function WinnerScreen({ selectedWinner, onReset }: { selectedWinner?: Restaurant
 
   if (!winner) return null;
 
-  const foodPhotos = getFoodPhotos(winner.category).slice(0, 4);
+  // 실제 사진만. 없으면 이모지 플레이스홀더.
+  const foodPhotos = (winner.photos ?? []).slice(0, 4);
 
   const handleCopyAddress = async () => {
     await navigator.clipboard.writeText(winner.address);
@@ -656,7 +657,7 @@ function WinnerScreen({ selectedWinner, onReset }: { selectedWinner?: Restaurant
     >
       {/* Hero */}
       <div className="relative w-full" style={{ aspectRatio: '4/3' }}>
-        <FoodImage src={winner.image || getFoodPhotos(winner.category)[0]} name={winner.name} category={winner.category} className="w-full h-full object-cover" emojiClass="text-[80px]" />
+        <FoodImage src={winner.image || winner.photos?.[0]} name={winner.name} category={winner.category} className="w-full h-full object-cover" emojiClass="text-[80px]" />
         <div className="absolute inset-0 bg-gradient-to-t from-black/75 via-black/15 to-transparent" />
         <div className="absolute inset-x-0 bottom-0 px-5 pb-5 text-center">
           <div className="text-[40px] leading-none mb-1">🏆</div>
@@ -712,10 +713,9 @@ function WinnerScreen({ selectedWinner, onReset }: { selectedWinner?: Restaurant
                   <div key={cat}>
                     <p className="text-[10px] font-bold text-[#B0B0B0] uppercase tracking-wide px-3 pt-3 pb-1 bg-[#FAFAFA]">{cat}</p>
                     {items.map((item, i) => (
-                      <button
+                      <div
                         key={i}
-                        onClick={() => setDetailIndex(winner.menuItems!.indexOf(item))}
-                        className="w-full flex items-center gap-3 px-3 py-2.5 border-b border-[#F0F0F0] last:border-b-0 text-left active:bg-[#FAFAFA]"
+                        className="w-full flex items-center gap-3 px-3 py-2.5 border-b border-[#F0F0F0] last:border-b-0 text-left"
                       >
                         {item.image ? (
                           <img src={item.image} alt="" className="w-10 h-10 rounded-lg object-cover flex-shrink-0 bg-[#F5F5F5]" />
@@ -738,7 +738,7 @@ function WinnerScreen({ selectedWinner, onReset }: { selectedWinner?: Restaurant
                         <span className="text-[12.5px] font-bold text-[#4A4A4A] flex-shrink-0 tabular-nums">
                           {item.price != null ? `$${item.price}` : ''}
                         </span>
-                      </button>
+                      </div>
                     ))}
                   </div>
                 ))}
@@ -917,7 +917,7 @@ function FinalBattleResultScreen({
         </div>
         <div className="flex-1 flex items-center justify-center px-5">
           <div className="w-full max-w-[360px] rounded-3xl overflow-hidden relative" style={{ aspectRatio: '4/5' }}>
-            <FoodImage src={finalist1.image || getFoodPhotos(finalist1.category)[0]} name={finalist1.name} category={finalist1.category} className="w-full h-full object-cover" emojiClass="text-[88px]" />
+            <FoodImage src={finalist1.image || finalist1.photos?.[0]} name={finalist1.name} category={finalist1.category} className="w-full h-full object-cover" emojiClass="text-[88px]" />
             <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/10 to-transparent" />
             <div className="absolute bottom-5 left-5 right-5">
               <span className="inline-block bg-[#FFD700] text-[#1A1A1A] text-[11px] font-black px-3 py-1 rounded-full mb-2">🏆 유일한 후보</span>
@@ -987,7 +987,7 @@ function FinalBattleResultScreen({
               ? { duration: 2.6, repeat: Infinity, ease: 'easeInOut' }
               : { duration: 0.4 }}
           >
-            <FoodImage src={finalist1.image || getFoodPhotos(finalist1.category)[0]} name={finalist1.name} category={finalist1.category} className="w-full h-full object-cover" emojiClass="text-[72px]" />
+            <FoodImage src={finalist1.image || finalist1.photos?.[0]} name={finalist1.name} category={finalist1.category} className="w-full h-full object-cover" emojiClass="text-[72px]" />
           </motion.div>
           <div className="absolute inset-0 bg-gradient-to-br from-black/30 via-black/45 to-black/70" />
           {selected !== null && (
@@ -1055,7 +1055,7 @@ function FinalBattleResultScreen({
               ? { duration: 2.6, repeat: Infinity, ease: 'easeInOut', delay: 0.3 }
               : { duration: 0.4 }}
           >
-            <FoodImage src={finalist2.image || getFoodPhotos(finalist2.category)[0]} name={finalist2.name} category={finalist2.category} className="w-full h-full object-cover" emojiClass="text-[72px]" />
+            <FoodImage src={finalist2.image || finalist2.photos?.[0]} name={finalist2.name} category={finalist2.category} className="w-full h-full object-cover" emojiClass="text-[72px]" />
           </motion.div>
           <div className="absolute inset-0 bg-gradient-to-br from-black/70 via-black/45 to-black/30" />
           {selected === 2 && (

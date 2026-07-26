@@ -169,18 +169,61 @@ function drivePhotosByRestaurant(): Map<string, string[]> {
   return m;
 }
 
+// 드라이브 인제스천 식당 전체(팀이 직접 다녀와 사진을 올린 곳) — 실사진·실메뉴 보유.
+// OSM과 이름이 겹치지 않아 카탈로그에 없던 곳까지 여기서 카탈로그에 편입한다.
+// 좌표 없는 곳은 CBD 플레이스홀더 + needsEnrichment 로 표시(거리 필터에 쓰기 전 보강 필요).
+const MEL_CBD = { lat: -37.8136, lng: 144.9631 };
+let __driveRestaurants: Record<string, any>[] | undefined;
+function driveRestaurants(): Record<string, any>[] {
+  if (__driveRestaurants) return __driveRestaurants;
+  const out: Record<string, any>[] = [];
+  try {
+    if (existsSync(__ingestPath)) {
+      const d = JSON.parse(readFileSync(__ingestPath, "utf8")) as {
+        restaurants?: { id: string; name: string; category?: string; cuisine_guess?: string; match_type?: string }[];
+        menu_items?: { restaurant_id: string; name: string; price: number | null; category?: string | null; description?: string | null; dietary?: string[] }[];
+      };
+      const dp = drivePhotosByRestaurant();
+      const menus = new Map<string, Record<string, unknown>[]>();
+      for (const m of d.menu_items ?? []) {
+        const arr = menus.get(m.restaurant_id) ?? [];
+        arr.push({ name: m.name, price: m.price, category: m.category, description: m.description, dietary: m.dietary ?? [] });
+        menus.set(m.restaurant_id, arr);
+      }
+      for (const r of d.restaurants ?? []) {
+        const photos = dp.get(r.id) ?? [];
+        out.push({
+          id: r.id, name: r.name, category: r.category || r.cuisine_guess || "기타",
+          tags: [], rating: 0, review_count: 0,
+          address: "Melbourne VIC", latitude: MEL_CBD.lat, longitude: MEL_CBD.lng,
+          price_level: 2, photos, menu_items: menus.get(r.id) ?? [],
+          business_hours: null, dietary_options: [], short_description: null,
+          needsEnrichment: r.match_type === "new",
+        });
+      }
+      if (out.length) console.log(`[data] 드라이브 식당 카탈로그: ${out.length}곳 (사진 보유 ${out.filter(x => x.photos.length).length}곳)`);
+    }
+  } catch { /* 없으면 OSM만 */ }
+  __driveRestaurants = out;
+  return out;
+}
+
 function mockRestaurantsResponse() {
   const osm = osmRestaurants();
-  if (osm) {
+  const drive = driveRestaurants();
+  // 실데이터 전용: 팀이 직접 다녀와 사진을 올린 드라이브 식당만 서빙한다.
+  // OSM 2115곳은 사진이 없어(2109곳 무사진) 앱이 스톡 이미지를 돌려쓰게 만들었다 → 카탈로그에서 제외.
+  const source = drive.length ? drive : osm;
+  if (source) {
     const dp = drivePhotosByRestaurant();
-    return osm.map(r => {
-      const drive = dp.get(r.id) ?? [];
-      const photos = [...drive, ...(r.photos || [])];
+    return source.map(r => {
+      const photos = [...(dp.get(r.id) ?? []), ...(r.photos || [])];
+      const uniq = Array.from(new Set(photos));
       return {
         id: r.id, name: r.name, category: r.category,
         tags: r.tags || [], rating: r.rating, reviewCount: r.review_count,
-        distance: "", address: r.address, image: photos[0] || "",
-        photos, menuItems: r.menu_items || [],
+        distance: "", address: r.address, image: uniq[0] || "",
+        photos: uniq, menuItems: r.menu_items || [],
         lat: r.latitude, lng: r.longitude, priceRange: r.price_level,
         openHours: r.business_hours, dietary: r.dietary_options || [],
         description: r.short_description,

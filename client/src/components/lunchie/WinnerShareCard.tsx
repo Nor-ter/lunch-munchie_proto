@@ -1,5 +1,4 @@
 import { forwardRef, type SyntheticEvent } from 'react';
-import { getFoodPhotos } from '@/lib/foodPhotos';
 import {
   formatLunchieDateLabel,
   getLunchieLocationLabel,
@@ -46,7 +45,7 @@ const WinnerShareCard = forwardRef<HTMLDivElement, WinnerShareCardProps>(({
   locationLabel,
   dateLabel,
 }, ref) => {
-  const foodFallback = getFoodPhotos(restaurant.category)[0];
+  const foodFallback = restaurant.photos?.[0]; // 실제 사진만 (스톡 폴백 제거)
   const resolvedVoteLabel = voteLabel?.trim() || (
     participants.length === 1 ? '나의 최종 선택' : '친구들과 함께 고른 최종 선택'
   );
@@ -116,7 +115,7 @@ const WinnerShareCard = forwardRef<HTMLDivElement, WinnerShareCardProps>(({
           src={restaurant.image || foodFallback}
           alt={restaurant.name}
           crossOrigin="anonymous"
-          onError={event => handleFoodImageError(event, foodFallback)}
+          onError={event => handleFoodImageError(event, foodFallback ?? '')}
           style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
         />
         <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(to top, rgba(45,32,27,0.52), transparent 58%)' }} />
