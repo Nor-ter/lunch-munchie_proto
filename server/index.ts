@@ -19,6 +19,8 @@ async function startServer() {
       : path.resolve(__dirname, "..", "dist", "public");
 
   app.use(express.static(staticPath));
+  // 팀 드라이브에서 수집한 실사진 — 드라이브 핫링크는 스로틀링되므로 우리 서버가 직접 서빙한다.
+  app.use("/photos", express.static(path.resolve(__dirname, "data", "photos"), { maxAge: "7d", immutable: true }));
   app.use("/api", apiRoutes);
 
   app.get("*", (_req, res) => {
