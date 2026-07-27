@@ -8,6 +8,7 @@ import React, { createContext, useContext, useState, useEffect, useCallback, use
 import { normalizeDiet, isHardRestriction, type DietTag } from '@shared/const';
 import { intentForHour, type Intent } from '@shared/intent';
 import { normalizeFoodTag, type TagType } from '@/constants/foodTags';
+import { DRIVE_COURSES, DRIVE_FEED_POSTS } from '@/data/driveFeed';
 import { isWebAuthConfigured } from '@/contexts/AuthContext';
 import { MAX_MUNCHIE_FEED_PHOTOS } from '@/lib/coursemapDecor';
 import type { LunchmateProfileLoadout } from '@/types/lunchmateCustomization';
@@ -841,11 +842,13 @@ export function AppProvider({
     try {
       const s = localStorage.getItem('lm_courses');
       const stored = s ? JSON.parse(s) as Course[] : [];
-      const merged = new Map(MOCK_COURSES.map(course => [course.id, course]));
+      // 드라이브 실데이터 코스(피드 게시물이 참조) + 기존 샘플 코스
+      const merged = new Map([...DRIVE_COURSES, ...MOCK_COURSES].map(course => [course.id, course]));
       stored.forEach(course => {
         const baseline = merged.get(course.id);
         const hasResolvableStops = course.stops?.some(stop => (
           MOCK_RESTAURANTS.some(restaurant => restaurant.id === stop.placeId)
+          || DRIVE_COURSES.some(c => c.stops.some(st => st.placeId === stop.placeId))
         ));
         merged.set(course.id, {
           ...baseline,
@@ -858,7 +861,7 @@ export function AppProvider({
         tags: course.tags.map(tag => normalizeFoodTag(tag)),
       }));
     }
-    catch { return MOCK_COURSES; }
+    catch { return [...DRIVE_COURSES, ...MOCK_COURSES]; }
   });
 
   const [restaurants, setRestaurants] = useState<Restaurant[]>(MOCK_RESTAURANTS);
@@ -918,7 +921,8 @@ export function AppProvider({
         }));
       }
     } catch { /* fall through */ }
-    return MOCK_FEED_POSTS.map((post, index) => ({
+    // 실데이터 피드: 팀이 다녀와 찍은 사진·메뉴로 생성(scripts/genDriveFeed.py).
+    return DRIVE_FEED_POSTS.map((post, index) => ({
       ...post,
       ...(index === 0 && initialAuthUserId ? { authorId: initialAuthUserId } : {}),
       photos: post.photos.slice(0, MAX_MUNCHIE_FEED_PHOTOS),
