@@ -8,7 +8,11 @@
    "id": "osm_node_11019583672",
    "category": "카페",
    "matched_osm_id": "osm_node_11019583672",
-   "match_type": "exact"
+   "match_type": "exact",
+   "coord_source": "nominatim",
+   "lat": -37.798236,
+   "lng": 144.985659,
+   "resolved_address": "ACOFFEE, 30, Sackville Street, Collingwood, Melbourne, Victoria, 3066, Australia"
   },
   {
    "name": "ALT Pasta",
@@ -18,7 +22,11 @@
    "id": "osm_node_12189425008",
    "category": "이탈리안",
    "matched_osm_id": "osm_node_12189425008",
-   "match_type": "fuzzy"
+   "match_type": "fuzzy",
+   "coord_source": "nominatim",
+   "lat": -37.812846,
+   "lng": 144.96139,
+   "resolved_address": "ALT PASTA BAR, 30, Niagara Lane, Koreatown, Melbourne, Victoria, 3000, Australia"
   },
   {
    "name": "Brunetti Classico",
@@ -27,7 +35,11 @@
    "menu_item_count": 0,
    "id": "drv_601ccdf0764f",
    "category": "베이커리",
-   "match_type": "new"
+   "match_type": "new",
+   "coord_source": "nominatim",
+   "lat": -37.767504,
+   "lng": 144.923766,
+   "resolved_address": "Brunetti Classico, Puckle Street, Moonee Ponds, Melbourne, Victoria, 3039, Australia"
   },
   {
    "name": "Brotherhood Cafe",
@@ -36,7 +48,8 @@
    "menu_item_count": 54,
    "id": "drv_f862ae70ed9c",
    "category": "카페",
-   "match_type": "new"
+   "match_type": "new",
+   "coord_source": "placeholder"
   },
   {
    "name": "BBQ King",
@@ -46,7 +59,11 @@
    "id": "osm_node_12511122652",
    "category": "한식",
    "matched_osm_id": "osm_node_12511122652",
-   "match_type": "exact"
+   "match_type": "exact",
+   "coord_source": "nominatim",
+   "lat": -37.813491,
+   "lng": 144.954763,
+   "resolved_address": "BBQ King, Little Lonsdale Street, Koreatown, Melbourne, Victoria, 3000, Australia"
   },
   {
    "name": "Ballers Clubhouse",
@@ -55,7 +72,11 @@
    "menu_item_count": 0,
    "id": "drv_87ff58eb4ce2",
    "category": "바",
-   "match_type": "new"
+   "match_type": "new",
+   "coord_source": "nominatim",
+   "lat": -37.79747,
+   "lng": 144.968768,
+   "resolved_address": "Ballers Clubhouse, Elgin Street, Carlton, Melbourne, Victoria, 3053, Australia"
   },
   {
    "name": "Bandak Chicken",
@@ -64,7 +85,8 @@
    "menu_item_count": 10,
    "id": "drv_dff911cc29f2",
    "category": "한식",
-   "match_type": "new"
+   "match_type": "new",
+   "coord_source": "placeholder"
   },
   {
    "name": "Bar Holiday",
@@ -73,7 +95,8 @@
    "menu_item_count": 28,
    "id": "drv_3c59e47667fe",
    "category": "바",
-   "match_type": "new"
+   "match_type": "new",
+   "coord_source": "placeholder"
   },
   {
    "name": "Basil Leaf Pho",
@@ -83,7 +106,11 @@
    "id": "osm_node_622311421",
    "category": "베트남",
    "matched_osm_id": "osm_node_622311421",
-   "match_type": "fuzzy"
+   "match_type": "fuzzy",
+   "coord_source": "nominatim",
+   "lat": -37.796131,
+   "lng": 144.978655,
+   "resolved_address": "Pho La Que Basil Leaf, 369, Brunswick Street, Fitzroy, Melbourne, Victoria, 3065, Australia"
   },
   {
    "name": "Black Gold",
@@ -92,7 +119,10 @@
    "menu_item_count": 0,
    "id": "drv_a68d6a979843",
    "category": "카페",
-   "match_type": "new"
+   "match_type": "new",
+   "lat": -37.823197,
+   "lng": 144.993758,
+   "coord_source": "exif"
   },
   {
    "name": "Boonchoou",
@@ -102,7 +132,11 @@
    "id": "osm_node_13201816313",
    "category": "타이",
    "matched_osm_id": "osm_node_13201816313",
-   "match_type": "exact"
+   "match_type": "exact",
+   "coord_source": "nominatim",
+   "lat": -37.811833,
+   "lng": 144.966701,
+   "resolved_address": "Boonchoou, 11, Heffernan Lane, Chinatown, Melbourne, Victoria, 3000, Australia"
   },
   {
    "name": "Boost Juice Como",
@@ -112,7 +146,11 @@
    "id": "osm_node_11104114002",
    "category": "카페",
    "matched_osm_id": "osm_node_11104114002",
-   "match_type": "fuzzy"
+   "match_type": "fuzzy",
+   "coord_source": "nominatim2",
+   "lat": -37.812409,
+   "lng": 145.229532,
+   "resolved_address": "Boost Juice, Warrandyte Road, Ringwood, Melbourne, Victoria, 3134, Australia"
   },
   {
    "name": "Bread K CBD",
@@ -121,7 +159,11 @@
    "menu_item_count": 0,
    "id": "drv_99d79661a16f",
    "category": "베이커리",
-   "match_type": "new"
+   "match_type": "new",
+   "coord_source": "nominatim2",
+   "lat": -37.765767,
+   "lng": 144.920242,
+   "resolved_address": "Bread K, 44, Hall Street, Moonee Ponds, Melbourne, Victoria, 3039, Australia"
   },
   {
    "name": "Brother Baba Budan",
@@ -130,7 +172,8 @@
    "menu_item_count": 0,
    "id": "r1",
    "category": "카페",
-   "match_type": "new"
+   "match_type": "new",
+   "coord_source": "placeholder"
   },
   {
    "name": "Brunetti Oro Brunswick",
@@ -140,7 +183,10 @@
    "id": "osm_node_595482856",
    "category": "베이커리",
    "matched_osm_id": "osm_node_595482856",
-   "match_type": "fuzzy"
+   "match_type": "fuzzy",
+   "lat": -37.775561,
+   "lng": 144.966461,
+   "coord_source": "exif"
   },
   {
    "name": "Buza Chicken",
@@ -149,7 +195,10 @@
    "menu_item_count": 0,
    "id": "drv_4976c2f16428",
    "category": "한식",
-   "match_type": "new"
+   "match_type": "new",
+   "lat": -37.809714,
+   "lng": 144.963303,
+   "coord_source": "exif"
   },
   {
    "name": "Caretaker's Cottage",
@@ -158,7 +207,11 @@
    "menu_item_count": 0,
    "id": "drv_642ef553e08b",
    "category": "레스토랑",
-   "match_type": "new"
+   "match_type": "new",
+   "coord_source": "nominatim",
+   "lat": -37.809634,
+   "lng": 144.967837,
+   "resolved_address": "Caretaker's Cottage, Little Lonsdale Street, Greek Precinct, Melbourne, Victoria, 3000, Australia"
   },
   {
    "name": "Charrd",
@@ -167,7 +220,8 @@
    "menu_item_count": 0,
    "id": "drv_fd23596b7653",
    "category": "레스토랑",
-   "match_type": "new"
+   "match_type": "new",
+   "coord_source": "placeholder"
   },
   {
    "name": "CATALOGUE",
@@ -176,7 +230,11 @@
    "menu_item_count": 0,
    "id": "drv_0f86e92497c5",
    "category": "카페",
-   "match_type": "new"
+   "match_type": "new",
+   "coord_source": "nominatim",
+   "lat": -37.77763,
+   "lng": 144.970984,
+   "resolved_address": "Catalogue, 36, Lygon Street, Brunswick East, Melbourne, Victoria, 3057, Australia"
   },
   {
    "name": "Choukette",
@@ -185,7 +243,11 @@
    "menu_item_count": 0,
    "id": "drv_5a2741248c72",
    "category": "카페",
-   "match_type": "new"
+   "match_type": "new",
+   "coord_source": "nominatim",
+   "lat": -37.770373,
+   "lng": 144.961717,
+   "resolved_address": "Choukette, 318, Sydney Road, Brunswick, Melbourne, Victoria, 3056, Australia"
   },
   {
    "name": "Chunky Town",
@@ -195,7 +257,8 @@
    "id": "osm_node_12483817081",
    "category": "한식",
    "matched_osm_id": "osm_node_12483817081",
-   "match_type": "exact"
+   "match_type": "exact",
+   "coord_source": "placeholder"
   },
   {
    "name": "City Saints",
@@ -205,7 +268,11 @@
    "id": "osm_node_13814342101",
    "category": "카페",
    "matched_osm_id": "osm_node_13814342101",
-   "match_type": "exact"
+   "match_type": "exact",
+   "coord_source": "nominatim",
+   "lat": -37.806035,
+   "lng": 144.986723,
+   "resolved_address": "City Saints, 2, Mansard Lane, Collingwood, Melbourne, Victoria, 3066, Australia"
   },
   {
    "name": "ANGUS & BON",
@@ -214,7 +281,11 @@
    "menu_item_count": 0,
    "id": "drv_c53673358150",
    "category": "레스토랑",
-   "match_type": "new"
+   "match_type": "new",
+   "coord_source": "nominatim2",
+   "lat": -38.010091,
+   "lng": 145.302557,
+   "resolved_address": "Angus Facey Reserve, Narre Warren, Melbourne, Victoria, 3805, Australia"
   },
   {
    "name": "Amiri",
@@ -223,7 +294,11 @@
    "menu_item_count": 0,
    "id": "drv_2cab4d8e23e7",
    "category": "중동",
-   "match_type": "new"
+   "match_type": "new",
+   "coord_source": "nominatim",
+   "lat": -37.810566,
+   "lng": 144.966039,
+   "resolved_address": "Amiri, Artemis Lane, Greek Precinct, Melbourne, Victoria, 3000, Australia"
   },
   {
    "name": "Arbory Bar & Eatery",
@@ -232,7 +307,11 @@
    "menu_item_count": 0,
    "id": "drv_865e6dfccac9",
    "category": "레스토랑",
-   "match_type": "new"
+   "match_type": "new",
+   "coord_source": "nominatim",
+   "lat": -37.818972,
+   "lng": 144.966168,
+   "resolved_address": "Arbory Bar & Eatery, Flinders Walk, Melbourne, Victoria, 3000, Australia"
   },
   {
    "name": "Attakai - Japanese Cafe Carlton",
@@ -241,7 +320,11 @@
    "menu_item_count": 0,
    "id": "drv_19b26b3fa685",
    "category": "일식",
-   "match_type": "new"
+   "match_type": "new",
+   "coord_source": "nominatim2",
+   "lat": -37.815604,
+   "lng": 144.964991,
+   "resolved_address": "Attakai, 260, Collins Street, East End Theatre District, Melbourne, Victoria, 3000, Australia"
   },
   {
    "name": "Core Roasters",
@@ -250,7 +333,11 @@
    "menu_item_count": 0,
    "id": "drv_b6c439c9264c",
    "category": "카페",
-   "match_type": "new"
+   "match_type": "new",
+   "coord_source": "nominatim",
+   "lat": -37.778085,
+   "lng": 144.977182,
+   "resolved_address": "Core Roasters, 14, Barkly Street, Brunswick East, Melbourne, Victoria, 3068, Australia"
   },
   {
    "name": "Dak Hanmari",
@@ -259,7 +346,8 @@
    "menu_item_count": 0,
    "id": "drv_7900ce6ab5e7",
    "category": "한식",
-   "match_type": "new"
+   "match_type": "new",
+   "coord_source": "placeholder"
   },
   {
    "name": "Cafe Tomi",
@@ -269,7 +357,11 @@
    "id": "osm_node_12975359701",
    "category": "카페",
    "matched_osm_id": "osm_node_12975359701",
-   "match_type": "exact"
+   "match_type": "exact",
+   "coord_source": "nominatim",
+   "lat": -37.800733,
+   "lng": 144.953381,
+   "resolved_address": "Cafe Tomi, 11, Wreckyn Street, North Melbourne, Melbourne, Victoria, 3051, Australia"
   },
   {
    "name": "Calēre Coffee",
@@ -278,7 +370,8 @@
    "menu_item_count": 3,
    "id": "drv_1bf1d6505448",
    "category": "카페",
-   "match_type": "new"
+   "match_type": "new",
+   "coord_source": "placeholder"
   },
   {
    "name": "Campos Coffee South Yarra",
@@ -287,7 +380,10 @@
    "menu_item_count": 0,
    "id": "drv_dbe1f5a1ce95",
    "category": "카페",
-   "match_type": "new"
+   "match_type": "new",
+   "lat": -37.840175,
+   "lng": 144.995544,
+   "coord_source": "exif"
   },
   {
    "name": "GAMJA HOTTEOK",
@@ -296,7 +392,8 @@
    "menu_item_count": 0,
    "id": "drv_276b5402dbed",
    "category": "한식",
-   "match_type": "new"
+   "match_type": "new",
+   "coord_source": "placeholder"
   },
   {
    "name": "Goldilocks Rooftop Bar",
@@ -305,7 +402,11 @@
    "menu_item_count": 0,
    "id": "drv_b7ce6455417e",
    "category": "바",
-   "match_type": "new"
+   "match_type": "new",
+   "coord_source": "nominatim",
+   "lat": -37.811827,
+   "lng": 144.965087,
+   "resolved_address": "Goldilocks Rooftop Bar, 264, Swanston Street, Greek Precinct, Melbourne, Victoria, 3000, Australia"
   },
   {
    "name": "David's Master Pot",
@@ -315,7 +416,11 @@
    "id": "osm_node_10604032437",
    "category": "한식",
    "matched_osm_id": "osm_node_10604032437",
-   "match_type": "exact"
+   "match_type": "exact",
+   "coord_source": "nominatim",
+   "lat": -37.811454,
+   "lng": 144.967256,
+   "resolved_address": "David's Master Pot, 219, Russell Street, Chinatown, Melbourne, Victoria, 3000, Australia"
   },
   {
    "name": "Donatello's",
@@ -324,7 +429,11 @@
    "menu_item_count": 0,
    "id": "drv_e5493500c918",
    "category": "카페",
-   "match_type": "new"
+   "match_type": "new",
+   "coord_source": "nominatim",
+   "lat": -37.758674,
+   "lng": 144.96388,
+   "resolved_address": "Donatello's, 2B, Mitchell Street, Brunswick, Melbourne, Victoria, 3056, Australia"
   },
   {
    "name": "Dosirock",
@@ -333,7 +442,8 @@
    "menu_item_count": 0,
    "id": "drv_a6e92fbdefe5",
    "category": "한식",
-   "match_type": "new"
+   "match_type": "new",
+   "coord_source": "placeholder"
   },
   {
    "name": "Dukes Coffee Roasters",
@@ -343,7 +453,11 @@
    "id": "osm_node_3276141235",
    "category": "카페",
    "matched_osm_id": "osm_node_3276141235",
-   "match_type": "exact"
+   "match_type": "exact",
+   "coord_source": "nominatim",
+   "lat": -37.816785,
+   "lng": 144.966141,
+   "resolved_address": "Dukes Coffee Roasters, Flinders Lane, Melbourne, Victoria, 3000, Australia"
   },
   {
    "name": "Fluffy Torpedo Fitzroy",
@@ -353,7 +467,11 @@
    "id": "osm_node_10560871409",
    "category": "기타",
    "matched_osm_id": "osm_node_10560871409",
-   "match_type": "fuzzy"
+   "match_type": "fuzzy",
+   "coord_source": "nominatim",
+   "lat": -37.804516,
+   "lng": 144.983159,
+   "resolved_address": "Fluffy Torpedo Fine Ice Cream, 159, Smith Street, Fitzroy, Melbourne, Victoria, 3065, Australia"
   },
   {
    "name": "Good Measure",
@@ -362,7 +480,10 @@
    "menu_item_count": 0,
    "id": "drv_4bf1bb8a34ed",
    "category": "카페",
-   "match_type": "new"
+   "match_type": "new",
+   "lat": -37.801031,
+   "lng": 144.966719,
+   "coord_source": "exif"
   },
   {
    "name": "Grill'd Burgers",
@@ -372,7 +493,8 @@
    "id": "osm_node_583078708",
    "category": "레스토랑",
    "matched_osm_id": "osm_node_583078708",
-   "match_type": "fuzzy"
+   "match_type": "fuzzy",
+   "coord_source": "placeholder"
   },
   {
    "name": "Grill'd Carlton",
@@ -382,7 +504,11 @@
    "id": "osm_node_583078708",
    "category": "레스토랑",
    "matched_osm_id": "osm_node_583078708",
-   "match_type": "fuzzy"
+   "match_type": "fuzzy",
+   "coord_source": "nominatim",
+   "lat": -37.79887,
+   "lng": 144.96749,
+   "resolved_address": "Grill'd, 350, Lygon Street, Little Italy, Carlton, Melbourne, Victoria, 3053, Australia"
   },
   {
    "name": "DODAM",
@@ -391,7 +517,11 @@
    "menu_item_count": 98,
    "id": "drv_e0f56a7a445b",
    "category": "한식",
-   "match_type": "new"
+   "match_type": "new",
+   "coord_source": "nominatim",
+   "lat": -37.771618,
+   "lng": 144.978773,
+   "resolved_address": "Dodam, 7, Bluestone Way, East Brunswick Village, Brunswick East, Melbourne, Victoria, 3057, Australia"
   },
   {
    "name": "Guild Cafe",
@@ -400,7 +530,11 @@
    "menu_item_count": 0,
    "id": "drv_e73b935bcf75",
    "category": "카페",
-   "match_type": "new"
+   "match_type": "new",
+   "coord_source": "nominatim",
+   "lat": -37.921063,
+   "lng": 145.056798,
+   "resolved_address": "Merchants Guild, 680, Centre Road, Bentleigh East, Melbourne, Victoria, 3165, Australia"
   },
   {
    "name": "HEEBI",
@@ -410,7 +544,11 @@
    "id": "osm_node_13871688694",
    "category": "베이커리",
    "matched_osm_id": "osm_node_13871688694",
-   "match_type": "exact"
+   "match_type": "exact",
+   "coord_source": "nominatim",
+   "lat": -37.802685,
+   "lng": 144.964056,
+   "resolved_address": "Heebi, Pelham Street, Carlton, Melbourne, Victoria, 3053, Australia"
   },
   {
    "name": "HER",
@@ -419,7 +557,11 @@
    "menu_item_count": 0,
    "id": "drv_0fb91ddda38e",
    "category": "바",
-   "match_type": "new"
+   "match_type": "new",
+   "coord_source": "nominatim",
+   "lat": -37.811555,
+   "lng": 144.964216,
+   "resolved_address": "Her, 270, Lonsdale Street, Greek Precinct, Melbourne, Victoria, 3000, Australia"
   },
   {
    "name": "Katsuretsu Co",
@@ -428,7 +570,8 @@
    "menu_item_count": 0,
    "id": "drv_162144e9dcf6",
    "category": "일식",
-   "match_type": "new"
+   "match_type": "new",
+   "coord_source": "placeholder"
   },
   {
    "name": "Khaosan Lane",
@@ -438,7 +581,11 @@
    "id": "osm_node_13893164960",
    "category": "타이",
    "matched_osm_id": "osm_node_13893164960",
-   "match_type": "exact"
+   "match_type": "exact",
+   "coord_source": "nominatim",
+   "lat": -37.813357,
+   "lng": 144.963338,
+   "resolved_address": "Khaosan Lane, Postal Lane, Greek Precinct, Melbourne, Victoria, 3000, Australia"
   },
   {
    "name": "Korchi City",
@@ -448,7 +595,10 @@
    "id": "osm_node_13967406746",
    "category": "한식",
    "matched_osm_id": "osm_node_13967406746",
-   "match_type": "exact"
+   "match_type": "exact",
+   "lat": -37.814214,
+   "lng": 144.959564,
+   "coord_source": "exif"
   },
   {
    "name": "LA Smash Burgers",
@@ -457,7 +607,10 @@
    "menu_item_count": 0,
    "id": "drv_24218a099d63",
    "category": "레스토랑",
-   "match_type": "new"
+   "match_type": "new",
+   "lat": -37.839225,
+   "lng": 144.993972,
+   "coord_source": "exif"
   },
   {
    "name": "LE PUB",
@@ -466,7 +619,11 @@
    "menu_item_count": 9,
    "id": "drv_739d796cfb41",
    "category": "바",
-   "match_type": "new"
+   "match_type": "new",
+   "coord_source": "nominatim",
+   "lat": -37.813573,
+   "lng": 144.961404,
+   "resolved_address": "Le Pub, 380, Little Bourke Street, Greek Precinct, Melbourne, Victoria, 3000, Australia"
   },
   {
    "name": "Laksa King",
@@ -475,7 +632,11 @@
    "menu_item_count": 0,
    "id": "drv_2b92bb74f460",
    "category": "타이",
-   "match_type": "new"
+   "match_type": "new",
+   "coord_source": "nominatim",
+   "lat": -37.879814,
+   "lng": 145.163477,
+   "resolved_address": "Laksa King, Waverley Rail Trail, Glen Waverley, Melbourne, Victoria, 3150, Australia"
   },
   {
    "name": "Leonardo's Pizza Palace",
@@ -485,7 +646,11 @@
    "id": "osm_node_676533299",
    "category": "이탈리안",
    "matched_osm_id": "osm_node_676533299",
-   "match_type": "exact"
+   "match_type": "exact",
+   "coord_source": "nominatim",
+   "lat": -37.801121,
+   "lng": 144.968605,
+   "resolved_address": "Leonardo's Pizza Palace, 29, Grattan Street, Carlton, Melbourne, Victoria, 3053, Australia"
   },
   {
    "name": "Haidilao Hotpot",
@@ -494,7 +659,8 @@
    "menu_item_count": 0,
    "id": "drv_3d5be0a8d003",
    "category": "중식",
-   "match_type": "new"
+   "match_type": "new",
+   "coord_source": "placeholder"
   },
   {
    "name": "Hongdae",
@@ -504,7 +670,8 @@
    "id": "osm_node_10187961370",
    "category": "한식",
    "matched_osm_id": "osm_node_10187961370",
-   "match_type": "exact"
+   "match_type": "exact",
+   "coord_source": "placeholder"
   },
   {
    "name": "J&G Fried Chicken",
@@ -514,7 +681,10 @@
    "id": "osm_node_13681161233",
    "category": "한식",
    "matched_osm_id": "osm_node_13681161233",
-   "match_type": "fuzzy"
+   "match_type": "fuzzy",
+   "lat": -37.808533,
+   "lng": 144.963119,
+   "coord_source": "exif"
   },
   {
    "name": "Jang Gun",
@@ -523,7 +693,8 @@
    "menu_item_count": 0,
    "id": "drv_8475180c93cb",
    "category": "한식",
-   "match_type": "new"
+   "match_type": "new",
+   "coord_source": "placeholder"
   },
   {
    "name": "Jinro Pocha",
@@ -532,7 +703,8 @@
    "menu_item_count": 0,
    "id": "drv_223ca8327b34",
    "category": "한식",
-   "match_type": "new"
+   "match_type": "new",
+   "coord_source": "placeholder"
   },
   {
    "name": "Katsu duo",
@@ -541,7 +713,11 @@
    "menu_item_count": 0,
    "id": "drv_996137890a6d",
    "category": "일식",
-   "match_type": "new"
+   "match_type": "new",
+   "coord_source": "nominatim",
+   "lat": -37.936204,
+   "lng": 145.002605,
+   "resolved_address": "Tokyo Katsu, 393, Hampton Street, Hampton, Melbourne, Victoria, 3188, Australia"
   },
   {
    "name": "Lulu & me Cheesecakes",
@@ -550,7 +726,11 @@
    "menu_item_count": 0,
    "id": "drv_4c1151bf89d9",
    "category": "베이커리",
-   "match_type": "new"
+   "match_type": "new",
+   "coord_source": "nominatim2",
+   "lat": -37.814078,
+   "lng": 144.961382,
+   "resolved_address": "Lulu’s Char Akita Teow, Hardware Lane, Koreatown, Melbourne, Victoria, 3000, Australia"
   },
   {
    "name": "Luna Bakery",
@@ -559,7 +739,8 @@
    "menu_item_count": 0,
    "id": "drv_452f511e8d37",
    "category": "베이커리",
-   "match_type": "new"
+   "match_type": "new",
+   "coord_source": "placeholder"
   },
   {
    "name": "MONDO",
@@ -569,7 +750,11 @@
    "id": "osm_node_9731738515",
    "category": "디저트",
    "matched_osm_id": "osm_node_9731738515",
-   "match_type": "exact"
+   "match_type": "exact",
+   "coord_source": "nominatim",
+   "lat": -37.813443,
+   "lng": 144.962589,
+   "resolved_address": "Mondo, 215, Elizabeth Street, Greek Precinct, Melbourne, Victoria, 3000, Australia"
   },
   {
    "name": "Mamak",
@@ -579,7 +764,11 @@
    "id": "osm_node_6642220675",
    "category": "말레이시안",
    "matched_osm_id": "osm_node_6642220675",
-   "match_type": "exact"
+   "match_type": "exact",
+   "coord_source": "nominatim",
+   "lat": -37.812311,
+   "lng": 144.961565,
+   "resolved_address": "Mamak, 366, Lonsdale Street, Koreatown, Melbourne, Victoria, 3000, Australia"
   },
   {
    "name": "Manseokho Raw Fish Restaurant",
@@ -588,7 +777,8 @@
    "menu_item_count": 0,
    "id": "drv_dbd0720dc71d",
    "category": "한식",
-   "match_type": "new"
+   "match_type": "new",
+   "coord_source": "placeholder"
   },
   {
    "name": "Marion Wine Bar",
@@ -597,7 +787,11 @@
    "menu_item_count": 0,
    "id": "drv_7d60e3c99d96",
    "category": "레스토랑",
-   "match_type": "new"
+   "match_type": "new",
+   "coord_source": "nominatim",
+   "lat": -37.80548,
+   "lng": 144.975852,
+   "resolved_address": "Marion Wine Bar, Gertrude Street, Fitzroy, Melbourne, Victoria, 3065, Australia"
   },
   {
    "name": "Molly Tea (Swanston)",
@@ -607,7 +801,11 @@
    "id": "osm_node_13010526849",
    "category": "카페",
    "matched_osm_id": "osm_node_13010526849",
-   "match_type": "fuzzy"
+   "match_type": "fuzzy",
+   "coord_source": "nominatim2",
+   "lat": -37.809494,
+   "lng": 144.960776,
+   "resolved_address": "Molly Tea, Elizabeth Street, Greek Precinct, Melbourne, Victoria, 3000, Australia"
   },
   {
    "name": "Mr Lee's Foods Ringwood",
@@ -616,7 +814,11 @@
    "menu_item_count": 0,
    "id": "drv_91e68c0b7cd7",
    "category": "한식",
-   "match_type": "new"
+   "match_type": "new",
+   "coord_source": "nominatim",
+   "lat": -37.804375,
+   "lng": 145.253848,
+   "resolved_address": "Mr Lee's Foods, 5, Old Lilydale Road, Ringwood East, Melbourne, Victoria, 3135, Australia"
   },
   {
    "name": "Mr PHO Hoa Hoi Vang",
@@ -625,7 +827,8 @@
    "menu_item_count": 0,
    "id": "drv_92236db711a0",
    "category": "베트남",
-   "match_type": "new"
+   "match_type": "new",
+   "coord_source": "placeholder"
   },
   {
    "name": "Mr. Lee's BunSik",
@@ -634,7 +837,11 @@
    "menu_item_count": 0,
    "id": "drv_ac0da4ef1c1a",
    "category": "한식",
-   "match_type": "new"
+   "match_type": "new",
+   "coord_source": "nominatim2",
+   "lat": -37.804375,
+   "lng": 145.253848,
+   "resolved_address": "Mr Lee's Foods, 5, Old Lilydale Road, Ringwood East, Melbourne, Victoria, 3135, Australia"
   },
   {
    "name": "Mr. Lee_s Foods City",
@@ -643,7 +850,11 @@
    "menu_item_count": 0,
    "id": "drv_25c8397b09e9",
    "category": "한식",
-   "match_type": "new"
+   "match_type": "new",
+   "coord_source": "nominatim2",
+   "lat": -37.804375,
+   "lng": 145.253848,
+   "resolved_address": "Mr Lee's Foods, 5, Old Lilydale Road, Ringwood East, Melbourne, Victoria, 3135, Australia"
   },
   {
    "name": "O3 Southbank",
@@ -652,7 +863,11 @@
    "menu_item_count": 0,
    "id": "drv_bc8167a02b57",
    "category": "카페",
-   "match_type": "new"
+   "match_type": "new",
+   "coord_source": "nominatim",
+   "lat": -37.825362,
+   "lng": 144.96402,
+   "resolved_address": "Southbank, Melbourne, Victoria, 3006, Australia"
   },
   {
    "name": "Noulboo Korean chicken & pork",
@@ -661,7 +876,8 @@
    "menu_item_count": 46,
    "id": "drv_8e7c5c2995c0",
    "category": "한식",
-   "match_type": "new"
+   "match_type": "new",
+   "coord_source": "placeholder"
   },
   {
    "name": "O3 Brunswick",
@@ -670,7 +886,11 @@
    "menu_item_count": 0,
    "id": "drv_acec433af625",
    "category": "카페",
-   "match_type": "new"
+   "match_type": "new",
+   "coord_source": "nominatim",
+   "lat": -37.776481,
+   "lng": 144.961664,
+   "resolved_address": "O3 Brunswick, 268, Barkly Street, Brunswick, Melbourne, Victoria, 3056, Australia"
   },
   {
    "name": "ParkBongSook Restaurant",
@@ -679,7 +899,8 @@
    "menu_item_count": 0,
    "id": "drv_18b29006aa0b",
    "category": "한식",
-   "match_type": "new"
+   "match_type": "new",
+   "coord_source": "placeholder"
   },
   {
    "name": "Path Melbourne",
@@ -688,7 +909,8 @@
    "menu_item_count": 0,
    "id": "drv_a2b35c9a44c8",
    "category": "카페",
-   "match_type": "new"
+   "match_type": "new",
+   "coord_source": "placeholder"
   },
   {
    "name": "Piccolina Gelateria",
@@ -697,7 +919,11 @@
    "menu_item_count": 26,
    "id": "drv_ba086fe187bd",
    "category": "디저트",
-   "match_type": "new"
+   "match_type": "new",
+   "coord_source": "nominatim",
+   "lat": -37.818898,
+   "lng": 145.03591,
+   "resolved_address": "Piccolina Gelateria, 731, Glenferrie Road, Glenferrie, Hawthorn, Melbourne, Victoria, 3122, Australia"
   },
   {
    "name": "Pidapipó Laboratorio Fitzroy",
@@ -706,7 +932,8 @@
    "menu_item_count": 0,
    "id": "drv_22a8b616ac88",
    "category": "디저트",
-   "match_type": "new"
+   "match_type": "new",
+   "coord_source": "placeholder"
   },
   {
    "name": "Pinto Tiramisu",
@@ -715,7 +942,8 @@
    "menu_item_count": 0,
    "id": "drv_93c90253b66f",
    "category": "디저트",
-   "match_type": "new"
+   "match_type": "new",
+   "coord_source": "placeholder"
   },
   {
    "name": "Pizza Monster",
@@ -724,7 +952,11 @@
    "menu_item_count": 0,
    "id": "drv_300af11d6849",
    "category": "이탈리안",
-   "match_type": "new"
+   "match_type": "new",
+   "coord_source": "nominatim",
+   "lat": -37.863751,
+   "lng": 145.081319,
+   "resolved_address": "Monster Pizza, 256, High Street, Ashburton, Melbourne, Victoria, 3147, Australia"
   },
   {
    "name": "Platform28",
@@ -734,7 +966,8 @@
    "id": "osm_node_2372891529",
    "category": "바",
    "matched_osm_id": "osm_node_2372891529",
-   "match_type": "exact"
+   "match_type": "exact",
+   "coord_source": "placeholder"
   },
   {
    "name": "OMI380",
@@ -744,7 +977,8 @@
    "id": "osm_node_13783937905",
    "category": "디저트",
    "matched_osm_id": "osm_node_13783937905",
-   "match_type": "exact"
+   "match_type": "exact",
+   "coord_source": "placeholder"
   },
   {
    "name": "Ondo",
@@ -754,7 +988,11 @@
    "id": "osm_node_13931255761",
    "category": "한식",
    "matched_osm_id": "osm_node_13931255761",
-   "match_type": "exact"
+   "match_type": "exact",
+   "coord_source": "nominatim",
+   "lat": -37.809387,
+   "lng": 144.96851,
+   "resolved_address": "Ondo, 115, Little Lonsdale Street, Greek Precinct, Melbourne, Victoria, 3000, Australia"
   },
   {
    "name": "Panda Hot Pot 蜀大侠火锅",
@@ -763,7 +1001,8 @@
    "menu_item_count": 0,
    "id": "drv_54281fa39478",
    "category": "중식",
-   "match_type": "new"
+   "match_type": "new",
+   "coord_source": "placeholder"
   },
   {
    "name": "Queen Victoria Night Market",
@@ -772,7 +1011,11 @@
    "menu_item_count": 0,
    "id": "drv_23d957b609b1",
    "category": "베트남",
-   "match_type": "new"
+   "match_type": "new",
+   "coord_source": "nominatim2",
+   "lat": -37.821973,
+   "lng": 144.971721,
+   "resolved_address": "Queen Victoria Gardens, Melbourne, Victoria, Australia"
   },
   {
    "name": "Rocky Ridge Brunswick",
@@ -781,7 +1024,11 @@
    "menu_item_count": 0,
    "id": "drv_5433657c3c99",
    "category": "바",
-   "match_type": "new"
+   "match_type": "new",
+   "coord_source": "nominatim",
+   "lat": -37.77743,
+   "lng": 144.97007,
+   "resolved_address": "Rocky Ridge, 130, Barkly Street, Brunswick, Melbourne, Victoria, 3056, Australia"
   },
   {
    "name": "Saigon Square",
@@ -790,7 +1037,8 @@
    "menu_item_count": 0,
    "id": "drv_bf0ff38bebc5",
    "category": "베트남",
-   "match_type": "new"
+   "match_type": "new",
+   "coord_source": "placeholder"
   },
   {
    "name": "Seven Star Pocha Koreatown",
@@ -800,7 +1048,11 @@
    "id": "osm_node_13700717402",
    "category": "한식",
    "matched_osm_id": "osm_node_13700717402",
-   "match_type": "fuzzy"
+   "match_type": "fuzzy",
+   "coord_source": "nominatim",
+   "lat": -37.813338,
+   "lng": 144.955806,
+   "resolved_address": "Seven Star Pocha, 535, Little Lonsdale Street, Koreatown, Melbourne, Victoria, 3000, Australia"
   },
   {
    "name": "Sokcho",
@@ -809,7 +1061,8 @@
    "menu_item_count": 16,
    "id": "drv_b6c5c9cdb75b",
    "category": "한식",
-   "match_type": "new"
+   "match_type": "new",
+   "coord_source": "placeholder"
   },
   {
    "name": "Sani Cafe Brunswick",
@@ -818,7 +1071,8 @@
    "menu_item_count": 0,
    "id": "drv_bc80fefd35f9",
    "category": "카페",
-   "match_type": "new"
+   "match_type": "new",
+   "coord_source": "placeholder"
   },
   {
    "name": "Sebastian Kakigori",
@@ -828,7 +1082,11 @@
    "id": "osm_node_1282403408",
    "category": "디저트",
    "matched_osm_id": "osm_node_1282403408",
-   "match_type": "exact"
+   "match_type": "exact",
+   "coord_source": "nominatim",
+   "lat": -37.81397,
+   "lng": 144.960011,
+   "resolved_address": "Sebastian Kakigori, Little Bourke Street, Koreatown, Melbourne, Victoria, 3000, Australia"
   },
   {
    "name": "Seven Seeds Carlton",
@@ -838,7 +1096,11 @@
    "id": "osm_node_457308112",
    "category": "카페",
    "matched_osm_id": "osm_node_457308112",
-   "match_type": "fuzzy"
+   "match_type": "fuzzy",
+   "coord_source": "nominatim",
+   "lat": -37.802835,
+   "lng": 144.959035,
+   "resolved_address": "Seven Seeds, 114, Berkeley Street, Carlton, Melbourne, Victoria, 3053, Australia"
   },
   {
    "name": "Tan Thanh Loi",
@@ -847,7 +1109,11 @@
    "menu_item_count": 0,
    "id": "drv_73bd82ea627b",
    "category": "베트남",
-   "match_type": "new"
+   "match_type": "new",
+   "coord_source": "nominatim",
+   "lat": -37.799207,
+   "lng": 144.899937,
+   "resolved_address": "Tân Thành Lợi, 73, Nicholson Street, Footscray, Melbourne, Victoria, 3011, Australia"
   },
   {
    "name": "Taquito",
@@ -857,7 +1123,11 @@
    "id": "osm_node_7069271801",
    "category": "멕시칸",
    "matched_osm_id": "osm_node_7069271801",
-   "match_type": "exact"
+   "match_type": "exact",
+   "coord_source": "nominatim",
+   "lat": -37.797697,
+   "lng": 144.969153,
+   "resolved_address": "Taquito, 350, Drummond Street, Carlton, Melbourne, Victoria, 3053, Australia"
   },
   {
    "name": "Thai Town",
@@ -867,7 +1137,11 @@
    "id": "osm_node_12387410569",
    "category": "타이",
    "matched_osm_id": "osm_node_12387410569",
-   "match_type": "exact"
+   "match_type": "exact",
+   "coord_source": "nominatim",
+   "lat": -37.810611,
+   "lng": 144.966284,
+   "resolved_address": "Thai Town, 25, Artemis Lane, Greek Precinct, Melbourne, Victoria, 3000, Australia"
   },
   {
    "name": "Sool Tong",
@@ -876,7 +1150,8 @@
    "menu_item_count": 0,
    "id": "drv_3b5e49a4aef7",
    "category": "한식",
-   "match_type": "new"
+   "match_type": "new",
+   "coord_source": "placeholder"
   },
   {
    "name": "Sparrow's Philly Cheesesteaks",
@@ -886,7 +1161,10 @@
    "id": "osm_node_4162611890",
    "category": "레스토랑",
    "matched_osm_id": "osm_node_4162611890",
-   "match_type": "exact"
+   "match_type": "exact",
+   "lat": -37.805561,
+   "lng": 144.975128,
+   "coord_source": "exif"
   },
   {
    "name": "Starbucks Melbourne Central",
@@ -895,7 +1173,8 @@
    "menu_item_count": 46,
    "id": "drv_02791727180d",
    "category": "카페",
-   "match_type": "new"
+   "match_type": "new",
+   "coord_source": "placeholder"
   },
   {
    "name": "The Emerald Peacock",
@@ -904,7 +1183,11 @@
    "menu_item_count": 0,
    "id": "drv_cbf0e092bec9",
    "category": "바",
-   "match_type": "new"
+   "match_type": "new",
+   "coord_source": "nominatim2",
+   "lat": -37.891799,
+   "lng": 145.391006,
+   "resolved_address": "Kallista - Emerald Road/The Patch Road, The Patch Road, The Patch, Melbourne, Victoria, 3792, Australia"
   },
   {
    "name": "The Galbi",
@@ -914,7 +1197,11 @@
    "id": "osm_node_5083155127",
    "category": "한식",
    "matched_osm_id": "osm_node_5083155127",
-   "match_type": "exact"
+   "match_type": "exact",
+   "coord_source": "nominatim",
+   "lat": -37.805886,
+   "lng": 144.957475,
+   "resolved_address": "The Galbi, 268, Victoria Street, North Melbourne, Melbourne, Victoria, 3051, Australia"
   },
   {
    "name": "The Irish Times Pub",
@@ -923,7 +1210,11 @@
    "menu_item_count": 0,
    "id": "drv_12e62a67e7bc",
    "category": "바",
-   "match_type": "new"
+   "match_type": "new",
+   "coord_source": "nominatim",
+   "lat": -37.816203,
+   "lng": 144.960493,
+   "resolved_address": "The Irish Times, 427, Little Collins Street, Koreatown, Melbourne, Victoria, 3000, Australia"
   },
   {
    "name": "The Journal Cafe",
@@ -933,7 +1224,11 @@
    "id": "osm_node_4305653789",
    "category": "카페",
    "matched_osm_id": "osm_node_4305653789",
-   "match_type": "exact"
+   "match_type": "exact",
+   "coord_source": "nominatim",
+   "lat": -37.81691,
+   "lng": 144.965784,
+   "resolved_address": "The Journal Cafe, 253, Flinders Lane, Melbourne, Victoria, 3000, Australia"
   },
   {
    "name": "The Pizza Doctor",
@@ -942,7 +1237,11 @@
    "menu_item_count": 0,
    "id": "drv_07525b4c700c",
    "category": "이탈리안",
-   "match_type": "new"
+   "match_type": "new",
+   "coord_source": "nominatim",
+   "lat": -37.774569,
+   "lng": 144.948803,
+   "resolved_address": "The Pizza Doctor, 9, Grantham Street, Brunswick West, Melbourne, Victoria, 3055, Australia"
   },
   {
    "name": "Ton & Co",
@@ -951,7 +1250,11 @@
    "menu_item_count": 0,
    "id": "drv_62183f88307f",
    "category": "일식",
-   "match_type": "new"
+   "match_type": "new",
+   "coord_source": "nominatim",
+   "lat": -37.851647,
+   "lng": 144.990605,
+   "resolved_address": "Ton & Co, 118, High Street, Prahran, Melbourne, Victoria, 3181, Australia"
   },
   {
    "name": "Universal Restaurant",
@@ -960,7 +1263,11 @@
    "menu_item_count": 24,
    "id": "drv_91560cb19deb",
    "category": "바",
-   "match_type": "new"
+   "match_type": "new",
+   "coord_source": "nominatim",
+   "lat": -37.803922,
+   "lng": 144.966197,
+   "resolved_address": "Universal Italian, 139-141, Lygon Street, Little Italy, Carlton, Melbourne, Victoria, 3053, Australia"
   },
   {
    "name": "The Rainbow Hotel",
@@ -969,7 +1276,8 @@
    "menu_item_count": 0,
    "id": "drv_3fb807881edb",
    "category": "레스토랑",
-   "match_type": "new"
+   "match_type": "new",
+   "coord_source": "placeholder"
   },
   {
    "name": "The Wokkers",
@@ -978,7 +1286,11 @@
    "menu_item_count": 0,
    "id": "drv_e9c0b819f3a9",
    "category": "기타",
-   "match_type": "new"
+   "match_type": "new",
+   "coord_source": "nominatim",
+   "lat": -37.818476,
+   "lng": 145.124523,
+   "resolved_address": "The Wokkers, 980, Whitehorse Road, Box Hill, Melbourne, Victoria, 3128, Australia"
   },
   {
    "name": "Tim Ho Wan",
@@ -988,7 +1300,11 @@
    "id": "osm_node_4137979192",
    "category": "중식",
    "matched_osm_id": "osm_node_4137979192",
-   "match_type": "exact"
+   "match_type": "exact",
+   "coord_source": "nominatim",
+   "lat": -37.812867,
+   "lng": 144.967166,
+   "resolved_address": "Tim Ho Wan, Bourke Street, Greek Precinct, Melbourne, Victoria, 3000, Australia"
   },
   {
    "name": "Toby's Estate Coffee Roasters Melbourne",
@@ -998,7 +1314,11 @@
    "id": "osm_node_13067835589",
    "category": "카페",
    "matched_osm_id": "osm_node_13067835589",
-   "match_type": "fuzzy"
+   "match_type": "fuzzy",
+   "coord_source": "nominatim2",
+   "lat": -37.795634,
+   "lng": 144.976738,
+   "resolved_address": "Toby's Estate, 35, Rose Street, Fitzroy, Melbourne, Victoria, 3065, Australia"
   },
   {
    "name": "Tofu Shoten",
@@ -1007,7 +1327,11 @@
    "menu_item_count": 20,
    "id": "drv_943165dba14c",
    "category": "일식",
-   "match_type": "new"
+   "match_type": "new",
+   "coord_source": "nominatim",
+   "lat": -37.772221,
+   "lng": 144.96051,
+   "resolved_address": "Tofu Shoten, 6B, Saxon Street, Brunswick, Melbourne, Victoria, 3056, Australia"
   },
   {
    "name": "Tokyo Maki - Melbourne",
@@ -1017,7 +1341,11 @@
    "id": "osm_node_1479905335",
    "category": "일식",
    "matched_osm_id": "osm_node_1479905335",
-   "match_type": "fuzzy"
+   "match_type": "fuzzy",
+   "coord_source": "nominatim",
+   "lat": -37.820796,
+   "lng": 144.956618,
+   "resolved_address": "Tokyo Maki, 555, Flinders Street, Melbourne, Victoria, 3000, Australia"
   },
   {
    "name": "seoul tiger",
@@ -1026,7 +1354,8 @@
    "menu_item_count": 7,
    "id": "drv_8ccf91976bb9",
    "category": "레스토랑",
-   "match_type": "new"
+   "match_type": "new",
+   "coord_source": "placeholder"
   },
   {
    "name": "Yamamoto Udon Izakaya",
@@ -1035,7 +1364,11 @@
    "menu_item_count": 0,
    "id": "drv_12fd35875928",
    "category": "일식",
-   "match_type": "new"
+   "match_type": "new",
+   "coord_source": "nominatim2",
+   "lat": -37.812068,
+   "lng": 144.969988,
+   "resolved_address": "Yamamoto Udon, 108, Bourke Street, East End Theatre District, Melbourne, Victoria, 3000, Australia"
   },
   {
    "name": "heytea Melbourne University",
@@ -1044,7 +1377,11 @@
    "menu_item_count": 0,
    "id": "drv_b8e93f2d0eb1",
    "category": "카페",
-   "match_type": "new"
+   "match_type": "new",
+   "coord_source": "nominatim2",
+   "lat": -37.880513,
+   "lng": 145.164097,
+   "resolved_address": "Heytea, 64, Kingsway, Glen Waverley, Melbourne, Victoria, 3150, Australia"
   },
   {
    "name": "Upstairs360",
@@ -1053,7 +1390,8 @@
    "menu_item_count": 0,
    "id": "drv_d07b88e4795f",
    "category": "한식",
-   "match_type": "new"
+   "match_type": "new",
+   "coord_source": "placeholder"
   },
   {
    "name": "Vacation Coffee CBD",
@@ -1062,7 +1400,8 @@
    "menu_item_count": 0,
    "id": "drv_e185c1799a41",
    "category": "카페",
-   "match_type": "new"
+   "match_type": "new",
+   "coord_source": "placeholder"
   },
   {
    "name": "Wakewake",
@@ -1071,7 +1410,8 @@
    "menu_item_count": 0,
    "id": "drv_d171bb0d694c",
    "category": "베이커리",
-   "match_type": "new"
+   "match_type": "new",
+   "coord_source": "placeholder"
   },
   {
    "name": "Wide Open Road Coffee Roasters",
@@ -1080,7 +1420,11 @@
    "menu_item_count": 0,
    "id": "drv_da73937477bb",
    "category": "카페",
-   "match_type": "new"
+   "match_type": "new",
+   "coord_source": "nominatim2",
+   "lat": -37.776283,
+   "lng": 144.961226,
+   "resolved_address": "Wide Open Road, 274, Barkly Street, Brunswick, Melbourne, Victoria, 3056, Australia"
   },
   {
    "name": "Time after time",
@@ -1090,7 +1434,11 @@
    "id": "osm_node_13523348331",
    "category": "카페",
    "matched_osm_id": "osm_node_13523348331",
-   "match_type": "exact"
+   "match_type": "exact",
+   "coord_source": "nominatim",
+   "lat": -37.814953,
+   "lng": 144.965306,
+   "resolved_address": "Time After Time, 7, Howey Place, Greek Precinct, Melbourne, Victoria, 3000, Australia"
   },
   {
    "name": "trbl. Coffee",
@@ -1099,7 +1447,8 @@
    "menu_item_count": 0,
    "id": "drv_bdd0383fc975",
    "category": "카페",
-   "match_type": "new"
+   "match_type": "new",
+   "coord_source": "placeholder"
   }
  ],
  "photos": [

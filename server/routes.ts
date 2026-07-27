@@ -180,7 +180,7 @@ function driveRestaurants(): Record<string, any>[] {
   try {
     if (existsSync(__ingestPath)) {
       const d = JSON.parse(readFileSync(__ingestPath, "utf8")) as {
-        restaurants?: { id: string; name: string; category?: string; cuisine_guess?: string; match_type?: string }[];
+        restaurants?: { id: string; name: string; category?: string; cuisine_guess?: string; match_type?: string; lat?: number; lng?: number; coord_source?: string; resolved_address?: string }[];
         menu_items?: { restaurant_id: string; name: string; price: number | null; category?: string | null; description?: string | null; dietary?: string[] }[];
       };
       const dp = drivePhotosByRestaurant();
@@ -195,10 +195,15 @@ function driveRestaurants(): Record<string, any>[] {
         out.push({
           id: r.id, name: r.name, category: r.category || r.cuisine_guess || "기타",
           tags: [], rating: 0, review_count: 0,
-          address: "Melbourne VIC", latitude: MEL_CBD.lat, longitude: MEL_CBD.lng,
+          // 좌표: 사진 EXIF GPS > Nominatim(OSM) 지오코딩 > CBD 플레이스홀더.
+          // 플레이스홀더인 곳은 needsEnrichment=true (거리 필터를 신뢰하면 안 됨).
+          address: r.resolved_address || "Melbourne VIC",
+          latitude: typeof r.lat === "number" ? r.lat : MEL_CBD.lat,
+          longitude: typeof r.lng === "number" ? r.lng : MEL_CBD.lng,
+          coordSource: r.coord_source ?? "placeholder",
           price_level: 2, photos, menu_items: menus.get(r.id) ?? [],
           business_hours: null, dietary_options: [], short_description: null,
-          needsEnrichment: r.match_type === "new",
+          needsEnrichment: !r.coord_source || r.coord_source === "placeholder",
         });
       }
       if (out.length) console.log(`[data] 드라이브 식당 카탈로그: ${out.length}곳 (사진 보유 ${out.filter(x => x.photos.length).length}곳)`);
