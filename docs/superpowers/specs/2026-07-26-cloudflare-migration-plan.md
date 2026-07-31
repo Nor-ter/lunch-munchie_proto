@@ -1,7 +1,7 @@
 # Cloudflare 마이그레이션 계획 — 이미지 · DB · 알고리즘
 
 - 날짜: 2026-07-26
-- 상태: **계획(로직+문서) · 코드 미착수 · 결정 필요 3건**
+- 상태: **계획(로직+문서) · 코드 미착수** · DB 전략 확정(**D1 단독**, 2026-07-26)
 - 대상: Express(Node) + Supabase Postgres + 로컬 파일 서빙 → Cloudflare 엣지
 
 ## 0. 현재 아키텍처의 사실 (측정값)
@@ -45,7 +45,7 @@
 | Vite `dist/public` | **Workers Assets** (또는 Pages) | 정적 자산 |
 | Express `/api/*` | **Workers + Hono** | Express는 Workers 미지원 → Hono로 포팅 |
 | `/photos` express.static | **R2** + Images 변환 | 41MB → R2 무료 티어(10GB) 내 |
-| Supabase Postgres | **Hyperdrive → Supabase** (권장) 또는 D1 | §4 결정 |
+| Supabase Postgres | **D1** (확정) | Hyperdrive 불필요 — 접착제 하나 제거 |
 | 유저별 엔진 상태 | **Durable Object (User DO)** | 스와이프마다 read-modify-write |
 | 그룹 세션 | **Durable Object (Session DO)** | 투표·정족수 조율 |
 | 전역 chain 전이 | **D1 집계 테이블** (+DO 캐시) | 쓰기 저빈도·읽기 다빈도 |
@@ -63,21 +63,27 @@
   → 현재처럼 해상도별 사본을 미리 만들 필요가 없어진다.
 - 인제스천 파이프라인은 그대로 두고, 산출물만 R2에 올린다(`scripts/uploadPhotosR2.ts` 신설).
 
-### 3-2. 데이터베이스 — **결정 필요 (§4-A)**
+### 3-2. 데이터베이스 — **D1 단독 (확정)**
 
-**옵션 A: Supabase 유지 + Hyperdrive (권장)**
-- Workers → Hyperdrive → Supabase Postgres. 연결 풀링·쿼리 캐시.
-- **장점**: RLS·Supabase Auth·기존 마이그레이션·drizzle 스키마 **그대로**. 이관 리스크 최소.
-- **단점**: Cloudflare 밖 왕복이 남음(엣지 이점 일부 상실). Hyperdrive 유료 플랜 필요.
+**왜 D1 단독인가.** 실측 결과 RLS로 보호되는 표면이 작다:
 
-**옵션 B: D1 전면 이관**
-- **장점**: 완전 엣지, 비용 저렴, drizzle이 D1 지원.
-- **단점**: **RLS 없음** → 지금 DB가 강제하던 접근 제어를 전부 Worker 코드로 옮겨야 함(보안 회귀 위험).
-  Supabase Auth와의 연계 재설계. 마이그레이션 SQL 재작성(Postgres → SQLite 방언).
+| 테이블 | 보호 내용 | D1 이관 |
+|---|---|---|
+| `courses` | `author_id = auth.uid()` (select/modify) | 가드 모듈로 이관 (검사 2) |
+| `course_items` | 부모 코스 소유권 (select/modify) | 가드 모듈로 이관 (검사 2) |
+| `follows` | RPC + 자기팔로우 가드 | 앱 코드로 이관 |
+| restaurants · photos · menu_items · features | **`USING (true)` 공개 읽기** | 그대로 — 잃을 것 없음 |
 
-**하이브리드(현실적 절충)**: 트랜잭션·인증이 걸린 것(users/courses/sessions)은 **A**,
-읽기 다빈도 파생 데이터(식당 카탈로그·피처·chain 집계·rec_events)는 **D1**.
-→ 엣지 이점은 읽기 경로에서 얻고, 보안 경계는 건드리지 않는다.
+→ 옮겨야 할 인가 검사가 **4~5개**뿐이다. 이 규모에 하이브리드(두 DB)의 운영 복잡도와
+조인 불가 문제를 감수할 이유가 없다.
+
+**얻는 것**: DB 하나 · 완전 엣지 · Hyperdrive 불필요 · 최저 비용 · 운영 단순.
+
+**대가와 조건**:
+- Postgres → SQLite 마이그레이션 재작성 (`jsonb`→`text`, `timestamptz`→`integer`, 트리거/RPC → 앱 코드).
+- **RLS가 사라지므로 인가를 코드가 책임진다.** 조건: **단일 가드 모듈**(`server/auth/guard.ts` 상당)에
+  모으고, 각 검사마다 "소유자 아님 → 거부" 테스트를 붙인다. 라우트에 검사 로직을 흩뿌리지 않는다.
+- **인증은 Supabase Auth를 계속 쓴다.** Worker가 JWT만 검증하면 되므로 D1 이관이 인증 교체를 뜻하지 않는다.
 
 ### 3-3. 알고리즘(엔진) — 여기가 본체
 
@@ -115,11 +121,18 @@ D1 / Queues
 
 ## 4. 결정 필요 3건
 
-| # | 결정 | 선택지 | 제안 |
-|---|---|---|---|
-| A | DB | Supabase+Hyperdrive / D1 전면 / 하이브리드 | **하이브리드** (보안 경계 유지 + 읽기 엣지화) |
-| B | 정적 호스팅 | Workers Assets / Pages | **Workers Assets** (API와 한 Worker, 라우팅 단순) |
-| C | Supabase Edge Functions | 유지 / Worker 흡수 | **유지** (Google 서버 키 보관처 변경은 별건, 키 원칙 유지) |
+| # | 결정 | 결론 |
+|---|---|---|
+| A | DB | **D1 단독** (확정) — 보호 표면 4~5검사뿐이라 하이브리드 복잡도 불필요 |
+| B | 정적 호스팅 | **Workers Assets** (API와 한 Worker, 라우팅 단순) |
+| C | Supabase Edge Functions | **유지** (Google 서버 키 보관처 — 키 원칙 유지) |
+| D | 인증 | **Supabase Auth 유지** — Worker에서 JWT 검증. D1 이관과 무관 |
+
+**프레임워크: Hono** — Express는 Node `http`에 의존해 Workers에서 실행 불가.
+Hono는 **MIT 오픈소스이며 무료**다(Cloudflare 제품은 아니지만 공식 템플릿·문서가 채택,
+Workers 지원 일급). 선택 이유: 라우트 19개 · Express 고유 API 71곳(`res.status` 34 ·
+`res.json` 17 · `req.body/params/query` 20)이 **거의 1:1로 대응**해 diff가 최소.
+게다가 **Node에서도 동작**하므로 이관 중 양쪽 동시 운영·비교 검증·롤백이 가능하다.
 
 ## 5. 단계 (각 단계가 독립 배포 가능)
 
@@ -128,11 +141,12 @@ Phase 0  준비        wrangler 셋업 · R2/D1/DO 바인딩 정의 · CI 초안
 Phase 1  이미지      429장 R2 업로드 · Worker /photos 라우트 · Images 변환
                      → 앱은 그대로, URL만 교체. 롤백 쉬움. **가장 안전한 첫 단계**
 Phase 2  읽기 API    Hono 포팅 중 GET 계열(restaurants/courses/journey)만 먼저
-                     featureStore 번들 · 카탈로그 D1 → 엣지 읽기
+                     featureStore 번들 · 카탈로그 D1 이관(공개 읽기라 인가 무관 = 안전)
 Phase 3  엔진 상태   User DO(taste·exposure·satiation·chain lastStop)
                      rec_events → Queues → D1
 Phase 4  그룹 결정   Session DO (memSessions·decideGroup 이관) — 정합성 개선 지점
-Phase 5  정리        Node 서버 제거 · Workers Assets로 클라 서빙 · Cron 집계
+Phase 5  쓰기+인가   courses/course_items/follows D1 이관 + 단일 가드 모듈 + 인가 테스트
+Phase 6  정리        Node 서버 제거 · Workers Assets로 클라 서빙 · Cron 집계
 ```
 
 ## 6. 비용 (개략)
@@ -140,19 +154,20 @@ Phase 5  정리        Node 서버 제거 · Workers Assets로 클라 서빙 · 
 | 항목 | 무료 티어 | 예상 |
 |---|---|---|
 | Workers | 10만 req/일 | 프로토타입 무료, 이후 $5/mo |
+| Hono | — | **무료** (MIT 오픈소스 라이브러리) |
 | R2 | 10GB 저장 + **egress 무료** | 41MB → 무료 |
 | D1 | 5GB · 2500만 행 읽기/일 | 무료 |
 | Durable Objects | 유료 플랜 포함 | $5/mo 내 |
-| Hyperdrive | 유료 플랜 | 옵션 A 선택 시 |
 | Images | 변환 건당 과금 | 캐시 적중률 높아 소액 |
 
 ## 7. 위험 · 미해결
 
 - **Express → Hono 포팅량**: routes.ts ~900줄. 기계적이지만 회귀 위험 → Phase 2/3로 쪼개 이관.
-- **`postgres`/`drizzle-orm(postgres-js)` 드라이버는 Workers 미지원** → Hyperdrive 또는 D1 드라이버로 교체 필요.
+- **`postgres`/`drizzle-orm(postgres-js)` 드라이버는 Workers 미지원** → drizzle D1 드라이버로 교체.
 - **DO 비용/지연**: 유저마다 DO 1개. 콜드스타트·요금 실측 후 판단(스와이프 지연 목표 <100ms).
-- **RLS 상실 위험(옵션 B)**: D1엔 RLS가 없다. 권한 검사를 코드로 옮기면 **보안 회귀**가 생기기 쉽다.
-  → 이것이 하이브리드를 제안하는 주된 이유.
+- **RLS 상실 (D1 단독의 유일한 실질 리스크)**: 인가가 DB에서 코드로 내려온다.
+  완화: 단일 가드 모듈 + 검사별 거부 테스트. 표면이 4~5개로 작아 통제 가능하다고 판단.
+  (초안에서는 이 위험을 과대평가해 하이브리드를 권고했으나, 실측 후 D1 단독으로 정정.)
 - **오프라인 Python 학습의 자리**: Cloudflare에 상주 불가. 외부 배치 + R2 교환으로 유지.
 - **좌표 미확보 38곳**: 마이그레이션과 무관하나, 거리 기반 엣지 쿼리를 하려면 선결.
 
