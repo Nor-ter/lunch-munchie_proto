@@ -12,7 +12,7 @@ import { buildSlate, buildControlSlate, assignVariant } from "./engine/scorer.js
 import { recordEvents, memEventCount, getMetrics, recordCatalogSize, recordItemFeatures, getItemFeatures, todayStops, recentStops } from "./engine/events.js";
 import { enrichContext } from "./engine/context.js";
 import { getTaste, updateTaste, updatePairwise, pairwiseWeight, sampleTheta, tasteFitFromTheta, MIN_TASTE } from "./engine/taste.js";
-import { buildItemVector } from "./engine/features.js";
+import { buildItemVector, reputationPrior } from "./engine/features.js";
 import { exposurePenalty, recordExposure } from "./engine/exposure.js";
 import { satiation as satiationScore, recordConsumption } from "./engine/satiation.js";
 import { recordStop, prevStop, chainFit as chainFitFn } from "./engine/chain.js";
@@ -957,12 +957,13 @@ export function createRecommendHandler(
   };
   const prev = prevStop(userId, now); // 같은 occasion 직전 스톱 (있으면 다음-스톱 가산)
   const slate = variant === "control"
-    ? buildControlSlate(filtered, ctx, { k })
+    ? buildControlSlate(filtered, ctx, { k, reputationPrior: (id) => reputationPrior(id) })
     : buildSlate(filtered, ctx, {
         k, eps: 0.05, tasteFit, // 탐색=Thompson, 그룹=least-misery
         exposurePenalty: (id) => exposurePenalty(userId, id, now),
         satiation: (cat) => satiationScore(userId, cat, now),
         chainFit: (cat) => chainFitFn(prev, cat),
+        reputationPrior: (id) => reputationPrior(id), // 평점 없는 식당의 평판 대체(감사 치명 1)
       });
   // arm·합성 방식별 model_version
   const mv = variant === "control"

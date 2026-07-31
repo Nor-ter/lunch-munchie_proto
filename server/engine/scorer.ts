@@ -18,6 +18,10 @@ export interface SlateOptions {
   exposurePenalty?: (id: string) => number; // v1 단기 노출 피로 g(누적 노출) in [0,1)
   satiation?: (category: string | undefined) => number; // v2 재소비 갈망 in [-0.5,+0.5)
   chainFit?: (category: string | undefined) => number; // v2 음식 연쇄 P(next|prev) in [0,1]
+  // 평점이 없는 카탈로그(팀 인제스천 식당은 rating=0)에서 평판을 대체하는 사전확률 [0,1].
+  // 외부 평점이 들어오면 rating 기반 reputation 이 우선한다.
+  reputationPrior?: (id: string) => number | null;
+  inclusionTrials?: number; // 마진 포함확률 몬테카를로 횟수 (기본 300)
 }
 
 const W_FATIGUE = 0.3; // -w6 단기 노출 피로 가중
@@ -51,12 +55,18 @@ function contextFit(c: Candidate, ctx: RecContext): number {
 
 export function scoreCandidate(
   c: Candidate, ctx: RecContext, pool: Candidate[], tasteFit: number | null = null, fatigue = 0, sat = 0, chain = 0,
+  repPrior: number | null = null,
 ): number {
   const ratings = pool.map((p) => p.rating ?? 0);
   const reviews = pool.map((p) => p.review_count ?? 0);
   const rLo = Math.min(...ratings, 0), rHi = Math.max(...ratings, 5);
   const vHi = Math.max(...reviews, 1);
-  const reputation = 0.7 * norm(c.rating ?? 0, rLo, rHi) + 0.3 * norm(c.review_count ?? 0, 0, vHi);
+  const rated = (c.rating ?? 0) > 0 || (c.review_count ?? 0) > 0;
+  // 외부 평점이 있으면 그것을 쓰고, 없으면(팀 인제스천 식당) 사전확률로 대체.
+  // 평점이 전무한 카탈로그에서 reputation 이 상수 0이 되면 점수의 40~60%가 죽는다(감사 치명 1).
+  const reputation = rated
+    ? 0.7 * norm(c.rating ?? 0, rLo, rHi) + 0.3 * norm(c.review_count ?? 0, 0, vHi)
+    : (repPrior ?? 0.5);
   const cf = contextFit(c, ctx);
   // v3: 취향 적합도(단일 유저 또는 그룹 least-misery)가 있으면 섞는다. 아니면 v0 가중(콜드).
   const base = tasteFit != null
@@ -76,9 +86,60 @@ function rng(seed?: number): () => number {
   };
 }
 
+// 확률 p에서 K개를 비복원 순차 추출 (한 번의 슬레이트 뽑기).
+function drawWithoutReplacement(probs: number[], k: number, rand: () => number): number[] {
+  const remaining = probs.map((_, i) => i);
+  const remProb = [...probs];
+  const chosen: number[] = [];
+  const take = Math.min(k, probs.length);
+  for (let t = 0; t < take; t++) {
+    const total = remProb.reduce((a, b) => a + b, 0);
+    let r = rand() * total;
+    let pick = 0;
+    for (let i = 0; i < remaining.length; i++) {
+      r -= remProb[i];
+      if (r <= 0) { pick = i; break; }
+    }
+    chosen.push(remaining[pick]);
+    remaining.splice(pick, 1);
+    remProb.splice(pick, 1);
+  }
+  return chosen;
+}
+
+/**
+ * 마진 포함확률 π_i = P(아이템 i가 K개 슬레이트에 포함될 확률).
+ *
+ * 왜 필요한가: p_i 는 "첫 draw 에서 뽑힐 확률"이지 "슬레이트에 들어갈 확률"이 아니다.
+ * K회 비복원 추출에서 실제 노출률은 p_i 보다 훨씬 크고(측정상 ~7배), 그 배율이
+ * 항목마다 달라서(5.9~14.5x) 상수배로 상쇄되지 않는다. p_i 를 propensity 로 로깅하면
+ * off-policy(IPS) 추정이 체계적으로 편향된다 → 여기서 몬테카를로로 π_i 를 직접 추정한다.
+ *
+ * 정확한 해석해는 조합 폭발이라, 실제 샘플러를 M회 돌려 포함 빈도로 추정한다(무편향).
+ * 0 나눗셈 방지를 위해 하한을 둔다.
+ */
+export function inclusionProbabilities(probs: number[], k: number, trials?: number, seed?: number): number[] {
+  const n = probs.length;
+  if (n === 0) return [];
+  const take = Math.min(k, n);
+  if (take >= n) return probs.map(() => 1); // 전부 노출되면 π=1
+  // 비용 O(trials·K·n). 카탈로그가 커져도 요청 지연이 터지지 않도록 연산 예산으로 상한.
+  // (해석적 근사 1-(1-p)^K 는 비복원 효과를 무시해 오차가 커서 쓰지 않는다 — 실측 확인.)
+  const BUDGET = 300_000;
+  const auto = Math.floor(BUDGET / Math.max(1, take * n));
+  const M = Math.max(60, Math.min(300, trials ?? auto));
+  const rand = rng(seed);
+  const hits = new Array(n).fill(0);
+  for (let m = 0; m < M; m++) {
+    for (const i of drawWithoutReplacement(probs, take, rand)) hits[i]++;
+  }
+  const floor = 1 / (10 * M); // 희소 항목의 IPS 폭발 방지 (0 나눗셈·헤비테일 차단)
+  return hits.map((h) => Math.max(floor, Math.min(1, h / M)));
+}
+
 /**
  * 후보를 점수화하고, epsilon-혼합 분포에서 K개를 비복원 샘플링한다.
- * 반환된 각 항목의 propensity = 그 분포에서의 marginal 노출 확률(근사).
+ * 반환된 각 항목의 propensity = **마진 포함확률**(몬테카를로 추정) — off-policy 평가용.
  */
 export function buildSlate(pool: Candidate[], ctx: RecContext, opts: SlateOptions = {}): ScoredItem[] {
   const k = Math.max(1, opts.k ?? 7);
@@ -92,37 +153,26 @@ export function buildSlate(pool: Candidate[], ctx: RecContext, opts: SlateOption
   const pen = opts.exposurePenalty;
   const sat = opts.satiation;
   const ch = opts.chainFit;
+  const rp = opts.reputationPrior;
   const scores = pool.map((c) =>
-    scoreCandidate(c, ctx, pool, tf ? tf(c) : null, pen ? pen(c.id) : 0, sat ? sat(c.category) : 0, ch ? ch(c.category) : 0));
+    scoreCandidate(c, ctx, pool, tf ? tf(c) : null, pen ? pen(c.id) : 0, sat ? sat(c.category) : 0, ch ? ch(c.category) : 0,
+      rp ? rp(c.id) : null));
   const maxS = Math.max(...scores);
   const exps = scores.map((s) => Math.exp((s - maxS) / tau));
   const sumExp = exps.reduce((a, b) => a + b, 0);
   // 정책 확률 p_i (탐색 혼합)
   const probs = exps.map((e) => (1 - eps) * (e / sumExp) + eps * (1 / n));
 
-  // p_i 비례 비복원 샘플링
-  const idx = pool.map((_, i) => i);
-  const chosen: number[] = [];
-  const remaining = [...idx];
-  const remProb = [...probs];
+  // p_i 비례 비복원 샘플링 (실제 슬레이트)
   const take = Math.min(k, n);
-  for (let t = 0; t < take; t++) {
-    const total = remProb.reduce((a, b) => a + b, 0);
-    let r = rand() * total;
-    let pick = 0;
-    for (let i = 0; i < remaining.length; i++) {
-      r -= remProb[i];
-      if (r <= 0) { pick = i; break; }
-    }
-    chosen.push(remaining[pick]);
-    remaining.splice(pick, 1);
-    remProb.splice(pick, 1);
-  }
+  const chosen = drawWithoutReplacement(probs, take, rand);
+  // 로깅용 propensity = 마진 포함확률(π). p_i 가 아니다 — §inclusionProbabilities 주석 참조.
+  const pi = inclusionProbabilities(probs, take, opts.inclusionTrials, opts.seed);
 
   return chosen.map((i, rank) => ({
     id: pool[i].id,
     score: Number(scores[i].toFixed(4)),
-    propensity: Number(probs[i].toFixed(6)), // marginal 노출 확률(근사) → off-policy용
+    propensity: Number(pi[i].toFixed(6)), // 마진 포함확률 → off-policy(IPS) 분모
     rank,
   }));
 }
@@ -147,7 +197,8 @@ export function buildControlSlate(pool: Candidate[], ctx: RecContext, opts: Slat
   const rand = rng(opts.seed);
   const n = pool.length;
   if (n === 0) return [];
-  const scores = pool.map((c) => scoreCandidate(c, ctx, pool));
+  const rp = opts.reputationPrior;
+  const scores = pool.map((c) => scoreCandidate(c, ctx, pool, null, 0, 0, 0, rp ? rp(c.id) : null));
   const rem = pool.map((_, i) => i);
   const chosen: number[] = [];
   const take = Math.min(k, n);

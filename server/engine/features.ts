@@ -94,3 +94,46 @@ export function buildItemVector(item: ItemMeta): number[] {
   const cafe = /카페/.test(cat) ? 1 : 0;
   return [clamp01(spicy), clamp01(salty), clamp01(sweet), clamp01(oily), clamp01(light), price, dessert, cafe];
 }
+
+// ── 평판 사전확률 (감사 치명 1 대응) ───────────────────────────────────────────
+// 팀 인제스천 식당은 외부 평점이 없어 rating=0 → reputation 항이 상수 0이 되고
+// 점수의 40~60%가 죽는다. 외부 평점이 들어오기 전까지 "우리가 가진 증거"로 대체한다.
+//
+// 근거: 팀원이 사진을 여러 장 남겼다 = 인상 깊었을 가능성이 높다(약한 신호지만 0보다 낫다).
+//       메뉴를 확보했다 = 정보가 충실하다. 사진 품질 = 기록의 성실도.
+// 주의: 이건 **대용 지표**지 사용자 평점이 아니다. 실제 평점이 생기면 그쪽이 우선한다.
+export interface RepEvidence {
+  restaurant_id: string;
+  photo_kinds?: Record<string, number> | null;
+  evidence?: { photos?: number; menu_items?: number } | null;
+  vibe_tags?: string[] | null;
+}
+
+const repPriorStore = new Map<string, number>();
+
+export function loadReputationPriors(rows: RepEvidence[]): number {
+  // 사진 수는 로그 스케일(1장과 3장의 차이가 10장과 12장보다 크다)
+  const raw = rows.map((r) => {
+    const photos = r.evidence?.photos ?? 0;
+    const menus = r.evidence?.menu_items ?? 0;
+    const kinds = Object.keys(r.photo_kinds ?? {}).length; // 컷 다양성(외관·내부·음식…)
+    return {
+      id: r.restaurant_id,
+      // 0.55·사진량(log) + 0.25·컷 다양성 + 0.20·메뉴 확보
+      s: 0.55 * Math.log1p(photos) + 0.25 * Math.min(1, kinds / 4) * Math.log1p(4) + 0.20 * Math.min(1, menus / 20) * Math.log1p(4),
+    };
+  });
+  if (!raw.length) return 0;
+  const vals = raw.map((r) => r.s);
+  const lo = Math.min(...vals), hi = Math.max(...vals);
+  for (const r of raw) {
+    // [0.25, 0.85] 로 압축 — 증거가 없다고 0점(=완전 배제)이 되면 탐색이 죽는다.
+    repPriorStore.set(r.id, 0.25 + 0.6 * (hi > lo ? (r.s - lo) / (hi - lo) : 0.5));
+  }
+  return repPriorStore.size;
+}
+
+export function reputationPrior(id: string | null | undefined): number | null {
+  if (!id) return null;
+  return repPriorStore.get(String(id)) ?? null;
+}

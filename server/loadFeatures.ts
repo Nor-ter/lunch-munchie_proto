@@ -11,12 +11,14 @@ import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import { db } from "./db.js";
 import { restaurantFeatures } from "../shared/schema.js";
-import { loadFeatureStore, featureStoreSize } from "./engine/features.js";
+import { loadFeatureStore, featureStoreSize, loadReputationPriors } from "./engine/features.js";
 
 const here = dirname(fileURLToPath(import.meta.url));
 
 type Row = {
   restaurant_id: string;
+  photo_kinds?: Record<string, number> | null;
+  evidence?: { photos?: number; menu_items?: number } | null;
   taste?: { spicy: number; salty: number; sweet: number; oily: number; light: number } | null;
   price_stats?: { min: number; max: number; median: number; n: number } | null;
 };
@@ -26,6 +28,7 @@ export async function loadFeatures(): Promise<{ count: number; source: "db" | "f
     const rows = await db.select().from(restaurantFeatures);
     if (rows.length) {
       loadFeatureStore(rows as Row[]);
+      loadReputationPriors(rows as unknown as Parameters<typeof loadReputationPriors>[0]);
       return { count: featureStoreSize(), source: "db" };
     }
   } catch {
@@ -37,6 +40,7 @@ export async function loadFeatures(): Promise<{ count: number; source: "db" | "f
     const rows = (parsed.features ?? []).filter((f) => f.restaurant_id);
     if (rows.length) {
       loadFeatureStore(rows);
+      loadReputationPriors(rows as Parameters<typeof loadReputationPriors>[0]); // 평점 부재 대체(감사 치명 1)
       return { count: featureStoreSize(), source: "file" };
     }
   } catch {
