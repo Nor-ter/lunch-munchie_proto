@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
-import { buildSlate, inclusionProbabilities } from "./scorer";
+import { buildSlate, inclusionProbabilities, contextFit } from "./scorer";
+import { buildItemVector, FEATURE_DIM, FEATURE_KEYS } from "./features";
 import type { Candidate } from "../../shared/engine";
 
 // 감사 치명 3 회귀 테스트.
@@ -66,5 +67,42 @@ describe("평판 사전확률 (감사 치명 1)", () => {
     const withPrior = buildSlate(p, {}, { k: 20, eps: 0, reputationPrior: prior, seed: 3 });
     const uniq = new Set(withPrior.map((s) => s.score)).size;
     expect(uniq).toBeGreaterThan(2); // 사전확률 없으면 카테고리 2분류로 고유값 ≤2
+  });
+});
+
+describe("contextFit 피처 기반 (감사 개선 3)", () => {
+  it("카테고리 정규식에 안 걸리는 곳도 맥락에 반응한다 (사각지대 제거)", () => {
+    // '레스토랑'·'바'는 옛 정규식 어디에도 안 걸려 항상 0.5 였다.
+    const bar: Candidate = { id: "b1", category: "바", rating: 0, review_count: 0, price_level: 2 };
+    const cold = contextFit(bar, { weather: "cold" });
+    const hot = contextFit(bar, { weather: "hot" });
+    expect(cold).not.toBeCloseTo(0.5, 3);
+    expect(cold).not.toBeCloseTo(hot, 3); // 맥락에 따라 값이 갈린다
+  });
+
+  it("추운 날엔 든든한 쪽(기름짐↑·가벼움↓)이 가벼운 쪽보다 높다", () => {
+    const hearty: Candidate = { id: "h", category: "한식", rating: 0, review_count: 0, price_level: 2 };
+    const light: Candidate = { id: "l", category: "샐러드", rating: 0, review_count: 0, price_level: 2 };
+    expect(contextFit(hearty, { weather: "cold" })).toBeGreaterThan(contextFit(light, { weather: "cold" }));
+  });
+
+  it("더운 날엔 반대로 뒤집힌다", () => {
+    const hearty: Candidate = { id: "h", category: "한식", rating: 0, review_count: 0, price_level: 2 };
+    const light: Candidate = { id: "l", category: "샐러드", rating: 0, review_count: 0, price_level: 2 };
+    expect(contextFit(light, { weather: "hot" })).toBeGreaterThan(contextFit(hearty, { weather: "hot" }));
+  });
+
+  it("맥락이 없으면 중립 0.5", () => {
+    const c: Candidate = { id: "x", category: "한식", rating: 0, review_count: 0, price_level: 2 };
+    expect(contextFit(c, {})).toBeCloseTo(0.5, 6);
+  });
+});
+
+describe("절편 항 (감사 개선 2)", () => {
+  it("피처 벡터 마지막이 상수 1 (기저율 학습용)", () => {
+    const v = buildItemVector({ id: "z", category: "한식", price_level: 2 });
+    expect(v.length).toBe(FEATURE_DIM);
+    expect(FEATURE_KEYS[FEATURE_DIM - 1]).toBe("bias");
+    expect(v[FEATURE_DIM - 1]).toBe(1);
   });
 });

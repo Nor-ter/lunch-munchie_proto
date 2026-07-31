@@ -4,7 +4,9 @@
 // 텍스트 임베딩은 후속(Python 오프라인). 아키텍처상 이 x_i를 피처 스토어가 보관하지만,
 // 프로토타입에선 카테고리 룰 기반으로 서빙 시 즉석 계산(24개 카탈로그라 충분).
 
-export const FEATURE_KEYS = ["spicy", "salty", "sweet", "oily", "light", "price", "dessert", "cafe"] as const;
+// "bias"는 상수 1 성분 — 모델이 기저 선호율(이 유저가 전반적으로 잘 좋아하는가)을
+// 학습할 수 있게 한다. 없으면 모든 설명을 맛/가격 축에 억지로 실어야 한다(감사 개선 2).
+export const FEATURE_KEYS = ["spicy", "salty", "sweet", "oily", "light", "price", "dessert", "cafe", "bias"] as const;
 export const FEATURE_DIM = FEATURE_KEYS.length;
 
 // 카테고리 → 맛 프로파일 [맵기, 짭짤, 단맛, 기름짐, 가벼움] (0~1). 키워드 부분일치.
@@ -92,7 +94,7 @@ export function buildItemVector(item: ItemMeta): number[] {
     : typeof item.price_level === "number" ? clamp01((item.price_level - 1) / 3) : 0.5;
   const dessert = /디저트|베이커리|빵/.test(cat) ? 1 : 0;
   const cafe = /카페/.test(cat) ? 1 : 0;
-  return [clamp01(spicy), clamp01(salty), clamp01(sweet), clamp01(oily), clamp01(light), price, dessert, cafe];
+  return [clamp01(spicy), clamp01(salty), clamp01(sweet), clamp01(oily), clamp01(light), price, dessert, cafe, 1];
 }
 
 // ── 평판 사전확률 (감사 치명 1 대응) ───────────────────────────────────────────

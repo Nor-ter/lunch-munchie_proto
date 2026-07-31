@@ -8,6 +8,7 @@
 // 슬레이트는 p_i 분포에서 비복원 샘플링 → 로그된 propensity = 실제 노출 확률(근사).
 
 import type { Candidate, RecContext, ScoredItem } from "../../shared/engine.js";
+import { buildItemVector, FEATURE_DIM, FEATURE_KEYS } from "./features.js";
 
 export interface SlateOptions {
   k?: number;    // 슬레이트 크기 (예선 카드 수)
@@ -33,24 +34,52 @@ function norm(x: number, lo: number, hi: number): number {
   return Math.max(0, Math.min(1, (x - lo) / (hi - lo)));
 }
 
-// v0 맥락 적합도 — 가벼운 규칙. (v2에서 학습형으로 대체)
-function contextFit(c: Candidate, ctx: RecContext): number {
-  let f = 0.5;
-  const cat = c.category ?? "";
+// 맥락 → "이 상황에서 원하는 피처 방향" 가중 벡터.
+//
+// 왜 정규식을 버렸나(감사 개선 3): 카테고리 문자열 매칭은 ① 매칭 안 되는 카테고리가
+// 통째로 사각지대가 되고(레스토랑·바 등 21곳이 항상 0.5 고정) ② 언어가 바뀌면 전부
+// 무력화되며(features.ts에서 한글 정규식 때문에 전 카탈로그가 NEUTRAL로 떨어진 전례)
+// ③ 값이 몇 개의 이산점으로만 나와 순위를 못 매긴다(고유값 2/118).
+// 대신 이미 사진·메뉴에서 뽑아둔 **연속 피처 벡터**와 맥락을 내적한다.
+const KEY_IDX = Object.fromEntries(FEATURE_KEYS.map((k, i) => [k, i])) as Record<string, number>;
+
+export function contextWeights(ctx: RecContext): number[] {
+  const w = new Array(FEATURE_DIM).fill(0);
+  const add = (k: string, v: number) => { const i = KEY_IDX[k]; if (i !== undefined) w[i] += v; };
+
   if (ctx.weather === "rain" || ctx.weather === "cold") {
-    if (/한식|중식|국물|탕|찌개|면|일식/.test(cat)) f += 0.2; // 비/추위 → 국물·따뜻한 음식
+    add("oily", 0.35); add("salty", 0.20); add("light", -0.35); // 따뜻하고 든든한 쪽
+  } else if (ctx.weather === "hot") {
+    add("light", 0.35); add("sweet", 0.20); add("oily", -0.30); // 가볍고 시원한 쪽
   }
-  if (ctx.weather === "hot" && /냉면|샐러드|디저트|음료|카페/.test(cat)) f += 0.15;
-  if (ctx.time_of_day === "evening" && (c.price_level ?? 0) >= 3) f += 0.1; // 저녁 → 객단가 ↑ 허용
-  // 동행(companions): 혼자 vs 같이 → 적합한 식당이 다르다.
+  if (ctx.time_of_day === "evening") add("price", 0.25);          // 저녁 → 객단가 허용
+  if (ctx.time_of_day === "morning") { add("cafe", 0.30); add("sweet", 0.20); add("light", 0.20); }
+  if (ctx.time_of_day === "late") { add("salty", 0.20); add("oily", 0.20); }
+
   const n = typeof ctx.companions === "number" ? ctx.companions : 0;
-  if (n === 1) { // 혼자 → 혼밥 편하고 빠른 곳
-    if (/카페|베이커리|일식|라멘|스시|분식|비건|샐러드|디저트|브런치/.test(cat)) f += 0.15;
-    if (/파인다이닝|고기|스테이크|타파스/.test(cat)) f -= 0.1; // 혼자 가기 부담
-  } else if (n >= 2) { // 같이 → 나눠먹기·넓은 자리·예약 (대규모일수록 가중 ↑)
-    if (/한식|중식|고기|스테이크|파인다이닝|타파스|이탈리안/.test(cat)) f += n >= 5 ? 0.2 : 0.15;
+  if (n === 1) {                                                  // 혼밥 → 가볍고 부담 적은 쪽
+    add("light", 0.25); add("price", -0.20); add("cafe", 0.15);
+  } else if (n >= 2) {                                            // 같이 → 나눠먹기 좋은 쪽
+    add("oily", 0.20); add("salty", 0.15); add("light", -0.20);
+    if (n >= 5) add("price", 0.10);
   }
-  return Math.max(0, Math.min(1, f));
+  // 인텐트(밥/카페/디저트)는 후보 필터에서 이미 걸러지므로 여기선 약한 보정만.
+  if (ctx.intent === "cafe") add("cafe", 0.25);
+  if (ctx.intent === "dessert") { add("dessert", 0.30); add("sweet", 0.20); }
+  return w;
+}
+
+// 맥락 적합도 [0,1] — 0.5 기준으로 피처가 원하는 방향이면 가산, 반대면 감산.
+// 피처가 중립(0.5)이면 정확히 0.5가 나온다.
+export function contextFit(c: Candidate, ctx: RecContext): number {
+  const x = buildItemVector({ id: c.id, category: c.category, price_level: c.price_level });
+  const w = contextWeights(ctx);
+  let s = 0;
+  for (let i = 0; i < FEATURE_DIM; i++) {
+    if (FEATURE_KEYS[i] === "bias") continue; // 절편은 맥락 판단 대상이 아니다
+    s += w[i] * (x[i] - 0.5);
+  }
+  return Math.max(0, Math.min(1, 0.5 + s));
 }
 
 export function scoreCandidate(
@@ -133,8 +162,9 @@ export function inclusionProbabilities(probs: number[], k: number, trials?: numb
   for (let m = 0; m < M; m++) {
     for (const i of drawWithoutReplacement(probs, take, rand)) hits[i]++;
   }
-  const floor = 1 / (10 * M); // 희소 항목의 IPS 폭발 방지 (0 나눗셈·헤비테일 차단)
-  return hits.map((h) => Math.max(floor, Math.min(1, h / M)));
+  // Jeffreys 평활 (h+0.5)/(M+1): 표본 0회인 희소 항목의 추정치가 0이 되어
+  // IPS 가중이 폭발하는 것을 막고, 상대오차도 크게 줄인다(단순 바닥값보다 안정).
+  return hits.map((h) => Math.min(1, (h + 0.5) / (M + 1)));
 }
 
 /**
