@@ -91,8 +91,25 @@ export const courses = pgTable("courses", {
   saves_count: integer("saves_count").notNull().default(0),
   route_polyline: text("route_polyline"),
   share_image_url: text("share_image_url"),
+  feed_photos: jsonb("feed_photos").$type<string[]>().notNull().default([]),
+  feed_decor: jsonb("feed_decor").$type<unknown[]>().notNull().default([]),
+  template_id: text("template_id"),
   comments_count: integer("comments_count").notNull().default(0),
   is_public: boolean("is_public").notNull().default(true),
+  created_at: timestamp("created_at").notNull(),
+});
+
+/** Canonical media contract shared by feed, post detail, and template detail. */
+export const courseMedia = pgTable("course_media", {
+  id: text("id").primaryKey(),
+  course_id: text("course_id").notNull(),
+  r2_path: text("r2_path").notNull(),
+  placement_index: integer("placement_index").notNull(),
+  x: doublePrecision("x").notNull(),
+  y: doublePrecision("y").notNull(),
+  width: doublePrecision("width").notNull(),
+  height: doublePrecision("height").notNull(),
+  rotation: doublePrecision("rotation").notNull(),
   created_at: timestamp("created_at").notNull(),
 });
 

@@ -145,7 +145,7 @@ export default function TemplateDetailPage() {
           className="mx-auto rounded-[28px] bg-white p-2.5 shadow-[0_18px_45px_rgba(91,57,42,0.16)]"
           style={{ width: 'min(100%, 350px, calc((100dvh - 330px) * 0.75))' }}
         >
-          <TemplateArtwork course={course} template={template} photoSources={linkedPost?.photos} className="rounded-[20px]" eager />
+          <TemplateArtwork course={course} template={template} photoSources={linkedPost?.photos} decorOverride={linkedPost?.decor} className="rounded-[20px]" eager />
         </div>
       </section>
 

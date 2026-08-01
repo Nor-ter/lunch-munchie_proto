@@ -493,14 +493,9 @@ app.post("/api/courses", async (c) => {
     const strings = (value: unknown, limit: number) => Array.isArray(value)
       ? value.filter((item): item is string => typeof item === "string").map((item) => item.trim().slice(0, 40)).filter(Boolean).slice(0, limit)
       : [];
-    // 클라이언트 편집 화면은 data URL/로컬 asset도 미리보기로 쓸 수 있지만, 그것은
-    // 서버에 영속될 수 없다. D1의 NOT NULL 계약을 지키면서 실제 R2 사진만 저장하고,
-    // 없으면 선택한 첫 식당의 R2 사진으로 안전하게 대체한다.
+    // Feed artwork must be an author-uploaded R2 path. Restaurant imagery is
+    // recommendation metadata and must never stand in for a user's post.
     const requestedHero = typeof body.heroImage === "string" && body.heroImage.startsWith("/photos/") ? body.heroImage : null;
-    const fallbackHero = (known.results as any[])
-      .flatMap((restaurant) => json<string[]>(restaurant.photos, []))
-      .find((photo) => typeof photo === "string" && photo.startsWith("/photos/")) ?? "";
-    const heroImage = requestedHero ?? fallbackHero;
     // URL은 태그와 달리 잘라내면 안 된다. 과거 generic `strings()`를 써서
     // 40자로 절단된 R2 경로가 다른 사람의 카드에서 깨졌었다.
     const feedPhotos = Array.isArray(body.feedPhotos)
@@ -514,6 +509,7 @@ app.post("/api/courses", async (c) => {
     if (!feedPhotos.length || !feedDecor.length) {
       return c.json({ error: "포스팅하려면 배치한 사진을 1장 이상 저장해야 합니다." }, 400);
     }
+    const heroImage = requestedHero ?? feedPhotos[0];
     const templateId = typeof body.templateId === "string" ? body.templateId.slice(0, 80) : null;
     const id = crypto.randomUUID();
     const createdAt = Date.now();
@@ -526,6 +522,8 @@ app.post("/api/courses", async (c) => {
     const statements = [
       c.env.DB.prepare("INSERT INTO courses (id, author_id, title, description, hero_image, category, region, tags, hashtags, total_distance, total_duration, likes_count, saves_count, comments_count, is_public, feed_photos, feed_decor, template_id, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, 0, 0, 1, ?, ?, ?, ?)")
         .bind(id, session.sub, title, description, heroImage, "course", region, JSON.stringify(tags), JSON.stringify(hashtags), distance, duration, JSON.stringify(feedPhotos), JSON.stringify(feedDecor), templateId, createdAt),
+      ...feedDecor.map((photo: any, index: number) => c.env.DB.prepare("INSERT INTO course_media (id, course_id, r2_path, placement_index, x, y, width, height, rotation, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")
+        .bind(crypto.randomUUID(), id, photo.src, index, photo.x, photo.y, photo.w, photo.h ?? photo.w, photo.rotate, createdAt)),
       ...restaurantIds.map((restaurantId, index) => c.env.DB.prepare("INSERT INTO course_items (id, course_id, restaurant_id, order_index, start_time, end_time, is_bookmarked, created_at) VALUES (?, ?, ?, ?, ?, ?, 0, ?)")
         .bind(crypto.randomUUID(), id, restaurantId, index + 1, "", "", createdAt)),
     ];
@@ -616,7 +614,12 @@ app.patch("/api/course-media", async (c) => {
   }) : [];
   if (!decor.length) return c.json({ error: "승계할 서버 사진 배치가 없습니다." }, 400);
   const templateId = typeof body.templateId === "string" ? body.templateId.slice(0, 80) : null;
-  await c.env.DB.prepare("UPDATE courses SET feed_photos = ?, feed_decor = ?, template_id = COALESCE(?, template_id) WHERE id = ?").bind(JSON.stringify(photos), JSON.stringify(decor), templateId, body.courseId).run();
+  await c.env.DB.batch([
+    c.env.DB.prepare("UPDATE courses SET feed_photos = ?, feed_decor = ?, template_id = COALESCE(?, template_id) WHERE id = ?").bind(JSON.stringify(photos), JSON.stringify(decor), templateId, body.courseId),
+    c.env.DB.prepare("DELETE FROM course_media WHERE course_id = ?").bind(body.courseId),
+    ...decor.map((photo, index) => c.env.DB.prepare("INSERT INTO course_media (id, course_id, r2_path, placement_index, x, y, width, height, rotation, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")
+      .bind(crypto.randomUUID(), body.courseId, photo.src, index, photo.x, photo.y, photo.w, photo.h ?? photo.w, photo.rotate, Date.now())),
+  ]);
   return c.json({ ok: true });
 });
 
@@ -674,6 +677,21 @@ app.get("/api/feed", async (c) => {
       const { results: stops } = await c.env.DB.prepare(
         "SELECT ci.*, r.name, r.category, r.photos, r.rating FROM course_items ci JOIN restaurants r ON ci.restaurant_id = r.id WHERE ci.course_id = ? ORDER BY ci.order_index"
       ).bind(course.id).all();
+      const { results: mediaRows } = await c.env.DB.prepare(
+        "SELECT r2_path, placement_index, x, y, width, height, rotation FROM course_media WHERE course_id = ? ORDER BY placement_index"
+      ).bind(course.id).all();
+      // 0005 backfills valid legacy user layouts. The JSON fields remain a
+      // compatibility fallback only until every old writer has upgraded.
+      const canonicalMedia = (mediaRows as any[]).map((media) => ({
+        id: `${course.id}:media:${media.placement_index}`,
+        src: media.r2_path,
+        x: Number(media.x), y: Number(media.y),
+        w: Number(media.width), h: Number(media.height), rotate: Number(media.rotation),
+      }));
+      const decor = canonicalMedia.length ? canonicalMedia : json<any[]>(course.feed_decor, []);
+      const photos = canonicalMedia.length
+        ? Array.from(new Set(canonicalMedia.map((media) => media.src)))
+        : json<string[]>(course.feed_photos, []);
       
       feedItems.push({
         id: `post_${course.id}`,
@@ -684,8 +702,8 @@ app.get("/api/feed", async (c) => {
         title: course.title,
         description: course.description,
         heroImage: course.hero_image,
-        photos: json<string[]>(course.feed_photos, []),
-        decor: json<any[]>(course.feed_decor, []),
+        photos,
+        decor,
         templateId: course.template_id || null,
         tags: json<string[]>(course.tags, []),
         stops: stops.map((s: any) => ({
