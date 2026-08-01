@@ -29,6 +29,7 @@
     "preview": "vite preview --host",
     "check": "tsc --noEmit",
     "test": "vitest run",
+    "test:precommit": "tsc --noEmit && vitest run && playwright test",
     "test:e2e": "playwright test",
     "test:e2e:live": "playwright test --config playwright.live.config.ts",
     "e2e:auth:setup": "tsx e2e-harness/scripts/capture-auth.ts",
@@ -37,7 +38,8 @@
     "harness:web-follow:status": "node automation/web-follow-login/run.mjs status",
     "harness:web-maps": "node automation/web-maps-places/run.mjs",
     "harness:web-maps:status": "node automation/web-maps-places/run.mjs status",
-    "format": "prettier --write ."
+    "format": "prettier --write .",
+    "prepare": "node scripts/installGitHooks.mjs"
   },
   "dependencies": {
     "@dnd-kit/core": "^6.3.1",

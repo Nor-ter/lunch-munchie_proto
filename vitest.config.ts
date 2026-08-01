@@ -11,6 +11,7 @@ export default defineConfig({
   },
   test: {
     globals: true,
+    setupFiles: ["./test/setup.ts"],
     include: ["**/*.test.ts", "**/*.test.tsx", "**/*.spec.ts", "**/*.spec.tsx"],
     // Playwright live tests intentionally share the `*.spec.ts` suffix but
     // must only run through `playwright.live.config.ts`, never Vitest.
