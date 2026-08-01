@@ -1,0 +1,44 @@
+name: Deploy Lunchie state worker
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "workers/**"
+      - "wrangler.state.toml"
+      - "package.json"
+      - "pnpm-lock.yaml"
+      - ".github/workflows/deploy-worker.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: lunchie-state-worker-production
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    name: Deploy state worker
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      - name: Deploy lunchie-munchie-state
+        env:
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_WORKER_DEPLOY_TOKEN }}
+        run: pnpm cf:state:deploy
