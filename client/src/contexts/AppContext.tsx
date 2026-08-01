@@ -1082,10 +1082,10 @@ export function AppProvider({
             deadlineMinutes,
           }),
         });
-        if (res.ok) {
-          const data = await res.json();
-          const deck = await buildDeck(filters, restaurants, profile.id);
-          const session: GroupSession = {
+        const data = await res.json().catch(() => ({})) as { session?: { id: string }; token?: string; error?: string };
+        if (!res.ok || !data.session?.id || !data.token) throw new Error(data.error ?? '세션을 서버에 저장하지 못했어요.');
+        const deck = await buildDeck(filters, restaurants, profile.id);
+        const session: GroupSession = {
             id: data.session.id,
             name,
             inviteCode: data.token,
@@ -1108,23 +1108,14 @@ export function AppProvider({
             modelVersion: deck.modelVersion,
             results: [],
           };
-          setCurrentSession(session);
-          return session;
-        }
-      } catch {
-        // fall through to local session
+        setCurrentSession(session);
+        return session;
+      } catch (error) {
+        // A local-only session must never offer a QR/link: another device
+        // cannot resolve it. Settings page turns this into a visible error.
+        throw error;
       }
     }
-
-    const session = buildLocalSession(name, filters, { ...profile, name: actualHostName, emoji: actualEmoji }, restaurants);
-    const deck = await buildDeck(filters, restaurants, profile.id);
-    session.restaurants = deck.restaurants;
-    session.slateId = deck.slateId;
-    session.recMeta = deck.recMeta;
-    session.modelVersion = deck.modelVersion;
-    session.deadlineMinutes = deadlineMinutes;
-    setCurrentSession(session);
-    return session;
   }, [profile, restaurants]);
 
   const fetchSession = useCallback(async (token: string): Promise<GroupSession> => {
@@ -1176,7 +1167,7 @@ export function AppProvider({
   }, [restaurants]);
 
   const joinSession = useCallback(async (token: string, name?: string, emoji?: string) => {
-    await fetch(`/api/sessions/${token}/join`, {
+    const response = await fetch(`/api/sessions/${token}/join`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -1185,6 +1176,8 @@ export function AppProvider({
         emoji: emoji || profile.emoji,
       }),
     });
+    const payload = await response.json().catch(() => ({})) as { error?: string };
+    if (!response.ok) throw new Error(payload.error ?? '세션에 참가하지 못했어요.');
     return fetchSession(token);
   }, [profile, fetchSession]);
 

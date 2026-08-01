@@ -624,6 +624,112 @@ app.post("/api/journey-winner", async (c) => {
   return c.json({ ok: true, duplicate: (result.meta?.changes ?? 0) === 0 });
 });
 
+type SessionRow = {
+  id: string; host_user_id: string; share_token: string; group_size: number;
+  filter_distance: number; filter_budget: number; filter_categories: string;
+  filter_dietary: string; status: string; deadline_at: number | null; created_at: number;
+};
+const sessionPayload = (session: SessionRow) => ({
+  ...session,
+  // The existing app named this field filter_vibe. Keep that client contract
+  // while D1 correctly stores food categories in filter_categories.
+  filter_vibe: json<string[]>(session.filter_categories, []),
+  filter_categories: json<string[]>(session.filter_categories, []),
+  filter_dietary: json<string[]>(session.filter_dietary, []),
+});
+const sessionToken = () => crypto.randomUUID().replaceAll("-", "").slice(0, 6).toUpperCase();
+
+// Group-session state must live in D1: a QR/link opened on another device
+// cannot see the in-memory Express fallback used during local development.
+app.post("/api/sessions/create", async (c) => {
+  const body = await c.req.json<Record<string, unknown>>().catch(() => ({}));
+  const hostId = nullableText(body.hostId, 256) ?? `guest:${crypto.randomUUID()}`;
+  const hostName = nullableText(body.hostName, 80) ?? "호스트";
+  const emoji = nullableText(body.emoji, 16) ?? "👤";
+  const groupSize = typeof body.groupSize === "number" && Number.isFinite(body.groupSize) ? Math.max(1, Math.min(12, Math.floor(body.groupSize))) : 4;
+  const filterDistance = typeof body.filterDistance === "number" && Number.isFinite(body.filterDistance) ? Math.max(100, Math.min(50_000, Math.floor(body.filterDistance))) : 1000;
+  const filterBudget = typeof body.filterBudget === "number" && Number.isFinite(body.filterBudget) ? Math.max(1, Math.min(4, Math.floor(body.filterBudget))) : 2;
+  const categories = Array.isArray(body.filterCategories) ? body.filterCategories.filter((item): item is string => typeof item === "string").map(item => item.trim().slice(0, 40)).filter(Boolean).slice(0, 12) : [];
+  const dietary = Array.isArray(body.filterDietary) ? body.filterDietary.filter((item): item is string => typeof item === "string").map(item => item.trim().slice(0, 40)).filter(Boolean).slice(0, 12) : [];
+  const createdAt = Date.now();
+
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    const id = crypto.randomUUID();
+    const token = sessionToken();
+    try {
+      await c.env.DB.batch([
+        c.env.DB.prepare("INSERT INTO sessions (id, host_user_id, share_token, group_size, filter_distance, filter_budget, filter_categories, filter_dietary, status, deadline_at, top_restaurant_ids, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'WAITING', NULL, '[]', ?)")
+          .bind(id, hostId, token, groupSize, filterDistance, filterBudget, JSON.stringify(categories), JSON.stringify(dietary), createdAt),
+        c.env.DB.prepare("INSERT INTO session_members (id, session_id, user_id, user_name, emoji, is_ready, joined_at) VALUES (?, ?, ?, ?, ?, 0, ?)")
+          .bind(crypto.randomUUID(), id, hostId, hostName, emoji, createdAt),
+      ]);
+      const session: SessionRow = {
+        id, host_user_id: hostId, share_token: token, group_size: groupSize,
+        filter_distance: filterDistance, filter_budget: filterBudget,
+        filter_categories: JSON.stringify(categories), filter_dietary: JSON.stringify(dietary),
+        status: "WAITING", deadline_at: null, created_at: createdAt,
+      };
+      return c.json({ session: sessionPayload(session), token }, 201);
+    } catch (error: any) {
+      // A random invite-code collision is safe to retry; any other D1 error
+      // is surfaced so the client never gives out a non-existent invitation.
+      if (attempt === 2 || !String(error?.message ?? "").includes("UNIQUE")) return c.json({ error: "세션을 서버에 저장하지 못했습니다." }, 500);
+    }
+  }
+  return c.json({ error: "초대 코드를 만들지 못했습니다." }, 500);
+});
+
+app.get("/api/sessions/:token", async (c) => {
+  const token = c.req.param("token").trim().toUpperCase();
+  const session = await c.env.DB.prepare("SELECT * FROM sessions WHERE share_token = ?").bind(token).first<SessionRow>();
+  if (!session) return c.json({ error: "Session not found" }, 404);
+  const { results: members } = await c.env.DB.prepare("SELECT user_id, user_name, emoji, is_ready, joined_at FROM session_members WHERE session_id = ? ORDER BY joined_at").bind(session.id).all();
+  return c.json({ session: sessionPayload(session), members });
+});
+
+app.post("/api/sessions/:token/join", async (c) => {
+  const token = c.req.param("token").trim().toUpperCase();
+  const body = await c.req.json<Record<string, unknown>>().catch(() => ({}));
+  const userId = nullableText(body.userId, 256);
+  const userName = nullableText(body.userName, 80);
+  const emoji = nullableText(body.emoji, 16) ?? "👤";
+  if (!userId || !userName) return c.json({ error: "참여자 정보가 필요합니다." }, 400);
+  const session = await c.env.DB.prepare("SELECT id, group_size FROM sessions WHERE share_token = ?").bind(token).first<{ id: string; group_size: number }>();
+  if (!session) return c.json({ error: "세션을 찾을 수 없거나 만료되었습니다." }, 404);
+  const existing = await c.env.DB.prepare("SELECT id FROM session_members WHERE session_id = ? AND user_id = ?").bind(session.id, userId).first();
+  if (!existing) {
+    const count = await c.env.DB.prepare("SELECT COUNT(*) AS count FROM session_members WHERE session_id = ?").bind(session.id).first<{ count: number }>();
+    if (Number(count?.count ?? 0) >= Number(session.group_size)) return c.json({ error: "정원이 찼어요.", code: "SESSION_FULL" }, 409);
+  }
+  await c.env.DB.prepare("INSERT INTO session_members (id, session_id, user_id, user_name, emoji, is_ready, joined_at) VALUES (?, ?, ?, ?, ?, 0, ?) ON CONFLICT(session_id, user_id) DO UPDATE SET user_name = excluded.user_name, emoji = excluded.emoji")
+    .bind(crypto.randomUUID(), session.id, userId, userName, emoji, Date.now()).run();
+  return c.json({ ok: true });
+});
+
+app.post("/api/sessions/:token/ready", async (c) => {
+  const token = c.req.param("token").trim().toUpperCase();
+  const body = await c.req.json<Record<string, unknown>>().catch(() => ({}));
+  const userId = nullableText(body.userId, 256);
+  if (!userId || typeof body.isReady !== "boolean") return c.json({ error: "준비 상태 정보가 필요합니다." }, 400);
+  const session = await c.env.DB.prepare("SELECT id FROM sessions WHERE share_token = ?").bind(token).first<{ id: string }>();
+  if (!session) return c.json({ error: "세션을 찾을 수 없습니다." }, 404);
+  const result = await c.env.DB.prepare("UPDATE session_members SET is_ready = ? WHERE session_id = ? AND user_id = ?").bind(body.isReady ? 1 : 0, session.id, userId).run();
+  if ((result.meta?.changes ?? 0) === 0) return c.json({ error: "세션 참여자를 찾을 수 없습니다." }, 404);
+  return c.json({ ok: true });
+});
+
+app.post("/api/sessions/:token/status", async (c) => {
+  const token = c.req.param("token").trim().toUpperCase();
+  const body = await c.req.json<Record<string, unknown>>().catch(() => ({}));
+  const status = nullableText(body.status, 40)?.toUpperCase();
+  if (!status) return c.json({ error: "세션 상태가 필요합니다." }, 400);
+  const deadlineMinutes = typeof body.deadlineMinutes === "number" && Number.isFinite(body.deadlineMinutes) ? Math.max(1, Math.min(120, Math.floor(body.deadlineMinutes))) : null;
+  const deadline = deadlineMinutes ? Date.now() + deadlineMinutes * 60_000 : null;
+  const result = await c.env.DB.prepare("UPDATE sessions SET status = ?, deadline_at = COALESCE(?, deadline_at) WHERE share_token = ?").bind(status, deadline, token).run();
+  if ((result.meta?.changes ?? 0) === 0) return c.json({ error: "세션을 찾을 수 없습니다." }, 404);
+  return c.json({ ok: true });
+});
+
 app.get("/api/journey-today", async (c) => {
   const session = await readSession(c.req.raw, c.env.AUTH_SESSION_SECRET);
   const guestId = cookieValue(c.req.raw, "lm_guest_id");
