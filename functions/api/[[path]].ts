@@ -80,7 +80,15 @@ app.get("/api/auth/google/callback", async (c) => {
 app.get("/api/auth/session", async (c) => {
   const session = await readSession(c.req.raw, c.env.AUTH_SESSION_SECRET);
   if (session) await ensurePublicUser(c.env.DB, session);
-  return c.json({ user: session });
+  // The session identifies the Google account, while the D1 profile owns
+  // user-editable display data such as a custom avatar.  Returning both keeps
+  // a refresh from replacing a user-selected photo with Google's old picture.
+  const profile = session
+    ? await c.env.DB.prepare(
+      "SELECT id, username, profile_image_url, bio, location FROM users WHERE id = ?"
+    ).bind(session.sub).first<any>()
+    : null;
+  return c.json({ user: session, profile });
 });
 app.post("/api/auth/logout", (c) => {
   c.header("Set-Cookie", cookie("lm_session", "", 0));
@@ -252,6 +260,27 @@ app.post("/api/uploads", async (c) => {
   const key = `uploads/${session.sub}/${crypto.randomUUID()}.${extension}`;
   await c.env.PHOTOS_R2.put(`photos/${key}`, bytes, { httpMetadata: { contentType: `image/${match[1]}` } });
   return c.json({ url: `/photos/${key}` }, 201);
+});
+
+// A profile avatar is an explicit reference to an image the current account
+// uploaded.  Do not accept arbitrary URLs here: otherwise a user could make a
+// different user's private upload appear as their own profile photo.
+app.patch("/api/profile", async (c) => {
+  const session = await readSession(c.req.raw, c.env.AUTH_SESSION_SECRET);
+  if (!session) return c.json({ error: "로그인이 필요합니다.", code: "AUTH_REQUIRED" }, 401);
+  await ensurePublicUser(c.env.DB, session);
+  const body = await c.req.json<{ avatarUrl?: unknown }>().catch(() => ({}));
+  if (!("avatarUrl" in body)) return c.json({ error: "변경할 프로필 정보가 없습니다." }, 400);
+  const avatarUrl = body.avatarUrl;
+  if (avatarUrl !== null && (typeof avatarUrl !== "string" || !avatarUrl.startsWith(`/photos/uploads/${session.sub}/`) || avatarUrl.length > 2_000)) {
+    return c.json({ error: "내가 업로드한 프로필 사진만 사용할 수 있습니다." }, 400);
+  }
+  await c.env.DB.prepare("UPDATE users SET profile_image_url = ? WHERE id = ?")
+    .bind(avatarUrl, session.sub).run();
+  const profile = await c.env.DB.prepare(
+    "SELECT id, username, profile_image_url, bio, location FROM users WHERE id = ?"
+  ).bind(session.sub).first<any>();
+  return c.json({ profile });
 });
 
 // 헬스 체크

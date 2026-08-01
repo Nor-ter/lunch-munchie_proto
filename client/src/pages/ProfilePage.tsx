@@ -272,6 +272,10 @@ function ProfilePageContent() {
 
   const pickEmoji = (e: string) => {
     updateProfile({ emoji: e, avatarPhoto: undefined });
+    void fetch('/api/profile', {
+      method: 'PATCH', credentials: 'same-origin', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ avatarUrl: null }),
+    });
     toast.success('아바타를 변경했어요! ' + e);
   };
 
@@ -281,10 +285,22 @@ function ProfilePageContent() {
     if (!file) return;
     try {
       const dataUrl = await fileToResizedDataUrl(file, 400, 0.85);
-      updateProfile({ avatarPhoto: dataUrl });
+      const uploadResponse = await fetch('/api/uploads', {
+        method: 'POST', credentials: 'same-origin', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ dataUrl }),
+      });
+      const upload = await uploadResponse.json().catch(() => ({})) as { url?: string; error?: string };
+      if (!uploadResponse.ok || !upload.url) throw new Error(upload.error || '사진 업로드에 실패했어요.');
+      const profileResponse = await fetch('/api/profile', {
+        method: 'PATCH', credentials: 'same-origin', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ avatarUrl: upload.url }),
+      });
+      const saved = await profileResponse.json().catch(() => ({})) as { profile?: { profile_image_url?: string | null }; error?: string };
+      if (!profileResponse.ok) throw new Error(saved.error || '프로필 사진을 저장하지 못했어요.');
+      updateProfile({ avatarPhoto: saved.profile?.profile_image_url ?? upload.url });
       toast.success('프로필 사진을 업데이트했어요! 📸');
-    } catch {
-      toast.error('사진을 불러오지 못했어요');
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : '사진을 불러오지 못했어요');
     }
   };
 
@@ -532,7 +548,14 @@ function ProfilePageContent() {
                 </button>
                 {profile.avatarPhoto && (
                   <button
-                    onClick={() => { updateProfile({ avatarPhoto: undefined }); toast('사진을 지웠어요 — 이모지로 돌아가요'); }}
+                    onClick={() => {
+                      updateProfile({ avatarPhoto: undefined });
+                      void fetch('/api/profile', {
+                        method: 'PATCH', credentials: 'same-origin', headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ avatarUrl: null }),
+                      });
+                      toast('사진을 지웠어요 — 이모지로 돌아가요');
+                    }}
                     className="mt-2 text-[11px] font-semibold text-[#B0A090] underline underline-offset-2"
                   >
                     사진 삭제하고 이모지로

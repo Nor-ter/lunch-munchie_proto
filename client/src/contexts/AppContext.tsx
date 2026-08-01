@@ -867,13 +867,20 @@ export function AppProvider({
     // 계정은 사용자가 프로필에서 직접 정할 수 있다.
     void fetch('/api/auth/session', { credentials: 'same-origin' })
       .then(response => response.ok ? response.json() : null)
-      .then((data: { user?: { sub?: string; name?: string; picture?: string } } | null) => {
+      .then((data: {
+        user?: { sub?: string; name?: string; picture?: string };
+        profile?: { username?: string | null; profile_image_url?: string | null } | null;
+      } | null) => {
         const googleUser = data?.user;
         if (!googleUser || googleUser.sub !== initialAuthUserId) return;
+        const serverProfile = data?.profile;
         setProfile(previous => ({
           ...previous,
-          ...(googleUser.name ? { name: googleUser.name } : {}),
-          ...(googleUser.picture ? { avatarPhoto: googleUser.picture } : {}),
+          ...(serverProfile?.username || googleUser.name ? { name: serverProfile?.username || googleUser.name! } : {}),
+          // A null server value is meaningful: the user deliberately removed
+          // their photo and chose the emoji avatar. Never fall back to Google
+          // in that case.
+          ...(serverProfile ? { avatarPhoto: serverProfile.profile_image_url ?? undefined } : googleUser.picture ? { avatarPhoto: googleUser.picture } : {}),
         }));
       })
       .catch(() => { /* profile fallback remains usable */ });
