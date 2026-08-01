@@ -611,10 +611,14 @@ function WinnerScreen({ selectedWinner, onReset }: { selectedWinner?: Restaurant
       // eventLogger로도 보내면 같은 결정을 두 번 학습하게 된다.
       const journeyStop = { restaurant_id: winner.id, name: winner.name, category: winner.category, intent: intentForCategory(winner.category) ?? null, at: Date.now(), satisfaction: null };
       try {
-        const stored = JSON.parse(localStorage.getItem('lm_today_journey') ?? '[]') as typeof journeyStop[];
-        const today = new Date().toDateString();
-        const current = stored.filter(item => new Date(item.at).toDateString() === today && item.restaurant_id !== winner.id);
-        localStorage.setItem('lm_today_journey', JSON.stringify([...current, journeyStop]));
+        const legacy = JSON.parse(localStorage.getItem('lm_today_journey') ?? '[]') as typeof journeyStop[];
+        const stored = JSON.parse(localStorage.getItem('lm_lunchie_journey') ?? JSON.stringify(legacy)) as typeof journeyStop[];
+        const thirtyDaysAgo = Date.now() - 30 * 24 * 60 * 60 * 1000;
+        // 같은 세션 결과 화면이 다시 렌더되어도 한 번만 남긴다. 다른 날의 같은
+        // 식당 선택은 실제 여정이므로 보존한다.
+        const current = stored.filter(item => item.at >= thirtyDaysAgo && !(item.restaurant_id === winner.id && Math.abs(item.at - journeyStop.at) < 60_000));
+        localStorage.setItem('lm_lunchie_journey', JSON.stringify([...current, journeyStop]));
+        localStorage.setItem('lm_today_journey', JSON.stringify([...current, journeyStop].filter(item => new Date(item.at).toDateString() === new Date().toDateString())));
       } catch { /* 여정 저장 실패가 결과 화면을 막으면 안 된다. */ }
       void fetch('/api/journey-winner', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ restaurantId: winner.id, sessionId: currentSession?.id, intent: journeyStop.intent, idempotencyKey }) });
       // 회고 대기: 다음 홈 진입 시 "어땠어요?" 설문 → 만족 정답(SURVEY) 수집

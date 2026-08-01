@@ -22,6 +22,31 @@ type JourneyStop = {
   satisfaction: 'POS' | 'NEU' | 'NEG' | null;
 };
 
+type JourneyDay = { key: string; label: string; stops: JourneyStop[] };
+
+function formatJourneyDay(value: number) {
+  const date = new Date(value);
+  const today = new Date();
+  const yesterday = new Date();
+  yesterday.setDate(today.getDate() - 1);
+  if (date.toDateString() === today.toDateString()) return '오늘의 런치픽';
+  if (date.toDateString() === yesterday.toDateString()) return '어제의 런치픽';
+  return new Intl.DateTimeFormat('ko-KR', { month: 'long', day: 'numeric', weekday: 'short' }).format(date);
+}
+
+function groupJourneyByDay(stops: JourneyStop[]): JourneyDay[] {
+  const days = new Map<string, JourneyDay>();
+  [...stops].sort((a, b) => b.at - a.at).forEach(stop => {
+    const date = new Date(stop.at);
+    if (!Number.isFinite(date.getTime())) return;
+    const key = `${date.getFullYear()}-${date.getMonth()}-${date.getDate()}`;
+    const day = days.get(key) ?? { key, label: formatJourneyDay(stop.at), stops: [] };
+    day.stops.push(stop);
+    days.set(key, day);
+  });
+  return Array.from(days.values());
+}
+
 interface JourneyRequestDependencies {
   resolveRequestAuth?: () => Promise<ApiRequestAuth>;
   request?: typeof fetch;
@@ -193,13 +218,12 @@ export default function HomePage() {
   useEffect(() => {
     let localStops: JourneyStop[] = [];
     try {
-      const today = new Date().toDateString();
-      localStops = (JSON.parse(localStorage.getItem('lm_today_journey') ?? '[]') as JourneyStop[])
-        .filter(stop => new Date(stop.at).toDateString() === today);
+      const legacy = localStorage.getItem('lm_today_journey') ?? '[]';
+      localStops = JSON.parse(localStorage.getItem('lm_lunchie_journey') ?? legacy) as JourneyStop[];
     } catch { /* local journey is an optional anonymous-mode convenience */ }
     if (auth.data?.isAnonymous) { setJourneyStops(localStops); return; }
     let active = true;
-    fetch('/api/journey-today', { credentials: 'same-origin' })
+    fetch('/api/journey?days=30', { credentials: 'same-origin' })
       .then(response => response.ok ? response.json() : { stops: [] })
       .then((data: { stops?: JourneyStop[] }) => { if (active) setJourneyStops(data.stops?.length ? data.stops : localStops); })
       .catch(() => { if (active) setJourneyStops(localStops); });
@@ -217,9 +241,14 @@ export default function HomePage() {
   }, [search]);
 
   const landingPosts = feedPosts;
+  const journeyDays = useMemo(() => groupJourneyByDay(journeyStops), [journeyStops]);
+  const todayJourneyStops = useMemo(() => {
+    const today = new Date().toDateString();
+    return journeyStops.filter(stop => new Date(stop.at).toDateString() === today);
+  }, [journeyStops]);
 
   const notifications = useMemo(() => {
-    const journeyItems = journeyStops.map(stop => ({
+    const journeyItems = todayJourneyStops.map(stop => ({
       id: `journey-${stop.restaurant_id}-${stop.at}`,
       kind: 'journey' as const,
       title: '오늘의 여정',
@@ -254,7 +283,7 @@ export default function HomePage() {
       })),
     ]);
     return [...journeyItems, ...feedItems].sort((a, b) => b.at - a.at).slice(0, 20);
-  }, [feedPosts, isMyPost, journeyStops]);
+  }, [feedPosts, isMyPost, todayJourneyStops]);
   const unreadCount = notifications.filter(item => !readNotificationIds.includes(item.id)).length;
   const visibleNotifications = notifications.filter(
     item => !readNotificationIds.includes(item.id),
@@ -318,6 +347,38 @@ export default function HomePage() {
         </div>
       </section>
 
+      <section className="mx-4 mt-5 rounded-[22px] border border-[#F1D8CC] bg-[#FFF5EF] p-4">
+        <div className="flex items-end justify-between">
+          <div>
+            <h3 className="text-[17px] font-black text-[#3E2D25]">런치픽 여정</h3>
+            <p className="mt-0.5 text-[11px] font-semibold text-[#9D8579]">Lunchie에서 확정한 한 끼를 날짜별로 모았어요.</p>
+          </div>
+          <span className="rounded-full bg-white px-2.5 py-1 text-[10px] font-black text-[#DB6C66]">최근 30일</span>
+        </div>
+        {journeyDays.length > 0 ? (
+          <div className="mt-3 space-y-4">
+            {journeyDays.map(day => (
+              <div key={day.key}>
+                <p className="mb-1.5 text-[11px] font-black text-[#B26A62]">{day.label} · {day.stops.length}곳</p>
+                <div className="space-y-2">
+                  {day.stops.map((stop, index) => (
+                    <div key={`${stop.restaurant_id}-${stop.at}`} className="flex items-center gap-2.5 rounded-2xl bg-white px-3 py-2.5">
+                      <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-[#F6B5AC] text-[11px] font-black text-white">{day.stops.length - index}</span>
+                      <span className="min-w-0 flex-1 truncate text-[12px] font-bold text-[#4B382F]">{stop.name}</span>
+                      <span className="text-[10px] font-semibold text-[#A68C7F]">{stop.category ?? '맛집'}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <div className="mt-3 rounded-2xl bg-white px-3 py-4 text-center">
+            <p className="text-[11px] font-semibold text-[#9D8579]">아직 런치픽이 없어요. Quick Match로 첫 여정을 시작해보세요.</p>
+          </div>
+        )}
+      </section>
+
       <section className="mt-[35px]">
         <div className="flex items-end justify-between px-4">
           <div>
@@ -375,11 +436,11 @@ export default function HomePage() {
                   <div>
                   <h3 className="mt-1 text-[17px] font-black text-[#3E2D25]">오늘의 여정</h3>
                   </div>
-                  <span className="rounded-full bg-white px-2.5 py-1 text-[10px] font-black text-[#DB6C66]">{journeyStops.length}곳</span>
+                  <span className="rounded-full bg-white px-2.5 py-1 text-[10px] font-black text-[#DB6C66]">{todayJourneyStops.length}곳</span>
                 </div>
-                {journeyStops.length > 0 ? (
+                {todayJourneyStops.length > 0 ? (
                   <div className="mt-3 space-y-2">
-                    {journeyStops.map((stop, index) => (
+                    {todayJourneyStops.map((stop, index) => (
                       <div key={`${stop.restaurant_id}-${stop.at}`} className="flex items-center gap-2.5 rounded-2xl bg-white px-3 py-2.5">
                         <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-[#F6B5AC] text-[11px] font-black text-white">{index + 1}</span>
                         <span className="min-w-0 flex-1 truncate text-[12px] font-bold text-[#4B382F]">{stop.name}</span>

@@ -635,6 +635,29 @@ app.get("/api/journey-today", async (c) => {
   return c.json({ stops: results.map((row: any) => ({ restaurant_id: row.restaurant_id, name: row.name, category: row.category, intent: json<{ intent?: string }>(row.context_json, {}).intent ?? null, at: row.created_at, satisfaction: null })) });
 });
 
+// Lunchie에서 확정한 WINNER는 단순 알림이 아니라 사용자의 식사 여정 기록이다.
+// 날짜 묶음은 기기 현지 시간으로 UI가 결정하므로, 서버는 시간순 원본만 반환한다.
+app.get("/api/journey", async (c) => {
+  const session = await readSession(c.req.raw, c.env.AUTH_SESSION_SECRET);
+  if (!session) return c.json({ stops: [] });
+  const requestedDays = Number(c.req.query("days"));
+  const days = Number.isFinite(requestedDays) ? Math.max(1, Math.min(90, Math.floor(requestedDays))) : 30;
+  const since = Date.now() - days * 24 * 60 * 60 * 1000;
+  const { results } = await c.env.DB.prepare(
+    "SELECT e.restaurant_id, r.name, r.category, e.context_json, e.created_at FROM rec_events e JOIN restaurants r ON r.id = e.restaurant_id WHERE e.user_id = ? AND e.event_type = 'WINNER' AND e.created_at >= ? ORDER BY e.created_at DESC LIMIT 200"
+  ).bind(session.sub, since).all();
+  return c.json({
+    stops: results.map((row: any) => ({
+      restaurant_id: row.restaurant_id,
+      name: row.name,
+      category: row.category,
+      intent: json<{ intent?: string }>(row.context_json, {}).intent ?? null,
+      at: row.created_at,
+      satisfaction: null,
+    })),
+  });
+});
+
 // 수정과 삭제는 UI의 버튼 노출만으로 판단하지 않는다. 매 요청에서 현재 Google
 // 세션의 sub와 courses.author_id가 일치해야만 실행된다.
 app.patch("/api/feed-post", async (c) => {
