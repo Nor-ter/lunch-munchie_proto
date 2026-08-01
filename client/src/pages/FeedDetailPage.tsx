@@ -18,7 +18,7 @@ export default function FeedDetailPage() {
   const backPath = fromNotifications ? '/?notifications=1' : fromProfile ? '/profile' : fromSaved ? '/saved' : '/feed?tab=feed';
   const backLabel = fromNotifications ? '알림으로 돌아가기' : fromProfile ? '프로필로 돌아가기' : fromSaved ? '저장목록으로 돌아가기' : '먼치피드로 돌아가기';
   const deletePost = async () => {
-    if (!post || !window.confirm('이 게시물을 피드에서 내릴까요?')) return;
+    if (!post || !window.confirm('게시물과 원본 코스를 영구 삭제할까요? 되돌릴 수 없습니다.')) return;
     const response = await fetch(`/api/feed-post?courseId=${encodeURIComponent(post.courseId)}`, {
       method: 'DELETE', credentials: 'same-origin',
     });
@@ -28,7 +28,7 @@ export default function FeedDetailPage() {
       return;
     }
     deleteFeedPost(post.id);
-    toast.success('게시물을 피드에서 내렸어요.');
+    toast.success('게시물과 원본 코스를 삭제했어요.');
     navigate(backPath, { replace: true });
   };
 

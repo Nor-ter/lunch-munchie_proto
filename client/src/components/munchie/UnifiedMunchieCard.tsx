@@ -10,6 +10,7 @@ import {
   Send,
   Share2,
   ThumbsUp,
+  Trash2,
   X,
 } from 'lucide-react';
 import { toast } from 'sonner';
@@ -64,6 +65,8 @@ export default function UnifiedMunchieCard({
     savedCourseIds,
     saveCourse,
     unsaveCourse,
+    isMyPost,
+    deleteFeedPost,
   } = useApp();
   const [comment, setComment] = useState('');
   const [commentExpanded, setCommentExpanded] = useState(false);
@@ -154,6 +157,17 @@ export default function UnifiedMunchieCard({
     setShowPostMenu(false);
     toast.success('게시물을 신고했어요. 검토 후 필요한 조치를 진행할게요.');
   };
+  const deletePost = async () => {
+    if (!isMyPost(post) || !window.confirm('게시물과 원본 코스를 영구 삭제할까요? 되돌릴 수 없습니다.')) return;
+    const response = await fetch(`/api/feed-post?courseId=${encodeURIComponent(post.courseId)}`, {
+      method: 'DELETE', credentials: 'same-origin',
+    });
+    const payload = await response.json().catch(() => ({})) as { error?: string };
+    if (!response.ok) { toast.error(payload.error || '게시물을 삭제하지 못했어요.'); return; }
+    deleteFeedPost(post.id);
+    setShowPostMenu(false);
+    toast.success('게시물과 원본 코스를 삭제했어요.');
+  };
 
   if (compact) {
     return (
@@ -191,7 +205,9 @@ export default function UnifiedMunchieCard({
           {showPostMenu && (
             <motion.div initial={{ opacity: 0, y: -4 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -4 }} className="absolute right-2 top-8 z-30 w-[112px] overflow-hidden rounded-xl border border-[#DACBC3] bg-white shadow-[0_8px_22px_rgba(57,38,29,0.16)]">
               <button type="button" onClick={() => { setShowPostMenu(false); go(`/profile/${post.authorId}`); }} className="block h-9 w-full px-3 text-left text-[10px] font-bold text-[#51443E]">작성자 보기</button>
-              <button type="button" disabled={postReported} onClick={reportPost} className="block h-9 w-full border-t border-[#EEE3DD] px-3 text-left text-[10px] font-bold text-[#D84D52] disabled:text-[#A99D97]">{postReported ? '신고 완료' : '게시물 신고'}</button>
+              {isMyPost(post)
+                ? <button type="button" onClick={() => void deletePost()} className="flex h-9 w-full items-center gap-1.5 border-t border-[#EEE3DD] px-3 text-left text-[10px] font-bold text-[#D84D52]"><Trash2 size={12} /> 삭제</button>
+                : <button type="button" disabled={postReported} onClick={reportPost} className="block h-9 w-full border-t border-[#EEE3DD] px-3 text-left text-[10px] font-bold text-[#D84D52] disabled:text-[#A99D97]">{postReported ? '신고 완료' : '게시물 신고'}</button>}
             </motion.div>
           )}
         </AnimatePresence>
@@ -217,7 +233,9 @@ export default function UnifiedMunchieCard({
           {showPostMenu && (
             <motion.div initial={{ opacity: 0, y: -5 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -5 }} className="absolute right-3 top-12 z-30 w-[126px] overflow-hidden rounded-xl border border-[#E3D2C9] bg-white shadow-[0_10px_24px_rgba(57,38,29,0.16)]">
               <button type="button" onClick={() => { setShowPostMenu(false); go(`/profile/${post.authorId}`); }} className="block h-10 w-full px-3 text-left text-[11px] font-bold text-[#51443E]">작성자 보기</button>
-              <button type="button" disabled={postReported} onClick={reportPost} className="block h-10 w-full border-t border-[#EEE3DD] px-3 text-left text-[11px] font-bold text-[#D84D52] disabled:text-[#A99D97]">{postReported ? '신고 완료' : '게시물 신고'}</button>
+              {isMyPost(post)
+                ? <button type="button" onClick={() => void deletePost()} className="flex h-10 w-full items-center gap-2 border-t border-[#EEE3DD] px-3 text-left text-[11px] font-bold text-[#D84D52]"><Trash2 size={14} /> 게시물·코스 삭제</button>
+                : <button type="button" disabled={postReported} onClick={reportPost} className="block h-10 w-full border-t border-[#EEE3DD] px-3 text-left text-[11px] font-bold text-[#D84D52] disabled:text-[#A99D97]">{postReported ? '신고 완료' : '게시물 신고'}</button>}
             </motion.div>
           )}
         </AnimatePresence>

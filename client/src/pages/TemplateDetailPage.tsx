@@ -14,10 +14,12 @@ export default function TemplateDetailPage() {
   const search = useSearch();
   const [, navigate] = useLocation();
   const [infoOpen, setInfoOpen] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
   const {
     getCourseById,
-    deleteProfileTemplate,
     feedPosts,
+    deleteFeedPost,
+    refreshFeedPosts,
     savedCourseIds,
     saveCourse,
     unsaveCourse,
@@ -61,12 +63,26 @@ export default function TemplateDetailPage() {
     navigate(`/course/${course.id}/edit?from=profile`);
   };
 
-  const deleteTemplate = () => {
-    if (!course) return;
-    if (!window.confirm('이 템플릿을 삭제할까요? 원본 코스와 피드는 그대로 유지돼요.')) return;
-    deleteProfileTemplate(course.id);
-    toast.success('나의 템플릿에서 삭제했어요');
-    navigate('/profile', { replace: true });
+  const deleteTemplate = async () => {
+    if (!course || isDeleting) return;
+    if (!window.confirm('게시물과 원본 코스를 영구 삭제할까요? 되돌릴 수 없습니다.')) return;
+    setIsDeleting(true);
+    try {
+      const response = await fetch(`/api/feed-post?courseId=${encodeURIComponent(course.id)}`, {
+        method: 'DELETE', credentials: 'same-origin',
+      });
+      const payload = await response.json().catch(() => ({})) as { error?: string };
+      if (!response.ok) {
+        toast.error(payload.error || '게시물과 원본 코스를 삭제하지 못했어요.');
+        return;
+      }
+      if (linkedPost) deleteFeedPost(linkedPost.id);
+      await refreshFeedPosts();
+      toast.success('게시물과 원본 코스를 영구 삭제했어요.');
+      navigate('/profile', { replace: true });
+    } finally {
+      setIsDeleting(false);
+    }
   };
 
   const toggleSave = () => {
@@ -137,6 +153,7 @@ export default function TemplateDetailPage() {
               type="button"
               onClick={deleteTemplate}
               aria-label="템플릿 삭제"
+              disabled={isDeleting}
               className="flex h-9 w-9 items-center justify-center rounded-full bg-[#FFF0F0] text-[#D94447] shadow-sm"
             >
               <Trash2 size={16} />

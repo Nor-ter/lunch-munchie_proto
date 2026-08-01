@@ -1115,17 +1115,29 @@ app.delete("/api/feed-post", async (c) => {
   if (!session) return c.json({ error: "로그인이 필요합니다.", code: "AUTH_REQUIRED" }, 401);
   const courseId = new URL(c.req.url).searchParams.get("courseId");
   if (!courseId || courseId.length > 128) return c.json({ error: "게시물 정보가 필요합니다." }, 400);
-  // Check ownership before changing visibility.  Some D1 deployments do not
-  // consistently expose `meta.changes`, which previously made a successful
-  // soft-delete look like a permission failure in the app.
+  // A feed is its course's public representation. The product policy is now
+  // explicit: deleting a feed permanently deletes the author-owned course and
+  // every relational record that exists only because of that course. Ownership
+  // is checked before any mutation; clients can never delete another account's
+  // content by guessing a course ID.
   const course = await c.env.DB.prepare(
-    "SELECT id, is_public FROM courses WHERE id = ? AND author_id = ?"
-  ).bind(courseId, session.sub).first<{ id: string; is_public: number }>();
+    "SELECT id FROM courses WHERE id = ? AND author_id = ?"
+  ).bind(courseId, session.sub).first<{ id: string }>();
   if (!course) return c.json({ error: "이 게시물을 삭제할 권한이 없습니다." }, 403);
-  if (!Number(course.is_public)) return c.json({ ok: true, alreadyDeleted: true });
-  await c.env.DB.prepare("UPDATE courses SET is_public = 0 WHERE id = ? AND author_id = ?")
-    .bind(courseId, session.sub).run();
-  return c.json({ ok: true });
+  const { results: comments } = await c.env.DB.prepare("SELECT id FROM feed_comments WHERE course_id = ?").bind(courseId).all<{ id: string }>();
+  const statements = [
+    c.env.DB.prepare("DELETE FROM course_media WHERE course_id = ?").bind(courseId),
+    c.env.DB.prepare("DELETE FROM course_items WHERE course_id = ?").bind(courseId),
+    c.env.DB.prepare("DELETE FROM saved_courses WHERE course_id = ?").bind(courseId),
+    c.env.DB.prepare("DELETE FROM feed_likes WHERE course_id = ?").bind(courseId),
+    c.env.DB.prepare("DELETE FROM feed_comments WHERE course_id = ?").bind(courseId),
+    c.env.DB.prepare("DELETE FROM rec_events WHERE course_id = ?").bind(courseId),
+    c.env.DB.prepare("DELETE FROM content_reports WHERE target_id = ?").bind(courseId),
+    ...comments.map(comment => c.env.DB.prepare("DELETE FROM content_reports WHERE target_id = ?").bind(comment.id)),
+    c.env.DB.prepare("DELETE FROM courses WHERE id = ? AND author_id = ?").bind(courseId, session.sub),
+  ];
+  await c.env.DB.batch(statements);
+  return c.json({ ok: true, deletedCourseId: courseId });
 });
 
 app.post("/api/feed-comment", async (c) => {
