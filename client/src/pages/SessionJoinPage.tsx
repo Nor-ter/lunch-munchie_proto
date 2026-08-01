@@ -81,7 +81,7 @@ export default function SessionJoinPage() {
       toast.success(`"${session.name}" 세션에 참가했습니다! 🎉`);
       navigate('/session/lobby');
     } catch (e) {
-      toast.error('세션 참가에 실패했습니다.');
+      toast.error(e instanceof Error ? e.message : '세션 참가에 실패했습니다.');
     } finally {
       setIsJoining(false);
     }
