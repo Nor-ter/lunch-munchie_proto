@@ -1,0 +1,14 @@
+# Cloudflare Pages Functions local secrets.
+# Copy this file to .dev.vars. It is gitignored and must never be committed.
+
+# Google Cloud OAuth web-client credentials. Add the local callback below to the
+# OAuth client's authorised redirect URIs before testing sign-in.
+GOOGLE_CLIENT_ID=
+GOOGLE_CLIENT_SECRET=
+
+# Create a distinct random value for local development; do not reuse production.
+AUTH_SESSION_SECRET=
+
+# Development reads catalogue images from this public, read-only media service.
+# Do not seed or sync the full production R2 bucket into the local emulator.
+MEDIA_ORIGIN=https://lunchie-munchie.pages.dev

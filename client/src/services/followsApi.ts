@@ -9,9 +9,10 @@ export async function getCurrentUserId(): Promise<string> {
 }
 
 export async function getUser(userId: string): Promise<User | null> {
-  const { data, error } = await supabase.from('users').select('*').eq('id', userId).maybeSingle();
-  if (error) throw error;
-  return (data as User | null) ?? null;
+  const response = await fetch(`/api/users/${encodeURIComponent(userId)}`);
+  if (response.status === 404) return null;
+  if (!response.ok) throw new Error('프로필을 불러오지 못했습니다.');
+  return await response.json() as User;
 }
 
 export async function followUser(followingId: string): Promise<void> {

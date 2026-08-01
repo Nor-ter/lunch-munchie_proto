@@ -1,0 +1,11 @@
+name = "lunchie-munchie-state"
+main = "workers/state.ts"
+compatibility_date = "2026-07-31"
+
+[exports.UserDurableObject]
+type = "durable-object"
+storage = "sqlite"
+
+[exports.SessionDurableObject]
+type = "durable-object"
+storage = "sqlite"

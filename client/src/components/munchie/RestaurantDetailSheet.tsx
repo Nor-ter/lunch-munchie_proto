@@ -2,7 +2,6 @@ import { motion } from 'framer-motion';
 import { ChevronLeft, Star, MapPin, Clock } from 'lucide-react';
 import { useApp, type Restaurant } from '@/contexts/AppContext';
 import type { CoursePlace } from '@/types/course';
-import { getFoodPhotos } from '@/lib/foodPhotos';
 
 /**
  * 식당 상세 슬라이드 페이지 — 코스 에디터/코스 상세의 코스 순서에서
@@ -23,7 +22,7 @@ export default function RestaurantDetailSheet({
   const matchingRestaurant = linkedRestaurant && (
     !fallbackPlace || linkedRestaurant.name.trim().toLocaleLowerCase() === fallbackPlace.name.trim().toLocaleLowerCase()
   ) ? linkedRestaurant : undefined;
-  const fallbackPhoto = fallbackPlace?.imageUrl ?? getFoodPhotos(fallbackPlace?.category ?? 'Munchie')[0] ?? '';
+  const fallbackPhoto = fallbackPlace?.imageUrl ?? '';
   const restaurant: Restaurant | undefined = matchingRestaurant ?? (fallbackPlace ? {
     id: fallbackPlace.id,
     name: fallbackPlace.name,
@@ -47,7 +46,6 @@ export default function RestaurantDetailSheet({
   const menuPhotos = Array.from(new Set([
     ...(restaurant.menuItems ?? []).map(item => item.image).filter((image): image is string => !!image),
     ...(restaurant.photos ?? []),
-    ...getFoodPhotos(restaurant.category),
   ])).slice(0, 4);
 
   return (

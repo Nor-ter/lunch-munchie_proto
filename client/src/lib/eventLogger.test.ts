@@ -89,7 +89,7 @@ describe("eventLogger auth transport", () => {
         "Content-Type": "application/json",
         Authorization: `Bearer ${token}`,
       },
-      body: JSON.stringify({ events: [event] }),
+      body: expect.stringContaining('"idempotency_key"'),
       keepalive: true,
     });
     expect(sendBeacon).not.toHaveBeenCalled();
@@ -115,9 +115,9 @@ describe("eventLogger auth transport", () => {
 
     await vi.waitFor(() => expect(sendBeacon).toHaveBeenCalledTimes(1));
     expect(sendBeacon.mock.calls[0][0]).toBe("/api/events");
-    await expect(
-      (sendBeacon.mock.calls[0][1] as Blob).text(),
-    ).resolves.toBe(JSON.stringify({ events: [event] }));
+    const payload = JSON.parse(await (sendBeacon.mock.calls[0][1] as Blob).text());
+    expect(payload.events[0]).toMatchObject(event);
+    expect(payload.events[0].idempotency_key).toEqual(expect.any(String));
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
@@ -232,9 +232,13 @@ describe("eventLogger auth transport", () => {
 
     await vi.waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
     const request = fetchMock.mock.calls[0][1] as RequestInit;
-    expect(JSON.parse(String(request.body))).toEqual({
-      events: [firstEvent, secondEvent],
-    });
+    const payload = JSON.parse(String(request.body));
+    expect(payload.events).toHaveLength(2);
+    expect(payload.events[0]).toMatchObject(firstEvent);
+    expect(payload.events[1]).toMatchObject(secondEvent);
+    expect(payload.events.map((event: RecEventInput) => event.idempotency_key)).toEqual([
+      expect.any(String), expect.any(String),
+    ]);
   });
 
   it("does not expose an access token through console output on transport failure", async () => {

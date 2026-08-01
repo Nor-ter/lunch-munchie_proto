@@ -10,7 +10,6 @@ import { useLocation } from 'wouter';
 import { ArrowLeft, Heart, X, Star, MapPin, Clock, Phone, Navigation, Share2, Download, Link2, Home, Bookmark, RotateCcw } from 'lucide-react';
 import { toast } from 'sonner';
 import { useApp, type Restaurant, type MenuItem } from '@/contexts/AppContext';
-import { getFoodPhotos } from '@/lib/foodPhotos';
 import { useCourseShare } from '@/hooks/useCourseShare';
 import WinnerShareCard from '@/components/lunchie/WinnerShareCard';
 import FoodImage from '@/components/FoodImage';
@@ -60,9 +59,19 @@ function MenuCube({ photos, step }: { photos: string[]; step: number }) {
   const photoIndex = ((step % n) + n) % n;
   const front = ((step % 4) + 4) % 4;
 
-  const facesRef = useRef<number[]>([0, 0, 0, 0]);
-  facesRef.current[front] = photoIndex;
-  const faces = facesRef.current;
+  // 처음 열릴 때 모든 면을 첫 사진으로 채우면, 옆면이 보이는 순간 첫
+  // 메뉴 사진이 중복으로 튀어나온다. 각 면을 순서대로 준비해 둔 뒤,
+  // 회전 직전에 들어올 면만 다음 사진으로 교체한다.
+  const faceState = useRef<{ photoKey: string; faces: number[] } | null>(null);
+  const photoKey = photos.join("\u0000");
+  if (!faceState.current || faceState.current.photoKey !== photoKey) {
+    faceState.current = {
+      photoKey,
+      faces: Array.from({ length: 4 }, (_, face) => face % n),
+    };
+  }
+  faceState.current.faces[front] = photoIndex;
+  const faces = faceState.current.faces;
 
   return (
     <div ref={ref} className="absolute inset-0 pointer-events-none" style={{ perspective: 1000 }}>
@@ -170,7 +179,9 @@ function SwipeCard({
   const crackGray = useTransform(x, [-220, 0], [0.85, 0]);
   const crackDark = useTransform(x, [-220, 0], [0.55, 1]);
   const crackFilter = useMotionTemplate`grayscale(${crackGray}) brightness(${crackDark})`;
-  const foodPhotos = getFoodPhotos(restaurant.category);
+  // 그 식당의 실제 사진만 쓴다. 없으면 빈 배열 → FoodImage가 이모지 플레이스홀더를 보여준다.
+  // 카테고리 스톡 사진 폴백은 제거했다(버거집에 피자가 뜨는 등 실제와 다른 사진은 거짓 정보다).
+  const foodPhotos = restaurant.photos ?? [];
   const photoIndex = foodPhotos.length ? ((photoStep % foodPhotos.length) + foodPhotos.length) % foodPhotos.length : 0;
 
   const handleDragEnd = useCallback((_: unknown, info: { offset: { x: number } }) => {
@@ -437,10 +448,9 @@ function SwipeCard({
                     <div key={cat} className="mb-1">
                       <p className="text-[10px] font-bold text-white/40 uppercase tracking-wide pt-3 pb-1.5">{cat}</p>
                       {items.map((item, idx) => (
-                        <button
+                        <div
                           key={idx}
-                          onClick={(e) => { e.stopPropagation(); setDetailIndex(restaurant.menuItems.indexOf(item)); }}
-                          className="w-full flex items-center gap-3 py-2.5 border-b border-white/10 last:border-b-0 text-left active:bg-white/5"
+                          className="w-full flex items-center gap-3 py-2.5 border-b border-white/10 last:border-b-0 text-left"
                         >
                           {item.image ? (
                             <img src={item.image} alt="" className="w-11 h-11 rounded-lg object-cover flex-shrink-0 bg-white/10" />
@@ -465,7 +475,7 @@ function SwipeCard({
                           <span className="text-white/90 text-[13px] font-bold flex-shrink-0 tabular-nums">
                             {item.price != null ? `$${item.price}` : ''}
                           </span>
-                        </button>
+                        </div>
                       ))}
                     </div>
                   ))}
@@ -494,7 +504,7 @@ function SwipeCard({
                     aria-label="다음 메뉴"
                   />
                   <div className="absolute top-3 left-1/2 -translate-x-1/2 flex gap-1.5 pointer-events-none">
-                    {foodPhotos.map((_, j) => (
+                    {foodPhotos.map((_: string, j: number) => (
                       <div key={j} className="w-1.5 h-1.5 rounded-full"
                         style={{ background: j === photoIndex ? 'white' : 'rgba(255,255,255,0.4)' }} />
                     ))}
@@ -563,6 +573,7 @@ function WinnerScreen({ selectedWinner, onReset }: { selectedWinner?: Restaurant
   const [isCapturing, setIsCapturing] = useState(false);
   const [saved, setSaved] = useState(false);
   const [detailIndex, setDetailIndex] = useState<number | null>(null);
+  const winnerEventKeyRef = useRef<string | null>(null);
   const [liveResults, setLiveResults] = useState<{
     results: { restaurantId: string; score: number; likeCount: number; dislikeCount: number }[];
     winnerId?: string | null;
@@ -594,7 +605,22 @@ function WinnerScreen({ selectedWinner, onReset }: { selectedWinner?: Restaurant
 
   useEffect(() => {
     if (winner) {
-      logWinner(winner.id, { user_id: profile.id, session_id: currentSession?.id ?? null, slate_id: currentSession?.slateId ?? null, context: { intent: intentForCategory(winner.category) ?? undefined } });
+      const idempotencyKey = winnerEventKeyRef.current ?? `winner:${currentSession?.id ?? crypto.randomUUID()}:${winner.id}`;
+      winnerEventKeyRef.current = idempotencyKey;
+      // WINNER의 정본은 바로 아래 journey-winner API가 멱등 키와 함께 저장한다.
+      // eventLogger로도 보내면 같은 결정을 두 번 학습하게 된다.
+      const journeyStop = { restaurant_id: winner.id, name: winner.name, category: winner.category, intent: intentForCategory(winner.category) ?? null, at: Date.now(), satisfaction: null };
+      try {
+        const legacy = JSON.parse(localStorage.getItem('lm_today_journey') ?? '[]') as typeof journeyStop[];
+        const stored = JSON.parse(localStorage.getItem('lm_lunchie_journey') ?? JSON.stringify(legacy)) as typeof journeyStop[];
+        const thirtyDaysAgo = Date.now() - 30 * 24 * 60 * 60 * 1000;
+        // 같은 세션 결과 화면이 다시 렌더되어도 한 번만 남긴다. 다른 날의 같은
+        // 식당 선택은 실제 여정이므로 보존한다.
+        const current = stored.filter(item => item.at >= thirtyDaysAgo && !(item.restaurant_id === winner.id && Math.abs(item.at - journeyStop.at) < 60_000));
+        localStorage.setItem('lm_lunchie_journey', JSON.stringify([...current, journeyStop]));
+        localStorage.setItem('lm_today_journey', JSON.stringify([...current, journeyStop].filter(item => new Date(item.at).toDateString() === new Date().toDateString())));
+      } catch { /* 여정 저장 실패가 결과 화면을 막으면 안 된다. */ }
+      void fetch('/api/journey-winner', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ restaurantId: winner.id, sessionId: currentSession?.id, intent: journeyStop.intent, idempotencyKey }) });
       // 회고 대기: 다음 홈 진입 시 "어땠어요?" 설문 → 만족 정답(SURVEY) 수집
       try { localStorage.setItem('lunchie_retro', JSON.stringify({ id: winner.id, name: winner.name, session: currentSession?.id ?? null, at: Date.now() })); } catch { /* noop */ }
     }
@@ -602,7 +628,8 @@ function WinnerScreen({ selectedWinner, onReset }: { selectedWinner?: Restaurant
 
   if (!winner) return null;
 
-  const foodPhotos = getFoodPhotos(winner.category).slice(0, 4);
+  // 실제 사진만. 없으면 이모지 플레이스홀더.
+  const foodPhotos = (winner.photos ?? []).slice(0, 4);
 
   const handleCopyAddress = async () => {
     await navigator.clipboard.writeText(winner.address);
@@ -656,7 +683,7 @@ function WinnerScreen({ selectedWinner, onReset }: { selectedWinner?: Restaurant
     >
       {/* Hero */}
       <div className="relative w-full" style={{ aspectRatio: '4/3' }}>
-        <FoodImage src={winner.image || getFoodPhotos(winner.category)[0]} name={winner.name} category={winner.category} className="w-full h-full object-cover" emojiClass="text-[80px]" />
+        <FoodImage src={winner.image || winner.photos?.[0]} name={winner.name} category={winner.category} className="w-full h-full object-cover" emojiClass="text-[80px]" />
         <div className="absolute inset-0 bg-gradient-to-t from-black/75 via-black/15 to-transparent" />
         <div className="absolute inset-x-0 bottom-0 px-5 pb-5 text-center">
           <div className="text-[40px] leading-none mb-1">🏆</div>
@@ -712,10 +739,9 @@ function WinnerScreen({ selectedWinner, onReset }: { selectedWinner?: Restaurant
                   <div key={cat}>
                     <p className="text-[10px] font-bold text-[#B0B0B0] uppercase tracking-wide px-3 pt-3 pb-1 bg-[#FAFAFA]">{cat}</p>
                     {items.map((item, i) => (
-                      <button
+                      <div
                         key={i}
-                        onClick={() => setDetailIndex(winner.menuItems!.indexOf(item))}
-                        className="w-full flex items-center gap-3 px-3 py-2.5 border-b border-[#F0F0F0] last:border-b-0 text-left active:bg-[#FAFAFA]"
+                        className="w-full flex items-center gap-3 px-3 py-2.5 border-b border-[#F0F0F0] last:border-b-0 text-left"
                       >
                         {item.image ? (
                           <img src={item.image} alt="" className="w-10 h-10 rounded-lg object-cover flex-shrink-0 bg-[#F5F5F5]" />
@@ -738,7 +764,7 @@ function WinnerScreen({ selectedWinner, onReset }: { selectedWinner?: Restaurant
                         <span className="text-[12.5px] font-bold text-[#4A4A4A] flex-shrink-0 tabular-nums">
                           {item.price != null ? `$${item.price}` : ''}
                         </span>
-                      </button>
+                      </div>
                     ))}
                   </div>
                 ))}
@@ -917,7 +943,7 @@ function FinalBattleResultScreen({
         </div>
         <div className="flex-1 flex items-center justify-center px-5">
           <div className="w-full max-w-[360px] rounded-3xl overflow-hidden relative" style={{ aspectRatio: '4/5' }}>
-            <FoodImage src={finalist1.image || getFoodPhotos(finalist1.category)[0]} name={finalist1.name} category={finalist1.category} className="w-full h-full object-cover" emojiClass="text-[88px]" />
+            <FoodImage src={finalist1.image || finalist1.photos?.[0]} name={finalist1.name} category={finalist1.category} className="w-full h-full object-cover" emojiClass="text-[88px]" />
             <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/10 to-transparent" />
             <div className="absolute bottom-5 left-5 right-5">
               <span className="inline-block bg-[#FFD700] text-[#1A1A1A] text-[11px] font-black px-3 py-1 rounded-full mb-2">🏆 유일한 후보</span>
@@ -987,7 +1013,7 @@ function FinalBattleResultScreen({
               ? { duration: 2.6, repeat: Infinity, ease: 'easeInOut' }
               : { duration: 0.4 }}
           >
-            <FoodImage src={finalist1.image || getFoodPhotos(finalist1.category)[0]} name={finalist1.name} category={finalist1.category} className="w-full h-full object-cover" emojiClass="text-[72px]" />
+            <FoodImage src={finalist1.image || finalist1.photos?.[0]} name={finalist1.name} category={finalist1.category} className="w-full h-full object-cover" emojiClass="text-[72px]" />
           </motion.div>
           <div className="absolute inset-0 bg-gradient-to-br from-black/30 via-black/45 to-black/70" />
           {selected !== null && (
@@ -1055,7 +1081,7 @@ function FinalBattleResultScreen({
               ? { duration: 2.6, repeat: Infinity, ease: 'easeInOut', delay: 0.3 }
               : { duration: 0.4 }}
           >
-            <FoodImage src={finalist2.image || getFoodPhotos(finalist2.category)[0]} name={finalist2.name} category={finalist2.category} className="w-full h-full object-cover" emojiClass="text-[72px]" />
+            <FoodImage src={finalist2.image || finalist2.photos?.[0]} name={finalist2.name} category={finalist2.category} className="w-full h-full object-cover" emojiClass="text-[72px]" />
           </motion.div>
           <div className="absolute inset-0 bg-gradient-to-br from-black/70 via-black/45 to-black/30" />
           {selected === 2 && (
@@ -1173,7 +1199,7 @@ function WaitingOrDecidedScreen({ onContinue, onReroll }: { onContinue: (winner?
     rejectVotes?: number;
     excludeIds?: string[];
   }>({
-    completedCount: 1,
+    completedCount: 0,
     totalMembers: currentSession?.members.length || 1,
     memberCompletion: [],
     results: [],
@@ -1189,14 +1215,15 @@ function WaitingOrDecidedScreen({ onContinue, onReroll }: { onContinue: (winner?
 
   // 결승 한 표(round=2G). restaurantId가 REJECT면 "둘 다 별로". 멤버당 1표로 서버가 중복 제거.
   const castVote = async (restaurantId: string) => {
-    setVoted(true);
     const round = 2 * (liveResults.generation ?? 1);
     const isReject = restaurantId === REJECT;
     try {
-      await fetch('/api/swipes', {
+      const response = await fetch('/api/swipes', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ id: `vote_${profile.id}_${restaurantId}_${Date.now()}`, session_id: currentSession?.id, user_id: profile.id, restaurant_id: restaurantId, round, swipe_action: 'LIKE' }),
       });
+      if (!response.ok) throw new Error('final_vote_failed');
+      setVoted(true);
       // 신호: finalist 선택 = CHOOSE(pairwise), '둘 다 별로' = NOPE(명시 음성)
       logEvent({ event_type: 'SWIPE', action: isReject ? 'NOPE' : 'CHOOSE', slate_type: 'FINAL', restaurant_id: restaurantId, round, user_id: profile.id, session_id: currentSession?.id ?? null });
     } catch { /* 표 전송 실패는 폴링으로 복구 */ }
@@ -1235,6 +1262,13 @@ function WaitingOrDecidedScreen({ onContinue, onReroll }: { onContinue: (winner?
     const interval = setInterval(fetchLiveResults, 3000);
     return () => clearInterval(interval);
   }, [currentSession]);
+
+  // If this device refreshes after casting, derive the local view from the
+  // server response instead of showing the final ballot again.
+  useEffect(() => {
+    if (liveResults.phase !== 'FINAL') return;
+    setVoted(liveResults.memberCompletion.some(member => member.id === profile.id && member.completed));
+  }, [liveResults.phase, liveResults.memberCompletion, profile.id]);
 
   // 합의 실패(NO_CONSENSUS) 1회 로깅 (음성 신호 G)
   const noConsensusLoggedRef = useRef(false);
@@ -1460,10 +1494,11 @@ function WaitingOrDecidedScreen({ onContinue, onReroll }: { onContinue: (winner?
             const gen = liveResults.generation ?? 1;
             const round = phase === 'FINAL' ? 2 * gen : 2 * gen - 1;
             try {
-              await fetch(`/api/sessions/${currentSession.inviteCode}/force`, {
+              const response = await fetch(`/api/sessions/${currentSession.inviteCode}/force`, {
                 method: 'POST', headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ userId: profile.id, round }),
               });
+              if (!response.ok) throw new Error('force_failed');
             } catch { /* 폴링으로 복구 */ }
           }}
           className="mb-3 w-full max-w-[340px] py-3 rounded-2xl font-bold text-white text-[14px] bg-white/15 border border-white/25 active:scale-[0.98] transition-all mx-auto block">
@@ -1546,6 +1581,32 @@ export default function QuickMatchPage() {
   const total = Math.min(targetRestaurants.length, 7); // 예선 = 엔진 top-7 (결정 플로우 ①)
   const visibleCards = targetRestaurants.slice(currentIndex, currentIndex + 3);
   const progress = Math.min(currentIndex + 1, total);
+  const progressSignalRef = useRef(new Set<string>());
+
+  // The server cannot infer a client-specific deck after recommendation
+  // filtering. Announce the exact target once per generation so each member's
+  // completion count stays correct on every device.
+  useEffect(() => {
+    if (!currentSession || total <= 0) return;
+    const generation = currentSession.generation ?? 1;
+    const round = generation * 2 - 1;
+    const key = `${currentSession.id}:${profile.id}:${round}:deck`;
+    if (progressSignalRef.current.has(key)) return;
+    progressSignalRef.current.add(key);
+    void fetch('/api/swipes', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        id: `deck_${currentSession.id}_${profile.id}_${round}`,
+        session_id: currentSession.id,
+        user_id: profile.id,
+        restaurant_id: `__deck_size__:${total}`,
+        round,
+        swipe_action: 'SYSTEM',
+      }),
+    }).then(response => {
+      if (!response.ok) progressSignalRef.current.delete(key);
+    }).catch(() => progressSignalRef.current.delete(key));
+  }, [currentSession?.id, currentSession?.generation, profile.id, total]);
 
   // Auto-transition to decided phase if all cards have been swiped — 예선(swipe) 중에만.
   // 결정/결과 단계에선 절대 되돌리지 않는다 (안 그러면 듀얼→결과가 'decided'로 튕겨 무한루프).
@@ -1557,6 +1618,30 @@ export default function QuickMatchPage() {
       setPhase('decided');
     }
   }, [phase, currentIndex, targetRestaurants, swipeRecords, total, currentSession?.id]);
+
+  // Marking completion is idempotent and is deliberately separate from the
+  // final swipe: a network retry cannot leave someone permanently "투표 중".
+  useEffect(() => {
+    if (phase !== 'decided' || !currentSession) return;
+    const generation = currentSession.generation ?? 1;
+    const round = generation * 2 - 1;
+    const key = `${currentSession.id}:${profile.id}:${round}:done`;
+    if (progressSignalRef.current.has(key)) return;
+    progressSignalRef.current.add(key);
+    void fetch('/api/swipes', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        id: `done_${currentSession.id}_${profile.id}_${round}`,
+        session_id: currentSession.id,
+        user_id: profile.id,
+        restaurant_id: '__prelim_done__',
+        round,
+        swipe_action: 'SYSTEM',
+      }),
+    }).then(response => {
+      if (!response.ok) progressSignalRef.current.delete(key);
+    }).catch(() => progressSignalRef.current.delete(key));
+  }, [phase, currentSession?.id, currentSession?.generation, profile.id]);
 
   useEffect(() => {
     if (showIntro) {

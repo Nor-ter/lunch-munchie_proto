@@ -1,7 +1,7 @@
 /**
  * Lunchie Munchie App — Design: Soft Coral (Option 8)
  */
-import { useEffect } from "react";
+import { useEffect, type ReactNode } from "react";
 import { Toaster } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import NotFound from "@/pages/NotFound";
@@ -63,7 +63,15 @@ function IntegratedCourseEditorRedirect() {
   return null;
 }
 
-function AppShell() {
+function RequireGoogleAuth({ userId, children }: { userId: string | null; children: ReactNode }) {
+  const [location] = useLocation();
+  useEffect(() => {
+    if (!userId) window.location.assign(`/api/auth/google/start?next=${encodeURIComponent(location)}`);
+  }, [location, userId]);
+  return userId ? <>{children}</> : null;
+}
+
+function AppShell({ userId }: { userId: string | null }) {
   const [location] = useLocation();
   const showTabBar = !NO_TABBAR.some(p => location.startsWith(p));
   return (
@@ -86,7 +94,7 @@ function AppShell() {
             <Route path="/template/:templateId" component={TemplateDetailPage} />
             <Route path="/courses/:id/navigate" component={CourseNavigatePage} />
             <Route path="/courses/:id" component={CoursesRedirect} />
-            <Route path="/coursemap/new" component={CoursemapCreatePage} />
+            <Route path="/coursemap/new">{() => <RequireGoogleAuth userId={userId}><CoursemapCreatePage /></RequireGoogleAuth>}</Route>
             <Route path="/course/:id/edit" component={IntegratedCourseEditorRedirect} />
             <Route path="/course/:id/share" component={StorySharePage} />
             <Route path="/course/:id/feeds" component={CourseFeedsPage} />
@@ -161,7 +169,7 @@ export default function App() {
                   <MapProvider>
                     <TooltipProvider>
                       <Toaster />
-                      <AppShell />
+                      <AppShell userId={userId} />
                     </TooltipProvider>
                   </MapProvider>
                 </AppProvider>

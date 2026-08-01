@@ -1,0 +1,4 @@
+{
+  "baseUrl": "https://your-lunchie-munchie.pages.dev",
+  "storageStatePath": ".e2e/lunchie-auth.json"
+}

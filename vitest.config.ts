@@ -11,7 +11,10 @@ export default defineConfig({
   },
   test: {
     globals: true,
+    setupFiles: ["./test/setup.ts"],
     include: ["**/*.test.ts", "**/*.test.tsx", "**/*.spec.ts", "**/*.spec.tsx"],
-    exclude: ["e2e/**", "mobile/**", "**/node_modules/**", "dist/**"],
+    // Playwright live tests intentionally share the `*.spec.ts` suffix but
+    // must only run through `playwright.live.config.ts`, never Vitest.
+    exclude: ["e2e/**", "e2e-harness/**", "mobile/**", "**/node_modules/**", "dist/**"],
   },
 });

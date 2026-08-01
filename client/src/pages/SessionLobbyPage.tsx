@@ -89,6 +89,7 @@ export default function SessionLobbyPage() {
   }
 
   const inviteUrl = `${window.location.origin}/join/${currentSession.inviteCode}`;
+  const isSoloSession = currentSession.filters.partySize <= 1;
 
   const copyInviteLink = async (): Promise<boolean> => {
     try {
@@ -176,6 +177,13 @@ export default function SessionLobbyPage() {
       <main className="flex-1">
         <section aria-labelledby="lobby-invite-title">
           <AppCard className="mb-4 p-4">
+            {isSoloSession ? (
+              <div className="py-2">
+                <span id="lobby-invite-title" className="text-[14px] font-bold text-[var(--lm-text)]">혼자 하는 Lunchie예요</span>
+                <p className="mt-1 text-[12px] leading-relaxed text-[var(--lm-sub)]">1명 정원으로 만든 세션은 초대할 수 없어요. 친구와 함께하려면 설정에서 ‘같이’를 선택해 새 세션을 만들어 주세요.</p>
+                <button type="button" onClick={() => navigate('/lunchie/settings')} className="mt-3 min-h-10 rounded-xl bg-[#FCB3A8] px-4 text-[12px] font-bold text-[var(--lm-text)]">같이 하는 세션 만들기</button>
+              </div>
+            ) : <>
             <button
               type="button"
               onClick={() => setShowQR(open => !open)}
@@ -235,6 +243,7 @@ export default function SessionLobbyPage() {
                 </motion.div>
               )}
             </AnimatePresence>
+            </>}
           </AppCard>
         </section>
 
