@@ -38,7 +38,10 @@ export default function TemplateArtwork({
   // absent, not as an intentional blank canvas: the regular template slots
   // must still render the hero/restaurant photo for every viewer.
   const decor = decorOverride?.length ? decorOverride : getCoursemapDecor(course.id);
-  const slots = template.slots.slice(0, Math.min(Math.max(places.length, photos.length, 1), 3));
+  // Feed photos and course stops have different meanings. A legacy post can
+  // have one course cover image but several stops; never repeat that cover
+  // image once per stop.
+  const slots = template.slots.slice(0, Math.min(Math.max(photos.length, 1), 3));
 
   // 슬롯 중심을 잇는 점선 루트 (viewBox 300×400 = 3:4)
   const routePoints = slots

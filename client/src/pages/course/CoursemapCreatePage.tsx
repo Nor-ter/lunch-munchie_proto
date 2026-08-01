@@ -1036,6 +1036,10 @@ function CoursemapCreateContent() {
 
   const publish = async () => {
     if (isPublishing) return;
+    if (placed.length === 0) {
+      toast.error('포스팅하려면 사진을 1장 이상 올려주세요.');
+      return;
+    }
     const linked = filledPins.map(pin => pin.restaurant);
     const tagPool = Array.from(new Set(linked.flatMap(restaurant => restaurant.tags)));
     const title = `${linked[0]!.name}${linked.length > 1 ? ` 외 ${linked.length - 1}곳` : ''} 코스`;

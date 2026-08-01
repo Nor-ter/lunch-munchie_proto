@@ -501,12 +501,19 @@ app.post("/api/courses", async (c) => {
       .flatMap((restaurant) => json<string[]>(restaurant.photos, []))
       .find((photo) => typeof photo === "string" && photo.startsWith("/photos/")) ?? "";
     const heroImage = requestedHero ?? fallbackHero;
-    const feedPhotos = strings(body.feedPhotos, MAX_MUNCHIE_FEED_PHOTOS).filter((photo) => photo.startsWith("/photos/"));
+    // URL은 태그와 달리 잘라내면 안 된다. 과거 generic `strings()`를 써서
+    // 40자로 절단된 R2 경로가 다른 사람의 카드에서 깨졌었다.
+    const feedPhotos = Array.isArray(body.feedPhotos)
+      ? Array.from(new Set(body.feedPhotos.filter((photo): photo is string => typeof photo === "string" && photo.startsWith("/photos/") && photo.length <= 512))).slice(0, MAX_MUNCHIE_FEED_PHOTOS)
+      : [];
     const feedDecor = Array.isArray(body.feedDecor) ? body.feedDecor.slice(0, MAX_MUNCHIE_FEED_PHOTOS).flatMap((raw: any, index) => {
       if (!raw || typeof raw !== "object" || typeof raw.src !== "string" || !raw.src.startsWith("/photos/")) return [];
       const number = (value: unknown, fallback: number, min: number, max: number) => typeof value === "number" && Number.isFinite(value) ? Math.max(min, Math.min(max, value)) : fallback;
       return [{ id: typeof raw.id === "string" ? raw.id.slice(0, 120) : `photo_${index}`, src: raw.src, x: number(raw.x, 50, 0, 100), y: number(raw.y, 50, 0, 100), w: number(raw.w, 40, 5, 100), h: number(raw.h, number(raw.w, 40, 5, 100), 5, 100), rotate: number(raw.rotate, 0, -180, 180) }];
     }) : [];
+    if (!feedPhotos.length || !feedDecor.length) {
+      return c.json({ error: "포스팅하려면 배치한 사진을 1장 이상 저장해야 합니다." }, 400);
+    }
     const templateId = typeof body.templateId === "string" ? body.templateId.slice(0, 80) : null;
     const id = crypto.randomUUID();
     const createdAt = Date.now();

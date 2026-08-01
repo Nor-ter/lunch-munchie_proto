@@ -215,6 +215,8 @@ export interface FeedPost {
   authorEmoji: string;
   courseId: string;
   photos: string[];
+  /** Legacy posts without a user upload fall back to their course restaurant cover. */
+  usesCourseFallbackPhoto?: boolean;
   /** 서버에 보존한 템플릿·사진 배치. 다른 기기/다른 사용자도 같은 카드로 렌더링한다. */
   templateId?: string;
   decor?: import('@/lib/coursemapDecor').PlacedPhoto[];
@@ -765,6 +767,7 @@ export function AppProvider({
             authorEmoji: feed.creatorId === 'user_minji' ? '🐰' : feed.creatorId === 'user_jenny' ? '🍓' : feed.creatorId === 'user_minsu' ? '🐻' : '🐳',
             courseId: feed.courseId,
             photos: ((Array.isArray(feed.photos) && feed.photos.length ? feed.photos : feed.heroImage ? [feed.heroImage] : []) as unknown[]).filter((photo: unknown): photo is string => typeof photo === 'string').map((photo: string) => photo.startsWith('http') || photo.startsWith('/') ? photo : `/photos/${photo}`),
+            usesCourseFallbackPhoto: (!Array.isArray(feed.photos) || feed.photos.length === 0) && typeof feed.heroImage === 'string' && Boolean(feed.heroImage),
             templateId: typeof feed.templateId === 'string' ? feed.templateId : undefined,
             decor: Array.isArray(feed.decor) ? feed.decor : undefined,
             caption: feed.description,
