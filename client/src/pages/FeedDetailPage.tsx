@@ -8,7 +8,7 @@ export default function FeedDetailPage() {
   const { id } = useParams<{ id: string }>();
   const search = useSearch();
   const [, navigate] = useLocation();
-  const { feedPosts, isMyPost, deleteFeedPost } = useApp();
+  const { feedPosts, isMyPost, deleteFeedPost, isLoading } = useApp();
   const post = feedPosts.find(item => item.id === id);
   const origin = new URLSearchParams(search).get('from');
   const fromProfile = origin === 'profile';
@@ -25,6 +25,10 @@ export default function FeedDetailPage() {
     toast.success('게시물을 피드에서 내렸어요.');
     navigate(backPath, { replace: true });
   };
+
+  if (!post && isLoading) {
+    return <main className="flex min-h-dvh items-center justify-center bg-[#FCF4EE] text-sm font-bold text-[#9A8579]">피드를 불러오는 중이에요…</main>;
+  }
 
   if (!post) {
     return (

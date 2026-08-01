@@ -21,6 +21,7 @@ export default function TemplateDetailPage() {
     savedCourseIds,
     saveCourse,
     unsaveCourse,
+    isLoading,
   } = useApp();
   const searchParams = new URLSearchParams(search);
   const courseId = searchParams.get('course') ?? undefined;
@@ -73,6 +74,10 @@ export default function TemplateDetailPage() {
     isSaved ? unsaveCourse(course.id) : saveCourse(course.id);
     toast.success(isSaved ? '저장을 해제했어요' : '코스를 저장했어요');
   };
+
+  if ((!template || !course) && isLoading) {
+    return <main className="flex min-h-dvh items-center justify-center bg-[#FCF4EE] text-sm font-bold text-[#9A8579]">게시물 원본을 불러오는 중이에요…</main>;
+  }
 
   if (!template || !course) {
     return (
