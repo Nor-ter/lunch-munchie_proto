@@ -4,6 +4,7 @@ import { useApp } from '@/contexts/AppContext';
 import { toast } from 'sonner';
 import { Loader2, ArrowLeft, Shield, LogIn } from 'lucide-react';
 import { motion } from 'framer-motion';
+import { useAuthStatus } from '@/hooks/useAuthStatus';
 
 const EMOJIS = ['😊', '🍱', '🍜', '🍣', '🥩', '🍕', '🌮', '🍔', '🥗', '☕', '🎂', '🍰', '🦊', '🐱', '🐼', '🐨'];
 const DIETARY_OPTIONS = ['비건', '채식', '글루텐프리', '할랄', '유제품 제외', '견과류 알러지', '해산물 제외'];
@@ -12,16 +13,28 @@ export default function SessionJoinPage() {
   const [, navigate] = useLocation();
   const { token } = useParams<{ token: string }>();
   const { joinSession, fetchSession, profile, updateProfile } = useApp();
+  const auth = useAuthStatus();
   
   const [sessionName, setSessionName] = useState<string>('');
   const [loadingSession, setLoadingSession] = useState(true);
   const [isJoining, setIsJoining] = useState(false);
   
   // Profile settings state
-  const [name, setName] = useState(profile.name === '사용자' ? '' : profile.name);
+  // An invitation must never inherit the prototype's old "지민" identity.
+  // Anonymous guests choose their own session-only name; signed-in members use
+  // their account name as a convenient, editable starting point.
+  const [name, setName] = useState('');
   const [selectedEmoji, setSelectedEmoji] = useState(profile.emoji || '🙂');
   const [dietary, setDietary] = useState<string[]>(profile.dietary || []);
-  const [isLoggedIn, setIsLoggedIn] = useState(!!profile.isLoggedIn);
+  const isLoggedIn = Boolean(auth.data && !auth.data.isAnonymous);
+
+  useEffect(() => {
+    if (!isLoggedIn || name) return;
+    const accountName = profile.name !== '지민' && profile.name !== '사용자'
+      ? profile.name
+      : auth.data?.name;
+    if (accountName) setName(accountName);
+  }, [auth.data?.name, isLoggedIn, name, profile.name]);
 
   useEffect(() => {
     if (!token) {
@@ -43,15 +56,12 @@ export default function SessionJoinPage() {
   }, [token, fetchSession, navigate]);
 
   const handleLogin = () => {
-    setIsLoggedIn(true);
-    updateProfile({ isLoggedIn: true });
-    toast.success('로그인에 성공했습니다! 🔑');
+    window.location.assign(`/api/auth/google/start?next=${encodeURIComponent(`/join/${token ?? ''}`)}`);
   };
 
-  const handleLogout = () => {
-    setIsLoggedIn(false);
-    updateProfile({ isLoggedIn: false });
-    toast.success('로그아웃되었습니다.');
+  const handleLogout = async () => {
+    await fetch('/api/auth/logout', { method: 'POST', credentials: 'same-origin' });
+    window.location.reload();
   };
 
   const toggleDietary = (item: string) => {
@@ -73,7 +83,7 @@ export default function SessionJoinPage() {
         name: name.trim(), 
         emoji: selectedEmoji, 
         dietary: dietary,
-        isLoggedIn: isLoggedIn
+        isLoggedIn,
       });
       
       // 2. Join the session via API
@@ -81,7 +91,7 @@ export default function SessionJoinPage() {
       toast.success(`"${session.name}" 세션에 참가했습니다! 🎉`);
       navigate('/session/lobby');
     } catch (e) {
-      toast.error('세션 참가에 실패했습니다.');
+      toast.error(e instanceof Error ? e.message : '세션 참가에 실패했습니다.');
     } finally {
       setIsJoining(false);
     }

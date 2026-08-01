@@ -1,11 +1,20 @@
 node_modules/
 dist/
 .pnpm-store/
+# Source photos are an operational R2-import cache, not application source.
+# Keep the canonical media in R2 and the URL manifest in drive_ingest.json.
+server/data/photos/
+.wrangler/
+outputs/
+backups/
 .codex-vite.*.log
 .DS_Store
 .env
 .env.*
 !/.env.example
+.dev.vars
+.dev.vars.*
+!/.dev.vars.example
 *.local
 .project-config.json
 .manus-logs/
@@ -13,15 +22,27 @@ dist/
 .artifacts/
 test-results/
 playwright-report/
+.e2e/
+config/e2e.config.local.json
 
 # Superpowers brainstorm mockups
 .superpowers/
+docs/superpowers/
+
+# Local planning drafts. Canonical operational docs live in docs/testing and
+# docs/google-oauth-direct-setup.md.
+cloudeflare_implementation_plan.md
+docs/engine/master_architectural_plan.md
 
 # Local AI assistant settings
 .claude/settings.local.json
 
 # Local prototype workspace (separate Git repository)
 Prototype/
+
+# Exported design drafts, not application assets (the app has no references).
+client/public/Logo 003.png
+client/public/Logo 004.png
 
 # 암호화된 자격증명 — 저장소에 넣지 않음
 supabase/functions/.env.local

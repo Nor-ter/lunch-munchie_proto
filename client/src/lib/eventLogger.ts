@@ -119,7 +119,12 @@ export function flushEvents(): void {
 }
 
 export function logEvent(event: RecEventInput): void {
-  queue.push(event);
+  // 같은 객체가 pagehide와 timer flush에 함께 걸려도 서버가 한 번만 기록하게 한다.
+  // user_id는 서버 세션에서 다시 결정하므로 이 키는 개인 식별 정보를 담지 않는다.
+  queue.push({
+    ...event,
+    idempotency_key: event.idempotency_key ?? crypto.randomUUID(),
+  });
   if (queue.length >= FLUSH_SIZE) {
     flushEvents();
     return;
@@ -147,3 +152,48 @@ export const logWinner = (restaurant_id: string, extra: Partial<RecEventInput> =
 
 export const logNavigate = (restaurant_id: string, extra: Partial<RecEventInput> = {}) =>
   logEvent({ event_type: "NAVIGATE", restaurant_id, ...extra });
+
+/** 가입에서 사용자가 명시적으로 선택한 제약만 기록한다. 선택하지 않은 값은 추론하지 않는다. */
+export const logOnboardingCompleted = (diet: string[]) =>
+  logEvent({
+    event_type: "ONBOARDING_COMPLETED",
+    context: { diet, onboarding_version: "v1", location_permission: "deferred" },
+  });
+
+/** Lunchie 세션 조건은 이번 결정의 맥락이며, 개인 장기 취향 벡터에는 직접 학습하지 않는다. */
+export const logSessionCreated = (session_id: string, context: Record<string, unknown>) =>
+  logEvent({ event_type: "SESSION_CREATED", session_id, context });
+
+// Munchie 피드 및 코스 연동 헬퍼
+export const logFeedLike = (course_id: string, isLiked: boolean, extra: Partial<RecEventInput> = {}) =>
+  logEvent({
+    event_type: isLiked ? "FEED_LIKE" : "FEED_DISLIKE",
+    course_id,
+    slate_type: "COURSE_FEED",
+    ...extra,
+  });
+
+export const logCourseSave = (course_id: string, extra: Partial<RecEventInput> = {}) =>
+  logEvent({
+    event_type: "COURSE_SAVE",
+    course_id,
+    slate_type: "COURSE_FEED",
+    ...extra,
+  });
+
+export const logCourseOpen = (course_id: string, extra: Partial<RecEventInput> = {}) =>
+  logEvent({
+    event_type: "COURSE_OPEN",
+    course_id,
+    slate_type: "COURSE_FEED",
+    ...extra,
+  });
+
+export const logCourseFeedImpression = (course_id: string, dwell_ms?: number, extra: Partial<RecEventInput> = {}) =>
+  logEvent({
+    event_type: "IMPRESSION",
+    course_id,
+    slate_type: "COURSE_FEED",
+    dwell_ms,
+    ...extra,
+  });

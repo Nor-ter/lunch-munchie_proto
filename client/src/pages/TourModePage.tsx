@@ -10,7 +10,7 @@ import { useLocation } from 'wouter';
 import { ArrowLeft, MapPin, Clock, Users, DollarSign, ChevronRight, Share2, Navigation } from 'lucide-react';
 import { MapContainer, TileLayer, Marker, Popup, Polyline } from 'react-leaflet';
 import L from 'leaflet';
-import { useApp, MOCK_RESTAURANTS } from '@/contexts/AppContext';
+import { useApp } from '@/contexts/AppContext';
 import { toast } from 'sonner';
 
 delete (L.Icon.Default.prototype as unknown as Record<string, unknown>)._getIconUrl;
@@ -93,7 +93,8 @@ function ConditionsSetup({ tourType, onConfirm }: {
   const [partySize, setPartySize] = useState(2);
   const [transport, setTransport] = useState('도보');
 
-  const nearbyPlaces = MOCK_RESTAURANTS.slice(0, 3);
+  const { restaurants } = useApp();
+  const nearbyPlaces = restaurants.slice(0, 3);
 
   return (
     <div className="space-y-4">

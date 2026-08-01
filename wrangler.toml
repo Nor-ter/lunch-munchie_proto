@@ -1,0 +1,23 @@
+name = "lunchie-munchie"
+pages_build_output_dir = "./dist/public"
+compatibility_date = "2026-07-31"
+compatibility_flags = ["nodejs_compat"]
+
+[vars]
+ENVIRONMENT = "production"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "lunchie-db"
+database_id = "7d0e2717-d86d-42f8-9104-e02f33797695"
+migrations_dir = "migrations"
+
+[[r2_buckets]]
+binding = "PHOTOS_R2"
+bucket_name = "lunchie-photos"
+
+[durable_objects]
+bindings = [
+  { name = "USER_DO", class_name = "UserDurableObject", script_name = "lunchie-munchie-state" },
+  { name = "SESSION_DO", class_name = "SessionDurableObject", script_name = "lunchie-munchie-state" }
+]

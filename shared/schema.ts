@@ -1,4 +1,12 @@
-import { pgTable, text, integer, doublePrecision, boolean, timestamp, jsonb } from "drizzle-orm/pg-core";
+import {
+  pgTable,
+  text,
+  integer,
+  doublePrecision,
+  boolean,
+  timestamp,
+  jsonb,
+} from "drizzle-orm/pg-core";
 import { createSelectSchema, createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 
@@ -25,7 +33,26 @@ export const restaurants = pgTable("restaurants", {
   tags: jsonb("tags").$type<string[]>(),
   dietary_options: jsonb("dietary_options").$type<string[]>(),
   photos: jsonb("photos").$type<string[]>(),
-  menu_items: jsonb("menu_items").$type<{name: string, price: number | null, image?: string, dietary?: string[], category?: string, description?: string}[]>(), // price: 가격 미표기 메뉴는 null · category: 소스 메뉴판의 섹션 헤더 그대로(예: "Mains") · description: 재료/상세 설명. 있을 때만(extractMenu)
+
+  // 1. 분위기 및 공간 태그 (기본적인 필터링 용도)
+  vibe_tags: jsonb("vibe_tags").$type<string[]>(),
+
+  // 2. 비정형 시각적 메타데이터 (LLM 활용을 위한 자유 양식 텍스트)
+  visual_description: text("visual_description"),
+
+  // 3. menu_items 타입 구체화
+  menu_items: jsonb("menu_items").$type<
+    {
+      name: string;
+      price: number | null;
+      image?: string;
+      dietary?: string[];
+      category?: string;
+      description?: string;
+      is_signature?: boolean;
+    }[]
+  >(),
+
   phone_number: text("phone_number"),
   business_hours: text("business_hours"),
   website: text("website"), // 공식 웹사이트 (메뉴 스크랩 소스)
@@ -41,6 +68,20 @@ export const userFollows = pgTable("user_follows", {
   id: text("id").primaryKey(),
   follower_id: text("follower_id").notNull(),
   following_id: text("following_id").notNull(),
+  created_at: timestamp("created_at").notNull(),
+});
+
+export const savedCourses = pgTable("saved_courses", {
+  id: text("id").primaryKey(),
+  user_id: text("user_id").notNull(),
+  course_id: text("course_id").notNull(),
+  created_at: timestamp("created_at").notNull(),
+});
+
+export const feedLikes = pgTable("feed_likes", {
+  id: text("id").primaryKey(),
+  user_id: text("user_id").notNull(),
+  course_id: text("course_id").notNull(),
   created_at: timestamp("created_at").notNull(),
 });
 
@@ -60,8 +101,25 @@ export const courses = pgTable("courses", {
   saves_count: integer("saves_count").notNull().default(0),
   route_polyline: text("route_polyline"),
   share_image_url: text("share_image_url"),
+  feed_photos: jsonb("feed_photos").$type<string[]>().notNull().default([]),
+  feed_decor: jsonb("feed_decor").$type<unknown[]>().notNull().default([]),
+  template_id: text("template_id"),
   comments_count: integer("comments_count").notNull().default(0),
   is_public: boolean("is_public").notNull().default(true),
+  created_at: timestamp("created_at").notNull(),
+});
+
+/** Canonical media contract shared by feed, post detail, and template detail. */
+export const courseMedia = pgTable("course_media", {
+  id: text("id").primaryKey(),
+  course_id: text("course_id").notNull(),
+  r2_path: text("r2_path").notNull(),
+  placement_index: integer("placement_index").notNull(),
+  x: doublePrecision("x").notNull(),
+  y: doublePrecision("y").notNull(),
+  width: doublePrecision("width").notNull(),
+  height: doublePrecision("height").notNull(),
+  rotation: doublePrecision("rotation").notNull(),
   created_at: timestamp("created_at").notNull(),
 });
 
@@ -118,10 +176,11 @@ export const sessionMembers = pgTable("session_members", {
 // 런치 엔진 v0 — 추천 이벤트 로그 (로깅 + propensity, off-policy 평가 기반)
 export const recEvents = pgTable("rec_events", {
   id: text("id").primaryKey(),
-  event_type: text("event_type").notNull(), // IMPRESSION | SWIPE | WINNER | NAVIGATE | VISIT | REORDER | COURSE_SAVE | COURSE_EDIT | REROLL
-  slate_id: text("slate_id"),               // 같은 추천 호출/대결을 묶음 (off-policy·pairwise 기준)
-  slate_type: text("slate_type"),           // PRELIM | FINAL | NEXT_STOP | COURSE_FEED
+  event_type: text("event_type").notNull(), // IMPRESSION | SWIPE | WINNER | NAVIGATE | VISIT | REORDER | COURSE_SAVE | COURSE_EDIT | REROLL | FEED_LIKE | FEED_DISLIKE | COURSE_OPEN
+  slate_id: text("slate_id"), // 같은 추천 호출/대결을 묶음 (off-policy·pairwise 기준)
+  slate_type: text("slate_type"), // PRELIM | FINAL | NEXT_STOP | COURSE_FEED
   user_id: text("user_id"),
+  course_id: text("course_id"), // Munchie 피드 코스 ID
   session_id: text("session_id"),
   group_id: text("group_id"),
   restaurant_id: text("restaurant_id"),
@@ -135,6 +194,75 @@ export const recEvents = pgTable("rec_events", {
   dwell_ms: integer("dwell_ms"),
   context: jsonb("context").$type<Record<string, unknown>>(),
   created_at: timestamp("created_at").notNull(),
+});
+
+// ── 사진 인제스천 + 피처 스토어 (콜드스타트 해소) ──────────────────────────
+// 마이그레이션: supabase/migrations/20260629000000_photo_ingest_and_features.sql
+// 설계: docs/superpowers/specs/2026-06-29-drive-photo-ingestion.md
+// 사진 바이너리는 저장하지 않고 Drive file_id/URL만. 메뉴판 사진은 여기 넣지 않는다(정보만 추출).
+
+export const restaurantPhotos = pgTable("restaurant_photos", {
+  id: text("id").primaryKey(),
+  restaurant_id: text("restaurant_id").notNull(),
+  drive_file_id: text("drive_file_id"),
+  url: text("url"),
+  kind: text("kind").notNull(), // storefront | interior | dish | table | other  (menu 제외)
+  dishes: jsonb("dishes").$type<string[]>(),
+  vibe_tags: jsonb("vibe_tags").$type<string[]>(),
+  quality: doublePrecision("quality"),
+  contributor: text("contributor"),
+  source: text("source").notNull().default("drive"),
+  created_at: timestamp("created_at").notNull(),
+});
+
+export const restaurantMenuItems = pgTable("restaurant_menu_items", {
+  id: text("id").primaryKey(),
+  restaurant_id: text("restaurant_id").notNull(),
+  name: text("name").notNull(),
+  normalized_name: text("normalized_name").notNull(), // 중복 판정 키
+  price: doublePrecision("price"), // 미표기면 null
+  currency: text("currency").notNull().default("AUD"),
+  category: text("category"), // 메뉴판 섹션 헤더
+  description: text("description"),
+  dietary: jsonb("dietary").$type<string[]>(),
+  source: text("source").notNull(), // website | drive_photo | manual
+  confidence: doublePrecision("confidence"),
+  is_signature: boolean("is_signature").notNull().default(false),
+  extracted_at: timestamp("extracted_at").notNull(),
+});
+
+// ★ 콜드스타트 해소 지점 — features.ts buildItemVector 가 우선 조회, 없으면 카테고리 룰 폴백
+export const restaurantFeatures = pgTable("restaurant_features", {
+  restaurant_id: text("restaurant_id").primaryKey(),
+  taste: jsonb("taste").$type<{
+    spicy: number;
+    salty: number;
+    sweet: number;
+    oily: number;
+    light: number;
+  }>(),
+  price_stats: jsonb("price_stats").$type<{
+    min: number;
+    max: number;
+    median: number;
+    n: number;
+  }>(),
+  signature_dishes: jsonb("signature_dishes").$type<string[]>(),
+  vibe_tags: jsonb("vibe_tags").$type<string[]>(),
+  photo_kinds: jsonb("photo_kinds").$type<Record<string, number>>(),
+  evidence: jsonb("evidence").$type<{ photos: number; menu_items: number }>(),
+  feature_version: text("feature_version").notNull().default("v1-photo"),
+  updated_at: timestamp("updated_at").notNull(),
+});
+
+// 멱등성 레저 — 이미 판독한 파일 재처리(=토큰 재과금) 방지
+export const ingestLedger = pgTable("ingest_ledger", {
+  file_hash: text("file_hash").primaryKey(),
+  drive_file_id: text("drive_file_id"),
+  restaurant_folder: text("restaurant_folder").notNull(),
+  kind: text("kind"),
+  status: text("status").notNull(), // classified | menu_extracted | skipped | failed
+  processed_at: timestamp("processed_at").notNull(),
 });
 
 // Zod schemas generated from Drizzle

@@ -10,67 +10,11 @@
 
 ## 현재 상태
 
-- 기준 브랜치: `tl_branch`
-- 동기화 브랜치: `tl_branch`, `merge4_v1_testing`
-- 최신 기능 기준: Munchie 피드·코스맵 편집, Lunchmate 런치박스·레벨 시스템, 프로필 동기화 및 스크롤 안정화 (`2026-07-24`)
-- 개발 단계: 웹 중심 통합 프로토타입
-- 검증 상태: TypeScript 검사, 테스트 파일 34개·테스트 368개, 프로덕션 빌드 통과
-- 데이터 모드: PostgreSQL 연결 또는 mock/in-memory 폴백
-- 주요 미완료 사항: 실제 운영 DB·인증·배포 환경 검증, UI 전체 E2E 테스트, 번들 최적화
-
-## 2026-07-24 버그 픽스 및 기능 업데이트
-
-### Munchie 피드 작성·수정
-
-- 신규 피드 작성기의 전체 꾸미기 기능을 기존 Munchie 피드 수정 화면에도 동일하게 적용
-- 수정 시작 시 게시되어 있던 템플릿, 사진, 위치·크기·회전·확대 상태, 드로잉, 한줄평을 그대로 복원
-- 수정 화면에서 템플릿 변경, 사진 추가·삭제·드래그, 휠·핀치 확대, 회전, 가로·세로 크기 변경 지원
-- 사진 에디터의 크롭, 필터, 펜, 하이라이터, 텍스트, 지우개, 초기화 기능 지원
-- 수정 완료 시 사진 결과와 배치 정보, 템플릿 ID, 캔버스 드로잉, 한줄평을 함께 영속화
-- 내가 작성한 게시물에서는 `작성자 보기`와 `게시물 신고`를 숨기고 `게시물 수정`·`게시물 삭제` 제공
-- 게시물 삭제 전 확인 모달을 표시하고 확인 시 연결된 코스맵과 Munchie 피드를 함께 삭제
-- 내 게시물의 프로필은 나의 프로필로, 다른 작성자의 프로필은 외부 사용자 프로필 로딩 화면으로 이동
-
-### 코스맵 편집·피드 동기화
-
-- 코스 순서 변경 결과가 지도 경로와 Munchie 피드에 즉시 반영되도록 동기화
-- 편집 중 번호표를 선택해 장소를 다시 검색하고 지도 위치까지 교체 가능
-- 장소 추가·삭제 및 최대 3개 스팟 편집 지원
-- 장소 변경 말풍선의 잘림과 점선 간격을 보정하고 신규 작성 화면과 동일한 번호표 하이라이트 적용
-- 삭제 버튼은 편집 모드에서만 코랄색으로 표시하며 취소·확인·닫기 동작을 갖춘 삭제 확인 모달 제공
-- 코스맵과 Munchie 피드의 좋아요·공유 횟수를 같은 게시물 상태로 연동
-- 좋아요 아이콘을 하트 대신 앱의 좋아요 아이콘으로 통일
-- 스팟 수 표기를 `3개 스팟` 텍스트 대신 지도 핀 아이콘과 숫자로 통일
-- 코스맵 작성자 레벨 라벨 표시와 팔로우 기능 활성화
-
-### 런치박스·보상·드래그 피딩
-
-- Munchie 피드 게시 보상을 주먹밥 단일 보상에서 여러 음식 중 랜덤 보상으로 확장
-- 보상 획득 즉시 프로필의 `나의 런치박스` 보유 수량과 동기화
-- 일본식 검정·빨강 벤토 박스 UI에 음식을 반찬칸 형태로 배치
-- 음식 카드와 음식 자체를 선택·드래그해 Lunchmate에게 줄 수 있도록 개선
-- 드롭 성공 시 해당 음식의 보유 수량을 정확히 1개 차감
-- 벤토 내부의 마우스 휠 및 터치 세로 스크롤 지원
-
-### 프로필·Lunchmate 레벨
-
-- 프로필 이름, 자기소개, 아바타 및 기존 피드 작성자 정보를 함께 동기화
-- 배지 대신 계정명 옆에 클릭 가능한 레벨 라벨을 표시하고 전체 레벨 단계와 아이콘 안내 제공
-- 기존 가로 EXP 바 대신 프로필 왼쪽에 한국식 김밥 아이콘이 쌓이는 세로 EXP 스택 적용
-- EXP 100% 도달 시 반짝임·진동 레벨업 모션을 재생하고 다음 레벨은 빈 스택부터 다시 진행
-- 레벨 진행도를 Lv.1·0 EXP부터 다시 시작할 수 있는 초기화 기능 제공
-- 프로필 우측 상단을 `런치메이트룸` 텍스트 대신 옷걸이 아이콘으로 변경
-- 룸 화면 제목과 접근성 라벨을 `런치메이트 룸`으로 통일
-- `나의 피드` 제목을 `나의 먼치피드`로 변경
-
-### 홈·공통 UI·안정성
-
-- 홈의 Quick Match 버튼을 10px 위로 조정
-- 홈 Lunchie 캐릭터가 프로필 코스튬을 공유하고 눈 깜빡임 모션을 재생하도록 동기화
-- 템플릿 상세의 작성자 한줄평 영역을 확대하고 소요 시간·핀 수·좋아요·공유 통계 표시
-- 전역 문서 스크롤 잠금 상태를 HMR에서도 공유하도록 변경하고 남은 `overflow: hidden`·`inert` 상태 자동 정리
-- `html`과 `body`에 세로 스크롤 및 터치 `pan-y` 동작을 명시해 화면 잠김 재발 방지
-- Quick Match, Munchie Feed, 프로필, 벤토 바텀시트 등 주요 변경사항에 회귀 테스트 추가
+- 운영 URL: <https://lunchie-munchie.pages.dev>
+- 기준 배포 브랜치: `main` (병합 시 Cloudflare 자동 배포)
+- 개발 브랜치: 기능별 브랜치 → Pull Request → `main` 병합
+- 런타임: Cloudflare Pages Functions + D1 + R2 + Durable Objects
+- 로컬 품질 게이트: TypeScript, Vitest, 로컬 Playwright E2E, Pages 프로덕션 빌드
 
 ## 제품 구성
 
@@ -249,55 +193,108 @@ Lunchie Munchie는 두 가지 핵심 경험을 하나의 앱으로 제공합니�
 
 ### 요구사항
 
-- Node.js 22 권장
-- Corepack
-- pnpm 10.4.1 (`package.json`의 `packageManager` 기준)
+- Node.js **22 이상** (Cloudflare CI도 Node 22 사용)
+- Corepack 및 pnpm (`package.json`의 `packageManager` 기준)
+- 로컬 Pages/Functions 개발 시 Cloudflare Wrangler 로그인: `npx wrangler login`
 
-### 설치 및 실행
+### 처음 한 번: 로컬 개발 환경
 
 ```bash
+git clone <repository-url>
+cd lunch-munchie_proto
 corepack enable
 pnpm install
-pnpm dev
+node scripts/installGitHooks.mjs # 기존 worktree라면 한 번 실행
+cp .dev.vars.example .dev.vars
 ```
 
-기본 개발 명령은 Vite 클라이언트와 Express 서버를 동시에 실행합니다.
-
-```bash
-pnpm dev:client   # 클라이언트만 실행
-pnpm dev:server   # API 서버만 실행
-pnpm seed         # DB 시드
-pnpm preview      # 프로덕션 빌드 미리보기
-```
-
-### 환경 변수
-
-루트에 `.env`를 만들고 필요한 값을 설정합니다.
+`.dev.vars`에는 로컬 Functions만 읽는 비밀값을 둡니다. 절대 커밋하지 않습니다.
 
 ```dotenv
-DATABASE_URL=postgresql://USER:PASSWORD@HOST:PORT/DATABASE
-VITE_FRONTEND_FORGE_API_KEY=
+GOOGLE_CLIENT_ID="...apps.googleusercontent.com"
+GOOGLE_CLIENT_SECRET="..."
+AUTH_SESSION_SECRET="긴-무작위-문자열"
+# 로컬은 운영 R2 원본을 복제하지 않고, 공개 사진 URL만 읽는다.
+MEDIA_ORIGIN="https://lunchie-munchie.pages.dev"
 ```
 
-- `DATABASE_URL`: PostgreSQL/Drizzle 연결에 필요
-- `VITE_FRONTEND_FORGE_API_KEY`: Google Maps 프록시 연동을 사용할 때 선택적으로 설정
-- 실제 키와 `.env` 파일은 Git에 커밋하지 않습니다.
+Google Cloud OAuth 클라이언트의 **Authorized redirect URIs**에는 다음 둘 다 등록합니다.
 
-## 검증
+```text
+http://localhost:8788/api/auth/google/callback
+https://lunchie-munchie.pages.dev/api/auth/google/callback
+```
+
+로컬 개발은 Pages Functions까지 함께 띄우는 명령을 사용합니다. 단순 `pnpm dev`는 Vite/기존 Express 개발용이며 Cloudflare D1·R2·Google OAuth Functions를 검증하지 않습니다.
 
 ```bash
-pnpm check     # TypeScript 타입 검사
-pnpm test      # Vitest 테스트
-pnpm build     # 클라이언트 + 서버 프로덕션 빌드
+pnpm dev:pages
+# http://localhost:8788
 ```
 
-2026-07-22 현재 검증 결과:
+로컬 D1을 새로 만들거나 마이그레이션해야 할 때만 실행합니다.
 
-- TypeScript 검사 통과
-- 테스트 파일 21개 통과
-- 테스트 249개 통과
-- Vite 클라이언트 및 Express 서버 빌드 성공
-- 클라이언트 메인 JS 번들 약 2.18 MB로 코드 분할 최적화 필요
+```bash
+pnpm cf:d1:migrate:local
+pnpm cf:d1:seed:local
+```
+
+### 테스트와 커밋
+
+```bash
+npm run test:precommit  # 타입 → 357개 Vitest → 로컬 Playwright E2E → Pages 빌드
+git checkout -b feature/short-description
+git add <files>
+git commit -m "feat: short description"
+git push -u origin feature/short-description
+```
+
+`.githooks/pre-commit`이 위 품질 게이트를 **모든 일반 커밋 전에 자동 실행**합니다. 실패하면 커밋되지 않습니다. 라이브 E2E는 운영 인증이 필요하므로 커밋 훅에서는 실행하지 않고 릴리스 전 별도 실행합니다.
+
+```bash
+pnpm test:e2e:live
+```
+
+테스트 범위와 새 기능에 반드시 추가해야 할 케이스는 [커밋 품질 게이트 문서](./docs/testing/precommit-testing.md)를 따릅니다. 긴급 상황의 `--no-verify`는 예외이며, 병합/배포 전에 반드시 정상 게이트를 통과해야 합니다.
+
+## Cloudflare CI/CD
+
+### 배포 흐름
+
+```text
+feature branch → Pull Request → Quality gate 통과 → main 병합
+  → D1 migration → Durable Object Worker → Pages production deploy
+```
+
+- [`.github/workflows/quality.yml`](./.github/workflows/quality.yml): 모든 PR·브랜치 푸시에서 품질 게이트를 실행합니다.
+- [`.github/workflows/deploy-cloudflare.yml`](./.github/workflows/deploy-cloudflare.yml): `main`에 병합될 때만 운영 배포합니다. 스키마를 먼저 적용하고 Worker, Pages 순서로 배포합니다.
+- 운영 공개 URL은 계속 공개이며, 미리보기/관리 화면만 Cloudflare Access 정책으로 보호합니다.
+
+### GitHub Actions Secrets
+
+저장소 **Settings → Secrets and variables → Actions**에 다음 Repository secrets를 추가합니다. 토큰 값과 `.dev.vars`는 절대 코드·로그·PR에 넣지 않습니다.
+
+| Secret | 용도 | 최소 Cloudflare 권한 |
+| --- | --- | --- |
+| `CLOUDFLARE_ACCOUNT_ID` | Cloudflare 계정 식별자 | 비밀값 아님이나 Actions secret으로 보관 |
+| `CLOUDFLARE_WORKER_DEPLOY_TOKEN` | Durable Object Worker와 Pages 배포 | Account: Workers Scripts Edit, Durable Objects Edit, Pages Edit |
+| `CLOUDFLARE_D1_MIGRATIONS_TOKEN` | 운영 D1 마이그레이션만 | Account: D1 Edit (`lunchie-db` 범위) |
+
+토큰은 Cloudflare Dashboard → **Manage account → Account API tokens**에서 만들고, 가능한 한 Lunchie Munchie 리소스로 범위를 제한합니다. 배포 토큰에 R2 읽기/쓰기, 사용자 관리, Zone/DNS, Billing 권한을 넣지 않습니다. 사진 업로드가 CI에서 필요해질 때만 R2 Object Read & Write 권한을 별도 토큰으로 추가합니다.
+
+Cloudflare Pages Secrets(`GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `AUTH_SESSION_SECRET`)는 GitHub Actions secret으로 복제하지 않습니다. 한 번만 Cloudflare에 저장합니다.
+
+```bash
+npm run cf:auth:secrets
+```
+
+운영에서 수동 복구가 필요할 때만 다음을 사용합니다. 일반 배포는 GitHub Actions를 사용합니다.
+
+```bash
+pnpm cf:d1:migrate
+pnpm cf:state:deploy
+pnpm cf:pages:deploy
+```
 
 ## 프로젝트 구조
 
@@ -313,88 +310,9 @@ mobile/                 Expo 모바일 프로토타입
 docs/                   제품·엔진·프로세스 문서와 산출물
 ```
 
-## Checkpoint #4 - 테스팅 버전 업데이트 내역
+## 업데이트 내역
 
-> **Checkpoint #4는 프리 릴리즈 전 최종 merge point입니다.**
-> 테스팅 브랜치에서 발견·수정한 기능 변경은 이 영역에만 기록하고, 아래의 `병합 완료 업데이트 내역`과 분리해서 관리합니다.
-
-### 관리 기준
-
-- 최종 반영 대상 브랜치: `merge4_v1_testing`
-- 테스터는 자신의 테스팅 브랜치에서 변경한 기능과 검증 결과를 이 섹션에만 추가합니다.
-- 기존 테스터 기록은 수정하거나 덮어쓰지 않고, `테스팅 브랜치 변경 기록`의 가장 위에 새 항목을 추가합니다.
-- 메인 개발자는 각 기록의 브랜치와 변경사항을 확인한 뒤 `merge4_v1_testing`에 병합하거나 필요한 커밋만 선별 반영합니다.
-- `merge4_v1_testing` 반영이 끝난 항목은 상태를 `병합 완료`로 변경하고, 정식 통합 내용은 아래 `병합 완료 업데이트 내역`에 별도로 정리합니다.
-- 기능 변경 없이 문서만 수정한 경우에도 변경 목적과 검증 여부를 기록합니다.
-
-### 테스팅 브랜치 변경 기록
-
-#### 코스맵 템플릿·포토 에디터 테스트 업데이트
-
-| 항목 | 내용 |
-|---|---|
-| 업데이트한 branch명 | `tl_branch` |
-| 날짜 | `2026-07-23` |
-| 테스터 이름 | John Lee |
-| 최종 반영 대상 | `merge4_v1_testing` |
-| 병합 상태 | 병합 대기 |
-
-- 템플릿 선택과 꾸미기 화면을 통합하고, 편집 화면에서 템플릿을 즉시 비교·교체하도록 개선
-- 사진의 선택 순서와 최상단 배치 순서를 연결하고 드래그·휠·핀치 확대/축소를 지원
-- 템플릿 위에서 펜·하이라이터·지우개·되돌리기를 사용할 수 있도록 편집 도구 추가
-- 사진 에디터에 포인터, 그리기, 하이라이터, 텍스트, 선택 지우개와 전체 Reset 기능 추가
-- 크롭 가이드의 이동·가장자리 크기 조절과 템플릿 가로·세로 비율 자동 반영 지원
-- 사진 이동·확대 시 검은 여백이 노출되지 않도록 사진 경계와 그리기 영역 제한
-- 템플릿 팔레트를 한 줄 가로 스크롤과 무한 반복 구조로 변경하고 신규 템플릿 자동 확장 지원
-- 팔레트 스크롤에는 진동·스냅 모션을 적용하지 않고, 템플릿 캔버스 직접 스와이프에만 짧은 방향성 피드백 적용
-- 펜·하이라이터 아이콘에 선택한 색을 표시하고 흰색·노란색 선택 시 검은 아이콘으로 대비 개선
-- 사진이 6장일 때 사진 추가 버튼을 숨기고, 중복 사진 선택 시 `사진이 이미 목록에 있습니다, 목록에서 추가해주세요` 안내 표시
-- 사진 추가·삭제 시 편집 도구를 포인터 상태로 자동 전환하고, 템플릿 팔레트의 열림·닫힘 동작을 토글 방식으로 정리
-- 대용량 업로드·편집 사진으로 브라우저 저장 용량을 초과해도 포스팅 완료 흐름이 중단되지 않도록 코스 저장 예외 처리
-- 게시 후에는 Reset 전용 원본 이미지의 중복 저장을 제거해 코스맵 편집 데이터의 저장 용량 절감
-- 미리보기 전용이던 사진 위치·가로/세로 크기·회전·확대와 펜/하이라이터 꾸미기를 게시물 데이터에 함께 저장
-- 홈페이지·Munchie Feed·저장 목록·마이프로필·템플릿 상세가 동일한 공통 렌더러와 게시물 꾸미기 데이터를 사용하도록 통합
-- 공통 렌더러의 사진 프레임 높이 누락을 수정해 세로로 변경한 사진 형태가 미리보기와 게시 후에도 동일하게 표시
-- 게시물에는 이미지 원본을 중복하지 않는 가벼운 배치 좌표만 저장해 브라우저 저장 용량 초과로 꾸미기가 누락되는 문제 방지
-- 선택한 코스맵 템플릿을 게시물에 직접 기록하고, 피드 수정 화면에서도 같은 템플릿과 배치를 유지
-- 장소·사진 누락과 게시 처리 실패에 대한 안내를 추가하고 `미리보기 → 포스팅 → 완료 → 공유하기` 실제 화면 흐름 검증
-- TypeScript 검사, Vitest 테스트 파일 25개·테스트 339개, Vite·Express 프로덕션 빌드 통과
-- 게시물 배치 데이터 직렬화·복원 회귀 테스트 2개 추가, TypeScript 검사와 프로덕션 빌드 재통과
-
-### 테스터 기록 추가 양식
-
-다른 테스터는 아래 양식을 복사해 `테스팅 브랜치 변경 기록` 바로 아래에 최신순으로 추가합니다.
-
-```markdown
-#### 업데이트 제목
-
-| 항목 | 내용 |
-|---|---|
-| 업데이트한 branch명 | `테스팅 브랜치명` |
-| 날짜 | `YYYY-MM-DD` |
-| 테스터 이름 | 이름 |
-| 최종 반영 대상 | `merge4_v1_testing` |
-| 병합 상태 | 병합 대기 / 검토 중 / 병합 완료 |
-
-- 변경한 기능
-- 수정한 버그
-- 확인이 필요한 사항 또는 알려진 문제
-- 실행한 검증과 결과
-```
-
-## 병합 완료 업데이트 내역
-
-### 2026-07-23 — merge4_v1 통합 및 Lunchmate 경험 개선
-
-- `merge4_v1`의 통합 결과를 `tl_branch`에 반영하고 두 브랜치의 기능 기준을 일치
-- Munchie Feed 사진 선택 과정에 크롭 에디터를 추가하고 이미지 처리 유틸리티와 관련 테스트를 보강
-- Lunchmate 닭 캐릭터의 대기·이동·식사·감정 상태 이미지를 추가하고 상황별 렌더링을 개선
-- 프로필과 Foodie Room에 캐릭터 동작 훅을 적용해 이동·상호작용·레벨 진행 모션을 확장
-- 모자·안경·의상·가방의 포즈별 에셋 매니페스트를 추가하고 꾸미기 및 렌더링 흐름을 정돈
-- Lunchbox, 캐릭터 렌더러, 프로필·룸 모션, 이미지 처리 로직의 자동 테스트를 추가·확장
-- Vitest 테스트 파일 25개·테스트 339개 통과
-
-### sj_update — 2026-07-22 모바일 UI·Lunchie 세션·Munchie 코스맵 정돈
+### 2026-07-22 — 모바일 UI·Lunchie 세션·Munchie 코스맵 정돈
 
 - 모든 공통 하단 내비게이션의 표시 높이를 Safe Area 포함 `88px`로 통일하고, 본문·고정 액션·플로팅 버튼의 하단 여백을 공통 토큰으로 연결
 - 홈·Munchie Feed·저장목록·프로필 하단 바의 상단 모서리와 돌출 효과를 제거해 화면 전체 폭에 맞닿는 플랫한 형태로 통일

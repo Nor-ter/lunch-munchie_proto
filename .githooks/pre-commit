@@ -1,0 +1,7 @@
+#!/usr/bin/env sh
+# Keep commits reproducible. Do not run live/production E2E here: it requires
+# credentials and a deployed target, and belongs in the release gate.
+set -eu
+
+echo "[pre-commit] Running Lunchie Munchie quality gate…"
+npm run test:precommit
