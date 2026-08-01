@@ -1,14 +1,32 @@
 import { Hono } from "hono";
 import { handle } from "hono/cloudflare-pages";
+import { decideGroup } from "../../server/engine/group";
+import { isHardRestriction, normalizeDiet, type DietTag } from "../../shared/const";
 
 export interface EnvBindings {
   DB: any;
   PHOTOS_R2: any;
+  /** Optional development-only public media origin. Never set in production. */
+  MEDIA_ORIGIN?: string;
   USER_DO: any;
   SESSION_DO: any;
   GOOGLE_CLIENT_ID: string;
   GOOGLE_CLIENT_SECRET: string;
   AUTH_SESSION_SECRET: string;
+}
+
+async function fetchConfiguredMedia(origin: string | undefined, key: string) {
+  if (!origin) return null;
+  let base: URL;
+  try {
+    base = new URL(origin);
+  } catch {
+    return null;
+  }
+  if (base.protocol !== "https:") return null;
+  const encodedPath = key.split("/").map(encodeURIComponent).join("/");
+  const response = await fetch(new URL(`/photos/${encodedPath}`, base));
+  return response.ok ? response : null;
 }
 
 const app = new Hono<{ Bindings: EnvBindings }>();
@@ -37,12 +55,34 @@ async function readSession(request: Request, secret: string): Promise<GoogleSess
 }
 // OAuth subject는 권한 확인용 내부 키일 뿐 화면에 보여주지 않는다. 최초 로그인 때만
 // 공개 사용자 행을 만들며, 이후 사용자가 앱에서 바꾼 이름은 덮어쓰지 않는다.
-async function ensurePublicUser(db: any, session: GoogleSession) {
-  await db.prepare(
-    "INSERT INTO users (id, username, profile_image_url, created_at) VALUES (?, ?, ?, ?) ON CONFLICT(id) DO NOTHING"
-  ).bind(session.sub, session.name?.trim().slice(0, 80) || "Lunchie 사용자", session.picture?.slice(0, 2_000) || null, Date.now()).run();
+async function userColumnNames(db: any) {
+  const { results } = await db.prepare("PRAGMA table_info(users)").all<{ name: string }>();
+  return new Set(results.map((column) => column.name));
 }
-const cookie = (name: string, value: string, maxAge?: number) => `${name}=${value}; Path=/; HttpOnly; Secure; SameSite=Lax${maxAge !== undefined ? `; Max-Age=${maxAge}` : ""}`;
+async function ensurePublicUser(db: any, session: GoogleSession) {
+  const columns = await userColumnNames(db);
+  if (columns.has("username") && columns.has("profile_image_url")) {
+    await db.prepare(
+      "INSERT INTO users (id, username, profile_image_url, created_at) VALUES (?, ?, ?, ?) ON CONFLICT(id) DO NOTHING"
+    ).bind(session.sub, session.name?.trim().slice(0, 80) || "Lunchie 사용자", session.picture?.slice(0, 2_000) || null, Date.now()).run();
+    return true;
+  }
+  // A developer can still authenticate against a pre-D1 local database. The
+  // canonical public-profile fields are unavailable until that local database
+  // is reset/migrated, but login itself must not end in a 500.
+  if (columns.has("email")) {
+    await db.prepare("INSERT INTO users (id, email) VALUES (?, ?) ON CONFLICT(id) DO NOTHING")
+      .bind(session.sub, session.email ?? null).run();
+  } else {
+    await db.prepare("INSERT INTO users (id) VALUES (?) ON CONFLICT(id) DO NOTHING").bind(session.sub).run();
+  }
+  return false;
+}
+// `Secure` is required on the public HTTPS service, but browsers (notably
+// Safari) do not reliably retain Secure cookies on plain http://localhost.
+// Keep local OAuth functional without weakening deployed sessions.
+const requestIsSecure = (request: Request) => new URL(request.url).protocol === "https:";
+const cookie = (name: string, value: string, maxAge?: number, secure = true) => `${name}=${value}; Path=/; HttpOnly;${secure ? " Secure;" : ""} SameSite=Lax${maxAge !== undefined ? `; Max-Age=${maxAge}` : ""}`;
 const cookieValue = (request: Request, name: string) => request.headers.get("cookie")?.match(new RegExp(`(?:^|; )${name}=([^;]+)`))?.[1] ?? null;
 
 app.get("/api/auth/google/start", (c) => {
@@ -51,7 +91,7 @@ app.get("/api/auth/google/start", (c) => {
   const callback = new URL("/api/auth/google/callback", c.req.url).toString();
   const google = new URL("https://accounts.google.com/o/oauth2/v2/auth");
   google.search = new URLSearchParams({ client_id: c.env.GOOGLE_CLIENT_ID, redirect_uri: callback, response_type: "code", scope: "openid email profile", state: `${state}.${toBase64Url(next)}`, prompt: "select_account" }).toString();
-  c.header("Set-Cookie", cookie("lm_oauth_state", state, 600));
+  c.header("Set-Cookie", cookie("lm_oauth_state", state, 600, requestIsSecure(c.req.raw)));
   return c.redirect(google.toString());
 });
 
@@ -73,17 +113,17 @@ app.get("/api/auth/google/callback", async (c) => {
   if (guestId) await c.env.DB.prepare("UPDATE rec_events SET user_id = ? WHERE user_id = ?").bind(profile.sub, `guest:${guestId}`).run();
   await ensurePublicUser(c.env.DB, { ...profile, exp: Date.now() + 7 * 24 * 60 * 60 * 1000 });
   const payload = toBase64Url(encoder.encode(JSON.stringify({ ...profile, exp: Date.now() + 7 * 24 * 60 * 60 * 1000 })));
-  c.header("Set-Cookie", cookie("lm_session", `${payload}.${await sign(payload, c.env.AUTH_SESSION_SECRET)}`, 7 * 24 * 60 * 60));
+  c.header("Set-Cookie", cookie("lm_session", `${payload}.${await sign(payload, c.env.AUTH_SESSION_SECRET)}`, 7 * 24 * 60 * 60, requestIsSecure(c.req.raw)));
   return c.redirect(next);
 });
 
 app.get("/api/auth/session", async (c) => {
   const session = await readSession(c.req.raw, c.env.AUTH_SESSION_SECRET);
-  if (session) await ensurePublicUser(c.env.DB, session);
+  const hasPublicProfile = session ? await ensurePublicUser(c.env.DB, session) : false;
   // The session identifies the Google account, while the D1 profile owns
   // user-editable display data such as a custom avatar.  Returning both keeps
   // a refresh from replacing a user-selected photo with Google's old picture.
-  const profile = session
+  const profile = session && hasPublicProfile
     ? await c.env.DB.prepare(
       "SELECT id, username, profile_image_url, bio, location FROM users WHERE id = ?"
     ).bind(session.sub).first<any>()
@@ -91,13 +131,18 @@ app.get("/api/auth/session", async (c) => {
   return c.json({ user: session, profile });
 });
 app.post("/api/auth/logout", (c) => {
-  c.header("Set-Cookie", cookie("lm_session", "", 0));
-  c.res.headers.append("Set-Cookie", cookie("lm_guest_id", "", 0));
+  c.header("Set-Cookie", cookie("lm_session", "", 0, requestIsSecure(c.req.raw)));
+  c.res.headers.append("Set-Cookie", cookie("lm_guest_id", "", 0, requestIsSecure(c.req.raw)));
   return c.json({ ok: true });
 });
 
 const json = <T>(value: string | null | undefined, fallback: T): T => {
   try { return value ? JSON.parse(value) as T : fallback; } catch { return fallback; }
+};
+const isoDate = (value: unknown) => {
+  const numeric = typeof value === "number" ? value : Number(value);
+  const date = Number.isFinite(numeric) ? new Date(numeric) : new Date(String(value ?? ""));
+  return Number.isFinite(date.getTime()) ? date.toISOString() : new Date(0).toISOString();
 };
 
 const EVENT_TYPES = new Set([
@@ -143,7 +188,7 @@ app.post("/api/events", async (c) => {
     ));
   }
   const result = await c.env.DB.batch(statements);
-  if (!session && !existingGuestId) c.header("Set-Cookie", cookie("lm_guest_id", guestId, 30 * 24 * 60 * 60));
+  if (!session && !existingGuestId) c.header("Set-Cookie", cookie("lm_guest_id", guestId, 30 * 24 * 60 * 60, requestIsSecure(c.req.raw)));
   const inserted = result.reduce((sum: number, item: any) => sum + Number(item.meta?.changes ?? 0), 0);
   return c.json({ ok: true, received: requested.length, inserted });
 });
@@ -231,11 +276,18 @@ function selectColdStartMmr(
   return selected.map(({ restaurant }) => restaurant);
 }
 
-// R2 object keys are stored without a leading slash.  This mirrors the local
-// `/photos/*` development route and never falls back to an external stock image.
+// Posts store stable R2 object keys behind `/photos/*`, not environment-specific
+// URLs. Local development can opt into a read-only media origin so it never has
+// to copy the entire production catalogue into a local R2 emulator.
 app.get("/photos/*", async (c) => {
   const key = c.req.path.replace(/^\/photos\//, "");
   if (!key || key.includes("..")) return c.text("Not Found", 404);
+  const remoteObject = await fetchConfiguredMedia(c.env.MEDIA_ORIGIN, key);
+  if (remoteObject) {
+    const headers = new Headers(remoteObject.headers);
+    headers.set("Cache-Control", "public, max-age=604800, immutable");
+    return new Response(remoteObject.body, { headers });
+  }
   // uploadPhotosR2.ts stores every local asset beneath the `photos/` prefix.
   const object = await c.env.PHOTOS_R2.get(`photos/${key}`);
   if (!object) return c.text("Not Found", 404);
@@ -268,7 +320,7 @@ app.post("/api/uploads", async (c) => {
 app.patch("/api/profile", async (c) => {
   const session = await readSession(c.req.raw, c.env.AUTH_SESSION_SECRET);
   if (!session) return c.json({ error: "로그인이 필요합니다.", code: "AUTH_REQUIRED" }, 401);
-  await ensurePublicUser(c.env.DB, session);
+  if (!await ensurePublicUser(c.env.DB, session)) return c.json({ error: "로컬 사용자 스키마를 갱신한 뒤 프로필을 수정할 수 있습니다." }, 409);
   const body = await c.req.json<{ avatarUrl?: unknown }>().catch(() => ({}));
   if (!("avatarUrl" in body)) return c.json({ error: "변경할 프로필 정보가 없습니다." }, 400);
   const avatarUrl = body.avatarUrl;
@@ -496,7 +548,7 @@ app.get("/api/courses", async (c) => {
         creatorId: course.author_id,
         savedCount: Number(course.saves_count ?? 0),
         isPublic: Boolean(course.is_public),
-        createdAt: new Date(Number(course.created_at)).toISOString(),
+        createdAt: isoDate(course.created_at),
         stops: stops.map((s: any) => ({
           placeId: s.restaurant_id,
           order: s.order_index,
@@ -620,14 +672,14 @@ app.post("/api/journey-winner", async (c) => {
   const userId = session?.sub ?? `guest:${guestId}`;
   const result = await c.env.DB.prepare("INSERT OR IGNORE INTO rec_events (id, event_type, user_id, session_id, restaurant_id, context_json, idempotency_key, created_at) VALUES (?, 'WINNER', ?, ?, ?, ?, ?, ?)")
     .bind(crypto.randomUUID(), userId, body.sessionId || null, body.restaurantId, JSON.stringify({ intent: body.intent || null }), body.idempotencyKey, Date.now()).run();
-  if (!session && !cookieValue(c.req.raw, "lm_guest_id")) c.header("Set-Cookie", cookie("lm_guest_id", guestId, 30 * 24 * 60 * 60));
+  if (!session && !cookieValue(c.req.raw, "lm_guest_id")) c.header("Set-Cookie", cookie("lm_guest_id", guestId, 30 * 24 * 60 * 60, requestIsSecure(c.req.raw)));
   return c.json({ ok: true, duplicate: (result.meta?.changes ?? 0) === 0 });
 });
 
 type SessionRow = {
   id: string; host_user_id: string; share_token: string; group_size: number;
   filter_distance: number; filter_budget: number; filter_categories: string;
-  filter_dietary: string; status: string; deadline_at: number | null; created_at: number;
+  filter_dietary: string; top_restaurant_ids: string; status: string; deadline_at: number | null; created_at: number;
 };
 const sessionPayload = (session: SessionRow) => ({
   ...session,
@@ -636,8 +688,166 @@ const sessionPayload = (session: SessionRow) => ({
   filter_vibe: json<string[]>(session.filter_categories, []),
   filter_categories: json<string[]>(session.filter_categories, []),
   filter_dietary: json<string[]>(session.filter_dietary, []),
+  deck_ids: json<string[]>(session.top_restaurant_ids, []),
 });
 const sessionToken = () => crypto.randomUUID().replaceAll("-", "").slice(0, 6).toUpperCase();
+const PRELIM_DONE_ID = "__prelim_done__";
+const DECK_SIZE_PREFIX = "__deck_size__:";
+const FORCE_PREFIX = "__force__:";
+
+type SessionSwipe = {
+  session_id: string; user_id: string; restaurant_id: string;
+  round: number; swipe_action: string; created_at: number;
+};
+
+type SessionPreference = { category: string; score: number; rank?: number };
+const preferenceSnapshot = (value: unknown) => {
+  const parsed = typeof value === "string" ? json<unknown>(value, []) : value;
+  if (Array.isArray(parsed)) return { categories: parsed, dietary: [] as string[] };
+  if (parsed && typeof parsed === "object") {
+    const item = parsed as { categories?: unknown; dietary?: unknown };
+    return {
+      categories: Array.isArray(item.categories) ? item.categories : [],
+      dietary: Array.isArray(item.dietary) ? item.dietary.filter((diet): diet is string => typeof diet === "string") : [],
+    };
+  }
+  return { categories: [] as unknown[], dietary: [] as string[] };
+};
+const sessionPreferences = (value: unknown): SessionPreference[] => preferenceSnapshot(value).categories
+  .filter((item): item is Record<string, unknown> => Boolean(item) && typeof item === "object")
+  .map(item => ({
+    category: typeof item.category === "string" ? item.category.trim().slice(0, 40) : "",
+    score: Math.max(0, Math.min(1, Number(item.score) || 0)),
+    rank: Number.isFinite(Number(item.rank)) ? Number(item.rank) : undefined,
+  }))
+  .filter(item => item.category);
+const sessionDietary = (value: unknown) => preferenceSnapshot(value).dietary;
+const SESSION_SEAFOOD_RE = /해산물|seafood|스시|sushi|초밥|회|sashimi|오마카세|omakase/i;
+function matchesGroupDiet(category: string, optionText: unknown, rawRestrictions: string[]) {
+  const required = rawRestrictions
+    .map(normalizeDiet)
+    .filter((diet): diet is DietTag => Boolean(diet) && isHardRestriction(diet));
+  if (!required.length) return true;
+  const offered = json<string[]>(typeof optionText === "string" ? optionText : "[]", []).map(normalizeDiet);
+  return required.every(diet => diet === "NO_SEAFOOD" ? !SESSION_SEAFOOD_RE.test(category) : offered.includes(diet));
+}
+
+// A group slate is intentionally computed once on the server. Ranking averages
+// member preference signals, then applies a category-coverage penalty so the
+// first seven cards do not collapse into one cuisine. The stable tie-break is
+// session-based: identical room state always produces the identical deck.
+function buildSharedSessionDeck(sessionId: string, restaurants: any[], memberRows: any[], size = 7) {
+  const members = memberRows.map(member => sessionPreferences(member.preferences_json));
+  const categoryScores = new Map<string, number>();
+  for (const preferences of members) {
+    const perMember = new Map(preferences.map(preference => [preference.category, preference.score]));
+    for (const restaurant of restaurants) {
+      const previous = categoryScores.get(restaurant.category) ?? 0;
+      categoryScores.set(restaurant.category, previous + (perMember.get(restaurant.category) ?? 0.35));
+    }
+  }
+  const divisor = Math.max(1, members.length);
+  const hash = (value: string) => {
+    let result = 2166136261;
+    for (let index = 0; index < value.length; index++) result = Math.imul(result ^ value.charCodeAt(index), 16777619);
+    return (result >>> 0) / 0xffffffff;
+  };
+  const remaining = restaurants.map(restaurant => ({
+    restaurant,
+    score: (categoryScores.get(restaurant.category) ?? 0) / divisor
+      + Math.min(1, Number(restaurant.rating ?? 0) / 5) * 0.15
+      + hash(`${sessionId}:${restaurant.id}`) * 0.03,
+  }));
+  const selected: any[] = [];
+  const categoryCount = new Map<string, number>();
+  while (remaining.length && selected.length < size) {
+    remaining.sort((a, b) => (
+      (b.score - (categoryCount.get(b.restaurant.category) ?? 0) * 0.22)
+      - (a.score - (categoryCount.get(a.restaurant.category) ?? 0) * 0.22)
+      || a.restaurant.id.localeCompare(b.restaurant.id)
+    ));
+    const next = remaining.shift()!.restaurant;
+    selected.push(next);
+    categoryCount.set(next.category, (categoryCount.get(next.category) ?? 0) + 1);
+  }
+  return selected.map(restaurant => restaurant.id);
+}
+
+export function sessionResults(session: SessionRow, members: any[], swipes: SessionSwipe[], restaurants: any[]) {
+  const generation = Math.max(1, Math.ceil(swipes.reduce((max, swipe) => Math.max(max, Number(swipe.round) || 1), 1) / 2));
+  const prelimRound = generation * 2 - 1;
+  const finalRound = generation * 2;
+  const inPrelim = swipes.filter(swipe => Number(swipe.round) === prelimRound);
+  const deckSizeByUser = new Map<string, number>();
+  const completedUsers = new Set<string>();
+  const forced = new Set<number>();
+  for (const swipe of inPrelim) {
+    if (swipe.restaurant_id === PRELIM_DONE_ID) completedUsers.add(swipe.user_id);
+    if (swipe.restaurant_id.startsWith(DECK_SIZE_PREFIX)) {
+      const size = Number(swipe.restaurant_id.slice(DECK_SIZE_PREFIX.length));
+      if (Number.isInteger(size) && size > 0 && size <= 50) deckSizeByUser.set(swipe.user_id, size);
+    }
+    if (swipe.restaurant_id === `${FORCE_PREFIX}${prelimRound}`) forced.add(prelimRound);
+  }
+  const finalRows = swipes.filter(swipe => Number(swipe.round) === finalRound);
+  for (const swipe of finalRows) if (swipe.restaurant_id === `${FORCE_PREFIX}${finalRound}`) forced.add(finalRound);
+
+  const prelimRows = inPrelim.filter(swipe =>
+    swipe.restaurant_id !== PRELIM_DONE_ID &&
+    !swipe.restaurant_id.startsWith(DECK_SIZE_PREFIX) &&
+    !swipe.restaurant_id.startsWith(FORCE_PREFIX),
+  );
+  const validFinalRows = finalRows.filter(swipe => !swipe.restaurant_id.startsWith(FORCE_PREFIX));
+  const countByUser = new Map<string, number>();
+  for (const swipe of prelimRows) countByUser.set(swipe.user_id, (countByUser.get(swipe.user_id) ?? 0) + 1);
+  const filtered = restaurants.filter(restaurant => {
+    const categories = json<string[]>(session.filter_categories, []);
+    return categories.length === 0 || categories.includes(restaurant.category);
+  });
+  const fallbackTarget = Math.min(filtered.length, 7);
+  const targetFor = (userId: string) => deckSizeByUser.get(userId) ?? fallbackTarget;
+  const prelimComplete = (userId: string) => completedUsers.has(userId) || (countByUser.get(userId) ?? 0) >= targetFor(userId);
+  const completedCount = members.filter(member => prelimComplete(member.user_id)).length;
+  const deadlineAt = session.deadline_at ? new Date(Number(session.deadline_at)).toISOString() : null;
+  const expired = session.deadline_at !== null && Number.isFinite(Number(session.deadline_at)) && Date.now() >= Number(session.deadline_at);
+  const decision = decideGroup(
+    prelimRows as any,
+    validFinalRows as any,
+    members.length,
+    completedCount,
+    expired,
+    generation,
+    3,
+    forced.has(prelimRound),
+    forced.has(finalRound),
+  );
+  const finalVoters = new Set(validFinalRows.filter(swipe => swipe.swipe_action === "LIKE").map(swipe => swipe.user_id));
+  const finalStage = decision.phase === "FINAL";
+  return {
+    completedCount,
+    totalMembers: members.length,
+    memberCompletion: members.map(member => ({
+      id: member.user_id,
+      name: member.user_name,
+      emoji: member.emoji,
+      completed: finalStage ? finalVoters.has(member.user_id) : prelimComplete(member.user_id),
+      swipeCount: finalStage ? (finalVoters.has(member.user_id) ? 1 : 0) : Math.min(countByUser.get(member.user_id) ?? 0, targetFor(member.user_id)),
+      targetCount: finalStage ? 1 : targetFor(member.user_id),
+    })),
+    isExpired: expired,
+    deadlineAt,
+    generation,
+    rerollCap: 3,
+    results: decision.results,
+    phase: decision.phase,
+    finalists: decision.finalists,
+    finalTally: decision.finalTally,
+    finalVotedCount: decision.finalVotedCount,
+    rejectVotes: decision.rejectVotes,
+    excludeIds: decision.excludeIds,
+    winnerId: decision.winnerId,
+  };
+}
 
 // Group-session state must live in D1: a QR/link opened on another device
 // cannot see the in-memory Express fallback used during local development.
@@ -651,6 +861,10 @@ app.post("/api/sessions/create", async (c) => {
   const filterBudget = typeof body.filterBudget === "number" && Number.isFinite(body.filterBudget) ? Math.max(1, Math.min(4, Math.floor(body.filterBudget))) : 2;
   const categories = Array.isArray(body.filterCategories) ? body.filterCategories.filter((item): item is string => typeof item === "string").map(item => item.trim().slice(0, 40)).filter(Boolean).slice(0, 12) : [];
   const dietary = Array.isArray(body.filterDietary) ? body.filterDietary.filter((item): item is string => typeof item === "string").map(item => item.trim().slice(0, 40)).filter(Boolean).slice(0, 12) : [];
+  const hostPreferences = Array.isArray(body.hostPreferences)
+    ? sessionPreferences(JSON.stringify(body.hostPreferences)).slice(0, 20)
+    : [];
+  const hostDietary = Array.isArray(body.hostDietary) ? body.hostDietary.filter((item): item is string => typeof item === "string").slice(0, 12) : [];
   const createdAt = Date.now();
 
   for (let attempt = 0; attempt < 3; attempt += 1) {
@@ -658,15 +872,15 @@ app.post("/api/sessions/create", async (c) => {
     const token = sessionToken();
     try {
       await c.env.DB.batch([
-        c.env.DB.prepare("INSERT INTO sessions (id, host_user_id, share_token, group_size, filter_distance, filter_budget, filter_categories, filter_dietary, status, deadline_at, top_restaurant_ids, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'WAITING', NULL, '[]', ?)")
-          .bind(id, hostId, token, groupSize, filterDistance, filterBudget, JSON.stringify(categories), JSON.stringify(dietary), createdAt),
-        c.env.DB.prepare("INSERT INTO session_members (id, session_id, user_id, user_name, emoji, is_ready, joined_at) VALUES (?, ?, ?, ?, ?, 0, ?)")
-          .bind(crypto.randomUUID(), id, hostId, hostName, emoji, createdAt),
+        c.env.DB.prepare("INSERT INTO sessions (id, host_user_id, share_token, group_size, filter_distance, filter_budget, filter_categories, filter_dietary, status, deadline_at, top_restaurant_ids, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'WAITING', NULL, ?, ?)")
+          .bind(id, hostId, token, groupSize, filterDistance, filterBudget, JSON.stringify(categories), JSON.stringify(dietary), "[]", createdAt),
+        c.env.DB.prepare("INSERT INTO session_members (id, session_id, user_id, user_name, emoji, is_ready, preferences_json, joined_at) VALUES (?, ?, ?, ?, ?, 0, ?, ?)")
+          .bind(crypto.randomUUID(), id, hostId, hostName, emoji, JSON.stringify({ categories: hostPreferences, dietary: hostDietary }), createdAt),
       ]);
       const session: SessionRow = {
         id, host_user_id: hostId, share_token: token, group_size: groupSize,
         filter_distance: filterDistance, filter_budget: filterBudget,
-        filter_categories: JSON.stringify(categories), filter_dietary: JSON.stringify(dietary),
+        filter_categories: JSON.stringify(categories), filter_dietary: JSON.stringify(dietary), top_restaurant_ids: "[]",
         status: "WAITING", deadline_at: null, created_at: createdAt,
       };
       return c.json({ session: sessionPayload(session), token }, 201);
@@ -693,6 +907,8 @@ app.post("/api/sessions/:token/join", async (c) => {
   const userId = nullableText(body.userId, 256);
   const userName = nullableText(body.userName, 80);
   const emoji = nullableText(body.emoji, 16) ?? "👤";
+  const preferences = Array.isArray(body.preferences) ? sessionPreferences(JSON.stringify(body.preferences)).slice(0, 20) : [];
+  const dietary = Array.isArray(body.dietary) ? body.dietary.filter((item): item is string => typeof item === "string").slice(0, 12) : [];
   if (!userId || !userName) return c.json({ error: "참여자 정보가 필요합니다." }, 400);
   const session = await c.env.DB.prepare("SELECT id, group_size FROM sessions WHERE share_token = ?").bind(token).first<{ id: string; group_size: number }>();
   if (!session) return c.json({ error: "세션을 찾을 수 없거나 만료되었습니다." }, 404);
@@ -707,8 +923,8 @@ app.post("/api/sessions/:token/join", async (c) => {
       }, 409);
     }
   }
-  await c.env.DB.prepare("INSERT INTO session_members (id, session_id, user_id, user_name, emoji, is_ready, joined_at) VALUES (?, ?, ?, ?, ?, 0, ?) ON CONFLICT(session_id, user_id) DO UPDATE SET user_name = excluded.user_name, emoji = excluded.emoji")
-    .bind(crypto.randomUUID(), session.id, userId, userName, emoji, Date.now()).run();
+  await c.env.DB.prepare("INSERT INTO session_members (id, session_id, user_id, user_name, emoji, is_ready, preferences_json, joined_at) VALUES (?, ?, ?, ?, ?, 0, ?, ?) ON CONFLICT(session_id, user_id) DO UPDATE SET user_name = excluded.user_name, emoji = excluded.emoji, preferences_json = excluded.preferences_json")
+    .bind(crypto.randomUUID(), session.id, userId, userName, emoji, JSON.stringify({ categories: preferences, dietary }), Date.now()).run();
   return c.json({ ok: true });
 });
 
@@ -729,11 +945,95 @@ app.post("/api/sessions/:token/status", async (c) => {
   const body = await c.req.json<Record<string, unknown>>().catch(() => ({}));
   const status = nullableText(body.status, 40)?.toUpperCase();
   if (!status) return c.json({ error: "세션 상태가 필요합니다." }, 400);
+  const userId = nullableText(body.userId, 256);
+  const session = await c.env.DB.prepare("SELECT * FROM sessions WHERE share_token = ?").bind(token).first<SessionRow>();
+  if (!session) return c.json({ error: "세션을 찾을 수 없습니다." }, 404);
+  if (status === "SWIPING_1") {
+    if (!userId || userId !== session.host_user_id) return c.json({ error: "세션 시작은 호스트만 할 수 있습니다." }, 403);
+    const { results: members } = await c.env.DB.prepare("SELECT user_id, preferences_json FROM session_members WHERE session_id = ? ORDER BY joined_at").bind(session.id).all();
+    const minParticipants = Number(session.group_size) === 1 ? 1 : 2;
+    if (members.length < minParticipants) return c.json({ error: `투표를 시작하려면 최소 ${minParticipants}명이 필요합니다.` }, 409);
+    const { results: catalogue } = await c.env.DB.prepare("SELECT id, category, rating, dietary_options FROM restaurants").all();
+    const categories = json<string[]>(session.filter_categories, []);
+    const memberDietary = (members as any[]).flatMap(member => sessionDietary(member.preferences_json));
+    const requiredDietary = [...json<string[]>(session.filter_dietary, []), ...memberDietary];
+    const pool = (catalogue as any[]).filter(restaurant => (
+      (categories.length === 0 || categories.includes(restaurant.category))
+      && (Number(session.filter_budget) >= 4 || Number(restaurant.price_level ?? 4) <= Number(session.filter_budget))
+      && matchesGroupDiet(restaurant.category, restaurant.dietary_options, requiredDietary)
+    ));
+    const deckIds = buildSharedSessionDeck(session.id, pool.length ? pool : catalogue as any[], members as any[]);
+    if (!deckIds.length) return c.json({ error: "조건에 맞는 공통 후보군이 없습니다." }, 409);
+    await c.env.DB.prepare("UPDATE sessions SET top_restaurant_ids = ? WHERE id = ?").bind(JSON.stringify(deckIds), session.id).run();
+  }
   const deadlineMinutes = typeof body.deadlineMinutes === "number" && Number.isFinite(body.deadlineMinutes) ? Math.max(1, Math.min(120, Math.floor(body.deadlineMinutes))) : null;
   const deadline = deadlineMinutes ? Date.now() + deadlineMinutes * 60_000 : null;
-  const result = await c.env.DB.prepare("UPDATE sessions SET status = ?, deadline_at = COALESCE(?, deadline_at) WHERE share_token = ?").bind(status, deadline, token).run();
+  const result = await c.env.DB.prepare("UPDATE sessions SET status = ?, deadline_at = COALESCE(?, deadline_at) WHERE id = ?").bind(status, deadline, session.id).run();
   if ((result.meta?.changes ?? 0) === 0) return c.json({ error: "세션을 찾을 수 없습니다." }, 404);
   return c.json({ ok: true });
+});
+
+// Every swipe and progress marker is persisted in D1.  A shared session must
+// never rely on browser state: other devices poll this exact source of truth.
+app.post("/api/swipes", async (c) => {
+  const body = await c.req.json<Record<string, unknown>>().catch(() => ({}));
+  const sessionId = nullableText(body.session_id, 128);
+  const userId = nullableText(body.user_id, 256);
+  const restaurantId = nullableText(body.restaurant_id, 128);
+  const round = typeof body.round === "number" && Number.isInteger(body.round) ? body.round : Number(body.round);
+  const action = nullableText(body.swipe_action, 16)?.toUpperCase();
+  if (!sessionId || !userId || !restaurantId || !Number.isInteger(round) || round < 1 || round > 12 || !action) {
+    return c.json({ error: "올바른 스와이프 정보가 필요합니다." }, 400);
+  }
+  const member = await c.env.DB.prepare("SELECT id FROM session_members WHERE session_id = ? AND user_id = ?").bind(sessionId, userId).first();
+  if (!member) return c.json({ error: "세션 참여자를 찾을 수 없습니다." }, 403);
+  const isSignal = restaurantId === PRELIM_DONE_ID || restaurantId.startsWith(DECK_SIZE_PREFIX);
+  const allowedAction = action === "LIKE" || action === "DISLIKE" || (isSignal && action === "SYSTEM");
+  if (!allowedAction || restaurantId.startsWith(FORCE_PREFIX)) return c.json({ error: "유효하지 않은 투표입니다." }, 400);
+  // A final vote is replaceable before the group is completed, but there is
+  // only one effective vote per person. This makes retries idempotent.
+  const statements = round % 2 === 0 && action === "LIKE"
+    ? [
+      c.env.DB.prepare("DELETE FROM swipes WHERE session_id = ? AND user_id = ? AND round = ? AND swipe_action = 'LIKE'").bind(sessionId, userId, round),
+      c.env.DB.prepare("INSERT OR IGNORE INTO swipes (id, session_id, user_id, restaurant_id, round, swipe_action, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)")
+        .bind(nullableText(body.id, 128) ?? crypto.randomUUID(), sessionId, userId, restaurantId, round, action, Date.now()),
+    ]
+    : [c.env.DB.prepare("INSERT OR IGNORE INTO swipes (id, session_id, user_id, restaurant_id, round, swipe_action, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)")
+      .bind(nullableText(body.id, 128) ?? crypto.randomUUID(), sessionId, userId, restaurantId, round, action, Date.now())];
+  await c.env.DB.batch(statements);
+  return c.json({ ok: true });
+});
+
+app.post("/api/sessions/:token/force", async (c) => {
+  const token = c.req.param("token").trim().toUpperCase();
+  const body = await c.req.json<Record<string, unknown>>().catch(() => ({}));
+  const userId = nullableText(body.userId, 256);
+  const round = typeof body.round === "number" && Number.isInteger(body.round) ? body.round : Number(body.round);
+  if (!userId || !Number.isInteger(round) || round < 1 || round > 12) return c.json({ error: "올바른 진행 정보가 필요합니다." }, 400);
+  const session = await c.env.DB.prepare("SELECT id, host_user_id FROM sessions WHERE share_token = ?").bind(token).first<{ id: string; host_user_id: string }>();
+  if (!session) return c.json({ error: "세션을 찾을 수 없습니다." }, 404);
+  if (session.host_user_id !== userId) return c.json({ error: "host_only" }, 403);
+  // Force is a durable marker, rather than Worker memory, so a new Pages
+  // isolate or a second device observes the same transition.
+  await c.env.DB.prepare("INSERT OR IGNORE INTO swipes (id, session_id, user_id, restaurant_id, round, swipe_action, created_at) VALUES (?, ?, ?, ?, ?, 'SYSTEM', ?)")
+    .bind(`force:${session.id}:${round}`, session.id, userId, `${FORCE_PREFIX}${round}`, round, Date.now()).run();
+  return c.json({ ok: true });
+});
+
+app.get("/api/sessions/:token/results", async (c) => {
+  const token = c.req.param("token").trim().toUpperCase();
+  const session = await c.env.DB.prepare("SELECT * FROM sessions WHERE share_token = ?").bind(token).first<SessionRow>();
+  if (!session) return c.json({ error: "세션을 찾을 수 없습니다." }, 404);
+  const [memberRows, swipeRows, restaurantRows] = await Promise.all([
+    c.env.DB.prepare("SELECT user_id, user_name, emoji FROM session_members WHERE session_id = ? ORDER BY joined_at").bind(session.id).all(),
+    c.env.DB.prepare("SELECT session_id, user_id, restaurant_id, round, swipe_action, created_at FROM swipes WHERE session_id = ? ORDER BY created_at").bind(session.id).all(),
+    c.env.DB.prepare("SELECT id, category FROM restaurants").all(),
+  ]);
+  const payload = sessionResults(session, memberRows.results, swipeRows.results as SessionSwipe[], restaurantRows.results);
+  if (payload.phase === "DONE" && session.status !== "COMPLETED") {
+    await c.env.DB.prepare("UPDATE sessions SET status = 'COMPLETED' WHERE id = ?").bind(session.id).run();
+  }
+  return c.json(payload);
 });
 
 app.get("/api/journey-today", async (c) => {
@@ -861,9 +1161,16 @@ app.post("/api/reports", async (c) => {
 // REST API — /api/feed (Munchie 피드 개인화 랭킹)
 app.get("/api/feed", async (c) => {
   try {
-    // 1. Fetch courses
+    // Older local databases may predate the public-profile columns. Keep the
+    // feed readable while still joining author data whenever the canonical
+    // schema is present.
+    const { results: userColumns } = await c.env.DB.prepare("PRAGMA table_info(users)").all<{ name: string }>();
+    const userColumnNames = new Set(userColumns.map(column => column.name));
+    const hasPublicProfiles = userColumnNames.has("username") && userColumnNames.has("profile_image_url");
     const { results: courses } = await c.env.DB.prepare(
-      "SELECT c.*, u.username AS author_name, u.profile_image_url AS author_image FROM courses c LEFT JOIN users u ON u.id = c.author_id WHERE c.is_public = 1 ORDER BY c.created_at DESC LIMIT 20"
+      hasPublicProfiles
+        ? "SELECT c.*, u.username AS author_name, u.profile_image_url AS author_image FROM courses c LEFT JOIN users u ON u.id = c.author_id WHERE c.is_public = 1 ORDER BY c.created_at DESC LIMIT 20"
+        : "SELECT c.* FROM courses c WHERE c.is_public = 1 ORDER BY c.created_at DESC LIMIT 20"
     ).all();
     
     const feedItems = [];
@@ -892,8 +1199,8 @@ app.get("/api/feed", async (c) => {
         id: `post_${course.id}`,
         courseId: course.id,
         creatorId: course.author_id,
-        authorName: course.author_name || null,
-        authorImage: course.author_image || null,
+        authorName: hasPublicProfiles ? course.author_name || null : null,
+        authorImage: hasPublicProfiles ? course.author_image || null : null,
         title: course.title,
         description: course.description,
         heroImage: course.hero_image,

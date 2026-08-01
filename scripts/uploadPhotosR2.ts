@@ -3,8 +3,11 @@ import path from "node:path";
 import { execSync } from "node:child_process";
 
 const PHOTOS_DIR = path.resolve(process.cwd(), "server/data/photos");
-const BUCKET_NAME = "lunchie-photos";
 const WRANGLER_CLI = path.resolve(process.cwd(), "node_modules/wrangler/bin/wrangler.js");
+const local = process.argv.includes("--local");
+// Wrangler reads the binding-to-bucket mapping from wrangler.toml in both
+// local Pages development and production.
+const BUCKET_NAME = "lunchie-photos";
 
 function getAllFiles(dirPath: string, arrayOfFiles: string[] = []) {
   if (!fs.existsSync(dirPath)) return arrayOfFiles;
@@ -24,7 +27,7 @@ function getAllFiles(dirPath: string, arrayOfFiles: string[] = []) {
 
 export async function runUpload() {
   const files = getAllFiles(PHOTOS_DIR);
-  console.log(`[R2 Sync] Found ${files.length} images to upload.`);
+  console.log(`[R2 Sync] Found ${files.length} images to upload to ${local ? "local" : "remote"} R2.`);
   
   let successCount = 0;
   for (let i = 0; i < files.length; i++) {
@@ -34,7 +37,7 @@ export async function runUpload() {
       console.log(`[${i+1}/${files.length}] Uploading ${r2Key}...`);
       // Use the current Node runtime rather than `npx`: the workstation's default
       // Node can be older than Wrangler's supported version.
-      execSync(`"${process.execPath}" "${WRANGLER_CLI}" r2 object put "${BUCKET_NAME}/${r2Key}" --file "${file}"`, { stdio: 'pipe' });
+      execSync(`"${process.execPath}" "${WRANGLER_CLI}" r2 object put "${BUCKET_NAME}/${r2Key}" --file "${file}"${local ? " --local" : ""}`, { stdio: 'pipe' });
       successCount++;
     } catch (e: any) {
       console.error(`Failed to upload ${r2Key}: ${e.message}`);

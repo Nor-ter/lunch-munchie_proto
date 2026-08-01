@@ -1079,12 +1079,13 @@ export function AppProvider({
             filterBudget: filters.budget,
             filterCategories: filters.categories,
             filterDietary: filters.dietary,
+            hostPreferences: profile.categoryPrefs,
+            hostDietary: profile.dietary,
             deadlineMinutes,
           }),
         });
         const data = await res.json().catch(() => ({})) as { session?: { id: string }; token?: string; error?: string };
         if (!res.ok || !data.session?.id || !data.token) throw new Error(data.error ?? '세션을 서버에 저장하지 못했어요.');
-        const deck = await buildDeck(filters, restaurants, profile.id);
         const session: GroupSession = {
             id: data.session.id,
             name,
@@ -1102,10 +1103,8 @@ export function AppProvider({
             deadline: null, // 마감 타이머는 투표 시작 시점에 적용
             deadlineMinutes,
             status: 'waiting',
-            restaurants: deck.restaurants,
-            slateId: deck.slateId,
-            recMeta: deck.recMeta,
-            modelVersion: deck.modelVersion,
+            restaurants: [],
+            modelVersion: 'session-group-pending-v1',
             results: [],
           };
         setCurrentSession(session);
@@ -1133,7 +1132,25 @@ export function AppProvider({
       categories: data.session.filter_vibe || [],
       intent: prevIntent,
     };
-    const deck = await buildDeck(sessFilters, restaurants, profile.id);
+    const sharedDeckIds: string[] = Array.isArray(data.session.deck_ids)
+      ? data.session.deck_ids.filter((id: unknown): id is string => typeof id === 'string')
+      : [];
+    // New sessions always use the server-persisted candidate order. Waiting
+    // rooms deliberately have no cards: the slate is made only after every
+    // participant has supplied a preference snapshot and marked ready.
+    const sharedRestaurants = sharedDeckIds
+      .map(id => restaurants.find(restaurant => restaurant.id === id))
+      .filter((restaurant): restaurant is Restaurant => Boolean(restaurant));
+    const deck = sharedRestaurants.length === sharedDeckIds.length && sharedRestaurants.length > 0
+      ? {
+          restaurants: sharedRestaurants,
+          slateId: `session:${data.session.id}`,
+          recMeta: Object.fromEntries(sharedRestaurants.map((restaurant, index) => [restaurant.id, { propensity: 1 / sharedRestaurants.length, position: index }])),
+          modelVersion: 'session-shared-slate-v1',
+        }
+      : status === 'waiting'
+        ? { restaurants: [], slateId: undefined, recMeta: undefined, modelVersion: 'session-group-pending-v1' }
+        : await buildDeck(sessFilters, restaurants, profile.id);
     const session: GroupSession = {
       id: data.session.id,
       name: '점심 세션',
@@ -1174,6 +1191,8 @@ export function AppProvider({
         userId: profile.id,
         userName: name || profile.name,
         emoji: emoji || profile.emoji,
+        preferences: profile.categoryPrefs,
+        dietary: profile.dietary,
       }),
     });
     const payload = await response.json().catch(() => ({})) as { error?: string };
@@ -1192,37 +1211,18 @@ export function AppProvider({
 
   const startSession = useCallback(async (token: string, deadlineMinutes?: number) => {
     const minutes = deadlineMinutes ?? currentSession?.deadlineMinutes ?? 10;
-
-    // 1) 서버에 상태 변경을 시도한다 (DB가 살아 있을 때 정상 동작).
-    //    마감 타이머는 이 시점(투표 시작)부터 적용된다.
-    try {
-      const res = await fetch(`/api/sessions/${token}/status`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ status: 'SWIPING_1', deadlineMinutes: minutes }),
-      });
-      if (res.ok) {
-        try {
-          return await fetchSession(token);
-        } catch {
-          // 서버 상태는 바꿨지만 재동기화 실패 → 아래 로컬 진행으로 폴백
-        }
-      }
-    } catch {
-      // 네트워크/DB 사용 불가 → 아래 로컬(오프라인) 세션으로 폴백
-    }
-
-    // 2) 로컬 폴백: 백엔드(DB)가 없어도 투표를 시작할 수 있게 메모리상의
-    //    세션 상태를 직접 진행시킨다. (restaurants/courses의 mock 폴백과 동일한 취지)
-    if (!currentSession) throw new Error('No active session to start');
-    const next: GroupSession = {
-      ...currentSession,
-      status: 'voting',
-      deadline: new Date(Date.now() + minutes * 60 * 1000).toISOString(),
-    };
-    setCurrentSession(next);
-    return next;
-  }, [currentSession, fetchSession]);
+    // A group session has one D1 state machine. Starting locally after a
+    // failed server request split participants into different realities:
+    // each person could finish cards, while the shared result never advanced.
+    const res = await fetch(`/api/sessions/${token}/status`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ status: 'SWIPING_1', deadlineMinutes: minutes, userId: profile.id }),
+    });
+    const payload = await res.json().catch(() => ({})) as { error?: string };
+    if (!res.ok) throw new Error(payload.error ?? '세션을 시작하지 못했어요.');
+    return fetchSession(token);
+  }, [fetchSession]);
 
   const addSwipe = useCallback((restaurantId: string, action: SwipeRecord['action']) => {
     const record: SwipeRecord = {
@@ -1238,7 +1238,10 @@ export function AppProvider({
       totalLikes: action === 'like' ? prev.totalLikes + 1 : prev.totalLikes,
     }));
 
-    if (apiAvailable && currentSession) {
+    // Sessions are created server-first, so their swipes must also be sent
+    // server-first.  `apiAvailable` is only a catalogue boot hint; using it
+    // here used to silently turn a valid shared session into local-only votes.
+    if (currentSession) {
       fetch('/api/swipes', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -1251,9 +1254,11 @@ export function AppProvider({
           swipe_action: action === 'like' || action === 'save' ? 'LIKE' : 'DISLIKE',
           created_at: new Date(),
         }),
+      }).then(response => {
+        if (!response.ok) console.error('Failed to persist session swipe');
       }).catch(() => { });
     }
-  }, [apiAvailable, currentSession, profile.id]);
+  }, [currentSession, profile.id]);
 
   // "다시 고르기": 로컬 스와이프 기록을 지워야 카드가 처음부터 다시 나온다.
   // 안 지우면 예선 자동완료 감지(unswipedCount===0)가 즉시 다시 걸려 결정 화면으로 튕긴다.

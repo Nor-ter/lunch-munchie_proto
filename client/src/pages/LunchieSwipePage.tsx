@@ -1199,7 +1199,7 @@ function WaitingOrDecidedScreen({ onContinue, onReroll }: { onContinue: (winner?
     rejectVotes?: number;
     excludeIds?: string[];
   }>({
-    completedCount: 1,
+    completedCount: 0,
     totalMembers: currentSession?.members.length || 1,
     memberCompletion: [],
     results: [],
@@ -1215,14 +1215,15 @@ function WaitingOrDecidedScreen({ onContinue, onReroll }: { onContinue: (winner?
 
   // 결승 한 표(round=2G). restaurantId가 REJECT면 "둘 다 별로". 멤버당 1표로 서버가 중복 제거.
   const castVote = async (restaurantId: string) => {
-    setVoted(true);
     const round = 2 * (liveResults.generation ?? 1);
     const isReject = restaurantId === REJECT;
     try {
-      await fetch('/api/swipes', {
+      const response = await fetch('/api/swipes', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ id: `vote_${profile.id}_${restaurantId}_${Date.now()}`, session_id: currentSession?.id, user_id: profile.id, restaurant_id: restaurantId, round, swipe_action: 'LIKE' }),
       });
+      if (!response.ok) throw new Error('final_vote_failed');
+      setVoted(true);
       // 신호: finalist 선택 = CHOOSE(pairwise), '둘 다 별로' = NOPE(명시 음성)
       logEvent({ event_type: 'SWIPE', action: isReject ? 'NOPE' : 'CHOOSE', slate_type: 'FINAL', restaurant_id: restaurantId, round, user_id: profile.id, session_id: currentSession?.id ?? null });
     } catch { /* 표 전송 실패는 폴링으로 복구 */ }
@@ -1261,6 +1262,13 @@ function WaitingOrDecidedScreen({ onContinue, onReroll }: { onContinue: (winner?
     const interval = setInterval(fetchLiveResults, 3000);
     return () => clearInterval(interval);
   }, [currentSession]);
+
+  // If this device refreshes after casting, derive the local view from the
+  // server response instead of showing the final ballot again.
+  useEffect(() => {
+    if (liveResults.phase !== 'FINAL') return;
+    setVoted(liveResults.memberCompletion.some(member => member.id === profile.id && member.completed));
+  }, [liveResults.phase, liveResults.memberCompletion, profile.id]);
 
   // 합의 실패(NO_CONSENSUS) 1회 로깅 (음성 신호 G)
   const noConsensusLoggedRef = useRef(false);
@@ -1486,10 +1494,11 @@ function WaitingOrDecidedScreen({ onContinue, onReroll }: { onContinue: (winner?
             const gen = liveResults.generation ?? 1;
             const round = phase === 'FINAL' ? 2 * gen : 2 * gen - 1;
             try {
-              await fetch(`/api/sessions/${currentSession.inviteCode}/force`, {
+              const response = await fetch(`/api/sessions/${currentSession.inviteCode}/force`, {
                 method: 'POST', headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ userId: profile.id, round }),
               });
+              if (!response.ok) throw new Error('force_failed');
             } catch { /* 폴링으로 복구 */ }
           }}
           className="mb-3 w-full max-w-[340px] py-3 rounded-2xl font-bold text-white text-[14px] bg-white/15 border border-white/25 active:scale-[0.98] transition-all mx-auto block">
@@ -1572,6 +1581,32 @@ export default function QuickMatchPage() {
   const total = Math.min(targetRestaurants.length, 7); // 예선 = 엔진 top-7 (결정 플로우 ①)
   const visibleCards = targetRestaurants.slice(currentIndex, currentIndex + 3);
   const progress = Math.min(currentIndex + 1, total);
+  const progressSignalRef = useRef(new Set<string>());
+
+  // The server cannot infer a client-specific deck after recommendation
+  // filtering. Announce the exact target once per generation so each member's
+  // completion count stays correct on every device.
+  useEffect(() => {
+    if (!currentSession || total <= 0) return;
+    const generation = currentSession.generation ?? 1;
+    const round = generation * 2 - 1;
+    const key = `${currentSession.id}:${profile.id}:${round}:deck`;
+    if (progressSignalRef.current.has(key)) return;
+    progressSignalRef.current.add(key);
+    void fetch('/api/swipes', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        id: `deck_${currentSession.id}_${profile.id}_${round}`,
+        session_id: currentSession.id,
+        user_id: profile.id,
+        restaurant_id: `__deck_size__:${total}`,
+        round,
+        swipe_action: 'SYSTEM',
+      }),
+    }).then(response => {
+      if (!response.ok) progressSignalRef.current.delete(key);
+    }).catch(() => progressSignalRef.current.delete(key));
+  }, [currentSession?.id, currentSession?.generation, profile.id, total]);
 
   // Auto-transition to decided phase if all cards have been swiped — 예선(swipe) 중에만.
   // 결정/결과 단계에선 절대 되돌리지 않는다 (안 그러면 듀얼→결과가 'decided'로 튕겨 무한루프).
@@ -1583,6 +1618,30 @@ export default function QuickMatchPage() {
       setPhase('decided');
     }
   }, [phase, currentIndex, targetRestaurants, swipeRecords, total, currentSession?.id]);
+
+  // Marking completion is idempotent and is deliberately separate from the
+  // final swipe: a network retry cannot leave someone permanently "투표 중".
+  useEffect(() => {
+    if (phase !== 'decided' || !currentSession) return;
+    const generation = currentSession.generation ?? 1;
+    const round = generation * 2 - 1;
+    const key = `${currentSession.id}:${profile.id}:${round}:done`;
+    if (progressSignalRef.current.has(key)) return;
+    progressSignalRef.current.add(key);
+    void fetch('/api/swipes', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        id: `done_${currentSession.id}_${profile.id}_${round}`,
+        session_id: currentSession.id,
+        user_id: profile.id,
+        restaurant_id: '__prelim_done__',
+        round,
+        swipe_action: 'SYSTEM',
+      }),
+    }).then(response => {
+      if (!response.ok) progressSignalRef.current.delete(key);
+    }).catch(() => progressSignalRef.current.delete(key));
+  }, [phase, currentSession?.id, currentSession?.generation, profile.id]);
 
   useEffect(() => {
     if (showIntro) {
