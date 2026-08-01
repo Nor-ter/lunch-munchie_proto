@@ -12,6 +12,7 @@ import { useApp } from '@/contexts/AppContext';
 import { FOOD_TAGS } from '@/constants/foodTags';
 import { toast } from 'sonner';
 import type { Intent } from '@shared/intent';
+import { logSessionCreated } from '@/lib/eventLogger';
 
 const INTENT_OPTIONS: { value: Intent | null; label: string; icon: string }[] = [
   { value: null, label: '자동', icon: '🕐' },
@@ -186,13 +187,22 @@ export default function LunchieSettingsPage() {
       const hostName = profile.name && profile.name !== '사용자' ? profile.name : '호스트';
       const sessionName = `${hostName}의 점심 세션`;
 
-      await createSession(
+      const session = await createSession(
         sessionName,
         { partySize, dietary, budget, radius, categories, intent: intent ?? undefined },
         hostName,
         profile.emoji,
         deadlineMin,
       );
+      logSessionCreated(session.id, {
+        intent: intent ?? 'auto',
+        party_size: partySize,
+        radius_m: radius,
+        budget,
+        dietary_count: dietary.length,
+        category_count: categories.length,
+        deadline_minutes: deadlineMin,
+      });
       toast.success('점심 세션이 생성되었습니다', {
         position: 'top-center',
         style: { marginTop: 'calc(env(safe-area-inset-top, 0px) + 64px)' },

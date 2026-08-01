@@ -244,3 +244,66 @@ export function buildControlSlate(pool: Candidate[], ctx: RecContext, opts: Slat
     rank,
   }));
 }
+
+const dot = (a: number[], b: number[]) => {
+  let s = 0;
+  for (let i = 0; i < a.length; i++) s += a[i] * b[i];
+  return s;
+};
+
+export interface CourseFeedItem {
+  id: string;
+  courseId: string;
+  creatorId: string;
+  title?: string;
+  tags?: string[];
+  stops: Array<{ placeId: string; category?: string }>;
+  savedCount?: number;
+}
+
+// Munchie 피드 개인화 랭킹 스코어러 (θ_u 기반 Thompson 샘플링 + 15% ε-다양성 탐색)
+export function scoreFeedCourses<T extends CourseFeedItem>(
+  userId: string | null | undefined,
+  courses: T[],
+  sampleThetaFn?: (uid: string) => number[] | null,
+  getItemVectorFn?: (placeId: string) => number[] | undefined,
+  eps = 0.15
+): T[] {
+  if (!courses.length) return [];
+  const theta = userId && sampleThetaFn ? sampleThetaFn(userId) : null;
+
+  const scored = courses.map((course) => {
+    let tasteScore = 0.5; // 콜드스타트 기본값
+    if (theta && getItemVectorFn && course.stops.length > 0) {
+      let sum = 0;
+      let count = 0;
+      for (const stop of course.stops) {
+        const vec = getItemVectorFn(stop.placeId);
+        if (vec) {
+          sum += 1 / (1 + Math.exp(-dot(theta, vec)));
+          count++;
+        }
+      }
+      if (count > 0) tasteScore = sum / count;
+    }
+    const popularityScore = Math.min(1, Math.log10((course.savedCount ?? 0) + 1) / 3);
+    const totalScore = 0.7 * tasteScore + 0.3 * popularityScore;
+    return { course, score: totalScore };
+  });
+
+  // 점수 내림차순 정렬
+  scored.sort((a, b) => b.score - a.score);
+
+  // 15% ε-탐색 (세렌디피티 보너스 / 에코챔버 방지)
+  const result = scored.map((s) => s.course);
+  for (let i = 0; i < result.length; i++) {
+    if (Math.random() < eps) {
+      const randIdx = Math.floor(Math.random() * result.length);
+      const temp = result[i];
+      result[i] = result[randIdx];
+      result[randIdx] = temp;
+    }
+  }
+
+  return result;
+}

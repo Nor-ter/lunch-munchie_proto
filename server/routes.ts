@@ -11,7 +11,7 @@ import { MOCK_RESTAURANTS, MOCK_COURSES } from "./melbourneData.js";
 import { buildSlate, buildControlSlate, assignVariant } from "./engine/scorer.js";
 import { recordEvents, memEventCount, getMetrics, recordCatalogSize, recordItemFeatures, getItemFeatures, todayStops, recentStops } from "./engine/events.js";
 import { enrichContext } from "./engine/context.js";
-import { getTaste, updateTaste, updatePairwise, pairwiseWeight, sampleTheta, tasteFitFromTheta, MIN_TASTE } from "./engine/taste.js";
+import { getTaste, updateTaste, updatePairwise, pairwiseWeight, sampleTheta, tasteFitFromTheta, MIN_TASTE, EVENT_WEIGHTS } from "./engine/taste.js";
 import { buildItemVector, reputationPrior } from "./engine/features.js";
 import { exposurePenalty, recordExposure } from "./engine/exposure.js";
 import { satiation as satiationScore, recordConsumption } from "./engine/satiation.js";
@@ -171,8 +171,6 @@ function drivePhotosByRestaurant(): Map<string, string[]> {
 
 // 드라이브 인제스천 식당 전체(팀이 직접 다녀와 사진을 올린 곳) — 실사진·실메뉴 보유.
 // OSM과 이름이 겹치지 않아 카탈로그에 없던 곳까지 여기서 카탈로그에 편입한다.
-// 좌표 없는 곳은 CBD 플레이스홀더 + needsEnrichment 로 표시(거리 필터에 쓰기 전 보강 필요).
-const MEL_CBD = { lat: -37.8136, lng: 144.9631 };
 let __driveRestaurants: Record<string, any>[] | undefined;
 function driveRestaurants(): Record<string, any>[] {
   if (__driveRestaurants) return __driveRestaurants;
@@ -184,6 +182,10 @@ function driveRestaurants(): Record<string, any>[] {
         menu_items?: { restaurant_id: string; name: string; price: number | null; category?: string | null; description?: string | null; dietary?: string[] }[];
       };
       const dp = drivePhotosByRestaurant();
+      const idCounts = new Map<string, number>();
+      for (const restaurant of d.restaurants ?? []) {
+        idCounts.set(restaurant.id, (idCounts.get(restaurant.id) ?? 0) + 1);
+      }
       const menus = new Map<string, Record<string, unknown>[]>();
       for (const m of d.menu_items ?? []) {
         const arr = menus.get(m.restaurant_id) ?? [];
@@ -192,18 +194,20 @@ function driveRestaurants(): Record<string, any>[] {
       }
       for (const r of d.restaurants ?? []) {
         const photos = dp.get(r.id) ?? [];
+        // 지도·거리 추천에는 검증된 위치와 실제 이미지가 필수다. 불완전 수집 행을
+        // CBD 좌표로 위장하거나 다른 식당 사진으로 보완하지 않는다.
+        const hasCoordinates = Number.isFinite(r.lat) && Number.isFinite(r.lng) && r.coord_source !== "placeholder";
+        if (!hasCoordinates || photos.length === 0 || (idCounts.get(r.id) ?? 0) !== 1) continue;
         out.push({
           id: r.id, name: r.name, category: r.category || r.cuisine_guess || "기타",
           tags: [], rating: 0, review_count: 0,
-          // 좌표: 사진 EXIF GPS > Nominatim(OSM) 지오코딩 > CBD 플레이스홀더.
-          // 플레이스홀더인 곳은 needsEnrichment=true (거리 필터를 신뢰하면 안 됨).
           address: r.resolved_address || "Melbourne VIC",
-          latitude: typeof r.lat === "number" ? r.lat : MEL_CBD.lat,
-          longitude: typeof r.lng === "number" ? r.lng : MEL_CBD.lng,
-          coordSource: r.coord_source ?? "placeholder",
+          latitude: r.lat,
+          longitude: r.lng,
+          coordSource: r.coord_source,
           price_level: 2, photos, menu_items: menus.get(r.id) ?? [],
           business_hours: null, dietary_options: [], short_description: null,
-          needsEnrichment: !r.coord_source || r.coord_source === "placeholder",
+          needsEnrichment: false,
         });
       }
       if (out.length) console.log(`[data] 드라이브 식당 카탈로그: ${out.length}곳 (사진 보유 ${out.filter(x => x.photos.length).length}곳)`);
@@ -844,30 +848,55 @@ export function createEventsHandler(
           }))
         : requestedEvents;
 
-    // v1 온라인 학습: 스와이프(암묵 라벨)마다 취향 벡터 theta_u를 즉시 SGD 갱신.
-    // v2 satiation: WINNER(=소비 프록시)로 (user,카테고리,시각) 소비 이력 누적.
+    // 스와이프·선택은 취향을, 검증된 VISIT만 포만감·동선 상태를 갱신한다.
     for (const e of events) {
-      if (!e.user_id || !e.restaurant_id) continue;
+      if (!e.user_id) continue;
+      const uid = String(e.user_id);
+
+      // Munchie 피드/코스 신호 처리 (course_id 기반)
+      if (e.course_id && (e.event_type === "FEED_LIKE" || e.event_type === "FEED_DISLIKE" || e.event_type === "COURSE_SAVE" || e.event_type === "COURSE_OPEN")) {
+        const dbRes = await tryDb(async () => {
+          const items = await db.select().from(courseItems).where(eq(courseItems.course_id, e.course_id!));
+          return items;
+        });
+        const items = dbRes.ok ? dbRes.value : [];
+        const numStops = Math.max(1, items.length);
+        const baseWeight = e.event_type === "FEED_LIKE" ? EVENT_WEIGHTS.FEED_LIKE :
+                           e.event_type === "FEED_DISLIKE" ? EVENT_WEIGHTS.FEED_DISLIKE :
+                           e.event_type === "COURSE_SAVE" ? EVENT_WEIGHTS.COURSE_SAVE : EVENT_WEIGHTS.COURSE_OPEN;
+        const dilutedWeight = Math.abs(baseWeight) / numStops;
+        const targetVal = baseWeight >= 0 ? 1 : 0;
+
+        for (const item of items) {
+          const feat = getItemFeatures(item.restaurant_id);
+          if (feat) {
+            const vec = buildItemVector({ ...feat, id: item.restaurant_id });
+            updateTaste(uid, vec, targetVal, dilutedWeight);
+          }
+        }
+        // Model Access Isolation: Satiation & Personal Chain 갱신은 수행하지 않음!
+      }
+
+      if (!e.restaurant_id) continue;
       const feat = getItemFeatures(String(e.restaurant_id));
       if (!feat) continue;
-      const uid = String(e.user_id);
-      const vec = buildItemVector({ ...feat, id: String(e.restaurant_id) }); // id → 피처 스토어 우선 조회
+      const vec = buildItemVector({ ...feat, id: String(e.restaurant_id) });
+
       if (e.event_type === "SWIPE" && (e.action === "LIKE" || e.action === "NOPE")) {
-        updateTaste(uid, vec, e.action === "LIKE" ? 1 : 0); // 스와이프=약한 라벨 (둘 다 별로의 FINAL NOPE도 여기)
+        updateTaste(uid, vec, e.action === "LIKE" ? 1 : 0, EVENT_WEIGHTS.SWIPE);
       } else if (e.event_type === "SWIPE" && e.action === "CHOOSE") {
-        // 듀얼 A>B = 최고급 pairwise 신호 (결정 플로우 ⑤). opponent로 패자 파생해 pairwise 학습.
-        // 신뢰도 가중: 빠르고 단호할수록 강하게(decision_ms).
         const c = e.context as { opponent_id?: string; decision_ms?: number } | null | undefined;
         const oppFeat = c?.opponent_id ? getItemFeatures(String(c.opponent_id)) : undefined;
         if (oppFeat) updatePairwise(uid, vec, buildItemVector({ ...oppFeat, id: String(c!.opponent_id) }), pairwiseWeight(c?.decision_ms));
-      } else if (e.event_type === "WINNER" && feat.category) {
-        updateTaste(uid, vec, 1, 2); // v4: 우승=강한 긍정(직접 선택)
-        const ctx = e.context as { consumed_at?: number } | null | undefined;
-        const ts = typeof ctx?.consumed_at === "number" ? ctx.consumed_at : Date.now();
-        recordConsumption(uid, feat.category, ts); // v2 satiation
-        recordStop(uid, feat.category, ts);        // v2 음식 연쇄
-      } else if (e.event_type === "COURSE_SAVE") {
-        updateTaste(uid, vec, 1, 3); // v4: 저장=가장 강한 명시 신호
+      } else if (e.event_type === "WINNER") {
+        updateTaste(uid, vec, 1, EVENT_WEIGHTS.WINNER);
+      } else if (e.event_type === "VISIT" && feat.category) {
+        updateTaste(uid, vec, 1, EVENT_WEIGHTS.VISIT);
+        recordConsumption(uid, feat.category, Date.now());
+        recordStop(uid, feat.category, Date.now());
+      } else if (e.event_type === "SURVEY") {
+        const val = e.action === "POS" ? 1 : e.action === "NEG" ? 0 : 0.5;
+        updateTaste(uid, vec, val, EVENT_WEIGHTS.SURVEY);
       }
     }
     const result = await dependencies.persistEvents(events);
@@ -904,21 +933,16 @@ export function createRecommendHandler(
   if (identity.status === "responded") return;
   const userId = identity.userId;
 
-  // 맥락 보강(Phase 0b): 클라가 안 보낸 파생 가능 필드(시간대·요일·도시·날씨)를 서버에서 채움.
-  // 스코어링·IMPRESSION 로깅 모두 보강된 맥락을 쓴다.
   const ctx: RecContext = await dependencies.enrichRequestContext(body.context ?? {});
   const k = typeof body.k === "number" ? body.k : 7;
-  // 진짜 A/B: 서버가 user_id로 결정적 배정 (body.variant는 테스트 오버라이드용).
   const variant: string = body.variant ?? assignVariant(userId);
   const pool = await dependencies.loadCandidates();
-  recordCatalogSize(pool.length); // 커버리지 분모(전체 카탈로그 크기) 추적
-  recordItemFeatures(pool.map((c) => ({ id: c.id, category: c.category, price_level: c.price_level, rating: c.rating }))); // feature 효과 분석용
-  // 클라이언트가 사전 필터(카테고리 등)한 후보만 점수화하도록 범위 제한 (선택)
+  recordCatalogSize(pool.length);
+  recordItemFeatures(pool.map((c) => ({ id: c.id, category: c.category, price_level: c.price_level, rating: c.rating })));
   const candidateIds: string[] | undefined = Array.isArray(body.candidate_ids) ? body.candidate_ids : undefined;
   const scoped = candidateIds && candidateIds.length
     ? pool.filter((c) => new Set(candidateIds).has(c.id))
     : pool;
-  // diet 하드 제약 필터 (정규화 후 매칭). 모두 걸러지면 빈 덱 방지를 위해 완화.
   const reqDiet = requiredHardDiets(ctx.diet);
   let filtered = scoped;
   let diet_relaxed = false;
@@ -929,23 +953,20 @@ export function createRecommendHandler(
       diet_relaxed = true;
     }
   }
-  // 인텐트(밥/카페/디저트) 필터: 후보를 해당 카테고리군으로 제한. 모두 걸러지면 완화.
   let intent_relaxed = false;
   if (ctx.intent) {
     const byIntent = filtered.filter((c) => intentForCategory(c.category) === ctx.intent);
     if (byIntent.length) filtered = byIntent;
     else intent_relaxed = true;
   }
-  // 처치가 실제로 다르다: control=랜덤 베이스라인, B=엔진(취향+노출피로+재소비+연쇄).
   const now = Date.now();
-  // 그룹 합의: member_ids 있으면 멤버 취향을 least-misery로 합성. 없으면 단일 유저.
   const memberIds: string[] = Array.isArray(body.member_ids) && body.member_ids.length
     ? body.member_ids.map(String)
     : (userId ? [String(userId)] : []);
   const memberThetas: number[][] = [];
   for (const uid of memberIds) {
     const t = getTaste(uid);
-    if (t && t.n >= MIN_TASTE) memberThetas.push(sampleTheta(t)); // 멤버별 Thompson 샘플
+    if (t) memberThetas.push(sampleTheta(t)); // RL 탐색: n=0부터 Thompson 샘플
   }
   // least-misery: 후보별 멤버 tasteFit의 최소 (아무도 불행하지 않게). 학습된 멤버 없으면 콜드.
   const tasteFit = (c: Candidate) => {

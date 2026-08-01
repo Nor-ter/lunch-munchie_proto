@@ -59,9 +59,19 @@ function MenuCube({ photos, step }: { photos: string[]; step: number }) {
   const photoIndex = ((step % n) + n) % n;
   const front = ((step % 4) + 4) % 4;
 
-  const facesRef = useRef<number[]>([0, 0, 0, 0]);
-  facesRef.current[front] = photoIndex;
-  const faces = facesRef.current;
+  // 처음 열릴 때 모든 면을 첫 사진으로 채우면, 옆면이 보이는 순간 첫
+  // 메뉴 사진이 중복으로 튀어나온다. 각 면을 순서대로 준비해 둔 뒤,
+  // 회전 직전에 들어올 면만 다음 사진으로 교체한다.
+  const faceState = useRef<{ photoKey: string; faces: number[] } | null>(null);
+  const photoKey = photos.join("\u0000");
+  if (!faceState.current || faceState.current.photoKey !== photoKey) {
+    faceState.current = {
+      photoKey,
+      faces: Array.from({ length: 4 }, (_, face) => face % n),
+    };
+  }
+  faceState.current.faces[front] = photoIndex;
+  const faces = faceState.current.faces;
 
   return (
     <div ref={ref} className="absolute inset-0 pointer-events-none" style={{ perspective: 1000 }}>
@@ -563,6 +573,7 @@ function WinnerScreen({ selectedWinner, onReset }: { selectedWinner?: Restaurant
   const [isCapturing, setIsCapturing] = useState(false);
   const [saved, setSaved] = useState(false);
   const [detailIndex, setDetailIndex] = useState<number | null>(null);
+  const winnerEventKeyRef = useRef<string | null>(null);
   const [liveResults, setLiveResults] = useState<{
     results: { restaurantId: string; score: number; likeCount: number; dislikeCount: number }[];
     winnerId?: string | null;
@@ -594,7 +605,18 @@ function WinnerScreen({ selectedWinner, onReset }: { selectedWinner?: Restaurant
 
   useEffect(() => {
     if (winner) {
-      logWinner(winner.id, { user_id: profile.id, session_id: currentSession?.id ?? null, slate_id: currentSession?.slateId ?? null, context: { intent: intentForCategory(winner.category) ?? undefined } });
+      const idempotencyKey = winnerEventKeyRef.current ?? `winner:${currentSession?.id ?? crypto.randomUUID()}:${winner.id}`;
+      winnerEventKeyRef.current = idempotencyKey;
+      // WINNER의 정본은 바로 아래 journey-winner API가 멱등 키와 함께 저장한다.
+      // eventLogger로도 보내면 같은 결정을 두 번 학습하게 된다.
+      const journeyStop = { restaurant_id: winner.id, name: winner.name, category: winner.category, intent: intentForCategory(winner.category) ?? null, at: Date.now(), satisfaction: null };
+      try {
+        const stored = JSON.parse(localStorage.getItem('lm_today_journey') ?? '[]') as typeof journeyStop[];
+        const today = new Date().toDateString();
+        const current = stored.filter(item => new Date(item.at).toDateString() === today && item.restaurant_id !== winner.id);
+        localStorage.setItem('lm_today_journey', JSON.stringify([...current, journeyStop]));
+      } catch { /* 여정 저장 실패가 결과 화면을 막으면 안 된다. */ }
+      void fetch('/api/journey-winner', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ restaurantId: winner.id, sessionId: currentSession?.id, intent: journeyStop.intent, idempotencyKey }) });
       // 회고 대기: 다음 홈 진입 시 "어땠어요?" 설문 → 만족 정답(SURVEY) 수집
       try { localStorage.setItem('lunchie_retro', JSON.stringify({ id: winner.id, name: winner.name, session: currentSession?.id ?? null, at: Date.now() })); } catch { /* noop */ }
     }

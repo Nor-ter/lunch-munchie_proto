@@ -6,18 +6,20 @@ import { FollowerListSheet, type FollowListMode } from '@/components/follow/Foll
 import { ProfileStats } from '@/components/follow/ProfileStats';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { useUser } from '@/hooks/useUser';
+import { DEMO_AUTHORS } from '@/data/demoAuthors';
 
 export default function OtherProfilePage() {
   const { id = '' } = useParams<{ id: string }>();
   const [, navigate] = useLocation();
-  const user = useUser(id);
+  const demoUser = DEMO_AUTHORS[id];
+  const user = useUser(id, !demoUser);
   const [listMode, setListMode] = useState<FollowListMode | null>(null);
 
-  if (user.isLoading) {
+  if (user.isLoading && !demoUser) {
     return <main className="flex min-h-dvh items-center justify-center bg-[#FCF4EE] text-sm text-[#9B9B9B]">프로필을 불러오는 중…</main>;
   }
 
-  if (!user.data) {
+  if (!demoUser && !user.data) {
     return (
       <main className="flex min-h-dvh items-center justify-center bg-[#FCF4EE] px-6 text-center">
         <div>
@@ -30,6 +32,8 @@ export default function OtherProfilePage() {
     );
   }
 
+  const profile = demoUser ?? user.data!;
+  const isDemo = Boolean(demoUser);
   return (
     <main className="min-h-dvh bg-[#FCF4EE] pb-24">
       <header className="flex items-center px-4 pb-3 pt-10">
@@ -42,27 +46,23 @@ export default function OtherProfilePage() {
       <section className="mx-4 mt-3 rounded-[28px] bg-[#F8DCD2] p-6">
         <div className="flex items-center gap-4">
           <Avatar className="size-20 border-4 border-white/70">
-            {user.data.profile_image_url && <AvatarImage src={user.data.profile_image_url} alt="" />}
-            <AvatarFallback className="bg-white/70 text-xl font-black">{user.data.username.slice(0, 1).toUpperCase()}</AvatarFallback>
+            {profile.profile_image_url && <AvatarImage src={profile.profile_image_url} alt="" />}
+            <AvatarFallback className="bg-white/70 text-xl font-black">{profile.username.slice(0, 1).toUpperCase()}</AvatarFallback>
           </Avatar>
           <div className="min-w-0 flex-1">
-            <p className="truncate text-lg font-black text-[#3B2A22]">@{user.data.username}</p>
-            {user.data.location && <p className="mt-1 flex items-center gap-1 text-xs text-[#8A6E60]"><MapPin size={12} />{user.data.location}</p>}
-            {user.data.bio && <p className="mt-2 text-sm text-[#6F5549]">{user.data.bio}</p>}
+            <p className="truncate text-lg font-black text-[#3B2A22]">@{profile.username}</p>
+            {profile.location && <p className="mt-1 flex items-center gap-1 text-xs text-[#8A6E60]"><MapPin size={12} />{profile.location}</p>}
+            {profile.bio && <p className="mt-2 text-sm text-[#6F5549]">{profile.bio}</p>}
           </div>
-          <FollowButton userId={user.data.id} />
+          {!isDemo && <FollowButton userId={profile.id} />}
         </div>
         <div className="mt-6 grid grid-cols-2">
-          <ProfileStats
-            userId={user.data.id}
-            onPressFollowers={() => setListMode('followers')}
-            onPressFollowing={() => setListMode('following')}
-          />
+          {isDemo ? <div className="col-span-2 text-center text-xs font-semibold text-[#8A6E60]">샘플 피드 작성자</div> : <ProfileStats userId={profile.id} onPressFollowers={() => setListMode('followers')} onPressFollowing={() => setListMode('following')} />}
         </div>
       </section>
 
       <section className="px-5 py-10 text-center text-sm text-[#9B9B9B]">공개 코스와 피드는 다음 연결 단계에서 표시됩니다.</section>
-      <FollowerListSheet open={listMode !== null} userId={user.data.id} mode={listMode ?? 'followers'} onOpenChange={(open) => !open && setListMode(null)} />
+      {!isDemo && <FollowerListSheet open={listMode !== null} userId={profile.id} mode={listMode ?? 'followers'} onOpenChange={(open) => !open && setListMode(null)} />}
     </main>
   );
 }

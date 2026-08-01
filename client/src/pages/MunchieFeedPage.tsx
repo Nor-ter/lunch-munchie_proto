@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { AnimatePresence, motion } from 'framer-motion';
 import { Palette, Plus, Settings2 } from 'lucide-react';
@@ -10,8 +10,11 @@ import UnifiedMunchieCard from '@/components/munchie/UnifiedMunchieCard';
 
 export default function MunchieFeedPage() {
   const [, navigate] = useLocation();
-  const { feedPosts } = useApp();
+  const { feedPosts, refreshFeedPosts } = useApp();
   const [activeFilter, setActiveFilter] = useState<TagType | 'all'>('all');
+  // 피드는 공개 서버 원본이다. 앱 초기화의 다른 요청이 실패해도 피드 진입 시에는
+  // 반드시 다시 읽어, 방금 발행한 게시물이 캐시에 가려지지 않게 한다.
+  useEffect(() => { void refreshFeedPosts().catch(() => undefined); }, [refreshFeedPosts]);
   const filteredPosts = activeFilter === 'all'
     ? feedPosts
     : feedPosts.filter(post => hasFoodTag(post.tags, activeFilter as TagType));

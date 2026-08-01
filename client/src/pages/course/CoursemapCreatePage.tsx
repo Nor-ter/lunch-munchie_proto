@@ -7,7 +7,7 @@
  * ⑤ 미리보기 — 게시 전 확인 (버튼 비활성)
  * ⑥ 포스팅 완료 — 주먹밥 보상 지급
  */
-import { useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { useLocation, useSearch } from 'wouter';
 import {
@@ -28,6 +28,7 @@ import { fileToResizedDataUrl } from '@/lib/imageUtils';
 import OneLineReviewBox from '@/components/munchie/OneLineReviewBox';
 import UnifiedMunchieCard from '@/components/munchie/UnifiedMunchieCard';
 import { TemplateBackgroundLayer, TemplateFrameLayer } from '@/components/munchie/TemplateLayers';
+import { useAuthStatus } from '@/hooks/useAuthStatus';
 
 const STEP_TITLES = [
   '코스맵을 정하세요',
@@ -929,12 +930,12 @@ function PhotoEditorModal({ src, onSave, onClose }: {
 
 // ── 메인 페이지 ───────────────────────────────────────────────────────────────
 
-export default function CoursemapCreatePage() {
+function CoursemapCreateContent() {
   const [, navigate] = useLocation();
   const search = useSearch();
   const sourceCourseId = new URLSearchParams(search).get('course');
   const {
-    profile, getCourseById, getRestaurantById, addCourse, addFeedPost,
+    profile, getCourseById, getRestaurantById, addCourse, refreshFeedPosts,
   } = useApp();
 
   // 복사해서 가져오기 — 기존 코스의 장소·해시태그를 초기값으로
@@ -966,6 +967,7 @@ export default function CoursemapCreatePage() {
   const [editingPhotoId, setEditingPhotoId] = useState<string | null>(null);
   const [rewardCount, setRewardCount] = useState<number | null>(null);
   const [publishedCourseId, setPublishedCourseId] = useState<string | null>(null);
+  const [isPublishing, setIsPublishing] = useState(false);
 
   const filledPins = pins.filter((pin): pin is CoursePin => !!pin);
   const template = COURSEMAP_TEMPLATES[templateIndex]!;
@@ -1032,13 +1034,13 @@ export default function CoursemapCreatePage() {
     step === 2 && placed.length === 0 ? '사진을 1장 이상 올려주세요' :
     null;
 
-  const publish = () => {
-    const newId = `course_${Date.now()}`;
+  const publish = async () => {
+    if (isPublishing) return;
     const linked = filledPins.map(pin => pin.restaurant);
     const tagPool = Array.from(new Set(linked.flatMap(restaurant => restaurant.tags)));
     const title = `${linked[0]!.name}${linked.length > 1 ? ` 외 ${linked.length - 1}곳` : ''} 코스`;
     const course: Course = {
-      id: newId,
+      id: '',
       title,
       description: caption.trim(),
       heroImage: photoPool[0] ?? linked[0]!.image ?? '',
@@ -1059,23 +1061,46 @@ export default function CoursemapCreatePage() {
       })),
       createdAt: new Date().toISOString().slice(0, 10),
       isPublic: true,
-      creatorId: profile.id,
+      creatorId: '',
       savedCount: 0,
     };
+    setIsPublishing(true);
+    try {
+      // data URL은 이 브라우저에만 존재한다. 게시 전에 R2 경로로 바꿔야 다른 사람이
+      // 같은 사진과 배치를 볼 수 있다.
+      const persistPhoto = async (src: string) => {
+        if (!src.startsWith('data:image/')) return src;
+        const uploaded = await fetch('/api/uploads', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ dataUrl: src }) });
+        const payload = await uploaded.json() as { url?: string; error?: string };
+        if (!uploaded.ok || !payload.url) throw new Error(payload.error ?? '사진을 업로드하지 못했어요.');
+        return payload.url;
+      };
+      const serverPlaced = await Promise.all(placed.slice(0, MAX_MUNCHIE_FEED_PHOTOS).map(async photo => ({ ...photo, src: await persistPhoto(photo.src) })));
+      const serverPhotos = Array.from(new Set(serverPlaced.map(photo => photo.src)));
+      const response = await fetch('/api/courses', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          title: course.title, description: course.description, heroImage: serverPhotos[0] ?? course.heroImage,
+          tags: course.tags, hashtags: course.hashtags, region: course.region,
+          metadata: course.metadata, stops: course.stops, feedPhotos: serverPhotos,
+          feedDecor: serverPlaced, templateId: template.id,
+        }),
+      });
+      const saved = await response.json() as { id?: string; authorId?: string; error?: string; code?: string };
+      if (response.status === 401 || saved.code === 'AUTH_REQUIRED') {
+        toast.error('포스팅하려면 Google 로그인이 필요해요.');
+        window.location.assign('/api/auth/google/start?next=%2Fcoursemap%2Fnew');
+        return;
+      }
+      if (!response.ok || !saved.id) throw new Error(saved.error ?? '코스를 저장하지 못했어요.');
 
-    addCourse(course);
-    setTemplateForCourse(newId, template.id);
-    saveCoursemapDecor(newId, placed.slice(0, MAX_MUNCHIE_FEED_PHOTOS));
-    addFeedPost({
-      authorId: profile.id,
-      authorName: profile.name,
-      authorEmoji: profile.emoji,
-      courseId: newId,
-      photos: placed.slice(0, MAX_MUNCHIE_FEED_PHOTOS).map(photo => photo.src),
-      caption: caption.trim(),
-      skinId: 'default',
-      tags: course.tags,
-    });
+      // 서버 저장 성공 후에만 즉시 화면에 반영한다. 이 로컬 값은 캐시이며 원본은 D1이다.
+      const persistedCourse = { ...course, id: saved.id, creatorId: saved.authorId ?? profile.id };
+      addCourse(persistedCourse);
+      // 피드도 서버 원본을 즉시 반영한다. 새로고침 전에는 안 보이던 동기화 누락을 막는다.
+      await refreshFeedPosts();
+      setTemplateForCourse(saved.id, template.id);
+      saveCoursemapDecor(saved.id, serverPlaced);
 
     // 보상 — 주먹밥 +1 (프로필 런치메이트 밥 주기용)
     let riceballs = 0;
@@ -1083,9 +1108,14 @@ export default function CoursemapCreatePage() {
       riceballs = Number(localStorage.getItem('lm_riceball_count') ?? '0') + 1;
       localStorage.setItem('lm_riceball_count', String(riceballs));
     } catch { riceballs = 1; }
-    setRewardCount(riceballs);
-    setPublishedCourseId(newId);
-    setStep(4);
+      setRewardCount(riceballs);
+      setPublishedCourseId(saved.id);
+      setStep(4);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : '코스를 저장하지 못했어요.');
+    } finally {
+      setIsPublishing(false);
+    }
   };
 
   const goNext = () => {
@@ -1093,7 +1123,7 @@ export default function CoursemapCreatePage() {
       if (nextHint) toast.error(nextHint);
       return;
     }
-    if (step === 3) { publish(); return; }
+    if (step === 3) { void publish(); return; }
     setStep(current => current + 1);
   };
 
@@ -1254,12 +1284,13 @@ export default function CoursemapCreatePage() {
             )}
             <motion.button
               type="button"
-              whileTap={{ scale: canNext ? 0.97 : 1 }}
+              whileTap={{ scale: canNext && !isPublishing ? 0.97 : 1 }}
               onClick={goNext}
+              disabled={isPublishing}
               className="h-[52px] flex-[1.6] rounded-2xl text-[14px] font-black text-white shadow-lg transition-colors"
               style={{ background: canNext ? '#EB5053' : '#E5CFC5' }}
             >
-              {nextLabel}
+              {isPublishing ? '저장 중…' : nextLabel}
             </motion.button>
           </div>
         </div>
@@ -1281,4 +1312,29 @@ export default function CoursemapCreatePage() {
       </AnimatePresence>
     </div>
   );
+}
+
+// 포스팅은 공개 콘텐츠 열람과 달리 로그인 전에는 작성 화면조차 열지 않는다.
+// 서버 권한 검증과 별개로, 여기서 UX 진입점도 단일 정책으로 막는다.
+export default function CoursemapCreatePage() {
+  const auth = useAuthStatus();
+  const [, navigate] = useLocation();
+  const search = useSearch();
+  const next = `/coursemap/new${search}`;
+
+  useEffect(() => {
+    if (auth.data?.isAnonymous) {
+      window.location.replace(`/api/auth/google/start?next=${encodeURIComponent(next)}`);
+    }
+  }, [auth.data?.isAnonymous, navigate, next]);
+
+  if (auth.isLoading || !auth.data || auth.data.isAnonymous) {
+    return (
+      <main className="flex min-h-dvh items-center justify-center bg-[#FCF4EE] px-6 text-center">
+        <p className="text-sm font-bold text-[#8C7D74]">로그인 확인 중…</p>
+      </main>
+    );
+  }
+
+  return <CoursemapCreateContent />;
 }

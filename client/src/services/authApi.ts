@@ -1,5 +1,5 @@
 import type { User } from '@supabase/supabase-js';
-import { ensureAnonymousSession, supabase } from '@/lib/supabase';
+import { supabase } from '@/lib/supabase';
 
 export const IDENTITY_CONFLICT_CODE = 'identity_already_exists';
 export const GOOGLE_PROFILE_IMPORT_PARAM = 'google_profile';
@@ -54,25 +54,20 @@ export function clearAuthRedirectError(): void {
 }
 
 export async function linkIdentityWithGoogle(): Promise<void> {
-  const { error } = await supabase.auth.linkIdentity({
-    provider: 'google',
-    options: { redirectTo: getAuthRedirectTo() },
-  });
-  if (error) throw error;
+  window.location.assign(`/api/auth/google/start?next=${encodeURIComponent('/profile')}`);
 }
 
 export async function confirmConflictSignIn(): Promise<void> {
-  const { error } = await supabase.auth.signInWithOAuth({
-    provider: 'google',
-    options: { redirectTo: getAuthRedirectTo() },
-  });
-  if (error) throw error;
+  window.location.assign(`/api/auth/google/start?next=${encodeURIComponent('/profile')}`);
 }
 
 export async function signOutToAnonymous(): Promise<void> {
-  const { error } = await supabase.auth.signOut();
-  if (error) throw error;
-  await ensureAnonymousSession();
+  const response = await fetch('/api/auth/logout', { method: 'POST', credentials: 'same-origin' });
+  if (!response.ok) throw new Error('로그아웃하지 못했어요.');
+  // 다른 사람이 같은 브라우저를 열었을 때 이전 계정의 방/투표 상태를 복원하지 않는다.
+  for (const key of ['lm_session', 'lm_swipes', 'lm_feed_likes', 'lm_feed_dislikes', 'lm_today_journey']) {
+    localStorage.removeItem(key);
+  }
 }
 
 export function getGoogleIdentityProfile(user: User): { displayName: string | null; avatarUrl: string | null } {

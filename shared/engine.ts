@@ -4,6 +4,8 @@
 import type { Intent } from "./intent.js";
 
 export const EVENT_TYPES = [
+  "ONBOARDING_COMPLETED", // 가입 시 사용자가 직접 고른 안전 제약·초기 관심사 (추천 점수에는 미반영)
+  "SESSION_CREATED",     // Lunchie 한 번의 의사결정 맥락; 장기 취향이 아닌 요청 조건
   "IMPRESSION", // 추천 카드 노출 (propensity 기록 대상)
   "SWIPE",      // like / nope
   "WINNER",     // 우승 식당 확정
@@ -12,6 +14,9 @@ export const EVENT_TYPES = [
   "REORDER",    // 재주문/재소비
   "COURSE_SAVE",// 추천 코스 저장 (명시 신호)
   "COURSE_EDIT",// 추천 코스 수정 (연쇄 선호 신호)
+  "FEED_LIKE",  // Munchie 피드 좋아요 (열망 신호 w=0.25)
+  "FEED_DISLIKE",// Munchie 피드 싫어요 (열망 신호 w=-0.25)
+  "COURSE_OPEN",// Munchie 코스 상세 열람 (관심 신호 w=0.1)
   "REROLL",     // 다시하기 (불만족·피로 신호)
   "SURVEY",     // 회고 마이크로설문 (action: POS|NEU|NEG = 👍😐👎, 만족 정답)
   "ABANDON",    // 중도 이탈 (결정 전 나감 · context: phase·swipes_done = 어디서 몇 장 보고)
@@ -55,10 +60,13 @@ export interface ScoredItem {
 export type SlateType = "PRELIM" | "FINAL" | "NEXT_STOP" | "COURSE_FEED";
 
 export interface RecEventInput {
+  /** 브라우저 재전송/중복 flush에도 한 번의 행동만 저장하기 위한 클라이언트 생성 키 */
+  idempotency_key?: string | null;
   event_type: EventType;
   slate_id?: string | null;
   slate_type?: SlateType | null;
   user_id?: string | null;
+  course_id?: string | null;
   session_id?: string | null;
   group_id?: string | null;
   restaurant_id?: string | null;

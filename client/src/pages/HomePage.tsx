@@ -11,6 +11,7 @@ import {
 import LunchkinCharacter from '@/components/munchie/LunchkinCharacter';
 import UnifiedMunchieCard from '@/components/munchie/UnifiedMunchieCard';
 import HeaderIconButton, { HeaderActionRow } from '@/components/ui/HeaderIconButton';
+import { useAuthStatus } from '@/hooks/useAuthStatus';
 
 type JourneyStop = {
   restaurant_id: string;
@@ -181,6 +182,7 @@ export default function HomePage() {
   const [, navigate] = useLocation();
   const search = useSearch();
   const { feedPosts, profile, isMyPost } = useApp();
+  const auth = useAuthStatus();
   const [journeyStops, setJourneyStops] = useState<JourneyStop[]>([]);
   const [notificationsOpen, setNotificationsOpen] = useState(false);
   const [readNotificationIds, setReadNotificationIds] = useState<string[]>(() => {
@@ -189,10 +191,20 @@ export default function HomePage() {
   });
 
   useEffect(() => {
+    let localStops: JourneyStop[] = [];
+    try {
+      const today = new Date().toDateString();
+      localStops = (JSON.parse(localStorage.getItem('lm_today_journey') ?? '[]') as JourneyStop[])
+        .filter(stop => new Date(stop.at).toDateString() === today);
+    } catch { /* local journey is an optional anonymous-mode convenience */ }
+    if (auth.data?.isAnonymous) { setJourneyStops(localStops); return; }
     let active = true;
-    fetchTodayJourney(profile.id).then(stops => { if (active) setJourneyStops(stops); });
+    fetch('/api/journey-today', { credentials: 'same-origin' })
+      .then(response => response.ok ? response.json() : { stops: [] })
+      .then((data: { stops?: JourneyStop[] }) => { if (active) setJourneyStops(data.stops?.length ? data.stops : localStops); })
+      .catch(() => { if (active) setJourneyStops(localStops); });
     return () => { active = false; };
-  }, [profile.id]);
+  }, [auth.data?.isAnonymous, profile.id]);
 
   useEffect(() => {
     localStorage.setItem('lm_read_notifications', JSON.stringify(readNotificationIds));
@@ -374,6 +386,10 @@ export default function HomePage() {
                         <span className="text-[10px] font-semibold text-[#A68C7F]">{stop.category ?? '맛집'}</span>
                       </div>
                     ))}
+                  </div>
+                ) : auth.data?.isAnonymous ? (
+                  <div className="mt-3 rounded-2xl bg-white px-3 py-4 text-center">
+                    <p className="text-[11px] font-semibold text-[#9D8579]">아직 런치 결과가 없어요. Quick Match로 오늘의 첫 여정을 시작해보세요.</p>
                   </div>
                 ) : (
                   <p className="mt-3 rounded-2xl bg-white px-3 py-4 text-center text-[11px] font-semibold text-[#9D8579]">오늘 등록된 여정이 아직 없어요.</p>

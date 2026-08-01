@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { AnimatePresence, motion } from 'framer-motion';
 import {
@@ -15,13 +15,18 @@ import {
 import { toast } from 'sonner';
 import { useLocation } from 'wouter';
 import { isFeedCommentHidden, type Course, type FeedPost, useApp } from '@/contexts/AppContext';
-import { getTemplateForCourse, type CoursemapTemplate } from '@/constants/coursemapTemplates';
+import { logCourseFeedImpression } from '@/lib/eventLogger';
+import { useAuthStatus } from '@/hooks/useAuthStatus';
+import { COURSEMAP_TEMPLATES, getTemplateForCourse, type CoursemapTemplate } from '@/constants/coursemapTemplates';
 import type { PlacedPhoto } from '@/lib/coursemapDecor';
 import TemplateArtwork from '@/components/munchie/TemplateArtwork';
 import OneLineReviewBox from '@/components/munchie/OneLineReviewBox';
 
-function timeAgo(iso: string) {
-  const days = Math.max(0, Math.floor((Date.now() - new Date(iso).getTime()) / 86_400_000));
+function timeAgo(iso: string | number) {
+  const normalized = typeof iso === 'string' ? iso.replace(/T(\d):/, 'T0$1:') : iso;
+  const timestamp = new Date(normalized).getTime();
+  if (!Number.isFinite(timestamp)) return '';
+  const days = Math.max(0, Math.floor((Date.now() - timestamp) / 86_400_000));
   if (days === 0) return '오늘';
   if (days === 1) return '1일 전';
   if (days < 7) return `${days}일 전`;
@@ -69,6 +74,7 @@ export default function UnifiedMunchieCard({
     try { return JSON.parse(localStorage.getItem('lm_reported_feed_ids') ?? '[]').includes(post.id); }
     catch { return false; }
   });
+  const { data: auth } = useAuthStatus();
   const linkedCourse = courseOverride ?? getCourseById(post.courseId);
   // 오래된 피드가 API 코스 목록에 없더라도 한줄평과 사진은 사라지면 안 된다.
   const course: Course = linkedCourse ?? {
@@ -88,27 +94,62 @@ export default function UnifiedMunchieCard({
   };
 
   const courseIndex = Math.max(courses.findIndex(item => item.id === course.id), 0);
-  const template = templateOverride ?? getTemplateForCourse(course.id, courseIndex);
+  const template = templateOverride ?? COURSEMAP_TEMPLATES.find(item => item.id === post.templateId) ?? getTemplateForCourse(course.id, courseIndex);
+  const compactDetailPath = `/template/${template.id}?course=${course.id}&from=${detailOrigin}`;
   const visibleComments = post.comments.filter(item => !isFeedCommentHidden(item));
   const rootComments = visibleComments.filter(item => !item.parentId);
   const liked = likedFeedIds.includes(post.id);
   const saved = savedCourseIds.includes(course.id);
-  const compactDetailPath = `/feed/${post.id}?from=${detailOrigin}`;
+  const cardRef = useRef<HTMLElement | null>(null);
+  const impressionLoggedRef = useRef(false);
+
+  useEffect(() => {
+    if (!cardRef.current || impressionLoggedRef.current) return;
+    let entryTime = 0;
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        const [entry] = entries;
+        if (entry.isIntersecting) {
+          entryTime = Date.now();
+        } else if (entryTime > 0) {
+          const dwell = Date.now() - entryTime;
+          if (dwell >= 1000 && !impressionLoggedRef.current) {
+            impressionLoggedRef.current = true;
+            logCourseFeedImpression(post.courseId || post.id, dwell);
+          }
+          entryTime = 0;
+        }
+      },
+      { threshold: 0.6 }
+    );
+
+    observer.observe(cardRef.current);
+    return () => observer.disconnect();
+  }, [post.courseId, post.id]);
 
   const go = (path: string) => interactive && navigate(path);
-  const submitComment = () => {
+  const requireLogin = () => {
+    if (!auth?.isAnonymous) return true;
+    toast.error('이 기능은 로그인 후 사용할 수 있어요.');
+    window.location.assign(`/api/auth/google/start?next=${encodeURIComponent(window.location.pathname + window.location.search)}`);
+    return false;
+  };
+  const submitComment = async () => {
     if (!interactive || !comment.trim()) return;
+    if (!requireLogin()) return;
+    const response = await fetch('/api/feed-comment', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ courseId: course.id, text: comment.trim(), parentId: replyingTo?.id }) });
+    if (!response.ok) { toast.error('댓글을 등록하지 못했어요.'); return; }
     addFeedComment(post.id, comment.trim(), replyingTo?.id);
     setComment('');
     setReplyingTo(null);
     setCommentExpanded(true);
     toast.success(replyingTo ? '답글을 등록했어요.' : '댓글을 등록했어요.');
   };
-  const reportPost = () => {
-    try {
-      const reported: string[] = JSON.parse(localStorage.getItem('lm_reported_feed_ids') ?? '[]');
-      if (!reported.includes(post.id)) localStorage.setItem('lm_reported_feed_ids', JSON.stringify([...reported, post.id]));
-    } catch { /* 신고 UI는 저장 실패와 무관하게 닫는다. */ }
+  const reportPost = async () => {
+    if (!requireLogin()) return;
+    const response = await fetch('/api/reports', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ targetType: 'course', targetId: course.id }) });
+    if (!response.ok) { toast.error('신고를 접수하지 못했어요.'); return; }
     setPostReported(true);
     setShowPostMenu(false);
     toast.success('게시물을 신고했어요. 검토 후 필요한 조치를 진행할게요.');
@@ -131,7 +172,7 @@ export default function UnifiedMunchieCard({
             </AnimatePresence>
           </OneLineReviewBox>
           <div className={`relative mx-2 mb-2 overflow-hidden rounded-[12px] border bg-[#F1E7DE] ${homeSummary ? 'border-[#F2B6AB]' : 'border-[#E8D6CC]'}`}>
-            <TemplateArtwork course={course} template={template} photoSources={post.photos} decorOverride={decorOverride} eager />
+            <TemplateArtwork course={course} template={template} photoSources={post.photos} decorOverride={decorOverride ?? post.decor} eager />
             {!homeSummary && <div className="absolute bottom-1 left-1 flex gap-1">
               <span className="flex h-6 items-center gap-0.5 rounded-lg border border-[#F2C4BA] bg-[#FFF8F4] px-1.5 text-[7px] font-black text-[#E76B68]"><ThumbsUp size={10} />{post.likes}</span>
               <span
@@ -181,12 +222,12 @@ export default function UnifiedMunchieCard({
         </AnimatePresence>
 
         <button type="button" onClick={() => go(`/template/${template.id}?course=${course.id}&from=${detailOrigin}`)} className="mx-3 block w-[calc(100%-1.5rem)] overflow-hidden rounded-[14px] border border-[#EED9D0] bg-[#F1E7DE]" aria-label="Munchie 피드 이미지 상세 보기">
-          <TemplateArtwork course={course} template={template} photoSources={post.photos} decorOverride={decorOverride} eager />
+          <TemplateArtwork course={course} template={template} photoSources={post.photos} decorOverride={decorOverride ?? post.decor} eager />
         </button>
 
         <div className="mx-3 flex items-center justify-between py-2.5 text-[#A27469]">
           <div className="flex items-center gap-2">
-            <button type="button" onClick={() => interactive && toggleFeedLike(post.id)} className={`flex h-10 min-w-10 items-center justify-center gap-1 rounded-xl px-2 ${liked ? 'bg-[#FFE2DF] text-[#D94E55]' : 'text-current'}`} aria-label="좋아요">
+            <button type="button" onClick={async () => { if (!interactive || !requireLogin()) return; const response = await fetch('/api/feed-like', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ courseId: course.id }) }); if (!response.ok) { toast.error('좋아요를 저장하지 못했어요.'); return; } toggleFeedLike(post.id); }} className={`flex h-10 min-w-10 items-center justify-center gap-1 rounded-xl px-2 ${liked ? 'bg-[#FFE2DF] text-[#D94E55]' : 'text-current'}`} aria-label="좋아요">
               <ThumbsUp size={20} strokeWidth={2} fill={liked ? 'currentColor' : 'none'} /><span className="text-[10px] font-black">{post.likes}</span>
             </button>
             <button type="button" onClick={() => interactive && setCommentExpanded(true)} className="flex h-10 min-w-10 items-center justify-center gap-1 rounded-xl px-2 text-current" aria-label="댓글 보기">
@@ -277,8 +318,8 @@ export default function UnifiedMunchieCard({
                   )}
                   <div className="flex h-12 items-center gap-2 rounded-[15px] border border-[#E4D1C8] bg-[#FFFDFC] px-3">
                     <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[#FFE6DE] text-sm">{post.authorEmoji}</span>
-                    <input value={comment} onChange={event => setComment(event.target.value)} onKeyDown={event => event.key === 'Enter' && submitComment()} placeholder={replyingTo ? `${replyingTo.authorName}님에게 답글...` : '댓글 입력'} className="min-w-0 flex-1 bg-transparent text-[13px] outline-none placeholder:text-[#9B8A82]" autoFocus />
-                    <button type="button" onClick={submitComment} disabled={!comment.trim()} aria-label="댓글 등록" className="flex h-9 w-9 items-center justify-center rounded-full bg-[#EF6B6D] text-white disabled:bg-[#E8DDD8]"><Send size={18} /></button>
+                    <input value={comment} onChange={event => setComment(event.target.value)} onKeyDown={event => event.key === 'Enter' && void submitComment()} placeholder={auth?.isAnonymous ? '로그인 후 댓글을 남길 수 있어요' : (replyingTo ? `${replyingTo.authorName}님에게 답글...` : '댓글 입력')} className="min-w-0 flex-1 bg-transparent text-[13px] outline-none placeholder:text-[#9B8A82]" autoFocus />
+                    <button type="button" onClick={() => void submitComment()} disabled={!comment.trim()} aria-label="댓글 등록" className="flex h-9 w-9 items-center justify-center rounded-full bg-[#EF6B6D] text-white disabled:bg-[#E8DDD8]"><Send size={18} /></button>
                   </div>
                 </div>
               </motion.aside>

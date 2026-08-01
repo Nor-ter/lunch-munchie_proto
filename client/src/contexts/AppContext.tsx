@@ -9,8 +9,9 @@ import { normalizeDiet, isHardRestriction, type DietTag } from '@shared/const';
 import { intentForHour, type Intent } from '@shared/intent';
 import { normalizeFoodTag, type TagType } from '@/constants/foodTags';
 import { DRIVE_COURSES, DRIVE_FEED_POSTS } from '@/data/driveFeed';
+import { demoAuthorIdFor } from '@/data/demoAuthors';
 import { isWebAuthConfigured } from '@/contexts/AuthContext';
-import { MAX_MUNCHIE_FEED_PHOTOS } from '@/lib/coursemapDecor';
+import { getCoursemapDecor, MAX_MUNCHIE_FEED_PHOTOS } from '@/lib/coursemapDecor';
 import type { LunchmateProfileLoadout } from '@/types/lunchmateCustomization';
 import {
   normalizeLunchmateOwnedItemIds,
@@ -18,6 +19,7 @@ import {
   normalizeLunchmateRewardClaims,
   type LunchmateRewardClaim,
 } from '@/utils/lunchmateProfile';
+import { logCourseSave, logFeedLike } from '@/lib/eventLogger';
 export type { TagType } from '@/constants/foodTags';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -213,6 +215,9 @@ export interface FeedPost {
   authorEmoji: string;
   courseId: string;
   photos: string[];
+  /** 서버에 보존한 템플릿·사진 배치. 다른 기기/다른 사용자도 같은 카드로 렌더링한다. */
+  templateId?: string;
+  decor?: import('@/lib/coursemapDecor').PlacedPhoto[];
   caption: string;
   skinId: string;
   likes: number;
@@ -223,313 +228,11 @@ export interface FeedPost {
   tags: TagType[];
 }
 
-// ─── Mock Data ────────────────────────────────────────────────────────────────
+export const MOCK_RESTAURANTS: Restaurant[] = [];
 
-export const MOCK_RESTAURANTS: Restaurant[] = [
-  {
-    id: 'r1', name: '카페 레이아웃', category: '카페',
-    tags: ['데이트코스', '카페'], rating: 4.8, reviewCount: 2341,
-    distance: '350m', address: '서울 성동구 성수이로7길 26',
-    image: 'https://images.unsplash.com/photo-1554118811-1e0d58224f24?w=600&q=80',
-    lat: 37.5447, lng: 127.0561, priceRange: 2, openHours: '09:00–22:00',
-    dietary: ['비건 옵션'], description: '성수동 감성 카페. 빈티지 인테리어와 정원이 아름다운 곳.',
-  },
-  {
-    id: 'r2', name: '성수연방', category: '복합문화공간',
-    tags: ['데이트코스', '디저트'], rating: 4.6, reviewCount: 1892,
-    distance: '520m', address: '서울 성동구 연무장5가길 7',
-    image: 'https://d2xsxph8kpxj0f.cloudfront.net/310519663322273601/2bdpbPnYmCuK9PccZ3SWKc/lm-course-seongsu-hGTsaQPMJotuBpuyBnE5dN.webp',
-    lat: 37.5441, lng: 127.0571, priceRange: 2, openHours: '11:00–21:00',
-    dietary: [], description: '성수동 복합문화공간. 다양한 팝업스토어와 카페가 모여있는 곳.',
-  },
-  {
-    id: 'r3', name: '어니언 성수', category: '베이커리',
-    tags: ['카페', '디저트'], rating: 4.9, reviewCount: 5621,
-    distance: '680m', address: '서울 성동구 아차산로9길 8',
-    image: 'https://images.unsplash.com/photo-1509440159596-0249088772ff?w=600&q=80',
-    lat: 37.5451, lng: 127.0551, priceRange: 2, openHours: '08:00–22:00',
-    dietary: ['비건 옵션'], description: '성수동 대표 베이커리 카페. 시그니처 소금빵이 유명.',
-  },
-  {
-    id: 'r4', name: '대림창고', category: '레스토랑',
-    tags: ['데이트코스', '맛집'], rating: 4.7, reviewCount: 3201,
-    distance: '900m', address: '서울 성동구 성수이로 78',
-    image: 'https://images.unsplash.com/photo-1414235077428-338989a2e8c0?w=600&q=80',
-    lat: 37.5438, lng: 127.0581, priceRange: 3, openHours: '11:30–22:00',
-    dietary: [], description: '창고를 개조한 감성 레스토랑. 브런치와 파스타가 인기.',
-  },
-  {
-    id: 'r5', name: '서울숲 피크닉', category: '공원',
-    tags: ['펍나이트', '데이트코스'], rating: 4.5, reviewCount: 8901,
-    distance: '1.2km', address: '서울 성동구 뚝섬로 273',
-    image: 'https://images.unsplash.com/photo-1519331379826-f10be5486c6f?w=600&q=80',
-    lat: 37.5445, lng: 127.0611, priceRange: 1, openHours: '06:00–22:00',
-    dietary: [], description: '서울 도심 속 자연. 피크닉과 산책을 즐길 수 있는 도심 공원.',
-  },
-  {
-    id: 'r6', name: '한남 브런치 클럽', category: '브런치',
-    tags: ['맛집', '혼밥'], rating: 4.6, reviewCount: 1234,
-    distance: '2.1km', address: '서울 용산구 이태원로 240',
-    image: 'https://d2xsxph8kpxj0f.cloudfront.net/310519663322273601/2bdpbPnYmCuK9PccZ3SWKc/lm-course-hannam-EMhDLXHPSYVSTV5cbEekLC.webp',
-    lat: 37.5349, lng: 126.9990, priceRange: 3, openHours: '10:00–21:00',
-    dietary: ['글루텐프리 옵션', '비건 옵션'], description: '한남동 감성 브런치 카페. 에그베네딕트와 아보카도 토스트가 시그니처.',
-  },
-  {
-    id: 'r7', name: '북촌 한옥 찻집', category: '전통찻집',
-    tags: ['브런치', '혼밥'], rating: 4.8, reviewCount: 2109,
-    distance: '3.5km', address: '서울 종로구 계동길 37',
-    image: 'https://d2xsxph8kpxj0f.cloudfront.net/310519663322273601/2bdpbPnYmCuK9PccZ3SWKc/lm-course-bukchon-ATNXaSXg79mMDT2jnbpMuD.webp',
-    lat: 37.5825, lng: 126.9844, priceRange: 2, openHours: '10:00–20:00',
-    dietary: ['비건 옵션'], description: '북촌 한옥마을 전통 찻집. 한복 체험과 함께 즐기는 전통차.',
-  },
-  {
-    id: 'r8', name: '연남동 파스타', category: '이탈리안',
-    tags: ['맛집', '가성비'], rating: 4.5, reviewCount: 3456,
-    distance: '4.2km', address: '서울 마포구 연남로 48',
-    image: 'https://d2xsxph8kpxj0f.cloudfront.net/310519663322273601/2bdpbPnYmCuK9PccZ3SWKc/lm-course-yeonnam-eiXe5dfjEAvbX6RscXaFtr.webp',
-    lat: 37.5614, lng: 126.9237, priceRange: 2, openHours: '11:00–22:00',
-    dietary: ['비건 옵션'], description: '연남동 감성 파스타 레스토랑. 수제 파스타와 피자가 인기.',
-  },
-  {
-    id: 'r9', name: '마라탕 천국', category: '중식',
-    tags: ['맛집', '가성비'], rating: 4.4, reviewCount: 4567,
-    distance: '1.8km', address: '서울 마포구 홍대입구역 2번 출구',
-    image: 'https://images.unsplash.com/photo-1569050467447-ce54b3bbc37d?w=600&q=80',
-    lat: 37.5571, lng: 126.9240, priceRange: 1, openHours: '11:00–23:00',
-    dietary: ['할랄 옵션'], description: '홍대 마라탕 맛집. 매운 국물과 다양한 재료로 인기.',
-  },
-  {
-    id: 'r10', name: '스시 오마카세 료', category: '일식',
-    tags: ['맛집', '데이트코스'], rating: 4.9, reviewCount: 891,
-    distance: '2.8km', address: '서울 마포구 연남동 228-15',
-    image: 'https://images.unsplash.com/photo-1579871494447-9811cf80d66c?w=600&q=80',
-    lat: 37.5614, lng: 126.9237, priceRange: 4, openHours: '12:00–22:00',
-    dietary: [], description: '연남동 프리미엄 오마카세. 신선한 제철 재료로 만드는 코스 요리.',
-  },
-  {
-    id: 'r11', name: '버거 조인트 성수', category: '버거',
-    tags: ['맛집', '가성비'], rating: 4.3, reviewCount: 2780,
-    distance: '420m', address: '서울 성동구 성수일로 56',
-    image: 'https://images.unsplash.com/photo-1568901346375-23c9450c58cd?w=600&q=80',
-    lat: 37.5449, lng: 127.0558, priceRange: 2, openHours: '11:00–21:00',
-    dietary: ['육식'], description: '성수동 수제버거 맛집. 두툼한 패티와 직접 만든 번이 일품.',
-  },
-  {
-    id: 'r12', name: '비건 테이블', category: '비건',
-    tags: ['맛집', '혼밥'], rating: 4.7, reviewCount: 1043,
-    distance: '760m', address: '서울 성동구 연무장길 18',
-    image: 'https://images.unsplash.com/photo-1512621776951-a57141f2eefd?w=600&q=80',
-    lat: 37.5432, lng: 127.0566, priceRange: 3, openHours: '11:30–21:00',
-    dietary: ['비건', '채식', '글루텐프리'], description: '식물성 재료로만 만드는 건강한 비건 레스토랑.',
-  },
-  {
-    id: 'r13', name: '타코 아미고', category: '멕시칸',
-    tags: ['맛집', '가성비'], rating: 4.4, reviewCount: 1890,
-    distance: '1.1km', address: '서울 마포구 와우산로 29길',
-    image: 'https://images.unsplash.com/photo-1565299624946-b28f40a0ae38?w=600&q=80',
-    lat: 37.5538, lng: 126.9255, priceRange: 2, openHours: '11:00–23:00',
-    dietary: ['할랄'], description: '정통 멕시칸 타코와 부리토. 매콤한 살사가 매력.',
-  },
-  {
-    id: 'r14', name: '라멘 텐푸라', category: '일식',
-    tags: ['맛집', '가성비'], rating: 4.5, reviewCount: 3421,
-    distance: '640m', address: '서울 마포구 동교로 174',
-    image: 'https://images.unsplash.com/photo-1617196034183-421b4040ed20?w=600&q=80',
-    lat: 37.5601, lng: 126.9244, priceRange: 2, openHours: '11:00–22:00',
-    dietary: [], description: '진한 돈코츠 라멘 전문점. 바삭한 텐푸라와 함께.',
-  },
-  {
-    id: 'r15', name: '그릴 스테이크 하우스', category: '스테이크',
-    tags: ['맛집', '데이트코스'], rating: 4.8, reviewCount: 1567,
-    distance: '2.3km', address: '서울 용산구 이태원로 200',
-    image: 'https://images.unsplash.com/photo-1546833999-b9f581a1996d?w=600&q=80',
-    lat: 37.5340, lng: 126.9945, priceRange: 4, openHours: '17:00–23:00',
-    dietary: ['육식'], description: '드라이에이징 스테이크 전문. 특별한 날을 위한 곳.',
-  },
-  {
-    id: 'r16', name: '쌀국수 사이공', category: '베트남',
-    tags: ['맛집', '가성비'], rating: 4.2, reviewCount: 2210,
-    distance: '880m', address: '서울 마포구 양화로 23길',
-    image: 'https://images.unsplash.com/photo-1582878826629-29b7ad1cdc43?w=600&q=80',
-    lat: 37.5556, lng: 126.9221, priceRange: 1, openHours: '10:30–21:30',
-    dietary: ['해산물 제외'], description: '깊은 육수의 정통 베트남 쌀국수. 든든한 한 끼.',
-  },
-  {
-    id: 'r17', name: '샐러드 보울', category: '샐러드',
-    tags: ['혼밥', '가성비'], rating: 4.1, reviewCount: 980,
-    distance: '310m', address: '서울 성동구 성수이로 99',
-    image: 'https://images.unsplash.com/photo-1512852939750-1305098529bf?w=600&q=80',
-    lat: 37.5450, lng: 127.0560, priceRange: 2, openHours: '09:00–20:00',
-    dietary: ['비건', '채식', '글루텐프리'], description: '신선한 채소로 만드는 커스텀 샐러드 전문점.',
-  },
-  {
-    id: 'r18', name: '국밥 한그릇', category: '한식',
-    tags: ['맛집', '가성비'], rating: 4.6, reviewCount: 5120,
-    distance: '540m', address: '서울 성동구 아차산로 11길',
-    image: 'https://images.unsplash.com/photo-1583224944844-5b268c057b72?w=600&q=80',
-    lat: 37.5455, lng: 127.0549, priceRange: 1, openHours: '06:00–22:00',
-    dietary: [], description: '24시간 든든한 돼지국밥. 진한 국물이 일품.',
-  },
-  {
-    id: 'r19', name: '피자 나폴리', category: '이탈리안',
-    tags: ['맛집', '데이트코스'], rating: 4.5, reviewCount: 2670,
-    distance: '1.5km', address: '서울 마포구 연남로 30',
-    image: 'https://images.unsplash.com/photo-1513104890138-7c749659a591?w=600&q=80',
-    lat: 37.5620, lng: 126.9230, priceRange: 3, openHours: '11:30–22:30',
-    dietary: ['채식'], description: '화덕에서 구운 정통 나폴리 피자. 쫄깃한 도우.',
-  },
-  {
-    id: 'r20', name: '디저트 카페 슈가', category: '카페',
-    tags: ['카페', '디저트'], rating: 4.7, reviewCount: 3340,
-    distance: '450m', address: '서울 성동구 서울숲길 42',
-    image: 'https://images.unsplash.com/photo-1551024601-bec78aea704b?w=600&q=80',
-    lat: 37.5446, lng: 127.0573, priceRange: 2, openHours: '11:00–22:00',
-    dietary: ['채식', '글루텐프리'], description: '수제 디저트와 스페셜티 커피. 인스타 핫플.',
-  },
-];
+export const MOCK_COURSES: Course[] = [];
 
-export const MOCK_COURSES: Course[] = [
-  {
-    id: 'c1',
-    title: '성수동 감성 데이트 코스',
-    description: '감성 가득한 성수동에서 특별한 하루를 보내세요.',
-    heroImage: 'https://d2xsxph8kpxj0f.cloudfront.net/310519663322273601/2bdpbPnYmCuK9PccZ3SWKc/lm-course-seongsu-hGTsaQPMJotuBpuyBnE5dN.webp',
-    tags: ['데이트코스', '카페'],
-    hashtags: ['#데이트', '#카페', '#분위기', '#성수핫플'],
-    region: '성수동',
-    metadata: { distance: 3.2, duration: 300, placeCount: 3 },
-    stops: [
-      { placeId: 'r1', order: 1, startTime: '10:00', endTime: '11:00', isBookmarked: false },
-      { placeId: 'r2', order: 2, startTime: '11:20', endTime: '12:30', isBookmarked: false },
-      { placeId: 'r3', order: 3, startTime: '12:40', endTime: '14:00', isBookmarked: true },
-    ],
-    createdAt: '2026-05-20',
-    isPublic: true,
-    creatorId: 'user1',
-    savedCount: 234,
-  },
-  {
-    id: 'c2',
-    title: '한남동 브런치 코스',
-    description: '여유로운 주말 브런치를 즐기는 한남동 코스.',
-    heroImage: 'https://d2xsxph8kpxj0f.cloudfront.net/310519663322273601/2bdpbPnYmCuK9PccZ3SWKc/lm-course-hannam-EMhDLXHPSYVSTV5cbEekLC.webp',
-    tags: ['브런치', '혼밥'],
-    hashtags: ['#브런치', '#한남', '#주말'],
-    region: '한남동',
-    metadata: { distance: 2.7, duration: 240, placeCount: 3 },
-    stops: [
-      { placeId: 'r6', order: 1, startTime: '10:30', endTime: '12:00', isBookmarked: false },
-      { placeId: 'r7', order: 2, startTime: '12:30', endTime: '14:00', isBookmarked: false },
-      { placeId: 'r8', order: 3, startTime: '14:30', endTime: '16:00', isBookmarked: false },
-    ],
-    createdAt: '2026-05-18',
-    isPublic: true,
-    creatorId: 'user2',
-    savedCount: 156,
-  },
-  {
-    id: 'c3',
-    title: '북촌 한옥 감성 코스',
-    description: '전통과 현대가 공존하는 북촌의 아름다운 코스.',
-    heroImage: 'https://d2xsxph8kpxj0f.cloudfront.net/310519663322273601/2bdpbPnYmCuK9PccZ3SWKc/lm-course-bukchon-ATNXaSXg79mMDT2jnbpMuD.webp',
-    tags: ['카페', '디저트'],
-    hashtags: ['#북촌', '#한옥', '#전통', '#감성'],
-    region: '북촌',
-    metadata: { distance: 2.1, duration: 180, placeCount: 3 },
-    stops: [
-      { placeId: 'r7', order: 1, startTime: '10:00', endTime: '12:00', isBookmarked: false },
-      { placeId: 'r6', order: 2, startTime: '12:30', endTime: '14:00', isBookmarked: false },
-    ],
-    createdAt: '2026-05-15',
-    isPublic: true,
-    creatorId: 'user3',
-    savedCount: 89,
-  },
-  {
-    id: 'c4',
-    title: '연남동 맛집 투어',
-    description: '연남동 골목 구석구석 숨어있는 맛집 탐방.',
-    heroImage: 'https://d2xsxph8kpxj0f.cloudfront.net/310519663322273601/2bdpbPnYmCuK9PccZ3SWKc/lm-course-yeonnam-eiXe5dfjEAvbX6RscXaFtr.webp',
-    tags: ['맛집', '펍나이트'],
-    hashtags: ['#연남동', '#맛집', '#투어'],
-    region: '연남동',
-    metadata: { distance: 3.8, duration: 360, placeCount: 3 },
-    stops: [
-      { placeId: 'r8', order: 1, startTime: '11:00', endTime: '12:30', isBookmarked: false },
-      { placeId: 'r9', order: 2, startTime: '13:00', endTime: '14:30', isBookmarked: false },
-      { placeId: 'r10', order: 3, startTime: '15:00', endTime: '17:00', isBookmarked: false },
-    ],
-    createdAt: '2026-05-10',
-    isPublic: true,
-    creatorId: 'user1',
-    savedCount: 312,
-  },
-];
-
-export const MOCK_FEED_POSTS: FeedPost[] = [
-  {
-    id: 'f1',
-    authorName: '지민',
-    authorEmoji: '😊',
-    courseId: 'c1',
-    photos: [
-      'https://images.unsplash.com/photo-1554118811-1e0d58224f24?w=800&q=80',
-      'https://d2xsxph8kpxj0f.cloudfront.net/310519663322273601/2bdpbPnYmCuK9PccZ3SWKc/lm-course-seongsu-hGTsaQPMJotuBpuyBnE5dN.webp',
-      'https://images.unsplash.com/photo-1509440159596-0249088772ff?w=800&q=80',
-    ],
-    caption: '성수 골목을 다 걸었다. 카페부터 공원까지 완벽한 하루~! 추천 💕',
-    skinId: 'pink-picnic',
-    likes: 23,
-    saves: 18,
-    comments: [
-      { id: 'cm1', authorName: '제니', authorEmoji: '🐳', text: '코스 순서까지 완벽해요! 바로 저장했습니다 👍', createdAt: '2026-07-09T13:00:00.000Z' },
-      { id: 'cm2', authorName: '민수', authorEmoji: '🍜', text: '2번 카페 웨이팅 심한가요?', createdAt: '2026-07-09T14:10:00.000Z' },
-      { id: 'cm3', authorName: '익명123', authorEmoji: '😈', text: '광고글 티난다ㅋ 노잼 코스', createdAt: '2026-07-09T15:22:00.000Z' },
-    ],
-    createdAt: '2026-07-09T12:30:00.000Z',
-    tags: ['데이트코스', '카페'],
-  },
-  {
-    id: 'f2',
-    authorName: '제니',
-    authorEmoji: '🐳',
-    courseId: 'c2',
-    photos: [
-      'https://d2xsxph8kpxj0f.cloudfront.net/310519663322273601/2bdpbPnYmCuK9PccZ3SWKc/lm-course-hannam-EMhDLXHPSYVSTV5cbEekLC.webp',
-      'https://d2xsxph8kpxj0f.cloudfront.net/310519663322273601/2bdpbPnYmCuK9PccZ3SWKc/lm-course-bukchon-ATNXaSXg79mMDT2jnbpMuD.webp',
-    ],
-    caption: '주말 브런치는 역시 한남. 에그베네딕트가 진리 😋',
-    skinId: 'vintage-frame',
-    likes: 41,
-    saves: 27,
-    comments: [
-      { id: 'cm4', authorName: '지민', authorEmoji: '😊', text: '빈티지 스킨 너무 잘 어울려요 🎞️', createdAt: '2026-07-08T12:00:00.000Z' },
-      { id: 'cm5', authorName: '수아', authorEmoji: '🥐', text: '다음 주말에 그대로 따라가볼게요!', createdAt: '2026-07-08T15:30:00.000Z' },
-    ],
-    createdAt: '2026-07-08T11:00:00.000Z',
-    tags: ['브런치', '혼밥'],
-  },
-  {
-    id: 'f3',
-    authorName: '민수',
-    authorEmoji: '🍜',
-    courseId: 'c4',
-    photos: [
-      'https://d2xsxph8kpxj0f.cloudfront.net/310519663322273601/2bdpbPnYmCuK9PccZ3SWKc/lm-course-yeonnam-eiXe5dfjEAvbX6RscXaFtr.webp',
-      'https://images.unsplash.com/photo-1569050467447-ce54b3bbc37d?w=800&q=80',
-      'https://images.unsplash.com/photo-1579871494447-9811cf80d66c?w=800&q=80',
-    ],
-    caption: '연남동 맛집 3연타… 배 터질 뻔했지만 후회는 없다!',
-    skinId: 'blue-note',
-    likes: 15,
-    saves: 9,
-    comments: [
-      { id: 'cm6', authorName: '제니', authorEmoji: '🐳', text: '마라탕 국물 진하죠 ㅠㅠ 최고', createdAt: '2026-07-07T14:00:00.000Z' },
-    ],
-    createdAt: '2026-07-07T13:20:00.000Z',
-    tags: ['맛집', '펍나이트'],
-  },
-];
+export const MOCK_FEED_POSTS: FeedPost[] = [];
 
 const THEMES = [
   { id: 'date', label: '데이트코스', emoji: '💕', color: '#EB5053', tag: '데이트코스' as TagType },
@@ -610,6 +313,8 @@ interface AppContextValue {
 
   /** Munchie Feed */
   feedPosts: FeedPost[];
+  /** 서버 원본을 다시 읽어 현재 세션의 피드 캐시를 동기화한다. */
+  refreshFeedPosts: () => Promise<void>;
   addFeedPost: (post: Omit<FeedPost, 'id' | 'likes' | 'saves' | 'comments' | 'createdAt'>) => FeedPost;
   updateFeedPost: (postId: string, updates: Partial<Pick<FeedPost, 'courseId' | 'caption' | 'skinId' | 'photos' | 'tags'>>) => void;
   deleteFeedPost: (postId: string) => void;
@@ -643,17 +348,25 @@ interface AppContextValue {
 
 const AppContext = createContext<AppContextValue | null>(null);
 
+// 초기 데모 데이터의 `T9:15`처럼 한 자리 시각도 안전하게 처리한다. NaN 비교는
+// Array.sort에서 "동일"으로 취급돼 방금 발행한 서버 게시물을 아래로 밀어낸다.
+const createdAtMs = (value: string | number) => {
+  const normalized = typeof value === 'string' ? value.replace(/T(\d):/, 'T0$1:') : value;
+  const parsed = new Date(normalized).getTime();
+  return Number.isFinite(parsed) ? parsed : 0;
+};
+
 export type ApiRequestAuth =
   | {
-      status: 'authenticated';
-      accessToken: string;
-    }
+    status: 'authenticated';
+    accessToken: string;
+  }
   | {
-      status: 'anonymous';
-    }
+    status: 'anonymous';
+  }
   | {
-      status: 'blocked';
-    };
+    status: 'blocked';
+  };
 
 interface ApiAuthEnvironment {
   VITE_SUPABASE_URL?: string;
@@ -837,6 +550,8 @@ export function AppProvider({
 }) {
   const legacyProfileIdRef = useRef(readStoredProfileId());
   const lastAuthUidRef = useRef(localStorage.getItem(LAST_AUTH_UID_KEY));
+  // Prevent a render while an upload is in flight from creating duplicate R2 files.
+  const legacyMediaMigrationRef = useRef(new Set<string>());
   const isFirstAuthAdoption = Boolean(initialAuthUserId && !lastAuthUidRef.current);
   const [courses, setCourses] = useState<Course[]>(() => {
     try {
@@ -904,16 +619,15 @@ export function AppProvider({
   });
 
   const [feedPosts, setFeedPosts] = useState<FeedPost[]>(() => {
-    // v2: comments가 배열로 바뀌면서 키를 올렸다. 구버전(lm_feed) 데이터는 버리고 재시드.
+    // v3: 데모 글을 첫 로그인 사용자에게 귀속시키던 v2 캐시는 신뢰할 수 없다.
+    // 로그인 사용자의 '나의 피드' 원본은 서버 author_id뿐이며, 로컬 값은 화면 캐시일 뿐이다.
     try {
-      const s = localStorage.getItem('lm_feed_v2');
+      const s = localStorage.getItem('lm_feed_v3');
       if (s) {
         const parsed = JSON.parse(s) as FeedPost[];
         return parsed.map(p => ({
           ...p,
-          authorId: isFirstAuthAdoption && p.authorId === legacyProfileIdRef.current
-            ? initialAuthUserId ?? p.authorId
-            : p.authorId,
+          authorId: p.authorId ?? demoAuthorIdFor(p.authorName),
           tags: p.tags.map(tag => normalizeFoodTag(tag)),
           photos: p.photos.slice(0, MAX_MUNCHIE_FEED_PHOTOS),
           comments: Array.isArray(p.comments) ? p.comments : [],
@@ -922,9 +636,9 @@ export function AppProvider({
       }
     } catch { /* fall through */ }
     // 실데이터 피드: 팀이 다녀와 찍은 사진·메뉴로 생성(scripts/genDriveFeed.py).
-    return DRIVE_FEED_POSTS.map((post, index) => ({
+    return DRIVE_FEED_POSTS.map(post => ({
       ...post,
-      ...(index === 0 && initialAuthUserId ? { authorId: initialAuthUserId } : {}),
+      authorId: post.authorId ?? demoAuthorIdFor(post.authorName),
       photos: post.photos.slice(0, MAX_MUNCHIE_FEED_PHOTOS),
     }));
   });
@@ -970,13 +684,49 @@ export function AppProvider({
     return { ...DEFAULT_PROFILE, id: initialAuthUserId ?? generateUserId() };
   });
 
+  const refreshFeedPosts = useCallback(async () => {
+    const response = await fetch('/api/feed');
+    if (!response.ok) throw new Error('피드를 불러오지 못했어요.');
+    const feedData = await response.json();
+    if (!Array.isArray(feedData)) throw new Error('피드 형식이 올바르지 않아요.');
+    const remoteFeeds = feedData.map((feed: any): FeedPost => ({
+      id: feed.id,
+      authorId: feed.creatorId,
+      authorName: feed.authorName || (feed.creatorId === profile.id ? profile.name : feed.creatorId === 'user_minji' ? '김민지' : feed.creatorId === 'user_jenny' ? '제니' : feed.creatorId === 'user_minsu' ? '민수' : 'Lunchie 사용자'),
+      authorEmoji: feed.creatorId === profile.id ? profile.emoji : feed.creatorId === 'user_minji' ? '🐰' : feed.creatorId === 'user_jenny' ? '🍓' : feed.creatorId === 'user_minsu' ? '🐻' : '🐳',
+      courseId: feed.courseId,
+      photos: ((Array.isArray(feed.photos) && feed.photos.length ? feed.photos : feed.heroImage ? [feed.heroImage] : []) as unknown[]).filter((photo: unknown): photo is string => typeof photo === 'string').map((photo: string) => photo.startsWith('http') || photo.startsWith('/') ? photo : `/photos/${photo}`),
+      templateId: typeof feed.templateId === 'string' ? feed.templateId : undefined,
+      decor: Array.isArray(feed.decor) ? feed.decor : undefined,
+      caption: feed.description,
+      skinId: 'default',
+      likes: feed.likesCount || 0,
+      saves: feed.savesCount || 0,
+      dislikes: 0,
+      comments: Array.isArray(feed.comments) ? feed.comments.map((comment: any) => ({
+        id: comment.id, authorId: comment.authorId, authorName: comment.authorName,
+        authorEmoji: comment.authorEmoji || '🐳', parentId: comment.parentId || undefined,
+        text: comment.text, createdAt: typeof comment.createdAt === 'number' ? new Date(comment.createdAt).toISOString() : comment.createdAt,
+        likes: 0, dislikes: 0,
+      })) : [],
+      tags: Array.isArray(feed.tags) ? feed.tags.map((tag: string) => normalizeFoodTag(tag)) : [],
+      createdAt: feed.createdAt || new Date().toISOString(),
+    }));
+    setFeedPosts(previous => {
+      const merged = new Map(previous.map(post => [post.id, post]));
+      remoteFeeds.forEach(post => merged.set(post.id, post));
+      return Array.from(merged.values()).sort((a, b) => createdAtMs(b.createdAt) - createdAtMs(a.createdAt));
+    });
+  }, [profile.id, profile.name, profile.emoji]);
+
   useEffect(() => {
     setIsLoading(true);
     Promise.all([
       fetch('/api/restaurants').then(r => (r.ok ? r.json() : Promise.reject())),
       fetch('/api/courses').then(r => (r.ok ? r.json() : Promise.reject())),
+      fetch('/api/feed').then(r => (r.ok ? r.json() : Promise.reject())),
     ])
-      .then(([resData, courseData]) => {
+      .then(([resData, courseData, feedData]) => {
         if (Array.isArray(resData) && resData.length > 0) {
           setRestaurants(previous => {
             // 실데이터가 도착하면 mock 시드는 걷어낸다. 예전엔 previous(=MOCK_RESTAURANTS)에
@@ -988,7 +738,8 @@ export function AppProvider({
             );
             resData.forEach((restaurant: Restaurant) => merged.set(restaurant.id, {
               ...restaurant,
-              tags: restaurant.tags.map(tag => normalizeFoodTag(tag)),
+              tags: Array.isArray(restaurant.tags) ? restaurant.tags.map(tag => normalizeFoodTag(tag)) : [],
+              photos: Array.isArray(restaurant.photos) ? restaurant.photos.map(p => p.startsWith('http') || p.startsWith('/') ? p : `/photos/${p}`) : [],
             }));
             return Array.from(merged.values());
           });
@@ -1006,11 +757,88 @@ export function AppProvider({
             return Array.from(merged.values());
           });
         }
+        if (Array.isArray(feedData) && feedData.length > 0) {
+          const remoteFeeds = feedData.map((feed: any): FeedPost => ({
+            id: feed.id,
+            authorId: feed.creatorId,
+            authorName: feed.authorName || (feed.creatorId === profile.id ? profile.name : feed.creatorId === 'user_minji' ? '김민지' : feed.creatorId === 'user_jenny' ? '제니' : feed.creatorId === 'user_minsu' ? '민수' : 'Lunchie 사용자'),
+            authorEmoji: feed.creatorId === 'user_minji' ? '🐰' : feed.creatorId === 'user_jenny' ? '🍓' : feed.creatorId === 'user_minsu' ? '🐻' : '🐳',
+            courseId: feed.courseId,
+            photos: ((Array.isArray(feed.photos) && feed.photos.length ? feed.photos : feed.heroImage ? [feed.heroImage] : []) as unknown[]).filter((photo: unknown): photo is string => typeof photo === 'string').map((photo: string) => photo.startsWith('http') || photo.startsWith('/') ? photo : `/photos/${photo}`),
+            templateId: typeof feed.templateId === 'string' ? feed.templateId : undefined,
+            decor: Array.isArray(feed.decor) ? feed.decor : undefined,
+            caption: feed.description,
+            skinId: 'default',
+            likes: feed.likesCount || 0,
+            saves: feed.savesCount || 0,
+            dislikes: 0,
+            comments: Array.isArray(feed.comments) ? feed.comments.map((comment: any) => ({
+              id: comment.id, authorId: comment.authorId, authorName: comment.authorName,
+              authorEmoji: comment.authorEmoji || '🐳', parentId: comment.parentId || undefined,
+              text: comment.text, createdAt: typeof comment.createdAt === 'number' ? new Date(comment.createdAt).toISOString() : comment.createdAt,
+              likes: 0, dislikes: 0,
+            })) : [],
+            tags: Array.isArray(feed.tags) ? feed.tags.map((tag: string) => normalizeFoodTag(tag)) : [],
+            createdAt: feed.createdAt || new Date().toISOString(),
+          }));
+          setFeedPosts(previous => {
+            const merged = new Map(previous.map(post => [post.id, post]));
+            remoteFeeds.forEach(post => merged.set(post.id, post));
+            return Array.from(merged.values());
+          });
+        }
         setApiAvailable(true);
       })
       .catch(() => setApiAvailable(false))
       .finally(() => setIsLoading(false));
   }, []);
+
+  // 과거 게시물의 배치는 localStorage에만 있었으므로, 작성자가 다시 접속했을 때
+  // 서버로 한 번 승계한다. 다른 사용자는 이후부터 같은 R2 사진·배치를 받는다.
+  useEffect(() => {
+    // profile.id는 이전 익명 프로필을 잠깐 유지할 수 있다. 인증된 Google sub를
+    // 우선 사용해야 과거 작성물이 실제 소유자로 판별되어 자동 복구된다.
+    const ownerIds = new Set([initialAuthUserId, profile.id].filter((id): id is string => Boolean(id)));
+    const legacy = feedPosts
+      .filter((post): post is FeedPost & { courseId: string } => {
+        const courseId = post.courseId;
+        return typeof courseId === 'string' && typeof post.authorId === 'string' && ownerIds.has(post.authorId) && !post.decor?.length && !legacyMediaMigrationRef.current.has(courseId);
+      })
+      .map(post => ({ post, decor: getCoursemapDecor(post.courseId) }))
+      .filter((item): item is { post: FeedPost; decor: NonNullable<ReturnType<typeof getCoursemapDecor>> } => Boolean(item.decor?.length));
+    if (!legacy.length) return;
+    void Promise.all(legacy.map(async ({ post, decor }) => {
+      legacyMediaMigrationRef.current.add(post.courseId);
+      try {
+        // Old drafts can contain data URLs. Upload them before persisting the
+        // layout so another browser receives durable R2 URLs, never local data.
+        const serverDecor = await Promise.all(decor.map(async photo => {
+          if (!photo.src.startsWith('data:image/')) return photo;
+          const upload = await fetch('/api/uploads', {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ dataUrl: photo.src }),
+          });
+          const uploaded = await upload.json().catch(() => ({})) as { url?: string };
+          if (!upload.ok || typeof uploaded.url !== 'string') throw new Error('legacy image upload failed');
+          return { ...photo, src: uploaded.url };
+        }));
+        const response = await fetch('/api/course-media', {
+          method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            courseId: post.courseId,
+            feedPhotos: Array.from(new Set(serverDecor.map(photo => photo.src))),
+            feedDecor: serverDecor,
+            templateId: courseSkins[post.courseId],
+          }),
+        });
+        if (!response.ok) throw new Error('legacy media migration failed');
+      } catch {
+        // A temporary network error may be retried after the next render.
+        legacyMediaMigrationRef.current.delete(post.courseId);
+        throw new Error('legacy media migration failed');
+      }
+    })).then(() => refreshFeedPosts()).catch(() => undefined);
+  }, [courseSkins, feedPosts, initialAuthUserId, profile.id, refreshFeedPosts]);
 
   // 최초 legacy id → auth uid에서만 로컬 작성자 id를 승계한다. 이후 Google 충돌 계정 전환이나
   // 로그아웃→새 익명 uid에는 이전 계정의 로컬 소유권을 자동 양도하지 않는다.
@@ -1029,26 +857,22 @@ export function AppProvider({
       localStorage.setItem(LAST_AUTH_UID_KEY, uid);
     };
 
-    if (initialAuthUserId) adoptUid(initialAuthUserId);
-
-    if (!isWebAuthConfigured()) return;
-
-    let active = true;
-    let unsubscribe: (() => void) | undefined;
-
-    void import('@/lib/supabase').then(({ supabase }) => {
-      if (!active) return;
-
-      const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-        if (session) adoptUid(session.user.id);
-      });
-      unsubscribe = () => subscription.unsubscribe();
-    });
-
-    return () => {
-      active = false;
-      unsubscribe?.();
-    };
+    if (!initialAuthUserId) return;
+    adoptUid(initialAuthUserId);
+    // 기본 프로토타입 이름(지민)을 Google 계정 이름으로 덮는다. 이름이 없는
+    // 계정은 사용자가 프로필에서 직접 정할 수 있다.
+    void fetch('/api/auth/session', { credentials: 'same-origin' })
+      .then(response => response.ok ? response.json() : null)
+      .then((data: { user?: { sub?: string; name?: string; picture?: string } } | null) => {
+        const googleUser = data?.user;
+        if (!googleUser || googleUser.sub !== initialAuthUserId) return;
+        setProfile(previous => ({
+          ...previous,
+          ...(googleUser.name ? { name: googleUser.name } : {}),
+          ...(googleUser.picture ? { avatarPhoto: googleUser.picture } : {}),
+        }));
+      })
+      .catch(() => { /* profile fallback remains usable */ });
   }, []);
 
   useEffect(() => { localStorage.setItem('lm_courses', JSON.stringify(courses)); }, [courses]);
@@ -1063,14 +887,18 @@ export function AppProvider({
   useEffect(() => { localStorage.setItem('lm_profile', JSON.stringify(profile)); }, [profile]);
   useEffect(() => {
     // 업로드 사진(data URL)이 크면 quota 초과가 날 수 있다 — 실패해도 앱은 계속 동작.
-    try { localStorage.setItem('lm_feed_v2', JSON.stringify(feedPosts)); } catch { /* noop */ }
+    try { localStorage.setItem('lm_feed_v3', JSON.stringify(feedPosts)); } catch { /* noop */ }
   }, [feedPosts]);
   useEffect(() => { localStorage.setItem('lm_feed_likes', JSON.stringify(likedFeedIds)); }, [likedFeedIds]);
   useEffect(() => { localStorage.setItem('lm_feed_dislikes', JSON.stringify(dislikedFeedIds)); }, [dislikedFeedIds]);
   useEffect(() => { localStorage.setItem('lm_course_skins', JSON.stringify(courseSkins)); }, [courseSkins]);
 
   const saveCourse = useCallback((id: string) => {
-    setSavedCourseIds(prev => prev.includes(id) ? prev : [...prev, id]);
+    setSavedCourseIds(prev => {
+      const exists = prev.includes(id);
+      if (!exists) logCourseSave(id);
+      return exists ? prev : [...prev, id];
+    });
   }, []);
 
   const unsaveCourse = useCallback((id: string) => {
@@ -1128,6 +956,7 @@ export function AppProvider({
     setLikedFeedIds(prev => {
       const liked = prev.includes(postId);
       const wasDisliked = dislikedFeedIds.includes(postId);
+      logFeedLike(postId, !liked);
       setFeedPosts(posts => posts.map(p =>
         p.id === postId ? {
           ...p,
@@ -1418,7 +1247,7 @@ export function AppProvider({
           swipe_action: action === 'like' || action === 'save' ? 'LIKE' : 'DISLIKE',
           created_at: new Date(),
         }),
-      }).catch(() => {});
+      }).catch(() => { });
     }
   }, [apiAvailable, currentSession, profile.id]);
 
@@ -1479,7 +1308,7 @@ export function AppProvider({
       swipeRecords, addSwipe, clearSessionSwipes, rerollSession, likedRestaurantIds,
       savedRestaurantIds, saveRestaurant, unsaveRestaurant,
       profile, updateProfile,
-      feedPosts, addFeedPost, updateFeedPost, deleteFeedPost,
+      feedPosts, refreshFeedPosts, addFeedPost, updateFeedPost, deleteFeedPost,
       likedFeedIds, dislikedFeedIds, toggleFeedLike, toggleFeedDislike, addFeedComment,
       reactToFeedComment, reportFeedComment, toggleCommentHidden, isMyPost,
       courseSkins, setCourseSkin,

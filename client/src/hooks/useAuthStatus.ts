@@ -1,13 +1,13 @@
 import { useQuery } from '@tanstack/react-query';
-import { supabase } from '@/lib/supabase';
-
-export interface AuthStatus { uid: string; isAnonymous: boolean }
+export interface AuthStatus { uid: string; isAnonymous: boolean; email?: string; name?: string; picture?: string }
 
 async function getAuthStatus(): Promise<AuthStatus> {
-  const { data: { user }, error } = await supabase.auth.getUser();
-  if (error) throw error;
-  if (!user) throw new Error('로그인 세션이 없습니다.');
-  return { uid: user.id, isAnonymous: user.is_anonymous ?? false };
+  const response = await fetch('/api/auth/session', { credentials: 'same-origin' });
+  if (!response.ok) throw new Error('로그인 세션을 확인하지 못했어요.');
+  const { user } = await response.json() as { user: { sub: string; email?: string; name?: string; picture?: string } | null };
+  return user
+    ? { uid: user.sub, isAnonymous: false, email: user.email, name: user.name, picture: user.picture }
+    : { uid: 'anonymous', isAnonymous: true };
 }
 
 export function useAuthStatus() {

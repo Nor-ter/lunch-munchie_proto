@@ -1,54 +1,23 @@
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import { ChevronRight, LoaderCircle, LogOut, UserRound } from 'lucide-react';
 import { toast } from 'sonner';
 import { LoginSheet } from './LoginSheet';
-import {
-  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
-  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
-} from '@/components/ui/alert-dialog';
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from '@/components/ui/sheet';
 import { useApp } from '@/contexts/AppContext';
 import { useAuthStatus } from '@/hooks/useAuthStatus';
-import { supabase } from '@/lib/supabase';
 import {
-  applyGoogleProfile, GOOGLE_PROFILE_IMPORT_PARAM, IDENTITY_CONFLICT_CODE,
-  getGoogleAccountDetails, type GoogleAccountDetails, linkIdentityWithGoogle,
-  markGoogleProfilePrompted, parseAuthRedirectError,
-  shouldPromptForGoogleProfile, signOutToAnonymous,
+  linkIdentityWithGoogle, signOutToAnonymous,
 } from '@/services/authApi';
-
-function hasGoogleProfileImportMarker(): boolean {
-  return new URLSearchParams(window.location.search).get(GOOGLE_PROFILE_IMPORT_PARAM) === 'ask';
-}
-
-function clearGoogleProfileImportMarker(): void {
-  const url = new URL(window.location.href);
-  url.searchParams.delete(GOOGLE_PROFILE_IMPORT_PARAM);
-  window.history.replaceState({}, '', `${url.pathname}${url.search}${url.hash}`);
-}
 
 export function AccountBanner() {
   const auth = useAuthStatus();
-  const { updateProfile } = useApp();
+  const queryClient = useQueryClient();
+  const { setCurrentSession } = useApp();
   const [loginOpen, setLoginOpen] = useState(false);
   const [signingIn, setSigningIn] = useState(false);
   const [signingOut, setSigningOut] = useState(false);
-  const [importingProfile, setImportingProfile] = useState(false);
-  const [profileImportOpen, setProfileImportOpen] = useState(false);
   const [accountOpen, setAccountOpen] = useState(false);
-  const [accountLoading, setAccountLoading] = useState(false);
-  const [accountDetails, setAccountDetails] = useState<GoogleAccountDetails | null>(null);
-
-  useEffect(() => {
-    if (parseAuthRedirectError()?.code === IDENTITY_CONFLICT_CODE) setLoginOpen(true);
-  }, []);
-
-  useEffect(() => {
-    if (auth.data && !auth.data.isAnonymous && hasGoogleProfileImportMarker()) {
-      if (shouldPromptForGoogleProfile()) setProfileImportOpen(true);
-      else clearGoogleProfileImportMarker();
-    }
-  }, [auth.data]);
 
   if (auth.isLoading || !auth.data) return null;
 
@@ -100,6 +69,8 @@ export function AccountBanner() {
     setSigningOut(true);
     try {
       await signOutToAnonymous();
+      setCurrentSession(null);
+      await queryClient.invalidateQueries({ queryKey: ['authStatus'] });
       setAccountOpen(false);
       toast.success('로그아웃했어요. 익명 모드로 계속 사용할 수 있어요.');
     } catch (cause) {
@@ -109,51 +80,8 @@ export function AccountBanner() {
     }
   };
 
-  const openAccountDetails = async () => {
+  const openAccountDetails = () => {
     setAccountOpen(true);
-    setAccountLoading(true);
-    try {
-      const { data: { user }, error } = await supabase.auth.getUser();
-      if (error) throw error;
-      if (!user) throw new Error('Google 로그인 세션을 찾을 수 없어요.');
-      setAccountDetails(getGoogleAccountDetails(user));
-    } catch (cause) {
-      toast.error(cause instanceof Error ? cause.message : 'Google 계정 정보를 불러오지 못했어요.');
-      setAccountOpen(false);
-    } finally {
-      setAccountLoading(false);
-    }
-  };
-
-  const importGoogleProfile = async () => {
-    setImportingProfile(true);
-    try {
-      const { data: { user }, error } = await supabase.auth.getUser();
-      if (error) throw error;
-      if (!user) throw new Error('Google 로그인 세션을 찾을 수 없어요.');
-      const googleProfile = await applyGoogleProfile(user);
-      if (!googleProfile.displayName && !googleProfile.avatarUrl) {
-        throw new Error('Google 계정에서 가져올 이름이나 사진이 없어요.');
-      }
-      updateProfile({
-        ...(googleProfile.displayName ? { name: googleProfile.displayName } : {}),
-        ...(googleProfile.avatarUrl ? { avatarPhoto: googleProfile.avatarUrl } : {}),
-      });
-      markGoogleProfilePrompted();
-      clearGoogleProfileImportMarker();
-      setProfileImportOpen(false);
-      toast.success('Google 프로필 이름과 사진을 가져왔어요.');
-    } catch (cause) {
-      toast.error(cause instanceof Error ? cause.message : 'Google 프로필을 가져오지 못했어요.');
-    } finally {
-      setImportingProfile(false);
-    }
-  };
-
-  const skipGoogleProfile = () => {
-    markGoogleProfilePrompted();
-    clearGoogleProfileImportMarker();
-    setProfileImportOpen(false);
   };
 
   return (
@@ -187,31 +115,25 @@ export function AccountBanner() {
           </SheetHeader>
 
           <div className="mt-6">
-            {accountLoading ? (
-              <div className="flex min-h-28 items-center justify-center" aria-label="계정 정보 불러오는 중">
-                <LoaderCircle className="size-6 animate-spin text-[#EB5053]" />
+            <div className="flex items-center gap-4 rounded-2xl bg-[#FAF6F1] p-4">
+              {auth.data.picture ? (
+                <img src={auth.data.picture} alt="Google 프로필" className="size-14 shrink-0 rounded-full object-cover" referrerPolicy="no-referrer" />
+              ) : (
+                <span className="flex size-14 shrink-0 items-center justify-center rounded-full bg-white text-[#9B887C]">
+                  <UserRound className="size-7" aria-hidden="true" />
+                </span>
+              )}
+              <div className="min-w-0">
+                <p className="truncate text-base font-bold text-[#3B2A22]">{auth.data.name ?? 'Google 사용자'}</p>
+                <p className="mt-1 truncate text-sm text-[#7C6C62]">{auth.data.email ?? '이메일 정보 없음'}</p>
+                <p className="mt-1.5 text-xs font-semibold text-[#4285F4]">Google로 연결됨</p>
               </div>
-            ) : (
-              <div className="flex items-center gap-4 rounded-2xl bg-[#FAF6F1] p-4">
-                {accountDetails?.avatarUrl ? (
-                  <img src={accountDetails.avatarUrl} alt="Google 프로필" className="size-14 shrink-0 rounded-full object-cover" referrerPolicy="no-referrer" />
-                ) : (
-                  <span className="flex size-14 shrink-0 items-center justify-center rounded-full bg-white text-[#9B887C]">
-                    <UserRound className="size-7" aria-hidden="true" />
-                  </span>
-                )}
-                <div className="min-w-0">
-                  <p className="truncate text-base font-bold text-[#3B2A22]">{accountDetails?.displayName ?? 'Google 사용자'}</p>
-                  <p className="mt-1 truncate text-sm text-[#7C6C62]">{accountDetails?.email ?? '이메일 정보 없음'}</p>
-                  <p className="mt-1.5 text-xs font-semibold text-[#4285F4]">Google로 연결됨</p>
-                </div>
-              </div>
-            )}
+            </div>
 
             <button
               type="button"
               onClick={logout}
-              disabled={signingOut || accountLoading}
+              disabled={signingOut}
               className="mt-5 flex h-11 w-full items-center justify-center gap-2 rounded-xl border border-[#E5DCD2] bg-white text-sm font-bold text-[#6F625A] disabled:opacity-50"
             >
               {signingOut ? <LoaderCircle className="size-4 animate-spin" /> : <LogOut size={16} />}
@@ -221,24 +143,6 @@ export function AccountBanner() {
         </SheetContent>
       </Sheet>
 
-      <AlertDialog open={profileImportOpen} onOpenChange={(open) => {
-        if (!open && !importingProfile) skipGoogleProfile();
-      }}>
-        <AlertDialogContent className="max-w-[390px] rounded-2xl">
-          <AlertDialogHeader>
-            <AlertDialogTitle>Google 프로필을 가져올까요?</AlertDialogTitle>
-            <AlertDialogDescription>
-              Google 계정의 프로필 이름과 사진으로 Lunchie Munchie 프로필을 업데이트할 수 있어요. 원하지 않으면 현재 프로필을 그대로 유지합니다.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel onClick={skipGoogleProfile} disabled={importingProfile}>현재 프로필 유지</AlertDialogCancel>
-            <AlertDialogAction onClick={importGoogleProfile} disabled={importingProfile} className="bg-[#EB5053] hover:bg-[#D94447]">
-              {importingProfile ? '가져오는 중…' : '이름·사진 가져오기'}
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
     </>
   );
 }

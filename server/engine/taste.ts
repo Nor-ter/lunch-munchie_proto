@@ -9,7 +9,20 @@
 
 import { FEATURE_DIM } from "./features.js";
 
-export const MIN_TASTE = 5;
+// 신호 종류별 가중치 (Model Access & Signal Isolation)
+export const EVENT_WEIGHTS = {
+  SURVEY: 3.0,       // 회고 마이크로설문 (최고 신뢰도 정답)
+  WINNER: 2.0,       // 우승 (소비 정답)
+  VISIT: 2.5,        // 실제 방문
+  SWIPE: 1.0,        // 예선 스와이프
+  COURSE_SAVE: 0.5,  // Munchie 코스 저장 (열망 신호)
+  FEED_LIKE: 0.25,   // Munchie 피드 좋아요 (열망 신호)
+  FEED_DISLIKE: -0.25,// Munchie 피드 싫어요
+  COURSE_OPEN: 0.1,  // 코스 상세 열람
+  COURSE_EDIT: 1.5,  // 코스 편집 (직접 짠 조합)
+} as const;
+
+export const MIN_TASTE = 0; // RL 탐색 원리: n=0 (콜드스타트)부터 Thompson Sampling 수행
 const D = FEATURE_DIM;
 const PRIOR = 1.0; // 사전 정밀도 A0 = PRIOR*I → 콜드스타트 mu=0(중립), 분산 큼(탐색)
 

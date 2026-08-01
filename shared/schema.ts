@@ -61,6 +61,20 @@ export const userFollows = pgTable("user_follows", {
   created_at: timestamp("created_at").notNull(),
 });
 
+export const savedCourses = pgTable("saved_courses", {
+  id: text("id").primaryKey(),
+  user_id: text("user_id").notNull(),
+  course_id: text("course_id").notNull(),
+  created_at: timestamp("created_at").notNull(),
+});
+
+export const feedLikes = pgTable("feed_likes", {
+  id: text("id").primaryKey(),
+  user_id: text("user_id").notNull(),
+  course_id: text("course_id").notNull(),
+  created_at: timestamp("created_at").notNull(),
+});
+
 export const courses = pgTable("courses", {
   id: text("id").primaryKey(),
   author_id: text("author_id").notNull(),
@@ -135,10 +149,11 @@ export const sessionMembers = pgTable("session_members", {
 // 런치 엔진 v0 — 추천 이벤트 로그 (로깅 + propensity, off-policy 평가 기반)
 export const recEvents = pgTable("rec_events", {
   id: text("id").primaryKey(),
-  event_type: text("event_type").notNull(), // IMPRESSION | SWIPE | WINNER | NAVIGATE | VISIT | REORDER | COURSE_SAVE | COURSE_EDIT | REROLL
+  event_type: text("event_type").notNull(), // IMPRESSION | SWIPE | WINNER | NAVIGATE | VISIT | REORDER | COURSE_SAVE | COURSE_EDIT | REROLL | FEED_LIKE | FEED_DISLIKE | COURSE_OPEN
   slate_id: text("slate_id"),               // 같은 추천 호출/대결을 묶음 (off-policy·pairwise 기준)
   slate_type: text("slate_type"),           // PRELIM | FINAL | NEXT_STOP | COURSE_FEED
   user_id: text("user_id"),
+  course_id: text("course_id"),             // Munchie 피드 코스 ID
   session_id: text("session_id"),
   group_id: text("group_id"),
   restaurant_id: text("restaurant_id"),

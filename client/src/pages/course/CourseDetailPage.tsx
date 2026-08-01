@@ -21,11 +21,12 @@ import {
 import { CSS } from '@dnd-kit/utilities';
 import { CourseMapView } from '@/components/course/CourseMapView';
 import { useApp } from '@/contexts/AppContext';
-import { getCourseById as getMockCourseById } from '@/data/mockCourse';
+// Removed mockCourse import
 import { CoursePlace } from '@/types/course';
 import { getCourseSequenceColor } from '@/constants/courseTheme';
 import { getCoursePlacesFromStops } from '@/lib/courseMapSync';
 import RestaurantDetailSheet from '@/components/munchie/RestaurantDetailSheet';
+import { logCourseOpen } from '@/lib/eventLogger';
 
 type FromMode = 'explore' | 'saved' | 'feed' | 'template' | 'template-detail' | 'profile';
 
@@ -225,13 +226,12 @@ export default function CourseDetailPage() {
     ? feedPosts.find(post => post.id === requestedPostId && post.courseId === id)
       ?? feedPosts.find(post => post.courseId === id)
     : undefined;
-  const courseData = getMockCourseById(id);
   const syncedPlaces = useMemo(
     () => (appCourse ? getCoursePlacesFromStops(appCourse, getRestaurantById) : []),
     [appCourse, getRestaurantById],
   );
   const legacyPhotoPlaces: CoursePlace[] = (orphanPost?.photos ?? []).slice(0, 3).map((photo, index) => ({
-    id: `legacy-${orphanPost!.id}-${index}`,
+    id: `legacy-${orphanPost?.id}-${index}`,
     name: `코스 스팟 ${index + 1}`,
     rating: 0,
     distance: '기록 사진',
@@ -244,13 +244,17 @@ export default function CourseDetailPage() {
     ? syncedPlaces
     : legacyPhotoPlaces.length > 0
       ? legacyPhotoPlaces
-      : courseData.places.map(p => ({ ...p }));
+      : [];
   const durationHours = appCourse
     ? appCourse.metadata.duration / 60
-    : courseData.durationHours;
+    : 0;
   const durationLabel = `${Number.isInteger(durationHours) ? durationHours : durationHours.toFixed(1)}시간`;
-  const authorHandle = (orphanPost?.authorName || courseData.authorHandle).replace(/^@/, '');
-  const authorMeta = orphanPost ? 'Munchie creator' : `${courseData.followerCount} Followers`;
+  const authorHandle = (orphanPost?.authorName || 'app_user').replace(/^@/, '');
+  const authorMeta = orphanPost ? 'Munchie creator' : `0 Followers`;
+
+  useEffect(() => {
+    if (id) logCourseOpen(id);
+  }, [id]);
 
   // Local editable state (only used in saved mode)
   const [places, setPlaces] = useState<CoursePlace[]>(initialPlaces);

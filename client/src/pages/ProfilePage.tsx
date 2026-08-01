@@ -9,11 +9,10 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { useLocation } from 'wouter';
 import {
   Menu, X, Camera, Upload,
-  LogIn, LogOut,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { useApp, type FeedPost } from '@/contexts/AppContext';
-import { useAuth } from '@/contexts/AuthContext';
+import { useAuthStatus } from '@/hooks/useAuthStatus';
 import { fileToResizedDataUrl } from '@/lib/imageUtils';
 import UnifiedMunchieCard from '@/components/munchie/UnifiedMunchieCard';
 import FoodieBuddy, { type FoodieBuddyUiState } from '@/components/munchie/FoodieBuddy';
@@ -103,10 +102,9 @@ function MyFeedItem({ post }: { post: FeedPost }) {
 
 // ── ProfilePage ───────────────────────────────────────────────────────────────
 
-export default function ProfilePage() {
+function ProfilePageContent() {
   const [, navigate] = useLocation();
   const { profile, updateProfile, courses, feedPosts, isMyPost } = useApp();
-  const { status: authStatus, signOut } = useAuth();
   const lunchmateLoadout = useMemo(
     () => lunchmateLoadoutFromProfile(profile.lunchmateLoadout),
     [profile.lunchmateLoadout],
@@ -126,7 +124,6 @@ export default function ProfilePage() {
       : null;
   });
   const [followListMode, setFollowListMode] = useState<FollowListMode | null>(null);
-  const [authActionPending, setAuthActionPending] = useState(false);
   const [levelUpRewardItem, setLevelUpRewardItem] = useState<LunchmateLayerItem | null>(null);
   const [editName, setEditName] = useState(profile.name);
   const avatarFileRef = useRef<HTMLInputElement>(null);
@@ -289,25 +286,6 @@ export default function ProfilePage() {
     } catch {
       toast.error('사진을 불러오지 못했어요');
     }
-  };
-
-  const handleProfileAuthAction = async () => {
-    if (authActionPending || authStatus === 'loading' || authStatus === 'unconfigured') return;
-
-    if (authStatus !== 'authenticated') {
-      navigate('/auth/login?next=%2Fprofile');
-      return;
-    }
-
-    setAuthActionPending(true);
-    const { error } = await signOut();
-    setAuthActionPending(false);
-
-    if (error) {
-      toast.error('로그아웃하지 못했어요. 잠시 후 다시 시도해 주세요.');
-      return;
-    }
-    toast.success('현재 브라우저에서 로그아웃했어요.');
   };
 
   return (
@@ -474,9 +452,10 @@ export default function ProfilePage() {
               <div className="mx-auto mb-4 h-1 w-10 rounded-full bg-gray-200" />
               <p className="mb-4 font-bold text-[16px]">프로필 설정</p>
 
-              <div className="mb-5">
-                <p className="mb-1.5 text-[12px] font-semibold text-[#9B9B9B]">계정</p>
-                <AccountBanner />
+               <div className="mb-5">
+                 <p className="mb-1.5 text-[12px] font-semibold text-[#9B9B9B]">계정</p>
+                 {/* Google 계정 정보와 로그아웃은 AccountBanner가 직접 OAuth 세션으로 처리한다. */}
+                 <AccountBanner />
               </div>
 
               {/* 아바타 — 탭하면 사진 업로드/이모지 변경 시트로 */}
@@ -510,31 +489,6 @@ export default function ProfilePage() {
                     {d}
                   </button>
                 ))}
-              </div>
-
-              <div className="mt-5 border-t border-[#F0E8E0] pt-4">
-                <p className="mb-1.5 text-[12px] font-semibold text-[#9B9B9B]">계정</p>
-                <button
-                  type="button"
-                  onClick={handleProfileAuthAction}
-                  disabled={authStatus === 'loading' || authStatus === 'unconfigured' || authActionPending}
-                  aria-busy={authStatus === 'loading' || authActionPending}
-                  className="flex h-11 w-full items-center justify-center gap-2 rounded-xl border border-[#F0E8E0] bg-[#FAF6F1] text-[13px] font-bold text-[#4A4A4A] active:scale-[0.99] disabled:cursor-not-allowed disabled:opacity-55"
-                >
-                  {authStatus === 'authenticated' ? <LogOut size={15} /> : <LogIn size={15} />}
-                  {authActionPending || authStatus === 'loading'
-                    ? '인증 확인 중'
-                    : authStatus === 'authenticated'
-                      ? '로그아웃'
-                      : authStatus === 'unconfigured'
-                        ? '웹 로그인 설정 필요'
-                        : 'Google로 로그인'}
-                </button>
-                {authStatus === 'unconfigured' && (
-                  <p className="mt-2 text-[11px] text-[#A1948C]">
-                    웹 인증 환경 설정이 완료되면 로그인할 수 있어요.
-                  </p>
-                )}
               </div>
 
               <button
@@ -614,4 +568,25 @@ export default function ProfilePage() {
       </AnimatePresence>
     </div>
   );
+}
+
+// 익명 사용자는 개인 프로필 데이터를 볼 수 없다. 프로토타입 기본값(지민 등)을
+// 랜더링하지 않고, 로그인 안내만 제공한다.
+export default function ProfilePage() {
+  const auth = useAuthStatus();
+  const [, navigate] = useLocation();
+  if (auth.isLoading || !auth.data) {
+    return <main className="flex min-h-dvh items-center justify-center bg-[#FCF4EE]"><p className="text-sm font-bold text-[#8C7D74]">프로필 확인 중…</p></main>;
+  }
+  if (auth.data.isAnonymous) {
+    return (
+      <main className="flex min-h-dvh flex-col items-center justify-center bg-[#FCF4EE] px-8 text-center">
+        <div className="flex h-16 w-16 items-center justify-center rounded-full bg-[#FFF0EB] text-2xl">👤</div>
+        <h1 className="mt-5 text-xl font-black text-[#342C28]">내 프로필</h1>
+        <p className="mt-2 text-sm leading-6 text-[#8C7D74]">로그인하면 내가 만든 코스와 피드,<br />저장한 기록을 볼 수 있어요.</p>
+        <button onClick={() => window.location.assign('/api/auth/google/start?next=%2Fprofile')} className="mt-6 h-12 rounded-2xl bg-[#E85053] px-6 text-sm font-bold text-white">Google로 로그인</button>
+      </main>
+    );
+  }
+  return <ProfilePageContent />;
 }

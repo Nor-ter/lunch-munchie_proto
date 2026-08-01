@@ -2,6 +2,9 @@
   "name": "runchicken-prototype3",
   "version": "1.0.0",
   "type": "module",
+  "engines": {
+    "node": ">=22"
+  },
   "license": "MIT",
   "scripts": {
     "dev": "concurrently \"vite --host\" \"tsx watch server/index.ts\"",
@@ -10,9 +13,22 @@
     "build": "vite build && esbuild server/index.ts --platform=node --packages=external --bundle --format=esm --outdir=dist",
     "start": "NODE_ENV=production node dist/index.js",
     "seed": "tsx server/seed.ts",
+    "data:check": "node scripts/validateDataPipeline.mjs",
+    "data:check:strict": "node scripts/validateDataPipeline.mjs --strict",
+    "data:seed:d1": "node scripts/generateD1Seed.mjs",
+    "data:geocode:review": "node scripts/geocodeUnresolved.mjs",
+    "data:geocode:apply": "node scripts/geocodeUnresolved.mjs --apply",
+    "cf:r2:upload": "tsx scripts/uploadPhotosR2.ts",
+    "cf:state:deploy": "wrangler deploy --config wrangler.state.toml",
+    "cf:d1:migrate": "wrangler d1 migrations apply lunchie-db --remote",
+    "cf:pages:deploy": "wrangler pages deploy dist/public --project-name=lunchie-munchie",
+    "cf:auth:secrets": "node scripts/configureGoogleAuthSecrets.mjs",
     "preview": "vite preview --host",
     "check": "tsc --noEmit",
     "test": "vitest run",
+    "test:e2e": "playwright test",
+    "test:e2e:live": "playwright test --config playwright.live.config.ts",
+    "e2e:auth:setup": "tsx e2e-harness/scripts/capture-auth.ts",
     "test:e2e:web-follow": "playwright test --config playwright.web-follow.config.ts",
     "harness:web-follow": "node automation/web-follow-login/run.mjs",
     "harness:web-follow:status": "node automation/web-follow-login/run.mjs status",
@@ -65,6 +81,7 @@
     "embla-carousel-react": "^8.6.0",
     "express": "^4.21.2",
     "framer-motion": "^12.23.22",
+    "hono": "^4.12.33",
     "html-to-image": "^1.11.13",
     "html2canvas": "^1.4.1",
     "input-otp": "^1.4.2",
@@ -114,7 +131,8 @@
     "typescript": "5.6.3",
     "vite": "^7.1.7",
     "vite-plugin-manus-runtime": "^0.0.57",
-    "vitest": "^2.1.4"
+    "vitest": "^2.1.4",
+    "wrangler": "^4.118.0"
   },
   "packageManager": "pnpm@10.4.1+sha512.c753b6c3ad7afa13af388fa6d808035a008e30ea9993f58c6663e2bc5ff21679aa834db094987129aa4d488b86df57f7b634981b2f827cdcacc698cc0cfb88af",
   "pnpm": {

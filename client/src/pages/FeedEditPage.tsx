@@ -44,9 +44,14 @@ export default function FeedEditPage() {
     );
   }
 
-  const save = () => {
+  const save = async () => {
     if (!caption.trim() || placed.length === 0) return;
     const nextPlaced = placed.slice(0, MAX_MUNCHIE_FEED_PHOTOS);
+    const response = await fetch('/api/feed-post', {
+      method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ courseId: course.id, caption: caption.trim(), heroImage: nextPlaced[0]?.src }),
+    });
+    if (!response.ok) { toast.error('서버에서 수정 권한을 확인하지 못했어요.'); return; }
     updateFeedPost(post.id, { photos: nextPlaced.map(photo => photo.src), caption: caption.trim() });
     saveCoursemapDecor(post.courseId, nextPlaced);
     toast.success('Munchie 피드를 수정했어요.');
@@ -79,7 +84,7 @@ export default function FeedEditPage() {
       </section>
 
       <div className="page-bottom-bar fixed bottom-4 left-1/2 z-30 w-[calc(100%-32px)] max-w-[398px] -translate-x-1/2">
-        <button onClick={save} disabled={!caption.trim() || placed.length === 0} className="h-[52px] w-full rounded-2xl bg-[#EB5053] font-bold text-white shadow-lg disabled:bg-[#E5CFC5]">수정 완료</button>
+        <button onClick={() => void save()} disabled={!caption.trim() || placed.length === 0} className="h-[52px] w-full rounded-2xl bg-[#EB5053] font-bold text-white shadow-lg disabled:bg-[#E5CFC5]">수정 완료</button>
       </div>
     </main>
   );

@@ -394,7 +394,7 @@ export const DRIVE_FEED_POSTS: FeedPost[] = [
     "likes": 32,
     "saves": 18,
     "comments": [],
-    "createdAt": "2026-07-20T9:15:00.000Z",
+    "createdAt": "2026-07-20T09:15:00.000Z",
     "tags": [
       "맛집"
     ]
