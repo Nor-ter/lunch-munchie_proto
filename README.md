@@ -242,7 +242,7 @@ pnpm cf:d1:seed:local
 ### 테스트와 커밋
 
 ```bash
-npm run test:precommit  # 타입 → 357개 Vitest → 로컬 Playwright E2E → Pages 빌드
+npm run test:precommit  # 타입 → 469개 Vitest → 로컬 Playwright E2E → Pages 빌드
 git checkout -b feature/short-description
 git add <files>
 git commit -m "feat: short description"
