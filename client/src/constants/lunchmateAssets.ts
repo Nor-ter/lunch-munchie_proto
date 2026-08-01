@@ -1,0 +1,192 @@
+export interface LunchmateAssetSource {
+  src: string;
+  srcSet: string;
+}
+
+export type LunchmateStateAssetKey =
+  | 'default'
+  | 'happy'
+  | 'excited'
+  | 'surprised'
+  | 'sad'
+  | 'thinking'
+  | 'eating'
+  | 'like'
+  | 'jump';
+
+export type LunchmateCostumeAssetKey =
+  | 'costume_hoodie'
+  | 'costume_overalls'
+  | 'costume_beret'
+  | 'costume_raincoat';
+
+export type LunchmateChickenAssetKey =
+  | 'idle'
+  | 'feeding'
+  | 'grabbed'
+  | 'sitting'
+  | 'side-walk-left-1'
+  | 'side-walk-left-2'
+  | 'side-walk-right-1'
+  | 'side-walk-right-2'
+  | 'happy'
+  | 'surprised'
+  | 'sleepy'
+  | 'crying';
+
+/** Profile front idle/tap interaction only. These assets share the 950px chicken canvas. */
+export type LunchmateChickenFaceState =
+  | 'default'
+  | 'surprised'
+  | 'crying'
+  | 'angry';
+
+function assetSource(fileName: string, revision?: string): LunchmateAssetSource {
+  const revisionQuery = revision ? `?v=${revision}` : '';
+
+  return {
+    src: `/assets/lunchmate/1x/lunchmate_${fileName}.png${revisionQuery}`,
+    srcSet: `/assets/lunchmate/1x/lunchmate_${fileName}.png${revisionQuery} 1x, /assets/lunchmate/2x/lunchmate_${fileName}@2x.png${revisionQuery} 2x`,
+  };
+}
+
+const LUNCHMATE_STATE_ASSET_REVISION = 'body-seams-v1';
+
+function composedAssetSource(
+  oneXPath: string,
+  twoXPath: string,
+  revision?: string,
+): LunchmateAssetSource {
+  const revisionQuery = revision ? `?v=${revision}` : '';
+
+  return {
+    src: `${oneXPath}${revisionQuery}`,
+    srcSet: `${oneXPath}${revisionQuery} 1x, ${twoXPath}${revisionQuery} 2x`,
+  };
+}
+
+export function lunchmateLayerAssetSource(relativePath: string): LunchmateAssetSource {
+  const basePath = `/assets/lunchmate/layers/${relativePath}`;
+  return {
+    src: `${basePath}.png`,
+    srcSet: `${basePath}.png 1x, ${basePath}@2x.png 2x`,
+  };
+}
+
+export const lunchmateStateAssets = {
+  default: assetSource('default', LUNCHMATE_STATE_ASSET_REVISION),
+  happy: assetSource('happy', LUNCHMATE_STATE_ASSET_REVISION),
+  excited: assetSource('excited', LUNCHMATE_STATE_ASSET_REVISION),
+  surprised: assetSource('surprised', LUNCHMATE_STATE_ASSET_REVISION),
+  sad: assetSource('sad', LUNCHMATE_STATE_ASSET_REVISION),
+  thinking: assetSource('thinking', LUNCHMATE_STATE_ASSET_REVISION),
+  eating: assetSource('eating', LUNCHMATE_STATE_ASSET_REVISION),
+  like: assetSource('like', LUNCHMATE_STATE_ASSET_REVISION),
+  jump: assetSource('jump', LUNCHMATE_STATE_ASSET_REVISION),
+} satisfies Record<LunchmateStateAssetKey, LunchmateAssetSource>;
+
+export const lunchmateFacelessBaseAsset = composedAssetSource(
+  '/assets/lunchmate/base/1x/faceless.png',
+  '/assets/lunchmate/base/2x/faceless@2x.png',
+  'faceless-seamless-v2',
+);
+
+export const lunchmateFaceAssets = {
+  default: composedAssetSource(
+    '/assets/lunchmate/layers/face/1x/default.png',
+    '/assets/lunchmate/layers/face/2x/default@2x.png',
+  ),
+  happy: composedAssetSource(
+    '/assets/lunchmate/layers/face/1x/happy.png',
+    '/assets/lunchmate/layers/face/2x/happy@2x.png',
+  ),
+  excited: composedAssetSource(
+    '/assets/lunchmate/layers/face/1x/excited.png',
+    '/assets/lunchmate/layers/face/2x/excited@2x.png',
+  ),
+  surprised: composedAssetSource(
+    '/assets/lunchmate/layers/face/1x/surprised.png',
+    '/assets/lunchmate/layers/face/2x/surprised@2x.png',
+  ),
+  sad: composedAssetSource(
+    '/assets/lunchmate/layers/face/1x/sad.png',
+    '/assets/lunchmate/layers/face/2x/sad@2x.png',
+  ),
+  thinking: composedAssetSource(
+    '/assets/lunchmate/layers/face/1x/thinking.png',
+    '/assets/lunchmate/layers/face/2x/thinking@2x.png',
+    'thinking-clean-v2',
+  ),
+} as const;
+
+export const lunchmateEffectAssets = {
+  surprised_marks: composedAssetSource(
+    '/assets/lunchmate/layers/effects/1x/surprised_marks.png',
+    '/assets/lunchmate/layers/effects/2x/surprised_marks@2x.png',
+  ),
+  thinking_bubble: composedAssetSource(
+    '/assets/lunchmate/layers/effects/1x/thinking_bubble.png',
+    '/assets/lunchmate/layers/effects/2x/thinking_bubble@2x.png',
+  ),
+  jump_lines: composedAssetSource(
+    '/assets/lunchmate/layers/effects/1x/jump_lines.png',
+    '/assets/lunchmate/layers/effects/2x/jump_lines@2x.png',
+  ),
+} as const;
+
+function chickenAssetSource(
+  fileName: string,
+  revision = 'chicken-visual-v1',
+): LunchmateAssetSource {
+  const src = `/assets/lunchmate/chicken/chicken-${fileName}.png?v=${revision}`;
+  return {
+    src,
+    srcSet: `${src} 1x, ${src} 2x`,
+  };
+}
+
+function chickenFaceSystemAssetSource(fileName: string): LunchmateAssetSource {
+  const src = `/assets/lunchmate/chicken/face-system/${fileName}.png?v=chicken-face-system-v1`;
+  return {
+    src,
+    // The supplied source is a shared 950px transparent canvas for every density.
+    srcSet: `${src} 1x, ${src} 2x`,
+  };
+}
+
+/** Profile/Room chicken artwork selected by the existing Lunchmate flow phases. */
+export const lunchmateChickenAssets = {
+  idle: chickenAssetSource('idle'),
+  feeding: chickenAssetSource('feeding'),
+  grabbed: chickenAssetSource('grabbed', 'chicken-grabbed-v1'),
+  sitting: chickenAssetSource('sitting', 'chicken-sitting-v1'),
+  'side-walk-left-1': chickenAssetSource('side-walk-left-1', 'chicken-motion-v1'),
+  'side-walk-left-2': chickenAssetSource('side-walk-left-2', 'chicken-motion-v1'),
+  'side-walk-right-1': chickenAssetSource('side-walk-right-1', 'chicken-motion-v1'),
+  'side-walk-right-2': chickenAssetSource('side-walk-right-2', 'chicken-motion-v1'),
+  happy: chickenAssetSource('happy', 'chicken-motion-v1'),
+  surprised: chickenAssetSource('surprised', 'chicken-motion-v1'),
+  sleepy: chickenAssetSource('sleepy', 'chicken-motion-v1'),
+  crying: chickenAssetSource('crying', 'chicken-motion-v1'),
+} satisfies Record<LunchmateChickenAssetKey, LunchmateAssetSource>;
+
+/**
+ * The chicken face system is deliberately separate from the legacy Lunchmate
+ * expression layers. It is used only by the Profile front-idle/tap route.
+ */
+export const lunchmateChickenFacelessBaseAsset = chickenFaceSystemAssetSource('chicken-faceless');
+
+export const lunchmateChickenFaceAssets = {
+  default: chickenFaceSystemAssetSource('face-default'),
+  surprised: chickenFaceSystemAssetSource('face-surprised'),
+  crying: chickenFaceSystemAssetSource('face-crying'),
+  angry: chickenFaceSystemAssetSource('face-angry'),
+} satisfies Record<LunchmateChickenFaceState, LunchmateAssetSource>;
+
+// Phase 1F에서는 manifest 등록만 한다. 선택 UI와 profile 저장 연결은 후속 Phase 범위다.
+export const lunchmateCostumeAssets = {
+  costume_hoodie: assetSource('costume_hoodie'),
+  costume_overalls: assetSource('costume_overalls'),
+  costume_beret: assetSource('costume_beret'),
+  costume_raincoat: assetSource('costume_raincoat'),
+} satisfies Record<LunchmateCostumeAssetKey, LunchmateAssetSource>;

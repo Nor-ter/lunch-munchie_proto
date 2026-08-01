@@ -1,0 +1,36 @@
+{
+  "name": "web-follow-login",
+  "canonicalOrigin": "http://localhost:5173",
+  "phases": [
+    {
+      "id": 0,
+      "name": "auth-bootstrap-and-identity",
+      "files": ["client/src/lib/supabase.ts", "client/src/components/auth/AuthBootstrap.tsx", "client/src/App.tsx", "client/src/contexts/AppContext.tsx", ".env.example", "package.json", "pnpm-lock.yaml"],
+      "evidence": ["browser", "db-read"]
+    },
+    {
+      "id": 1,
+      "name": "services-and-query-hooks",
+      "files": ["client/src/services/followsApi.ts", "client/src/services/authApi.ts", "client/src/hooks/useCurrentUserId.ts", "client/src/hooks/useAuthStatus.ts", "client/src/hooks/useUser.ts", "client/src/hooks/useIsFollowing.ts", "client/src/hooks/useFollowCounts.ts", "client/src/hooks/useFollowers.ts", "client/src/hooks/useFollowing.ts", "client/src/hooks/useToggleFollow.ts"],
+      "evidence": ["db-read"]
+    },
+    {
+      "id": 2,
+      "name": "follow-ui-and-other-profile",
+      "files": ["client/src/components/follow/FollowButton.tsx", "client/src/components/follow/ProfileStats.tsx", "client/src/components/follow/FollowerListSheet.tsx", "client/src/pages/ProfilePage.tsx", "client/src/pages/OtherProfilePage.tsx", "client/src/components/munchie/FeedPostCard.tsx", "client/src/App.tsx", "playwright.web-follow.config.ts", "e2e/web-follow-login.spec.ts"],
+      "evidence": ["browser", "db-read"]
+    },
+    {
+      "id": 3,
+      "name": "google-login-ui",
+      "files": ["client/src/components/auth/AccountBanner.tsx", "client/src/components/auth/LoginSheet.tsx", "client/src/components/auth/AuthBootstrap.tsx", "client/src/services/authApi.ts", "client/src/pages/ProfilePage.tsx", "client/src/App.tsx", "e2e/web-follow-login.spec.ts"],
+      "evidence": ["browser", "human-oauth"]
+    },
+    {
+      "id": 4,
+      "name": "final-gate",
+      "files": ["docs/workflow/web-follow-login-work-log.md"],
+      "evidence": ["browser", "db-read", "follow-roundtrip", "security", "human-oauth"]
+    }
+  ]
+}

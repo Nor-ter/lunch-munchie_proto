@@ -1,0 +1,37 @@
+{
+  "name": "web-maps-places",
+  "canonicalOrigin": "http://localhost:5173",
+  "phases": [
+    {
+      "id": 0,
+      "name": "google-maps-loader-and-key",
+      "files": ["client/src/components/map/MapProvider.tsx", "client/src/App.tsx", ".env.example", "package.json", "pnpm-lock.yaml"],
+      "checks": { "deps": ["@vis.gl/react-google-maps"], "envKeys": ["VITE_GOOGLE_MAPS_API_KEY"] },
+      "evidence": ["browser", "human-mapkey"]
+    },
+    {
+      "id": 1,
+      "name": "edge-function-services-and-hooks",
+      "files": ["client/src/services/edgeFunctions.ts", "client/src/services/placesApi.ts", "client/src/services/directionsApi.ts", "client/src/lib/polyline.ts", "client/src/hooks/usePlacesSearch.ts", "client/src/hooks/useDirections.ts"],
+      "evidence": ["edge-invoke"]
+    },
+    {
+      "id": 2,
+      "name": "google-course-map-markers-and-route",
+      "files": ["client/src/components/map/CourseMap.tsx"],
+      "evidence": ["browser", "edge-invoke"]
+    },
+    {
+      "id": 3,
+      "name": "place-explore-screen",
+      "files": ["client/src/pages/PlaceExplorePage.tsx", "client/src/App.tsx"],
+      "evidence": ["browser", "edge-invoke"]
+    },
+    {
+      "id": 4,
+      "name": "final-gate",
+      "files": ["docs/workflow/web-maps-places-work-log.md"],
+      "evidence": ["browser", "edge-invoke", "security"]
+    }
+  ]
+}

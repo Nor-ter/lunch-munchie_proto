@@ -1,0 +1,34 @@
+import { describe, it, expect } from "vitest";
+import { intentForCategory, intentForHour } from "./intent";
+
+describe("intentForCategory (규칙 기반 — 한국어 + 영문 멜번)", () => {
+  it("카페류 → cafe (KR·EN)", () => {
+    expect(intentForCategory("카페")).toBe("cafe");
+    expect(intentForCategory("전통찻집")).toBe("cafe");
+    expect(intentForCategory("Cafe")).toBe("cafe");
+    expect(intentForCategory("Coffee Shop")).toBe("cafe");
+  });
+  it("디저트류 → dessert (KR·EN)", () => {
+    expect(intentForCategory("베이커리")).toBe("dessert");
+    expect(intentForCategory("Bakery")).toBe("dessert");
+    expect(intentForCategory("Ice Cream")).toBe("dessert");
+  });
+  it("나머지 식사류 → meal (한식·롱테일 cuisine)", () => {
+    expect(intentForCategory("한식")).toBe("meal");
+    expect(intentForCategory("Italian")).toBe("meal");
+    expect(intentForCategory("Fast Food")).toBe("meal");
+    expect(intentForCategory("Restaurant")).toBe("meal");
+    expect(intentForCategory("Vietnamese")).toBe("meal");
+  });
+  it("null/빈값 → null", () => {
+    expect(intentForCategory(null)).toBeNull();
+    expect(intentForCategory("")).toBeNull();
+  });
+});
+
+describe("intentForHour", () => {
+  it("점심=밥, 오후=카페", () => {
+    expect(intentForHour(12)).toBe("meal");
+    expect(intentForHour(15)).toBe("cafe");
+  });
+});

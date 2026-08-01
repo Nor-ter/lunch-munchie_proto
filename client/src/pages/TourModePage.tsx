@@ -77,7 +77,7 @@ const TOUR_TYPES = [
     emoji: '🔥',
     title: '핫플 코스',
     subtitle: '지금 가장 핫한 장소들',
-    color: '#F09D09',
+    color: '#D94447',
     tag: '',
   },
 ];
@@ -93,7 +93,7 @@ function ConditionsSetup({ tourType, onConfirm }: {
   const [partySize, setPartySize] = useState(2);
   const [transport, setTransport] = useState('도보');
 
-  const nearbyPlaces = MOCK_RESTAURANTS.slice(0, 4);
+  const nearbyPlaces = MOCK_RESTAURANTS.slice(0, 3);
 
   return (
     <div className="space-y-4">
@@ -222,7 +222,7 @@ function SharedMap({ tourType, onShare }: { tourType: typeof TOUR_TYPES[0]; onSh
   const [, navigate] = useLocation();
   const [activeIdx, setActiveIdx] = useState(0);
 
-  const stops = restaurants.slice(0, 4);
+  const stops = restaurants.slice(0, 3);
   const activeStop = stops[activeIdx];
   const mapCenter: [number, number] = [37.5447, 127.0561];
   const polyline: [number, number][] = stops.map((_, i) => [

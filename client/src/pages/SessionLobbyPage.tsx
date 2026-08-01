@@ -1,183 +1,376 @@
 /**
  * Lunchie Munchie — Session Lobby Page
- * Design: Soft Coral (Option 8)
- * Features: QR code invite, member list, start voting
+ * Keeps the existing session polling/invite/start flow while presenting clear
+ * host, capacity, participant, and waiting states.
  */
 
-import { useState } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
+import { useEffect, useRef, useState } from 'react';
+import { AnimatePresence, motion, useReducedMotion } from 'framer-motion';
 import { useLocation } from 'wouter';
-import { ArrowLeft, Copy, Share2, Play, QrCode, Users, ChevronDown, ChevronUp } from 'lucide-react';
+import {
+  ArrowLeft,
+  CheckCircle2,
+  ChevronDown,
+  Copy,
+  Crown,
+  QrCode,
+  Share2,
+  UserPlus,
+  Users,
+} from 'lucide-react';
 import { QRCodeSVG } from 'qrcode.react';
-import { useApp } from '@/contexts/AppContext';
 import { toast } from 'sonner';
+import { LunchieLogo } from '@/components/brand/LunchieLogo';
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import {
+  AppCard,
+  IconButton,
+  PrimaryButton,
+  ScreenContainer,
+  StatusBadge,
+} from '@/components/ui/lunchie-ui';
+import { useApp } from '@/contexts/AppContext';
+import { getLobbyPresentation } from '@/lib/lobbyPresentation';
+
+function isAbortError(error: unknown): boolean {
+  return typeof error === 'object' && error !== null && 'name' in error && error.name === 'AbortError';
+}
 
 export default function SessionLobbyPage() {
   const [, navigate] = useLocation();
-  const { currentSession, setCurrentSession } = useApp();
+  const { currentSession, fetchSession, startSession, profile } = useApp();
   const [showQR, setShowQR] = useState(true);
   const [showMembers, setShowMembers] = useState(true);
+  const [isStarting, setIsStarting] = useState(false);
+  const reduceMotion = Boolean(useReducedMotion());
+  const previousMembersRef = useRef<{ sessionId: string; ids: string[] } | undefined>(undefined);
 
-  if (!currentSession) {
+  // Poll the server so newly joined members (and the start signal) show up.
+  // Keep this above the early return: hooks must never be conditional.
+  useEffect(() => {
+    if (!currentSession?.inviteCode) return;
+    const interval = window.setInterval(() => {
+      fetchSession(currentSession.inviteCode).catch(console.error);
+    }, 3000);
+    return () => window.clearInterval(interval);
+  }, [currentSession?.inviteCode, fetchSession]);
+
+  const previousMemberIds = currentSession && previousMembersRef.current?.sessionId === currentSession.id
+    ? previousMembersRef.current.ids
+    : undefined;
+  const presentation = currentSession
+    ? getLobbyPresentation({ session: currentSession, currentUserId: profile.id, previousMemberIds })
+    : null;
+
+  useEffect(() => {
+    if (!currentSession) {
+      previousMembersRef.current = undefined;
+      return;
+    }
+    previousMembersRef.current = {
+      sessionId: currentSession.id,
+      ids: currentSession.members.map(member => member.id),
+    };
+  }, [currentSession?.id, currentSession?.members]);
+
+  if (!currentSession || !presentation) {
     return (
-      <div className="min-h-dvh flex items-center justify-center px-5">
-        <div className="text-center">
-          <p className="font-bold text-[16px] text-[#1A1A1A] mb-4">진행 중인 세션이 없어요</p>
-          <button onClick={() => navigate('/session/create')} className="lm-btn-primary px-6 flex items-center justify-center">
+      <ScreenContainer className="lunchie-lobby flex min-h-dvh items-center justify-center px-5">
+        <AppCard className="w-full max-w-sm p-6 text-center">
+          <LunchieLogo size={48} className="mb-4 flex justify-center" />
+          <h1 className="text-[18px] font-black text-[var(--lm-text)]">진행 중인 세션이 없어요</h1>
+          <p className="mt-1 text-[13px] text-[var(--lm-sub)]">조건을 고르고 새 Lunchie 투표를 만들어 보세요.</p>
+          <PrimaryButton className="mt-5 w-full" onClick={() => navigate('/lunchie/settings')}>
             세션 만들기
-          </button>
-        </div>
-      </div>
+          </PrimaryButton>
+        </AppCard>
+      </ScreenContainer>
     );
   }
 
-  const inviteUrl = `${window.location.origin}/join/${currentSession.id}`;
+  const inviteUrl = `${window.location.origin}/join/${currentSession.inviteCode}`;
 
-  const handleCopy = () => {
-    navigator.clipboard.writeText(inviteUrl).then(() => toast.success('링크 복사됨! 📋'));
+  const copyInviteLink = async (): Promise<boolean> => {
+    try {
+      if (!navigator.clipboard?.writeText) throw new Error('Clipboard API unavailable');
+      await navigator.clipboard.writeText(inviteUrl);
+      return true;
+    } catch (error) {
+      console.error('Failed to copy invite link', error);
+      return false;
+    }
+  };
+
+  const handleCopy = async () => {
+    if (await copyInviteLink()) {
+      toast.success('초대 링크를 복사했어요! 📋');
+    } else {
+      toast.error('링크를 복사하지 못했어요. 브라우저 권한을 확인해 주세요.');
+    }
   };
 
   const handleShare = async () => {
-    if (navigator.share) {
+    if (!navigator.share) {
+      await handleCopy();
+      return;
+    }
+
+    try {
       await navigator.share({ title: `Lunchie Munchie — ${currentSession.name}`, url: inviteUrl });
-    } else handleCopy();
+    } catch (error) {
+      if (isAbortError(error)) return;
+      if (await copyInviteLink()) {
+        toast.success('공유 대신 초대 링크를 복사했어요.');
+      } else {
+        console.error('Failed to share invite link', error);
+        toast.error('초대 링크를 공유하지 못했어요. 잠시 후 다시 시도해 주세요.');
+      }
+    }
   };
 
-  const handleStart = () => {
-    setCurrentSession({ ...currentSession, status: 'voting' });
-    navigate('/quick-match');
+  const handleStart = async () => {
+    if (!presentation.canStart || isStarting) return;
+    setIsStarting(true);
+    try {
+      await startSession(currentSession.inviteCode, currentSession.deadlineMinutes);
+      navigate('/lunchie/swipe');
+    } catch (error) {
+      console.error(error);
+      toast.error('투표를 시작하지 못했습니다.');
+      setIsStarting(false);
+    }
   };
+
+  const handlePrimaryAction = () => {
+    if (presentation.isWaiting) {
+      void handleStart();
+    } else {
+      navigate('/lunchie/swipe');
+    }
+  };
+
+  const collapseInitial = reduceMotion ? false : { opacity: 0, height: 0 };
+  const collapseTransition = { duration: reduceMotion ? 0 : 0.2 };
 
   return (
-    <div className="min-h-dvh bg-white px-5 pb-8">
-      {/* Header */}
-      <div className="flex items-center gap-3 pt-12 pb-5">
-        <button onClick={() => navigate('/')} className="w-10 h-10 rounded-full bg-[#F5F5F5] flex items-center justify-center active:scale-95">
-          <ArrowLeft size={18} color="#1A1A1A" />
-        </button>
-        <div className="flex-1 min-w-0">
-          <h1 className="font-bold text-[20px] text-[#1A1A1A] truncate">{currentSession.name}</h1>
-          <p className="text-[12px] text-[#9B9B9B]">대기 중 · {currentSession.members.length}명 참여</p>
+    <ScreenContainer className="lunchie-lobby flex min-h-dvh flex-col overflow-x-hidden px-5">
+      <header className="flex items-center gap-3 pb-5 pt-[max(32px,env(safe-area-inset-top))]">
+        <IconButton aria-label="홈으로 돌아가기" onClick={() => navigate('/')} className="shrink-0">
+          <ArrowLeft size={20} aria-hidden="true" />
+        </IconButton>
+        <div className="min-w-0 flex-1">
+          <h1 className="truncate text-[20px] font-black text-[var(--lm-text)]">{currentSession.name}</h1>
+          <p className="mt-0.5 truncate text-[12px] text-[var(--lm-sub)]">
+            Host {presentation.hostName} · {presentation.memberCount}/{presentation.capacity}명
+          </p>
         </div>
-        <div className="px-3 py-1.5 rounded-full text-[11px] font-bold text-[#3CBA44] bg-[#3CBA44]/10">
-          LIVE
-        </div>
-      </div>
+        <StatusBadge
+          className={presentation.isWaiting
+            ? 'inline-flex h-[36px] min-w-[78px] shrink-0 items-center justify-center rounded-full bg-[#FFF0EE] px-[12px] text-[13.5px] text-[var(--lm-primary)]'
+            : 'bg-[#EAF7EC] text-[#278836]'}
+        >
+          {presentation.statusLabel}
+        </StatusBadge>
+      </header>
 
-      {/* Invite Code */}
-      <div className="bg-[#FFF5F5] rounded-2xl p-4 mb-4 flex items-center justify-between">
-        <div>
-          <p className="text-[11px] text-[#9B9B9B] mb-1">초대 코드</p>
-          <p className="font-black text-[24px] text-[#EB5053] tracking-widest">{currentSession.inviteCode}</p>
-        </div>
-        <button onClick={handleCopy} className="w-10 h-10 rounded-xl bg-[#EB5053] flex items-center justify-center active:scale-95">
-          <Copy size={16} color="white" />
-        </button>
-      </div>
-
-      {/* QR Code */}
-      <div className="lm-card p-4 mb-4">
-        <button onClick={() => setShowQR(!showQR)} className="w-full flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <QrCode size={17} color="#EB5053" />
-            <p className="font-semibold text-[14px] text-[#1A1A1A]">QR 코드로 초대하기</p>
-          </div>
-          {showQR ? <ChevronUp size={16} color="#9B9B9B" /> : <ChevronDown size={16} color="#9B9B9B" />}
-        </button>
-
-        <AnimatePresence>
-          {showQR && (
-            <motion.div
-              initial={{ opacity: 0, height: 0 }}
-              animate={{ opacity: 1, height: 'auto' }}
-              exit={{ opacity: 0, height: 0 }}
-              className="overflow-hidden"
+      <main className="flex-1">
+        <section aria-labelledby="lobby-invite-title">
+          <AppCard className="mb-4 p-4">
+            <button
+              type="button"
+              onClick={() => setShowQR(open => !open)}
+              className="flex min-h-11 w-full items-center justify-between rounded-xl text-left outline-none focus-visible:ring-2 focus-visible:ring-[var(--lm-primary)] focus-visible:ring-offset-2"
+              aria-expanded={showQR}
+              aria-controls="lobby-invite-content"
             >
-              <div className="mt-4 flex flex-col items-center gap-4">
-                <div className="bg-white p-4 rounded-2xl shadow-md">
-                  <QRCodeSVG value={inviteUrl} size={160} fgColor="#EB5053" level="M" />
-                </div>
-                <div className="flex gap-3 w-full">
-                  <button onClick={handleCopy} className="flex-1 flex items-center justify-center gap-2 py-3 bg-[#F5F5F5] rounded-xl text-[13px] font-semibold text-[#1A1A1A] active:scale-95">
-                    <Copy size={15} /> 링크 복사
-                  </button>
-                  <button onClick={handleShare} className="flex-1 flex items-center justify-center gap-2 py-3 bg-[#F5F5F5] rounded-xl text-[13px] font-semibold text-[#1A1A1A] active:scale-95">
-                    <Share2 size={15} /> 공유하기
-                  </button>
-                </div>
-              </div>
-            </motion.div>
-          )}
-        </AnimatePresence>
-      </div>
+              <span className="flex items-center gap-2">
+                <QrCode size={18} className="text-[var(--lm-primary)]" aria-hidden="true" />
+                <span id="lobby-invite-title" className="text-[14px] font-bold text-[var(--lm-text)]">친구 초대하기</span>
+              </span>
+              <ChevronDown
+                size={18}
+                className={`text-[var(--lm-sub)] transition-transform ${showQR ? 'rotate-180' : ''}`}
+                aria-hidden="true"
+              />
+            </button>
 
-      {/* Members */}
-      <div className="lm-card p-4 mb-4">
-        <button onClick={() => setShowMembers(!showMembers)} className="w-full flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <Users size={17} color="#EB5053" />
-            <p className="font-semibold text-[14px] text-[#1A1A1A]">참여 멤버 ({currentSession.members.length}명)</p>
-          </div>
-          {showMembers ? <ChevronUp size={16} color="#9B9B9B" /> : <ChevronDown size={16} color="#9B9B9B" />}
-        </button>
-
-        <AnimatePresence>
-          {showMembers && (
-            <motion.div
-              initial={{ opacity: 0, height: 0 }}
-              animate={{ opacity: 1, height: 'auto' }}
-              exit={{ opacity: 0, height: 0 }}
-              className="overflow-hidden"
-            >
-              <div className="mt-3 space-y-2">
-                {currentSession.members.map((member, i) => (
-                  <div key={member.id} className="flex items-center gap-3 p-3 bg-[#F5F5F5] rounded-xl">
-                    <div className="w-9 h-9 rounded-full bg-white flex items-center justify-center text-lg flex-shrink-0 shadow-sm">
-                      {member.emoji}
+            <AnimatePresence initial={false}>
+              {showQR && (
+                <motion.div
+                  id="lobby-invite-content"
+                  initial={collapseInitial}
+                  animate={{ opacity: 1, height: 'auto' }}
+                  exit={{ opacity: 0, height: 0 }}
+                  transition={collapseTransition}
+                  className="overflow-hidden"
+                >
+                  <div className="mt-3 flex flex-col items-center gap-4 border-t border-[#F4ECE6] pt-4">
+                    <div
+                      className="rounded-[18px] bg-white p-3 shadow-[0_4px_18px_rgba(91,57,42,0.08)]"
+                      role="img"
+                      aria-label={`${currentSession.name} 참여용 QR 코드`}
+                    >
+                      <QRCodeSVG value={inviteUrl} size={152} fgColor="#E85053" level="M" />
                     </div>
-                    <div className="flex-1 min-w-0">
-                      <p className="font-semibold text-[13px] text-[#1A1A1A] truncate">
-                        {member.name}
-                        {i === 0 && <span className="ml-2 text-[#F09D09] text-[11px]">👑 호스트</span>}
-                      </p>
+                    <p className="max-w-full truncate rounded-full bg-[#FFF7F3] px-3 py-1.5 text-[11px] text-[#806F65]">
+                      코드 {currentSession.inviteCode}
+                    </p>
+                    <div className="grid w-full grid-cols-2 gap-2">
+                      <button
+                        type="button"
+                        onClick={() => void handleCopy()}
+                        className="flex min-h-11 items-center justify-center gap-2 rounded-xl bg-[#FCB3A8] px-3 text-[13px] font-bold text-[var(--lm-text)] outline-none transition-colors hover:bg-[#F9A79B] focus-visible:ring-2 focus-visible:ring-[var(--lm-primary)] focus-visible:ring-offset-2"
+                      >
+                        <Copy size={16} aria-hidden="true" /> 링크 복사
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => void handleShare()}
+                        className="flex min-h-11 items-center justify-center gap-2 rounded-xl bg-[#FCB3A8] px-3 text-[13px] font-bold text-[var(--lm-text)] outline-none transition-colors hover:bg-[#F9A79B] focus-visible:ring-2 focus-visible:ring-[var(--lm-primary)] focus-visible:ring-offset-2"
+                      >
+                        <Share2 size={16} aria-hidden="true" /> 공유하기
+                      </button>
                     </div>
-                    <div className={`w-2 h-2 rounded-full ${member.hasVoted ? 'bg-[#3CBA44]' : 'bg-[#E5E5E5]'}`} />
                   </div>
-                ))}
-              </div>
-            </motion.div>
-          )}
-        </AnimatePresence>
-      </div>
+                </motion.div>
+              )}
+            </AnimatePresence>
+          </AppCard>
+        </section>
 
-      {/* Session Info */}
-      <div className="lm-card p-4 mb-6">
-        <p className="font-semibold text-[14px] text-[#1A1A1A] mb-3">세션 설정</p>
-        <div className="grid grid-cols-2 gap-2">
-          {[
-            ['인원수', `${currentSession.filters.partySize}명`],
-            ['예산', '₩'.repeat(currentSession.filters.budget)],
-            ['반경', currentSession.filters.radius >= 1000 ? `${currentSession.filters.radius / 1000}km` : `${currentSession.filters.radius}m`],
-            ['식당 수', `${currentSession.restaurants.length}개`],
-          ].map(([k, v]) => (
-            <div key={k} className="bg-[#F5F5F5] rounded-xl p-3">
-              <p className="text-[11px] text-[#9B9B9B]">{k}</p>
-              <p className="font-bold text-[15px] text-[#1A1A1A]">{v}</p>
-            </div>
-          ))}
-        </div>
-      </div>
+        <section aria-labelledby="lobby-members-title">
+          <AppCard className="mb-4 p-4">
+            <button
+              type="button"
+              onClick={() => setShowMembers(open => !open)}
+              className="flex min-h-11 w-full items-center justify-between rounded-xl text-left outline-none focus-visible:ring-2 focus-visible:ring-[var(--lm-primary)] focus-visible:ring-offset-2"
+              aria-expanded={showMembers}
+              aria-controls="lobby-members-content"
+            >
+              <span className="flex items-center gap-2">
+                <Users size={18} className="text-[var(--lm-primary)]" aria-hidden="true" />
+                <span id="lobby-members-title" className="text-[14px] font-bold text-[var(--lm-text)]">
+                  참여자 {presentation.memberCount}명
+                </span>
+              </span>
+              <ChevronDown
+                size={18}
+                className={`text-[var(--lm-sub)] transition-transform ${showMembers ? 'rotate-180' : ''}`}
+                aria-hidden="true"
+              />
+            </button>
 
-      {/* Start Button */}
-      <motion.button
-        onClick={handleStart}
-        className="w-full lm-btn-primary flex items-center justify-center gap-3 text-[16px]"
-        whileHover={{ scale: 1.02 }}
-        whileTap={{ scale: 0.97 }}
-      >
-        <Play size={20} fill="white" />
-        투표 시작하기!
-      </motion.button>
-    </div>
+            <AnimatePresence initial={false}>
+              {showMembers && (
+                <motion.div
+                  id="lobby-members-content"
+                  initial={collapseInitial}
+                  animate={{ opacity: 1, height: 'auto' }}
+                  exit={{ opacity: 0, height: 0 }}
+                  transition={collapseTransition}
+                  className="overflow-hidden"
+                >
+                  <div className="mt-3 space-y-2 border-t border-[#F4ECE6] pt-3">
+                    {presentation.members.map(member => (
+                      <div key={member.id} className="flex min-h-14 items-center gap-3 rounded-2xl bg-[#FAF6F2] p-2.5">
+                        <Avatar className="size-11 border-2 border-white shadow-sm">
+                          {member.isCurrentUser && profile.avatarPhoto && (
+                            <AvatarImage
+                              src={profile.avatarPhoto}
+                              alt={`${member.name}님의 프로필 사진`}
+                              className="object-cover"
+                            />
+                          )}
+                          <AvatarFallback className="bg-[#EFE3DA] text-[20px]" aria-label={`${member.name}님의 아바타`}>
+                            {member.emoji}
+                          </AvatarFallback>
+                        </Avatar>
+                        <div className="min-w-0 flex-1">
+                          <div className="flex min-w-0 items-center gap-1.5">
+                            <p className="truncate text-[13px] font-bold text-[var(--lm-text)]">{member.name}</p>
+                            {member.isCurrentUser && <span className="shrink-0 text-[10px] text-[var(--lm-sub)]">나</span>}
+                          </div>
+                          {member.isHost && (
+                            <span className="mt-0.5 inline-flex items-center gap-1 text-[10px] font-bold text-[var(--lm-primary)]">
+                              <Crown size={11} aria-hidden="true" /> Host
+                            </span>
+                          )}
+                        </div>
+                        <span
+                          className={`inline-flex shrink-0 items-center gap-1 rounded-full px-2 py-1 text-[10px] font-bold ${
+                            member.ready ? 'bg-[#EAF7EC] text-[#278836]' : 'bg-[#ECE8E5] text-[#8A817B]'
+                          }`}
+                          aria-label={member.ready ? '준비 완료' : '준비 중'}
+                        >
+                          {member.ready ? <CheckCircle2 size={12} aria-hidden="true" /> : <span className="size-1.5 rounded-full bg-current" />}
+                          {member.ready ? '준비 완료' : '준비 중'}
+                        </span>
+                      </div>
+                    ))}
+
+                    {presentation.remainingSlots > 0 && (
+                      <button
+                        type="button"
+                        onClick={() => void handleCopy()}
+                        className="flex min-h-12 w-full items-center gap-3 rounded-2xl border border-dashed border-[#E8C9C3] bg-[#FFF9F6] px-3 text-left outline-none transition-colors hover:bg-[#FFF3EE] focus-visible:ring-2 focus-visible:ring-[var(--lm-primary)] focus-visible:ring-offset-2"
+                        aria-label={`빈 자리 ${presentation.remainingSlots}개, 초대 링크 복사`}
+                      >
+                        <span className="flex size-9 shrink-0 items-center justify-center rounded-full bg-white text-[var(--lm-primary)] shadow-sm">
+                          <UserPlus size={17} aria-hidden="true" />
+                        </span>
+                        <span className="min-w-0 flex-1">
+                          <span className="block text-[12px] font-bold text-[var(--lm-text)]">빈 자리에 친구 초대</span>
+                          <span className="block text-[10px] text-[var(--lm-sub)]">{presentation.remainingSlots}자리 남음 · 탭해서 링크 복사</span>
+                        </span>
+                      </button>
+                    )}
+                  </div>
+                </motion.div>
+              )}
+            </AnimatePresence>
+          </AppCard>
+        </section>
+
+        <AppCard className="mb-4 flex items-center gap-3 p-3.5" role="status" aria-live="polite">
+          <div className="flex size-16 shrink-0 items-center justify-center overflow-hidden rounded-2xl bg-[#FFF2EC]">
+            {reduceMotion ? (
+              <LunchieLogo size={48} />
+            ) : (
+              <img
+                src="/assets/lunchie-quick-match-jump.gif"
+                alt=""
+                aria-hidden="true"
+                className="h-16 w-20 object-contain mix-blend-multiply"
+                draggable={false}
+              />
+            )}
+          </div>
+          <div className="min-w-0 flex-1">
+            <p className="text-[13px] font-bold leading-snug text-[var(--lm-text)]">{presentation.statusCopy}</p>
+            <p className="mt-1 text-[11px] text-[var(--lm-sub)]">
+              {presentation.isFull
+                ? '정원이 모두 찼어요.'
+                : `${presentation.remainingSlots}자리 더 초대할 수 있어요.`}
+            </p>
+          </div>
+        </AppCard>
+      </main>
+
+      <footer className="sticky bottom-0 z-20 -mx-5 mt-auto bg-[linear-gradient(180deg,rgba(252,244,238,0),#FCF4EE_24%)] px-5 pb-[max(16px,env(safe-area-inset-bottom))] pt-7">
+        <PrimaryButton
+          className="lunchie-session-primary-action"
+          onClick={handlePrimaryAction}
+          disabled={presentation.isWaiting && (!presentation.canStart || isStarting)}
+          aria-describedby={presentation.disabledReason ? 'lobby-cta-reason' : undefined}
+        >
+          {isStarting ? '투표를 여는 중…' : presentation.ctaLabel}
+        </PrimaryButton>
+        {presentation.disabledReason && (
+          <p id="lobby-cta-reason" className="mt-2 text-center text-[11px] font-semibold text-[#8A746A]">
+            {presentation.disabledReason}
+          </p>
+        )}
+      </footer>
+    </ScreenContainer>
   );
 }

@@ -9,12 +9,13 @@ import { motion } from 'framer-motion';
 import { useLocation, useParams } from 'wouter';
 import { ArrowLeft, Share2, MapPin, Clock, Bookmark, Star, ChevronRight } from 'lucide-react';
 import { useApp } from '@/contexts/AppContext';
+import CourseMapOverlay from '@/components/CourseMapOverlay';
 import { toast } from 'sonner';
 
 const TAG_CLASS: Record<string, string> = {
-  '데이트 코스': 'tag-date', '맛집': 'tag-food', '카페': 'tag-cafe',
-  '전시/문화': 'tag-culture', '액티비티': 'tag-activity',
-  '혼자 여행': 'tag-hash', '맛집 투어': 'tag-food', '가성비': 'tag-activity',
+  '맛집': 'tag-food', '데이트코스': 'tag-date', '혼밥': 'tag-hash',
+  '카페': 'tag-cafe', '펍나이트': 'tag-date', '브런치': 'tag-food',
+  '디저트': 'tag-cafe', '가성비': 'tag-activity',
 };
 
 export default function CourseDetailPage() {
@@ -34,7 +35,7 @@ export default function CourseDetailPage() {
       <div className="min-h-dvh flex items-center justify-center">
         <div className="text-center">
           <p className="font-bold text-[16px] text-[#1A1A1A] mb-4">코스를 찾을 수 없어요</p>
-          <button onClick={() => navigate('/explore')} className="lm-btn-primary px-6 flex items-center justify-center">
+          <button onClick={() => navigate('/courses/feeds')} className="lm-btn-primary px-6 flex items-center justify-center">
             코스 탐색
           </button>
         </div>
@@ -43,9 +44,7 @@ export default function CourseDetailPage() {
   }
 
   const handleShare = () => {
-    navigator.clipboard.writeText(window.location.href).then(() => {
-      toast.success('링크가 복사되었습니다! 📋');
-    });
+    navigate(`/course/${course.id}/share`);
   };
 
   const toggleStopBookmark = (placeId: string) => {
@@ -68,16 +67,17 @@ export default function CourseDetailPage() {
   };
 
   return (
-    <div className="min-h-dvh bg-white pb-28">
-      {/* Hero Image */}
-      <div className="relative h-56">
+    <div className="min-h-dvh bg-[#FCF4EE] pb-28">
+      {/* Hero Header */}
+      <div className="relative h-[250px] md:h-[300px]">
         <img src={course.heroImage} alt={course.title} className="w-full h-full object-cover" />
-        <div className="absolute inset-0 bg-gradient-to-b from-black/30 via-transparent to-transparent" />
+        <CourseMapOverlay course={course} />
+        <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/30 to-transparent pointer-events-none" />
 
         {/* Header */}
         <div className="absolute top-0 left-0 right-0 flex items-center justify-between px-5 pt-12">
           <button
-            onClick={() => navigate(-1 as unknown as string)}
+            onClick={() => window.history.back()}
             className="w-9 h-9 rounded-full bg-white/80 flex items-center justify-center active:scale-95"
           >
             <ArrowLeft size={17} color="#1A1A1A" />
@@ -164,7 +164,7 @@ export default function CourseDetailPage() {
                     <p className="font-bold text-[15px] text-[#1A1A1A]">{restaurant.name}</p>
                     <p className="text-[12px] text-[#9B9B9B] mt-0.5">{stop.startTime} — {stop.endTime}</p>
                     <div className="flex items-center gap-1.5 mt-1">
-                      <Star size={11} fill="#F09D09" color="#F09D09" />
+                      <Star size={11} fill="#D94447" color="#D94447" />
                       <span className="text-[11px] text-[#4A4A4A]">{restaurant.rating}</span>
                       <span className="text-[11px] text-[#9B9B9B]">· {restaurant.category}</span>
                     </div>
@@ -193,10 +193,10 @@ export default function CourseDetailPage() {
 
       {/* Sticky Footer */}
       <div
-        className="fixed bottom-0 left-1/2 -translate-x-1/2 w-full max-w-[480px] bg-white px-5 py-4 z-40"
+        className="page-bottom-bar fixed bottom-0 left-1/2 z-40 w-full max-w-[480px] -translate-x-1/2 bg-white px-5"
         style={{ boxShadow: '0 -4px 16px rgba(0,0,0,0.08)' }}
       >
-        <div className="flex gap-3">
+        <div className="flex w-full gap-3">
           <button
             onClick={handleSave}
             className="lm-btn-outline flex items-center justify-center gap-2 flex-[3]"

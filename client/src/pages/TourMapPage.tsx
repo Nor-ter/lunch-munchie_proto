@@ -34,15 +34,7 @@ interface StyleConfig {
   bgMode: 'transparent' | 'photo' | 'dark';
 }
 
-// ─── Demo stops from liked restaurants ───────────────────────────────────────
 
-const DEMO_STOPS: TourStop[] = [
-  { id: 's1', name: '카페 레이아웃', image: 'https://images.unsplash.com/photo-1554118811-1e0d58224f24?w=200&q=80', nx: 0.15, ny: 0.15 },
-  { id: 's2', name: '성수연방', image: 'https://d2xsxph8kpxj0f.cloudfront.net/310519663322273601/2bdpbPnYmCuK9PccZ3SWKc/lm-course-seongsu-hGTsaQPMJotuBpuyBnE5dN.webp', nx: 0.55, ny: 0.30 },
-  { id: 's3', name: '어니언 성수', image: 'https://images.unsplash.com/photo-1509440159596-0249088772ff?w=200&q=80', nx: 0.25, ny: 0.52 },
-  { id: 's4', name: '대림창고', image: 'https://images.unsplash.com/photo-1414235077428-338989a2e8c0?w=200&q=80', nx: 0.68, ny: 0.68 },
-  { id: 's5', name: '서울숲', image: 'https://images.unsplash.com/photo-1519331379826-f10be5486c6f?w=200&q=80', nx: 0.40, ny: 0.84 },
-];
 
 const COLOR_PRESETS = [
   { label: 'Coral', value: '#EB5053' },
@@ -257,15 +249,15 @@ export default function TourMapPage() {
     .map((id: string) => getRestaurantById(id))
     .filter(Boolean) as typeof restaurants;
 
-  const stops: TourStop[] = likedRests.length >= 2
-    ? likedRests.slice(0, 5).map((r, i) => ({
-        id: r.id,
-        name: r.name,
-        image: r.image,
-        nx: 0.12 + (i % 2 === 0 ? 0.10 : 0.52),
-        ny: 0.12 + i * 0.18,
-      }))
-    : DEMO_STOPS;
+  const sourceRests = likedRests.length >= 2 ? likedRests : restaurants;
+
+  const stops: TourStop[] = sourceRests.slice(0, 3).map((r, i) => ({
+    id: r.id,
+    name: r.name,
+    image: r.image,
+    nx: 0.12 + (i % 2 === 0 ? 0.10 : 0.52),
+    ny: 0.12 + i * 0.18,
+  }));
 
   const [bgImage, setBgImage] = useState<string | null>(null);
   const [config, setConfig] = useState<StyleConfig>({
@@ -329,10 +321,10 @@ export default function TourMapPage() {
   };
 
   return (
-    <div className="min-h-dvh bg-white">
+    <div className="min-h-dvh bg-[#FCF4EE]">
       {/* Header */}
       <div className="flex items-center justify-between px-5 pt-12 pb-4 border-b border-[#E5E5E5]">
-        <button onClick={() => navigate(-1 as unknown as string)}
+        <button onClick={() => window.history.back()}
           className="w-10 h-10 rounded-full bg-[#F5F5F5] flex items-center justify-center active:scale-95">
           <ArrowLeft size={18} color="#1A1A1A" />
         </button>

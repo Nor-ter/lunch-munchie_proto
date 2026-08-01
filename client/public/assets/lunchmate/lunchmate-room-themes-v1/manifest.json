@@ -1,0 +1,68 @@
+{
+  "version": 1,
+  "collection": "lunchmate-room-themes-v1",
+  "keepExistingFoodieSkinIds": true,
+  "artDirection": "soft hand-painted 2D, paper and fabric texture, straight-on miniature room",
+  "render": {
+    "stage": {
+      "size1x": [720, 480],
+      "size2x": [1440, 960],
+      "characterFeetAnchor1x": [360, 405],
+      "characterSafeZone1x": {
+        "x": 220,
+        "y": 105,
+        "width": 280,
+        "height": 325
+      }
+    },
+    "profile": {
+      "size1x": [720, 260],
+      "size2x": [1440, 520],
+      "characterFeetAnchor1x": [360, 220],
+      "crop": "center"
+    },
+    "thumbnail": {
+      "size1x": [360, 240],
+      "size2x": [720, 480],
+      "aspectRatio": "3:2"
+    }
+  },
+  "themes": [
+    {
+      "assetKey": "pink-picnic",
+      "labelKo": "핑크 피크닉",
+      "suggestedId": "pinkPicnic",
+      "accent": "#F46B72"
+    },
+    {
+      "assetKey": "yellow-lunch-tray",
+      "labelKo": "옐로우 런치트레이",
+      "suggestedId": "yellowLunchTray",
+      "accent": "#F0B94E"
+    },
+    {
+      "assetKey": "vintage-frame",
+      "labelKo": "빈티지 프레임",
+      "suggestedId": "vintageFrame",
+      "accent": "#8C5A3A"
+    },
+    {
+      "assetKey": "blue-note",
+      "labelKo": "블루 노트",
+      "suggestedId": "blueNote",
+      "accent": "#6C98C7"
+    },
+    {
+      "assetKey": "flower-garden",
+      "labelKo": "플라워 가든",
+      "suggestedId": "flowerGarden",
+      "accent": "#7FA66C"
+    },
+    {
+      "assetKey": "modern-minimal",
+      "labelKo": "모던 미니멀",
+      "suggestedId": "modernMinimal",
+      "accent": "#A991BD"
+    }
+  ]
+}

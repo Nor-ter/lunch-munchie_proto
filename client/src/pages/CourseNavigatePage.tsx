@@ -44,7 +44,7 @@ export default function CourseNavigatePage() {
   if (!course) {
     return (
       <div className="min-h-dvh flex items-center justify-center">
-        <button onClick={() => navigate('/explore')} className="lm-btn-primary px-6 flex items-center justify-center">
+        <button onClick={() => navigate('/courses/feeds')} className="lm-btn-primary px-6 flex items-center justify-center">
           코스 탐색
         </button>
       </div>
@@ -67,18 +67,18 @@ export default function CourseNavigatePage() {
     .map(r => [r!.lat, r!.lng]);
 
   return (
-    <div className="min-h-dvh bg-white flex flex-col">
+    <div className="min-h-dvh bg-[#FCF4EE] flex flex-col">
       {/* Header */}
       <div className="flex items-center justify-between px-5 pt-12 pb-3 bg-white z-10">
         <button
-          onClick={() => navigate(`/courses/${params.id}`)}
+          onClick={() => navigate(`/course/${params.id}`)}
           className="w-9 h-9 rounded-full bg-[#F5F5F5] flex items-center justify-center active:scale-95"
         >
           <ArrowLeft size={17} color="#1A1A1A" />
         </button>
         <span className="font-semibold text-[15px] text-[#1A1A1A]">코스 따라가기</span>
         <button
-          onClick={() => navigate('/tour-map')}
+          onClick={() => navigate(`/course/${params.id}/share`)}
           className="w-9 h-9 rounded-full bg-[#FFF5F5] flex items-center justify-center active:scale-95"
           title="코스맵 공유"
         >
@@ -173,6 +173,7 @@ export default function CourseNavigatePage() {
             className="lm-btn-primary flex items-center justify-center gap-2 flex-[7]"
             onClick={() => {
               if (currentStopIndex < stops.length - 1) setCurrentStopIndex(i => i + 1);
+              else navigate(`/course/${params.id}/share`);
             }}
           >
             <Navigation size={16} />

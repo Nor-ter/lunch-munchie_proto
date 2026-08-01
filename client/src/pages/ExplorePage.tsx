@@ -6,29 +6,11 @@
 import { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useLocation } from 'wouter';
-import { MapPin, Clock, Bookmark, Star, SlidersHorizontal } from 'lucide-react';
+import { MapPin, Clock, Bookmark, Star, SlidersHorizontal, Plus, BookOpen } from 'lucide-react';
 import { useApp, Course, TagType } from '@/contexts/AppContext';
-
-const FILTER_TAGS: { label: string; value: TagType | 'all' }[] = [
-  { label: '전체', value: 'all' },
-  { label: '데이트 코스', value: '데이트 코스' },
-  { label: '맛집', value: '맛집' },
-  { label: '카페', value: '카페' },
-  { label: '혼자 여행', value: '혼자 여행' },
-  { label: '전시/문화', value: '전시/문화' },
-  { label: '액티비티', value: '액티비티' },
-];
-
-const TAG_CLASS: Record<string, string> = {
-  '데이트 코스': 'tag-date',
-  '맛집': 'tag-food',
-  '카페': 'tag-cafe',
-  '전시/문화': 'tag-culture',
-  '액티비티': 'tag-activity',
-  '혼자 여행': 'tag-hash',
-  '맛집 투어': 'tag-food',
-  '가성비': 'tag-activity',
-};
+import CourseMapOverlay from '@/components/CourseMapOverlay';
+import { getCourseTagStyle } from '@/constants/courseTheme';
+import { FOOD_FILTER_TAGS, hasFoodTag } from '@/constants/foodTags';
 
 function CourseListCard({ course, onTap }: { course: Course; onTap: () => void }) {
   const { savedCourseIds, saveCourse, unsaveCourse } = useApp();
@@ -46,16 +28,19 @@ function CourseListCard({ course, onTap }: { course: Course; onTap: () => void }
     >
       <div className="relative h-40">
         <img src={course.heroImage} alt={course.title} className="w-full h-full object-cover" />
-        <div className="absolute inset-0 bg-gradient-to-t from-black/50 to-transparent" />
+        <CourseMapOverlay course={course} />
+        <div className="absolute inset-0 z-10 bg-gradient-to-t from-black/50 to-transparent" />
         <button
           onClick={e => { e.stopPropagation(); isSaved ? unsaveCourse(course.id) : saveCourse(course.id); }}
-          className="absolute top-3 right-3 w-8 h-8 rounded-full bg-white/80 flex items-center justify-center"
+          className="absolute top-3 right-3 z-30 w-8 h-8 rounded-full bg-white/80 flex items-center justify-center"
         >
-          <Bookmark size={14} fill={isSaved ? '#EB5053' : 'none'} stroke={isSaved ? '#EB5053' : '#4A4A4A'} />
+          <Bookmark size={14} fill={isSaved ? '#E85053' : 'none'} stroke={isSaved ? '#E85053' : '#4A4A4A'} />
         </button>
-        <div className="absolute bottom-3 left-3 flex gap-1.5 flex-wrap">
+        <div className="absolute bottom-3 left-3 z-30 flex gap-1.5 flex-wrap">
           {course.tags.slice(0, 2).map(tag => (
-            <span key={tag} className={`tag ${TAG_CLASS[tag] || 'tag-hash'}`}>{tag}</span>
+            <span key={tag} className="tag" style={getCourseTagStyle(tag)}>
+              {tag}
+            </span>
           ))}
         </div>
       </div>
@@ -92,31 +77,56 @@ export default function ExplorePage() {
 
   const filtered = activeFilter === 'all'
     ? courses
-    : courses.filter(c => c.tags.includes(activeFilter as TagType));
+    : courses.filter(c => hasFoodTag(c.tags, activeFilter as TagType));
 
   return (
-    <div className="min-h-dvh bg-[#F5F5F5]">
+    <div className="min-h-dvh bg-[#FCF4EE]">
       {/* Header */}
       <div className="bg-white px-5 pt-12 pb-4">
         <div className="flex items-center justify-between mb-4">
-          <h1 className="font-bold text-[22px] text-[#1A1A1A]">코스 탐색 🗺️</h1>
-          <button className="w-10 h-10 rounded-full bg-[#F5F5F5] flex items-center justify-center">
-            <SlidersHorizontal size={18} color="#4A4A4A" />
-          </button>
+          <div>
+            <div className="flex items-center gap-2">
+              <h1 className="font-bold text-[28px] text-[#1A1A1A]">Munchie Mode</h1>
+              <svg width="28" height="28" viewBox="0 0 40 40" fill="none" stroke="#FF3E4D" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M5 12.5 L14 8.5 L25 12.5 L35 8.5 V29 L25 33 L14 29 L5 33 Z" strokeWidth="2.7" />
+                <path d="M14 8.5 V29" strokeWidth="2.4" />
+                <path d="M25 12.5 V33" strokeWidth="2.4" />
+                <path d="M20 4.7 C15.9 4.7 12.7 7.8 12.7 11.7 C12.7 16.7 20 23 20 23 C20 23 27.3 16.7 27.3 11.7 C27.3 7.8 24.1 4.7 20 4.7 Z" strokeWidth="2.7" />
+                <circle cx="20" cy="11.8" r="2.4" fill="#FF3E4D" strokeWidth="0" />
+              </svg>
+            </div>
+            <p className="text-[12px] mt-0.5" style={{ color: '#9B9B9B' }}>코스를 탐색해보아요</p>
+          </div>
+          <div className="flex gap-2">
+            <button
+              onClick={() => navigate('/feed')}
+              aria-label="Munchie Feed"
+              className="w-10 h-10 rounded-full bg-[#FDE1E1] flex items-center justify-center"
+            >
+              <BookOpen size={18} color="#E85053" />
+            </button>
+            <button className="w-10 h-10 rounded-full bg-[#F5F5F5] flex items-center justify-center">
+              <SlidersHorizontal size={18} color="#4A4A4A" />
+            </button>
+          </div>
         </div>
 
         {/* Filter chips */}
         <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-hide -mx-5 px-5">
-          {FILTER_TAGS.map(f => (
+          {FOOD_FILTER_TAGS.map(f => (
             <button
               key={f.value}
               onClick={() => setActiveFilter(f.value)}
               className={`flex-shrink-0 px-4 py-2 rounded-full text-[12px] font-semibold transition-all active:scale-95 ${
                 activeFilter === f.value
                   ? 'text-white'
-                  : 'bg-[#F5F5F5] text-[#4A4A4A]'
+                  : ''
               }`}
-              style={activeFilter === f.value ? { background: '#EB5053' } : {}}
+              style={f.value === 'all'
+                ? activeFilter === f.value
+                  ? { background: '#1A1A1A', color: '#FFFFFF' }
+                  : { background: '#F5F5F5', color: '#4A4A4A' }
+                : getCourseTagStyle(f.value, activeFilter === f.value)}
             >
               {f.label}
             </button>
@@ -131,7 +141,7 @@ export default function ExplorePage() {
             <CourseListCard
               key={course.id}
               course={course}
-              onTap={() => navigate(`/courses/${course.id}`)}
+              onTap={() => navigate(`/course/${course.id}?from=explore`)}
             />
           ))}
         </AnimatePresence>
@@ -147,16 +157,17 @@ export default function ExplorePage() {
 
       {/* Create Course FAB */}
       <motion.button
-        onClick={() => navigate('/session/create')}
-        className="fixed bottom-24 right-4 w-14 h-14 rounded-full shadow-xl flex items-center justify-center z-40 text-white font-bold text-2xl"
+        onClick={() => navigate('/lunchie/settings')}
+        className="fixed bottom-24 right-4 flex items-center gap-2 px-4 h-12 rounded-full shadow-xl text-white font-bold text-[13px] z-40"
         style={{ background: '#EB5053' }}
-        whileHover={{ scale: 1.1 }}
-        whileTap={{ scale: 0.9 }}
+        whileHover={{ scale: 1.05 }}
+        whileTap={{ scale: 0.95 }}
         initial={{ scale: 0 }}
         animate={{ scale: 1 }}
-        transition={{ type: 'spring', stiffness: 300, damping: 20, delay: 0.3 }}
+        transition={{ type: 'spring', stiffness: 300, damping: 20, delay: 0.2 }}
       >
-        +
+        <Plus size={18} />
+        새 코스 만들기
       </motion.button>
     </div>
   );
