@@ -1,21 +1,19 @@
-import { useState } from 'react';
 import { ChevronLeft, MapPin } from 'lucide-react';
 import { useLocation, useParams } from 'wouter';
-import { FollowButton } from '@/components/follow/FollowButton';
-import { FollowerListSheet, type FollowListMode } from '@/components/follow/FollowerListSheet';
-import { ProfileStats } from '@/components/follow/ProfileStats';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { useUser } from '@/hooks/useUser';
 import { DEMO_AUTHORS } from '@/data/demoAuthors';
+import { useApp } from '@/contexts/AppContext';
+import UnifiedMunchieCard from '@/components/munchie/UnifiedMunchieCard';
 
 export default function OtherProfilePage() {
   const { id = '' } = useParams<{ id: string }>();
   const [, navigate] = useLocation();
   const demoUser = DEMO_AUTHORS[id];
   const user = useUser(id, !demoUser);
-  const [listMode, setListMode] = useState<FollowListMode | null>(null);
+  const { feedPosts, isLoading: isFeedLoading } = useApp();
 
-  if (user.isLoading && !demoUser) {
+  if ((user.isLoading || isFeedLoading) && !demoUser) {
     return <main className="flex min-h-dvh items-center justify-center bg-[#FCF4EE] text-sm text-[#9B9B9B]">프로필을 불러오는 중…</main>;
   }
 
@@ -34,6 +32,7 @@ export default function OtherProfilePage() {
 
   const profile = demoUser ?? user.data!;
   const isDemo = Boolean(demoUser);
+  const posts = feedPosts.filter(post => post.authorId === profile.id);
   return (
     <main className="min-h-dvh bg-[#FCF4EE] pb-24">
       <header className="flex items-center px-4 pb-3 pt-10">
@@ -54,15 +53,23 @@ export default function OtherProfilePage() {
             {profile.location && <p className="mt-1 flex items-center gap-1 text-xs text-[#8A6E60]"><MapPin size={12} />{profile.location}</p>}
             {profile.bio && <p className="mt-2 text-sm text-[#6F5549]">{profile.bio}</p>}
           </div>
-          {!isDemo && <FollowButton userId={profile.id} />}
         </div>
-        <div className="mt-6 grid grid-cols-2">
-          {isDemo ? <div className="col-span-2 text-center text-xs font-semibold text-[#8A6E60]">샘플 피드 작성자</div> : <ProfileStats userId={profile.id} onPressFollowers={() => setListMode('followers')} onPressFollowing={() => setListMode('following')} />}
+        <div className="mt-6 grid grid-cols-1 border-t border-[#EBC5B8] pt-4">
+          <div className="text-center">
+            <p className="text-[17px] font-black text-[#3B2A22]">{posts.length}</p>
+            <p className="mt-0.5 text-[10px] text-[#8A6E60]">공개 게시물</p>
+          </div>
         </div>
       </section>
 
-      <section className="px-5 py-10 text-center text-sm text-[#9B9B9B]">공개 코스와 피드는 다음 연결 단계에서 표시됩니다.</section>
-      {!isDemo && <FollowerListSheet open={listMode !== null} userId={profile.id} mode={listMode ?? 'followers'} onOpenChange={(open) => !open && setListMode(null)} />}
+      <section className="px-4 pb-10 pt-6">
+        <h2 className="mb-3 text-[15px] font-black text-[#2D211C]">{isDemo ? '샘플 피드' : '공개 피드'}</h2>
+        {posts.length > 0 ? (
+          <div className="space-y-4">{posts.map(post => <UnifiedMunchieCard key={post.id} post={post} compact homeSummary detailOrigin="profile" />)}</div>
+        ) : (
+          <div className="rounded-2xl border border-dashed border-[#DCCBC0] bg-white px-5 py-12 text-center text-sm font-semibold text-[#9B9B9B]">아직 공개한 게시물이 없어요.</div>
+        )}
+      </section>
     </main>
   );
 }

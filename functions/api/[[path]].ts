@@ -270,6 +270,29 @@ app.get("/api/health", async (c) => {
   }
 });
 
+// Public profile data comes from the same D1 identity store that owns a post.
+// Do not fall back to the retired Supabase profile table.
+app.get("/api/users/:id", async (c) => {
+  const id = c.req.param("id");
+  if (!id || id.length > 256) return c.json({ error: "사용자 정보가 올바르지 않습니다." }, 400);
+  const user = await c.env.DB.prepare(
+    "SELECT id, username, profile_image_url, bio, location, created_at FROM users WHERE id = ?"
+  ).bind(id).first<any>();
+  if (!user) return c.json({ error: "사용자를 찾을 수 없습니다." }, 404);
+  const count = await c.env.DB.prepare(
+    "SELECT COUNT(*) AS count FROM courses WHERE author_id = ? AND is_public = 1"
+  ).bind(id).first<{ count: number }>();
+  return c.json({
+    id: user.id,
+    username: user.username,
+    profile_image_url: user.profile_image_url,
+    bio: user.bio,
+    location: user.location,
+    created_at: user.created_at,
+    public_post_count: Number(count?.count ?? 0),
+  });
+});
+
 // REST API — /api/recommend (D1 Query Binding)
 app.post("/api/recommend", async (c) => {
   try {
