@@ -1,84 +1,72 @@
 /**
  * Lunchie Munchie — 저장 목록 (전면 개편)
  * 두 소스를 한 페이지에서: ① Munchie Mode — 다른 사람이 만든 코스맵을 저장한 목록
- *                         ② Lunchie Mode — Quick Match(그룹 대결) 결과에서 저장한 맛집 목록
+ *                         ② Lunchie Mode — Quick Match에서 확정한 런치픽 여정
  */
-import { useState } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
+import { useEffect, useMemo, useState } from 'react';
+import { motion } from 'framer-motion';
 import { useLocation } from 'wouter';
-import { MapPin, Bookmark, BookmarkX, Star, Zap, Map as MapIcon } from 'lucide-react';
+import { MapPin, BookmarkX, Zap, Map as MapIcon } from 'lucide-react';
 import { useApp, TagType } from '@/contexts/AppContext';
 import { getCourseTagStyle } from '@/constants/courseTheme';
 import { FOOD_FILTER_TAGS, hasFoodTag } from '@/constants/foodTags';
 import UnifiedMunchieCard from '@/components/munchie/UnifiedMunchieCard';
+import { useAuthStatus } from '@/hooks/useAuthStatus';
 
 type Tab = 'coursemaps' | 'restaurants';
 
-function RestaurantSavedCard({
-  restaurantId,
-  onTap,
-  onUnsave,
-}: {
-  restaurantId: string;
-  onTap: () => void;
-  onUnsave: () => void;
-}) {
-  const { getRestaurantById } = useApp();
-  const r = getRestaurantById(restaurantId);
-  if (!r) return null;
+type JourneyStop = { restaurant_id: string; name: string; category: string | null; at: number };
+type JourneyDay = { key: string; label: string; stops: JourneyStop[] };
 
-  return (
-    <motion.div
-      layout
-      initial={{ opacity: 0, y: 10 }}
-      animate={{ opacity: 1, y: 0 }}
-      exit={{ opacity: 0, x: -100 }}
-      className="flex gap-3 p-3 rounded-2xl border border-[#F0E8E0] bg-white cursor-pointer active:scale-[0.98] transition-all"
-      onClick={onTap}
-    >
-      <img src={r.image} alt={r.name} className="w-20 h-20 object-cover rounded-xl flex-shrink-0" />
-      <div className="flex-1 min-w-0">
-        <div className="flex items-start justify-between gap-2">
-          <div className="min-w-0">
-            <div className="flex items-center gap-1.5 mb-1">
-              <span className="inline-flex items-center gap-0.5 rounded-full bg-[#FFF5F5] px-2 py-0.5 text-[11px] font-bold text-[#EB5053]">
-                <Star size={10} fill="#EB5053" /> {r.rating}
-              </span>
-              <span className="text-[11px] font-semibold text-white rounded-full px-2 py-0.5" style={{ background: '#EB5053' }}>
-                {r.category}
-              </span>
-            </div>
-            <p className="font-bold text-[14px] text-[#1A1A1A] line-clamp-1 leading-tight">{r.name}</p>
-          </div>
-          <button
-            onClick={e => { e.stopPropagation(); onUnsave(); }}
-            className="flex-shrink-0"
-            aria-label="저장 해제"
-          >
-            <Bookmark size={16} fill="#EB5053" stroke="#EB5053" />
-          </button>
-        </div>
-        <p className="mt-1.5 flex items-center gap-1 text-[11px] text-[#9B9B9B] line-clamp-1">
-          <MapPin size={10} /> {r.address}
-        </p>
-        <div className="mt-1.5 flex gap-1.5 flex-wrap">
-          {r.tags.slice(0, 2).map(tag => (
-            <span key={tag} className="tag tag-hash">{tag}</span>
-          ))}
-        </div>
-      </div>
-    </motion.div>
-  );
+function groupJourneyByDay(stops: JourneyStop[]): JourneyDay[] {
+  const days = new Map<string, JourneyDay>();
+  [...stops].sort((a, b) => b.at - a.at).forEach(stop => {
+    const date = new Date(stop.at);
+    if (!Number.isFinite(date.getTime())) return;
+    const key = `${date.getFullYear()}-${date.getMonth()}-${date.getDate()}`;
+    const today = new Date();
+    const yesterday = new Date(); yesterday.setDate(today.getDate() - 1);
+    const label = date.toDateString() === today.toDateString() ? '오늘의 런치픽'
+      : date.toDateString() === yesterday.toDateString() ? '어제의 런치픽'
+        : new Intl.DateTimeFormat('ko-KR', { month: 'long', day: 'numeric', weekday: 'short' }).format(date);
+    const day = days.get(key) ?? { key, label, stops: [] };
+    day.stops.push(stop);
+    days.set(key, day);
+  });
+  return Array.from(days.values());
 }
 
 export default function SavedPage() {
   const [, navigate] = useLocation();
   const {
     feedPosts, savedCourseIds, unsaveCourse,
-    savedRestaurantIds, unsaveRestaurant,
   } = useApp();
+  const auth = useAuthStatus();
   const [tab, setTab] = useState<Tab>('coursemaps');
   const [activeFilter, setActiveFilter] = useState<TagType | 'all'>('all');
+  const [journeyStops, setJourneyStops] = useState<JourneyStop[]>([]);
+  const [journeyLoading, setJourneyLoading] = useState(true);
+
+  useEffect(() => {
+    let active = true;
+    let localStops: JourneyStop[] = [];
+    try {
+      localStops = JSON.parse(localStorage.getItem('lm_lunchie_journey') ?? localStorage.getItem('lm_today_journey') ?? '[]');
+    } catch { /* browser fallback is optional */ }
+    if (auth.data?.isAnonymous) {
+      if (active) { setJourneyStops(localStops); setJourneyLoading(false); }
+      return;
+    }
+    fetch('/api/journey?days=30', { credentials: 'same-origin' })
+      .then(response => response.ok ? response.json() : { stops: [] })
+      .then((data: { stops?: JourneyStop[] }) => {
+        if (!active) return;
+        setJourneyStops(data.stops?.length ? data.stops : localStops);
+        setJourneyLoading(false);
+      })
+      .catch(() => { if (active) { setJourneyStops(localStops); setJourneyLoading(false); } });
+    return () => { active = false; };
+  }, [auth.data?.isAnonymous]);
 
   const savedPosts = Array.from(
     feedPosts
@@ -92,6 +80,7 @@ export default function SavedPage() {
   const filteredPosts = activeFilter === 'all'
     ? savedPosts
     : savedPosts.filter(post => hasFoodTag(post.tags, activeFilter as TagType));
+  const journeyDays = useMemo(() => groupJourneyByDay(journeyStops), [journeyStops]);
 
   return (
     <div className="min-h-dvh bg-[#FCF4EE] pb-24">
@@ -99,14 +88,14 @@ export default function SavedPage() {
       <div className="px-5 pt-12 pb-4">
         <h1 className="font-bold text-[22px] text-[#1A1A1A] mb-1">저장 목록 🔖</h1>
         <p className="text-[12px] text-[#9B9B9B] mb-4">
-          {tab === 'coursemaps' ? '마음에 든 한줄평과 코스맵을 함께 모아봤어요' : 'Quick Match에서 저장한 맛집이에요'}
+          {tab === 'coursemaps' ? '마음에 든 한줄평과 코스맵을 함께 모아봤어요' : 'Quick Match에서 확정한 런치픽 여정이에요'}
         </p>
 
         {/* 모드 세그먼트 */}
         <div className="flex rounded-full bg-[#F5F0EA] p-1">
           {([
             ['coursemaps', 'Munchie 먼치픽', MapIcon, savedPosts.length],
-            ['restaurants', 'Lunchie 런치픽', Zap, savedRestaurantIds.length],
+            ['restaurants', 'Lunchie 런치픽', Zap, journeyStops.length],
           ] as const).map(([key, label, Icon, count]) => (
             <button
               key={key}
@@ -197,23 +186,31 @@ export default function SavedPage() {
       {/* ── Lunchie 런치픽 탭 ─────────────────────────────────────────────── */}
       {tab === 'restaurants' && (
         <div className="px-5 space-y-3">
-          <AnimatePresence mode="popLayout">
-            {savedRestaurantIds.map(id => (
-              <RestaurantSavedCard
-                key={id}
-                restaurantId={id}
-                onTap={() => navigate(`/lunchie/map?id=${id}`)}
-                onUnsave={() => unsaveRestaurant(id)}
-              />
-            ))}
-          </AnimatePresence>
-
-          {savedRestaurantIds.length === 0 && (
+          {journeyDays.map(day => (
+            <section key={day.key}>
+              <p className="mb-2 text-[12px] font-black text-[#B26A62]">{day.label} · {day.stops.length}곳</p>
+              <div className="space-y-2">
+                {day.stops.map((stop, index) => (
+                  <button
+                    type="button"
+                    key={`${stop.restaurant_id}-${stop.at}`}
+                    onClick={() => navigate(`/lunchie/map?id=${stop.restaurant_id}`)}
+                    className="flex w-full items-center gap-3 rounded-2xl border border-[#F0E8E0] bg-white p-3 text-left active:scale-[0.98]"
+                  >
+                    <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[#F6B5AC] text-[11px] font-black text-white">{day.stops.length - index}</span>
+                    <span className="min-w-0 flex-1 truncate text-[14px] font-bold text-[#1A1A1A]">{stop.name}</span>
+                    <span className="flex items-center gap-1 text-[11px] font-semibold text-[#9B9B9B]"><MapPin size={11} />{stop.category ?? '맛집'}</span>
+                  </button>
+                ))}
+              </div>
+            </section>
+          ))}
+          {!journeyLoading && journeyStops.length === 0 && (
             <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="text-center py-16">
               <div className="text-5xl mb-3">⚡</div>
-              <p className="font-bold text-[16px] text-[#1A1A1A] mb-1">아직 저장한 런치픽이 없어요!</p>
+              <p className="font-bold text-[16px] text-[#1A1A1A] mb-1">아직 확정한 런치픽이 없어요!</p>
               <p className="text-[13px] text-[#9B9B9B] mb-6">
-                Quick Match로 그룹 점심을 정하고 결과 화면에서 저장해보세요
+                Quick Match로 점심을 정하면 날짜별 여정으로 자동 기록돼요
               </p>
               <button onClick={() => navigate('/lunchie/settings')} className="lm-btn-primary px-6 inline-flex items-center justify-center">
                 Quick Match 시작하기
