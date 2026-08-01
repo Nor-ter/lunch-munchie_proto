@@ -679,9 +679,17 @@ app.delete("/api/feed-post", async (c) => {
   const session = await readSession(c.req.raw, c.env.AUTH_SESSION_SECRET);
   if (!session) return c.json({ error: "로그인이 필요합니다.", code: "AUTH_REQUIRED" }, 401);
   const courseId = new URL(c.req.url).searchParams.get("courseId");
-  if (!courseId) return c.json({ error: "게시물 정보가 필요합니다." }, 400);
-  const result = await c.env.DB.prepare("UPDATE courses SET is_public = 0 WHERE id = ? AND author_id = ? AND is_public = 1").bind(courseId, session.sub).run();
-  if ((result.meta?.changes ?? 0) !== 1) return c.json({ error: "삭제 권한이 없거나 이미 삭제된 게시물입니다." }, 403);
+  if (!courseId || courseId.length > 128) return c.json({ error: "게시물 정보가 필요합니다." }, 400);
+  // Check ownership before changing visibility.  Some D1 deployments do not
+  // consistently expose `meta.changes`, which previously made a successful
+  // soft-delete look like a permission failure in the app.
+  const course = await c.env.DB.prepare(
+    "SELECT id, is_public FROM courses WHERE id = ? AND author_id = ?"
+  ).bind(courseId, session.sub).first<{ id: string; is_public: number }>();
+  if (!course) return c.json({ error: "이 게시물을 삭제할 권한이 없습니다." }, 403);
+  if (!Number(course.is_public)) return c.json({ ok: true, alreadyDeleted: true });
+  await c.env.DB.prepare("UPDATE courses SET is_public = 0 WHERE id = ? AND author_id = ?")
+    .bind(courseId, session.sub).run();
   return c.json({ ok: true });
 });
 
