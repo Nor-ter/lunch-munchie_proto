@@ -10,12 +10,11 @@
 
 ## 현재 상태
 
-- 기준 브랜치: `sj_branch`
-- 최신 기능 기준: `sj_branch` 모바일 UI·Lunchie 세션·Munchie 코스맵 정돈 (`2026-07-22`)
-- 개발 단계: 웹 중심 통합 프로토타입
-- 검증 상태: TypeScript 검사, 테스트 파일 21개·테스트 249개, 프로덕션 빌드 통과
-- 데이터 모드: PostgreSQL 연결 또는 mock/in-memory 폴백
-- 주요 미완료 사항: 실제 운영 DB·인증·배포 환경 검증, UI 전체 E2E 테스트, 번들 최적화
+- 운영 URL: <https://lunchie-munchie.pages.dev>
+- 기준 배포 브랜치: `main` (병합 시 Cloudflare 자동 배포)
+- 개발 브랜치: 기능별 브랜치 → Pull Request → `main` 병합
+- 런타임: Cloudflare Pages Functions + D1 + R2 + Durable Objects
+- 로컬 품질 게이트: TypeScript, Vitest, 로컬 Playwright E2E, Pages 프로덕션 빌드
 
 ## 제품 구성
 
@@ -194,55 +193,108 @@ Lunchie Munchie는 두 가지 핵심 경험을 하나의 앱으로 제공합니�
 
 ### 요구사항
 
-- Node.js 22 권장
-- Corepack
-- pnpm 10.4.1 (`package.json`의 `packageManager` 기준)
+- Node.js **22 이상** (Cloudflare CI도 Node 22 사용)
+- Corepack 및 pnpm (`package.json`의 `packageManager` 기준)
+- 로컬 Pages/Functions 개발 시 Cloudflare Wrangler 로그인: `npx wrangler login`
 
-### 설치 및 실행
+### 처음 한 번: 로컬 개발 환경
 
 ```bash
+git clone <repository-url>
+cd lunch-munchie_proto
 corepack enable
 pnpm install
-pnpm dev
+node scripts/installGitHooks.mjs # 기존 worktree라면 한 번 실행
+cp .dev.vars.example .dev.vars
 ```
 
-기본 개발 명령은 Vite 클라이언트와 Express 서버를 동시에 실행합니다.
-
-```bash
-pnpm dev:client   # 클라이언트만 실행
-pnpm dev:server   # API 서버만 실행
-pnpm seed         # DB 시드
-pnpm preview      # 프로덕션 빌드 미리보기
-```
-
-### 환경 변수
-
-루트에 `.env`를 만들고 필요한 값을 설정합니다.
+`.dev.vars`에는 로컬 Functions만 읽는 비밀값을 둡니다. 절대 커밋하지 않습니다.
 
 ```dotenv
-DATABASE_URL=postgresql://USER:PASSWORD@HOST:PORT/DATABASE
-VITE_FRONTEND_FORGE_API_KEY=
+GOOGLE_CLIENT_ID="...apps.googleusercontent.com"
+GOOGLE_CLIENT_SECRET="..."
+AUTH_SESSION_SECRET="긴-무작위-문자열"
+# 로컬은 운영 R2 원본을 복제하지 않고, 공개 사진 URL만 읽는다.
+MEDIA_ORIGIN="https://lunchie-munchie.pages.dev"
 ```
 
-- `DATABASE_URL`: PostgreSQL/Drizzle 연결에 필요
-- `VITE_FRONTEND_FORGE_API_KEY`: Google Maps 프록시 연동을 사용할 때 선택적으로 설정
-- 실제 키와 `.env` 파일은 Git에 커밋하지 않습니다.
+Google Cloud OAuth 클라이언트의 **Authorized redirect URIs**에는 다음 둘 다 등록합니다.
 
-## 검증
+```text
+http://localhost:8788/api/auth/google/callback
+https://lunchie-munchie.pages.dev/api/auth/google/callback
+```
+
+로컬 개발은 Pages Functions까지 함께 띄우는 명령을 사용합니다. 단순 `pnpm dev`는 Vite/기존 Express 개발용이며 Cloudflare D1·R2·Google OAuth Functions를 검증하지 않습니다.
 
 ```bash
-pnpm check     # TypeScript 타입 검사
-pnpm test      # Vitest 테스트
-pnpm build     # 클라이언트 + 서버 프로덕션 빌드
+pnpm dev:pages
+# http://localhost:8788
 ```
 
-2026-07-22 현재 검증 결과:
+로컬 D1을 새로 만들거나 마이그레이션해야 할 때만 실행합니다.
 
-- TypeScript 검사 통과
-- 테스트 파일 21개 통과
-- 테스트 249개 통과
-- Vite 클라이언트 및 Express 서버 빌드 성공
-- 클라이언트 메인 JS 번들 약 2.18 MB로 코드 분할 최적화 필요
+```bash
+pnpm cf:d1:migrate:local
+pnpm cf:d1:seed:local
+```
+
+### 테스트와 커밋
+
+```bash
+npm run test:precommit  # 타입 → 357개 Vitest → 로컬 Playwright E2E → Pages 빌드
+git checkout -b feature/short-description
+git add <files>
+git commit -m "feat: short description"
+git push -u origin feature/short-description
+```
+
+`.githooks/pre-commit`이 위 품질 게이트를 **모든 일반 커밋 전에 자동 실행**합니다. 실패하면 커밋되지 않습니다. 라이브 E2E는 운영 인증이 필요하므로 커밋 훅에서는 실행하지 않고 릴리스 전 별도 실행합니다.
+
+```bash
+pnpm test:e2e:live
+```
+
+테스트 범위와 새 기능에 반드시 추가해야 할 케이스는 [커밋 품질 게이트 문서](./docs/testing/precommit-testing.md)를 따릅니다. 긴급 상황의 `--no-verify`는 예외이며, 병합/배포 전에 반드시 정상 게이트를 통과해야 합니다.
+
+## Cloudflare CI/CD
+
+### 배포 흐름
+
+```text
+feature branch → Pull Request → Quality gate 통과 → main 병합
+  → D1 migration → Durable Object Worker → Pages production deploy
+```
+
+- [`.github/workflows/quality.yml`](./.github/workflows/quality.yml): 모든 PR·브랜치 푸시에서 품질 게이트를 실행합니다.
+- [`.github/workflows/deploy-cloudflare.yml`](./.github/workflows/deploy-cloudflare.yml): `main`에 병합될 때만 운영 배포합니다. 스키마를 먼저 적용하고 Worker, Pages 순서로 배포합니다.
+- 운영 공개 URL은 계속 공개이며, 미리보기/관리 화면만 Cloudflare Access 정책으로 보호합니다.
+
+### GitHub Actions Secrets
+
+저장소 **Settings → Secrets and variables → Actions**에 다음 Repository secrets를 추가합니다. 토큰 값과 `.dev.vars`는 절대 코드·로그·PR에 넣지 않습니다.
+
+| Secret | 용도 | 최소 Cloudflare 권한 |
+| --- | --- | --- |
+| `CLOUDFLARE_ACCOUNT_ID` | Cloudflare 계정 식별자 | 비밀값 아님이나 Actions secret으로 보관 |
+| `CLOUDFLARE_WORKER_DEPLOY_TOKEN` | Durable Object Worker와 Pages 배포 | Account: Workers Scripts Edit, Durable Objects Edit, Pages Edit |
+| `CLOUDFLARE_D1_MIGRATIONS_TOKEN` | 운영 D1 마이그레이션만 | Account: D1 Edit (`lunchie-db` 범위) |
+
+토큰은 Cloudflare Dashboard → **Manage account → Account API tokens**에서 만들고, 가능한 한 Lunchie Munchie 리소스로 범위를 제한합니다. 배포 토큰에 R2 읽기/쓰기, 사용자 관리, Zone/DNS, Billing 권한을 넣지 않습니다. 사진 업로드가 CI에서 필요해질 때만 R2 Object Read & Write 권한을 별도 토큰으로 추가합니다.
+
+Cloudflare Pages Secrets(`GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `AUTH_SESSION_SECRET`)는 GitHub Actions secret으로 복제하지 않습니다. 한 번만 Cloudflare에 저장합니다.
+
+```bash
+npm run cf:auth:secrets
+```
+
+운영에서 수동 복구가 필요할 때만 다음을 사용합니다. 일반 배포는 GitHub Actions를 사용합니다.
+
+```bash
+pnpm cf:d1:migrate
+pnpm cf:state:deploy
+pnpm cf:pages:deploy
+```
 
 ## 프로젝트 구조
 

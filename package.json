@@ -29,7 +29,7 @@
     "preview": "vite preview --host",
     "check": "tsc --noEmit",
     "test": "vitest run",
-    "test:precommit": "tsc --noEmit && vitest run && playwright test",
+    "test:precommit": "tsc --noEmit && vitest run && playwright test && vite build",
     "test:e2e": "playwright test",
     "test:e2e:live": "playwright test --config playwright.live.config.ts",
     "e2e:auth:setup": "tsx e2e-harness/scripts/capture-auth.ts",
