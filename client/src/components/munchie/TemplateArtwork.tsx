@@ -29,10 +29,15 @@ export default function TemplateArtwork({
   const { getRestaurantById } = useApp();
   const syncedPlaces = getCoursePlacesFromStops(course, getRestaurantById);
   const places = syncedPlaces.slice(0, 3);
-  const photos = (photoSources?.length ? photoSources : [
+  // An explicit empty array means this feed post has no original user photo.
+  // Do not replace it with a restaurant/course cover, which belongs to neither
+  // the author nor the post. Callers that omit photoSources still get normal
+  // course-detail defaults.
+  const sourcePhotos = photoSources === undefined ? [
     ...places.map(place => place.imageUrl),
     course.heroImage,
-  ]).filter((photo): photo is string => !!photo).slice(0, 3);
+  ] : photoSources;
+  const photos = sourcePhotos.filter((photo): photo is string => !!photo).slice(0, 3);
   // 만들기 플로우에서 직접 꾸민 배치가 있으면 그 배치를 그대로 재현한다
   // Earlier server posts have an explicit `[]` in feed_decor. Treat that as
   // absent, not as an intentional blank canvas: the regular template slots

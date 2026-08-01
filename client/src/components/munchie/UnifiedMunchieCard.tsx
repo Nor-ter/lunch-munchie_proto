@@ -173,7 +173,7 @@ export default function UnifiedMunchieCard({
           </OneLineReviewBox>
           <div className={`relative mx-2 mb-2 overflow-hidden rounded-[12px] border bg-[#F1E7DE] ${homeSummary ? 'border-[#F2B6AB]' : 'border-[#E8D6CC]'}`}>
             <TemplateArtwork course={course} template={template} photoSources={post.photos} decorOverride={decorOverride ?? post.decor} eager />
-            {post.usesCourseFallbackPhoto && <span className="absolute left-2 top-2 rounded-full bg-black/55 px-2 py-1 text-[8px] font-bold text-white">코스 식당 사진</span>}
+            {post.missingOriginalMedia && <span className="absolute left-2 top-2 rounded-full bg-black/55 px-2 py-1 text-[8px] font-bold text-white">원본 사진이 없는 이전 게시물</span>}
             {!homeSummary && <div className="absolute bottom-1 left-1 flex gap-1">
               <span className="flex h-6 items-center gap-0.5 rounded-lg border border-[#F2C4BA] bg-[#FFF8F4] px-1.5 text-[7px] font-black text-[#E76B68]"><ThumbsUp size={10} />{post.likes}</span>
               <span
@@ -225,7 +225,7 @@ export default function UnifiedMunchieCard({
         <button type="button" onClick={() => go(`/template/${template.id}?course=${course.id}&from=${detailOrigin}`)} className="mx-3 block w-[calc(100%-1.5rem)] overflow-hidden rounded-[14px] border border-[#EED9D0] bg-[#F1E7DE]" aria-label="Munchie 피드 이미지 상세 보기">
           <div className="relative">
             <TemplateArtwork course={course} template={template} photoSources={post.photos} decorOverride={decorOverride ?? post.decor} eager />
-            {post.usesCourseFallbackPhoto && <span className="absolute left-2 top-2 rounded-full bg-black/55 px-2 py-1 text-[9px] font-bold text-white">코스 식당 사진</span>}
+            {post.missingOriginalMedia && <span className="absolute left-2 top-2 rounded-full bg-black/55 px-2 py-1 text-[9px] font-bold text-white">원본 사진이 없는 이전 게시물</span>}
           </div>
         </button>
 

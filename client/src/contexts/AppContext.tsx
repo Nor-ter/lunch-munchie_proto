@@ -215,8 +215,8 @@ export interface FeedPost {
   authorEmoji: string;
   courseId: string;
   photos: string[];
-  /** Legacy posts without a user upload fall back to their course restaurant cover. */
-  usesCourseFallbackPhoto?: boolean;
+  /** Original user media is absent on a legacy post; never substitute a restaurant cover. */
+  missingOriginalMedia?: boolean;
   /** 서버에 보존한 템플릿·사진 배치. 다른 기기/다른 사용자도 같은 카드로 렌더링한다. */
   templateId?: string;
   decor?: import('@/lib/coursemapDecor').PlacedPhoto[];
@@ -697,9 +697,10 @@ export function AppProvider({
       authorName: feed.authorName || (feed.creatorId === profile.id ? profile.name : feed.creatorId === 'user_minji' ? '김민지' : feed.creatorId === 'user_jenny' ? '제니' : feed.creatorId === 'user_minsu' ? '민수' : 'Lunchie 사용자'),
       authorEmoji: feed.creatorId === profile.id ? profile.emoji : feed.creatorId === 'user_minji' ? '🐰' : feed.creatorId === 'user_jenny' ? '🍓' : feed.creatorId === 'user_minsu' ? '🐻' : '🐳',
       courseId: feed.courseId,
-      photos: ((Array.isArray(feed.photos) && feed.photos.length ? feed.photos : feed.heroImage ? [feed.heroImage] : []) as unknown[]).filter((photo: unknown): photo is string => typeof photo === 'string').map((photo: string) => photo.startsWith('http') || photo.startsWith('/') ? photo : `/photos/${photo}`),
+      photos: (Array.isArray(feed.photos) ? feed.photos : []).filter((photo: unknown): photo is string => typeof photo === 'string').map((photo: string) => photo.startsWith('http') || photo.startsWith('/') ? photo : `/photos/${photo}`),
       templateId: typeof feed.templateId === 'string' ? feed.templateId : undefined,
       decor: Array.isArray(feed.decor) ? feed.decor : undefined,
+      missingOriginalMedia: (!Array.isArray(feed.photos) || feed.photos.length === 0) && (!Array.isArray(feed.decor) || feed.decor.length === 0),
       caption: feed.description,
       skinId: 'default',
       likes: feed.likesCount || 0,
@@ -766,10 +767,10 @@ export function AppProvider({
             authorName: feed.authorName || (feed.creatorId === profile.id ? profile.name : feed.creatorId === 'user_minji' ? '김민지' : feed.creatorId === 'user_jenny' ? '제니' : feed.creatorId === 'user_minsu' ? '민수' : 'Lunchie 사용자'),
             authorEmoji: feed.creatorId === 'user_minji' ? '🐰' : feed.creatorId === 'user_jenny' ? '🍓' : feed.creatorId === 'user_minsu' ? '🐻' : '🐳',
             courseId: feed.courseId,
-            photos: ((Array.isArray(feed.photos) && feed.photos.length ? feed.photos : feed.heroImage ? [feed.heroImage] : []) as unknown[]).filter((photo: unknown): photo is string => typeof photo === 'string').map((photo: string) => photo.startsWith('http') || photo.startsWith('/') ? photo : `/photos/${photo}`),
-            usesCourseFallbackPhoto: (!Array.isArray(feed.photos) || feed.photos.length === 0) && typeof feed.heroImage === 'string' && Boolean(feed.heroImage),
+            photos: (Array.isArray(feed.photos) ? feed.photos : []).filter((photo: unknown): photo is string => typeof photo === 'string').map((photo: string) => photo.startsWith('http') || photo.startsWith('/') ? photo : `/photos/${photo}`),
             templateId: typeof feed.templateId === 'string' ? feed.templateId : undefined,
             decor: Array.isArray(feed.decor) ? feed.decor : undefined,
+            missingOriginalMedia: (!Array.isArray(feed.photos) || feed.photos.length === 0) && (!Array.isArray(feed.decor) || feed.decor.length === 0),
             caption: feed.description,
             skinId: 'default',
             likes: feed.likesCount || 0,
