@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { Course, FeedPost, Restaurant } from '@/contexts/AppContext';
-import { buildSavedFeedMapPoints } from './savedFeedMap';
+import { buildSavedFeedMapPoints, groupSavedFeedMapPointsByCourse } from './savedFeedMap';
 
 const post: FeedPost = {
   id: 'feed-1',
@@ -88,5 +88,32 @@ describe('saved feed map adapter', () => {
     });
 
     expect(points).toEqual([]);
+  });
+
+  it('groups each saved course at the average position while preserving its ordered places', () => {
+    const restaurants = [
+      restaurant('restaurant-1', '첫 카페', 37.1, 127.1),
+      restaurant('restaurant-2', '두 번째 카페', 37.3, 127.5),
+    ];
+    const points = buildSavedFeedMapPoints({
+      posts: [post],
+      getCourseById: () => course,
+      getRestaurantById: (id) => restaurants.find((item) => item.id === id),
+    });
+
+    const groups = groupSavedFeedMapPointsByCourse(points);
+
+    expect(groups).toHaveLength(1);
+    expect(groups[0]).toMatchObject({
+      id: 'feed-1',
+      feedId: 'feed-1',
+      courseId: 'course-1',
+      latitude: 37.2,
+      longitude: 127.3,
+    });
+    expect(groups[0]?.points.map((point) => point.restaurantId)).toEqual([
+      'restaurant-1',
+      'restaurant-2',
+    ]);
   });
 });

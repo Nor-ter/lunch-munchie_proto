@@ -7,11 +7,11 @@ import { useEffect, useMemo, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useLocation, useSearch } from 'wouter';
-import { MapPin, BookmarkX, Zap, Map as MapIcon, LayoutList } from 'lucide-react';
+import { MapPin, Bookmark, Zap, Map as MapIcon, LayoutList } from 'lucide-react';
 import { useApp, TagType } from '@/contexts/AppContext';
 import { getCourseTagStyle } from '@/constants/courseTheme';
 import { FOOD_FILTER_TAGS, hasFoodTag } from '@/constants/foodTags';
-import UnifiedMunchieCard from '@/components/munchie/UnifiedMunchieCard';
+import UnifiedMunchieCard, { SAVED_BOOKMARK_BUTTON_CLASS } from '@/components/munchie/UnifiedMunchieCard';
 import { SavedMunchieMap } from '@/components/saved/SavedMunchieMap';
 import { useSavedFeedMapPoints } from '@/hooks/useSavedFeedMapPoints';
 import { getSavedViewFromSearch, type SavedViewMode } from '@/lib/savedNavigation';
@@ -92,9 +92,16 @@ export default function SavedPage() {
     : savedPosts.filter(post => hasFoodTag(post.tags, activeFilter as TagType));
   const savedFeedMapPoints = useSavedFeedMapPoints(filteredPosts);
   const journeyDays = useMemo(() => groupJourneyByDay(journeyStops), [journeyStops]);
+  const selectedMapFeedId = munchieView === 'map'
+    ? new URLSearchParams(search).get('selectedFeed')
+    : null;
   const selectMunchieView = (view: SavedViewMode) => {
     setMunchieView(view);
     navigate(`/saved?view=${view}`, { replace: true });
+  };
+  const selectSavedMapFeed = (feedId: string | null) => {
+    const selectedFeedQuery = feedId ? `&selectedFeed=${encodeURIComponent(feedId)}` : '';
+    navigate(`/saved?view=map${selectedFeedQuery}`, { replace: true });
   };
 
   return (
@@ -179,10 +186,10 @@ export default function SavedPage() {
                       <button
                         type="button"
                         onClick={() => unsaveCourse(post.courseId)}
-                        className="absolute bottom-1.5 right-1.5 flex h-6 w-6 items-center justify-center rounded-full border border-[#F0C9BE] bg-[#FFFDFC]/95 text-[#D94449] shadow-sm"
+                        className={`absolute bottom-1.5 right-1.5 origin-bottom-right scale-[0.8] shadow-sm ${SAVED_BOOKMARK_BUTTON_CLASS}`}
                         aria-label="먼치픽 저장 해제"
                       >
-                        <BookmarkX size={12} />
+                        <Bookmark size={20} strokeWidth={2} fill="currentColor" />
                       </button>
                     </div>
                   ))}
@@ -195,7 +202,11 @@ export default function SavedPage() {
                   exit={{ opacity: 0 }}
                   className="h-[calc(100dvh-275px)] min-h-[440px] pb-14"
                 >
-                  <SavedMunchieMap points={savedFeedMapPoints} />
+                  <SavedMunchieMap
+                    points={savedFeedMapPoints}
+                    selectedFeedId={selectedMapFeedId}
+                    onSelectedFeedIdChange={selectSavedMapFeed}
+                  />
                 </motion.div>
               )}
             </AnimatePresence>

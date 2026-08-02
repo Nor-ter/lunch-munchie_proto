@@ -1,0 +1,57 @@
+{
+  "features": [
+    {
+      "name": "Profile user name and feed display",
+      "intent": "import",
+      "origin_ref": "merge4_v1",
+      "paths": [
+        "client/src/hooks/useProfileFeed.ts",
+        "client/src/lib/profileFeed.ts",
+        "client/src/pages/OtherProfilePage.tsx"
+      ]
+    },
+    {
+      "name": "Course selected restaurant emphasis and profile redirection",
+      "intent": "import",
+      "origin_ref": "merge4_v1",
+      "paths": [
+        "client/src/components/course/CourseMap.tsx",
+        "client/src/pages/course/CourseDetailPage.tsx"
+      ]
+    },
+    {
+      "name": "Feed list scroll location",
+      "intent": "import",
+      "origin_ref": "merge4_v1",
+      "paths": [
+        "client/src/components/SlideTransitionRoutes.tsx",
+        "client/src/components/SlideTransitionRoutes.test.ts"
+      ]
+    },
+    {
+      "name": "Saved map and list toggle",
+      "intent": "import",
+      "origin_ref": "merge4_v1",
+      "paths": [
+        "client/src/components/saved/SavedMunchieMap.tsx",
+        "client/src/hooks/useSavedFeedMapPoints.ts",
+        "client/src/pages/SavedPage.tsx"
+      ]
+    },
+    {
+      "name": "Left-side gimbap level indicator",
+      "intent": "retain",
+      "paths": ["client/src/components/munchie/FoodieBuddy.tsx"]
+    },
+    {
+      "name": "Bento-styled My Lunchbox",
+      "intent": "retain",
+      "paths": ["client/src/components/munchie/LunchboxBottomSheet.tsx"]
+    },
+    {
+      "name": "Hanger Lunchmate control",
+      "intent": "retain",
+      "paths": ["client/src/components/munchie/FoodieBuddy.tsx"]
+    }
+  ]
+}

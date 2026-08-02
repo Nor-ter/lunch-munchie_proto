@@ -16,11 +16,11 @@ describe('CourseDetailPage feed like synchronization', () => {
     expect(source).not.toContain('<Heart');
   });
 
-  it('renders the linked feed like and share counts in course metadata', () => {
+  it('renders the linked feed like count without the share count', () => {
     expect(source).toContain('좋아요 ${orphanPost?.likes ?? 0}개');
     expect(source).toContain('{orphanPost?.likes ?? 0}');
-    expect(source).toContain('공유 ${orphanPost?.shares ?? 0}회');
-    expect(source).toContain('{orphanPost?.shares ?? 0}');
+    expect(source).not.toContain('공유 ${orphanPost?.shares ?? 0}회');
+    expect(source).not.toContain('{orphanPost?.shares ?? 0}');
   });
 
   it('shows the author level, a pin-only spot count, and the working follow control', () => {

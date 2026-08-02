@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react';
 import { createPortal } from 'react-dom';
 import { AnimatePresence, motion } from 'framer-motion';
 import {
@@ -25,6 +25,10 @@ import { acquireDocumentScrollLock } from '@/lib/documentScrollLock';
 import { resolveFeedAuthorId } from '@/lib/profileFeed';
 import { logCourseFeedImpression } from '@/lib/eventLogger';
 import { useAuthStatus } from '@/hooks/useAuthStatus';
+import {
+  getSavedCourseDetailPath,
+  type SavedViewMode,
+} from '@/lib/savedNavigation';
 
 function timeAgo(iso: string | number) {
   const normalized = typeof iso === 'string' ? iso.replace(/T(\d):/, 'T0$1:') : iso;
@@ -37,6 +41,9 @@ function timeAgo(iso: string | number) {
   return `${Math.floor(days / 7)}주 전`;
 }
 
+export const SAVED_BOOKMARK_BUTTON_CLASS =
+  'flex h-10 w-10 items-center justify-center rounded-xl bg-[#FFE2DF] text-[#D94E55]';
+
 export default function UnifiedMunchieCard({
   post,
   compact = false,
@@ -48,6 +55,7 @@ export default function UnifiedMunchieCard({
   strokesOverride,
   detailOrigin = 'feed',
   profileReturnId,
+  savedView,
 }: {
   post: FeedPost;
   compact?: boolean;
@@ -59,6 +67,7 @@ export default function UnifiedMunchieCard({
   strokesOverride?: CoursemapCanvasStroke[];
   detailOrigin?: 'feed' | 'saved' | 'profile';
   profileReturnId?: string;
+  savedView?: SavedViewMode;
 }) {
   const [, navigate] = useLocation();
   const {
@@ -77,10 +86,12 @@ export default function UnifiedMunchieCard({
   } = useApp();
   const [comment, setComment] = useState('');
   const [commentExpanded, setCommentExpanded] = useState(false);
+  const [reviewRevealed, setReviewRevealed] = useState(false);
   const [replyingTo, setReplyingTo] = useState<{ id: string; authorName: string } | null>(null);
   const [commentMenuId, setCommentMenuId] = useState<string | null>(null);
   const [showPostMenu, setShowPostMenu] = useState(false);
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
+  const lastArtworkTapAtRef = useRef(0);
   const [postReported, setPostReported] = useState(() => {
     try { return JSON.parse(localStorage.getItem('lm_reported_feed_ids') ?? '[]').includes(post.id); }
     catch { return false; }
@@ -124,6 +135,9 @@ export default function UnifiedMunchieCard({
     ? `&profileId=${encodeURIComponent(profileReturnId)}`
     : '';
   const compactDetailPath = `/feed/${post.id}?from=${detailOrigin}${profileReturnQuery}`;
+  const courseMapPath = detailOrigin === 'saved' && savedView
+    ? getSavedCourseDetailPath(course.id, post.id, savedView)
+    : `/course/${course.id}?from=${detailOrigin}&post=${post.id}`;
   const cardRef = useRef<HTMLElement | null>(null);
   const impressionLoggedRef = useRef(false);
 
@@ -196,6 +210,17 @@ export default function UnifiedMunchieCard({
     if (!response.ok) { toast.error('좋아요를 저장하지 못했어요.'); return; }
     toggleFeedLike(post.id);
   };
+  const handleArtworkPointerUp = (event: ReactPointerEvent<HTMLDivElement>) => {
+    if (!interactive || event.button !== 0) return;
+    const tappedAt = Date.now();
+    const elapsed = tappedAt - lastArtworkTapAtRef.current;
+    if (elapsed >= 60 && elapsed <= 320) {
+      lastArtworkTapAtRef.current = 0;
+      if (!liked) void togglePostLike();
+      return;
+    }
+    lastArtworkTapAtRef.current = tappedAt;
+  };
 
   const deleteConfirmation = typeof document !== 'undefined' && createPortal(
     <AnimatePresence>
@@ -260,14 +285,31 @@ export default function UnifiedMunchieCard({
           <button type="button" onClick={() => setShowPostMenu(value => !value)} aria-label="게시물 메뉴" className={`flex h-6 w-6 items-center justify-center ${homeSummary ? 'text-[#D94447]' : 'text-[#413733]'}`}><MoreHorizontal size={15} strokeWidth={3} /></button>
         </header>
         <button type="button" onClick={() => go(compactDetailPath)} className="block w-full text-left" aria-label="피드 상세 보기">
-          <OneLineReviewBox compact slim={homeSummary} className="mx-2 mb-1.5 shrink-0 overflow-hidden">
-            <AnimatePresence mode="wait" initial={false}>
-              <motion.p key={post.caption} initial={{ opacity: 0, y: 5 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -5 }} className={`${homeSummary ? 'line-clamp-1 leading-none text-[#935B5C]' : 'line-clamp-2 leading-snug text-[#3B2A23]'} text-[9px] font-semibold`}>{post.caption}</motion.p>
-            </AnimatePresence>
-          </OneLineReviewBox>
           <div className={`relative mx-2 mb-2 overflow-hidden rounded-[12px] border bg-[#F1E7DE] ${homeSummary ? 'border-[#F2B6AB]' : 'border-[#E8D6CC]'}`}>
             <TemplateArtwork course={course} template={template} photoSources={post.photos} decorOverride={renderedDecor} strokesOverride={renderedStrokes} eager />
             {post.missingOriginalMedia && <span className="absolute left-2 top-2 rounded-full bg-black/55 px-2 py-1 text-[8px] font-bold text-white">원본 사진이 없는 이전 게시물</span>}
+            <div
+              data-ui="compact-one-line-review"
+              className={`pointer-events-none absolute inset-x-2 z-10 ${homeSummary ? 'bottom-2' : 'bottom-9'}`}
+            >
+              <OneLineReviewBox
+                compact
+                slim={homeSummary}
+                className="!border-[#F2B6AB]/55 !bg-[#FFF8F4]/46 !text-[#3B2A23] shadow-[0_3px_10px_rgba(45,29,24,0.1)] backdrop-blur-[1px]"
+              >
+                <AnimatePresence mode="wait" initial={false}>
+                  <motion.p
+                    key={post.caption}
+                    initial={{ opacity: 0, y: 5 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: -5 }}
+                    className={`${homeSummary ? 'line-clamp-1 leading-none' : 'line-clamp-2 leading-snug'} text-[9px] font-bold [text-shadow:0_1px_1px_rgba(255,255,255,0.72)]`}
+                  >
+                    {post.caption}
+                  </motion.p>
+                </AnimatePresence>
+              </OneLineReviewBox>
+            </div>
             {!homeSummary && <div className="absolute bottom-1 left-1 flex gap-1">
               <span className="flex h-6 items-center gap-0.5 rounded-lg border border-[#F2C4BA] bg-[#FFF8F4] px-1.5 text-[7px] font-black text-[#E76B68]"><ThumbsUp size={10} />{post.likes}</span>
               <span
@@ -336,12 +378,55 @@ export default function UnifiedMunchieCard({
           )}
         </AnimatePresence>
 
-        <button type="button" onClick={() => go(`/template/${template.id}?course=${course.id}&from=${detailOrigin}`)} className="mx-3 block w-[calc(100%-1.5rem)] overflow-hidden rounded-[14px] border border-[#EED9D0] bg-[#F1E7DE]" aria-label="Munchie 피드 이미지 상세 보기">
-          <div className="relative">
+        <div className="relative mx-3 overflow-hidden rounded-[14px] border border-[#EED9D0] bg-[#F1E7DE]">
+          <div
+            data-ui="munchie-template-artwork"
+            onPointerUp={handleArtworkPointerUp}
+            className="block w-full touch-manipulation"
+          >
             <TemplateArtwork course={course} template={template} photoSources={post.photos} decorOverride={renderedDecor} strokesOverride={renderedStrokes} eager />
-            {post.missingOriginalMedia && <span className="absolute left-2 top-2 rounded-full bg-black/55 px-2 py-1 text-[9px] font-bold text-white">원본 사진이 없는 이전 게시물</span>}
           </div>
-        </button>
+          {post.missingOriginalMedia && <span className="absolute left-2 top-2 z-10 rounded-full bg-black/55 px-2 py-1 text-[9px] font-bold text-white">원본 사진이 없는 이전 게시물</span>}
+          <button
+            type="button"
+            onClick={() => go(`/template/${template.id}?course=${course.id}&from=${detailOrigin}`)}
+            className="absolute right-2 top-2 z-10 rounded-full bg-[#FFFDFC]/90 px-2.5 py-1 text-[9px] font-black text-[#765E53] shadow-sm backdrop-blur"
+            aria-label="Munchie 피드 이미지 상세 보기"
+          >
+            템플릿 보기
+          </button>
+          <motion.div
+            aria-hidden="true"
+            initial={false}
+            animate={{ opacity: reviewRevealed ? 1 : 0 }}
+            transition={{ duration: 0.24, ease: 'easeOut' }}
+            className="pointer-events-none absolute inset-x-0 bottom-0 z-[5] h-28 bg-gradient-to-t from-[#241712]/85 via-[#241712]/45 to-transparent"
+          />
+          <button
+            type="button"
+            onClick={() => interactive && setReviewRevealed(value => !value)}
+            aria-label={reviewRevealed ? '한줄평 음영 숨기기' : '한줄평 또렷하게 보기'}
+            aria-pressed={reviewRevealed}
+            className="absolute inset-x-3 bottom-3 z-10 text-left"
+          >
+            <OneLineReviewBox
+              compact
+              className={`shadow-[0_3px_10px_rgba(45,29,24,0.1)] backdrop-blur-[1px] transition-[background-color,border-color,color,box-shadow] duration-200 ${
+                reviewRevealed
+                  ? '!border-white/25 !bg-[#2D1D18]/20 !text-white shadow-[0_5px_18px_rgba(0,0,0,0.2)]'
+                  : '!border-[#F2B6AB]/55 !bg-[#FFF8F4]/46 !text-[#3B2A23]'
+              }`}
+            >
+              <span className={`line-clamp-1 w-full text-[12px] font-bold leading-5 ${
+                reviewRevealed
+                  ? '[text-shadow:0_1px_3px_rgba(0,0,0,0.38)]'
+                  : '[text-shadow:0_1px_1px_rgba(255,255,255,0.72)]'
+              }`}>
+                {post.caption}
+              </span>
+            </OneLineReviewBox>
+          </button>
+        </div>
 
         <div className="mx-3 flex items-center justify-between py-2.5 text-[#A27469]">
           <div className="flex items-center gap-2">
@@ -351,7 +436,7 @@ export default function UnifiedMunchieCard({
             <button type="button" onClick={() => interactive && setCommentExpanded(true)} className="flex h-10 min-w-10 items-center justify-center gap-1 rounded-xl px-2 text-current" aria-label="댓글 보기">
               <MessageCircle size={20} strokeWidth={2} /><span className="text-[10px] font-black">{visibleComments.length}</span>
             </button>
-            <button type="button" onClick={() => go(`/course/${course.id}?from=${detailOrigin}&post=${post.id}`)} className="flex h-10 w-10 items-center justify-center rounded-xl text-current" aria-label="코스맵 보기">
+            <button type="button" onClick={() => go(courseMapPath)} className="flex h-10 w-10 items-center justify-center rounded-xl text-current" aria-label="코스맵 보기">
               <Map size={23} strokeWidth={2} />
             </button>
           </div>
@@ -364,7 +449,9 @@ export default function UnifiedMunchieCard({
                 saved ? unsaveCourse(course.id) : saveCourse(course.id);
                 toast.success(saved ? '저장을 해제했어요.' : 'Munchie 피드를 저장했어요.');
               }}
-              className={`flex h-10 w-10 items-center justify-center rounded-xl ${saved ? 'bg-[#FFE2DF] text-[#D94E55]' : 'text-current'}`}
+              className={saved
+                ? SAVED_BOOKMARK_BUTTON_CLASS
+                : 'flex h-10 w-10 items-center justify-center rounded-xl text-current'}
               aria-label={saved ? '저장 해제' : '저장'}
             >
               <Bookmark size={20} strokeWidth={2} fill={saved ? 'currentColor' : 'none'} />
