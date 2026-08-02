@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { motion } from 'framer-motion';
 import { useLocation, useParams, useSearch } from 'wouter';
-import { Bookmark, ChevronDown, ChevronLeft, Clock3, MapPin, Pencil, Share2, ThumbsUp, Trash2 } from 'lucide-react';
+import { Archive, Bookmark, ChevronDown, ChevronLeft, Clock3, MapPin, Pencil, Share2, ThumbsUp } from 'lucide-react';
 import { toast } from 'sonner';
 import { useApp, type Course } from '@/contexts/AppContext';
 import { getTemplateById, getTemplateForCourse } from '@/constants/coursemapTemplates';
@@ -22,6 +22,7 @@ export default function TemplateDetailPage() {
     savedCourseIds,
     saveCourse,
     unsaveCourse,
+    isLoading,
   } = useApp();
   const searchParams = new URLSearchParams(search);
   const courseId = searchParams.get('course') ?? undefined;
@@ -54,7 +55,11 @@ export default function TemplateDetailPage() {
   const authorReview = linkedPost?.caption.trim() || course?.description.trim() || '';
   const fallbackTemplateIndex = Math.max(feedPosts.findIndex(post => post.courseId === courseId), 0);
   const template = getTemplateById(templateId) ?? (course ? getTemplateForCourse(course.id, fallbackTemplateIndex) : undefined);
-  const linkedDecor = linkedPost ? fromFeedPhotoPlacements(linkedPost.photoPlacements, linkedPost.photos) ?? undefined : undefined;
+  const linkedDecor = linkedPost
+    ? linkedPost.decor?.length
+      ? linkedPost.decor
+      : fromFeedPhotoPlacements(linkedPost.photoPlacements, linkedPost.photos) ?? undefined
+    : undefined;
   const isSaved = course ? savedCourseIds.includes(course.id) : false;
 
   const editTemplate = () => {
@@ -62,11 +67,11 @@ export default function TemplateDetailPage() {
     navigate(`/course/${course.id}/edit?from=profile`);
   };
 
-  const deleteTemplate = () => {
+  const archiveTemplate = () => {
     if (!course) return;
-    if (!window.confirm('이 템플릿을 삭제할까요? 원본 코스와 피드는 그대로 유지돼요.')) return;
+    if (!window.confirm('이 템플릿을 나의 프로필에서 보관 처리할까요? 원본 코스와 피드는 그대로 유지돼요.')) return;
     deleteProfileTemplate(course.id);
-    toast.success('나의 템플릿에서 삭제했어요');
+    toast.success('템플릿을 나의 프로필에서 보관 처리했어요');
     navigate('/profile', { replace: true });
   };
 
@@ -75,6 +80,17 @@ export default function TemplateDetailPage() {
     isSaved ? unsaveCourse(course.id) : saveCourse(course.id);
     toast.success(isSaved ? '저장을 해제했어요' : '코스를 저장했어요');
   };
+
+  if ((!template || !course) && isLoading) {
+    return (
+      <main className="flex min-h-dvh items-center justify-center bg-[#FCF4EE] px-6 text-center">
+        <div>
+          <span className="mx-auto block h-8 w-8 animate-spin rounded-full border-4 border-[#F3D4CA] border-t-[#E85053]" aria-hidden="true" />
+          <p className="mt-3 text-sm font-bold text-[#9A8579]">게시물 원본을 불러오는 중이에요…</p>
+        </div>
+      </main>
+    );
+  }
 
   if (!template || !course) {
     return (
@@ -132,11 +148,11 @@ export default function TemplateDetailPage() {
             </button>
             <button
               type="button"
-              onClick={deleteTemplate}
-              aria-label="템플릿 삭제"
+              onClick={archiveTemplate}
+              aria-label="템플릿 보관"
               className="flex h-9 w-9 items-center justify-center rounded-full bg-[#FFF0F0] text-[#D94447] shadow-sm"
             >
-              <Trash2 size={16} />
+              <Archive size={16} />
             </button>
           </div>
         ) : <div className="h-10 w-[84px]" aria-hidden="true" />}

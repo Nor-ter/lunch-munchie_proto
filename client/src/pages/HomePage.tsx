@@ -3,16 +3,13 @@ import { createPortal } from 'react-dom';
 import { AnimatePresence, motion, useReducedMotion } from 'framer-motion';
 import { ArrowRight, Bell, MapPin, MessageCircle, ThumbsDown, ThumbsUp, X } from 'lucide-react';
 import { useLocation, useSearch } from 'wouter';
-import {
-  resolveApiRequestAuth,
-  type ApiRequestAuth,
-  useApp,
-} from '@/contexts/AppContext';
+import { useApp } from '@/contexts/AppContext';
 import LunchmateCharacterRenderer from '@/components/munchie/LunchmateCharacterRenderer';
 import UnifiedMunchieCard from '@/components/munchie/UnifiedMunchieCard';
 import HeaderIconButton, { HeaderActionRow } from '@/components/ui/HeaderIconButton';
 import { lunchmateLoadoutFromProfile } from '@/utils/lunchmateProfile';
 import type { LunchmateLoadout } from '@/types/lunchmateCustomization';
+import { useAuthStatus } from '@/hooks/useAuthStatus';
 
 type JourneyStop = {
   restaurant_id: string;
@@ -24,28 +21,15 @@ type JourneyStop = {
 };
 
 interface JourneyRequestDependencies {
-  resolveRequestAuth?: () => Promise<ApiRequestAuth>;
   request?: typeof fetch;
 }
 
-export async function fetchTodayJourney(
-  userId: string,
+export async function fetchJourneyHistory(
   dependencies: JourneyRequestDependencies = {},
 ): Promise<JourneyStop[]> {
   try {
-    const auth = await (
-      dependencies.resolveRequestAuth ?? resolveApiRequestAuth
-    )();
-    if (auth.status === 'blocked') return [];
-
     const request = dependencies.request ?? fetch;
-    const requestInit: RequestInit | undefined = auth.status === 'authenticated'
-      ? { headers: { Authorization: `Bearer ${auth.accessToken}` } }
-      : undefined;
-    const response = await request(
-      `/api/journey/today?userId=${encodeURIComponent(userId)}`,
-      requestInit,
-    );
+    const response = await request('/api/journey?days=30', { credentials: 'same-origin' });
     if (!response.ok) return [];
     const data = await response.json();
     return data.stops ?? [];
@@ -221,6 +205,7 @@ export default function HomePage() {
   const [, navigate] = useLocation();
   const search = useSearch();
   const { feedPosts, profile, isMyPost } = useApp();
+  const auth = useAuthStatus();
   const homeLunchmateLoadout = useMemo(
     () => lunchmateLoadoutFromProfile(profile.lunchmateLoadout),
     [profile.lunchmateLoadout],
@@ -233,10 +218,21 @@ export default function HomePage() {
   });
 
   useEffect(() => {
+    let localStops: JourneyStop[] = [];
+    try {
+      localStops = JSON.parse(localStorage.getItem('lm_lunchie_journey') ?? localStorage.getItem('lm_today_journey') ?? '[]');
+    } catch { /* browser fallback is optional */ }
+    if (auth.isError || auth.data?.isAnonymous) {
+      setJourneyStops(localStops);
+      return;
+    }
+    if (!auth.data) return;
     let active = true;
-    fetchTodayJourney(profile.id).then(stops => { if (active) setJourneyStops(stops); });
+    fetchJourneyHistory()
+      .then(stops => { if (active) setJourneyStops(stops.length ? stops : localStops); })
+      .catch(() => { if (active) setJourneyStops(localStops); });
     return () => { active = false; };
-  }, [profile.id]);
+  }, [auth.data?.isAnonymous, auth.isError, profile.id]);
 
   useEffect(() => {
     localStorage.setItem('lm_read_notifications', JSON.stringify(readNotificationIds));
@@ -249,9 +245,13 @@ export default function HomePage() {
   }, [search]);
 
   const landingPosts = feedPosts;
+  const todayJourneyStops = useMemo(() => {
+    const today = new Date().toDateString();
+    return journeyStops.filter(stop => new Date(stop.at).toDateString() === today);
+  }, [journeyStops]);
 
   const notifications = useMemo(() => {
-    const journeyItems = journeyStops.map(stop => ({
+    const journeyItems = todayJourneyStops.map(stop => ({
       id: `journey-${stop.restaurant_id}-${stop.at}`,
       kind: 'journey' as const,
       title: '오늘의 여정',
@@ -286,7 +286,7 @@ export default function HomePage() {
       })),
     ]);
     return [...journeyItems, ...feedItems].sort((a, b) => b.at - a.at).slice(0, 20);
-  }, [feedPosts, isMyPost, journeyStops]);
+  }, [feedPosts, isMyPost, todayJourneyStops]);
   const unreadCount = notifications.filter(item => !readNotificationIds.includes(item.id)).length;
   const visibleNotifications = notifications.filter(
     item => !readNotificationIds.includes(item.id),

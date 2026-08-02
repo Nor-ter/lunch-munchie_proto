@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { fetchTodayJourney } from "./HomePage";
+import { fetchJourneyHistory } from "./HomePage";
 
 function createJourneyResponse(
   status = 200,
@@ -21,91 +21,56 @@ function createJourneyResponse(
   } as unknown as Response;
 }
 
-describe("fetchTodayJourney auth compatibility", () => {
-  it("adds a Bearer token while preserving the legacy query structure", async () => {
+describe("fetchJourneyHistory session compatibility", () => {
+  it("uses the canonical 30-day journey endpoint with the Google session cookie", async () => {
     const request = vi.fn().mockResolvedValue(createJourneyResponse());
 
-    const stops = await fetchTodayJourney("user_browser_preview", {
-      resolveRequestAuth: async () => ({
-        status: "authenticated",
-        accessToken: "verified-access-token",
-      }),
-      request,
-    });
+    const stops = await fetchJourneyHistory({ request });
 
     expect(request).toHaveBeenCalledTimes(1);
     expect(request).toHaveBeenCalledWith(
-      "/api/journey/today?userId=user_browser_preview",
-      {
-        headers: {
-          Authorization: "Bearer verified-access-token",
-        },
-      },
+      "/api/journey?days=30",
+      { credentials: "same-origin" },
     );
     expect(stops).toHaveLength(1);
   });
 
-  it("keeps the existing anonymous request when no session exists or Supabase is unconfigured", async () => {
-    for (const anonymousState of [
-      { status: "anonymous" as const },
-      { status: "anonymous" as const },
-    ]) {
-      const request = vi.fn().mockResolvedValue(createJourneyResponse());
-
-      await fetchTodayJourney("user_browser_preview", {
-        resolveRequestAuth: async () => anonymousState,
-        request,
-      });
-
-      expect(request).toHaveBeenCalledWith(
-        "/api/journey/today?userId=user_browser_preview",
-        undefined,
-      );
-    }
-  });
-
-  it("does not send an anonymous request when session lookup is blocked", async () => {
-    const request = vi.fn();
-
-    const stops = await fetchTodayJourney("user_browser_preview", {
-      resolveRequestAuth: async () => ({ status: "blocked" }),
-      request,
-    });
-
-    expect(request).not.toHaveBeenCalled();
-    expect(stops).toEqual([]);
-  });
-
   it.each([401, 503])(
-    "does not retry anonymously after an authenticated %s",
+    "returns no server stops after an HTTP %s",
     async (status) => {
       const request = vi.fn().mockResolvedValue(createJourneyResponse(status));
 
-      const stops = await fetchTodayJourney("user_browser_preview", {
-        resolveRequestAuth: async () => ({
-          status: "authenticated",
-          accessToken: "verified-access-token",
-        }),
-        request,
-      });
+      const stops = await fetchJourneyHistory({ request });
 
       expect(request).toHaveBeenCalledTimes(1);
       expect(stops).toEqual([]);
     },
   );
 
-  it("does not retry or crash after an authenticated network failure", async () => {
+  it("does not retry or crash after a network failure", async () => {
     const request = vi.fn().mockRejectedValue(new Error("network failed"));
 
-    const stops = await fetchTodayJourney("user_browser_preview", {
-      resolveRequestAuth: async () => ({
-        status: "authenticated",
-        accessToken: "verified-access-token",
-      }),
-      request,
-    });
+    const stops = await fetchJourneyHistory({ request });
 
     expect(request).toHaveBeenCalledTimes(1);
     expect(stops).toEqual([]);
+  });
+
+  it("returns an empty list when the journey payload has no stops", async () => {
+    const request = vi.fn().mockResolvedValue({
+      ok: true,
+      json: vi.fn().mockResolvedValue({}),
+    } as unknown as Response);
+
+    await expect(fetchJourneyHistory({ request })).resolves.toEqual([]);
+  });
+
+  it("returns an empty list when the journey response cannot be decoded", async () => {
+    const request = vi.fn().mockResolvedValue({
+      ok: true,
+      json: vi.fn().mockRejectedValue(new Error("invalid JSON")),
+    } as unknown as Response);
+
+    await expect(fetchJourneyHistory({ request })).resolves.toEqual([]);
   });
 });

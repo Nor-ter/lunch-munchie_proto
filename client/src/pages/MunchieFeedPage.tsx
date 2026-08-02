@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { Palette, Plus } from 'lucide-react';
 import { useLocation } from 'wouter';
@@ -9,8 +9,9 @@ import UnifiedMunchieCard from '@/components/munchie/UnifiedMunchieCard';
 
 export default function MunchieFeedPage() {
   const [, navigate] = useLocation();
-  const { feedPosts } = useApp();
+  const { feedPosts, refreshFeedPosts } = useApp();
   const [activeFilter, setActiveFilter] = useState<TagType | 'all'>('all');
+  useEffect(() => { void refreshFeedPosts().catch(() => undefined); }, [refreshFeedPosts]);
   const filteredPosts = activeFilter === 'all'
     ? feedPosts
     : feedPosts.filter(post => hasFoodTag(post.tags, activeFilter as TagType));

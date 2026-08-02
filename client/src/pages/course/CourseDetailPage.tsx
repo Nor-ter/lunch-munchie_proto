@@ -22,7 +22,6 @@ import {
 import { CSS } from '@dnd-kit/utilities';
 import { CourseMapView } from '@/components/course/CourseMapView';
 import { MAX_COURSE_STOPS, type CourseStop, type Restaurant, useApp } from '@/contexts/AppContext';
-import { getCourseById as getMockCourseById } from '@/data/mockCourse';
 import { CoursePlace } from '@/types/course';
 import { getCourseSequenceColor } from '@/constants/courseTheme';
 import { getCourseMapPoints, getCoursePlacesFromStops } from '@/lib/courseMapSync';
@@ -38,6 +37,7 @@ import { FollowButton } from '@/components/follow/FollowButton';
 import { getLunchmateLevelIcon } from '@/constants/lunchmateLevelIcons';
 import { getLunchmateProgressSnapshot } from '@/utils/lunchmateProgress';
 import { lunchmateTotalXpFromProfile } from '@/utils/lunchmateProfile';
+import { logCourseOpen } from '@/lib/eventLogger';
 
 type FromMode = 'explore' | 'saved' | 'feed' | 'template' | 'template-detail' | 'profile';
 
@@ -293,7 +293,6 @@ export default function CourseDetailPage() {
     ? feedPosts.find(post => post.id === requestedPostId && post.courseId === id)
       ?? feedPosts.find(post => post.courseId === id)
     : undefined;
-  const courseData = getMockCourseById(id);
   const syncedPlaces = useMemo(
     () => (appCourse ? getCoursePlacesFromStops(appCourse, getRestaurantById) : []),
     [appCourse, getRestaurantById],
@@ -312,13 +311,13 @@ export default function CourseDetailPage() {
     ? syncedPlaces
     : legacyPhotoPlaces.length > 0
       ? legacyPhotoPlaces
-      : courseData.places.map(p => ({ ...p }));
+      : [];
   const durationHours = appCourse
     ? appCourse.metadata.duration / 60
-    : courseData.durationHours;
+    : 0;
   const durationLabel = `${Number.isInteger(durationHours) ? durationHours : durationHours.toFixed(1)}시간`;
-  const authorHandle = (orphanPost?.authorName || courseData.authorHandle).replace(/^@/, '');
-  const authorMeta = orphanPost ? 'Munchie creator' : `${courseData.followerCount} Followers`;
+  const authorHandle = (orphanPost?.authorName || 'app_user').replace(/^@/, '');
+  const authorMeta = orphanPost ? 'Munchie creator' : '0 Followers';
   const authorId = orphanPost
     ? resolveFeedAuthorId(orphanPost)
     : appCourse?.creatorId ?? '';
@@ -335,6 +334,10 @@ export default function CourseDetailPage() {
   const authorLevelIcon = getLunchmateLevelIcon(authorLevel);
   const AuthorLevelIcon = authorLevelIcon.Icon;
   const isCoursePostLiked = orphanPost ? likedFeedIds.includes(orphanPost.id) : false;
+
+  useEffect(() => {
+    if (id) logCourseOpen(id);
+  }, [id]);
 
   // Local editable state (only used in saved mode)
   const [places, setPlaces] = useState<CoursePlace[]>(initialPlaces);
@@ -434,22 +437,22 @@ export default function CourseDetailPage() {
     } else {
       addCourse({
         id,
-        title: courseData.title,
+        title: orphanPost?.caption || 'Munchie 코스',
         description: orphanPost?.caption ?? '',
         heroImage: places[0]?.imageUrl ?? orphanPost?.photos[0] ?? '',
         tags: orphanPost?.tags ?? [],
-        hashtags: courseData.hashtags ?? [],
-        region: courseData.region ?? '',
+        hashtags: [],
+        region: '',
         metadata: {
-          distance: courseData.distanceKm,
-          duration: Math.round(courseData.durationHours * 60),
+          distance: 0,
+          duration: 0,
           placeCount: stops.length,
         },
         stops,
         createdAt: new Date().toISOString().slice(0, 10),
         isPublic: true,
         creatorId: orphanPost?.authorId ?? profile.id,
-        savedCount: courseData.saveCount,
+        savedCount: 0,
       });
     }
 

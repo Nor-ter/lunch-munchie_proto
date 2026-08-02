@@ -31,14 +31,19 @@ export default function TemplateArtwork({
   const { getRestaurantById } = useApp();
   const syncedPlaces = getCoursePlacesFromStops(course, getRestaurantById);
   const places = syncedPlaces.slice(0, 3);
-  const photos = (photoSources?.length ? photoSources : [
+  // An explicit empty array means this feed post has no original user photo.
+  // Only callers that omit photoSources may fall back to course imagery.
+  const sourcePhotos = photoSources === undefined ? [
     ...places.map(place => place.imageUrl),
     course.heroImage,
-  ]).filter((photo): photo is string => !!photo).slice(0, 3);
+  ] : photoSources;
+  const photos = sourcePhotos.filter((photo): photo is string => !!photo).slice(0, 3);
   // 만들기 플로우에서 직접 꾸민 배치가 있으면 그 배치를 그대로 재현한다
-  const decor = decorOverride ?? getCoursemapDecor(course.id, photos);
+  // Legacy server rows can contain an explicit empty decor array.
+  const decor = decorOverride?.length ? decorOverride : getCoursemapDecor(course.id, photos);
   const canvasStrokes = strokesOverride ?? getCoursemapCanvasStrokes(course.id);
-  const slots = template.slots.slice(0, Math.min(Math.max(places.length, photos.length, 1), 3));
+  // Feed media and course stops have different meanings; do not repeat covers.
+  const slots = template.slots.slice(0, Math.min(Math.max(photos.length, 1), 3));
 
   // 슬롯 중심을 잇는 점선 루트 (viewBox 300×400 = 3:4)
   const routePoints = slots
