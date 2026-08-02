@@ -616,10 +616,10 @@ function ProfilePageContent() {
 export default function ProfilePage() {
   const auth = useAuthStatus();
   const [, navigate] = useLocation();
-  if (auth.isLoading || !auth.data) {
+  if (auth.isLoading) {
     return <main className="flex min-h-dvh items-center justify-center bg-[#FCF4EE]"><p className="text-sm font-bold text-[#8C7D74]">프로필 확인 중…</p></main>;
   }
-  if (auth.data.isAnonymous) {
+  if (!auth.data || auth.isError || auth.data.isAnonymous) {
     return (
       <main className="flex min-h-dvh flex-col items-center justify-center bg-[#FCF4EE] px-8 text-center">
         <div className="flex h-16 w-16 items-center justify-center rounded-full bg-[#FFF0EB] text-2xl">👤</div>
