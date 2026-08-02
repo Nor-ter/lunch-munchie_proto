@@ -1,0 +1,4 @@
+interface:
+  display_name: "Safe Branch Merge"
+  short_description: "Audit, merge, and explain feature provenance safely"
+  default_prompt: "Use $merge-branches-safely to merge two branches while preserving protected target features and reporting where each resulting feature came from."
