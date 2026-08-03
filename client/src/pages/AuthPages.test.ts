@@ -7,6 +7,7 @@ const PROFILE_SOURCE = readFileSync(new URL('./ProfilePage.tsx', import.meta.url
 
 describe('web auth routes and integration boundaries', () => {
   it('registers login and callback routes without the TabBar', () => {
+    expect(APP_SOURCE).toContain('<Route path="/login">');
     expect(APP_SOURCE).toContain('<Route path="/auth/login"');
     expect(APP_SOURCE).toContain('<Route path="/auth/callback"');
     expect(APP_SOURCE).toContain("'/auth'");
