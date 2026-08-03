@@ -80,6 +80,8 @@ function AppShell({ userId }: { userId: string | null }) {
         <SlideTransitionRoutes>
           <Switch>
             <Route path="/onboarding" component={OnboardingPage} />
+            {/* Keep legacy bookmarks and older shared links on the direct Google OAuth flow. */}
+            <Route path="/login">{() => <Redirect to="/auth/login" />}</Route>
             <Route path="/auth/login" component={AuthLoginPage} />
             <Route path="/auth/callback" component={AuthCallbackPage} />
             <Route path="/" component={HomePage} />
