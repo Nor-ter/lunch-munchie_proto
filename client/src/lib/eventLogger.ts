@@ -48,12 +48,24 @@ export function flushEvents(): void {
   void send(batch);
 }
 
+function createIdempotencyKey(): string {
+  const randomUUID = globalThis.crypto?.randomUUID;
+  if (typeof randomUUID === "function") {
+    return randomUUID.call(globalThis.crypto);
+  }
+
+  // Web Crypto is unavailable on non-secure LAN origins such as
+  // http://192.168.x.x. Keep analytics best-effort instead of breaking the
+  // user action that produced the event.
+  return `fallback-${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}-${Math.random().toString(36).slice(2)}`;
+}
+
 export function logEvent(event: RecEventInput): void {
   // 같은 객체가 pagehide와 timer flush에 함께 걸려도 서버가 한 번만 기록하게 한다.
   // user_id는 서버 세션에서 다시 결정하므로 이 키는 개인 식별 정보를 담지 않는다.
   queue.push({
     ...event,
-    idempotency_key: event.idempotency_key ?? crypto.randomUUID(),
+    idempotency_key: event.idempotency_key ?? createIdempotencyKey(),
   });
   if (queue.length >= FLUSH_SIZE) {
     flushEvents();

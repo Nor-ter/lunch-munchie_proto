@@ -232,6 +232,12 @@ pnpm dev:pages
 # http://localhost:8788
 ```
 
+#### LAN 기기에서 테스트할 때
+
+- `http://<개발-PC의-LAN-IP>:8788`처럼 보안 컨텍스트가 아닌 주소에서는 일부 브라우저가 `crypto.randomUUID()`를 제공하지 않습니다. 이벤트 로거는 이 경우 시간값과 난수를 조합한 idempotency key로 대체해, 분석 이벤트 때문에 세션 생성이나 화면 이동이 중단되지 않도록 합니다.
+- HTTPS 또는 `http://localhost:8788`에서는 기존과 동일하게 `crypto.randomUUID()`를 사용합니다. 대체 키는 분석 이벤트 중복 방지에만 사용하며 인증·세션·사용자 식별에는 사용하지 않습니다.
+- Google OAuth 로그인은 사설 LAN IP의 HTTP callback을 사용하지 않습니다. 개발 PC에서는 `http://localhost:8788`, 다른 기기에서는 HTTPS로 배포된 Pages 주소를 사용합니다.
+
 로컬 D1을 새로 만들거나 마이그레이션해야 할 때만 실행합니다.
 
 ```bash
