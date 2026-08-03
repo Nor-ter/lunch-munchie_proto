@@ -77,3 +77,14 @@ feature branch → Pull Request → quality.yml 통과 → main 병합
 - Cloudflare Audit Log와 GitHub 배포 이력이 `main` 병합 이력과 일치하는지
 
 권한을 추가하려면 먼저 이 문서의 allowlist를 수정하는 PR을 열고, 필요한 기능·리소스·최소 권한·만료/회수 방법을 명시한다. “나중에 쓸 수도 있음”은 권한 부여 사유가 아니다.
+
+## 7. 자동 집행
+
+`.githooks/pre-commit`은 `check:cloudflare-policy:staged`를 가장 먼저 실행한다. 다음 항목이 staged 변경에 들어오면 품질 검사 전에 커밋을 차단한다.
+
+- `.env`, `.dev.vars` 또는 Cloudflare/OAuth 비밀값 리터럴
+- 승인된 배포 workflow·운영 도구 밖의 Wrangler 사용
+- `lunchie-db`, `lunchie-photos`, `lunchie-munchie-state` 외의 D1/R2/Worker 리소스
+- CI workflow의 임의 D1 SQL, R2 작업, 또는 승인되지 않은 GitHub Actions secret
+
+`npm run check:cloudflare-policy`는 저장소 전체를 검사하므로 GitHub Actions의 `test:precommit`에서도 동일한 규칙이 다시 적용된다. 검사의 의도적인 변경은 이 정책 문서와 검사 allowlist를 같은 PR에서 함께 갱신하고 리뷰받아야 한다.

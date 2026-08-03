@@ -249,7 +249,7 @@ git commit -m "feat: short description"
 git push -u origin feature/short-description
 ```
 
-`.githooks/pre-commit`이 위 품질 게이트를 **모든 일반 커밋 전에 자동 실행**합니다. 실패하면 커밋되지 않습니다. 라이브 E2E는 운영 인증이 필요하므로 커밋 훅에서는 실행하지 않고 릴리스 전 별도 실행합니다.
+`.githooks/pre-commit`은 먼저 **staged Cloudflare 정책 검사**를 하고, 이어서 위 품질 게이트를 모든 일반 커밋 전에 자동 실행합니다. Cloudflare의 미승인 리소스·원격 Wrangler 명령·비밀값을 추가하면 즉시 실패하며 커밋되지 않습니다. 라이브 E2E는 운영 인증이 필요하므로 커밋 훅에서는 실행하지 않고 릴리스 전 별도 실행합니다.
 
 ```bash
 pnpm test:e2e:live
