@@ -15,7 +15,7 @@ export interface UserFollow {
 }
 
 /**
- * Supabase `restaurants` 테이블 행 — place-details Edge Function이 그대로 돌려주는
+ * D1 `restaurants` 테이블 행 — Places API가 그대로 돌려주는
  * 실제 DB row(snake_case). 원본: mobile/types/db.ts Restaurant
  * (web-maps-places-workflow.md Phase 1 이식).
  *

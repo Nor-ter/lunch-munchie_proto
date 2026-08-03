@@ -3,11 +3,10 @@
  * 원본: mobile/services/placesApi.ts (web-maps-places-workflow.md Phase 1 이식).
  * 변경점: `@/types/db`의 Restaurant → `GoogleRestaurantRow`(웹 AppContext.Restaurant와 이름 충돌 회피, §1.3).
  *
- * ⚠️ Google 키는 여기서 절대 다루지 않는다. 반드시 supabase.functions.invoke()로
- * Edge Function(places-search / places-autocomplete / place-details)만 거친다 —
+ * ⚠️ Google 키는 여기서 절대 다루지 않는다. 반드시 Cloudflare Pages API로
+ * places-search / places-autocomplete / place-details만 거친다 —
  * 클라이언트에서 Google API 직접 호출 금지(web-maps-places-workflow.md §2 불변 원칙).
  *
- * 스택: @supabase/supabase-js(확정). 새 라이브러리 없음.
  */
 import type { GoogleRestaurantRow } from '@/types/db';
 import { invokeEdgeFunction, EdgeFunctionError } from '@/services/edgeFunctions';

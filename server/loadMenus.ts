@@ -1,6 +1,6 @@
 // 메뉴/사진 로더 — menus.json(extractMenu 결과)의 items·image를
 // restaurants.menu_items·photos에 반영.
-// 기본: UPDATE SQL 파일 생성(Supabase SQL Editor용, 방화벽 안전).
+// 기본: UPDATE SQL 파일 생성(D1 마이그레이션 검토용, 방화벽 안전).
 // --db 옵션: DB 직접 업데이트(도달 가능한 환경, 예: 배포).
 // 사용:  npx tsx server/loadMenus.ts [menus.json경로] [--db]
 import "dotenv/config";
@@ -48,7 +48,7 @@ async function main() {
   // 기본: UPDATE SQL 생성 (컬럼별로 있는 것만 SET)
   const esc = (s: string) => s.replace(/'/g, "''");
   const sql = [
-    `-- 메뉴·사진 반영 (${updates.length}곳, 메뉴 ${dishes}개 요리 · 사진 ${withImage}곳) — Supabase SQL Editor에 붙여넣고 Run`,
+    `-- 메뉴·사진 반영 (${updates.length}곳, 메뉴 ${dishes}개 요리 · 사진 ${withImage}곳) — D1 마이그레이션으로 적용`,
     ...updates.map((u) => {
       const sets = [
         u.menu_items ? `menu_items = '${esc(JSON.stringify(u.menu_items))}'::jsonb` : null,
@@ -60,7 +60,7 @@ async function main() {
   ].join("\n");
   const outPath = join(here, "data", "menu_updates.sql");
   writeFileSync(outPath, sql);
-  console.log(`✅ SQL ${updates.length}건 → ${outPath}\n   (Supabase SQL Editor에 붙여넣기 · DB 직접은 --db 옵션)`);
+  console.log(`✅ SQL ${updates.length}건 → ${outPath}\n   (D1 마이그레이션으로 검토·적용)`);
 }
 
 main().catch((e) => { console.error("실패:", e.message); process.exit(1); });

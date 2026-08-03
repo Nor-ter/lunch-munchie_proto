@@ -3,7 +3,7 @@
 // 결과: server/data/melbourne_osm.json (restaurants 스키마 + website/instagram)
 //
 // Overpass fetch는 HTTP라 로컬에서 동작(방화벽 무관). DB 적재는 방화벽 때문에
-// 이 JSON을 Supabase SQL Editor나 배포 환경에서 넣는다.
+// 이 JSON은 D1 시드 또는 마이그레이션으로 적용한다.
 import { writeFileSync, mkdirSync } from "node:fs";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";

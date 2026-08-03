@@ -100,6 +100,12 @@ export function validateFile(file, content) {
     errors.push(`${file}: Cloudflare 또는 OAuth 비밀값의 리터럴 값이 감지됐습니다.`);
   }
   if (
+    /^(?:client\/src|server|functions|migrations)\//.test(file) &&
+    /\bsupabase\b/i.test(content)
+  ) {
+    errors.push(`${file}: retired Supabase runtime must not be reintroduced; use Cloudflare Pages/D1 APIs.`);
+  }
+  if (
     !isDocumentation(file) &&
     /\bwrangler\s+(?:pages|d1|r2|deploy)\b/.test(content) &&
     !APPROVED_WRANGLER_PATHS.has(file)

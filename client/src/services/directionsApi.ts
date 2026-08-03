@@ -1,7 +1,6 @@
 /**
- * services/directionsApi.ts — directions Edge Function 호출 래퍼 (순수 함수)
+ * services/directionsApi.ts — Cloudflare directions API 호출 래퍼 (순수 함수)
  * 원본: mobile/services/directionsApi.ts (web-maps-places-workflow.md Phase 1 이식, 변경 없음).
- * 스택: @supabase/supabase-js(확정). 새 라이브러리 없음.
  */
 import { invokeEdgeFunction } from '@/services/edgeFunctions';
 

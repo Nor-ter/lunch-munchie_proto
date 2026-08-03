@@ -1,9 +1,9 @@
 import { Router, type Request, type Response } from "express";
 import { db, tryDb, withDb } from "./db.js";
 import {
-  verifySupabaseRequestAuth,
-  type SupabaseRequestAuthVerifier,
-} from "./auth/supabaseAuth.js";
+  verifyRequestAuth,
+  type RequestAuthVerifier,
+} from "./auth/requestAuth.js";
 import { users, sessions, restaurants, swipes, courses, courseItems, sessionMembers } from "../shared/schema.js";
 import { eq, and, inArray } from "drizzle-orm";
 import { nanoid } from "nanoid";
@@ -26,7 +26,7 @@ import { intentForCategory, intentForHour } from "../shared/intent.js";
 const router = Router();
 
 interface EventsRouteDependencies {
-  verifyAuth: SupabaseRequestAuthVerifier;
+  verifyAuth: RequestAuthVerifier;
   persistEvents: (events: RecEventInput[]) => Promise<unknown>;
 }
 
@@ -43,7 +43,7 @@ async function resolveCompatibleRequestIdentity(
   req: Request,
   res: Response,
   fallbackUserId: string | null | undefined,
-  verifyAuth: SupabaseRequestAuthVerifier,
+  verifyAuth: RequestAuthVerifier,
 ): Promise<CompatibleRequestIdentity> {
   let authResult;
   try {
@@ -54,15 +54,9 @@ async function resolveCompatibleRequestIdentity(
   }
 
   if (
-    authResult.status === "malformed_authorization" ||
-    authResult.status === "invalid_token"
+    authResult.status === "malformed_authorization"
   ) {
     res.status(401).json({ error: "invalid_authorization" });
-    return { status: "responded" };
-  }
-
-  if (authResult.status === "unconfigured") {
-    res.status(503).json({ error: "auth_unavailable" });
     return { status: "responded" };
   }
 
@@ -97,7 +91,7 @@ router.get("/image-proxy", async (req, res) => {
 });
 
 // ── In-memory fallback session store ─────────────────────────────────────────
-// DB(Supabase)가 일시정지/차단된 경우에도 세션 생성→초대→참여→투표 플로우가
+// 개발 DB가 일시정지/차단된 경우에도 세션 생성→초대→참여→투표 플로우가
 // 동작하도록, 동일 서버 프로세스 메모리에 세션을 보관하는 폴백.
 // (restaurants/courses의 멜버른 mock 폴백과 동일한 취지)
 interface MemStore {
@@ -136,7 +130,7 @@ function osmRestaurants(): Record<string, any>[] | null {
   return __osmCache ?? null;
 }
 
-// DB 연결이 불가능할 때(예: Supabase 일시정지/포트 차단) 코스맵 프로토타입이
+// DB 연결이 불가능할 때(예: 로컬 개발 DB 중단) 코스맵 프로토타입이
 // 그대로 동작하도록, 멜버른 샘플 데이터를 API 응답 형태로 변환하는 폴백 헬퍼.
 // 드라이브 인제스천 사진(server/data/drive_ingest.json) → restaurant_id별 URL 목록.
 // OSM 데이터엔 사진이 거의 없어(2115곳 중 2109곳 없음) 앱이 카테고리 스톡 이미지를 돌려쓴다.
@@ -807,7 +801,7 @@ function requiredHardDiets(diet?: string[]): DietTag[] {
 // 이벤트 수집: 단건 또는 { events: [...] } 배치 모두 허용.
 export function createEventsHandler(
   dependencies: EventsRouteDependencies = {
-    verifyAuth: verifySupabaseRequestAuth,
+    verifyAuth: verifyRequestAuth,
     persistEvents: recordEvents,
   },
 ) {
@@ -830,14 +824,9 @@ export function createEventsHandler(
     }
 
     if (
-      authResult.status === "malformed_authorization" ||
-      authResult.status === "invalid_token"
+      authResult.status === "malformed_authorization"
     ) {
       return res.status(401).json({ error: "invalid_authorization" });
-    }
-
-    if (authResult.status === "unconfigured") {
-      return res.status(503).json({ error: "auth_unavailable" });
     }
 
     const events: RecEventInput[] =
@@ -908,7 +897,7 @@ router.post("/events", createEventsHandler());
 
 // 추천 슬레이트 + propensity 로깅. v0 휴리스틱 스코어러.
 interface RecommendRouteDependencies {
-  verifyAuth: SupabaseRequestAuthVerifier;
+  verifyAuth: RequestAuthVerifier;
   enrichRequestContext: (context: RecContext) => Promise<RecContext>;
   loadCandidates: () => Promise<Candidate[]>;
   persistEvents: (events: RecEventInput[]) => Promise<unknown>;
@@ -916,7 +905,7 @@ interface RecommendRouteDependencies {
 
 export function createRecommendHandler(
   dependencies: RecommendRouteDependencies = {
-    verifyAuth: verifySupabaseRequestAuth,
+    verifyAuth: verifyRequestAuth,
     enrichRequestContext: enrichContext,
     loadCandidates: candidatePool,
     persistEvents: recordEvents,
@@ -1022,7 +1011,7 @@ router.post("/recommend", createRecommendHandler());
 
 // 하루 여정: 오늘의 스톱 타임라인 + (사슬 열림 시) 다음-스톱 제안.
 interface JourneyTodayRouteDependencies {
-  verifyAuth: SupabaseRequestAuthVerifier;
+  verifyAuth: RequestAuthVerifier;
   loadTodayStops: typeof todayStops;
   loadRestaurantNames: typeof restaurantNames;
   loadCandidates: typeof candidatePool;
@@ -1030,7 +1019,7 @@ interface JourneyTodayRouteDependencies {
 
 export function createJourneyTodayHandler(
   dependencies: JourneyTodayRouteDependencies = {
-    verifyAuth: verifySupabaseRequestAuth,
+    verifyAuth: verifyRequestAuth,
     loadTodayStops: todayStops,
     loadRestaurantNames: restaurantNames,
     loadCandidates: candidatePool,
@@ -1081,13 +1070,13 @@ router.get("/journey/today", createJourneyTodayHandler());
 
 // 전구 알림에서 언제든 확인하는 최근 여정 히스토리 (최신순, 최대 5개).
 interface JourneyHistoryRouteDependencies {
-  verifyAuth: SupabaseRequestAuthVerifier;
+  verifyAuth: RequestAuthVerifier;
   loadRecentStops: typeof recentStops;
 }
 
 export function createJourneyHistoryHandler(
   dependencies: JourneyHistoryRouteDependencies = {
-    verifyAuth: verifySupabaseRequestAuth,
+    verifyAuth: verifyRequestAuth,
     loadRecentStops: recentStops,
   },
 ) {
