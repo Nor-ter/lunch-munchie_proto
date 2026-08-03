@@ -242,7 +242,7 @@ pnpm cf:d1:seed:local
 ### 테스트와 커밋
 
 ```bash
-npm run test:precommit  # 타입 → 469개 Vitest → 로컬 Playwright E2E → Pages 빌드
+npm run test:precommit  # 타입 → Vitest → 로컬 Playwright E2E → Pages 빌드
 git checkout -b feature/short-description
 git add <files>
 git commit -m "feat: short description"
@@ -280,7 +280,7 @@ feature branch → Pull Request → Quality gate 통과 → main 병합
 | `CLOUDFLARE_WORKER_DEPLOY_TOKEN` | Durable Object Worker와 Pages 배포 | Account: Workers Scripts Edit, Durable Objects Edit, Pages Edit |
 | `CLOUDFLARE_D1_MIGRATIONS_TOKEN` | 운영 D1 마이그레이션만 | Account: D1 Edit (`lunchie-db` 범위) |
 
-토큰은 Cloudflare Dashboard → **Manage account → Account API tokens**에서 만들고, 가능한 한 Lunchie Munchie 리소스로 범위를 제한합니다. 배포 토큰에 R2 읽기/쓰기, 사용자 관리, Zone/DNS, Billing 권한을 넣지 않습니다. 사진 업로드가 CI에서 필요해질 때만 R2 Object Read & Write 권한을 별도 토큰으로 추가합니다.
+토큰은 Cloudflare Dashboard → **Manage account → Account API tokens**에서 만들고, 가능한 한 Lunchie Munchie 리소스로 범위를 제한합니다. 배포 토큰에 R2 읽기/쓰기, 사용자 관리, Zone/DNS, Billing 권한을 넣지 않습니다. CI는 사진을 업로드하지 않으므로 R2 토큰도 추가하지 않습니다.
 
 Cloudflare Pages Secrets(`GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `AUTH_SESSION_SECRET`)는 GitHub Actions secret으로 복제하지 않습니다. 한 번만 Cloudflare에 저장합니다.
 
@@ -288,13 +288,11 @@ Cloudflare Pages Secrets(`GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `AUTH_SESSI
 npm run cf:auth:secrets
 ```
 
-운영에서 수동 복구가 필요할 때만 다음을 사용합니다. 일반 배포는 GitHub Actions를 사용합니다.
+운영 수동 명령은 일반 개발자가 실행하지 않습니다. 중대 장애에서만 승인된 break-glass 절차로 실행하고, 일반 배포는 GitHub Actions를 사용합니다.
 
-```bash
-pnpm cf:d1:migrate
-pnpm cf:state:deploy
-pnpm cf:pages:deploy
-```
+### 권한·운영 정책
+
+Cloudflare 접근은 **Lunchie Munchie 리소스만** 허용하며, 개발자는 운영 쓰기 권한 없이 PR과 자동 배포로 작업합니다. 허용 리소스, 토큰별 정확한 명령 범위, 금지 항목, 데이터 변경과 비상 절차는 [CI/CD · Cloudflare 접근 정책](./docs/process/ci-cd-cloudflare-access-policy.md)을 단일 기준으로 따릅니다.
 
 ## 프로젝트 구조
 
