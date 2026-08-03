@@ -1,4 +1,4 @@
-// melbourne_osm.json → SQL INSERT 파일 (Supabase SQL Editor 붙여넣기용)
+// melbourne_osm.json → SQL INSERT 파일 (D1 시드 검토용)
 // 사용: npx tsx server/genSeedSql.ts
 // 결과: server/data/melbourne_seed.sql
 //   - website 컬럼 없으면 추가(idempotent)
@@ -39,7 +39,7 @@ const BATCH = 500;
 const parts: string[] = [
   `-- 멜번 식당/카페 시드 (OSM, ODbL) — © OpenStreetMap contributors`,
   `-- 생성: server/genSeedSql.ts · ${rows.length}곳`,
-  `-- Supabase Dashboard → SQL Editor 에 붙여넣고 실행 (로컬 DB 방화벽 우회)`,
+  `-- D1 로컬 시드 또는 마이그레이션으로 검토 후 적용`,
   ``,
   `ALTER TABLE restaurants ADD COLUMN IF NOT EXISTS website text;`,
   ``,
@@ -59,6 +59,6 @@ const outPath = join(dir, "melbourne_seed.sql");
 writeFileSync(outPath, parts.join("\n"));
 const kb = (readFileSync(outPath).length / 1024).toFixed(0);
 console.log(`✅ ${rows.length} rows → ${outPath} (${kb}KB, ${Math.ceil(rows.length / BATCH)} batches)`);
-console.log(`\n적재: Supabase Dashboard → SQL Editor → 파일 내용 붙여넣기 → Run`);
+console.log(`\n적재: D1 시드/마이그레이션 절차로 파일 내용을 검토 후 적용`);
 console.log(`\n미리보기 (앞 20줄):`);
 console.log(parts.join("\n").split("\n").slice(0, 20).join("\n"));

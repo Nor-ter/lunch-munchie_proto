@@ -1,7 +1,7 @@
 import { useEffect, useMemo } from 'react';
 import { LoaderCircle } from 'lucide-react';
 import { useLocation } from 'wouter';
-import { useAuth } from '@/contexts/AuthContext';
+import { useAuthStatus } from '@/hooks/useAuthStatus';
 import {
   buildAuthLoginPath,
   clearRememberedAuthNextPath,
@@ -11,7 +11,8 @@ import {
 
 export default function AuthCallbackPage() {
   const [, navigate] = useLocation();
-  const { status } = useAuth();
+  const auth = useAuthStatus();
+  const status = auth.isLoading ? 'loading' : auth.data?.isAnonymous ? 'unauthenticated' : 'authenticated';
   const callbackHasError = useMemo(
     () => hasOAuthCallbackError(window.location.search, window.location.hash),
     [],
@@ -31,14 +32,13 @@ export default function AuthCallbackPage() {
     navigate(buildAuthLoginPath(nextPath), { replace: true });
   };
 
-  const showFailure = callbackHasError || status === 'error';
+  const showFailure = callbackHasError;
   const isUnauthenticated = status === 'unauthenticated';
-  const isUnconfigured = status === 'unconfigured';
 
   return (
     <main className="min-h-dvh bg-[#FCF4EE] px-5 py-12 flex items-center justify-center">
       <section className="w-full max-w-[390px] rounded-3xl border border-[#F0E1D8] bg-white px-6 py-8 text-center shadow-sm">
-        {!showFailure && !isUnauthenticated && !isUnconfigured ? (
+        {!showFailure && !isUnauthenticated ? (
           <>
             <LoaderCircle size={30} className="mx-auto animate-spin text-[#E85053]" />
             <h1 className="mt-5 text-[19px] font-extrabold text-[#342C28]">로그인을 확인하고 있어요</h1>
@@ -50,22 +50,18 @@ export default function AuthCallbackPage() {
               !
             </div>
             <h1 className="mt-4 text-[19px] font-extrabold text-[#342C28]">
-              {isUnconfigured ? '웹 로그인 설정이 필요해요' : '로그인을 완료하지 못했어요'}
+              로그인을 완료하지 못했어요
             </h1>
             <p role={showFailure ? 'alert' : undefined} className="mt-2 text-[13px] leading-5 text-[#8C7D74]">
-              {isUnconfigured
-                ? '설정이 완료된 뒤 다시 시도해 주세요.'
-                : 'Google 로그인을 다시 시작해 주세요.'}
+              Google 로그인을 다시 시작해 주세요.
             </p>
-            {!isUnconfigured && (
-              <button
+            <button
                 type="button"
                 onClick={goToLogin}
                 className="mt-6 h-11 w-full rounded-2xl bg-[#E85053] text-[14px] font-bold text-white active:scale-[0.98]"
               >
                 로그인 페이지로 돌아가기
-              </button>
-            )}
+            </button>
             <button
               type="button"
               onClick={() => navigate('/profile', { replace: true })}

@@ -4,7 +4,7 @@
  * 모바일은 코스 편집 중 여는 시트, 웹은 전용 화면 + 실시간 지도로 재구성.
  *
  * 흐름: 검색(자동완성, 세션토큰+debounce로 비용 억제) → 후보 탭 → place-details(선택 시
- * **1회만** 호출) → Edge Function이 이미 Supabase restaurants에 upsert한 행을 그대로 받아
+ * **1회만** 호출) → Cloudflare API가 D1 restaurants에 upsert한 행을 그대로 받아
  * registerRestaurants()로 로컬에 즉시 반영(같은 세션에서 바로 코스 생성 가능하게) →
  * 지도(CourseMap)에 순번 마커 + (2곳 이상이면) useDirections로 실제 도보 경로 폴리라인 +
  * 리스트 → 통합 Munchie 피드 에디터에서 코스맵과 피드를 동시에 만든다.

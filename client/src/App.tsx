@@ -9,7 +9,6 @@ import { Route, Switch, useLocation, useParams, Redirect } from "wouter";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import ErrorBoundary from "./components/ErrorBoundary";
 import { ThemeProvider } from "./contexts/ThemeContext";
-import { AuthProvider, isWebAuthConfigured } from "./contexts/AuthContext";
 import { AppProvider } from "./contexts/AppContext";
 import AuthBootstrap from "./components/auth/AuthBootstrap";
 import { MapProvider } from "./components/map/MapProvider";
@@ -127,55 +126,21 @@ function AppShell({ userId }: { userId: string | null }) {
 
 const queryClient = new QueryClient();
 
-// 로그인/로그아웃/프로필갱신은 auth.uid()·is_anonymous가 바뀌는 "신원 전환" 이벤트 —
-// 유저별 캐시(isFollowing/followCounts/… )를 통째로 비운다(mobile/app/_layout.tsx 패턴).
-// TOKEN_REFRESHED·INITIAL_SESSION은 신원 전환이 아니라 제외.
-const IDENTITY_CHANGE_EVENTS = new Set(["SIGNED_IN", "SIGNED_OUT", "USER_UPDATED"]);
-
 export default function App() {
-  useEffect(() => {
-    if (!isWebAuthConfigured()) return;
-
-    let active = true;
-    let unsubscribe: (() => void) | undefined;
-
-    void import("./lib/supabase").then(({ supabase }) => {
-      if (!active) return;
-
-      const {
-        data: { subscription },
-      } = supabase.auth.onAuthStateChange((event) => {
-        if (IDENTITY_CHANGE_EVENTS.has(event)) {
-          window.setTimeout(() => {
-            queryClient.clear();
-          }, 0);
-        }
-      });
-      unsubscribe = () => subscription.unsubscribe();
-    });
-
-    return () => {
-      active = false;
-      unsubscribe?.();
-    };
-  }, []);
-
   return (
     <ErrorBoundary>
       <ThemeProvider defaultTheme="light">
         <QueryClientProvider client={queryClient}>
           <AuthBootstrap>
             {(userId) => (
-              <AuthProvider>
-                <AppProvider initialAuthUserId={userId}>
+              <AppProvider initialAuthUserId={userId}>
                   <MapProvider>
                     <TooltipProvider>
                       <Toaster />
                       <AppShell userId={userId} />
                     </TooltipProvider>
                   </MapProvider>
-                </AppProvider>
-              </AuthProvider>
+              </AppProvider>
             )}
           </AuthBootstrap>
         </QueryClientProvider>

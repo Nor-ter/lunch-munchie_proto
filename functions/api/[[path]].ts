@@ -641,7 +641,7 @@ app.get("/api/health", async (c) => {
 });
 
 // Public profile data comes from the same D1 identity store that owns a post.
-// Do not fall back to the retired Supabase profile table.
+// D1 is the only public-profile source of truth.
 app.get("/api/users/:id", async (c) => {
   const id = c.req.param("id");
   if (!id || id.length > 256)
@@ -667,6 +667,63 @@ app.get("/api/users/:id", async (c) => {
     public_post_count: Number(count?.count ?? 0),
   });
 });
+
+async function requireGoogleSession(c: { req: { raw: Request }; env: EnvBindings }) {
+  const session = await readSession(c.req.raw, c.env.AUTH_SESSION_SECRET);
+  if (!session) return null;
+  await ensurePublicUser(c.env.DB, session);
+  return session;
+}
+
+app.get("/api/users/:id/follows", async (c) => {
+  const id = c.req.param("id");
+  const [followers, following] = await Promise.all([
+    c.env.DB.prepare("SELECT COUNT(*) AS count FROM user_follows WHERE following_id = ?").bind(id).first<{ count: number }>(),
+    c.env.DB.prepare("SELECT COUNT(*) AS count FROM user_follows WHERE follower_id = ?").bind(id).first<{ count: number }>(),
+  ]);
+  return c.json({ followers: Number(followers?.count ?? 0), following: Number(following?.count ?? 0) });
+});
+
+app.get("/api/users/:id/follow", async (c) => {
+  const session = await requireGoogleSession(c);
+  if (!session) return c.json({ error: "로그인이 필요합니다." }, 401);
+  const row = await c.env.DB.prepare(
+    "SELECT 1 AS following FROM user_follows WHERE follower_id = ? AND following_id = ?",
+  ).bind(session.sub, c.req.param("id")).first<{ following: number }>();
+  return c.json({ following: Boolean(row?.following) });
+});
+
+app.post("/api/users/:id/follow", async (c) => {
+  const session = await requireGoogleSession(c);
+  const followingId = c.req.param("id");
+  if (!session) return c.json({ error: "로그인이 필요합니다." }, 401);
+  if (!followingId || followingId === session.sub) return c.json({ error: "자기 자신은 팔로우할 수 없습니다." }, 400);
+  const target = await c.env.DB.prepare("SELECT id FROM users WHERE id = ?").bind(followingId).first();
+  if (!target) return c.json({ error: "사용자를 찾을 수 없습니다." }, 404);
+  await c.env.DB.prepare(
+    "INSERT INTO user_follows (follower_id, following_id, created_at) VALUES (?, ?, ?) ON CONFLICT(follower_id, following_id) DO NOTHING",
+  ).bind(session.sub, followingId, Date.now()).run();
+  return c.json({ following: true });
+});
+
+app.delete("/api/users/:id/follow", async (c) => {
+  const session = await requireGoogleSession(c);
+  if (!session) return c.json({ error: "로그인이 필요합니다." }, 401);
+  await c.env.DB.prepare("DELETE FROM user_follows WHERE follower_id = ? AND following_id = ?")
+    .bind(session.sub, c.req.param("id")).run();
+  return c.json({ following: false });
+});
+
+async function listFollows(c: any, list: "followers" | "following") {
+  const id = c.req.param("id");
+  const query = list === "followers"
+    ? "SELECT u.id, u.username, u.profile_image_url, u.bio, u.location, u.created_at FROM user_follows f JOIN users u ON u.id = f.follower_id WHERE f.following_id = ? ORDER BY f.created_at DESC"
+    : "SELECT u.id, u.username, u.profile_image_url, u.bio, u.location, u.created_at FROM user_follows f JOIN users u ON u.id = f.following_id WHERE f.follower_id = ? ORDER BY f.created_at DESC";
+  const { results } = await c.env.DB.prepare(query).bind(id).all();
+  return c.json(results);
+}
+app.get("/api/users/:id/followers", (c) => listFollows(c, "followers"));
+app.get("/api/users/:id/following", (c) => listFollows(c, "following"));
 
 // REST API — /api/recommend (D1 Query Binding)
 app.post("/api/recommend", async (c) => {

@@ -10,7 +10,6 @@ import { intentForHour, type Intent } from '@shared/intent';
 import { normalizeFoodTag, type TagType } from '@/constants/foodTags';
 import { DRIVE_COURSES, DRIVE_FEED_POSTS } from '@/data/driveFeed';
 import { demoAuthorIdFor } from '@/data/demoAuthors';
-import { isWebAuthConfigured } from '@/contexts/AuthContext';
 import { getCoursemapDecor, MAX_MUNCHIE_FEED_PHOTOS, type CoursemapCanvasStroke, type FeedPhotoPlacement } from '@/lib/coursemapDecor';
 import type { LunchmateProfileLoadout, LunchmateRoomLoadout } from '@/types/lunchmateCustomization';
 import type { LunchboxInventory } from '@/constants/lunchboxFoods';
@@ -351,7 +350,7 @@ interface AppContextValue {
   restaurants: Restaurant[];
   /** Google Places로 새로 가져온 식당을 로컬 풀에 병합(id 중복이면 최신으로 덮어씀) —
    * PlaceExplorePage가 place-details 직후 getRestaurantById가 바로 찾을 수 있게 한다.
-   * 서버(Supabase restaurants 테이블)에는 Edge Function이 이미 upsert 해뒀으니
+   * 서버(D1 restaurants 테이블)에는 Pages API가 이미 upsert 해뒀으니
    * 다음 부팅 시 /api/restaurants 로 자연히 들어옴 — 이건 같은 세션 내 즉시 반영용. */
   registerRestaurants: (newRestaurants: Restaurant[]) => void;
   getRestaurantById: (id: string) => Restaurant | undefined;
@@ -371,83 +370,11 @@ const createdAtMs = (value: string | number) => {
 };
 
 export type ApiRequestAuth =
-  | {
-    status: 'authenticated';
-    accessToken: string;
-  }
-  | {
-    status: 'anonymous';
-  }
-  | {
-    status: 'blocked';
-  };
+  { status: 'cookie-session' };
 
-interface ApiAuthEnvironment {
-  VITE_SUPABASE_URL?: string;
-  VITE_SUPABASE_PUBLISHABLE_KEY?: string;
-}
-
-interface ApiAuthClient {
-  auth: {
-    getSession: () => Promise<{
-      data: {
-        session: {
-          access_token: string;
-        } | null;
-      };
-      error: unknown;
-    }>;
-  };
-}
-
-interface ApiRequestAuthOptions {
-  environment?: ApiAuthEnvironment;
-  loadClient?: () => Promise<ApiAuthClient>;
-}
-
-export async function resolveApiRequestAuth(
-  options: ApiRequestAuthOptions = {},
-): Promise<ApiRequestAuth> {
-  const environment = options.environment ?? {
-    VITE_SUPABASE_URL: import.meta.env.VITE_SUPABASE_URL,
-    VITE_SUPABASE_PUBLISHABLE_KEY:
-      import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
-  };
-  const configured = Boolean(
-    environment.VITE_SUPABASE_URL?.trim()
-    && environment.VITE_SUPABASE_PUBLISHABLE_KEY?.trim(),
-  );
-
-  if (!configured) {
-    return { status: 'anonymous' };
-  }
-
-  try {
-    const client = await (
-      options.loadClient
-      ?? (async () => (await import('@/lib/supabase')).supabase)
-    )();
-    const { data, error } = await client.auth.getSession();
-
-    if (error) {
-      return { status: 'blocked' };
-    }
-
-    if (!data.session) {
-      return { status: 'anonymous' };
-    }
-
-    if (!data.session.access_token) {
-      return { status: 'blocked' };
-    }
-
-    return {
-      status: 'authenticated',
-      accessToken: data.session.access_token,
-    };
-  } catch {
-    return { status: 'blocked' };
-  }
+/** Pages Functions derive identity from the signed same-origin cookie. */
+export async function resolveApiRequestAuth(): Promise<ApiRequestAuth> {
+  return { status: 'cookie-session' };
 }
 
 interface BuildDeckDependencies {
@@ -471,16 +398,9 @@ export async function buildDeck(
     const auth = await (
       dependencies.resolveRequestAuth ?? resolveApiRequestAuth
     )();
-    if (auth.status === 'blocked') {
-      return { restaurants: base };
-    }
-
     const headers: Record<string, string> = {
       'Content-Type': 'application/json',
     };
-    if (auth.status === 'authenticated') {
-      headers.Authorization = `Bearer ${auth.accessToken}`;
-    }
 
     const request = dependencies.request ?? fetch;
     const res = await request('/api/recommend', {

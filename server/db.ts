@@ -23,7 +23,7 @@ const client = postgres(connectionString || "", {
 export const db = drizzle(client, { schema });
 
 // ── DB 서킷 브레이커 ─────────────────────────────────────────────────────────
-// DB(Supabase)가 죽어 있으면 postgres-js는 매 쿼리마다 새로 연결을 시도하며
+// PostgreSQL 개발 DB가 죽어 있으면 postgres-js는 매 쿼리마다 새로 연결을 시도하며
 // connect_timeout(초)을 통째로 지불한다. 세션/추천/폴링 한 요청이 순차 DB 호출을
 // 여러 번 하므로 타임아웃이 누적돼(2초 × N) 초대 인식이 수 초씩 걸리게 된다.
 //

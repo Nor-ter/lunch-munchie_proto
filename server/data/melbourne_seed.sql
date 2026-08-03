@@ -1,6 +1,6 @@
 -- 멜번 식당/카페 시드 (OSM, ODbL) — © OpenStreetMap contributors
 -- 생성: server/genSeedSql.ts · 2115곳
--- Supabase Dashboard → SQL Editor 에 붙여넣고 실행 (로컬 DB 방화벽 우회)
+-- D1 시드 또는 마이그레이션으로 검토 후 적용
 
 ALTER TABLE restaurants ADD COLUMN IF NOT EXISTS website text;
 
