@@ -16,6 +16,47 @@
 - 런타임: Cloudflare Pages Functions + D1 + R2 + Durable Objects
 - 로컬 품질 게이트: TypeScript, Vitest, 로컬 Playwright E2E, Pages 프로덕션 빌드
 
+## `tl_branch` 변경사항 (`main` 대비)
+
+`tl_branch`는 `main`의 Quick Match 세션 데이터 계약을 유지하면서 Lunchie 설정 화면과 대기실 경험을 아래와 같이 개선합니다.
+
+### Quick Match 설정 화면
+
+- 기존 토글·상세 설정 모달을 카드 기반의 단일 설정 화면으로 재구성
+- `혼자`/`같이` 모드 전환과 2~8명 초대 인원 조절 지원
+  - `같이`에서 선택한 인원은 `혼자` 모드로 전환했다가 돌아와도 유지
+- 마감 시간을 최대 15분으로 제한
+  - 터치·드래그 및 키보드로 조절하는 원형 시간 다이얼
+  - 5분·10분·15분 빠른 선택 버튼
+  - 1~15분 범위의 직접 입력 필드
+- 검색 거리를 1km, 2km, 3km, 4km, 5km+로 재구성
+  - 250m 간격의 눈금자형 범위 컨트롤
+  - 프로필의 Lunchmate 캐릭터가 선택 방향에 따라 좌우 보행 모션으로 이동
+- 취향 선택을 `COFFEE`, `FOODIE`, `DESSERT`, `RANDOM` 카드로 변경하고 현재 선택을 강조
+- 분위기 태그를 설명과 아이콘이 포함된 직접 선택 카드로 변경
+- Dietary preferences를 영어 선택 카드로 확장
+  - Vegan, Vegetarian, Gluten-Free, Halal, Carnivore, Small Appetite, Buffet, Asian
+  - `No` 드롭다운에서 Beef, Seafood, Lamb, Pork, Nuts 복수 제외 가능
+- 사용자에게 노출되던 평점 및 1인 예산 설정 제거
+  - 기존 세션 API 호환을 위해 예산 필드는 내부 기본값으로 계속 전달
+- `세션 만들고 초대하기` 버튼을 floating 요소가 아닌 Dietary 카드 다음의 일반 문서 흐름에 배치
+- 진행 중인 세션이 있으면 새 세션을 중복 생성하지 않고 대기실 또는 투표 화면으로 복귀
+
+### 대기실·초대·내비게이션
+
+- 대기실 뒤로가기를 홈이 아닌 `/lunchie/settings`로 연결
+- 대기 애니메이션을 고정 GIF에서 사용자 프로필의 Lunchmate 캐릭터로 교체
+- `VITE_INVITE_ORIGIN`을 추가해 LAN 또는 HTTPS 터널 주소가 포함된 QR 초대 링크 생성 지원
+  - 설정값이 없거나 유효하지 않으면 현재 브라우저 origin을 안전하게 사용
+- Quick Match 설정과 세션 대기실에서도 홈과 동일한 flat 하단 내비게이션 표시
+- 대기실에서는 Lunchie 탭을 활성 상태로 유지
+
+### 검증
+
+- Quick Match 프레젠테이션 회귀 테스트 추가
+- 관련 Quick Match·데이터 연결·Lunchmate 렌더러 테스트 74개 통과
+- TypeScript 검사 및 Pages 프로덕션 빌드 통과
+
 ## 제품 구성
 
 Lunchie Munchie는 두 가지 핵심 경험을 하나의 앱으로 제공합니다.
@@ -32,7 +73,7 @@ Lunchie Munchie는 두 가지 핵심 경험을 하나의 앱으로 제공합니�
 - 솔로 및 그룹 세션 생성
 - 초대 링크·토큰을 통한 세션 참여
 - 참여 인원 제한, 준비 상태, 마감 시간 관리
-- 식단, 예산, 거리, 카테고리 등 추천 조건 설정
+- 식단, 거리, 카테고리 등 추천 조건 설정
 - 음식점 카드 스와이프와 체류시간(`dwell_ms`) 이벤트 수집
 - 실제 덱 크기를 반영한 예선 완료 판정
 - 추천 엔진 Top 2 기반 대각선 듀얼 결승 UI
@@ -237,6 +278,11 @@ pnpm dev:pages
 - `http://<개발-PC의-LAN-IP>:8788`처럼 보안 컨텍스트가 아닌 주소에서는 일부 브라우저가 `crypto.randomUUID()`를 제공하지 않습니다. 이벤트 로거는 이 경우 시간값과 난수를 조합한 idempotency key로 대체해, 분석 이벤트 때문에 세션 생성이나 화면 이동이 중단되지 않도록 합니다.
 - HTTPS 또는 `http://localhost:8788`에서는 기존과 동일하게 `crypto.randomUUID()`를 사용합니다. 대체 키는 분석 이벤트 중복 방지에만 사용하며 인증·세션·사용자 식별에는 사용하지 않습니다.
 - Google OAuth 로그인은 사설 LAN IP의 HTTP callback을 사용하지 않습니다. 개발 PC에서는 `http://localhost:8788`, 다른 기기에서는 HTTPS로 배포된 Pages 주소를 사용합니다.
+- 다른 기기에서 QR 초대 링크를 열려면 빌드 시 `VITE_INVITE_ORIGIN`에 그 기기가 접근할 수 있는 LAN 또는 HTTPS 터널 origin을 지정합니다. `/join` 경로나 초대 토큰은 포함하지 않습니다.
+
+```dotenv
+VITE_INVITE_ORIGIN="http://192.168.1.25:8788"
+```
 
 로컬 D1을 새로 만들거나 마이그레이션해야 할 때만 실행합니다.
 

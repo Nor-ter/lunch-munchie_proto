@@ -45,6 +45,7 @@ import PlaceExplorePage from "./pages/PlaceExplorePage";
 import StorySharePage from "./pages/StorySharePage";
 
 const NO_TABBAR = ['/onboarding', '/tour-mode', '/course/', '/coursemap', '/template/', '/templates', '/lunchie', '/session', '/join', '/feed/', '/explore/places', '/auth'];
+const LUNCHIE_TABBAR_ROUTES = new Set(['/lunchie/settings', '/session/lobby']);
 
 function CoursesRedirect() {
   const params = useParams<{ id: string }>();
@@ -72,7 +73,7 @@ function RequireGoogleAuth({ userId, children }: { userId: string | null; childr
 
 function AppShell({ userId }: { userId: string | null }) {
   const [location] = useLocation();
-  const showTabBar = !NO_TABBAR.some(p => location.startsWith(p));
+  const showTabBar = LUNCHIE_TABBAR_ROUTES.has(location) || !NO_TABBAR.some(p => location.startsWith(p));
   return (
     <div className="app-shell">
       <div className={showTabBar ? "app-content-with-tab-bar min-h-dvh" : "min-h-dvh"}>

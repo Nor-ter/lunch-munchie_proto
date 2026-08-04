@@ -4,7 +4,7 @@
  * host, capacity, participant, and waiting states.
  */
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { AnimatePresence, motion, useReducedMotion } from 'framer-motion';
 import { useLocation } from 'wouter';
 import {
@@ -21,6 +21,7 @@ import {
 import { QRCodeSVG } from 'qrcode.react';
 import { toast } from 'sonner';
 import { LunchieLogo } from '@/components/brand/LunchieLogo';
+import LunchmateCharacterRenderer from '@/components/munchie/LunchmateCharacterRenderer';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import {
   AppCard,
@@ -31,9 +32,21 @@ import {
 } from '@/components/ui/lunchie-ui';
 import { useApp } from '@/contexts/AppContext';
 import { getLobbyPresentation } from '@/lib/lobbyPresentation';
+import { lunchmateLoadoutFromProfile } from '@/utils/lunchmateProfile';
 
 function isAbortError(error: unknown): boolean {
   return typeof error === 'object' && error !== null && 'name' in error && error.name === 'AbortError';
+}
+
+export function resolveInviteOrigin(configuredOrigin: string | undefined, browserOrigin: string): string {
+  const candidate = configuredOrigin?.trim();
+  if (!candidate) return browserOrigin;
+  try {
+    const parsed = new URL(candidate);
+    return parsed.protocol === 'http:' || parsed.protocol === 'https:' ? parsed.origin : browserOrigin;
+  } catch {
+    return browserOrigin;
+  }
 }
 
 export default function SessionLobbyPage() {
@@ -43,6 +56,10 @@ export default function SessionLobbyPage() {
   const [showMembers, setShowMembers] = useState(true);
   const [isStarting, setIsStarting] = useState(false);
   const reduceMotion = Boolean(useReducedMotion());
+  const lunchmateLoadout = useMemo(
+    () => lunchmateLoadoutFromProfile(profile.lunchmateLoadout),
+    [profile.lunchmateLoadout],
+  );
   const previousMembersRef = useRef<{ sessionId: string; ids: string[] } | undefined>(undefined);
 
   // Poll the server so newly joined members (and the start signal) show up.
@@ -88,7 +105,8 @@ export default function SessionLobbyPage() {
     );
   }
 
-  const inviteUrl = `${window.location.origin}/join/${currentSession.inviteCode}`;
+  const inviteOrigin = resolveInviteOrigin(import.meta.env.VITE_INVITE_ORIGIN, window.location.origin);
+  const inviteUrl = `${inviteOrigin}/join/${currentSession.inviteCode}`;
   const isSoloSession = currentSession.filters.partySize <= 1;
 
   const copyInviteLink = async (): Promise<boolean> => {
@@ -156,7 +174,7 @@ export default function SessionLobbyPage() {
   return (
     <ScreenContainer className="lunchie-lobby flex min-h-dvh flex-col overflow-x-hidden px-5">
       <header className="flex items-center gap-3 pb-5 pt-[max(32px,env(safe-area-inset-top))]">
-        <IconButton aria-label="홈으로 돌아가기" onClick={() => navigate('/')} className="shrink-0">
+        <IconButton aria-label="Quick Match 설정으로 돌아가기" onClick={() => navigate('/lunchie/settings')} className="shrink-0">
           <ArrowLeft size={20} aria-hidden="true" />
         </IconButton>
         <div className="min-w-0 flex-1">
@@ -342,17 +360,22 @@ export default function SessionLobbyPage() {
 
         <AppCard className="mb-4 flex items-center gap-3 p-3.5" role="status" aria-live="polite">
           <div className="flex size-16 shrink-0 items-center justify-center overflow-hidden rounded-2xl bg-[#FFF2EC]">
-            {reduceMotion ? (
-              <LunchieLogo size={48} />
-            ) : (
-              <img
-                src="/assets/lunchie-quick-match-jump.gif"
-                alt=""
-                aria-hidden="true"
-                className="h-16 w-20 object-contain mix-blend-multiply"
-                draggable={false}
+            <motion.div
+              animate={reduceMotion ? undefined : { y: [0, -3, 0], rotate: [-1, 1, -1] }}
+              transition={reduceMotion ? undefined : { duration: 1.35, repeat: Infinity, ease: 'easeInOut' }}
+            >
+              <LunchmateCharacterRenderer
+                flowState="idle"
+                loadout={lunchmateLoadout}
+                size={62}
+                renderSize="compact"
+                artwork="chicken"
+                chickenAssetKeyOverride="idle"
+                chickenFaceSystem
+                animated={false}
+                alt="참여자를 기다리는 나의 런치킨"
               />
-            )}
+            </motion.div>
           </div>
           <div className="min-w-0 flex-1">
             <p className="text-[13px] font-bold leading-snug text-[var(--lm-text)]">{presentation.statusCopy}</p>

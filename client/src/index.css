@@ -200,6 +200,26 @@
     box-shadow: none;
   }
 
+  .lunchie-distance-range {
+    appearance: none;
+    -webkit-appearance: none;
+    background: transparent;
+    cursor: grab;
+  }
+
+  .lunchie-distance-range:active { cursor: grabbing; }
+  .lunchie-distance-range::-webkit-slider-runnable-track { height: 56px; background: transparent; }
+  .lunchie-distance-range::-webkit-slider-thumb {
+    width: 42px;
+    height: 56px;
+    appearance: none;
+    -webkit-appearance: none;
+    background: transparent;
+    border: 0;
+  }
+  .lunchie-distance-range::-moz-range-track { height: 56px; background: transparent; border: 0; }
+  .lunchie-distance-range::-moz-range-thumb { width: 42px; height: 56px; opacity: 0; border: 0; }
+
   .app-content-with-tab-bar {
     padding-bottom: var(--lm-tab-bar-height);
   }

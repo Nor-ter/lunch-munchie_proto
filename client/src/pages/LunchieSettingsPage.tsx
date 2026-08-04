@@ -1,199 +1,453 @@
 /**
- * Lunchie Munchie — Lunchie Mode / Quick Match (Invitation & Settings)
- * UI: sj_branch quick-match 설정 화면을 그대로 재현
- * Logic: merge1_v3 — createSession(...) 후 /session/lobby 로 이동
+ * Lunchie Quick Match — compact settings and session entry.
+ * Session persistence remains server-first through AppContext.
  */
 
-import { useState, type ReactNode, type CSSProperties } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
+import { useEffect, useMemo, useRef, useState, type Dispatch, type PointerEvent as ReactPointerEvent, type ReactNode, type SetStateAction } from 'react';
+import { motion } from 'framer-motion';
 import { useLocation, useSearch } from 'wouter';
-import { ArrowLeft, Clock, SlidersHorizontal, Users, Minus, Plus, X } from 'lucide-react';
+import {
+  ArrowLeft,
+  Check,
+  ChevronDown,
+  CircleHelp,
+  Clock3,
+  Minus,
+  Plus,
+  Ruler,
+  Sparkles,
+  Users,
+  UtensilsCrossed,
+} from 'lucide-react';
 import { useApp } from '@/contexts/AppContext';
+import LunchmateCharacterRenderer from '@/components/munchie/LunchmateCharacterRenderer';
 import { FOOD_TAGS } from '@/constants/foodTags';
+import { lunchmateLoadoutFromProfile } from '@/utils/lunchmateProfile';
 import { toast } from 'sonner';
 import type { Intent } from '@shared/intent';
+import type { LunchmateLoadout } from '@/types/lunchmateCustomization';
 import { logSessionCreated } from '@/lib/eventLogger';
 
-const INTENT_OPTIONS: { value: Intent | null; label: string; icon: string }[] = [
-  { value: null, label: '자동', icon: '🕐' },
-  { value: 'meal', label: '밥', icon: '🍚' },
-  { value: 'cafe', label: '카페', icon: '☕' },
-  { value: 'dessert', label: '디저트', icon: '🍰' },
+const PREFERENCE_CARDS: { value: Intent | null; label: string; image?: string; color: string }[] = [
+  { value: 'cafe', label: 'COFFEE', image: '/assets/characters/quick-match/coffee.png', color: '#FFF0E7' },
+  { value: 'meal', label: 'FOODIE', image: '/assets/characters/quick-match/rice.png', color: '#FFE9E4' },
+  { value: 'dessert', label: 'DESSERT', image: '/assets/characters/quick-match/dessert.png', color: '#FFE7EC' },
+  { value: null, label: 'RANDOM', color: '#FFF4D9' },
 ];
 
-// ─── Filter constants (sj_branch parity) ──────────────────────────────────────
-
-const DEADLINE_OPTIONS = [
-  { label: '5분', min: 5 },
-  { label: '10분', min: 10 },
-  { label: '15분', min: 15 },
+const DEADLINE_OPTIONS = [5, 10, 15];
+const RADIUS_OPTIONS = [1000, 2000, 3000, 4000, 5000];
+const DIETARY_OPTIONS = [
+  { label: 'Vegan', value: '비건', icon: '🌱' },
+  { label: 'Vegetarian', value: '채식', icon: '🥬' },
+  { label: 'Gluten-Free', value: '글루텐프리', icon: '🌾' },
+  { label: 'Halal', value: '할랄', icon: '🌙' },
+  { label: 'Carnivore', value: '육식', icon: '🥩' },
+  { label: 'Small Appetite', value: 'Small Appetite', icon: '🍽️' },
+  { label: 'Buffet', value: 'Buffet', icon: '♨️' },
+  { label: 'Asian', value: 'Asian', icon: '🥢' },
 ];
-
-const FILTER_OPTIONS = ['식단', '거리', '예산', '카드수', '취향', '평점'];
-
-const DETAIL_OPTIONS: Record<string, string[]> = {
-  '식단': ['비건', '채식', '육식', '글루텐프리', '할랄', '해산물 제외'],
-  '거리': ['500m 이내', '1km 이내', '3km 이내', '5km 이내'],
-  '예산': ['₩', '₩₩', '₩₩₩', '₩₩₩₩'],
-  '카드수': ['5장', '7장', '10장', '15장'],
-  '취향': [...FOOD_TAGS],
-  '평점': ['4.0 이상', '4.5 이상', '4.8 이상'],
+const DIETARY_EXCLUSIONS = [
+  { label: 'Beef', value: 'No Beef', icon: '🐄' },
+  { label: 'Seafood', value: '해산물 제외', icon: '🐟' },
+  { label: 'Lamb', value: 'No Lamb', icon: '🐑' },
+  { label: 'Pork', value: 'No Pork', icon: '🐖' },
+  { label: 'Nuts', value: 'No Nuts', icon: '🥜' },
+];
+const TAG_META: Record<string, { icon: string; hint: string }> = {
+  맛집: { icon: '🍽️', hint: '검증된 인기 메뉴' },
+  데이트코스: { icon: '💞', hint: '분위기 좋은 곳' },
+  혼밥: { icon: '🙋', hint: '혼자서도 편하게' },
+  카페: { icon: '☕', hint: '커피와 여유' },
+  펍나이트: { icon: '🍻', hint: '퇴근 후 한잔' },
+  브런치: { icon: '🥐', hint: '느긋한 한 끼' },
+  디저트: { icon: '🍰', hint: '달콤한 마무리' },
+  가성비: { icon: '✨', hint: '가격까지 만족' },
 };
+const tapSpring = { type: 'spring' as const, stiffness: 500, damping: 30 };
 
-const RADIUS_OPTIONS = [500, 1000, 2000, 3000, 5000];
-
-function formatRadius(r: number): string {
-  return r >= 1000 ? `${r / 1000}km` : `${r}m`;
+function formatRadius(radius: number): string {
+  return radius >= 5000 ? '5km+' : `${radius / 1000}km`;
 }
 
-const tapSpring = { type: "spring" as const, stiffness: 500, damping: 30 };
-
-function IconButton({
-  onClick,
-  disabled,
-  className,
-  children,
-}: {
-  onClick?: () => void;
-  disabled?: boolean;
-  className?: string;
-  children: ReactNode;
-}) {
+function Card({ children }: { children: ReactNode }) {
   return (
-    <motion.button
-      type="button"
-      onClick={onClick}
-      disabled={disabled}
-      className={className}
-      whileTap={disabled ? undefined : { scale: 0.88 }}
-      transition={tapSpring}
-    >
+    <section className="rounded-[22px] bg-white p-4 shadow-[0_2px_10px_rgba(180,140,130,0.10)]">
       {children}
-    </motion.button>
+    </section>
   );
 }
 
-function ChipButton({
-  selected,
-  onClick,
-  children,
-  className,
-  unselectedBg = "#F5F5F5",
-  unselectedColor = "#4A4A4A",
-}: {
+function CardTitle({ icon, children, badge }: { icon: ReactNode; children: ReactNode; badge?: ReactNode }) {
+  return (
+    <div className="mb-3 flex items-center gap-2 text-[14px] font-extrabold text-[#26232A]">
+      <span className="text-[#F4515E]">{icon}</span>
+      <span>{children}</span>
+      {badge && <span className="ml-auto rounded-full bg-[#FFE4E3] px-2.5 py-1 text-[11px] text-[#DB3C49]">{badge}</span>}
+    </div>
+  );
+}
+
+function ChoiceChip({ selected, onClick, children, className = '' }: {
   selected: boolean;
   onClick: () => void;
   children: ReactNode;
   className?: string;
-  unselectedBg?: string;
-  unselectedColor?: string;
 }) {
   return (
     <motion.button
       type="button"
       onClick={onClick}
-      className={className}
-      animate={{
-        backgroundColor: selected ? "#EB5053" : unselectedBg,
-        color: selected ? "#FFFFFF" : unselectedColor,
-      }}
-      whileTap={{
-        scale: 0.92,
-        backgroundColor: selected ? "#D94447" : "#E0E0E0",
-      }}
+      whileTap={{ scale: 0.93 }}
       transition={tapSpring}
+      className={`min-h-9 rounded-xl px-3 text-[12px] font-bold transition-colors ${
+        selected ? 'bg-[#F4515E] text-white' : 'bg-[#F4F2F2] text-[#6E686C]'
+      } ${className}`}
     >
       {children}
     </motion.button>
   );
 }
 
-function ActionButton({
-  onClick,
-  disabled,
-  children,
-  className,
-  style,
-}: {
-  onClick?: () => void;
-  disabled?: boolean;
-  children: ReactNode;
-  className?: string;
-  style?: CSSProperties;
+function DeadlineDial({ minutes, onChange }: { minutes: number; onChange: (minutes: number) => void }) {
+  const circumference = 2 * Math.PI * 44;
+  const progress = Math.min(minutes, 15) / 15;
+  const updateFromPointer = (event: ReactPointerEvent<HTMLDivElement>) => {
+    const rect = event.currentTarget.getBoundingClientRect();
+    const x = event.clientX - rect.left - rect.width / 2;
+    const y = event.clientY - rect.top - rect.height / 2;
+    let angle = Math.atan2(y, x) + Math.PI / 2;
+    if (angle < 0) angle += Math.PI * 2;
+    const ratio = angle / (Math.PI * 2);
+    onChange(ratio < 0.025 ? 15 : Math.max(1, Math.min(15, Math.ceil(ratio * 15))));
+  };
+  return (
+    <div
+      className="relative size-[104px] shrink-0 cursor-grab touch-none select-none active:cursor-grabbing"
+      role="slider"
+      tabIndex={0}
+      aria-label="마감 시간"
+      aria-valuemin={1}
+      aria-valuemax={15}
+      aria-valuenow={minutes}
+      aria-valuetext={`${minutes}분`}
+      onPointerDown={event => {
+        event.currentTarget.setPointerCapture(event.pointerId);
+        updateFromPointer(event);
+      }}
+      onPointerMove={event => {
+        if (event.currentTarget.hasPointerCapture(event.pointerId)) updateFromPointer(event);
+      }}
+      onKeyDown={event => {
+        if (event.key === 'ArrowRight' || event.key === 'ArrowUp') onChange(Math.min(15, minutes + 1));
+        if (event.key === 'ArrowLeft' || event.key === 'ArrowDown') onChange(Math.max(1, minutes - 1));
+      }}
+    >
+      <svg width="104" height="104" className="-rotate-90" aria-hidden="true">
+        <circle cx="52" cy="52" r="44" fill="none" stroke="#F4F0EF" strokeWidth="9" />
+        <circle
+          cx="52"
+          cy="52"
+          r="44"
+          fill="none"
+          stroke="#F4515E"
+          strokeWidth="9"
+          strokeLinecap="round"
+          strokeDasharray={circumference}
+          strokeDashoffset={circumference * (1 - progress)}
+          className="transition-[stroke-dashoffset] duration-200"
+        />
+      </svg>
+      <div className="absolute inset-0 flex flex-col items-center justify-center">
+        <strong className="text-[26px] leading-none text-[#26232A]">{minutes}</strong>
+        <span className="mt-1 text-[10px] font-bold text-[#A6A0A3]">MIN</span>
+      </div>
+    </div>
+  );
+}
+
+function DeadlineMinuteInput({ minutes, onChange }: { minutes: number; onChange: (minutes: number) => void }) {
+  const [draft, setDraft] = useState(String(minutes));
+
+  useEffect(() => setDraft(String(minutes)), [minutes]);
+
+  const commit = () => {
+    const parsed = Number.parseInt(draft, 10);
+    const next = Number.isFinite(parsed) ? Math.max(1, Math.min(15, parsed)) : minutes;
+    onChange(next);
+    setDraft(String(next));
+  };
+
+  return (
+    <label className="mt-2 flex min-h-10 items-center rounded-[14px] bg-[#F5F3F3] px-3">
+        <input
+          type="number"
+          inputMode="numeric"
+          min={1}
+          max={15}
+          value={draft}
+          onChange={event => setDraft(event.target.value)}
+          onBlur={commit}
+          onKeyDown={event => {
+            if (event.key === 'Enter') event.currentTarget.blur();
+          }}
+          className="min-w-0 flex-1 bg-transparent text-left text-[12px] font-extrabold text-[#403A3D] outline-none"
+          aria-label="마감 분 직접 입력"
+        />
+        <span className="text-[10px] font-bold text-[#AAA3A6]">분 직접입력</span>
+    </label>
+  );
+}
+
+function DietaryExclusionPicker({ selected, onToggle }: { selected: string[]; onToggle: (value: string) => void }) {
+  const [open, setOpen] = useState(false);
+  const selectedLabels = DIETARY_EXCLUSIONS.filter(option => selected.includes(option.value)).map(option => option.label);
+
+  return (
+    <div className="relative col-span-2">
+      <button
+        type="button"
+        onClick={() => setOpen(current => !current)}
+        aria-expanded={open}
+        aria-controls="dietary-exclusion-menu"
+        className={`flex min-h-11 w-full items-center rounded-[12px] border px-3 text-left transition-colors ${selectedLabels.length ? 'border-[#55A964] bg-[#EDF8EE]' : 'border-transparent bg-[#F8F5F3]'}`}
+      >
+        <span className="mr-2 text-base">🚫</span>
+        <strong className="text-[11px] text-[#514A4D]">No</strong>
+        <span className="ml-2 min-w-0 flex-1 truncate text-[10px] font-semibold text-[#7B7276]">
+          {selectedLabels.length ? selectedLabels.join(', ') : 'Select ingredients'}
+        </span>
+        {selectedLabels.length > 0 && <span className="mr-2 rounded-full bg-[#55A964] px-1.5 py-0.5 text-[9px] font-bold text-white">{selectedLabels.length}</span>}
+        <ChevronDown size={15} className={`shrink-0 text-[#8A8084] transition-transform ${open ? 'rotate-180' : ''}`} />
+      </button>
+      {open && (
+        <div id="dietary-exclusion-menu" className="mt-1 max-h-[156px] overflow-y-auto rounded-[14px] border border-[#E8DFDC] bg-white p-1.5 shadow-[0_10px_24px_rgba(92,69,62,0.14)]">
+          {DIETARY_EXCLUSIONS.map(option => {
+            const isSelected = selected.includes(option.value);
+            return (
+              <button
+                key={option.label}
+                type="button"
+                onClick={() => onToggle(option.value)}
+                aria-pressed={isSelected}
+                className={`flex min-h-10 w-full items-center rounded-[10px] px-2.5 text-left ${isSelected ? 'bg-[#EDF8EE]' : 'hover:bg-[#F8F5F3]'}`}
+              >
+                <span className="mr-2 text-base">{option.icon}</span>
+                <span className="text-[11px] font-bold text-[#514A4D]">{option.label}</span>
+                <span className={`ml-auto flex size-4 items-center justify-center rounded border ${isSelected ? 'border-[#55A964] bg-[#55A964] text-white' : 'border-[#D8CFCC] text-transparent'}`}><Check size={10} strokeWidth={3} /></span>
+              </button>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function PreferenceCard({ option, selected, onClick }: {
+  option: (typeof PREFERENCE_CARDS)[number];
+  selected: boolean;
+  onClick: () => void;
 }) {
   return (
     <motion.button
       type="button"
       onClick={onClick}
-      disabled={disabled}
-      className={className}
-      style={style}
-      whileTap={disabled ? undefined : { scale: 0.97, opacity: 0.88 }}
-      transition={tapSpring}
+      whileTap={{ scale: 0.96 }}
+      className={`relative min-w-0 overflow-hidden rounded-[18px] border-2 px-2 pb-3 pt-2 transition-all ${
+        selected
+          ? 'border-[#F4515E] bg-white shadow-[0_8px_20px_rgba(244,81,94,0.18)]'
+          : 'border-transparent bg-[#FAF7F5]'
+      }`}
+      aria-pressed={selected}
     >
-      {children}
+      {selected && (
+        <span className="absolute right-2 top-2 z-10 flex size-5 items-center justify-center rounded-full bg-[#F4515E] text-white">
+          <Check size={13} strokeWidth={3} />
+        </span>
+      )}
+      <span className="relative mx-auto flex aspect-square w-full max-w-[76px] items-center justify-center rounded-[16px]" style={{ background: option.color }}>
+        {option.image ? (
+          <img src={option.image} alt="" className="h-[72px] w-[72px] object-contain" draggable={false} />
+        ) : (
+          <span className="flex size-14 items-center justify-center rounded-full border-2 border-dashed border-[#F2B944] bg-white/80 text-[#E7A71E]">
+            <CircleHelp size={34} strokeWidth={2.4} />
+          </span>
+        )}
+      </span>
+      <span className="relative z-10 mt-1.5 block text-[10px] font-black tracking-[0.8px] text-[#F4515E]">{option.label}</span>
+      {selected && <span className="absolute bottom-1.5 left-[18%] z-0 h-2 w-[64%] -rotate-2 rounded-full bg-[#FFD5D1] opacity-80" />}
     </motion.button>
   );
 }
 
-// ─── Lunchie Settings Page ────────────────────────────────────────────────────
+function DistanceRuler({ radius, onChange, loadout }: { radius: number; onChange: (value: number) => void; loadout: LunchmateLoadout }) {
+  const selectedIndex = RADIUS_OPTIONS.indexOf(radius);
+  const progress = selectedIndex / (RADIUS_OPTIONS.length - 1) * 100;
+  const previousIndexRef = useRef(selectedIndex);
+  const settleTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const walkTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const [walkDirection, setWalkDirection] = useState<'left' | 'right' | null>(null);
+  const [walkFrame, setWalkFrame] = useState<1 | 2>(1);
+
+  useEffect(() => {
+    const previousIndex = previousIndexRef.current;
+    previousIndexRef.current = selectedIndex;
+    if (previousIndex === selectedIndex) return;
+
+    setWalkDirection(selectedIndex > previousIndex ? 'right' : 'left');
+    setWalkFrame(frame => frame === 1 ? 2 : 1);
+    if (walkTimerRef.current) clearInterval(walkTimerRef.current);
+    walkTimerRef.current = setInterval(() => setWalkFrame(frame => frame === 1 ? 2 : 1), 140);
+    if (settleTimerRef.current) clearTimeout(settleTimerRef.current);
+    settleTimerRef.current = setTimeout(() => {
+      if (walkTimerRef.current) clearInterval(walkTimerRef.current);
+      walkTimerRef.current = null;
+      setWalkDirection(null);
+      setWalkFrame(1);
+    }, 520);
+  }, [selectedIndex]);
+
+  useEffect(() => () => {
+    if (settleTimerRef.current) clearTimeout(settleTimerRef.current);
+    if (walkTimerRef.current) clearInterval(walkTimerRef.current);
+  }, []);
+
+  const chickenAsset = walkDirection
+    ? `side-walk-${walkDirection}-${walkFrame}` as const
+    : 'idle' as const;
+
+  return (
+    <div>
+      <div className="mb-2 flex items-center gap-2 text-[13px] font-extrabold text-[#26232A]">
+        <Ruler size={17} className="text-[#F4515E]" />
+        거리
+        <strong className="ml-auto text-[15px] text-[#F4515E]">{formatRadius(radius)}</strong>
+      </div>
+      <div className="relative mx-1 h-[100px] rounded-[18px] bg-[#FFF8F6] px-6 pt-4">
+        <div className="absolute left-5 right-5 top-[54px] h-1 rounded-full bg-[#E9DEDA]" />
+        <div className="absolute left-5 top-[54px] h-1 rounded-full bg-[#F4515E] transition-[width]" style={{ width: `calc((100% - 40px) * ${progress / 100})` }} />
+        <div className="absolute left-5 right-5 top-[47px] flex justify-between" aria-hidden="true">
+          {Array.from({ length: 17 }, (_, index) => (
+            <span key={index} className={`w-[2px] rounded-full bg-[#CBBDB8] ${index % 4 === 0 ? 'h-4' : 'h-2.5 opacity-75'}`} />
+          ))}
+        </div>
+        <motion.span
+          className="pointer-events-none absolute top-[2px] z-10 flex -translate-x-1/2 flex-col items-center"
+          animate={{ left: `calc(20px + (100% - 40px) * ${progress / 100})` }}
+          transition={{ type: 'spring', stiffness: 340, damping: 28 }}
+          aria-hidden="true"
+        >
+          <span className="flex size-12 items-center justify-center overflow-hidden rounded-full border-2 border-[#F4515E] bg-white shadow-[0_4px_12px_rgba(244,81,94,0.22)]">
+            <LunchmateCharacterRenderer
+              flowState="idle"
+              loadout={loadout}
+              size={42}
+              renderSize="compact"
+              artwork="chicken"
+              chickenAssetKeyOverride={chickenAsset}
+              chickenFaceSystem={!walkDirection}
+              animated={false}
+              alt={`검색 거리 ${formatRadius(radius)}를 가리키는 런치킨`}
+            />
+          </span>
+          <span className="h-3 w-0.5 bg-[#F4515E]" />
+        </motion.span>
+        <input
+          type="range"
+          min={0}
+          max={RADIUS_OPTIONS.length - 1}
+          step={1}
+          value={selectedIndex}
+          onChange={event => onChange(RADIUS_OPTIONS[Number(event.target.value)]!)}
+          className="lunchie-distance-range absolute inset-x-5 top-[27px] z-20 h-14 opacity-[0.01]"
+          aria-label="검색 거리"
+          aria-valuetext={formatRadius(radius)}
+        />
+        <div className="absolute inset-x-5 bottom-5 text-[9px] font-bold text-[#A69B96]">
+          {RADIUS_OPTIONS.map((option, index) => (
+            <span
+              key={option}
+              className="absolute whitespace-nowrap"
+              style={{
+                left: `${index / (RADIUS_OPTIONS.length - 1) * 100}%`,
+                transform: index === 0 ? 'translateX(0)' : index === RADIUS_OPTIONS.length - 1 ? 'translateX(-100%)' : 'translateX(-50%)',
+              }}
+            >
+              {formatRadius(option)}
+            </span>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
 
 export default function LunchieSettingsPage() {
   const [, navigate] = useLocation();
   const search = useSearch();
-  const { createSession, restaurants, profile } = useApp();
-
-  // "다음 여정" 카드 탭 시 ?intent=cafe 로 넘어옴 — 초기 선택값으로 반영.
+  const { createSession, startSession, fetchSession, currentSession, setCurrentSession, restaurants, profile } = useApp();
   const urlIntent = new URLSearchParams(search).get('intent');
   const initialIntent: Intent | null = urlIntent === 'meal' || urlIntent === 'cafe' || urlIntent === 'dessert' ? urlIntent : null;
 
   const [deadlineMin, setDeadlineMin] = useState(10);
   const [partySize, setPartySize] = useState(4);
+  const [togetherPartySize, setTogetherPartySize] = useState(4);
   const [radius, setRadius] = useState(1000);
   const [intent, setIntent] = useState<Intent | null>(initialIntent);
-  const [activeFilters, setActiveFilters] = useState<string[]>(['취향', '평점']);
-  const [details, setDetails] = useState<Record<string, string[]>>({
-    '취향': ['맛집'],
-    '평점': ['4.0 이상'],
-  });
-  const [showDetailModal, setShowDetailModal] = useState(false);
+  const [tags, setTags] = useState<string[]>(['맛집']);
+  const [dietary, setDietary] = useState<string[]>([]);
   const [isCreating, setIsCreating] = useState(false);
+  const lunchmateLoadout = useMemo(
+    () => lunchmateLoadoutFromProfile(profile.lunchmateLoadout),
+    [profile.lunchmateLoadout],
+  );
 
-  const toggleFilter = (f: string) => {
-    setActiveFilters(prev => (prev.includes(f) ? prev.filter(x => x !== f) : [...prev, f]));
+  const isSolo = partySize === 1;
+  const budget = 2 as const;
+  const chosenCount = tags.length + dietary.length + 1;
+  const hasActiveSession = currentSession?.status === 'waiting' || currentSession?.status === 'voting';
+  const realCategories = useMemo(() => new Set(restaurants.map(restaurant => restaurant.category)), [restaurants]);
+
+  const toggleMany = (value: string, setter: Dispatch<SetStateAction<string[]>>) => {
+    setter(current => current.includes(value) ? current.filter(item => item !== value) : [...current, value]);
   };
 
-  const toggleDetail = (filter: string, value: string) => {
-    setDetails(prev => {
-      const cur = prev[filter] || [];
-      const next = cur.includes(value) ? cur.filter(v => v !== value) : [...cur, value];
-      return { ...prev, [filter]: next };
-    });
+  const selectSolo = () => {
+    if (partySize > 1) setTogetherPartySize(partySize);
+    setPartySize(1);
   };
 
-  // sj 설정값 → merge1_v3 createSession 파라미터로 매핑
+  const selectTogether = () => setPartySize(Math.max(2, togetherPartySize));
+
   const handleStart = async () => {
+    if (hasActiveSession) {
+      setIsCreating(true);
+      try {
+        const activeSession = await fetchSession(currentSession.inviteCode);
+        const isWaiting = activeSession.status === 'waiting';
+        toast.info(isWaiting ? '진행 중인 대기방으로 이동합니다.' : '진행 중인 투표로 이동합니다.');
+        navigate(isWaiting ? '/session/lobby' : '/lunchie/swipe');
+        return;
+      } catch {
+        // A locally cached session can outlive its server record. Clear only
+        // that stale cache before creating a replacement session.
+        setCurrentSession(null);
+      }
+    }
+
     setIsCreating(true);
     try {
-      const sel = (f: string) => (activeFilters.includes(f) ? details[f] || [] : []);
-
-      const dietary = sel('식단');
-      const budgetSel = sel('예산');
-      const budget = (budgetSel[0]?.length || 2) as 1 | 2 | 3 | 4;
-      // '취향' 값 중 실제 식당 카테고리와 일치하는 것만 필터로 사용 (빈 세션 방지)
-      const realCats = new Set(restaurants.map(r => r.category));
-      const categories = sel('취향').filter(t => realCats.has(t));
-
+      const categories = tags.filter(tag => realCategories.has(tag));
       const hostName = profile.name && profile.name !== '사용자' ? profile.name : '호스트';
-      const sessionName = `${hostName}의 점심 세션`;
-
       const session = await createSession(
-        sessionName,
+        `${hostName}의 점심 세션`,
         { partySize, dietary, budget, radius, categories, intent: intent ?? undefined },
         hostName,
         profile.emoji,
         deadlineMin,
       );
+
       logSessionCreated(session.id, {
         intent: intent ?? 'auto',
         party_size: partySize,
@@ -203,274 +457,208 @@ export default function LunchieSettingsPage() {
         category_count: categories.length,
         deadline_minutes: deadlineMin,
       });
-      toast.success('점심 세션이 생성되었습니다', {
-        position: 'top-center',
-        style: { marginTop: 'calc(env(safe-area-inset-top, 0px) + 64px)' },
-      });
-      navigate('/session/lobby');
-    } catch {
-      toast.error('세션 생성에 실패했습니다.');
+
+      if (isSolo) {
+        await startSession(session.inviteCode, deadlineMin);
+        toast.success('Quick Match를 시작합니다.');
+        navigate('/lunchie/swipe');
+      } else {
+        toast.success('세션이 만들어졌어요. 친구를 초대해 보세요.');
+        navigate('/session/lobby');
+      }
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : '세션 생성에 실패했습니다.');
     } finally {
       setIsCreating(false);
     }
   };
 
-  const totalDetailCount = activeFilters.reduce((sum, f) => sum + (details[f]?.length || 0), 0);
-
   return (
-    <div className="min-h-dvh bg-[#FCF4EE]">
-      {/* Header */}
-      <div className="flex items-center justify-between px-5 pt-12 pb-5">
-        <IconButton
+    <div className="min-h-dvh bg-[#FFF6F2] pb-6">
+      <header className="sticky top-0 z-20 flex items-center gap-3 bg-[#FFF6F2]/95 px-5 pb-3 pt-[max(12px,env(safe-area-inset-top))] backdrop-blur">
+        <motion.button
+          type="button"
           onClick={() => navigate('/')}
-          className="w-10 h-10 rounded-full bg-white flex items-center justify-center shadow-sm"
+          whileTap={{ scale: 0.9 }}
+          className="flex size-9 items-center justify-center rounded-full bg-white shadow-sm"
+          aria-label="홈으로 돌아가기"
         >
-          <ArrowLeft size={18} color="#1A1A1A" />
-        </IconButton>
-        <div className="text-center">
-          <p className="font-black text-[17px] text-[#1A1A1A]">Lunchie Mode</p>
-          <p className="text-[11px] text-[#9B9B9B]">Quick Match</p>
+          <ArrowLeft size={17} />
+        </motion.button>
+        <div>
+          <h1 className="text-[19px] font-extrabold leading-none tracking-[-0.4px] text-[#F4515E]">Lunchie</h1>
+          <p className="mt-1 text-[10px] font-bold tracking-[0.7px] text-[#9B959A]">QUICK MATCH</p>
         </div>
-        <div className="w-10" />
-      </div>
-
-      <div className="px-5 space-y-4 pb-8">
-        {/* Deadline */}
-        <div className="rounded-2xl p-4 bg-white">
-          <div className="flex items-center gap-2 mb-1">
-            <Clock size={15} color="#EB5053" />
-            <p className="text-[13px] font-bold text-[#1A1A1A]">마감 타이밍</p>
-          </div>
-          <p className="text-[11px] text-[#9B9B9B] mb-3">투표 시작 후 제한 시간 · 마감 후엔 참여 불가</p>
-          <div className="flex gap-2">
-            {DEADLINE_OPTIONS.map(d => (
-              <ChipButton
-                key={d.min}
-                selected={deadlineMin === d.min}
-                onClick={() => setDeadlineMin(d.min)}
-                className="flex-1 py-2.5 rounded-xl text-[12px] font-bold"
-              >
-                {d.label}
-              </ChipButton>
-            ))}
-          </div>
+        <div className="ml-auto flex rounded-full bg-white p-[3px] shadow-sm" aria-label="식사 인원 모드">
+          <button type="button" onClick={selectSolo} className={`rounded-full px-4 py-1.5 text-[13px] font-bold ${isSolo ? 'bg-[#F4515E] text-white' : 'text-[#9B959A]'}`}>혼자</button>
+          <button type="button" onClick={selectTogether} className={`rounded-full px-4 py-1.5 text-[13px] font-bold ${!isSolo ? 'bg-[#F4515E] text-white' : 'text-[#9B959A]'}`}>같이</button>
         </div>
+      </header>
 
-        {/* Session Settings */}
-        <div className="rounded-2xl p-4 bg-white">
-          <div className="flex items-center gap-2 mb-3">
-            <Users size={15} color="#EB5053" />
-            <p className="text-[13px] font-bold text-[#1A1A1A]">세션 설정</p>
-          </div>
+      <main className="mx-auto max-w-[480px] space-y-3 px-4 pb-32">
+        {hasActiveSession && (
+          <button
+            type="button"
+            onClick={() => navigate(currentSession.status === 'waiting' ? '/session/lobby' : '/lunchie/swipe')}
+            className="flex w-full items-center justify-between rounded-2xl bg-[#2B3440] px-4 py-3 text-left text-white"
+          >
+            <span>
+              <strong className="block text-[13px]">진행 중인 Quick Match</strong>
+              <span className="text-[11px] text-[#AEB9C7]">새 세션을 만들지 않고 이어서 진행해요</span>
+            </span>
+            <span className="text-[12px] font-bold text-[#FF7A83]">{currentSession.status === 'waiting' ? '대기방' : '투표'} ›</span>
+          </button>
+        )}
 
-          {/* 누구랑 — 혼자 vs 같이(+정원) */}
-          <div className="bg-[#F5F5F5] rounded-xl p-3 mb-2">
-            <p className="text-[11px] text-[#9B9B9B] mb-2">누구랑 먹어요?</p>
-            <div className="flex gap-2">
-              {([['혼자', 1, '🧍'], ['같이', 4, '👥']] as const).map(([label, size, icon]) => (
-                <ChipButton
-                  key={label}
-                  selected={size === 1 ? partySize === 1 : partySize > 1}
-                  onClick={() => setPartySize(previous => (size === 1 ? 1 : (previous > 1 ? previous : 4)))}
-                  unselectedBg="#FFFFFF"
-                  className="flex-1 py-2.5 rounded-xl font-bold text-[14px]"
-                >
-                  {icon} {label}
-                </ChipButton>
-              ))}
-            </div>
-            {partySize > 1 && (
-              <div className="flex items-center justify-center gap-4 mt-3">
-                <IconButton
-                  onClick={() => setPartySize(previous => Math.max(2, previous - 1))}
-                  className="w-8 h-8 rounded-full bg-white shadow-sm flex items-center justify-center disabled:opacity-40"
-                  disabled={partySize <= 2}
-                >
-                  <Minus size={14} color="#1A1A1A" />
-                </IconButton>
-                <p className="font-black text-[17px] text-[#EB5053] w-16 text-center">{partySize}명 정원</p>
-                <IconButton
-                  onClick={() => setPartySize(previous => Math.min(12, previous + 1))}
-                  className="w-8 h-8 rounded-full bg-white shadow-sm flex items-center justify-center disabled:opacity-40"
-                  disabled={partySize >= 12}
-                >
-                  <Plus size={14} color="#1A1A1A" />
-                </IconButton>
+        <Card>
+          <CardTitle icon={<Clock3 size={16} />}>마감</CardTitle>
+          <div className="grid grid-cols-[112px_minmax(0,1fr)] items-center gap-4">
+            <DeadlineDial minutes={deadlineMin} onChange={setDeadlineMin} />
+            <div className="min-w-0">
+              <div className="grid grid-cols-3 gap-1.5">
+                {DEADLINE_OPTIONS.map(minutes => (
+                  <ChoiceChip key={minutes} selected={deadlineMin === minutes} onClick={() => setDeadlineMin(minutes)} className="min-h-9 px-1">{minutes}분</ChoiceChip>
+                ))}
               </div>
-            )}
-            <p className="text-[10px] text-[#B0B0B0] mt-1.5">
-              {partySize > 1 ? '나눠먹기 좋은 곳 위주 · 정원만큼 모이면 마감' : '혼밥하기 편한 곳 위주로 추천해요'}
-            </p>
-          </div>
-
-          {/* 무엇을 먹을까요 — 명시적 밥/카페/디저트 선택. 안 고르면 시간대로 자동 판정. */}
-          <div className="bg-[#F5F5F5] rounded-xl p-3 mb-2">
-            <p className="text-[11px] text-[#9B9B9B] mb-2">무엇을 먹을까요?</p>
-            <div className="flex gap-1.5">
-              {INTENT_OPTIONS.map(({ value, label, icon }) => (
-                <button
-                  key={label}
-                  onClick={() => setIntent(value)}
-                  className="flex-1 py-2.5 rounded-xl font-bold text-[13px] active:scale-[0.98] transition-all"
-                  style={{ background: intent === value ? '#EB5053' : 'white', color: intent === value ? 'white' : '#4A4A4A' }}
-                >
-                  {icon} {label}
-                </button>
-              ))}
-            </div>
-            {intent === null && (
-              <p className="text-[10px] text-[#B0B0B0] mt-1.5">지금 시간대({new Date().getHours()}시)에 맞춰 자동으로 골라요</p>
-            )}
-          </div>
-
-          {/* 반경 */}
-          <div className="bg-[#F5F5F5] rounded-xl p-3">
-            <p className="text-[11px] text-[#9B9B9B] mb-2">검색 반경</p>
-            <div className="flex gap-1.5">
-              {RADIUS_OPTIONS.map(r => (
-                <ChipButton
-                  key={r}
-                  selected={radius === r}
-                  onClick={() => setRadius(r)}
-                  unselectedBg="#FFFFFF"
-                  className="flex-1 py-2 rounded-lg text-[12px] font-bold"
-                >
-                  {formatRadius(r)}
-                </ChipButton>
-              ))}
+              <DeadlineMinuteInput minutes={deadlineMin} onChange={setDeadlineMin} />
             </div>
           </div>
-        </div>
+          <p className="mt-2 text-center text-[9px] font-semibold text-[#A6A0A3]">다이얼을 돌리거나 1–15분 사이로 직접 입력해요</p>
+        </Card>
 
-        {/* Filter Options */}
-        <div className="rounded-2xl p-4 bg-white">
-          <div className="flex items-center justify-between mb-3">
-            <div className="flex items-center gap-2">
-              <SlidersHorizontal size={15} color="#EB5053" />
-              <p className="text-[13px] font-bold text-[#1A1A1A]">옵션</p>
+        {!isSolo && (
+          <Card>
+            <div className="mb-3 flex items-center gap-2 text-[14px] font-extrabold text-[#26232A]">
+              <Users size={17} className="text-[#F4515E]" />
+              <span>인원</span>
+              <span className="ml-auto text-[10px] font-bold text-[#9B959A]">함께 먹을 정원</span>
             </div>
-            <motion.button
-              type="button"
-              onClick={() => setShowDetailModal(true)}
-              className="flex items-center gap-1 text-[11px] font-bold px-2.5 py-1 rounded-full"
-              animate={{ backgroundColor: "#FFF5F5", color: "#EB5053" }}
-              whileTap={{ scale: 0.94, backgroundColor: "#FFD6D6" }}
-              transition={tapSpring}
-            >
-              상세 설정 {totalDetailCount > 0 && `· ${totalDetailCount}`}
-            </motion.button>
-          </div>
-          <div className="flex flex-wrap gap-2">
-            {FILTER_OPTIONS.map(f => (
-              <ChipButton
-                key={f}
-                selected={activeFilters.includes(f)}
-                onClick={() => toggleFilter(f)}
-                className="px-3 py-1.5 rounded-full text-[12px] font-semibold"
+            <div className="flex min-h-[66px] items-center rounded-[18px] bg-[#FFF8F6] px-2.5">
+              <button
+                type="button"
+                onClick={() => {
+                  const next = Math.max(2, partySize - 1);
+                  setPartySize(next);
+                  setTogetherPartySize(next);
+                }}
+                disabled={partySize <= 2}
+                className="flex size-10 shrink-0 items-center justify-center rounded-[14px] bg-white text-[#645D61] shadow-sm disabled:opacity-30"
+                aria-label="초대 인원 줄이기"
               >
-                {f}
-              </ChipButton>
-            ))}
-          </div>
-
-          {/* Selected detail chips preview */}
-          {totalDetailCount > 0 && (
-            <div className="mt-3 pt-3 border-t border-[#F0F0F0] flex flex-wrap gap-1.5">
-              {activeFilters.flatMap(f =>
-                (details[f] || []).map(v => (
-                  <span
-                    key={`${f}-${v}`}
-                    className="text-[10px] font-semibold bg-[#F5F5F5] text-[#4A4A4A] px-2 py-0.5 rounded-full"
-                  >
-                    {v}
-                  </span>
-                )),
-              )}
-            </div>
-          )}
-        </div>
-
-        {/* Detail Settings Modal */}
-        <AnimatePresence>
-          {showDetailModal && (
-            <motion.div
-              className="fixed inset-0 z-[90] flex items-end justify-center"
-              style={{ background: 'rgba(0,0,0,0.5)' }}
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              onClick={() => setShowDetailModal(false)}
-            >
-              <motion.div
-                className="w-full max-w-[480px] bg-white rounded-t-3xl max-h-[80vh] overflow-y-auto scrollbar-hide"
-                initial={{ y: '100%' }}
-                animate={{ y: 0 }}
-                exit={{ y: '100%' }}
-                transition={{ type: 'spring', stiffness: 350, damping: 34 }}
-                onClick={e => e.stopPropagation()}
-              >
-                <div className="sticky top-0 bg-white px-5 pt-5 pb-3 flex items-center justify-between border-b border-[#F0F0F0]">
-                  <div>
-                    <p className="font-black text-[17px] text-[#1A1A1A]">상세 설정</p>
-                    <p className="text-[11px] text-[#9B9B9B]">활성화된 옵션의 세부 태그를 골라주세요</p>
-                  </div>
-                  <IconButton
-                    onClick={() => setShowDetailModal(false)}
-                    className="w-9 h-9 rounded-full bg-[#F5F5F5] flex items-center justify-center"
-                  >
-                    <X size={16} color="#4A4A4A" />
-                  </IconButton>
-                </div>
-
-                <div className="px-5 py-4 space-y-5">
-                  {activeFilters.length === 0 && (
-                    <p className="text-[13px] text-[#9B9B9B] text-center py-8">먼저 옵션에서 항목을 켜주세요</p>
-                  )}
-                  {activeFilters.map(filter => (
-                    <div key={filter}>
-                      <p className="text-[13px] font-bold text-[#1A1A1A] mb-2">{filter}</p>
-                      <div className="flex flex-wrap gap-2">
-                        {(DETAIL_OPTIONS[filter] || []).map(value => {
-                          const on = (details[filter] || []).includes(value);
-                          return (
-                            <ChipButton
-                              key={value}
-                              selected={on}
-                              onClick={() => toggleDetail(filter, value)}
-                              className="px-3 py-1.5 rounded-full text-[12px] font-semibold"
-                            >
-                              {value}
-                            </ChipButton>
-                          );
-                        })}
-                      </div>
-                    </div>
+                <Minus size={17} />
+              </button>
+              <div className="flex min-w-0 flex-1 flex-col items-center justify-center">
+                <div className="flex items-center justify-center -space-x-1 text-[#F4515E]" aria-hidden="true">
+                  {Array.from({ length: Math.min(partySize, 6) }, (_, index) => (
+                    <span key={index} className="flex size-6 items-center justify-center rounded-full border-2 border-[#FFF8F6] bg-[#FFE4E3]">
+                      <Users size={12} />
+                    </span>
                   ))}
                 </div>
+                <strong className="mt-1 text-[18px] leading-none text-[#F4515E]">{partySize}명</strong>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  const next = Math.min(8, partySize + 1);
+                  setPartySize(next);
+                  setTogetherPartySize(next);
+                }}
+                disabled={partySize >= 8}
+                className="flex size-10 shrink-0 items-center justify-center rounded-[14px] bg-white text-[#645D61] shadow-sm disabled:opacity-30"
+                aria-label="초대 인원 늘리기"
+              >
+                <Plus size={17} />
+              </button>
+            </div>
+          </Card>
+        )}
 
-                <div className="sticky bottom-0 bg-white px-5 py-4 border-t border-[#F0F0F0]">
-                  <ActionButton
-                    onClick={() => setShowDetailModal(false)}
-                    className="w-full py-3.5 rounded-2xl font-bold text-white text-[14px]"
-                    style={{ background: '#EB5053' }}
-                  >
-                    적용하기 {totalDetailCount > 0 && `(${totalDetailCount})`}
-                  </ActionButton>
-                </div>
-              </motion.div>
-            </motion.div>
-          )}
-        </AnimatePresence>
+        <Card>
+          <DistanceRuler radius={radius} onChange={setRadius} loadout={lunchmateLoadout} />
+        </Card>
 
-        {/* Start */}
-        <ActionButton
-          onClick={handleStart}
-          disabled={isCreating}
-          className="lunchie-session-primary-action"
-        >
-          {isCreating ? '세션 만드는 중...' : 'Swipe 시작하기'}
-        </ActionButton>
-      </div>
+        <Card>
+          <CardTitle icon={<UtensilsCrossed size={16} />} badge={`${chosenCount} 선택`}>오늘의 Quick Match</CardTitle>
+          <p className="-mt-1 mb-3 text-[11px] font-semibold text-[#A6A0A3]">끌리는 카드를 한 장 골라주세요</p>
+          <div className="grid grid-cols-4 gap-2">
+            {PREFERENCE_CARDS.map(option => (
+              <PreferenceCard key={option.label} option={option} selected={intent === option.value} onClick={() => setIntent(option.value)} />
+            ))}
+          </div>
+
+          <div className="my-4 h-px bg-[#F0EAE8]" />
+          <div className="mb-2 flex items-center gap-2">
+            <Sparkles size={15} className="text-[#F4515E]" />
+            <p className="text-[12px] font-extrabold text-[#524B4F]">어떤 분위기인가요?</p>
+            <span className="ml-auto text-[10px] font-bold text-[#A6A0A3]">여러 개 선택 가능</span>
+          </div>
+          <div className="grid grid-cols-2 gap-2">
+            {FOOD_TAGS.map(tag => {
+              const selected = tags.includes(tag);
+              const meta = TAG_META[tag];
+              return (
+                <motion.button
+                  key={tag}
+                  type="button"
+                  onClick={() => toggleMany(tag, setTags)}
+                  whileTap={{ scale: 0.97 }}
+                  aria-pressed={selected}
+                  className={`flex min-h-[58px] items-center gap-2 rounded-[15px] border px-3 text-left transition-all ${selected ? 'border-[#F4515E] bg-[#FFF0EE]' : 'border-[#EEE7E4] bg-white'}`}
+                >
+                  <span className="text-xl">{meta?.icon}</span>
+                  <span className="min-w-0">
+                    <strong className="block text-[12px] text-[#3E373B]">{tag}</strong>
+                    <span className="block truncate text-[9px] font-semibold text-[#A39A9E]">{meta?.hint}</span>
+                  </span>
+                  <span className={`ml-auto flex size-4 shrink-0 items-center justify-center rounded-full border ${selected ? 'border-[#F4515E] bg-[#F4515E] text-white' : 'border-[#D9D0CD] text-transparent'}`}><Check size={10} strokeWidth={3} /></span>
+                </motion.button>
+              );
+            })}
+          </div>
+
+          <div className="my-3 h-px bg-[#F0EAE8]" />
+          <div className="mb-2 flex items-center justify-between">
+            <p className="text-[12px] font-extrabold text-[#524B4F]">Dietary preferences</p>
+            <span className="text-[9px] font-bold text-[#A6A0A3]">Select all that apply</span>
+          </div>
+          <div className="grid grid-cols-2 gap-1.5">
+            {DIETARY_OPTIONS.map(option => {
+              const selected = dietary.includes(option.value);
+              return (
+                <button
+                  key={option.label}
+                  type="button"
+                  onClick={() => toggleMany(option.value, setDietary)}
+                  aria-pressed={selected}
+                  className={`flex min-h-10 w-full items-center rounded-[12px] px-2.5 text-left transition-colors ${selected ? 'bg-[#EDF8EE]' : 'bg-[#F8F5F3]'}`}
+                >
+                  <span className="mr-2 text-base">{option.icon}</span>
+                  <span className="truncate text-[11px] font-bold text-[#514A4D]">{option.label}</span>
+                  <span className={`ml-auto flex size-4 shrink-0 items-center justify-center rounded border ${selected ? 'border-[#55A964] bg-[#55A964] text-white' : 'border-[#D8CFCC] bg-white text-transparent'}`}><Check size={10} strokeWidth={3} /></span>
+                </button>
+              );
+            })}
+            <DietaryExclusionPicker selected={dietary} onToggle={value => toggleMany(value, setDietary)} />
+          </div>
+        </Card>
+
+        <div className="pb-3 pt-1">
+          <motion.button
+            type="button"
+            onClick={() => void handleStart()}
+            disabled={isCreating}
+            whileTap={{ scale: 0.98 }}
+            className="lunchie-session-primary-action w-full disabled:cursor-not-allowed disabled:opacity-60"
+          >
+            {isCreating
+              ? '준비하는 중…'
+              : hasActiveSession
+                ? currentSession.status === 'waiting' ? '대기방으로 돌아가기' : '투표 계속하기'
+                : isSolo ? 'Swipe 시작하기' : '세션 만들고 초대하기'}
+          </motion.button>
+        </div>
+      </main>
     </div>
   );
 }
