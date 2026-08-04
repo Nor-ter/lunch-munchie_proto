@@ -28,10 +28,12 @@ separate deployed Worker integration and should be verified in preview E2E.
    pnpm cf:d1:seed:local
    ```
 
-   Catalogue images are not copied into local R2. `MEDIA_ORIGIN` makes the
-   local Pages runtime read the deployed public media service, while all local
-   D1 writes stay isolated. Remove or change that value to use a staging media
-   service instead.
+   Catalogue images and the ignored source-photo cache are not copied into
+   local R2. `MEDIA_ORIGIN` makes the local Pages runtime read the deployed
+   public media service, while all local D1 writes stay isolated. A fresh clone
+   therefore seeds the whole verified catalogue without downloading photo
+   originals. Remove or change that value to use a staging media service
+   instead.
 
 6. Start the Pages runtime:
 

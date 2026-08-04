@@ -245,6 +245,8 @@ pnpm cf:d1:migrate:local
 pnpm cf:d1:seed:local
 ```
 
+`server/data/photos/`는 Git에 넣지 않는 운영 원본 캐시이므로 팀원이 내려받을 파일이 아닙니다. 로컬 시드는 `drive_ingest.json`의 사진 경로와 `MEDIA_ORIGIN`을 사용해 원본 파일 없이도 식당 카탈로그를 채웁니다.
+
 ### 테스트와 커밋
 
 ```bash
