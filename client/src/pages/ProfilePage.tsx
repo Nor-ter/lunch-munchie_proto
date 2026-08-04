@@ -611,23 +611,102 @@ function ProfilePageContent() {
   );
 }
 
-// 익명 사용자는 개인 프로필 데이터를 볼 수 없다. 프로토타입 기본값(지민 등)을
-// 랜더링하지 않고, 로그인 안내만 제공한다.
+const PROFILE_GOOGLE_LOGIN = '/api/auth/google/start?next=%2Fprofile';
+
+/** 익명 프리뷰 — 레이아웃은 로그인 프로필과 같되, 프로토타입 유저 데이터는 절대 그리지 않는다. */
+function ProfileGuestPreview() {
+  const goToLogin = useCallback(() => {
+    window.location.assign(PROFILE_GOOGLE_LOGIN);
+  }, []);
+
+  return (
+    <div className="min-h-dvh bg-[#FCF4EE] pb-24">
+      <HeaderActionRow className="header-action-row--raised">
+        <HeaderIconButton onClick={goToLogin} aria-label="프로필 설정">
+          <Menu size={18} color="#4A4A4A" />
+        </HeaderIconButton>
+      </HeaderActionRow>
+
+      <div className="mx-4 mt-2 rounded-[30px] p-4 pb-5" style={{ background: '#F8DCD2' }}>
+        <FoodieBuddy
+          score={0}
+          onCustomize={goToLogin}
+          uiState={LUNCHMATE_PREVIEW_FIXTURE.uiState}
+          unseenFoodCount={LUNCHMATE_PREVIEW_FIXTURE.unseenFoodCount}
+          onLunchboxOpen={goToLogin}
+          onProgressOpen={goToLogin}
+        />
+        <div className="relative z-20 -mt-9 px-3">
+          <div className="flex items-start gap-4">
+            <button
+              type="button"
+              onClick={goToLogin}
+              className="relative shrink-0 rounded-full border-4 border-[#F8DCD2] shadow-md active:scale-95 transition-transform"
+              aria-label="아바타 변경"
+            >
+              <Avatar emoji="😊" size={78} />
+              <span className="absolute bottom-0 right-0 w-6 h-6 rounded-full bg-[#EB5053] border-2 border-white flex items-center justify-center">
+                <Camera size={11} color="white" />
+              </span>
+            </button>
+            <div className="min-w-0 flex-1 pt-11">
+              <h1 className="text-[19px] font-black text-[#3B2A22]">로그인이 필요해요</h1>
+              <p className="mt-1.5 text-[13px] font-medium leading-5 text-[#8A6E60]">
+                로그인하면 나의 코스·피드·저장을 볼 수 있어요.
+              </p>
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={goToLogin}
+            className="mt-4 h-12 w-full rounded-2xl bg-[#E85053] text-sm font-bold text-white active:scale-[0.98] transition-transform"
+          >
+            Google로 로그인
+          </button>
+        </div>
+        <div className="mt-5 grid grid-cols-3">
+          {(['팔로워', '팔로잉'] as const).map((label) => (
+            <button
+              key={label}
+              type="button"
+              onClick={goToLogin}
+              className="border-r border-[#EBC5B8] text-center"
+              aria-label={`${label} 목록`}
+            >
+              <p className="font-black text-[17px] text-[#3B2A22]">0</p>
+              <p className="mt-0.5 text-[10px] text-[#8A6E60]">{label}</p>
+            </button>
+          ))}
+          <button type="button" onClick={goToLogin} className="text-center">
+            <p className="font-black text-[17px] text-[#3B2A22]">0</p>
+            <p className="mt-0.5 text-[10px] text-[#8A6E60]">좋아요</p>
+          </button>
+        </div>
+      </div>
+
+      <div className="px-4 mt-8">
+        <h2 className="font-black text-[18px] text-[#1A1A1A] mb-3">나의 피드 0</h2>
+        <button
+          type="button"
+          onClick={goToLogin}
+          className="w-full rounded-2xl border-2 border-dashed border-[#E5CFC5] py-8 text-center"
+        >
+          <p className="text-3xl mb-1">📔</p>
+          <p className="text-[13px] font-bold text-[#8A7A6C]">로그인하면 나의 피드를 볼 수 있어요</p>
+        </button>
+      </div>
+    </div>
+  );
+}
+
+// 익명 사용자는 개인 프로필 데이터(지민 등)를 그리지 않고, 동일 레이아웃의 로그인 유도 프리뷰만 보여준다.
 export default function ProfilePage() {
   const auth = useAuthStatus();
-  const [, navigate] = useLocation();
   if (auth.isLoading) {
     return <main className="flex min-h-dvh items-center justify-center bg-[#FCF4EE]"><p className="text-sm font-bold text-[#8C7D74]">프로필 확인 중…</p></main>;
   }
   if (!auth.data || auth.isError || auth.data.isAnonymous) {
-    return (
-      <main className="flex min-h-dvh flex-col items-center justify-center bg-[#FCF4EE] px-8 text-center">
-        <div className="flex h-16 w-16 items-center justify-center rounded-full bg-[#FFF0EB] text-2xl">👤</div>
-        <h1 className="mt-5 text-xl font-black text-[#342C28]">내 프로필</h1>
-        <p className="mt-2 text-sm leading-6 text-[#8C7D74]">로그인하면 내가 만든 코스와 피드,<br />저장한 기록을 볼 수 있어요.</p>
-        <button onClick={() => window.location.assign('/api/auth/google/start?next=%2Fprofile')} className="mt-6 h-12 rounded-2xl bg-[#E85053] px-6 text-sm font-bold text-white">Google로 로그인</button>
-      </main>
-    );
+    return <ProfileGuestPreview />;
   }
   return <ProfilePageContent />;
 }
