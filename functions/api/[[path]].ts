@@ -582,7 +582,7 @@ app.post("/api/uploads", async (c) => {
 });
 
 // A profile avatar is an explicit reference to an image the current account
-// uploaded.  Do not accept arbitrary URLs here: otherwise a user could make a
+// uploaded. Do not accept arbitrary URLs here: otherwise a user could make a
 // different user's private upload appear as their own profile photo.
 app.patch("/api/profile", async (c) => {
   const session = await readSession(c.req.raw, c.env.AUTH_SESSION_SECRET);
@@ -596,24 +596,40 @@ app.patch("/api/profile", async (c) => {
       { error: "로컬 사용자 스키마를 갱신한 뒤 프로필을 수정할 수 있습니다." },
       409,
     );
-  const body = await c.req.json<{ avatarUrl?: unknown }>().catch(() => ({}));
-  if (!("avatarUrl" in body))
+  const body = await c.req.json<{ avatarUrl?: unknown; username?: unknown }>().catch(() => ({}));
+  const hasAvatarUrl = "avatarUrl" in body;
+  const hasUsername = "username" in body;
+  if (!hasAvatarUrl && !hasUsername)
     return c.json({ error: "변경할 프로필 정보가 없습니다." }, 400);
-  const avatarUrl = body.avatarUrl;
-  if (
-    avatarUrl !== null &&
-    (typeof avatarUrl !== "string" ||
-      !avatarUrl.startsWith(`/photos/uploads/${session.sub}/`) ||
-      avatarUrl.length > 2_000)
-  ) {
-    return c.json(
-      { error: "내가 업로드한 프로필 사진만 사용할 수 있습니다." },
-      400,
-    );
+
+  if (hasAvatarUrl) {
+    const avatarUrl = body.avatarUrl;
+    if (
+      avatarUrl !== null &&
+      (typeof avatarUrl !== "string" ||
+        !avatarUrl.startsWith(`/photos/uploads/${session.sub}/`) ||
+        avatarUrl.length > 2_000)
+    ) {
+      return c.json(
+        { error: "내가 업로드한 프로필 사진만 사용할 수 있습니다." },
+        400,
+      );
+    }
+    await c.env.DB.prepare("UPDATE users SET profile_image_url = ? WHERE id = ?")
+      .bind(avatarUrl, session.sub)
+      .run();
   }
-  await c.env.DB.prepare("UPDATE users SET profile_image_url = ? WHERE id = ?")
-    .bind(avatarUrl, session.sub)
-    .run();
+
+  if (hasUsername) {
+    if (typeof body.username !== "string")
+      return c.json({ error: "이름을 입력해 주세요." }, 400);
+    const username = body.username.trim();
+    if (!username || username.length > 80)
+      return c.json({ error: "이름은 1~80자로 입력해 주세요." }, 400);
+    await c.env.DB.prepare("UPDATE users SET username = ? WHERE id = ?")
+      .bind(username, session.sub)
+      .run();
+  }
   const profile = await c.env.DB.prepare(
     "SELECT id, username, profile_image_url, bio, location FROM users WHERE id = ?",
   )

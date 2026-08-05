@@ -271,10 +271,25 @@ function ProfilePageContent() {
   const foodieScore = courses.length + myPosts.length;
 
 
-  const saveSettings = () => {
-    updateProfile({ name: editName });
-    setActiveSheet(null);
-    toast.success('프로필 업데이트 완료! ✅');
+  const saveSettings = async () => {
+    const username = editName.trim();
+    if (!username) {
+      toast.error('이름을 입력해 주세요.');
+      return;
+    }
+    try {
+      const response = await fetch('/api/profile', {
+        method: 'PATCH', credentials: 'same-origin', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username }),
+      });
+      const saved = await response.json().catch(() => ({})) as { profile?: { username?: string }; error?: string };
+      if (!response.ok || !saved.profile?.username) throw new Error(saved.error || '이름을 저장하지 못했어요.');
+      updateProfile({ name: saved.profile.username });
+      setActiveSheet(null);
+      toast.success('프로필 업데이트 완료! ✅');
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : '이름을 저장하지 못했어요.');
+    }
   };
 
   const toggleDiet = (d: string) => {
