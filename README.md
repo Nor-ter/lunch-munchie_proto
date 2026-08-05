@@ -202,6 +202,7 @@ Lunchie Munchie는 두 가지 핵심 경험을 하나의 앱으로 제공합니�
 ```bash
 git clone <repository-url>
 cd lunch-munchie_proto
+node -v # v22 이상이어야 함
 corepack enable
 pnpm install
 node scripts/installGitHooks.mjs # 기존 worktree라면 한 번 실행
@@ -212,6 +213,15 @@ node scripts/installGitHooks.mjs # 기존 worktree라면 한 번 실행
 커밋하거나 재공유하지 않습니다. 이미 전달받은 `.dev.vars`가 있다면
 `cp .dev.vars.example .dev.vars`를 실행하지 마세요. 빈 템플릿이 기존 Google
 로그인 설정을 덮어쓸 수 있습니다.
+
+macOS 등에서 `corepack enable`이 `/usr/local/bin/pnpm` 권한 문제로 실패하면 전역 shim을 만들지 말고 Corepack을 통해 pnpm을 직접 실행합니다.
+
+```bash
+corepack pnpm install
+corepack pnpm cf:d1:migrate:local
+corepack pnpm cf:d1:seed:local
+corepack pnpm dev:pages
+```
 
 ```dotenv
 GOOGLE_CLIENT_ID="...apps.googleusercontent.com"
@@ -233,9 +243,13 @@ https://lunchie-munchie.pages.dev/api/auth/google/callback
 명령을 사용합니다. 단순 `pnpm dev`는 Vite/기존 Express 개발용이며 Cloudflare D1·R2·Google OAuth Functions를 검증하지 않습니다.
 
 ```bash
+pnpm cf:d1:migrate:local
+pnpm cf:d1:seed:local
 pnpm dev:pages
 # http://localhost:8788
 ```
+
+서버가 준비되면 `http://localhost:8788`에서 Pages 앱이 열립니다. 정상 기동 시 Wrangler 로그에 `Ready on http://localhost:8788`가 표시되고, 로컬 D1 바인딩은 `.wrangler/state/v3/d1` 아래의 `lunchie-db`를 사용합니다.
 
 #### LAN 기기에서 테스트할 때
 
