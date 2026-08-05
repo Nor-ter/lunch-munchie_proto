@@ -205,10 +205,13 @@ cd lunch-munchie_proto
 corepack enable
 pnpm install
 node scripts/installGitHooks.mjs # 기존 worktree라면 한 번 실행
-cp .dev.vars.example .dev.vars
 ```
 
-`.dev.vars`에는 로컬 Functions만 읽는 비밀값을 둡니다. 절대 커밋하지 않습니다.
+프로젝트 관리자에게 받은 `.dev.vars`를 프로젝트 최상단(`package.json`과 같은
+위치)에 둡니다. 이 파일에는 로컬 Functions만 읽는 비밀값이 있으므로 절대
+커밋하거나 재공유하지 않습니다. 이미 전달받은 `.dev.vars`가 있다면
+`cp .dev.vars.example .dev.vars`를 실행하지 마세요. 빈 템플릿이 기존 Google
+로그인 설정을 덮어쓸 수 있습니다.
 
 ```dotenv
 GOOGLE_CLIENT_ID="...apps.googleusercontent.com"
@@ -225,7 +228,9 @@ http://localhost:8788/api/auth/google/callback
 https://lunchie-munchie.pages.dev/api/auth/google/callback
 ```
 
-로컬 개발은 Pages Functions까지 함께 띄우는 명령을 사용합니다. 단순 `pnpm dev`는 Vite/기존 Express 개발용이며 Cloudflare D1·R2·Google OAuth Functions를 검증하지 않습니다.
+로컬 개발은 Pages Functions까지 함께 띄우는 명령을 사용합니다. `MEDIA_ORIGIN`은
+`.dev.vars`에서 Wrangler가 읽으므로 macOS, Linux, Windows PowerShell 모두 같은
+명령을 사용합니다. 단순 `pnpm dev`는 Vite/기존 Express 개발용이며 Cloudflare D1·R2·Google OAuth Functions를 검증하지 않습니다.
 
 ```bash
 pnpm dev:pages
