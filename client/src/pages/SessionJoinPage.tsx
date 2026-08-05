@@ -5,6 +5,7 @@ import { toast } from 'sonner';
 import { Loader2, ArrowLeft, Shield, LogIn } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { useAuthStatus } from '@/hooks/useAuthStatus';
+import { startGoogleAuth } from '@/services/authApi';
 
 const EMOJIS = ['😊', '🍱', '🍜', '🍣', '🥩', '🍕', '🌮', '🍔', '🥗', '☕', '🎂', '🍰', '🦊', '🐱', '🐼', '🐨'];
 const DIETARY_OPTIONS = ['비건', '채식', '글루텐프리', '할랄', '유제품 제외', '견과류 알러지', '해산물 제외'];
@@ -56,7 +57,7 @@ export default function SessionJoinPage() {
   }, [token, fetchSession, navigate]);
 
   const handleLogin = () => {
-    window.location.assign(`/api/auth/google/start?next=${encodeURIComponent(`/join/${token ?? ''}`)}`);
+    startGoogleAuth(`/join/${token ?? ''}`);
   };
 
   const handleLogout = async () => {

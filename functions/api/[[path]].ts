@@ -33,6 +33,37 @@ async function fetchConfiguredMedia(origin: string | undefined, key: string) {
   return response.ok ? response : null;
 }
 
+const mediaAvailability = new Map<string, Promise<boolean>>();
+function photoPathToKey(path: unknown) {
+  return typeof path === "string" && path.startsWith("/photos/")
+    ? path.slice("/photos/".length)
+    : null;
+}
+async function photoExists(env: Pick<EnvBindings, "MEDIA_ORIGIN" | "PHOTOS_R2">, path: unknown) {
+  const key = photoPathToKey(path);
+  if (!key || key.includes("..")) return false;
+  const cacheKey = `${env.MEDIA_ORIGIN ?? "local-r2"}:${key}`;
+  const cached = mediaAvailability.get(cacheKey);
+  if (cached) return cached;
+  const check = (async () => {
+    const remoteObject = await fetchConfiguredMedia(env.MEDIA_ORIGIN, key);
+    if (remoteObject) {
+      await remoteObject.body?.cancel().catch(() => undefined);
+      return true;
+    }
+    return Boolean(await env.PHOTOS_R2.get(`photos/${key}`));
+  })();
+  mediaAvailability.set(cacheKey, check);
+  return check;
+}
+async function filterExistingPhotos(
+  env: Pick<EnvBindings, "MEDIA_ORIGIN" | "PHOTOS_R2">,
+  paths: string[],
+) {
+  const checks = await Promise.all(paths.map(async (path) => [path, await photoExists(env, path)] as const));
+  return checks.filter(([, exists]) => exists).map(([path]) => path);
+}
+
 export const app = new Hono<{ Bindings: EnvBindings }>();
 
 type GoogleSession = {
@@ -933,6 +964,23 @@ app.get("/api/courses", async (c) => {
 
       // 브라우저가 사용하는 Course 계약으로 정규화한다. DB의 JSON TEXT/스네이크 케이스를
       // 그대로 내보내면 tags.map에서 초기 동기화가 멈춰, 뒤의 피드 갱신도 실행되지 않는다.
+      const courseStops = await Promise.all(stops.map(async (s: any) => ({
+        placeId: s.restaurant_id,
+        order: s.order_index,
+        startTime: s.start_time || "",
+        endTime: s.end_time || "",
+        isBookmarked: Boolean(s.is_bookmarked),
+        restaurant: {
+          id: s.restaurant_id,
+          name: s.name,
+          category: s.category,
+          photos: await filterExistingPhotos(c.env, json<string[]>(s.photos, [])),
+          rating: s.rating,
+          latitude: s.latitude,
+          longitude: s.longitude,
+        },
+      })));
+
       populatedCourses.push({
         id: course.id,
         title: course.title,
@@ -950,22 +998,7 @@ app.get("/api/courses", async (c) => {
         savedCount: Number(course.saves_count ?? 0),
         isPublic: Boolean(course.is_public),
         createdAt: isoDate(course.created_at),
-        stops: stops.map((s: any) => ({
-          placeId: s.restaurant_id,
-          order: s.order_index,
-          startTime: s.start_time || "",
-          endTime: s.end_time || "",
-          isBookmarked: Boolean(s.is_bookmarked),
-          restaurant: {
-            id: s.restaurant_id,
-            name: s.name,
-            category: s.category,
-            photos: json<string[]>(s.photos, []),
-            rating: s.rating,
-            latitude: s.latitude,
-            longitude: s.longitude,
-          },
-        })),
+        stops: courseStops,
       });
     }
 
@@ -2350,6 +2383,26 @@ app.get("/api/feed", async (c) => {
       const photos = canonicalMedia.length
         ? Array.from(new Set(canonicalMedia.map((media) => media.src)))
         : json<string[]>(course.feed_photos, []);
+      const availablePhotos = await filterExistingPhotos(c.env, photos);
+      const availablePhotoSet = new Set(availablePhotos);
+      const availableDecor = decor.filter((item) => {
+        const src = typeof item?.src === "string" ? item.src : null;
+        return !src?.startsWith("/photos/") || availablePhotoSet.has(src);
+      });
+      const heroImage =
+        typeof course.hero_image === "string" && course.hero_image.startsWith("/photos/")
+          ? (await photoExists(c.env, course.hero_image) ? course.hero_image : availablePhotos[0] ?? "")
+          : course.hero_image;
+      const feedStops = await Promise.all(stops.map(async (s: any) => ({
+        placeId: s.restaurant_id,
+        restaurant: {
+          id: s.restaurant_id,
+          name: s.name,
+          category: s.category,
+          photos: await filterExistingPhotos(c.env, json<string[]>(s.photos, [])),
+          rating: s.rating,
+        },
+      })));
 
       feedItems.push({
         id: `post_${course.id}`,
@@ -2359,21 +2412,12 @@ app.get("/api/feed", async (c) => {
         authorImage: hasPublicProfiles ? course.author_image || null : null,
         title: course.title,
         description: course.description,
-        heroImage: course.hero_image,
-        photos,
-        decor,
+        heroImage,
+        photos: availablePhotos,
+        decor: availableDecor,
         templateId: course.template_id || null,
         tags: json<string[]>(course.tags, []),
-        stops: stops.map((s: any) => ({
-          placeId: s.restaurant_id,
-          restaurant: {
-            id: s.restaurant_id,
-            name: s.name,
-            category: s.category,
-            photos: json<string[]>(s.photos, []),
-            rating: s.rating,
-          },
-        })),
+        stops: feedStops,
         likesCount: course.likes_count ?? 0,
         savesCount: course.saves_count ?? 0,
         commentsCount: course.comments_count ?? 0,

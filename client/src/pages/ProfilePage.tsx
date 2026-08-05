@@ -20,7 +20,7 @@ import { ProfileStats } from '@/components/follow/ProfileStats';
 import { FollowerListSheet, type FollowListMode } from '@/components/follow/FollowerListSheet';
 import { AccountBanner } from '@/components/auth/AccountBanner';
 import {
-  GOOGLE_PROFILE_IMPORT_PARAM, GOOGLE_PROFILE_PROMPTED_KEY, IDENTITY_CONFLICT_CODE,
+  GOOGLE_PROFILE_IMPORT_PARAM, GOOGLE_PROFILE_PROMPTED_KEY, IDENTITY_CONFLICT_CODE, startGoogleAuth,
 } from '@/services/authApi';
 import LunchboxBottomSheet, {
   isPointInsideLunchboxDropTarget,
@@ -85,12 +85,24 @@ type ProfileSheet = 'settings' | 'avatar' | 'lunchbox' | 'progress' | 'levelUp';
 
 /** 프로필 아바타 — 업로드 사진이 있으면 사진, 없으면 이모지. 공통 렌더링으로 항상 최신 profile을 반영한다 */
 function Avatar({ photo, emoji, size }: { photo?: string; emoji: string; size: number }) {
+  const [imageFailed, setImageFailed] = useState(false);
+  useEffect(() => setImageFailed(false), [photo]);
+  const showPhoto = Boolean(photo && !imageFailed);
+
   return (
     <div
       className="rounded-full bg-[#EFE3DA] flex items-center justify-center overflow-hidden shrink-0"
       style={{ width: size, height: size, fontSize: size * 0.49 }}
     >
-      {photo ? <img src={photo} alt="" className="w-full h-full object-cover" /> : emoji}
+      {showPhoto ? (
+        <img
+          src={photo}
+          alt=""
+          className="w-full h-full object-cover"
+          referrerPolicy="no-referrer"
+          onError={() => setImageFailed(true)}
+        />
+      ) : emoji}
     </div>
   );
 }
@@ -625,7 +637,7 @@ export default function ProfilePage() {
         <div className="flex h-16 w-16 items-center justify-center rounded-full bg-[#FFF0EB] text-2xl">👤</div>
         <h1 className="mt-5 text-xl font-black text-[#342C28]">내 프로필</h1>
         <p className="mt-2 text-sm leading-6 text-[#8C7D74]">로그인하면 내가 만든 코스와 피드,<br />저장한 기록을 볼 수 있어요.</p>
-        <button onClick={() => window.location.assign('/api/auth/google/start?next=%2Fprofile')} className="mt-6 h-12 rounded-2xl bg-[#E85053] px-6 text-sm font-bold text-white">Google로 로그인</button>
+        <button onClick={() => startGoogleAuth('/profile')} className="mt-6 h-12 rounded-2xl bg-[#E85053] px-6 text-sm font-bold text-white">Google로 로그인</button>
       </main>
     );
   }

@@ -25,6 +25,7 @@ import { acquireDocumentScrollLock } from '@/lib/documentScrollLock';
 import { resolveFeedAuthorId } from '@/lib/profileFeed';
 import { logCourseFeedImpression } from '@/lib/eventLogger';
 import { useAuthStatus } from '@/hooks/useAuthStatus';
+import { startGoogleAuth } from '@/services/authApi';
 import {
   getSavedCourseDetailPath,
   type SavedViewMode,
@@ -169,7 +170,7 @@ export default function UnifiedMunchieCard({
     }
     if (!auth.isAnonymous) return true;
     toast.error('이 기능은 로그인 후 사용할 수 있어요.');
-    window.location.assign(`/api/auth/google/start?next=${encodeURIComponent(window.location.pathname + window.location.search)}`);
+    startGoogleAuth(window.location.pathname + window.location.search);
     return false;
   };
   const submitComment = async () => {

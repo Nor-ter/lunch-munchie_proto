@@ -38,6 +38,7 @@ import {
   type LunchboxFoodDefinition,
 } from '@/constants/lunchboxFoods';
 import { useAuthStatus } from '@/hooks/useAuthStatus';
+import { replaceWithGoogleAuth, startGoogleAuth } from '@/services/authApi';
 
 const STEP_TITLES = [
   '코스맵을 정하세요',
@@ -1625,7 +1626,7 @@ function CoursemapCreateContent() {
       const saved = await response.json() as { id?: string; authorId?: string; error?: string; code?: string };
       if (response.status === 401 || saved.code === 'AUTH_REQUIRED') {
         toast.error('포스팅하려면 Google 로그인이 필요해요.');
-        window.location.assign('/api/auth/google/start?next=%2Fcoursemap%2Fnew');
+        startGoogleAuth('/coursemap/new');
         return;
       }
       if (!response.ok || !saved.id) throw new Error(saved.error ?? '코스를 저장하지 못했어요.');
@@ -1872,7 +1873,7 @@ export default function CoursemapCreatePage() {
 
   useEffect(() => {
     if (auth.data?.isAnonymous) {
-      window.location.replace(`/api/auth/google/start?next=${encodeURIComponent(next)}`);
+      replaceWithGoogleAuth(next);
     }
   }, [auth.data?.isAnonymous, next]);
 
