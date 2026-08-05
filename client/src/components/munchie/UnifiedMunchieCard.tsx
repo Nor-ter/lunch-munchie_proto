@@ -41,6 +41,14 @@ function timeAgo(iso: string | number) {
   return `${Math.floor(days / 7)}주 전`;
 }
 
+function FeedAuthorAvatar({ post, className }: { post: FeedPost; className: string }) {
+  return post.authorImage ? (
+    <img src={post.authorImage} alt="" className={`${className} object-cover`} referrerPolicy="no-referrer" />
+  ) : (
+    <span className={className}>{post.authorEmoji}</span>
+  );
+}
+
 export const SAVED_BOOKMARK_BUTTON_CLASS =
   'flex h-10 w-10 items-center justify-center rounded-xl bg-[#FFE2DF] text-[#D94E55]';
 
@@ -278,7 +286,7 @@ export default function UnifiedMunchieCard({
       <>
       <article ref={cardRef} className={`relative overflow-hidden bg-[#FFFDFC] ${homeSummary ? 'rounded-[12px] border border-[#EFD0D4] shadow-[0_5px_14px_rgba(235,80,83,0.07)]' : 'rounded-[18px] border-2 border-[#EAD7CD] shadow-[0_7px_18px_rgba(123,76,53,0.1)]'}`} data-testid={`unified-munchie-card-${post.id}`}>
         <header className={`flex shrink-0 items-center gap-1 px-2 ${homeSummary ? 'h-9' : 'h-8'}`}>
-          <button type="button" onClick={() => go(authorProfilePath)} className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-white text-[9px] ${homeSummary ? 'border border-[#EB5053]' : 'border border-[#2F2926]'}`}>{post.authorEmoji}</button>
+          <button type="button" onClick={() => go(authorProfilePath)} className={`flex h-5 w-5 shrink-0 items-center justify-center overflow-hidden rounded-full bg-white text-[9px] ${homeSummary ? 'border border-[#EB5053]' : 'border border-[#2F2926]'}`}><FeedAuthorAvatar post={post} className="h-full w-full" /></button>
           <button type="button" onClick={() => go(authorProfilePath)} className={`min-w-0 truncate text-left text-[10px] font-black ${homeSummary ? 'text-[#3E2922]' : 'text-[#342925]'}`}>{post.authorName}</button>
           <span className={`shrink-0 text-[8px] font-medium ${homeSummary ? 'text-[#A36D6C]' : 'text-[#8B817B]'}`}>{timeAgo(post.createdAt)}</span>
           <span className="flex-1" />
@@ -350,8 +358,8 @@ export default function UnifiedMunchieCard({
     <>
       <article ref={cardRef} className="relative overflow-hidden rounded-[20px] border border-[#E9D6CC] bg-[#FFFDFC] shadow-[0_10px_26px_rgba(117,73,51,0.09)]" data-testid={`unified-munchie-card-${post.id}`}>
         <header className="flex items-center gap-2.5 px-3 pb-2.5 pt-3">
-          <button type="button" onClick={() => go(authorProfilePath)} className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-[#F0BCAE] bg-[#FFF1EB] text-base">
-            {post.authorEmoji}
+          <button type="button" onClick={() => go(authorProfilePath)} className="flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-full border border-[#F0BCAE] bg-[#FFF1EB] text-base">
+            <FeedAuthorAvatar post={post} className="h-full w-full" />
           </button>
           <button type="button" onClick={() => go(authorProfilePath)} className="min-w-0 text-left">
             <strong className="truncate text-[15px] font-black text-[#3E2922]">{post.authorName}</strong>

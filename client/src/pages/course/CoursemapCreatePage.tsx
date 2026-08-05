@@ -1535,6 +1535,7 @@ function CoursemapCreateContent() {
     authorId: profile.id,
     authorName: profile.name,
     authorEmoji: profile.emoji,
+    authorImage: profile.avatarPhoto,
     courseId: previewCourse.id,
     photos: placed.map(photo => photo.src),
     caption: caption.trim(),

@@ -217,6 +217,8 @@ export interface FeedPost {
   authorId?: string;
   authorName: string;
   authorEmoji: string;
+  /** 작성자의 프로필 사진. 없을 때는 authorEmoji를 표시한다. */
+  authorImage?: string;
   authorLevel?: number;
   authorLevelName?: string;
   courseId: string;
@@ -630,6 +632,7 @@ export function AppProvider({
       authorId: feed.creatorId,
       authorName: feed.authorName || (feed.creatorId === profile.id ? profile.name : feed.creatorId === 'user_minji' ? '김민지' : feed.creatorId === 'user_jenny' ? '제니' : feed.creatorId === 'user_minsu' ? '민수' : 'Lunchie 사용자'),
       authorEmoji: feed.creatorId === profile.id ? profile.emoji : feed.creatorId === 'user_minji' ? '🐰' : feed.creatorId === 'user_jenny' ? '🍓' : feed.creatorId === 'user_minsu' ? '🐻' : '🐳',
+      authorImage: typeof feed.authorImage === 'string' ? feed.authorImage : undefined,
       courseId: feed.courseId,
       photos: (Array.isArray(feed.photos) ? feed.photos : []).filter((photo: unknown): photo is string => typeof photo === 'string').map((photo: string) => photo.startsWith('http') || photo.startsWith('/') ? photo : `/photos/${photo}`),
       templateId: typeof feed.templateId === 'string' ? feed.templateId : undefined,
@@ -700,6 +703,7 @@ export function AppProvider({
             authorId: feed.creatorId,
             authorName: feed.authorName || (feed.creatorId === profile.id ? profile.name : feed.creatorId === 'user_minji' ? '김민지' : feed.creatorId === 'user_jenny' ? '제니' : feed.creatorId === 'user_minsu' ? '민수' : 'Lunchie 사용자'),
             authorEmoji: feed.creatorId === 'user_minji' ? '🐰' : feed.creatorId === 'user_jenny' ? '🍓' : feed.creatorId === 'user_minsu' ? '🐻' : '🐳',
+            authorImage: typeof feed.authorImage === 'string' ? feed.authorImage : undefined,
             courseId: feed.courseId,
             photos: (Array.isArray(feed.photos) ? feed.photos : []).filter((photo: unknown): photo is string => typeof photo === 'string').map((photo: string) => photo.startsWith('http') || photo.startsWith('/') ? photo : `/photos/${photo}`),
             templateId: typeof feed.templateId === 'string' ? feed.templateId : undefined,
@@ -1273,6 +1277,7 @@ export function AppProvider({
             ...post,
             authorName: updates.name ?? post.authorName,
             authorEmoji: updates.emoji ?? post.authorEmoji,
+            ...('avatarPhoto' in updates ? { authorImage: updates.avatarPhoto } : {}),
           }
         : post));
     }
