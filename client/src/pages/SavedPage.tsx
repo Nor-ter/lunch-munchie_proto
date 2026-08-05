@@ -7,7 +7,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useLocation, useSearch } from 'wouter';
-import { MapPin, Bookmark, Zap, Map as MapIcon, LayoutList } from 'lucide-react';
+import { MapPin, Bookmark, Zap, Map as MapIcon, LayoutList, X } from 'lucide-react';
 import { useApp, TagType } from '@/contexts/AppContext';
 import { getCourseTagStyle } from '@/constants/courseTheme';
 import { FOOD_FILTER_TAGS, hasFoodTag } from '@/constants/foodTags';
@@ -54,6 +54,7 @@ export default function SavedPage() {
   );
   const [journeyStops, setJourneyStops] = useState<JourneyStop[]>([]);
   const [journeyLoading, setJourneyLoading] = useState(true);
+  const [pendingUnsaveCourseId, setPendingUnsaveCourseId] = useState<string | null>(null);
 
   useEffect(() => {
     let active = true;
@@ -102,6 +103,11 @@ export default function SavedPage() {
   const selectSavedMapFeed = (feedId: string | null) => {
     const selectedFeedQuery = feedId ? `&selectedFeed=${encodeURIComponent(feedId)}` : '';
     navigate(`/saved?view=map${selectedFeedQuery}`, { replace: true });
+  };
+  const confirmUnsave = () => {
+    if (!pendingUnsaveCourseId) return;
+    unsaveCourse(pendingUnsaveCourseId);
+    setPendingUnsaveCourseId(null);
   };
 
   return (
@@ -185,9 +191,9 @@ export default function SavedPage() {
                       <UnifiedMunchieCard post={post} compact homeSummary detailOrigin="saved" />
                       <button
                         type="button"
-                        onClick={() => unsaveCourse(post.courseId)}
+                        onClick={() => setPendingUnsaveCourseId(post.courseId)}
                         className={`absolute bottom-1.5 right-1.5 origin-bottom-right scale-[0.8] shadow-sm ${SAVED_BOOKMARK_BUTTON_CLASS}`}
-                        aria-label="먼치픽 저장 해제"
+                        aria-label="먼치픽 저장 취소"
                       >
                         <Bookmark size={20} strokeWidth={2} fill="currentColor" />
                       </button>
@@ -306,6 +312,27 @@ export default function SavedPage() {
             );
           })}
         </div>,
+        document.body,
+      )}
+
+      {typeof document !== 'undefined' && createPortal(
+        <AnimatePresence>
+          {pendingUnsaveCourseId && (
+            <motion.div className="fixed inset-0 z-[100] flex items-center justify-center px-5" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
+              <button type="button" aria-label="저장 취소 확인 닫기" className="absolute inset-0 bg-[#2A1A14]/40" onClick={() => setPendingUnsaveCourseId(null)} />
+              <motion.section role="dialog" aria-modal="true" aria-labelledby="unsave-confirm-title" className="relative w-full max-w-[320px] rounded-[24px] bg-white p-5 shadow-[0_20px_50px_rgba(48,28,20,0.24)]" initial={{ scale: 0.94, y: 12 }} animate={{ scale: 1, y: 0 }} exit={{ scale: 0.94, y: 12 }}>
+                <button type="button" aria-label="저장 취소 확인 닫기" onClick={() => setPendingUnsaveCourseId(null)} className="absolute right-3 top-3 flex h-8 w-8 items-center justify-center rounded-full bg-[#F8ECE6] text-[#876E63]"><X size={16} /></button>
+                <span className="flex h-11 w-11 items-center justify-center rounded-full bg-[#FFE8E3] text-[#D94E55]"><Bookmark size={21} fill="currentColor" /></span>
+                <h2 id="unsave-confirm-title" className="mt-3 text-[17px] font-black text-[#30221C]">저장을 취소할까요?</h2>
+                <p className="mt-1.5 text-[12px] font-semibold leading-5 text-[#8A746A]">저장 목록에서 이 먼치픽이 사라져요.</p>
+                <div className="mt-5 grid grid-cols-2 gap-2.5">
+                  <button type="button" onClick={() => setPendingUnsaveCourseId(null)} className="h-11 rounded-[14px] border border-[#DFD0C8] bg-white text-[13px] font-black text-[#69564D]">취소</button>
+                  <button type="button" onClick={confirmUnsave} className="h-11 rounded-[14px] bg-[#E85053] text-[13px] font-black text-white">저장 취소</button>
+                </div>
+              </motion.section>
+            </motion.div>
+          )}
+        </AnimatePresence>,
         document.body,
       )}
 
