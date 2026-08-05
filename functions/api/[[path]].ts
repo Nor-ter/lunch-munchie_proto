@@ -33,7 +33,7 @@ async function fetchConfiguredMedia(origin: string | undefined, key: string) {
   return response.ok ? response : null;
 }
 
-const app = new Hono<{ Bindings: EnvBindings }>();
+export const app = new Hono<{ Bindings: EnvBindings }>();
 
 type GoogleSession = {
   sub: string;
