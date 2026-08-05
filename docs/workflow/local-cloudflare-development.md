@@ -12,8 +12,10 @@ separate deployed Worker integration and should be verified in preview E2E.
 1. Use Node 22 or newer and install dependencies with `pnpm install`.
 2. `.env` is optional: copy `.env.example` only when testing Google Maps. Values
    prefixed with `VITE_` are browser-visible by design.
-3. Copy `.dev.vars.example` to `.dev.vars` and fill the three server-only OAuth
-   values. `.dev.vars` is ignored by Git.
+3. Put the administrator-provided `.dev.vars` next to `package.json` and fill the
+   server-only OAuth values. `.dev.vars` is ignored by Git. Do **not** copy
+   `.dev.vars.example` over an existing file: that would replace working local
+   Google credentials with blank values.
 4. In Google Cloud Console, add this authorised redirect URI for the development
    OAuth web client:
 
@@ -41,7 +43,8 @@ separate deployed Worker integration and should be verified in preview E2E.
    pnpm dev:pages
    ```
 
-   Open `http://localhost:8788`.
+   Open `http://localhost:8788`. The command is shell-neutral: Wrangler reads
+   `MEDIA_ORIGIN` from `.dev.vars`, so it works unchanged in Windows PowerShell.
 
 ## Safety boundary
 
