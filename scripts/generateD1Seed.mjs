@@ -1,5 +1,5 @@
 /** Generate a D1 seed from verifiable Drive catalogue records only. */
-import { existsSync, readFileSync, writeFileSync } from "node:fs";
+import { readFileSync, writeFileSync } from "node:fs";
 import { resolve } from "node:path";
 
 const root = process.cwd();
@@ -12,7 +12,10 @@ const rank = { dish: 0, table: 1, storefront: 2, interior: 3, other: 4 };
 
 const photosByRestaurant = new Map();
 for (const photo of data.photos) {
-  if (!photo.url?.startsWith("/photos/") || !existsSync(resolve(root, "server/data", `.${photo.url}`))) continue;
+  // Source images are an ignored operational cache. Local Pages reads these
+  // public paths through MEDIA_ORIGIN, so a fresh clone must never require the
+  // 429 original files merely to seed its isolated D1 catalogue.
+  if (!photo.url?.startsWith("/photos/")) continue;
   const photos = photosByRestaurant.get(photo.restaurant_id) ?? [];
   photos.push(photo.url);
   photosByRestaurant.set(photo.restaurant_id, photos);
@@ -47,7 +50,7 @@ const candidates = data.restaurants.filter((restaurant) =>
 );
 const lines = [
   "-- Generated from server/data/drive_ingest.json. Do not hand edit.",
-  "-- Only records with a verified local image and non-placeholder coordinate are included.",
+  "-- Images resolve through MEDIA_ORIGIN; local source-photo cache is not required.",
 ];
 for (const restaurant of candidates) {
   const menus = menusByRestaurant.get(restaurant.id) ?? [];
