@@ -8,7 +8,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useLocation } from 'wouter';
 import {
-  Menu, X, Camera, Upload,
+  Settings, X, Camera, Upload,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { useApp, type FeedPost } from '@/contexts/AppContext';
@@ -18,7 +18,7 @@ import UnifiedMunchieCard from '@/components/munchie/UnifiedMunchieCard';
 import FoodieBuddy, { type FoodieBuddyUiState } from '@/components/munchie/FoodieBuddy';
 import { ProfileStats } from '@/components/follow/ProfileStats';
 import { FollowerListSheet, type FollowListMode } from '@/components/follow/FollowerListSheet';
-import { AccountBanner } from '@/components/auth/AccountBanner';
+import { AccountBanner, AccountLogoutButton } from '@/components/auth/AccountBanner';
 import {
   GOOGLE_PROFILE_IMPORT_PARAM, GOOGLE_PROFILE_PROMPTED_KEY, IDENTITY_CONFLICT_CODE,
 } from '@/services/authApi';
@@ -324,7 +324,7 @@ function ProfilePageContent() {
           onClick={() => { setEditName(profile.name); setActiveSheet('settings'); }}
           aria-label="프로필 설정"
         >
-          <Menu size={18} color="#4A4A4A" />
+          <Settings size={18} color="#4A4A4A" />
         </HeaderIconButton>
 
         {/* 아바타 업로드용 숨은 파일 입력 — 헤더 아바타 탭 시트/설정 시트 공용 */}
@@ -486,21 +486,11 @@ function ProfilePageContent() {
               <div className="mx-auto mb-4 h-1 w-10 rounded-full bg-gray-200" />
               <p className="mb-4 font-bold text-[16px]">프로필 설정</p>
 
-               <div className="mb-5">
+              <div className="mb-5">
                  <p className="mb-1.5 text-[12px] font-semibold text-[#9B9B9B]">계정</p>
-                 {/* Google 계정 정보와 로그아웃은 AccountBanner가 직접 OAuth 세션으로 처리한다. */}
+                 {/* Google 계정 정보를 설정 화면에서 바로 확인한다. */}
                  <AccountBanner />
               </div>
-
-              {/* 아바타 — 탭하면 사진 업로드/이모지 변경 시트로 */}
-              <button
-                onClick={() => setActiveSheet('avatar')}
-                className="mb-5 flex w-full items-center gap-3 rounded-xl bg-[#FAF6F1] border border-[#F0E8E0] p-3 active:scale-[0.99] transition-transform"
-              >
-                <Avatar photo={profile.avatarPhoto} emoji={profile.emoji} size={48} />
-                <span className="flex-1 text-left text-[13px] font-semibold text-[#4A4A4A]">아바타 변경</span>
-                <Camera size={16} color="#9B9B9B" />
-              </button>
 
               <p className="mb-1.5 text-[12px] font-semibold text-[#9B9B9B]">이름</p>
               <input
@@ -531,6 +521,8 @@ function ProfilePageContent() {
               >
                 저장하기
               </button>
+
+              <AccountLogoutButton onLoggedOut={() => setActiveSheet(null)} />
             </motion.div>
           </>
         )}
@@ -623,7 +615,7 @@ function ProfileGuestPreview() {
     <div className="min-h-dvh bg-[#FCF4EE] pb-24">
       <HeaderActionRow className="header-action-row--raised">
         <HeaderIconButton onClick={goToLogin} aria-label="프로필 설정">
-          <Menu size={18} color="#4A4A4A" />
+          <Settings size={18} color="#4A4A4A" />
         </HeaderIconButton>
       </HeaderActionRow>
 
