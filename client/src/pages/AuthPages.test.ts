@@ -20,7 +20,7 @@ describe('web auth routes and integration boundaries', () => {
   it('adds auth controls only inside the existing Profile settings sheet', () => {
     expect(PROFILE_SOURCE).toContain("activeSheet === 'settings'");
     expect(PROFILE_SOURCE).toContain('Google로 로그인');
-    expect(PROFILE_SOURCE).toContain('로그아웃');
+    expect(PROFILE_SOURCE).toContain('<AccountLogoutButton');
   });
 
   it('does not clear the local preview profile during sign-out', () => {
