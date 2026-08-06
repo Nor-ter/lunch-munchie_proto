@@ -87,9 +87,9 @@ export function useCourseShare() {
   const saveImageToDevice = async (
     ref: RefObject<HTMLDivElement | null>,
     filename = 'lunchie-course.png',
-    options?: { preferNativeShare?: boolean }
+    options?: { preferNativeShare?: boolean; targetWidth?: number }
   ): Promise<'download' | 'share'> => {
-    const dataUrl = await captureCard(ref);
+    const dataUrl = await captureCard(ref, { targetWidth: options?.targetWidth });
     const res = await fetch(dataUrl);
     const blob = await res.blob();
     const file = new File([blob], filename, { type: 'image/png' });

@@ -40,6 +40,12 @@ export function ThemeProvider({
     if (switchable) {
       localStorage.setItem("theme", theme);
     }
+
+    // The product is intentionally light-only. Explicitly advertise that to
+    // mobile browsers so device-level auto darkening does not recolor forms,
+    // backgrounds, or the generated share view.
+    root.style.colorScheme = theme === "dark" && switchable ? "dark" : "only light";
+    document.body.style.colorScheme = theme === "dark" && switchable ? "dark" : "only light";
   }, [theme, switchable]);
 
   const toggleTheme = switchable

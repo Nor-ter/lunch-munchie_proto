@@ -34,6 +34,18 @@ describe('Lunchie Quick Match presentation', () => {
     expect(settingsSource).toContain("return radius >= 5000 ? '5km+' : `${radius / 1000}km`");
   });
 
+  it('presents the deadline as a live clock dial inspired by the timer reference', () => {
+    expect(settingsSource).toContain("Array.from({ length: 30 }");
+    expect(settingsSource).toContain('<linearGradient id={gradientId}');
+    expect(settingsSource).toContain('`${minutes}분, ${deadlineLabel} 종료`');
+    expect(settingsSource).toContain('aria-label="마감 시간 1분 늘리기"');
+    expect(settingsSource).toContain('aria-label="마감 시간 1분 줄이기"');
+    expect(settingsSource).not.toContain('다이얼을 돌리면 종료 시각이 바로 바뀌어요');
+    expect(settingsSource).not.toContain('<DeadlineMinuteInput');
+    expect(settingsSource).toContain("if (event.key === 'Home') onChange(1)");
+    expect(settingsSource).toContain("if (event.key === 'End') onChange(15)");
+  });
+
   it('restores invite size, removes ratings, and presents expanded dietary options in English', () => {
     expect(settingsSource).not.toContain('원하는 평점');
     expect(settingsSource).not.toContain('>참여자</CardTitle>');

@@ -62,15 +62,27 @@ export default function SessionLobbyPage() {
   );
   const previousMembersRef = useRef<{ sessionId: string; ids: string[] } | undefined>(undefined);
 
-  // Poll the server so newly joined members (and the start signal) show up.
-  // Keep this above the early return: hooks must never be conditional.
+  // Keep every device on the same server-owned phase. A participant does not
+  // need to press through a second lobby action: the host's start signal moves
+  // everyone into the shared preliminary round on the next short poll.
   useEffect(() => {
     if (!currentSession?.inviteCode) return;
-    const interval = window.setInterval(() => {
-      fetchSession(currentSession.inviteCode).catch(console.error);
-    }, 3000);
-    return () => window.clearInterval(interval);
-  }, [currentSession?.inviteCode, fetchSession]);
+    let cancelled = false;
+    const syncSession = async () => {
+      try {
+        const session = await fetchSession(currentSession.inviteCode);
+        if (!cancelled && session.status !== 'waiting') navigate('/lunchie/swipe');
+      } catch (error) {
+        if (!cancelled) console.error(error);
+      }
+    };
+    void syncSession();
+    const interval = window.setInterval(() => void syncSession(), 1000);
+    return () => {
+      cancelled = true;
+      window.clearInterval(interval);
+    };
+  }, [currentSession?.inviteCode, fetchSession, navigate]);
 
   const previousMemberIds = currentSession && previousMembersRef.current?.sessionId === currentSession.id
     ? previousMembersRef.current.ids
@@ -108,6 +120,69 @@ export default function SessionLobbyPage() {
   const inviteOrigin = resolveInviteOrigin(import.meta.env.VITE_INVITE_ORIGIN, window.location.origin);
   const inviteUrl = `${inviteOrigin}/join/${currentSession.inviteCode}`;
   const isSoloSession = currentSession.filters.partySize <= 1;
+
+  // Invitees only need confirmation that they joined. QR controls and room
+  // management belong to the host; this screen disappears automatically as
+  // soon as the host starts the shared round.
+  if (!presentation.isHost) {
+    return (
+      <ScreenContainer className="flex min-h-dvh flex-col overflow-hidden bg-[#FCF4EE] px-5">
+        <header className="flex items-center justify-center pt-[max(34px,env(safe-area-inset-top))]">
+          <LunchieLogo size={54} />
+        </header>
+        <main className="flex flex-1 flex-col items-center justify-center pb-16 text-center">
+          <motion.div
+            className="relative mb-7 flex size-32 items-center justify-center rounded-[38px] bg-white shadow-[0_18px_50px_rgba(221,92,86,0.15)]"
+            animate={reduceMotion ? undefined : { y: [0, -7, 0] }}
+            transition={reduceMotion ? undefined : { duration: 1.8, repeat: Infinity, ease: 'easeInOut' }}
+          >
+            <LunchmateCharacterRenderer
+              flowState="idle"
+              loadout={lunchmateLoadout}
+              size={106}
+              renderSize="compact"
+              artwork="chicken"
+              chickenAssetKeyOverride="idle"
+              chickenFaceSystem
+              animated={false}
+              alt="예선전 출발을 기다리는 런치킨"
+            />
+            <span className="absolute -right-2 -top-2 flex size-9 items-center justify-center rounded-full bg-[#EB5053] text-lg text-white shadow-lg">✓</span>
+          </motion.div>
+          <span className="rounded-full bg-[#FFE3DF] px-3 py-1 text-[11px] font-black tracking-[0.4px] text-[#D8484B]">JOINED</span>
+          <h1 className="mt-4 text-[25px] font-black tracking-[-0.7px] text-[#2F2927]">참여 완료!</h1>
+          <p className="mt-2 max-w-[290px] text-[14px] font-semibold leading-relaxed text-[#8A7B75]">
+            {presentation.isWaiting ? (
+              <>{presentation.hostName}님이 시작하면<br />바로 예선전으로 함께 이동해요.</>
+            ) : (
+              <>예선전으로 함께 이동하고 있어요.</>
+            )}
+          </p>
+
+          <div className="mt-8 flex items-center justify-center -space-x-2" aria-label={`${presentation.memberCount}명 참여 중`}>
+            {presentation.members.map(member => (
+              <span key={member.id} className="flex size-12 items-center justify-center rounded-full border-[3px] border-[#FCF4EE] bg-white text-[22px] shadow-sm" title={member.name}>
+                {member.emoji}
+              </span>
+            ))}
+          </div>
+          <div className="mt-5 flex items-center gap-2 text-[12px] font-bold text-[#A18F88]" role="status" aria-live="polite">
+            <span className="flex gap-1" aria-hidden="true">
+              {[0, 1, 2].map(index => (
+                <motion.span
+                  key={index}
+                  className="size-1.5 rounded-full bg-[#EB5053]"
+                  animate={reduceMotion ? undefined : { opacity: [0.25, 1, 0.25], y: [0, -3, 0] }}
+                  transition={reduceMotion ? undefined : { duration: 1.1, repeat: Infinity, delay: index * 0.16 }}
+                />
+              ))}
+            </span>
+            시작 신호를 확인하고 있어요
+          </div>
+        </main>
+      </ScreenContainer>
+    );
+  }
 
   const copyInviteLink = async (): Promise<boolean> => {
     try {
@@ -324,13 +399,11 @@ export default function SessionLobbyPage() {
                           )}
                         </div>
                         <span
-                          className={`inline-flex shrink-0 items-center gap-1 rounded-full px-2 py-1 text-[10px] font-bold ${
-                            member.ready ? 'bg-[#EAF7EC] text-[#278836]' : 'bg-[#ECE8E5] text-[#8A817B]'
-                          }`}
-                          aria-label={member.ready ? '준비 완료' : '준비 중'}
+                          className="inline-flex shrink-0 items-center gap-1 rounded-full bg-[#EAF7EC] px-2 py-1 text-[10px] font-bold text-[#278836]"
+                          aria-label="세션 참여 완료"
                         >
-                          {member.ready ? <CheckCircle2 size={12} aria-hidden="true" /> : <span className="size-1.5 rounded-full bg-current" />}
-                          {member.ready ? '준비 완료' : '준비 중'}
+                          <CheckCircle2 size={12} aria-hidden="true" />
+                          참여 완료
                         </span>
                       </div>
                     ))}

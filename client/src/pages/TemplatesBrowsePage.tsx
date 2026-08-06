@@ -3,13 +3,13 @@ import { motion } from 'framer-motion';
 import { useLocation } from 'wouter';
 import { ChevronLeft, ChevronRight, ImageOff } from 'lucide-react';
 import { COURSEMAP_TEMPLATES } from '@/constants/coursemapTemplates';
-import { SHARE_TEMPLATES, type ShareTemplateDesign } from '@/constants/shareTemplates';
+import { type ShareTemplateDesign } from '@/constants/shareTemplates';
 import ShareTemplateInfoSheet from '@/components/munchie/ShareTemplateInfoSheet';
 
 const FEED_TEMPLATES: ShareTemplateDesign[] = COURSEMAP_TEMPLATES.map(template => ({
-  id: `feed-${template.id}`,
+  id: template.id,
   name: template.name,
-  desc: '맛집 피드용 빈 프레임',
+  desc: template.description,
   aspect: '4:3',
   background: template.image,
 }));
@@ -19,14 +19,12 @@ function TemplateSection({
   title,
   description,
   templates,
-  previewKind,
   onSelect,
 }: {
   eyebrow: string;
   title: string;
   description: string;
   templates: ShareTemplateDesign[];
-  previewKind: 'feed' | 'story';
   onSelect: (template: ShareTemplateDesign) => void;
 }) {
   return (
@@ -58,13 +56,11 @@ function TemplateSection({
             transition={{ delay: Math.min(index, 3) * 0.04 }}
             whileTap={{ scale: 0.98 }}
           >
-            <div className={`flex w-full items-center justify-center overflow-hidden rounded-[14px] bg-[#F8F1EB] ${previewKind === 'feed' ? 'h-[192px]' : 'h-[252px]'}`}>
+            <div className="flex h-[192px] w-full items-center justify-center overflow-hidden rounded-[14px] bg-[#F8F1EB]">
               <img
                 src={template.background}
                 alt={`${template.name} 사진 없는 기본 템플릿`}
-                className={previewKind === 'feed'
-                  ? 'h-full w-full object-contain'
-                  : 'h-[238px] w-auto max-w-full object-contain'}
+                className="h-full w-full object-contain"
                 loading={index < 4 ? 'eager' : 'lazy'}
               />
             </div>
@@ -105,25 +101,15 @@ export default function TemplatesBrowsePage() {
         <p className="mt-5 text-[9px] font-black uppercase tracking-[0.2em] text-[#E66F70]">Munchie templates</p>
         <h1 className="mt-1 text-[26px] font-black tracking-[-0.03em] text-[#2D211C]">템플릿 한눈에 보기</h1>
         <p className="mt-2 text-[12px] font-semibold leading-relaxed text-[#8C776B]">
-          사진을 넣기 전의 기본 디자인을 용도별로 확인해보세요.
+          모든 Munchie 피드 디자인을 한곳에서 확인해보세요.
         </p>
       </header>
 
       <TemplateSection
         eyebrow="Munchie feed"
         title="맛집 피드 템플릿"
-        description="4:3 피드 카드 · 2×2로 둘러보기"
+        description={`4:3 피드 카드 · 전체 ${FEED_TEMPLATES.length}개`}
         templates={FEED_TEMPLATES}
-        previewKind="feed"
-        onSelect={setSelectedTemplate}
-      />
-
-      <TemplateSection
-        eyebrow="Story share"
-        title="스토리 공유 템플릿"
-        description="9:16 스토리 카드 · 2×2로 둘러보기"
-        templates={SHARE_TEMPLATES}
-        previewKind="story"
         onSelect={setSelectedTemplate}
       />
 

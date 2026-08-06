@@ -59,6 +59,14 @@ function createFrameOverlay(template: CoursemapTemplate): Promise<string | null>
         });
       });
 
+      // 변환된 스토리 템플릿의 인쇄된 사진 칸도 투명하게 열어 실제 피드 사진이 보이게 한다.
+      template.slots.forEach(slot => {
+        enqueue(
+          Math.round(canvas.width * ((slot.left + slot.width / 2) / 100)),
+          Math.round(canvas.height * ((slot.top + slot.height / 2) / 100)),
+        );
+      });
+
       while (head < tail) {
         const pixelIndex = queue[head] ?? 0;
         head += 1;

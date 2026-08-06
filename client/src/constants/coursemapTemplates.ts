@@ -1,3 +1,5 @@
+import { SHARE_TEMPLATES } from '@/constants/shareTemplates';
+
 /**
  * 코스맵 템플릿 — 4:3 규격(화면에는 세로로 세워 3:4로 노출).
  * templates4_3 스크랩북 프레임(temp1~6)을 배경으로 깔고,
@@ -29,7 +31,7 @@ export interface CoursemapTemplate {
   frameInset: { top: number; right: number; bottom: number; left: number };
 }
 
-export const COURSEMAP_TEMPLATES: CoursemapTemplate[] = [
+const ORIGINAL_COURSEMAP_TEMPLATES: CoursemapTemplate[] = [
   {
     id: 'lucky-green',
     name: '럭키 그린',
@@ -108,6 +110,67 @@ export const COURSEMAP_TEMPLATES: CoursemapTemplate[] = [
       { left: 24, top: 62, width: 40, height: 22, rotate: 2 },
     ],
   },
+];
+
+const STORY_GRID_SLOTS: TemplateSlot[] = [
+  { left: 12, top: 8, width: 35, height: 35, rotate: -1 },
+  { left: 54, top: 8, width: 35, height: 35, rotate: 1 },
+  { left: 12, top: 54, width: 35, height: 34, rotate: 1 },
+];
+
+const STORY_ROUTE_SLOTS: TemplateSlot[] = [
+  { left: 35, top: 4, width: 18, height: 16, rotate: -1 },
+  { left: 63, top: 17, width: 18, height: 16, rotate: 1 },
+  { left: 35, top: 35, width: 18, height: 16, rotate: -1 },
+];
+
+const STORY_RECEIPT_SLOTS: TemplateSlot[] = [
+  { left: 18, top: 24, width: 30, height: 22, rotate: -3 },
+  { left: 53, top: 36, width: 30, height: 22, rotate: 3 },
+  { left: 24, top: 59, width: 30, height: 22, rotate: -2 },
+];
+
+const STORY_TRAY_SLOTS: TemplateSlot[] = [
+  { left: 13, top: 34, width: 34, height: 19, radius: '12px' },
+  { left: 52, top: 34, width: 34, height: 19, radius: '12px' },
+  { left: 14, top: 58, width: 39, height: 23, radius: '12px' },
+];
+
+const STORY_CD_SLOTS: TemplateSlot[] = [
+  { left: 18, top: 22, width: 30, height: 23, rotate: -8 },
+  { left: 53, top: 18, width: 30, height: 23, rotate: 7 },
+  { left: 31, top: 52, width: 30, height: 23, rotate: -4 },
+];
+
+const STORY_TICKET_SLOTS: TemplateSlot[] = [
+  { left: 35, top: 24, width: 31, height: 16, radius: '50%' },
+  { left: 35, top: 44, width: 31, height: 16, radius: '50%' },
+  { left: 35, top: 64, width: 31, height: 16, radius: '50%' },
+];
+
+function getStoryFeedSlots(index: number): TemplateSlot[] {
+  if (index <= 2) return STORY_GRID_SLOTS;
+  if (index === 3 || (index >= 5 && index <= 7)) return STORY_ROUTE_SLOTS;
+  if (index >= 8 && index <= 10) return STORY_TRAY_SLOTS;
+  if (index >= 11 && index <= 13) return STORY_CD_SLOTS;
+  if (index >= 17) return STORY_TICKET_SLOTS;
+  return STORY_RECEIPT_SLOTS;
+}
+
+/** 기존 9:16 스토리 디자인을 원본 픽셀 그대로 중앙 크롭한 3:4 Munchie 피드 템플릿. */
+export const STORY_FEED_TEMPLATES: CoursemapTemplate[] = SHARE_TEMPLATES.map((template, index) => ({
+  id: `story-feed-${String(index + 1).padStart(2, '0')}`,
+  name: template.name,
+  image: `/templates4_3/story-converted/template-${String(index + 1).padStart(2, '0')}.jpg`,
+  description: `${template.name} 스토리 디자인을 4:3 맛집 피드에 맞게 재구성했어요.`,
+  bestFor: '맛집 기록 · 사진 앨범 · Munchie 피드',
+  slots: getStoryFeedSlots(index).map(slot => ({ ...slot })),
+  frameInset: { top: 6, right: 6, bottom: 6, left: 6 },
+}));
+
+export const COURSEMAP_TEMPLATES: CoursemapTemplate[] = [
+  ...ORIGINAL_COURSEMAP_TEMPLATES,
+  ...STORY_FEED_TEMPLATES,
 ];
 
 export function getTemplateByIndex(index: number): CoursemapTemplate {

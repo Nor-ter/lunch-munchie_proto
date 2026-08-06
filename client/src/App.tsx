@@ -43,6 +43,7 @@ import TemplatesBrowsePage from "./pages/TemplatesBrowsePage";
 import CourseFeedsPage from "./pages/course/CourseFeedsPage";
 import PlaceExplorePage from "./pages/PlaceExplorePage";
 import StorySharePage from "./pages/StorySharePage";
+import LunchieWaitingCompanion from "./components/lunchie/LunchieWaitingCompanion";
 
 const NO_TABBAR = ['/onboarding', '/tour-mode', '/course/', '/coursemap', '/template/', '/templates', '/lunchie', '/session', '/join', '/feed/', '/explore/places', '/auth'];
 const LUNCHIE_TABBAR_ROUTES = new Set(['/lunchie/settings', '/session/lobby']);
@@ -121,6 +122,7 @@ function AppShell({ userId }: { userId: string | null }) {
         </SlideTransitionRoutes>
       </div>
       {showTabBar && <TabBar />}
+      <LunchieWaitingCompanion />
     </div>
   );
 }

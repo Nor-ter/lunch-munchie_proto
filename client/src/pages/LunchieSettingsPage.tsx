@@ -3,13 +3,14 @@
  * Session persistence remains server-first through AppContext.
  */
 
-import { useEffect, useMemo, useRef, useState, type Dispatch, type PointerEvent as ReactPointerEvent, type ReactNode, type SetStateAction } from 'react';
+import { useEffect, useId, useMemo, useRef, useState, type Dispatch, type PointerEvent as ReactPointerEvent, type ReactNode, type SetStateAction } from 'react';
 import { motion } from 'framer-motion';
 import { useLocation, useSearch } from 'wouter';
 import {
   ArrowLeft,
   Check,
   ChevronDown,
+  ChevronUp,
   CircleHelp,
   Clock3,
   Minus,
@@ -110,8 +111,41 @@ function ChoiceChip({ selected, onClick, children, className = '' }: {
 }
 
 function DeadlineDial({ minutes, onChange }: { minutes: number; onChange: (minutes: number) => void }) {
-  const circumference = 2 * Math.PI * 44;
+  const gradientId = useId();
+  const [now, setNow] = useState(() => Date.now());
+  const [draftMinutes, setDraftMinutes] = useState(String(minutes));
+  const radius = 96;
+  const circumference = 2 * Math.PI * radius;
   const progress = Math.min(minutes, 15) / 15;
+
+  useEffect(() => {
+    const updateClock = () => setNow(Date.now());
+    window.addEventListener('focus', updateClock);
+    const interval = window.setInterval(updateClock, 30_000);
+    return () => {
+      window.removeEventListener('focus', updateClock);
+      window.clearInterval(interval);
+    };
+  }, []);
+
+  useEffect(() => setDraftMinutes(String(minutes)), [minutes]);
+
+  const commitDraftMinutes = () => {
+    const parsed = Number.parseInt(draftMinutes, 10);
+    const next = Number.isFinite(parsed) ? Math.max(1, Math.min(15, parsed)) : minutes;
+    onChange(next);
+    setDraftMinutes(String(next));
+  };
+
+  const deadlineLabel = useMemo(() => {
+    const deadline = new Date(now + minutes * 60_000);
+    return deadline.toLocaleTimeString('ko-KR', {
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: false,
+    });
+  }, [minutes, now]);
+
   const updateFromPointer = (event: ReactPointerEvent<HTMLDivElement>) => {
     const rect = event.currentTarget.getBoundingClientRect();
     const x = event.clientX - rect.left - rect.width / 2;
@@ -119,83 +153,158 @@ function DeadlineDial({ minutes, onChange }: { minutes: number; onChange: (minut
     let angle = Math.atan2(y, x) + Math.PI / 2;
     if (angle < 0) angle += Math.PI * 2;
     const ratio = angle / (Math.PI * 2);
-    onChange(ratio < 0.025 ? 15 : Math.max(1, Math.min(15, Math.ceil(ratio * 15))));
+    onChange(Math.max(1, Math.min(15, Math.ceil(ratio * 15))));
   };
+
   return (
-    <div
-      className="relative size-[104px] shrink-0 cursor-grab touch-none select-none active:cursor-grabbing"
-      role="slider"
-      tabIndex={0}
-      aria-label="마감 시간"
-      aria-valuemin={1}
-      aria-valuemax={15}
-      aria-valuenow={minutes}
-      aria-valuetext={`${minutes}분`}
-      onPointerDown={event => {
-        event.currentTarget.setPointerCapture(event.pointerId);
-        updateFromPointer(event);
-      }}
-      onPointerMove={event => {
-        if (event.currentTarget.hasPointerCapture(event.pointerId)) updateFromPointer(event);
-      }}
-      onKeyDown={event => {
-        if (event.key === 'ArrowRight' || event.key === 'ArrowUp') onChange(Math.min(15, minutes + 1));
-        if (event.key === 'ArrowLeft' || event.key === 'ArrowDown') onChange(Math.max(1, minutes - 1));
-      }}
-    >
-      <svg width="104" height="104" className="-rotate-90" aria-hidden="true">
-        <circle cx="52" cy="52" r="44" fill="none" stroke="#F4F0EF" strokeWidth="9" />
-        <circle
-          cx="52"
-          cy="52"
-          r="44"
-          fill="none"
-          stroke="#F4515E"
-          strokeWidth="9"
-          strokeLinecap="round"
-          strokeDasharray={circumference}
-          strokeDashoffset={circumference * (1 - progress)}
-          className="transition-[stroke-dashoffset] duration-200"
+    <div className="flex w-full flex-col items-center">
+      <div className="text-center" aria-live="polite">
+        <div className="flex items-baseline justify-center text-[#211E20]">
+          <strong className="text-[58px] font-medium leading-[0.95] tracking-[-4px] tabular-nums">{minutes}</strong>
+          <span className="ml-1 text-[34px] font-medium leading-none">분</span>
+        </div>
+        <div className="mt-3 inline-flex min-h-10 items-center gap-2 rounded-[13px] bg-[#F5F3F3] px-4 text-[#4F494C]">
+          <Clock3 size={17} strokeWidth={2.4} aria-hidden="true" />
+          <span className="text-[13px] font-extrabold tabular-nums">{deadlineLabel} 종료</span>
+        </div>
+      </div>
+
+      <div
+        className="relative mt-3 size-[236px] shrink-0 cursor-grab touch-none select-none active:cursor-grabbing"
+        role="slider"
+        tabIndex={0}
+        aria-label="마감 시간"
+        aria-valuemin={1}
+        aria-valuemax={15}
+        aria-valuenow={minutes}
+        aria-valuetext={`${minutes}분, ${deadlineLabel} 종료`}
+        onPointerDown={event => {
+          event.currentTarget.setPointerCapture(event.pointerId);
+          updateFromPointer(event);
+        }}
+        onPointerMove={event => {
+          if (event.currentTarget.hasPointerCapture(event.pointerId)) updateFromPointer(event);
+        }}
+        onPointerUp={event => {
+          if (event.currentTarget.hasPointerCapture(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId);
+        }}
+        onPointerCancel={event => {
+          if (event.currentTarget.hasPointerCapture(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId);
+        }}
+        onKeyDown={event => {
+          if (event.key === 'ArrowRight' || event.key === 'ArrowUp') {
+            event.preventDefault();
+            onChange(Math.min(15, minutes + 1));
+          }
+          if (event.key === 'ArrowLeft' || event.key === 'ArrowDown') {
+            event.preventDefault();
+            onChange(Math.max(1, minutes - 1));
+          }
+          if (event.key === 'Home') onChange(1);
+          if (event.key === 'End') onChange(15);
+        }}
+      >
+        <svg viewBox="0 0 236 236" className="size-full drop-shadow-[0_8px_14px_rgba(72,47,55,0.08)]" aria-hidden="true">
+          <defs>
+            <linearGradient id={gradientId} x1="34" y1="24" x2="207" y2="74" gradientUnits="userSpaceOnUse">
+              <stop stopColor="#8F297F" />
+              <stop offset="0.52" stopColor="#D93687" />
+              <stop offset="1" stopColor="#FF5B78" />
+            </linearGradient>
+          </defs>
+          <circle cx="118" cy="118" r={radius} fill="#FFFFFF" stroke="#F1EEEE" strokeWidth="10" />
+          <circle
+            cx="118"
+            cy="118"
+            r={radius}
+            fill="none"
+            stroke={`url(#${gradientId})`}
+            strokeWidth="10"
+            strokeLinecap="round"
+            strokeDasharray={circumference}
+            strokeDashoffset={circumference * (1 - progress)}
+            transform="rotate(-90 118 118)"
+            className="transition-[stroke-dashoffset] duration-200"
+          />
+          {Array.from({ length: 30 }, (_, index) => {
+            const angle = (index / 30) * Math.PI * 2 - Math.PI / 2;
+            const innerRadius = index % 5 === 0 ? 70 : 76;
+            const outerRadius = 84;
+            return (
+              <line
+                key={index}
+                x1={118 + Math.cos(angle) * innerRadius}
+                y1={118 + Math.sin(angle) * innerRadius}
+                x2={118 + Math.cos(angle) * outerRadius}
+                y2={118 + Math.sin(angle) * outerRadius}
+                stroke="#2D292B"
+                strokeWidth={index % 5 === 0 ? 4 : 3}
+                strokeLinecap="round"
+              />
+            );
+          })}
+        </svg>
+        <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
+          <div
+            className="pointer-events-auto flex min-h-14 w-[130px] items-stretch overflow-hidden rounded-[17px] bg-[#F5F3F3] shadow-[inset_0_0_0_1px_rgba(70,55,60,0.03)]"
+            onPointerDown={event => event.stopPropagation()}
+          >
+            <label className="flex min-w-0 flex-1 items-center pl-4">
+              <input
+                type="number"
+                inputMode="numeric"
+                min={1}
+                max={15}
+                step={1}
+                value={draftMinutes}
+                onChange={event => {
+                  const value = event.target.value;
+                  setDraftMinutes(value);
+                  const parsed = Number.parseInt(value, 10);
+                  if (Number.isFinite(parsed) && parsed >= 1 && parsed <= 15) onChange(parsed);
+                }}
+                onBlur={commitDraftMinutes}
+                onKeyDown={event => {
+                  event.stopPropagation();
+                  if (event.key === 'Enter') event.currentTarget.blur();
+                }}
+                className="w-10 appearance-none bg-transparent text-center text-[24px] font-black leading-none tabular-nums text-[#2D292B] outline-none [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+                aria-label="마감 분 직접 입력"
+              />
+              <span className="ml-1 text-[12px] font-extrabold text-[#91898D]">분</span>
+            </label>
+            <div className="flex w-9 shrink-0 flex-col border-l border-[#E7E1E3]">
+              <button
+                type="button"
+                onClick={() => onChange(Math.min(15, minutes + 1))}
+                disabled={minutes >= 15}
+                className="flex flex-1 items-center justify-center text-[#5D565A] transition-colors hover:bg-white/70 disabled:text-[#CFC8CB]"
+                aria-label="마감 시간 1분 늘리기"
+              >
+                <ChevronUp size={15} strokeWidth={2.5} />
+              </button>
+              <button
+                type="button"
+                onClick={() => onChange(Math.max(1, minutes - 1))}
+                disabled={minutes <= 1}
+                className="flex flex-1 items-center justify-center border-t border-[#E7E1E3] text-[#5D565A] transition-colors hover:bg-white/70 disabled:text-[#CFC8CB]"
+                aria-label="마감 시간 1분 줄이기"
+              >
+                <ChevronDown size={15} strokeWidth={2.5} />
+              </button>
+            </div>
+          </div>
+        </div>
+        <span
+          className="pointer-events-none absolute size-4 -translate-x-1/2 -translate-y-1/2 rounded-full border-[3px] border-white bg-[#FF5B78] shadow-[0_2px_6px_rgba(143,41,127,0.35)] transition-[left,top] duration-200"
+          style={{
+            left: 118 + Math.sin(progress * Math.PI * 2) * radius,
+            top: 118 - Math.cos(progress * Math.PI * 2) * radius,
+          }}
+          aria-hidden="true"
         />
-      </svg>
-      <div className="absolute inset-0 flex flex-col items-center justify-center">
-        <strong className="text-[26px] leading-none text-[#26232A]">{minutes}</strong>
-        <span className="mt-1 text-[10px] font-bold text-[#A6A0A3]">MIN</span>
       </div>
     </div>
-  );
-}
-
-function DeadlineMinuteInput({ minutes, onChange }: { minutes: number; onChange: (minutes: number) => void }) {
-  const [draft, setDraft] = useState(String(minutes));
-
-  useEffect(() => setDraft(String(minutes)), [minutes]);
-
-  const commit = () => {
-    const parsed = Number.parseInt(draft, 10);
-    const next = Number.isFinite(parsed) ? Math.max(1, Math.min(15, parsed)) : minutes;
-    onChange(next);
-    setDraft(String(next));
-  };
-
-  return (
-    <label className="mt-2 flex min-h-10 items-center rounded-[14px] bg-[#F5F3F3] px-3">
-        <input
-          type="number"
-          inputMode="numeric"
-          min={1}
-          max={15}
-          value={draft}
-          onChange={event => setDraft(event.target.value)}
-          onBlur={commit}
-          onKeyDown={event => {
-            if (event.key === 'Enter') event.currentTarget.blur();
-          }}
-          className="min-w-0 flex-1 bg-transparent text-left text-[12px] font-extrabold text-[#403A3D] outline-none"
-          aria-label="마감 분 직접 입력"
-        />
-        <span className="text-[10px] font-bold text-[#AAA3A6]">분 직접입력</span>
-    </label>
   );
 }
 
@@ -512,18 +621,14 @@ export default function LunchieSettingsPage() {
 
         <Card>
           <CardTitle icon={<Clock3 size={16} />}>마감</CardTitle>
-          <div className="grid grid-cols-[112px_minmax(0,1fr)] items-center gap-4">
-            <DeadlineDial minutes={deadlineMin} onChange={setDeadlineMin} />
-            <div className="min-w-0">
-              <div className="grid grid-cols-3 gap-1.5">
-                {DEADLINE_OPTIONS.map(minutes => (
-                  <ChoiceChip key={minutes} selected={deadlineMin === minutes} onClick={() => setDeadlineMin(minutes)} className="min-h-9 px-1">{minutes}분</ChoiceChip>
-                ))}
-              </div>
-              <DeadlineMinuteInput minutes={deadlineMin} onChange={setDeadlineMin} />
+          <DeadlineDial minutes={deadlineMin} onChange={setDeadlineMin} />
+          <div className="mx-auto mt-4 w-full max-w-[320px]">
+            <div className="grid grid-cols-3 gap-1.5">
+              {DEADLINE_OPTIONS.map(minutes => (
+                <ChoiceChip key={minutes} selected={deadlineMin === minutes} onClick={() => setDeadlineMin(minutes)} className="min-h-9 px-1">{minutes}분</ChoiceChip>
+              ))}
             </div>
           </div>
-          <p className="mt-2 text-center text-[9px] font-semibold text-[#A6A0A3]">다이얼을 돌리거나 1–15분 사이로 직접 입력해요</p>
         </Card>
 
         {!isSolo && (
