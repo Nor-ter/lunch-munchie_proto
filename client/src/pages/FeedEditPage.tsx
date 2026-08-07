@@ -140,7 +140,6 @@ export default function FeedEditPage() {
           if (!editingPhoto) return null;
           return (
             <PhotoEditorModal
-              src={editingPhoto.src}
               originalSrc={editingPhoto.originalSrc ?? editingPhoto.src}
               cropAspect={(editingPhoto.w * 3) / ((editingPhoto.h ?? editingPhoto.w) * 4)}
               onBack={nextCropAspect => {
