@@ -8,7 +8,7 @@ import {
 } from "../../shared/const";
 import { categoryMatchesIntent, type Intent } from "../../shared/intent";
 import { isValidCoordinate, isWithinRadius } from "../../shared/geo";
-import { buildSlate } from "../../server/engine/scorer";
+import { buildSlate, scoreCandidateBreakdown } from "../../server/engine/scorer";
 import type { Candidate, RecContext, SlateType } from "../../shared/engine";
 import { isAdminEmail } from "./adminAccess";
 import { assessLearningReadiness, coverage } from "./algorithmInsights";
@@ -400,7 +400,7 @@ app.get("/api/admin/metrics", async (c) => {
     : 30;
   const start = Date.now() - (days - 1) * 86_400_000;
   const count = (row: { count?: number | string } | null | undefined) => Number(row?.count ?? 0);
-  const [registered, newRegistered, activeActors, activeSignedIn, activeGuests, eventResult, trendResult, personaResult, modelResult, impressionCoverage, persistedSlates, servedImpressions, attributableSwipes, categoryResult] = await Promise.all([
+  const [registered, newRegistered, activeActors, activeSignedIn, activeGuests, eventResult, trendResult, personaResult, modelResult, impressionCoverage, persistedSlates, servedImpressions, attributableSwipes, categoryResult, contributionResult] = await Promise.all([
     c.env.DB.prepare("SELECT COUNT(*) AS count FROM users").first<{ count: number }>(),
     c.env.DB.prepare("SELECT COUNT(*) AS count FROM users WHERE created_at >= ?").bind(start).first<{ count: number }>(),
     c.env.DB.prepare("SELECT COUNT(DISTINCT user_id) AS count FROM rec_events WHERE created_at >= ? AND user_id IS NOT NULL").bind(start).first<{ count: number }>(),
@@ -415,6 +415,7 @@ app.get("/api/admin/metrics", async (c) => {
     c.env.DB.prepare("SELECT COUNT(*) AS count FROM rec_events e INNER JOIN recommendation_slates s ON s.id = e.slate_id WHERE e.created_at >= ? AND e.event_type = 'IMPRESSION'").bind(start).first<{ count: number }>(),
     c.env.DB.prepare("SELECT COUNT(*) AS count FROM rec_events e INNER JOIN recommendation_slates s ON s.id = e.slate_id WHERE e.created_at >= ? AND e.event_type = 'SWIPE'").bind(start).first<{ count: number }>(),
     c.env.DB.prepare("SELECT r.category AS category, SUM(CASE WHEN e.event_type = 'IMPRESSION' THEN 1 ELSE 0 END) AS impressions, SUM(CASE WHEN e.event_type = 'SWIPE' AND e.action = 'LIKE' THEN 1 ELSE 0 END) AS likes, SUM(CASE WHEN e.event_type = 'SWIPE' AND e.action = 'NOPE' THEN 1 ELSE 0 END) AS nopes, SUM(CASE WHEN e.event_type = 'WINNER' THEN 1 ELSE 0 END) AS decisions FROM rec_events e JOIN restaurants r ON r.id = e.restaurant_id WHERE e.created_at >= ? AND e.event_type IN ('IMPRESSION', 'SWIPE', 'WINNER') GROUP BY r.category ORDER BY impressions DESC, decisions DESC LIMIT 8").bind(start).all<{ category: string; impressions: number; likes: number; nopes: number; decisions: number }>(),
+    c.env.DB.prepare("SELECT AVG(CAST(json_extract(item.value, '$.components.reputation') AS REAL)) AS reputation, AVG(CAST(json_extract(item.value, '$.components.context') AS REAL)) AS context, AVG(CAST(json_extract(item.value, '$.components.taste') AS REAL)) AS taste, AVG(CAST(json_extract(item.value, '$.components.exposureFatigue') AS REAL)) AS exposure_fatigue, AVG(CAST(json_extract(item.value, '$.components.satiation') AS REAL)) AS satiation, AVG(CAST(json_extract(item.value, '$.components.journeyChain') AS REAL)) AS journey_chain, COUNT(*) AS count FROM recommendation_slates s, json_each(s.items_json) AS item WHERE s.created_at >= ? AND json_type(item.value, '$.components') = 'object'").bind(start).first<{ reputation: number | null; context: number | null; taste: number | null; exposure_fatigue: number | null; satiation: number | null; journey_chain: number | null; count: number }>(),
   ]);
   const events = new Map<string, number>();
   for (const row of eventResult.results) events.set(`${row.event_type}:${row.action ?? ''}`, Number(row.count));
@@ -445,6 +446,7 @@ app.get("/api/admin/metrics", async (c) => {
     contextCoverage: coverage(Number(impressionCoverage?.context_logged ?? 0), impressionTotal),
   };
   const learning = assessLearningReadiness({ ...instrumentation, decisions });
+  const observedResponseRate = likes + nopes ? likes / (likes + nopes) : null;
   return c.json({
     days,
     users: { registered: count(registered), newRegistered: count(newRegistered), activeActors: count(activeActors), activeSignedIn: count(activeSignedIn), activeGuests: count(activeGuests) },
@@ -472,8 +474,20 @@ app.get("/api/admin/metrics", async (c) => {
         nopes,
         decisions: Number(row.decisions),
         likeRate: likes + nopes ? likes / (likes + nopes) : null,
+        responseLift: likes + nopes && observedResponseRate !== null
+          ? likes / (likes + nopes) - observedResponseRate
+          : null,
       };
     }),
+    policyContributions: contributionResult?.count ? [
+      { factor: "평판", contribution: Number(contributionResult.reputation ?? 0) },
+      { factor: "맥락 적합", contribution: Number(contributionResult.context ?? 0) },
+      { factor: "개인 취향", contribution: Number(contributionResult.taste ?? 0) },
+      { factor: "최근 노출", contribution: Number(contributionResult.exposure_fatigue ?? 0) },
+      { factor: "재소비", contribution: Number(contributionResult.satiation ?? 0) },
+      { factor: "여정 연쇄", contribution: Number(contributionResult.journey_chain ?? 0) },
+    ] : [],
+    contributionSampleSize: Number(contributionResult?.count ?? 0),
     updatedAt: new Date().toISOString(),
   });
 });
@@ -803,18 +817,19 @@ app.post("/api/recommend", async (c) => {
       diet: Array.isArray(ctx.dietary) ? ctx.dietary : Array.isArray(ctx.diet) ? ctx.diet : undefined,
     };
     const now = Date.now();
+    const exposurePenalty = (restaurantId: string) => {
+      const exposure = exposureMap[restaurantId];
+      if (!exposure?.count || !exposure.updatedAt) return 0;
+      const elapsed = Math.max(0, now - exposure.updatedAt);
+      const decayed = exposure.count * Math.pow(0.5, elapsed / 86_400_000);
+      return Math.min(0.9, decayed / 4);
+    };
     const scoredSlate = buildSlate(results as Candidate[], recommendationContext, {
       k,
       // Stage 0 is a context/reputation policy with controlled exploration.
       // Do not label it as personalised learning before a durable taste model exists.
       eps: 0.12,
-      exposurePenalty: (restaurantId) => {
-        const exposure = exposureMap[restaurantId];
-        if (!exposure?.count || !exposure.updatedAt) return 0;
-        const elapsed = Math.max(0, now - exposure.updatedAt);
-        const decayed = exposure.count * Math.pow(0.5, elapsed / 86_400_000);
-        return Math.min(0.9, decayed / 4);
-      },
+      exposurePenalty,
     });
     const byId = new Map((results as any[]).map((restaurant) => [restaurant.id, restaurant]));
     const finalResults = scoredSlate
@@ -847,6 +862,13 @@ app.post("/api/recommend", async (c) => {
       position: item.rank,
       score: item.score,
       propensity: item.propensity,
+      components: scoreCandidateBreakdown(
+        item.restaurant as Candidate,
+        recommendationContext,
+        results as Candidate[],
+        null,
+        exposurePenalty(item.id),
+      ),
     }));
     const contextJson = JSON.stringify(recommendationContext);
     const expiry = now + 24 * 60 * 60 * 1000;

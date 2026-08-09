@@ -7,7 +7,8 @@ type Persona = { category: string; selectors: number; decisions: number };
 type Model = { version: string; impressions: number; swipes: number; likes: number; likeRate: number | null };
 type Instrumentation = { persistedSlates: number; servedImpressions: number; attributableSwipes: number; propensityCoverage: number | null; scoreCoverage: number | null; modelVersionCoverage: number | null; contextCoverage: number | null };
 type Learning = { level: 'blocked' | 'instrumenting' | 'measuring' | 'evaluation-ready'; label: string; detail: string; nextStep: string };
-type CategoryPerformance = { category: string; impressions: number; likes: number; nopes: number; decisions: number; likeRate: number | null };
+type CategoryPerformance = { category: string; impressions: number; likes: number; nopes: number; decisions: number; likeRate: number | null; responseLift: number | null };
+type PolicyContribution = { factor: string; contribution: number };
 type AdminMetrics = {
   days: number;
   updatedAt: string;
@@ -20,6 +21,8 @@ type AdminMetrics = {
   instrumentation: Instrumentation;
   learning: Learning;
   categoryPerformance: CategoryPerformance[];
+  policyContributions: PolicyContribution[];
+  contributionSampleSize: number;
 };
 
 const COLORS = ['#FF6B6F', '#F49A8A', '#F7C873', '#85B8A9', '#86A8E7', '#AA95D9'];
@@ -167,8 +170,11 @@ export default function AdminDashboardPage() {
           <Panel title="추천 정책 학습 신호" detail="정책 버전별 노출·스와이프·수락률입니다. 표본이 작을 때는 의사결정에 사용하지 마세요.">
             {metrics.models.length ? <div className="space-y-3">{metrics.models.map((model) => <div key={model.version} className="rounded-xl bg-white/[0.05] p-3"><div className="flex justify-between gap-3"><span className="font-mono text-xs text-[#FFB3B5]">{model.version}</span><span className="text-sm font-bold">수락 {percentage(model.likeRate)}</span></div><div className="mt-2 grid grid-cols-3 text-xs text-white/60"><span>노출 {model.impressions}</span><span>스와이프 {model.swipes}</span><span>좋아요 {model.likes}</span></div></div>)}</div> : <Empty label="아직 모델 버전이 기록된 추천 데이터가 없습니다." />}
           </Panel>
-          <Panel title="카테고리 노출과 반응" detail="많이 노출된 카테고리와 실제 반응을 함께 봅니다. 노출이 적은 항목의 수락률은 성과로 해석하지 마세요.">
-            {metrics.categoryPerformance.length ? <div className="h-72"><ResponsiveContainer><BarChart data={metrics.categoryPerformance} margin={{ left: -16 }}><CartesianGrid stroke="#ffffff14" vertical={false} /><XAxis dataKey="category" tick={{ fill: '#ffffff88', fontSize: 10 }} axisLine={false} tickLine={false} interval={0} /><YAxis allowDecimals={false} tick={{ fill: '#ffffff88', fontSize: 11 }} axisLine={false} tickLine={false} /><Tooltip contentStyle={{ background: '#171717', border: '1px solid #ffffff22', borderRadius: 10 }} formatter={(value: number, name: string) => [value, name === 'impressions' ? '노출' : name === 'decisions' ? '결정' : name]} /><Bar dataKey="impressions" name="impressions" fill="#86A8E7" radius={[5, 5, 0, 0]} /><Bar dataKey="decisions" name="decisions" fill="#FF7376" radius={[5, 5, 0, 0]} /></BarChart></ResponsiveContainer></div> : <Empty label="카테고리별 추천 증거가 아직 없습니다." />}
+          <Panel title="현재 정책의 점수 구성" detail={`서버가 실제로 낸 슬레이트 ${metrics.contributionSampleSize}개 항목의 평균 점수 기여입니다. ‘왜 추천됐는지’의 정책 설명이며, 사용자의 결정 원인이나 인과 효과는 아닙니다.`}>
+            {metrics.policyContributions.length ? <div className="h-72"><ResponsiveContainer><BarChart data={metrics.policyContributions} layout="vertical" margin={{ left: 16 }}><CartesianGrid stroke="#ffffff14" vertical={false} /><XAxis type="number" tick={{ fill: '#ffffff88', fontSize: 11 }} axisLine={false} tickLine={false} /><YAxis dataKey="factor" type="category" width={68} tick={{ fill: '#ffffffcc', fontSize: 12 }} axisLine={false} tickLine={false} /><Tooltip contentStyle={{ background: '#171717', border: '1px solid #ffffff22', borderRadius: 10 }} formatter={(value: number) => [value.toFixed(3), '평균 점수 기여']} /><Bar dataKey="contribution" name="기여도" fill="#F7C873" radius={[0, 6, 6, 0]} /></BarChart></ResponsiveContainer></div> : <Empty label="새 추천 슬레이트가 쌓이면 점수 구성부터 표시합니다." />}
+          </Panel>
+          <Panel title="카테고리별 결정 반응" detail="노출 후 LIKE/NOPE 반응의 관측 차이입니다. 카테고리는 무작위 배정되지 않으므로 ‘결정에 미친 인과 영향’이 아니라 다음 정책 가설을 위한 신호입니다.">
+            {metrics.categoryPerformance.length ? <><div className="h-56"><ResponsiveContainer><BarChart data={metrics.categoryPerformance} margin={{ left: -16 }}><CartesianGrid stroke="#ffffff14" vertical={false} /><XAxis dataKey="category" tick={{ fill: '#ffffff88', fontSize: 10 }} axisLine={false} tickLine={false} interval={0} /><YAxis allowDecimals={false} tick={{ fill: '#ffffff88', fontSize: 11 }} axisLine={false} tickLine={false} /><Tooltip contentStyle={{ background: '#171717', border: '1px solid #ffffff22', borderRadius: 10 }} formatter={(value: number, name: string) => [value, name === 'impressions' ? '노출' : name === 'decisions' ? '결정' : name]} /><Bar dataKey="impressions" name="impressions" fill="#86A8E7" radius={[5, 5, 0, 0]} /><Bar dataKey="decisions" name="decisions" fill="#FF7376" radius={[5, 5, 0, 0]} /></BarChart></ResponsiveContainer></div><div className="mt-3 grid gap-2 sm:grid-cols-2">{metrics.categoryPerformance.map((row) => <div key={row.category} className="rounded-lg bg-white/[0.05] px-3 py-2 text-xs"><div className="flex justify-between"><span>{row.category}</span><span className="font-semibold">반응 {percentage(row.likeRate)}</span></div><p className="mt-1 text-white/55">전체 대비 {row.responseLift === null ? '데이터 없음' : `${row.responseLift >= 0 ? '+' : ''}${(row.responseLift * 100).toFixed(1)}%p`} · 노출 {row.impressions}</p></div>)}</div></> : <Empty label="카테고리별 추천 증거가 아직 없습니다." />}
           </Panel>
         </div>
         <footer className="mt-6 flex items-center gap-2 text-xs text-white/40"><DatabaseZap size={14} /><span>개인 식별자·정확 위치·개별 취향 벡터는 이 화면과 API에 포함되지 않습니다. 마지막 집계 {new Date(metrics.updatedAt).toLocaleString('ko-KR')}</span></footer>
