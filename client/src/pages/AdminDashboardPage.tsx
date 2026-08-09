@@ -1,10 +1,13 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Bar, BarChart, CartesianGrid, Cell, Line, LineChart, Pie, PieChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
-import { BarChart3, LockKeyhole, RefreshCw, ShieldCheck, UsersRound } from 'lucide-react';
+import { BarChart3, DatabaseZap, LockKeyhole, RefreshCw, ShieldCheck, UsersRound } from 'lucide-react';
 
 type Trend = { day: string; activeActors: number; sessions: number; decisions: number };
 type Persona = { category: string; selectors: number; decisions: number };
 type Model = { version: string; impressions: number; swipes: number; likes: number; likeRate: number | null };
+type Instrumentation = { persistedSlates: number; servedImpressions: number; attributableSwipes: number; propensityCoverage: number | null; scoreCoverage: number | null; modelVersionCoverage: number | null; contextCoverage: number | null };
+type Learning = { level: 'blocked' | 'instrumenting' | 'measuring' | 'evaluation-ready'; label: string; detail: string; nextStep: string };
+type CategoryPerformance = { category: string; impressions: number; likes: number; nopes: number; decisions: number; likeRate: number | null };
 type AdminMetrics = {
   days: number;
   updatedAt: string;
@@ -14,6 +17,9 @@ type AdminMetrics = {
   trend: Trend[];
   personas: Persona[];
   models: Model[];
+  instrumentation: Instrumentation;
+  learning: Learning;
+  categoryPerformance: CategoryPerformance[];
 };
 
 const COLORS = ['#FF6B6F', '#F49A8A', '#F7C873', '#85B8A9', '#86A8E7', '#AA95D9'];
@@ -23,6 +29,12 @@ const dayLabel = (day: string) => {
   return `${Number(month)}/${Number(date)}`;
 };
 const percentage = (value: number | null) => value === null ? '데이터 없음' : `${(value * 100).toFixed(1)}%`;
+const readinessTone = (level: Learning['level']) => ({
+  blocked: 'border-[#FF7679]/40 bg-[#52282A] text-[#FFB9BA]',
+  instrumenting: 'border-[#F7C873]/35 bg-[#4C4227] text-[#FFE1A2]',
+  measuring: 'border-[#86A8E7]/35 bg-[#273A52] text-[#C5D9FF]',
+  'evaluation-ready': 'border-[#85B8A9]/35 bg-[#25423A] text-[#B8E5D5]',
+}[level]);
 
 function MetricCard({ label, value, detail }: { label: string; value: string; detail: string }) {
   return <div className="rounded-2xl border border-white/10 bg-white/[0.06] p-4">
@@ -113,6 +125,7 @@ export default function AdminDashboardPage() {
           <MetricCard label="익명 체험 이용자" value={String(metrics.users.activeGuests)} detail="기기 쿠키 기준, 중복 제거" />
           <MetricCard label="결정 완료" value={String(metrics.funnel.decisions)} detail={`세션 결정률 ${percentage(metrics.quality.sessionDecisionRate)}`} />
           <MetricCard label="추천 수락률" value={percentage(metrics.quality.swipeLikeRate)} detail="좋아요 ÷ 선호/비선호 스와이프" />
+          <MetricCard label="학습 상태" value={metrics.learning.label} detail={`근거 스와이프 ${metrics.instrumentation.attributableSwipes}건`} />
         </div>
 
         <div className="mt-5 grid gap-5 lg:grid-cols-2">
@@ -123,14 +136,42 @@ export default function AdminDashboardPage() {
             <div className="h-72"><ResponsiveContainer><BarChart data={funnel} layout="vertical" margin={{ left: 12 }}><XAxis type="number" allowDecimals={false} tick={{ fill: '#ffffff88', fontSize: 11 }} axisLine={false} tickLine={false} /><YAxis dataKey="label" type="category" width={54} tick={{ fill: '#ffffffcc', fontSize: 12 }} axisLine={false} tickLine={false} /><Tooltip contentStyle={{ background: '#171717', border: '1px solid #ffffff22', borderRadius: 10 }} /><Bar dataKey="value" name="건수" fill="#FF7376" radius={[0, 8, 8, 0]} /></BarChart></ResponsiveContainer></div>
             <div className="grid grid-cols-3 gap-2 text-center text-xs"><Stat label="재추천" value={percentage(metrics.quality.rerollRate)} /><Stat label="Propensity 기록" value={percentage(metrics.quality.propensityCoverage)} /><Stat label="Score 기록" value={percentage(metrics.quality.scoreCoverage)} /></div>
           </Panel>
+          <Panel title="알고리즘 학습 준비도" detail="자동 최적화의 성과가 아니라, 문서에 정의된 오프라인 평가를 시작해도 되는지의 전제 조건입니다.">
+            <div className={`rounded-xl border p-4 ${readinessTone(metrics.learning.level)}`}>
+              <p className="text-sm font-bold">{metrics.learning.label}</p>
+              <p className="mt-2 text-xs leading-5 opacity-90">{metrics.learning.detail}</p>
+              <p className="mt-3 border-t border-current/20 pt-3 text-xs font-medium">다음: {metrics.learning.nextStep}</p>
+            </div>
+            <div className="mt-3 grid grid-cols-2 gap-2 text-center text-xs sm:grid-cols-3">
+              <Stat label="불변 슬레이트" value={`${metrics.instrumentation.persistedSlates}개`} />
+              <Stat label="서버 노출" value={`${metrics.instrumentation.servedImpressions}건`} />
+              <Stat label="행동 연결" value={`${metrics.instrumentation.attributableSwipes}건`} />
+            </div>
+          </Panel>
+          <Panel title="계측 계약" detail="추천을 받은 뒤의 클라이언트 값이 아니라, 서버가 저장한 노출 증거를 기준으로 합니다.">
+            <div className="space-y-3">
+              {[
+                ['포함 확률 (propensity)', metrics.instrumentation.propensityCoverage],
+                ['정책 점수', metrics.instrumentation.scoreCoverage],
+                ['정책 버전', metrics.instrumentation.modelVersionCoverage],
+                ['요청 맥락 스냅샷', metrics.instrumentation.contextCoverage],
+              ].map(([label, value]) => <div key={String(label)}>
+                <div className="flex justify-between gap-3 text-xs"><span className="text-white/70">{label}</span><span className="font-semibold text-white">{percentage(value as number | null)}</span></div>
+                <div className="mt-1.5 h-2 overflow-hidden rounded-full bg-white/10"><div className="h-full rounded-full bg-[#FF7376]" style={{ width: `${Math.max(0, Math.min(100, Number(value ?? 0) * 100))}%` }} /></div>
+              </div>)}
+            </div>
+          </Panel>
           <Panel title="관찰된 취향 분포" detail="기간 내 최종 선택 카테고리를 익명·집계해 표시합니다. 개인 페르소나는 노출하지 않습니다.">
             {metrics.personas.length ? <div className="flex h-72 flex-col sm:flex-row"><ResponsiveContainer width="100%" height="100%"><PieChart><Pie data={metrics.personas} dataKey="decisions" nameKey="category" innerRadius={48} outerRadius={92} paddingAngle={3}>{metrics.personas.map((row, index) => <Cell key={row.category} fill={COLORS[index % COLORS.length]} />)}</Pie><Tooltip contentStyle={{ background: '#171717', border: '1px solid #ffffff22', borderRadius: 10 }} /></PieChart></ResponsiveContainer><div className="grid content-center gap-2 text-xs text-white/75">{metrics.personas.map((row, index) => <div key={row.category} className="flex items-center gap-2"><span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: COLORS[index % COLORS.length] }} /><span>{row.category}</span><span className="ml-auto">{row.decisions}회 · {row.selectors}명</span></div>)}</div></div> : <Empty label="아직 최종 결정 데이터가 없습니다." />}
           </Panel>
           <Panel title="추천 정책 학습 신호" detail="정책 버전별 노출·스와이프·수락률입니다. 표본이 작을 때는 의사결정에 사용하지 마세요.">
             {metrics.models.length ? <div className="space-y-3">{metrics.models.map((model) => <div key={model.version} className="rounded-xl bg-white/[0.05] p-3"><div className="flex justify-between gap-3"><span className="font-mono text-xs text-[#FFB3B5]">{model.version}</span><span className="text-sm font-bold">수락 {percentage(model.likeRate)}</span></div><div className="mt-2 grid grid-cols-3 text-xs text-white/60"><span>노출 {model.impressions}</span><span>스와이프 {model.swipes}</span><span>좋아요 {model.likes}</span></div></div>)}</div> : <Empty label="아직 모델 버전이 기록된 추천 데이터가 없습니다." />}
           </Panel>
+          <Panel title="카테고리 노출과 반응" detail="많이 노출된 카테고리와 실제 반응을 함께 봅니다. 노출이 적은 항목의 수락률은 성과로 해석하지 마세요.">
+            {metrics.categoryPerformance.length ? <div className="h-72"><ResponsiveContainer><BarChart data={metrics.categoryPerformance} margin={{ left: -16 }}><CartesianGrid stroke="#ffffff14" vertical={false} /><XAxis dataKey="category" tick={{ fill: '#ffffff88', fontSize: 10 }} axisLine={false} tickLine={false} interval={0} /><YAxis allowDecimals={false} tick={{ fill: '#ffffff88', fontSize: 11 }} axisLine={false} tickLine={false} /><Tooltip contentStyle={{ background: '#171717', border: '1px solid #ffffff22', borderRadius: 10 }} formatter={(value: number, name: string) => [value, name === 'impressions' ? '노출' : name === 'decisions' ? '결정' : name]} /><Bar dataKey="impressions" name="impressions" fill="#86A8E7" radius={[5, 5, 0, 0]} /><Bar dataKey="decisions" name="decisions" fill="#FF7376" radius={[5, 5, 0, 0]} /></BarChart></ResponsiveContainer></div> : <Empty label="카테고리별 추천 증거가 아직 없습니다." />}
+          </Panel>
         </div>
-        <footer className="mt-6 flex items-center gap-2 text-xs text-white/40"><UsersRound size={14} /><span>개인 식별자·정확 위치·개별 취향 벡터는 이 화면과 API에 포함되지 않습니다. 마지막 집계 {new Date(metrics.updatedAt).toLocaleString('ko-KR')}</span></footer>
+        <footer className="mt-6 flex items-center gap-2 text-xs text-white/40"><DatabaseZap size={14} /><span>개인 식별자·정확 위치·개별 취향 벡터는 이 화면과 API에 포함되지 않습니다. 마지막 집계 {new Date(metrics.updatedAt).toLocaleString('ko-KR')}</span></footer>
       </> : <div className="rounded-2xl bg-[#4E2528] p-5 text-sm text-[#FFB8B8]">운영 지표를 불러오지 못했습니다. 잠시 후 다시 시도해 주세요.</div>}
     </div>
   </main>;
