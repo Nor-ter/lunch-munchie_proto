@@ -7,6 +7,7 @@ import {
   type DietTag,
 } from "../../shared/const";
 import { categoryMatchesIntent, type Intent } from "../../shared/intent";
+import { isValidCoordinate, isWithinRadius } from "../../shared/geo";
 
 export interface EnvBindings {
   DB: any;
@@ -1273,6 +1274,8 @@ type SessionRow = {
   share_token: string;
   group_size: number;
   filter_distance: number;
+  origin_latitude: number | null;
+  origin_longitude: number | null;
   filter_budget: number;
   filter_categories: string;
   filter_dietary: string;
@@ -1479,9 +1482,21 @@ export function sessionResults(
     countByUser.set(swipe.user_id, (countByUser.get(swipe.user_id) ?? 0) + 1);
   const filtered = restaurants.filter((restaurant) => {
     const categories = json<string[]>(session.filter_categories, []);
+    const hasOrigin = isValidCoordinate(
+      session.origin_latitude,
+      session.origin_longitude,
+    );
     return (
       (categories.length === 0 || categories.includes(restaurant.category)) &&
-      categoryMatchesIntent(restaurant.category, session.intent)
+      categoryMatchesIntent(restaurant.category, session.intent) &&
+      (!hasOrigin ||
+        isWithinRadius(
+          Number(session.origin_latitude),
+          Number(session.origin_longitude),
+          restaurant.latitude,
+          restaurant.longitude,
+          Number(session.filter_distance),
+        ))
     );
   });
   const fallbackTarget = Math.min(filtered.length, 7);
@@ -1569,6 +1584,13 @@ app.post("/api/sessions/create", async (c) => {
     Number.isFinite(body.filterDistance)
       ? Math.max(100, Math.min(50_000, Math.floor(body.filterDistance)))
       : 1000;
+  const originLatitude = body.originLatitude;
+  const originLongitude = body.originLongitude;
+  if (!isValidCoordinate(originLatitude, originLongitude))
+    return c.json(
+      { error: "거리 설정을 적용하려면 현재 위치가 필요합니다." },
+      400,
+    );
   const filterBudget =
     typeof body.filterBudget === "number" && Number.isFinite(body.filterBudget)
       ? Math.max(1, Math.min(4, Math.floor(body.filterBudget)))
@@ -1607,13 +1629,15 @@ app.post("/api/sessions/create", async (c) => {
     try {
       await c.env.DB.batch([
         c.env.DB.prepare(
-          "INSERT INTO sessions (id, host_user_id, share_token, group_size, filter_distance, filter_budget, filter_categories, filter_dietary, intent, status, deadline_at, top_restaurant_ids, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'WAITING', NULL, ?, ?)",
+          "INSERT INTO sessions (id, host_user_id, share_token, group_size, filter_distance, origin_latitude, origin_longitude, filter_budget, filter_categories, filter_dietary, intent, status, deadline_at, top_restaurant_ids, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'WAITING', NULL, ?, ?)",
         ).bind(
           id,
           hostId,
           token,
           groupSize,
           filterDistance,
+          Number(originLatitude),
+          Number(originLongitude),
           filterBudget,
           JSON.stringify(categories),
           JSON.stringify(dietary),
@@ -1639,6 +1663,8 @@ app.post("/api/sessions/create", async (c) => {
         share_token: token,
         group_size: groupSize,
         filter_distance: filterDistance,
+        origin_latitude: Number(originLatitude),
+        origin_longitude: Number(originLongitude),
         filter_budget: filterBudget,
         filter_categories: JSON.stringify(categories),
         filter_dietary: JSON.stringify(dietary),
@@ -1652,6 +1678,7 @@ app.post("/api/sessions/create", async (c) => {
     } catch (error: any) {
       // A random invite-code collision is safe to retry; any other D1 error
       // is surfaced so the client never gives out a non-existent invitation.
+      console.error("Lunchie session creation failed", error);
       if (attempt === 2 || !String(error?.message ?? "").includes("UNIQUE"))
         return c.json({ error: "세션을 서버에 저장하지 못했습니다." }, 500);
     }
@@ -1787,7 +1814,7 @@ app.post("/api/sessions/:token/status", async (c) => {
         409,
       );
     const { results: catalogue } = await c.env.DB.prepare(
-      "SELECT id, category, rating, dietary_options FROM restaurants",
+      "SELECT id, category, rating, price_level, dietary_options, latitude, longitude FROM restaurants",
     ).all();
     const categories = json<string[]>(session.filter_categories, []);
     const memberDietary = (members as any[]).flatMap((member) =>
@@ -1797,10 +1824,25 @@ app.post("/api/sessions/:token/status", async (c) => {
       ...json<string[]>(session.filter_dietary, []),
       ...memberDietary,
     ];
+    // Sessions created before migration 0009 have no saved origin. Preserve
+    // their ability to finish, but every newly-created room must have passed
+    // origin validation above and is therefore distance-constrained.
+    const hasOrigin = isValidCoordinate(
+      session.origin_latitude,
+      session.origin_longitude,
+    );
     const pool = (catalogue as any[]).filter(
       (restaurant) =>
         (categories.length === 0 || categories.includes(restaurant.category)) &&
         categoryMatchesIntent(restaurant.category, session.intent) &&
+        (!hasOrigin ||
+          isWithinRadius(
+            Number(session.origin_latitude),
+            Number(session.origin_longitude),
+            restaurant.latitude,
+            restaurant.longitude,
+            Number(session.filter_distance),
+          )) &&
         (Number(session.filter_budget) >= 4 ||
           Number(restaurant.price_level ?? 4) <=
             Number(session.filter_budget)) &&
@@ -1968,7 +2010,7 @@ app.get("/api/sessions/:token/results", async (c) => {
     )
       .bind(session.id)
       .all(),
-    c.env.DB.prepare("SELECT id, category FROM restaurants").all(),
+    c.env.DB.prepare("SELECT id, category, latitude, longitude FROM restaurants").all(),
   ]);
   const payload = sessionResults(
     session,
