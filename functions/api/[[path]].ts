@@ -8,7 +8,10 @@ import {
 } from "../../shared/const";
 import { categoryMatchesIntent, type Intent } from "../../shared/intent";
 import { isValidCoordinate, isWithinRadius } from "../../shared/geo";
+import { buildSlate } from "../../server/engine/scorer";
+import type { Candidate, RecContext, SlateType } from "../../shared/engine";
 import { isAdminEmail } from "./adminAccess";
+import { assessLearningReadiness, coverage } from "./algorithmInsights";
 
 export interface EnvBindings {
   DB: any;
@@ -397,7 +400,7 @@ app.get("/api/admin/metrics", async (c) => {
     : 30;
   const start = Date.now() - (days - 1) * 86_400_000;
   const count = (row: { count?: number | string } | null | undefined) => Number(row?.count ?? 0);
-  const [registered, newRegistered, activeActors, activeSignedIn, activeGuests, eventResult, trendResult, personaResult, modelResult, propensityLogged, scoreLogged] = await Promise.all([
+  const [registered, newRegistered, activeActors, activeSignedIn, activeGuests, eventResult, trendResult, personaResult, modelResult, impressionCoverage, persistedSlates, servedImpressions, attributableSwipes, categoryResult] = await Promise.all([
     c.env.DB.prepare("SELECT COUNT(*) AS count FROM users").first<{ count: number }>(),
     c.env.DB.prepare("SELECT COUNT(*) AS count FROM users WHERE created_at >= ?").bind(start).first<{ count: number }>(),
     c.env.DB.prepare("SELECT COUNT(DISTINCT user_id) AS count FROM rec_events WHERE created_at >= ? AND user_id IS NOT NULL").bind(start).first<{ count: number }>(),
@@ -407,8 +410,11 @@ app.get("/api/admin/metrics", async (c) => {
     c.env.DB.prepare("SELECT date(created_at / 1000, 'unixepoch') AS day, COUNT(DISTINCT user_id) AS active_actors, SUM(CASE WHEN event_type = 'SESSION_CREATED' THEN 1 ELSE 0 END) AS sessions, SUM(CASE WHEN event_type = 'WINNER' THEN 1 ELSE 0 END) AS decisions FROM rec_events WHERE created_at >= ? GROUP BY day ORDER BY day ASC").bind(start).all<{ day: string; active_actors: number; sessions: number; decisions: number }>(),
     c.env.DB.prepare("SELECT r.category AS category, COUNT(DISTINCT e.user_id) AS selectors, COUNT(*) AS decisions FROM rec_events e JOIN restaurants r ON r.id = e.restaurant_id WHERE e.created_at >= ? AND e.event_type = 'WINNER' GROUP BY r.category ORDER BY decisions DESC LIMIT 6").bind(start).all<{ category: string; selectors: number; decisions: number }>(),
     c.env.DB.prepare("SELECT COALESCE(model_version, '미지정') AS version, SUM(CASE WHEN event_type = 'IMPRESSION' THEN 1 ELSE 0 END) AS impressions, SUM(CASE WHEN event_type = 'SWIPE' THEN 1 ELSE 0 END) AS swipes, SUM(CASE WHEN event_type = 'SWIPE' AND action = 'LIKE' THEN 1 ELSE 0 END) AS likes FROM rec_events WHERE created_at >= ? GROUP BY COALESCE(model_version, '미지정') ORDER BY impressions DESC, swipes DESC LIMIT 6").bind(start).all<{ version: string; impressions: number; swipes: number; likes: number }>(),
-    c.env.DB.prepare("SELECT COUNT(*) AS count FROM rec_events WHERE created_at >= ? AND event_type = 'SWIPE' AND propensity IS NOT NULL").bind(start).first<{ count: number }>(),
-    c.env.DB.prepare("SELECT COUNT(*) AS count FROM rec_events WHERE created_at >= ? AND event_type = 'SWIPE' AND score IS NOT NULL").bind(start).first<{ count: number }>(),
+    c.env.DB.prepare("SELECT COUNT(*) AS impressions, SUM(CASE WHEN propensity IS NOT NULL AND propensity > 0 AND propensity <= 1 THEN 1 ELSE 0 END) AS propensity_logged, SUM(CASE WHEN score IS NOT NULL THEN 1 ELSE 0 END) AS score_logged, SUM(CASE WHEN model_version IS NOT NULL AND model_version != '' THEN 1 ELSE 0 END) AS model_logged, SUM(CASE WHEN context_json IS NOT NULL AND context_json != '' THEN 1 ELSE 0 END) AS context_logged FROM rec_events WHERE created_at >= ? AND event_type = 'IMPRESSION' AND COALESCE(slate_type, '') != 'COURSE_FEED'").bind(start).first<{ impressions: number; propensity_logged: number; score_logged: number; model_logged: number; context_logged: number }>(),
+    c.env.DB.prepare("SELECT COUNT(*) AS count FROM recommendation_slates WHERE created_at >= ?").bind(start).first<{ count: number }>(),
+    c.env.DB.prepare("SELECT COUNT(*) AS count FROM rec_events e INNER JOIN recommendation_slates s ON s.id = e.slate_id WHERE e.created_at >= ? AND e.event_type = 'IMPRESSION'").bind(start).first<{ count: number }>(),
+    c.env.DB.prepare("SELECT COUNT(*) AS count FROM rec_events e INNER JOIN recommendation_slates s ON s.id = e.slate_id WHERE e.created_at >= ? AND e.event_type = 'SWIPE'").bind(start).first<{ count: number }>(),
+    c.env.DB.prepare("SELECT r.category AS category, SUM(CASE WHEN e.event_type = 'IMPRESSION' THEN 1 ELSE 0 END) AS impressions, SUM(CASE WHEN e.event_type = 'SWIPE' AND e.action = 'LIKE' THEN 1 ELSE 0 END) AS likes, SUM(CASE WHEN e.event_type = 'SWIPE' AND e.action = 'NOPE' THEN 1 ELSE 0 END) AS nopes, SUM(CASE WHEN e.event_type = 'WINNER' THEN 1 ELSE 0 END) AS decisions FROM rec_events e JOIN restaurants r ON r.id = e.restaurant_id WHERE e.created_at >= ? AND e.event_type IN ('IMPRESSION', 'SWIPE', 'WINNER') GROUP BY r.category ORDER BY impressions DESC, decisions DESC LIMIT 8").bind(start).all<{ category: string; impressions: number; likes: number; nopes: number; decisions: number }>(),
   ]);
   const events = new Map<string, number>();
   for (const row of eventResult.results) events.set(`${row.event_type}:${row.action ?? ''}`, Number(row.count));
@@ -428,6 +434,17 @@ app.get("/api/admin/metrics", async (c) => {
     const row = trendByDay.get(day);
     return { day, activeActors: Number(row?.active_actors ?? 0), sessions: Number(row?.sessions ?? 0), decisions: Number(row?.decisions ?? 0) };
   });
+  const impressionTotal = Number(impressionCoverage?.impressions ?? 0);
+  const instrumentation = {
+    persistedSlates: count(persistedSlates),
+    servedImpressions: count(servedImpressions),
+    attributableSwipes: count(attributableSwipes),
+    propensityCoverage: coverage(Number(impressionCoverage?.propensity_logged ?? 0), impressionTotal),
+    scoreCoverage: coverage(Number(impressionCoverage?.score_logged ?? 0), impressionTotal),
+    modelVersionCoverage: coverage(Number(impressionCoverage?.model_logged ?? 0), impressionTotal),
+    contextCoverage: coverage(Number(impressionCoverage?.context_logged ?? 0), impressionTotal),
+  };
+  const learning = assessLearningReadiness({ ...instrumentation, decisions });
   return c.json({
     days,
     users: { registered: count(registered), newRegistered: count(newRegistered), activeActors: count(activeActors), activeSignedIn: count(activeSignedIn), activeGuests: count(activeGuests) },
@@ -436,12 +453,27 @@ app.get("/api/admin/metrics", async (c) => {
       swipeLikeRate: likes + nopes ? likes / (likes + nopes) : null,
       sessionDecisionRate: sessions ? decisions / sessions : null,
       rerollRate: sessions ? rerolls / sessions : null,
-      propensityCoverage: swipes ? count(propensityLogged) / swipes : null,
-      scoreCoverage: swipes ? count(scoreLogged) / swipes : null,
+      // These fields are meaningful on IMPRESSION, not on a later swipe.
+      propensityCoverage: instrumentation.propensityCoverage,
+      scoreCoverage: instrumentation.scoreCoverage,
     },
     trend,
     personas: personaResult.results.map((row) => ({ category: row.category || '기타', selectors: Number(row.selectors), decisions: Number(row.decisions) })),
     models: modelResult.results.map((row) => ({ version: row.version, impressions: Number(row.impressions), swipes: Number(row.swipes), likes: Number(row.likes), likeRate: Number(row.swipes) ? Number(row.likes) / Number(row.swipes) : null })),
+    instrumentation,
+    learning,
+    categoryPerformance: categoryResult.results.map((row) => {
+      const likes = Number(row.likes);
+      const nopes = Number(row.nopes);
+      return {
+        category: row.category || "기타",
+        impressions: Number(row.impressions),
+        likes,
+        nopes,
+        decisions: Number(row.decisions),
+        likeRate: likes + nopes ? likes / (likes + nopes) : null,
+      };
+    }),
     updatedAt: new Date().toISOString(),
   });
 });
@@ -449,120 +481,6 @@ app.get("/api/admin/metrics", async (c) => {
 // The old public endpoint was an accidental information disclosure. Keep no
 // backwards-compatible public aggregate route; only /api/admin/metrics exists.
 app.get("/api/metrics", (c) => c.json({ error: "운영 지표는 관리자 대시보드에서만 볼 수 있습니다." }, 410));
-
-type FeatureRow = {
-  restaurant_id: string;
-  taste: string | null;
-  price_stats: string | null;
-  evidence: string | null;
-};
-
-// 첫 슬레이트는 "무작위 7개"가 아니라, 드라이브 피처 공간에서 서로 다른
-// 질문이 되도록 MMR로 고른다. quality는 사용자 평점이 아니라 사진·메뉴 증거의 약한 사전값이다.
-function selectColdStartMmr(
-  restaurants: any[],
-  features: FeatureRow[],
-  k: number,
-  exposureMap: Record<string, { count?: number; updatedAt?: number }> = {},
-): any[] {
-  const featureById = new Map(
-    features.map((feature) => [feature.restaurant_id, feature]),
-  );
-  const vector = (restaurant: any) => {
-    const feature = featureById.get(restaurant.id);
-    const taste = json<Record<string, number>>(feature?.taste, {});
-    const price = json<{ median?: number } | null>(
-      feature?.price_stats,
-      null,
-    )?.median;
-    return [
-      taste.spicy ?? 0.4,
-      taste.salty ?? 0.4,
-      taste.sweet ?? 0.4,
-      taste.oily ?? 0.4,
-      taste.light ?? 0.5,
-      typeof price === "number"
-        ? Math.max(0, Math.min(1, (price - 10) / 35))
-        : ((restaurant.price_level ?? 2) - 1) / 3,
-    ];
-  };
-  const quality = (restaurant: any) => {
-    const evidence = json<{ photos?: number; menu_items?: number }>(
-      featureById.get(restaurant.id)?.evidence,
-      {},
-    );
-    return (
-      0.55 * Math.log1p(evidence.photos ?? 0) +
-      0.45 * Math.log1p(evidence.menu_items ?? 0)
-    );
-  };
-  const distance = (a: number[], b: number[]) =>
-    Math.sqrt(
-      a.reduce((sum, value, index) => sum + (value - b[index]) ** 2, 0) /
-        a.length,
-    );
-  const remaining = restaurants.map((restaurant) => ({
-    restaurant,
-    vector: vector(restaurant),
-    quality: quality(restaurant),
-  }));
-  // 메뉴가 많은 한 식당의 log 증거값은 다른 피처와 비교 가능한 [0,1] 사전값으로
-  // 정규화한다. 그렇지 않으면 DODAM처럼 메뉴가 풍부한 곳이 첫 슬롯을 영구 점유한다.
-  const maxQuality = Math.max(1, ...remaining.map((item) => item.quality));
-  const selected: typeof remaining = [];
-  while (remaining.length && selected.length < k) {
-    const scores: number[] = [];
-    for (let index = 0; index < remaining.length; index++) {
-      const candidate = remaining[index];
-      const novelty = selected.length
-        ? Math.min(
-            ...selected.map((chosen) =>
-              distance(candidate.vector, chosen.vector),
-            ),
-          )
-        : 1;
-      const exposure = exposureMap[candidate.restaurant.id];
-      const age = exposure?.updatedAt
-        ? Math.max(0, Date.now() - exposure.updatedAt)
-        : Infinity;
-      const decayedExposure = exposure
-        ? (exposure.count ?? 0) * Math.pow(0.5, age / 86_400_000)
-        : 0;
-      const weakQualityPrior = candidate.quality / maxQuality;
-      scores.push(
-        0.15 * weakQualityPrior +
-          0.85 * novelty -
-          0.42 * Math.min(1, decayedExposure),
-      );
-    }
-    // MMR은 후보를 "정렬"하는 것이 아니라 정보성 분포다. 최고점만 계속 고르면
-    // DODAM 같은 증거가 강한 한 식당이 첫 카드에 영구 고정된다. softmax+균등 탐색
-    // 분포에서 매 단계 비복원 추출해 다양성과 반복 비결정성을 동시에 보장한다.
-    const max = Math.max(...scores);
-    const temperature = 0.35;
-    const softmax = scores.map((score) =>
-      Math.exp((score - max) / temperature),
-    );
-    const total = softmax.reduce((sum, value) => sum + value, 0);
-    const epsilon = 0.4;
-    const weights = softmax.map(
-      (value) => (1 - epsilon) * (value / total) + epsilon / remaining.length,
-    );
-    let draw =
-      (crypto.getRandomValues(new Uint32Array(1))[0] / 0xffffffff) *
-      weights.reduce((sum, value) => sum + value, 0);
-    let picked = weights.length - 1;
-    for (let index = 0; index < weights.length; index++) {
-      draw -= weights[index];
-      if (draw <= 0) {
-        picked = index;
-        break;
-      }
-    }
-    selected.push(remaining.splice(picked, 1)[0]);
-  }
-  return selected.map(({ restaurant }) => restaurant);
-}
 
 // Posts store stable R2 object keys behind `/photos/*`, not environment-specific
 // URLs. Local development can opt into a read-only media origin so it never has
@@ -787,12 +705,20 @@ app.get("/api/users/:id/following", (c) => listFollows(c, "following"));
 app.post("/api/recommend", async (c) => {
   try {
     const body = await c.req.json();
-    const userId =
-      typeof body.user_id === "string" && body.user_id.trim()
-        ? body.user_id.trim()
-        : "anonymous";
+    // Recommendation ownership must be derived on the server.  A client-side
+    // profile ID is display state and cannot be allowed to poison another
+    // person's exposure/taste evidence.
+    const session = await readSession(c.req.raw, c.env.AUTH_SESSION_SECRET);
+    const existingGuestId = cookieValue(c.req.raw, "lm_guest_id");
+    const guestId = existingGuestId ?? crypto.randomUUID();
+    const userId = session?.sub ?? `guest:${guestId}`;
     const k = Math.min(20, Math.max(1, Number(body.k) || 7));
     const ctx = body.context || {};
+    const slateType: SlateType =
+      body.slate_type === "FINAL" || body.slate_type === "NEXT_STOP" || body.slate_type === "COURSE_FEED"
+        ? body.slate_type
+        : "PRELIM";
+    const requestSessionId = nullableText(body.session_id, 120);
     const candidateIds = Array.isArray(body.candidate_ids)
       ? [...new Set(body.candidate_ids.map(String))].slice(0, 200)
       : [];
@@ -857,91 +783,118 @@ app.post("/api/recommend", async (c) => {
       categoryMatchesIntent(restaurant.category, selectedIntent),
     );
 
-    const shuffle = <T>(items: T[]) => {
-      const shuffled = [...items];
-      for (let i = shuffled.length - 1; i > 0; i--) {
-        const random = new Uint32Array(1);
-        crypto.getRandomValues(random);
-        const j = random[0] % (i + 1);
-        [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
-      }
-      return shuffled;
-    };
-    let tasteN = 0;
     let exposureMap: Record<string, { count?: number; updatedAt?: number }> =
       {};
-    if (userId !== "anonymous") {
-      try {
-        const id = c.env.USER_DO.idFromName(userId);
-        const state = await c.env.USER_DO.get(id).fetch(
-          "https://user-state/state",
-        );
-        const stateData = await state.json<{
-          tasteN?: number;
-          exposureMap?: Record<string, { count?: number; updatedAt?: number }>;
-        }>();
-        tasteN = Number(stateData.tasteN ?? 0);
-        exposureMap = stateData.exposureMap ?? {};
-      } catch {
-        /* DO unavailable: preserve a safe cold-start slate */
-      }
+    try {
+      const id = c.env.USER_DO.idFromName(userId);
+      const state = await c.env.USER_DO.get(id).fetch(
+        "https://user-state/state",
+      );
+      const stateData = await state.json<{
+        exposureMap?: Record<string, { count?: number; updatedAt?: number }>;
+      }>();
+      exposureMap = stateData.exposureMap ?? {};
+    } catch {
+      /* A recommendation still works if short-lived exposure state is unavailable. */
     }
-    const ids = (results as any[]).map((restaurant) => restaurant.id);
-    const { results: featureRows } = ids.length
-      ? await c.env.DB.prepare(
-          `SELECT restaurant_id, taste, price_stats, evidence FROM restaurant_features WHERE restaurant_id IN (${ids.map(() => "?").join(",")})`,
-        )
-          .bind(...ids)
-          .all<FeatureRow>()
-      : { results: [] as FeatureRow[] };
-    let finalResults =
-      tasteN === 0
-        ? selectColdStartMmr(results as any[], featureRows, k, exposureMap)
-        : shuffle(results as any[]).slice(0, k);
+
+    const recommendationContext: RecContext = {
+      ...(ctx as RecContext),
+      diet: Array.isArray(ctx.dietary) ? ctx.dietary : Array.isArray(ctx.diet) ? ctx.diet : undefined,
+    };
+    const now = Date.now();
+    const scoredSlate = buildSlate(results as Candidate[], recommendationContext, {
+      k,
+      // Stage 0 is a context/reputation policy with controlled exploration.
+      // Do not label it as personalised learning before a durable taste model exists.
+      eps: 0.12,
+      exposurePenalty: (restaurantId) => {
+        const exposure = exposureMap[restaurantId];
+        if (!exposure?.count || !exposure.updatedAt) return 0;
+        const elapsed = Math.max(0, now - exposure.updatedAt);
+        const decayed = exposure.count * Math.pow(0.5, elapsed / 86_400_000);
+        return Math.min(0.9, decayed / 4);
+      },
+    });
+    const byId = new Map((results as any[]).map((restaurant) => [restaurant.id, restaurant]));
+    const finalResults = scoredSlate
+      .map((item) => ({ restaurant: byId.get(item.id), ...item }))
+      .filter((item): item is { restaurant: any; id: string; score: number; propensity: number; rank: number } => Boolean(item.restaurant));
     // An intentionally small slate is preferable to silently substituting
     // cafes/drinks for a user's explicit meal (or vice versa).
 
     const slateId = crypto.randomUUID();
     // 노출은 추천 결과를 받은 시점에 User DO에 기록한다. 이 값은 다음 단계에서
     // 하드 제외가 아닌 시간 감쇠 페널티·재발견 보너스 계산에만 사용된다.
-    if (userId !== "anonymous") {
-      try {
-        const stub = c.env.USER_DO.get(c.env.USER_DO.idFromName(userId));
-        await Promise.all(
-          finalResults.map((restaurant: any) =>
-            stub.fetch("https://user-state/recordExposure", {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ restaurantId: restaurant.id }),
-            }),
-          ),
-        );
-      } catch {
-        /* recommendation serving must not fail if state storage is unavailable */
-      }
-    }
-    return c.json({
-      slate: finalResults.map((r: any, rank: number) => ({
-        ...r,
-        photos: json<string[]>(r.photos, []),
-        menu_items: json(r.menus, []),
-        tags: json<string[]>(r.tags, []),
-        rank,
-        score: 0.5,
-        propensity: Number(
-          (
-            Math.min(k, results.length || finalResults.length) /
-            Math.max(1, results.length || finalResults.length)
-          ).toFixed(6),
+    try {
+      const stub = c.env.USER_DO.get(c.env.USER_DO.idFromName(userId));
+      await Promise.all(
+        finalResults.map((item) =>
+          stub.fetch("https://user-state/recordExposure", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ restaurantId: item.id, ts: now }),
+          }),
         ),
+      );
+    } catch {
+      /* recommendation serving must not fail if state storage is unavailable */
+    }
+
+    const policyVersion = "stage0-contextual-v1";
+    const slateItems = finalResults.map((item) => ({
+      restaurant_id: item.id,
+      position: item.rank,
+      score: item.score,
+      propensity: item.propensity,
+    }));
+    const contextJson = JSON.stringify(recommendationContext);
+    const expiry = now + 24 * 60 * 60 * 1000;
+    await c.env.DB.batch([
+      c.env.DB.prepare(
+        "INSERT INTO recommendation_slates (id, owner_user_id, session_id, slate_type, policy_version, variant, context_json, items_json, candidate_count, created_at, expires_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+      ).bind(slateId, userId, requestSessionId, slateType, policyVersion, "contextual", contextJson, JSON.stringify(slateItems), results.length, now, expiry),
+      ...slateItems.map((item) =>
+        c.env.DB.prepare(
+          "INSERT INTO rec_events (id, event_type, slate_id, slate_type, user_id, session_id, restaurant_id, position, propensity, score, model_version, variant, context_json, idempotency_key, created_at) VALUES (?, 'IMPRESSION', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        ).bind(
+          crypto.randomUUID(),
+          slateId,
+          slateType,
+          userId,
+          requestSessionId,
+          item.restaurant_id,
+          item.position,
+          item.propensity,
+          item.score,
+          policyVersion,
+          "contextual",
+          contextJson,
+          `slate:${slateId}:impression:${item.position}`,
+          now,
+        ),
+      ),
+    ]);
+    const response = c.json({
+      slate: finalResults.map((item) => ({
+        ...item.restaurant,
+        photos: json<string[]>(item.restaurant.photos, []),
+        menu_items: json(item.restaurant.menus, []),
+        tags: json<string[]>(item.restaurant.tags, []),
+        rank: item.rank,
+        score: item.score,
+        propensity: item.propensity,
       })),
       user_id: userId,
       k,
       slate_id: slateId,
-      model_version:
-        tasteN === 0 ? "stage0-mmr-v1" : "learning-loop-pending-v1",
+      slate_type: slateType,
+      model_version: policyVersion,
       engine: "cloudflare-hono-d1",
     });
+    if (!session && !existingGuestId)
+      response.headers.append("Set-Cookie", cookie("lm_guest_id", guestId, 30 * 24 * 60 * 60, requestIsSecure(c.req.raw)));
+    return response;
   } catch (err: any) {
     return c.json({ error: err.message }, 400);
   }
