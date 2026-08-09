@@ -6,6 +6,7 @@ import {
   normalizeDiet,
   type DietTag,
 } from "../../shared/const";
+import { categoryMatchesIntent, type Intent } from "../../shared/intent";
 
 export interface EnvBindings {
   DB: any;
@@ -790,16 +791,7 @@ app.post("/api/recommend", async (c) => {
       }
     }
 
-    // 3. Category / Intent mapping (Simplification)
-    if (ctx.intent) {
-      if (ctx.intent === "cafe" || ctx.intent === "dessert") {
-        query += ` AND category IN ('카페', '베이커리', '디저트', 'Cafe', 'Bakery', 'Dessert')`;
-      } else if (ctx.intent === "meal") {
-        query += ` AND category NOT IN ('카페', '베이커리', '디저트', 'Cafe', 'Bakery', 'Dessert')`;
-      }
-    }
-
-    // 4. Taste (Categories) mapping
+    // 3. Taste (Categories) mapping
     if (ctx.categories && ctx.categories.length > 0) {
       query += ` AND category IN (${ctx.categories.map(() => "?").join(",")})`;
       params.push(...ctx.categories);
@@ -810,9 +802,19 @@ app.post("/api/recommend", async (c) => {
     // not permanently pin users to alphabetically first restaurants.
     query += ` ORDER BY rating DESC, review_count DESC, name ASC LIMIT 200`;
 
-    const { results } = await c.env.DB.prepare(query)
+    const { results: rawResults } = await c.env.DB.prepare(query)
       .bind(...params)
       .all();
+    const selectedIntent: Intent | null =
+      ctx.intent === "meal" || ctx.intent === "cafe" || ctx.intent === "dessert"
+        ? ctx.intent
+        : null;
+    // Do not approximate cafe/dessert with a shared SQL list. The canonical
+    // classifier is also used by shared Lunchie sessions, so every serving
+    // path has one hard-category contract.
+    const results = (rawResults as any[]).filter((restaurant) =>
+      categoryMatchesIntent(restaurant.category, selectedIntent),
+    );
 
     const shuffle = <T>(items: T[]) => {
       const shuffled = [...items];
@@ -855,13 +857,8 @@ app.post("/api/recommend", async (c) => {
       tasteN === 0
         ? selectColdStartMmr(results as any[], featureRows, k, exposureMap)
         : shuffle(results as any[]).slice(0, k);
-    if (results.length < Math.min(k, 5)) {
-      const fallback = await c.env.DB.prepare(
-        `SELECT * FROM restaurants LIMIT 200`,
-      ).all();
-      const fallbackItems = shuffle(fallback.results as any[]);
-      finalResults = fallbackItems.slice(0, k);
-    }
+    // An intentionally small slate is preferable to silently substituting
+    // cafes/drinks for a user's explicit meal (or vice versa).
 
     const slateId = crypto.randomUUID();
     // 노출은 추천 결과를 받은 시점에 User DO에 기록한다. 이 값은 다음 단계에서
@@ -1279,6 +1276,7 @@ type SessionRow = {
   filter_budget: number;
   filter_categories: string;
   filter_dietary: string;
+  intent: Intent | null;
   top_restaurant_ids: string;
   status: string;
   deadline_at: number | null;
@@ -1481,7 +1479,10 @@ export function sessionResults(
     countByUser.set(swipe.user_id, (countByUser.get(swipe.user_id) ?? 0) + 1);
   const filtered = restaurants.filter((restaurant) => {
     const categories = json<string[]>(session.filter_categories, []);
-    return categories.length === 0 || categories.includes(restaurant.category);
+    return (
+      (categories.length === 0 || categories.includes(restaurant.category)) &&
+      categoryMatchesIntent(restaurant.category, session.intent)
+    );
   });
   const fallbackTarget = Math.min(filtered.length, 7);
   const targetFor = (userId: string) =>
@@ -1586,6 +1587,10 @@ app.post("/api/sessions/create", async (c) => {
         .filter(Boolean)
         .slice(0, 12)
     : [];
+  const intent: Intent | null =
+    body.intent === "meal" || body.intent === "cafe" || body.intent === "dessert"
+      ? body.intent
+      : null;
   const hostPreferences = Array.isArray(body.hostPreferences)
     ? sessionPreferences(JSON.stringify(body.hostPreferences)).slice(0, 20)
     : [];
@@ -1602,7 +1607,7 @@ app.post("/api/sessions/create", async (c) => {
     try {
       await c.env.DB.batch([
         c.env.DB.prepare(
-          "INSERT INTO sessions (id, host_user_id, share_token, group_size, filter_distance, filter_budget, filter_categories, filter_dietary, status, deadline_at, top_restaurant_ids, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'WAITING', NULL, ?, ?)",
+          "INSERT INTO sessions (id, host_user_id, share_token, group_size, filter_distance, filter_budget, filter_categories, filter_dietary, intent, status, deadline_at, top_restaurant_ids, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'WAITING', NULL, ?, ?)",
         ).bind(
           id,
           hostId,
@@ -1612,6 +1617,7 @@ app.post("/api/sessions/create", async (c) => {
           filterBudget,
           JSON.stringify(categories),
           JSON.stringify(dietary),
+          intent,
           "[]",
           createdAt,
         ),
@@ -1636,6 +1642,7 @@ app.post("/api/sessions/create", async (c) => {
         filter_budget: filterBudget,
         filter_categories: JSON.stringify(categories),
         filter_dietary: JSON.stringify(dietary),
+        intent,
         top_restaurant_ids: "[]",
         status: "WAITING",
         deadline_at: null,
@@ -1793,6 +1800,7 @@ app.post("/api/sessions/:token/status", async (c) => {
     const pool = (catalogue as any[]).filter(
       (restaurant) =>
         (categories.length === 0 || categories.includes(restaurant.category)) &&
+        categoryMatchesIntent(restaurant.category, session.intent) &&
         (Number(session.filter_budget) >= 4 ||
           Number(restaurant.price_level ?? 4) <=
             Number(session.filter_budget)) &&
@@ -1802,11 +1810,9 @@ app.post("/api/sessions/:token/status", async (c) => {
           requiredDietary,
         ),
     );
-    const deckIds = buildSharedSessionDeck(
-      session.id,
-      pool.length ? pool : (catalogue as any[]),
-      members as any[],
-    );
+    // Never fall back to the full catalogue: that would silently violate a
+    // user's explicit meal/cafe/dessert, category, budget, or dietary choice.
+    const deckIds = buildSharedSessionDeck(session.id, pool, members as any[]);
     if (!deckIds.length)
       return c.json({ error: "조건에 맞는 공통 후보군이 없습니다." }, 409);
     await c.env.DB.prepare(
