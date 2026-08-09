@@ -1856,7 +1856,13 @@ app.post("/api/sessions/:token/status", async (c) => {
     // user's explicit meal/cafe/dessert, category, budget, or dietary choice.
     const deckIds = buildSharedSessionDeck(session.id, pool, members as any[]);
     if (!deckIds.length)
-      return c.json({ error: "조건에 맞는 공통 후보군이 없습니다." }, 409);
+      return c.json(
+        {
+          error: `${Number(session.filter_distance) >= 1000 ? `${Number(session.filter_distance) / 1000}km` : `${session.filter_distance}m`} 반경 안에 현재 조건과 맞는 식당이 없어요. 반경 또는 조건을 바꿔 주세요.`,
+          code: "NO_ELIGIBLE_RESTAURANTS",
+        },
+        409,
+      );
     await c.env.DB.prepare(
       "UPDATE sessions SET top_restaurant_ids = ? WHERE id = ?",
     )

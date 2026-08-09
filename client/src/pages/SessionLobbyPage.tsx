@@ -42,6 +42,7 @@ export default function SessionLobbyPage() {
   const [showQR, setShowQR] = useState(true);
   const [showMembers, setShowMembers] = useState(true);
   const [isStarting, setIsStarting] = useState(false);
+  const [startFailure, setStartFailure] = useState<{ message: string; code?: string } | null>(null);
   const reduceMotion = Boolean(useReducedMotion());
   const previousMembersRef = useRef<{ sessionId: string; ids: string[] } | undefined>(undefined);
 
@@ -131,13 +132,17 @@ export default function SessionLobbyPage() {
 
   const handleStart = async () => {
     if (!presentation.canStart || isStarting) return;
+    setStartFailure(null);
     setIsStarting(true);
     try {
       await startSession(currentSession.inviteCode, currentSession.deadlineMinutes);
       navigate('/lunchie/swipe');
     } catch (error) {
       console.error(error);
-      toast.error('투표를 시작하지 못했습니다.');
+      const failure = error as Error & { code?: string };
+      const message = failure.message || '투표를 시작하지 못했습니다.';
+      setStartFailure({ message, code: failure.code });
+      toast.error(message);
       setIsStarting(false);
     }
   };
@@ -366,6 +371,20 @@ export default function SessionLobbyPage() {
       </main>
 
       <footer className="sticky bottom-0 z-20 -mx-5 mt-auto bg-[linear-gradient(180deg,rgba(252,244,238,0),#FCF4EE_24%)] px-5 pb-[max(16px,env(safe-area-inset-bottom))] pt-7">
+        {startFailure && (
+          <div role="alert" className="mb-3 rounded-2xl border border-[#F2C7BE] bg-[#FFF6F2] p-3 text-center">
+            <p className="text-[12px] font-semibold leading-relaxed text-[#7A3E35]">{startFailure.message}</p>
+            {startFailure.code === 'NO_ELIGIBLE_RESTAURANTS' && (
+              <button
+                type="button"
+                onClick={() => navigate('/lunchie/settings')}
+                className="mt-2 min-h-9 rounded-xl bg-[#EB5053] px-3 text-[11px] font-bold text-white"
+              >
+                반경·조건 바꾸기
+              </button>
+            )}
+          </div>
+        )}
         <PrimaryButton
           className="lunchie-session-primary-action"
           onClick={handlePrimaryAction}
