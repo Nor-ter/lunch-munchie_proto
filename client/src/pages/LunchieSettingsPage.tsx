@@ -12,6 +12,7 @@ import { useApp } from '@/contexts/AppContext';
 import { FOOD_TAGS } from '@/constants/foodTags';
 import { toast } from 'sonner';
 import type { Intent } from '@shared/intent';
+import { localityForCoordinate } from '@shared/melbourneLocality';
 import { logSessionCreated } from '@/lib/eventLogger';
 
 const INTENT_OPTIONS: { value: Intent | null; label: string; icon: string }[] = [
@@ -179,12 +180,15 @@ export default function LunchieSettingsPage() {
   const [showDetailModal, setShowDetailModal] = useState(false);
   const [isCreating, setIsCreating] = useState(false);
   const [origin, setOrigin] = useState<LocationFix | null>(null);
+  const [originLabel, setOriginLabel] = useState<string | null>(null);
   const [isLocating, setIsLocating] = useState(false);
 
   const confirmCurrentLocation = async () => {
     setIsLocating(true);
     try {
-      setOrigin(await currentPosition());
+      const fix = await currentPosition();
+      setOrigin(fix);
+      setOriginLabel(localityForCoordinate(fix.latitude, fix.longitude));
     } catch (error) {
       toast.error(error instanceof Error ? error.message : '현재 위치를 확인하지 못했습니다.');
     } finally {
@@ -406,9 +410,12 @@ export default function LunchieSettingsPage() {
             </div>
             {distanceEnabled ? <div className="mt-2 flex items-center justify-between gap-2">
               {origin ? (
-                <p className="text-[10px] text-[#6B7A72] leading-relaxed">
-                  <Navigation size={11} className="inline mr-1" />현재 위치를 반경 기준점으로 설정했어요.
-                </p>
+                <div>
+                  <p className="text-[10px] text-[#6B7A72] leading-relaxed">
+                    <Navigation size={11} className="inline mr-1" />현재 위치 · {originLabel ?? '현재 위치 주변'}
+                  </p>
+                  <p className="text-[9px] text-[#B0B0B0] mt-0.5">지역 기준: © OpenStreetMap contributors · 좌표는 표시하지 않아요.</p>
+                </div>
               ) : (
                 <p className="text-[10px] text-[#B0B0B0]">위치 허용 팝업이 보이면 ‘허용’을 눌러 반경 기준점을 설정해 주세요.</p>
               )}
