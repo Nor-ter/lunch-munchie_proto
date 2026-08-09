@@ -48,6 +48,18 @@ function formatRadius(r: number): string {
 
 const tapSpring = { type: "spring" as const, stiffness: 500, damping: 30 };
 
+function currentPosition(): Promise<{ latitude: number; longitude: number }> {
+  if (!navigator.geolocation)
+    return Promise.reject(new Error('이 브라우저에서는 위치 정보를 사용할 수 없습니다.'));
+  return new Promise((resolve, reject) => {
+    navigator.geolocation.getCurrentPosition(
+      ({ coords }) => resolve({ latitude: coords.latitude, longitude: coords.longitude }),
+      () => reject(new Error('현재 위치 권한이 필요합니다.')),
+      { enableHighAccuracy: false, timeout: 10_000, maximumAge: 5 * 60_000 },
+    );
+  });
+}
+
 function IconButton({
   onClick,
   disabled,
@@ -186,10 +198,22 @@ export default function LunchieSettingsPage() {
 
       const hostName = profile.name && profile.name !== '사용자' ? profile.name : '호스트';
       const sessionName = `${hostName}의 점심 세션`;
+      // The host supplies one location at creation; it becomes the shared
+      // reference point, rather than collecting every participant's location.
+      const origin = await currentPosition();
 
       const session = await createSession(
         sessionName,
-        { partySize, dietary, budget, radius, categories, intent: intent ?? undefined },
+        {
+          partySize,
+          dietary,
+          budget,
+          radius,
+          categories,
+          intent: intent ?? undefined,
+          originLatitude: origin.latitude,
+          originLongitude: origin.longitude,
+        },
         hostName,
         profile.emoji,
         deadlineMin,
@@ -208,8 +232,8 @@ export default function LunchieSettingsPage() {
         style: { marginTop: 'calc(env(safe-area-inset-top, 0px) + 64px)' },
       });
       navigate('/session/lobby');
-    } catch {
-      toast.error('세션 생성에 실패했습니다.');
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : '세션 생성에 실패했습니다.');
     } finally {
       setIsCreating(false);
     }
@@ -339,6 +363,7 @@ export default function LunchieSettingsPage() {
                 </ChipButton>
               ))}
             </div>
+            <p className="text-[10px] text-[#B0B0B0] mt-1.5">세션을 만들 때 호스트의 현재 위치를 한 번만 사용해, 모두에게 같은 반경 후보를 보여줘요.</p>
           </div>
         </div>
 

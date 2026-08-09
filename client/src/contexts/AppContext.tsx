@@ -125,6 +125,9 @@ export interface GroupSession {
     dietary: string[];
     budget: 1 | 2 | 3 | 4;
     radius: number;
+    /** 세션을 만든 호스트의 1회성 기준 위치. 공유 카드 덱의 공통 원점이다. */
+    originLatitude?: number;
+    originLongitude?: number;
     categories: string[];
     /** 명시적으로 고른 밥/카페/디저트. 없으면(undefined) 시간대로 자동 판정. */
     intent?: Intent;
@@ -1047,6 +1050,8 @@ export function AppProvider({
             name,
             groupSize: filters.partySize,
             filterDistance: filters.radius,
+            originLatitude: filters.originLatitude,
+            originLongitude: filters.originLongitude,
             filterBudget: filters.budget,
             filterCategories: filters.categories,
             filterDietary: filters.dietary,
@@ -1104,6 +1109,8 @@ export function AppProvider({
       dietary: data.session.filter_dietary || [],
       budget: data.session.filter_budget,
       radius: data.session.filter_distance,
+      originLatitude: data.session.origin_latitude,
+      originLongitude: data.session.origin_longitude,
       categories: data.session.filter_vibe || [],
       intent: serverIntent ?? prevIntent,
     };
