@@ -164,6 +164,8 @@ export default function LunchieSettingsPage() {
   const [deadlineMin, setDeadlineMin] = useState(10);
   const [partySize, setPartySize] = useState(4);
   const [radius, setRadius] = useState(1000);
+  // Location should enrich Lunchie, never prevent someone from using it.
+  const [distanceEnabled, setDistanceEnabled] = useState(false);
   const [intent, setIntent] = useState<Intent | null>(initialIntent);
   const [activeFilters, setActiveFilters] = useState<string[]>(['취향', '평점']);
   const [details, setDetails] = useState<Record<string, string[]>>({
@@ -213,9 +215,11 @@ export default function LunchieSettingsPage() {
 
       const hostName = profile.name && profile.name !== '사용자' ? profile.name : '호스트';
       const sessionName = `${hostName}의 점심 세션`;
-      // The host supplies one location at creation; it becomes the shared
-      // reference point, rather than collecting every participant's location.
-      const currentOrigin = origin ?? await currentPosition();
+      // Only a room using a radius needs the host location. It becomes the
+      // shared reference point, rather than tracking every participant.
+      const currentOrigin = distanceEnabled
+        ? origin ?? await currentPosition()
+        : null;
 
       const session = await createSession(
         sessionName,
@@ -224,10 +228,11 @@ export default function LunchieSettingsPage() {
           dietary,
           budget,
           radius,
+          distanceEnabled,
           categories,
           intent: intent ?? undefined,
-          originLatitude: currentOrigin.latitude,
-          originLongitude: currentOrigin.longitude,
+          originLatitude: currentOrigin?.latitude,
+          originLongitude: currentOrigin?.longitude,
         },
         hostName,
         profile.emoji,
@@ -236,7 +241,7 @@ export default function LunchieSettingsPage() {
       logSessionCreated(session.id, {
         intent: intent ?? 'auto',
         party_size: partySize,
-        radius_m: radius,
+        radius_m: distanceEnabled ? radius : null,
         budget,
         dietary_count: dietary.length,
         category_count: categories.length,
@@ -362,23 +367,34 @@ export default function LunchieSettingsPage() {
             )}
           </div>
 
-          {/* 반경 */}
+          {/* 거리 — 반경을 선택할 때만 위치 권한을 요청한다. */}
           <div className="bg-[#F5F5F5] rounded-xl p-3">
-            <p className="text-[11px] text-[#9B9B9B] mb-2">검색 반경</p>
-            <div className="flex gap-1.5">
+            <p className="text-[11px] text-[#9B9B9B] mb-2">거리</p>
+            <div className="flex flex-wrap gap-1.5">
+              <ChipButton
+                selected={!distanceEnabled}
+                onClick={() => setDistanceEnabled(false)}
+                unselectedBg="#FFFFFF"
+                className="px-3 py-2 rounded-lg text-[12px] font-bold"
+              >
+                거리 제한 없음
+              </ChipButton>
               {RADIUS_OPTIONS.map(r => (
                 <ChipButton
                   key={r}
-                  selected={radius === r}
-                  onClick={() => setRadius(r)}
+                  selected={distanceEnabled && radius === r}
+                  onClick={() => {
+                    setRadius(r);
+                    setDistanceEnabled(true);
+                  }}
                   unselectedBg="#FFFFFF"
-                  className="flex-1 py-2 rounded-lg text-[12px] font-bold"
+                  className="px-3 py-2 rounded-lg text-[12px] font-bold"
                 >
                   {formatRadius(r)}
                 </ChipButton>
               ))}
             </div>
-            <div className="mt-2 flex items-center justify-between gap-2">
+            {distanceEnabled ? <div className="mt-2 flex items-center justify-between gap-2">
               {origin ? (
                 <p className="text-[10px] text-[#6B7A72] leading-relaxed">
                   <Navigation size={11} className="inline mr-1" />현재 위치 기준 · {origin.latitude.toFixed(4)}, {origin.longitude.toFixed(4)} · 정확도 약 {Math.round(origin.accuracy)}m
@@ -394,8 +410,10 @@ export default function LunchieSettingsPage() {
               >
                 {isLocating ? '확인 중…' : origin ? '다시 확인' : '현재 위치 확인'}
               </button>
-            </div>
-            <p className="text-[10px] text-[#B0B0B0] mt-1.5">표시 거리는 현재 위치부터 식당까지의 직선거리예요. 위치는 세션 생성 시 한 번만 사용합니다.</p>
+            </div> : (
+              <p className="text-[10px] text-[#6B7A72] mt-2">위치 권한 없이 현재 조건에 맞는 전체 후보에서 추천해요.</p>
+            )}
+            <p className="text-[10px] text-[#B0B0B0] mt-1.5">반경을 선택하면 현재 위치 권한이 필요하며, 거리는 직선거리로 표시됩니다.</p>
           </div>
         </div>
 
