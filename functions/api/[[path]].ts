@@ -8,6 +8,7 @@ import {
 } from "../../shared/const";
 import { categoryMatchesIntent, type Intent } from "../../shared/intent";
 import { isValidCoordinate, isWithinRadius } from "../../shared/geo";
+import { isAdminEmail } from "./adminAccess";
 
 export interface EnvBindings {
   DB: any;
@@ -19,6 +20,8 @@ export interface EnvBindings {
   GOOGLE_CLIENT_ID: string;
   GOOGLE_CLIENT_SECRET: string;
   AUTH_SESSION_SECRET: string;
+  /** Comma-separated Google account emails allowed to access /admin. */
+  ADMIN_EMAILS?: string;
 }
 
 async function fetchConfiguredMedia(origin: string | undefined, key: string) {
@@ -384,39 +387,68 @@ app.post("/api/events", async (c) => {
   return c.json({ ok: true, received: requested.length, inserted });
 });
 
-// 집계값만 노출하는 운영 지표 API. 사용자/세션/식당 식별자와 원본 이벤트는 반환하지 않는다.
-app.get("/api/metrics", async (c) => {
+// 원본 사용자·세션·식당 식별자는 절대 반환하지 않는 관리자 집계 API.
+app.get("/api/admin/metrics", async (c) => {
+  const admin = await requireAdminSession(c);
+  if (admin instanceof Response) return admin;
   const requestedDays = Number(c.req.query("days") ?? 30);
   const days = Number.isFinite(requestedDays)
     ? Math.max(1, Math.min(365, Math.floor(requestedDays)))
     : 30;
   const start = Date.now() - (days - 1) * 86_400_000;
-  const { results } = await c.env.DB.prepare(
-    "SELECT date(created_at / 1000, 'unixepoch') AS day, event_type, COUNT(*) AS count FROM rec_events WHERE created_at >= ? GROUP BY day, event_type ORDER BY day ASC",
-  )
-    .bind(start)
-    .all<{ day: string; event_type: string; count: number }>();
-  const byDay = new Map<string, Record<string, number>>();
-  const byType: Record<string, number> = {};
-  for (const row of results) {
-    const current = byDay.get(row.day) ?? {};
-    current[row.event_type] = Number(row.count);
-    byDay.set(row.day, current);
-    byType[row.event_type] = (byType[row.event_type] ?? 0) + Number(row.count);
-  }
-  const daily = Array.from({ length: days }, (_, index) => {
-    const date = new Date(start + index * 86_400_000);
-    const day = date.toISOString().slice(0, 10);
-    return { day, ...(byDay.get(day) ?? {}) };
+  const count = (row: { count?: number | string } | null | undefined) => Number(row?.count ?? 0);
+  const [registered, newRegistered, activeActors, activeSignedIn, activeGuests, eventResult, trendResult, personaResult, modelResult, propensityLogged, scoreLogged] = await Promise.all([
+    c.env.DB.prepare("SELECT COUNT(*) AS count FROM users").first<{ count: number }>(),
+    c.env.DB.prepare("SELECT COUNT(*) AS count FROM users WHERE created_at >= ?").bind(start).first<{ count: number }>(),
+    c.env.DB.prepare("SELECT COUNT(DISTINCT user_id) AS count FROM rec_events WHERE created_at >= ? AND user_id IS NOT NULL").bind(start).first<{ count: number }>(),
+    c.env.DB.prepare("SELECT COUNT(DISTINCT user_id) AS count FROM rec_events WHERE created_at >= ? AND user_id IS NOT NULL AND user_id NOT LIKE 'guest:%'").bind(start).first<{ count: number }>(),
+    c.env.DB.prepare("SELECT COUNT(DISTINCT user_id) AS count FROM rec_events WHERE created_at >= ? AND user_id LIKE 'guest:%'").bind(start).first<{ count: number }>(),
+    c.env.DB.prepare("SELECT event_type, action, COUNT(*) AS count FROM rec_events WHERE created_at >= ? GROUP BY event_type, action").bind(start).all<{ event_type: string; action: string | null; count: number }>(),
+    c.env.DB.prepare("SELECT date(created_at / 1000, 'unixepoch') AS day, COUNT(DISTINCT user_id) AS active_actors, SUM(CASE WHEN event_type = 'SESSION_CREATED' THEN 1 ELSE 0 END) AS sessions, SUM(CASE WHEN event_type = 'WINNER' THEN 1 ELSE 0 END) AS decisions FROM rec_events WHERE created_at >= ? GROUP BY day ORDER BY day ASC").bind(start).all<{ day: string; active_actors: number; sessions: number; decisions: number }>(),
+    c.env.DB.prepare("SELECT r.category AS category, COUNT(DISTINCT e.user_id) AS selectors, COUNT(*) AS decisions FROM rec_events e JOIN restaurants r ON r.id = e.restaurant_id WHERE e.created_at >= ? AND e.event_type = 'WINNER' GROUP BY r.category ORDER BY decisions DESC LIMIT 6").bind(start).all<{ category: string; selectors: number; decisions: number }>(),
+    c.env.DB.prepare("SELECT COALESCE(model_version, '미지정') AS version, SUM(CASE WHEN event_type = 'IMPRESSION' THEN 1 ELSE 0 END) AS impressions, SUM(CASE WHEN event_type = 'SWIPE' THEN 1 ELSE 0 END) AS swipes, SUM(CASE WHEN event_type = 'SWIPE' AND action = 'LIKE' THEN 1 ELSE 0 END) AS likes FROM rec_events WHERE created_at >= ? GROUP BY COALESCE(model_version, '미지정') ORDER BY impressions DESC, swipes DESC LIMIT 6").bind(start).all<{ version: string; impressions: number; swipes: number; likes: number }>(),
+    c.env.DB.prepare("SELECT COUNT(*) AS count FROM rec_events WHERE created_at >= ? AND event_type = 'SWIPE' AND propensity IS NOT NULL").bind(start).first<{ count: number }>(),
+    c.env.DB.prepare("SELECT COUNT(*) AS count FROM rec_events WHERE created_at >= ? AND event_type = 'SWIPE' AND score IS NOT NULL").bind(start).first<{ count: number }>(),
+  ]);
+  const events = new Map<string, number>();
+  for (const row of eventResult.results) events.set(`${row.event_type}:${row.action ?? ''}`, Number(row.count));
+  const eventCount = (type: string, action?: string) => action === undefined
+    ? Array.from(events.entries()).filter(([key]) => key.startsWith(`${type}:`)).reduce((sum, [, value]) => sum + value, 0)
+    : events.get(`${type}:${action}`) ?? 0;
+  const impressions = eventCount("IMPRESSION");
+  const swipes = eventCount("SWIPE");
+  const likes = eventCount("SWIPE", "LIKE");
+  const nopes = eventCount("SWIPE", "NOPE");
+  const decisions = eventCount("WINNER");
+  const sessions = eventCount("SESSION_CREATED");
+  const rerolls = eventCount("REROLL");
+  const trendByDay = new Map(trendResult.results.map((row) => [row.day, row]));
+  const trend = Array.from({ length: days }, (_, index) => {
+    const day = new Date(start + index * 86_400_000).toISOString().slice(0, 10);
+    const row = trendByDay.get(day);
+    return { day, activeActors: Number(row?.active_actors ?? 0), sessions: Number(row?.sessions ?? 0), decisions: Number(row?.decisions ?? 0) };
   });
   return c.json({
     days,
-    total: Object.values(byType).reduce((sum, count) => sum + count, 0),
-    byType,
-    daily,
+    users: { registered: count(registered), newRegistered: count(newRegistered), activeActors: count(activeActors), activeSignedIn: count(activeSignedIn), activeGuests: count(activeGuests) },
+    funnel: { impressions, swipes, likes, nopes, decisions, navigations: eventCount("NAVIGATE"), rerolls, abandons: eventCount("ABANDON") },
+    quality: {
+      swipeLikeRate: likes + nopes ? likes / (likes + nopes) : null,
+      sessionDecisionRate: sessions ? decisions / sessions : null,
+      rerollRate: sessions ? rerolls / sessions : null,
+      propensityCoverage: swipes ? count(propensityLogged) / swipes : null,
+      scoreCoverage: swipes ? count(scoreLogged) / swipes : null,
+    },
+    trend,
+    personas: personaResult.results.map((row) => ({ category: row.category || '기타', selectors: Number(row.selectors), decisions: Number(row.decisions) })),
+    models: modelResult.results.map((row) => ({ version: row.version, impressions: Number(row.impressions), swipes: Number(row.swipes), likes: Number(row.likes), likeRate: Number(row.swipes) ? Number(row.likes) / Number(row.swipes) : null })),
     updatedAt: new Date().toISOString(),
   });
 });
+
+// The old public endpoint was an accidental information disclosure. Keep no
+// backwards-compatible public aggregate route; only /api/admin/metrics exists.
+app.get("/api/metrics", (c) => c.json({ error: "운영 지표는 관리자 대시보드에서만 볼 수 있습니다." }, 410));
 
 type FeatureRow = {
   restaurant_id: string;
@@ -690,6 +722,14 @@ async function requireGoogleSession(c: { req: { raw: Request }; env: EnvBindings
   const session = await readSession(c.req.raw, c.env.AUTH_SESSION_SECRET);
   if (!session) return null;
   await ensurePublicUser(c.env.DB, session);
+  return session;
+}
+
+async function requireAdminSession(c: { req: { raw: Request }; env: EnvBindings; json: (value: unknown, status?: number) => Response }) {
+  const session = await readSession(c.req.raw, c.env.AUTH_SESSION_SECRET);
+  if (!session) return c.json({ error: "관리자 로그인이 필요합니다." }, 401);
+  if (!isAdminEmail(session.email, c.env.ADMIN_EMAILS))
+    return c.json({ error: "관리자 권한이 없습니다." }, 403);
   return session;
 }
 

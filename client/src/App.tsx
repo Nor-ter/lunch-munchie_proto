@@ -37,14 +37,14 @@ import LunchieMapPage from "./pages/LunchieMapPage";
 import TourMapPage from "./pages/TourMapPage";
 import TourModePage from "./pages/TourModePage";
 import SlideTransitionRoutes from "./components/SlideTransitionRoutes";
-import MetricsPage from "./pages/MetricsPage";
+import AdminDashboardPage from "./pages/AdminDashboardPage";
 import TemplateDetailPage from "./pages/TemplateDetailPage";
 import TemplatesBrowsePage from "./pages/TemplatesBrowsePage";
 import CourseFeedsPage from "./pages/course/CourseFeedsPage";
 import PlaceExplorePage from "./pages/PlaceExplorePage";
 import StorySharePage from "./pages/StorySharePage";
 
-const NO_TABBAR = ['/onboarding', '/tour-mode', '/course/', '/coursemap', '/template/', '/templates', '/lunchie', '/session', '/join', '/feed/', '/explore/places', '/auth'];
+const NO_TABBAR = ['/onboarding', '/tour-mode', '/course/', '/coursemap', '/template/', '/templates', '/lunchie', '/session', '/join', '/feed/', '/explore/places', '/auth', '/admin'];
 
 function CoursesRedirect() {
   const params = useParams<{ id: string }>();
@@ -111,7 +111,8 @@ function AppShell({ userId }: { userId: string | null }) {
             <Route path="/lunchie/swipe" component={LunchieSwipePage} />
             <Route path="/lunchie/results" component={LunchieResultsPage} />
             <Route path="/lunchie/map" component={LunchieMapPage} />
-            <Route path="/metrics" component={MetricsPage} />
+            <Route path="/metrics">{() => <Redirect to="/admin" />}</Route>
+            <Route path="/admin" component={AdminDashboardPage} />
             <Route path="/tour-map" component={TourMapPage} />
             <Route path="/tour-mode" component={TourModePage} />
             <Route path="/404" component={NotFound} />

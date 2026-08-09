@@ -1,0 +1,145 @@
+import { useEffect, useMemo, useState } from 'react';
+import { Bar, BarChart, CartesianGrid, Cell, Line, LineChart, Pie, PieChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
+import { BarChart3, LockKeyhole, RefreshCw, ShieldCheck, UsersRound } from 'lucide-react';
+
+type Trend = { day: string; activeActors: number; sessions: number; decisions: number };
+type Persona = { category: string; selectors: number; decisions: number };
+type Model = { version: string; impressions: number; swipes: number; likes: number; likeRate: number | null };
+type AdminMetrics = {
+  days: number;
+  updatedAt: string;
+  users: { registered: number; newRegistered: number; activeSignedIn: number; activeGuests: number; activeActors: number };
+  funnel: { impressions: number; swipes: number; likes: number; nopes: number; decisions: number; navigations: number; rerolls: number; abandons: number };
+  quality: { swipeLikeRate: number | null; sessionDecisionRate: number | null; rerollRate: number | null; propensityCoverage: number | null; scoreCoverage: number | null };
+  trend: Trend[];
+  personas: Persona[];
+  models: Model[];
+};
+
+const COLORS = ['#FF6B6F', '#F49A8A', '#F7C873', '#85B8A9', '#86A8E7', '#AA95D9'];
+const periodLabel = (days: number) => days === 365 ? '전체' : `${days}일`;
+const dayLabel = (day: string) => {
+  const [, month, date] = day.split('-');
+  return `${Number(month)}/${Number(date)}`;
+};
+const percentage = (value: number | null) => value === null ? '데이터 없음' : `${(value * 100).toFixed(1)}%`;
+
+function MetricCard({ label, value, detail }: { label: string; value: string; detail: string }) {
+  return <div className="rounded-2xl border border-white/10 bg-white/[0.06] p-4">
+    <p className="text-xs text-white/60">{label}</p>
+    <p className="mt-1 text-2xl font-bold tabular-nums text-white">{value}</p>
+    <p className="mt-1 text-[11px] text-white/45">{detail}</p>
+  </div>;
+}
+
+function Panel({ title, detail, children }: { title: string; detail?: string; children: React.ReactNode }) {
+  return <section className="rounded-2xl border border-white/10 bg-[#272727] p-4 sm:p-5">
+    <h2 className="text-base font-bold text-white">{title}</h2>
+    {detail && <p className="mt-1 text-xs leading-relaxed text-white/55">{detail}</p>}
+    <div className="mt-4">{children}</div>
+  </section>;
+}
+
+function AccessState({ code }: { code: number | null }) {
+  const login = () => window.location.assign('/api/auth/google/start?next=/admin');
+  return <main className="flex min-h-dvh items-center justify-center bg-[#171717] p-5 text-white">
+    <section className="w-full max-w-md rounded-3xl border border-white/10 bg-[#272727] p-7 text-center shadow-2xl">
+      <LockKeyhole className="mx-auto h-9 w-9 text-[#FF7679]" />
+      <h1 className="mt-4 text-xl font-bold">운영 대시보드</h1>
+      {code === 401 ? <>
+        <p className="mt-2 text-sm leading-6 text-white/65">Google 로그인 후 관리자 권한을 확인합니다.</p>
+        <button onClick={login} className="mt-6 w-full rounded-xl bg-[#EB5053] px-4 py-3 text-sm font-bold">Google로 로그인</button>
+      </> : <>
+        <p className="mt-2 text-sm leading-6 text-white/65">이 계정에는 운영 지표 접근 권한이 없습니다.</p>
+        <p className="mt-3 rounded-lg bg-white/5 p-3 text-left text-xs leading-5 text-white/45">관리자는 Cloudflare Pages의 <code>ADMIN_EMAILS</code> 비밀 변수에 Google 이메일을 쉼표로 구분해 등록해야 합니다.</p>
+      </>}
+    </section>
+  </main>;
+}
+
+export default function AdminDashboardPage() {
+  const [period, setPeriod] = useState<7 | 30 | 365>(30);
+  const [metrics, setMetrics] = useState<AdminMetrics | null>(null);
+  const [errorCode, setErrorCode] = useState<number | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  const load = async () => {
+    setLoading(true);
+    setErrorCode(null);
+    try {
+      const response = await fetch(`/api/admin/metrics?days=${period}`);
+      if (!response.ok) {
+        setErrorCode(response.status);
+        return;
+      }
+      setMetrics(await response.json() as AdminMetrics);
+    } catch {
+      setErrorCode(500);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => { void load(); }, [period]);
+
+  const funnel = useMemo(() => metrics ? [
+    { label: '노출', value: metrics.funnel.impressions },
+    { label: '스와이프', value: metrics.funnel.swipes },
+    { label: '결정', value: metrics.funnel.decisions },
+    { label: '길찾기', value: metrics.funnel.navigations },
+  ] : [], [metrics]);
+
+  if (errorCode === 401 || errorCode === 403) return <AccessState code={errorCode} />;
+  return <main className="min-h-dvh bg-[#171717] px-4 py-7 text-white sm:px-8">
+    <div className="mx-auto max-w-6xl">
+      <header className="mb-7 flex flex-wrap items-start justify-between gap-4">
+        <div>
+          <div className="flex items-center gap-2 text-[#FF9092]"><ShieldCheck size={20} /><span className="text-xs font-bold tracking-[0.18em]">LUNCHIE MUNCHIE · ADMIN</span></div>
+          <h1 className="mt-2 text-3xl font-bold tracking-tight">운영 및 학습 현황</h1>
+          <p className="mt-2 max-w-2xl text-sm leading-6 text-white/60">개인 식별 정보 없이, 집계된 제품·추천·취향 신호만 표시합니다.</p>
+        </div>
+        <div className="flex items-center gap-2">
+          <div className="flex rounded-xl bg-white/10 p-1">
+            {([7, 30, 365] as const).map((value) => <button key={value} onClick={() => setPeriod(value)} className={`rounded-lg px-3 py-1.5 text-sm ${period === value ? 'bg-white text-[#222] font-bold' : 'text-white/65'}`}>{periodLabel(value)}</button>)}
+          </div>
+          <button onClick={() => void load()} disabled={loading} aria-label="새로고침" className="rounded-xl bg-white/10 p-2.5 text-white/80 disabled:opacity-40"><RefreshCw size={17} className={loading ? 'animate-spin' : ''} /></button>
+        </div>
+      </header>
+
+      {loading && !metrics ? <p className="py-28 text-center text-sm text-white/60">집계 지표를 불러오는 중…</p> : metrics ? <>
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
+          <MetricCard label="가입 이용자" value={String(metrics.users.registered)} detail={`기간 내 신규 ${metrics.users.newRegistered}명`} />
+          <MetricCard label="활성 로그인 이용자" value={String(metrics.users.activeSignedIn)} detail={`${periodLabel(period)} 동안 행동 기록`} />
+          <MetricCard label="익명 체험 이용자" value={String(metrics.users.activeGuests)} detail="기기 쿠키 기준, 중복 제거" />
+          <MetricCard label="결정 완료" value={String(metrics.funnel.decisions)} detail={`세션 결정률 ${percentage(metrics.quality.sessionDecisionRate)}`} />
+          <MetricCard label="추천 수락률" value={percentage(metrics.quality.swipeLikeRate)} detail="좋아요 ÷ 선호/비선호 스와이프" />
+        </div>
+
+        <div className="mt-5 grid gap-5 lg:grid-cols-2">
+          <Panel title="이용 추이" detail="일별 고유 행위자·세션·최종 결정">
+            <div className="h-72"><ResponsiveContainer><LineChart data={metrics.trend}><CartesianGrid stroke="#ffffff14" vertical={false} /><XAxis dataKey="day" tickFormatter={dayLabel} tick={{ fill: '#ffffff88', fontSize: 11 }} axisLine={false} tickLine={false} minTickGap={28} /><YAxis allowDecimals={false} tick={{ fill: '#ffffff88', fontSize: 11 }} axisLine={false} tickLine={false} /><Tooltip contentStyle={{ background: '#171717', border: '1px solid #ffffff22', borderRadius: 10 }} labelFormatter={dayLabel} /><Line type="monotone" dataKey="activeActors" name="활성 이용자" stroke="#FF7376" strokeWidth={2.5} dot={false} /><Line type="monotone" dataKey="sessions" name="세션" stroke="#F7C873" strokeWidth={2} dot={false} /><Line type="monotone" dataKey="decisions" name="결정" stroke="#85B8A9" strokeWidth={2} dot={false} /></LineChart></ResponsiveContainer></div>
+          </Panel>
+          <Panel title="Lunchie 퍼널" detail="추천 노출부터 길찾기까지의 행동 전환">
+            <div className="h-72"><ResponsiveContainer><BarChart data={funnel} layout="vertical" margin={{ left: 12 }}><XAxis type="number" allowDecimals={false} tick={{ fill: '#ffffff88', fontSize: 11 }} axisLine={false} tickLine={false} /><YAxis dataKey="label" type="category" width={54} tick={{ fill: '#ffffffcc', fontSize: 12 }} axisLine={false} tickLine={false} /><Tooltip contentStyle={{ background: '#171717', border: '1px solid #ffffff22', borderRadius: 10 }} /><Bar dataKey="value" name="건수" fill="#FF7376" radius={[0, 8, 8, 0]} /></BarChart></ResponsiveContainer></div>
+            <div className="grid grid-cols-3 gap-2 text-center text-xs"><Stat label="재추천" value={percentage(metrics.quality.rerollRate)} /><Stat label="Propensity 기록" value={percentage(metrics.quality.propensityCoverage)} /><Stat label="Score 기록" value={percentage(metrics.quality.scoreCoverage)} /></div>
+          </Panel>
+          <Panel title="관찰된 취향 분포" detail="기간 내 최종 선택 카테고리를 익명·집계해 표시합니다. 개인 페르소나는 노출하지 않습니다.">
+            {metrics.personas.length ? <div className="flex h-72 flex-col sm:flex-row"><ResponsiveContainer width="100%" height="100%"><PieChart><Pie data={metrics.personas} dataKey="decisions" nameKey="category" innerRadius={48} outerRadius={92} paddingAngle={3}>{metrics.personas.map((row, index) => <Cell key={row.category} fill={COLORS[index % COLORS.length]} />)}</Pie><Tooltip contentStyle={{ background: '#171717', border: '1px solid #ffffff22', borderRadius: 10 }} /></PieChart></ResponsiveContainer><div className="grid content-center gap-2 text-xs text-white/75">{metrics.personas.map((row, index) => <div key={row.category} className="flex items-center gap-2"><span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: COLORS[index % COLORS.length] }} /><span>{row.category}</span><span className="ml-auto">{row.decisions}회 · {row.selectors}명</span></div>)}</div></div> : <Empty label="아직 최종 결정 데이터가 없습니다." />}
+          </Panel>
+          <Panel title="추천 정책 학습 신호" detail="정책 버전별 노출·스와이프·수락률입니다. 표본이 작을 때는 의사결정에 사용하지 마세요.">
+            {metrics.models.length ? <div className="space-y-3">{metrics.models.map((model) => <div key={model.version} className="rounded-xl bg-white/[0.05] p-3"><div className="flex justify-between gap-3"><span className="font-mono text-xs text-[#FFB3B5]">{model.version}</span><span className="text-sm font-bold">수락 {percentage(model.likeRate)}</span></div><div className="mt-2 grid grid-cols-3 text-xs text-white/60"><span>노출 {model.impressions}</span><span>스와이프 {model.swipes}</span><span>좋아요 {model.likes}</span></div></div>)}</div> : <Empty label="아직 모델 버전이 기록된 추천 데이터가 없습니다." />}
+          </Panel>
+        </div>
+        <footer className="mt-6 flex items-center gap-2 text-xs text-white/40"><UsersRound size={14} /><span>개인 식별자·정확 위치·개별 취향 벡터는 이 화면과 API에 포함되지 않습니다. 마지막 집계 {new Date(metrics.updatedAt).toLocaleString('ko-KR')}</span></footer>
+      </> : <div className="rounded-2xl bg-[#4E2528] p-5 text-sm text-[#FFB8B8]">운영 지표를 불러오지 못했습니다. 잠시 후 다시 시도해 주세요.</div>}
+    </div>
+  </main>;
+}
+
+function Stat({ label, value }: { label: string; value: string }) {
+  return <div className="rounded-lg bg-white/[0.05] p-2"><p className="text-white/50">{label}</p><p className="mt-1 font-semibold text-white">{value}</p></div>;
+}
+
+function Empty({ label }: { label: string }) {
+  return <div className="flex h-72 items-center justify-center rounded-xl border border-dashed border-white/15 px-5 text-center text-sm text-white/45"><BarChart3 className="mr-2 h-5 w-5" />{label}</div>;
+}
