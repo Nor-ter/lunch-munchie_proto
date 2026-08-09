@@ -86,7 +86,7 @@ function formatSessionDistance(metres: number) {
   const rounded = metres < 1_000
     ? `${Math.round(metres / 10) * 10}m`
     : `${(metres / 1_000).toFixed(metres < 10_000 ? 1 : 0)}km`;
-  return `내 위치에서 ${rounded}`;
+  return `직선거리 ${rounded}`;
 }
 
 function withSessionDistances(

@@ -29,11 +29,11 @@ const DEADLINE_OPTIONS = [
   { label: '15분', min: 15 },
 ];
 
-const FILTER_OPTIONS = ['식단', '거리', '예산', '카드수', '취향', '평점'];
+const FILTER_OPTIONS = ['식단', '반경', '예산', '카드수', '취향', '평점'];
 
 const DETAIL_OPTIONS: Record<string, string[]> = {
   '식단': ['비건', '채식', '육식', '글루텐프리', '할랄', '해산물 제외'],
-  '거리': ['500m 이내', '1km 이내', '3km 이내', '5km 이내'],
+  '반경': ['500m 이내', '1km 이내', '3km 이내', '5km 이내'],
   '예산': ['₩', '₩₩', '₩₩₩', '₩₩₩₩'],
   '카드수': ['5장', '7장', '10장', '15장'],
   '취향': [...FOOD_TAGS],
@@ -380,9 +380,9 @@ export default function LunchieSettingsPage() {
             )}
           </div>
 
-          {/* 거리 — 반경을 선택할 때만 위치 권한을 요청한다. */}
+          {/* 반경 — 반경을 선택할 때만 위치 권한을 요청한다. */}
           <div className="bg-[#F5F5F5] rounded-xl p-3">
-            <p className="text-[11px] text-[#9B9B9B] mb-2">거리</p>
+            <p className="text-[11px] text-[#9B9B9B] mb-2">반경</p>
             <div className="flex flex-wrap gap-1.5">
               <ChipButton
                 selected={!distanceEnabled}
@@ -390,7 +390,7 @@ export default function LunchieSettingsPage() {
                 unselectedBg="#FFFFFF"
                 className="px-3 py-2 rounded-lg text-[12px] font-bold"
               >
-                거리 제한 없음
+                반경 제한 없음
               </ChipButton>
               {RADIUS_OPTIONS.map(r => (
                 <ChipButton
@@ -407,7 +407,7 @@ export default function LunchieSettingsPage() {
             {distanceEnabled ? <div className="mt-2 flex items-center justify-between gap-2">
               {origin ? (
                 <p className="text-[10px] text-[#6B7A72] leading-relaxed">
-                  <Navigation size={11} className="inline mr-1" />현재 위치 기준 · {origin.latitude.toFixed(4)}, {origin.longitude.toFixed(4)} · 정확도 약 {Math.round(origin.accuracy)}m
+                  <Navigation size={11} className="inline mr-1" />현재 위치를 반경 기준점으로 설정했어요.
                 </p>
               ) : (
                 <p className="text-[10px] text-[#B0B0B0]">위치 허용 팝업이 보이면 ‘허용’을 눌러 반경 기준점을 설정해 주세요.</p>
@@ -421,9 +421,9 @@ export default function LunchieSettingsPage() {
                 {isLocating ? '확인 중…' : origin ? '다시 확인' : '현재 위치 확인'}
               </button>
             </div> : (
-              <p className="text-[10px] text-[#6B7A72] mt-2">위치 권한 없이 현재 조건에 맞는 전체 후보에서 추천해요.</p>
+              <p className="text-[10px] text-[#6B7A72] mt-2">반경 제한 없이 현재 조건에 맞는 전체 후보에서 추천해요.</p>
             )}
-            <p className="text-[10px] text-[#B0B0B0] mt-1.5">반경을 선택하면 권한 요청이 열립니다. 이미 차단했다면 주소창의 사이트 설정에서 위치를 허용해 주세요.</p>
+            <p className="text-[10px] text-[#B0B0B0] mt-1.5">반경은 현재 위치부터 식당까지의 직선거리로 적용됩니다. 반경을 선택하면 권한 요청이 열립니다.</p>
           </div>
         </div>
 
