@@ -187,8 +187,10 @@ export default function LunchieSettingsPage() {
     setIsLocating(true);
     try {
       const fix = await currentPosition();
+      const label = localityForCoordinate(fix.latitude, fix.longitude);
       setOrigin(fix);
-      setOriginLabel(localityForCoordinate(fix.latitude, fix.longitude));
+      setOriginLabel(label);
+      toast.success(`현재 위치를 ${label}(으)로 확인했어요.`);
     } catch (error) {
       toast.error(error instanceof Error ? error.message : '현재 위치를 확인하지 못했습니다.');
     } finally {
@@ -408,7 +410,7 @@ export default function LunchieSettingsPage() {
                 </ChipButton>
               ))}
             </div>
-            {distanceEnabled ? <div className="mt-2 flex items-center justify-between gap-2">
+            <div className="mt-2 flex items-center justify-between gap-2">
               {origin ? (
                 <div>
                   <p className="text-[10px] text-[#6B7A72] leading-relaxed">
@@ -417,7 +419,7 @@ export default function LunchieSettingsPage() {
                   <p className="text-[9px] text-[#B0B0B0] mt-0.5">지역 기준: © OpenStreetMap contributors · 좌표는 표시하지 않아요.</p>
                 </div>
               ) : (
-                <p className="text-[10px] text-[#B0B0B0]">위치 허용 팝업이 보이면 ‘허용’을 눌러 반경 기준점을 설정해 주세요.</p>
+                <p className="text-[10px] text-[#B0B0B0]">현재 위치를 확인하면 지명과 반경 기준점을 보여드려요.</p>
               )}
               <button
                 type="button"
@@ -427,7 +429,8 @@ export default function LunchieSettingsPage() {
               >
                 {isLocating ? '확인 중…' : origin ? '다시 확인' : '현재 위치 확인'}
               </button>
-            </div> : (
+            </div>
+            {!distanceEnabled && (
               <p className="text-[10px] text-[#6B7A72] mt-2">반경 제한 없이 현재 조건에 맞는 전체 후보에서 추천해요.</p>
             )}
             <p className="text-[10px] text-[#B0B0B0] mt-1.5">반경은 현재 위치부터 식당까지의 직선거리로 적용됩니다. 반경을 선택하면 권한 요청이 열립니다.</p>
