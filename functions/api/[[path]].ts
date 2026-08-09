@@ -1274,6 +1274,7 @@ type SessionRow = {
   share_token: string;
   group_size: number;
   filter_distance: number;
+  distance_enabled: number;
   origin_latitude: number | null;
   origin_longitude: number | null;
   filter_budget: number;
@@ -1482,7 +1483,7 @@ export function sessionResults(
     countByUser.set(swipe.user_id, (countByUser.get(swipe.user_id) ?? 0) + 1);
   const filtered = restaurants.filter((restaurant) => {
     const categories = json<string[]>(session.filter_categories, []);
-    const hasOrigin = isValidCoordinate(
+    const hasOrigin = Number(session.distance_enabled) !== 0 && isValidCoordinate(
       session.origin_latitude,
       session.origin_longitude,
     );
@@ -1584,11 +1585,12 @@ app.post("/api/sessions/create", async (c) => {
     Number.isFinite(body.filterDistance)
       ? Math.max(100, Math.min(50_000, Math.floor(body.filterDistance)))
       : 1000;
+  const distanceEnabled = body.distanceEnabled !== false;
   const originLatitude = body.originLatitude;
   const originLongitude = body.originLongitude;
-  if (!isValidCoordinate(originLatitude, originLongitude))
+  if (distanceEnabled && !isValidCoordinate(originLatitude, originLongitude))
     return c.json(
-      { error: "거리 설정을 적용하려면 현재 위치가 필요합니다." },
+      { error: "거리 제한을 사용하려면 현재 위치 권한이 필요합니다. 거리 제한 없음을 선택하면 위치 없이 시작할 수 있어요." },
       400,
     );
   const filterBudget =
@@ -1629,15 +1631,16 @@ app.post("/api/sessions/create", async (c) => {
     try {
       await c.env.DB.batch([
         c.env.DB.prepare(
-          "INSERT INTO sessions (id, host_user_id, share_token, group_size, filter_distance, origin_latitude, origin_longitude, filter_budget, filter_categories, filter_dietary, intent, status, deadline_at, top_restaurant_ids, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'WAITING', NULL, ?, ?)",
+          "INSERT INTO sessions (id, host_user_id, share_token, group_size, filter_distance, distance_enabled, origin_latitude, origin_longitude, filter_budget, filter_categories, filter_dietary, intent, status, deadline_at, top_restaurant_ids, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'WAITING', NULL, ?, ?)",
         ).bind(
           id,
           hostId,
           token,
           groupSize,
           filterDistance,
-          Number(originLatitude),
-          Number(originLongitude),
+          distanceEnabled ? 1 : 0,
+          distanceEnabled ? Number(originLatitude) : null,
+          distanceEnabled ? Number(originLongitude) : null,
           filterBudget,
           JSON.stringify(categories),
           JSON.stringify(dietary),
@@ -1663,8 +1666,9 @@ app.post("/api/sessions/create", async (c) => {
         share_token: token,
         group_size: groupSize,
         filter_distance: filterDistance,
-        origin_latitude: Number(originLatitude),
-        origin_longitude: Number(originLongitude),
+        distance_enabled: distanceEnabled ? 1 : 0,
+        origin_latitude: distanceEnabled ? Number(originLatitude) : null,
+        origin_longitude: distanceEnabled ? Number(originLongitude) : null,
         filter_budget: filterBudget,
         filter_categories: JSON.stringify(categories),
         filter_dietary: JSON.stringify(dietary),
@@ -1827,7 +1831,7 @@ app.post("/api/sessions/:token/status", async (c) => {
     // Sessions created before migration 0009 have no saved origin. Preserve
     // their ability to finish, but every newly-created room must have passed
     // origin validation above and is therefore distance-constrained.
-    const hasOrigin = isValidCoordinate(
+    const hasOrigin = Number(session.distance_enabled) !== 0 && isValidCoordinate(
       session.origin_latitude,
       session.origin_longitude,
     );
@@ -1858,7 +1862,9 @@ app.post("/api/sessions/:token/status", async (c) => {
     if (!deckIds.length)
       return c.json(
         {
-          error: `${Number(session.filter_distance) >= 1000 ? `${Number(session.filter_distance) / 1000}km` : `${session.filter_distance}m`} 반경 안에 현재 조건과 맞는 식당이 없어요. 반경 또는 조건을 바꿔 주세요.`,
+          error: Number(session.distance_enabled) !== 0
+            ? `${Number(session.filter_distance) >= 1000 ? `${Number(session.filter_distance) / 1000}km` : `${session.filter_distance}m`} 반경 안에 현재 조건과 맞는 식당이 없어요. 반경 또는 조건을 바꿔 주세요.`
+            : "현재 조건과 맞는 식당이 없어요. 조건을 바꿔 주세요.",
           code: "NO_ELIGIBLE_RESTAURANTS",
         },
         409,

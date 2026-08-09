@@ -74,6 +74,7 @@ export interface Restaurant {
 
 function hasSessionOrigin(filters: GroupSession['filters']) {
   return (
+    filters.distanceEnabled !== false &&
     typeof filters.originLatitude === 'number' &&
     typeof filters.originLongitude === 'number' &&
     Number.isFinite(filters.originLatitude) &&
@@ -160,6 +161,8 @@ export interface GroupSession {
     dietary: string[];
     budget: 1 | 2 | 3 | 4;
     radius: number;
+    /** false면 위치 권한 없이 전체 후보에서 공통 덱을 만든다. */
+    distanceEnabled?: boolean;
     /** 세션을 만든 호스트의 1회성 기준 위치. 공유 카드 덱의 공통 원점이다. */
     originLatitude?: number;
     originLongitude?: number;
@@ -1095,6 +1098,7 @@ export function AppProvider({
             name,
             groupSize: filters.partySize,
             filterDistance: filters.radius,
+            distanceEnabled: filters.distanceEnabled !== false,
             originLatitude: filters.originLatitude,
             originLongitude: filters.originLongitude,
             filterBudget: filters.budget,
@@ -1154,6 +1158,7 @@ export function AppProvider({
       dietary: data.session.filter_dietary || [],
       budget: data.session.filter_budget,
       radius: data.session.filter_distance,
+      distanceEnabled: data.session.distance_enabled !== 0,
       originLatitude: data.session.origin_latitude,
       originLongitude: data.session.origin_longitude,
       categories: data.session.filter_vibe || [],
