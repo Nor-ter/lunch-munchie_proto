@@ -1050,6 +1050,7 @@ export function AppProvider({
             filterBudget: filters.budget,
             filterCategories: filters.categories,
             filterDietary: filters.dietary,
+            intent: filters.intent,
             hostPreferences: profile.categoryPrefs,
             hostDietary: profile.dietary,
             deadlineMinutes,
@@ -1093,7 +1094,10 @@ export function AppProvider({
     if (!res.ok) throw new Error('Session not found');
     const data = await res.json();
     const status = (data.session.status as string).toLowerCase() as GroupSession['status'];
-    // 서버 sessions 테이블에 intent 컬럼이 없어 서버 응답엔 안 실려옴 — 직전 로컬 세션의 intent를 승계.
+    const serverIntent = data.session.intent === 'meal' || data.session.intent === 'cafe' || data.session.intent === 'dessert'
+      ? data.session.intent as Intent
+      : undefined;
+    // Migration 전 로컬 D1에서 읽은 레거시 세션만, 직전 화면의 선택을 보조적으로 유지한다.
     const prevIntent = currentSessionRef.current?.inviteCode === token ? currentSessionRef.current.filters.intent : undefined;
     const sessFilters = {
       partySize: data.session.group_size,
@@ -1101,7 +1105,7 @@ export function AppProvider({
       budget: data.session.filter_budget,
       radius: data.session.filter_distance,
       categories: data.session.filter_vibe || [],
-      intent: prevIntent,
+      intent: serverIntent ?? prevIntent,
     };
     const sharedDeckIds: string[] = Array.isArray(data.session.deck_ids)
       ? data.session.deck_ids.filter((id: unknown): id is string => typeof id === 'string')
