@@ -7,7 +7,7 @@
 import { useState, type ReactNode, type CSSProperties } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useLocation, useSearch } from 'wouter';
-import { ArrowLeft, Clock, SlidersHorizontal, Users, Minus, Plus, X } from 'lucide-react';
+import { ArrowLeft, Clock, SlidersHorizontal, Users, Minus, Plus, Navigation, X } from 'lucide-react';
 import { useApp } from '@/contexts/AppContext';
 import { FOOD_TAGS } from '@/constants/foodTags';
 import { toast } from 'sonner';
@@ -48,12 +48,14 @@ function formatRadius(r: number): string {
 
 const tapSpring = { type: "spring" as const, stiffness: 500, damping: 30 };
 
-function currentPosition(): Promise<{ latitude: number; longitude: number }> {
+type LocationFix = { latitude: number; longitude: number; accuracy: number };
+
+function currentPosition(): Promise<LocationFix> {
   if (!navigator.geolocation)
     return Promise.reject(new Error('이 브라우저에서는 위치 정보를 사용할 수 없습니다.'));
   return new Promise((resolve, reject) => {
     navigator.geolocation.getCurrentPosition(
-      ({ coords }) => resolve({ latitude: coords.latitude, longitude: coords.longitude }),
+      ({ coords }) => resolve({ latitude: coords.latitude, longitude: coords.longitude, accuracy: coords.accuracy }),
       () => reject(new Error('현재 위치 권한이 필요합니다.')),
       { enableHighAccuracy: false, timeout: 10_000, maximumAge: 5 * 60_000 },
     );
@@ -170,6 +172,19 @@ export default function LunchieSettingsPage() {
   });
   const [showDetailModal, setShowDetailModal] = useState(false);
   const [isCreating, setIsCreating] = useState(false);
+  const [origin, setOrigin] = useState<LocationFix | null>(null);
+  const [isLocating, setIsLocating] = useState(false);
+
+  const confirmCurrentLocation = async () => {
+    setIsLocating(true);
+    try {
+      setOrigin(await currentPosition());
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : '현재 위치를 확인하지 못했습니다.');
+    } finally {
+      setIsLocating(false);
+    }
+  };
 
   const toggleFilter = (f: string) => {
     setActiveFilters(prev => (prev.includes(f) ? prev.filter(x => x !== f) : [...prev, f]));
@@ -200,7 +215,7 @@ export default function LunchieSettingsPage() {
       const sessionName = `${hostName}의 점심 세션`;
       // The host supplies one location at creation; it becomes the shared
       // reference point, rather than collecting every participant's location.
-      const origin = await currentPosition();
+      const currentOrigin = origin ?? await currentPosition();
 
       const session = await createSession(
         sessionName,
@@ -211,8 +226,8 @@ export default function LunchieSettingsPage() {
           radius,
           categories,
           intent: intent ?? undefined,
-          originLatitude: origin.latitude,
-          originLongitude: origin.longitude,
+          originLatitude: currentOrigin.latitude,
+          originLongitude: currentOrigin.longitude,
         },
         hostName,
         profile.emoji,
@@ -363,7 +378,24 @@ export default function LunchieSettingsPage() {
                 </ChipButton>
               ))}
             </div>
-            <p className="text-[10px] text-[#B0B0B0] mt-1.5">세션을 만들 때 호스트의 현재 위치를 한 번만 사용해, 모두에게 같은 반경 후보를 보여줘요.</p>
+            <div className="mt-2 flex items-center justify-between gap-2">
+              {origin ? (
+                <p className="text-[10px] text-[#6B7A72] leading-relaxed">
+                  <Navigation size={11} className="inline mr-1" />현재 위치 기준 · {origin.latitude.toFixed(4)}, {origin.longitude.toFixed(4)} · 정확도 약 {Math.round(origin.accuracy)}m
+                </p>
+              ) : (
+                <p className="text-[10px] text-[#B0B0B0]">현재 위치를 확인하면 선택한 반경의 기준점을 보여드려요.</p>
+              )}
+              <button
+                type="button"
+                onClick={() => void confirmCurrentLocation()}
+                disabled={isLocating}
+                className="shrink-0 text-[10px] font-bold text-[#EB5053] disabled:opacity-50"
+              >
+                {isLocating ? '확인 중…' : origin ? '다시 확인' : '현재 위치 확인'}
+              </button>
+            </div>
+            <p className="text-[10px] text-[#B0B0B0] mt-1.5">표시 거리는 현재 위치부터 식당까지의 직선거리예요. 위치는 세션 생성 시 한 번만 사용합니다.</p>
           </div>
         </div>
 
