@@ -1247,8 +1247,12 @@ export function AppProvider({
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ status: 'SWIPING_1', deadlineMinutes: minutes, userId: profile.id }),
     });
-    const payload = await res.json().catch(() => ({})) as { error?: string };
-    if (!res.ok) throw new Error(payload.error ?? '세션을 시작하지 못했어요.');
+    const payload = await res.json().catch(() => ({})) as { error?: string; code?: string };
+    if (!res.ok) {
+      const error = new Error(payload.error ?? '세션을 시작하지 못했어요.') as Error & { code?: string };
+      error.code = payload.code;
+      throw error;
+    }
     return fetchSession(token);
   }, [fetchSession]);
 
