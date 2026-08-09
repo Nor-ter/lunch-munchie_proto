@@ -6,7 +6,8 @@
 
 import React, { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
 import { normalizeDiet, isHardRestriction, type DietTag } from '@shared/const';
-import { intentForHour, type Intent } from '@shared/intent';
+import { categoryMatchesIntent, intentForHour, type Intent } from '@shared/intent';
+import { distanceMetres, isWithinRadius } from '@shared/geo';
 import { normalizeFoodTag, type TagType } from '@/constants/foodTags';
 import { DRIVE_COURSES, DRIVE_FEED_POSTS } from '@/data/driveFeed';
 import { demoAuthorIdFor } from '@/data/demoAuthors';
@@ -69,6 +70,40 @@ export interface Restaurant {
   openHours: string;
   dietary: string[];
   description: string;
+}
+
+function hasSessionOrigin(filters: GroupSession['filters']) {
+  return (
+    typeof filters.originLatitude === 'number' &&
+    typeof filters.originLongitude === 'number' &&
+    Number.isFinite(filters.originLatitude) &&
+    Number.isFinite(filters.originLongitude)
+  );
+}
+
+function formatSessionDistance(metres: number) {
+  const rounded = metres < 1_000
+    ? `${Math.round(metres / 10) * 10}m`
+    : `${(metres / 1_000).toFixed(metres < 10_000 ? 1 : 0)}km`;
+  return `내 위치에서 ${rounded}`;
+}
+
+function withSessionDistances(
+  restaurants: Restaurant[],
+  filters: GroupSession['filters'],
+) {
+  if (!hasSessionOrigin(filters)) return restaurants;
+  return restaurants.map((restaurant) => ({
+    ...restaurant,
+    distance: formatSessionDistance(
+      distanceMetres(
+        filters.originLatitude!,
+        filters.originLongitude!,
+        restaurant.lat,
+        restaurant.lng,
+      ),
+    ),
+  }));
 }
 
 export interface CourseStop {
@@ -394,7 +429,11 @@ export async function buildDeck(
 ): Promise<{ restaurants: Restaurant[]; slateId?: string; recMeta?: GroupSession['recMeta']; modelVersion?: string }> {
   const base = allRestaurants.filter(r =>
     (filters.categories.length === 0 || filters.categories.includes(r.category)) &&
-    matchesDiet(r.category, r.dietary, filters.dietary),
+    categoryMatchesIntent(r.category, filters.intent ?? intentForHour(new Date().getHours())) &&
+    matchesDiet(r.category, r.dietary, filters.dietary) &&
+    (!hasSessionOrigin(filters) || isWithinRadius(
+      filters.originLatitude!, filters.originLongitude!, r.lat, r.lng, filters.radius,
+    )),
   );
   if (base.length === 0) return { restaurants: base };
   try {
@@ -419,7 +458,7 @@ export async function buildDeck(
         user_id: userId,
       }),
     });
-    if (!res.ok) return { restaurants: base };
+    if (!res.ok) return { restaurants: withSessionDistances(base, filters) };
     const data = await res.json();
     const meta: GroupSession['recMeta'] = {};
     const slate: Restaurant[] = [];
@@ -429,9 +468,9 @@ export async function buildDeck(
       if (r) slate.push(r);
     }
     // 덱 = 슬레이트(top-7)만. 노출(IMPRESSION)·스와이프가 정확히 일치한다.
-    return { restaurants: slate.length ? slate : base, slateId: data.slate_id, recMeta: meta, modelVersion: data.model_version };
+    return { restaurants: withSessionDistances(slate.length ? slate : base, filters), slateId: data.slate_id, recMeta: meta, modelVersion: data.model_version };
   } catch {
-    return { restaurants: base };
+    return { restaurants: withSessionDistances(base, filters) };
   }
 }
 
@@ -676,10 +715,16 @@ export function AppProvider({
             const merged = new Map(
               previous.filter(r => !mockIds.has(r.id)).map(restaurant => [restaurant.id, restaurant]),
             );
-            resData.forEach((restaurant: Restaurant) => merged.set(restaurant.id, {
-              ...restaurant,
-              tags: Array.isArray(restaurant.tags) ? restaurant.tags.map(tag => normalizeFoodTag(tag)) : [],
-              photos: Array.isArray(restaurant.photos) ? restaurant.photos.map(p => p.startsWith('http') || p.startsWith('/') ? p : `/photos/${p}`) : [],
+            resData.forEach((rawRestaurant: Restaurant & { latitude?: number; longitude?: number }) => merged.set(rawRestaurant.id, {
+              ...rawRestaurant,
+              // D1 uses latitude/longitude; the established browser contract
+              // uses lat/lng. Normalise at this boundary so map and distance
+              // UI never accidentally render a stale mock value.
+              lat: Number(rawRestaurant.latitude ?? rawRestaurant.lat),
+              lng: Number(rawRestaurant.longitude ?? rawRestaurant.lng),
+              distance: typeof rawRestaurant.distance === 'string' ? rawRestaurant.distance : '',
+              tags: Array.isArray(rawRestaurant.tags) ? rawRestaurant.tags.map(tag => normalizeFoodTag(tag)) : [],
+              photos: Array.isArray(rawRestaurant.photos) ? rawRestaurant.photos.map(p => p.startsWith('http') || p.startsWith('/') ? p : `/photos/${p}`) : [],
             }));
             return Array.from(merged.values());
           });
@@ -1123,11 +1168,12 @@ export function AppProvider({
     const sharedRestaurants = sharedDeckIds
       .map(id => restaurants.find(restaurant => restaurant.id === id))
       .filter((restaurant): restaurant is Restaurant => Boolean(restaurant));
-    const deck = sharedRestaurants.length === sharedDeckIds.length && sharedRestaurants.length > 0
+    const distanceAwareRestaurants = withSessionDistances(sharedRestaurants, sessFilters);
+    const deck = distanceAwareRestaurants.length === sharedDeckIds.length && distanceAwareRestaurants.length > 0
       ? {
-          restaurants: sharedRestaurants,
+          restaurants: distanceAwareRestaurants,
           slateId: `session:${data.session.id}`,
-          recMeta: Object.fromEntries(sharedRestaurants.map((restaurant, index) => [restaurant.id, { propensity: 1 / sharedRestaurants.length, position: index }])),
+          recMeta: Object.fromEntries(distanceAwareRestaurants.map((restaurant, index) => [restaurant.id, { propensity: 1 / distanceAwareRestaurants.length, position: index }])),
           modelVersion: 'session-shared-slate-v1',
         }
       : status === 'waiting'
