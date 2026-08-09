@@ -56,7 +56,11 @@ function currentPosition(): Promise<LocationFix> {
   return new Promise((resolve, reject) => {
     navigator.geolocation.getCurrentPosition(
       ({ coords }) => resolve({ latitude: coords.latitude, longitude: coords.longitude, accuracy: coords.accuracy }),
-      () => reject(new Error('현재 위치 권한이 필요합니다.')),
+      (error) => reject(new Error(
+        error.code === error.PERMISSION_DENIED
+          ? '위치 권한이 꺼져 있어요. 주소창의 사이트 설정에서 위치를 허용한 뒤 다시 시도해 주세요.'
+          : '현재 위치를 확인하지 못했습니다. 잠시 후 다시 시도해 주세요.',
+      )),
       { enableHighAccuracy: false, timeout: 10_000, maximumAge: 5 * 60_000 },
     );
   });
@@ -186,6 +190,15 @@ export default function LunchieSettingsPage() {
     } finally {
       setIsLocating(false);
     }
+  };
+
+  const selectRadius = (nextRadius: number) => {
+    setRadius(nextRadius);
+    setDistanceEnabled(true);
+    // Selecting a radius is an explicit user gesture, so browsers can show
+    // the native permission prompt immediately instead of failing later at
+    // the "start" button.
+    if (!origin && !isLocating) void confirmCurrentLocation();
   };
 
   const toggleFilter = (f: string) => {
@@ -383,10 +396,7 @@ export default function LunchieSettingsPage() {
                 <ChipButton
                   key={r}
                   selected={distanceEnabled && radius === r}
-                  onClick={() => {
-                    setRadius(r);
-                    setDistanceEnabled(true);
-                  }}
+                  onClick={() => selectRadius(r)}
                   unselectedBg="#FFFFFF"
                   className="px-3 py-2 rounded-lg text-[12px] font-bold"
                 >
@@ -400,7 +410,7 @@ export default function LunchieSettingsPage() {
                   <Navigation size={11} className="inline mr-1" />현재 위치 기준 · {origin.latitude.toFixed(4)}, {origin.longitude.toFixed(4)} · 정확도 약 {Math.round(origin.accuracy)}m
                 </p>
               ) : (
-                <p className="text-[10px] text-[#B0B0B0]">현재 위치를 확인하면 선택한 반경의 기준점을 보여드려요.</p>
+                <p className="text-[10px] text-[#B0B0B0]">위치 허용 팝업이 보이면 ‘허용’을 눌러 반경 기준점을 설정해 주세요.</p>
               )}
               <button
                 type="button"
@@ -413,7 +423,7 @@ export default function LunchieSettingsPage() {
             </div> : (
               <p className="text-[10px] text-[#6B7A72] mt-2">위치 권한 없이 현재 조건에 맞는 전체 후보에서 추천해요.</p>
             )}
-            <p className="text-[10px] text-[#B0B0B0] mt-1.5">반경을 선택하면 현재 위치 권한이 필요하며, 거리는 직선거리로 표시됩니다.</p>
+            <p className="text-[10px] text-[#B0B0B0] mt-1.5">반경을 선택하면 권한 요청이 열립니다. 이미 차단했다면 주소창의 사이트 설정에서 위치를 허용해 주세요.</p>
           </div>
         </div>
 
