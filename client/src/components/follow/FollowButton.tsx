@@ -4,15 +4,15 @@ import { useCurrentUserId } from '@/hooks/useCurrentUserId';
 import { useIsFollowing } from '@/hooks/useIsFollowing';
 import { useToggleFollow } from '@/hooks/useToggleFollow';
 
-export function FollowButton({ userId }: { userId: string }) {
-  const { data: myId } = useCurrentUserId();
-  const status = useIsFollowing(userId);
+export function FollowButton({ userId, initialFollowing }: { userId: string; initialFollowing?: boolean }) {
+  const { data: myId, isLoading: currentUserLoading } = useCurrentUserId();
+  const status = useIsFollowing(userId, initialFollowing);
   const toggle = useToggleFollow(userId);
 
   if (!userId || myId === userId) return null;
 
   const following = status.data ?? false;
-  const busy = status.isLoading || toggle.isPending;
+  const busy = currentUserLoading || status.isLoading || toggle.isPending;
 
   return (
     <button

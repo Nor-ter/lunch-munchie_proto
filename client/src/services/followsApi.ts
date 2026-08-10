@@ -1,4 +1,4 @@
-import type { User } from '@/types/db';
+import type { User, UserSearchResult } from '@/types/db';
 
 export async function getCurrentUserId(): Promise<string> {
   const response = await fetch('/api/auth/session', { credentials: 'same-origin' });
@@ -12,6 +12,19 @@ export async function getUser(userId: string): Promise<User | null> {
   if (response.status === 404) return null;
   if (!response.ok) throw new Error('프로필을 불러오지 못했습니다.');
   return await response.json() as User;
+}
+
+export async function searchUsers(query: string, signal?: AbortSignal): Promise<UserSearchResult[]> {
+  const response = await fetch(`/api/users/search?q=${encodeURIComponent(query)}`, {
+    credentials: 'same-origin',
+    signal,
+  });
+  if (response.status === 401) throw new Error('로그인 후 사용자를 검색할 수 있어요.');
+  if (!response.ok) {
+    const body = await response.json().catch(() => ({})) as { error?: string };
+    throw new Error(body.error || '사용자를 검색하지 못했습니다.');
+  }
+  return await response.json() as UserSearchResult[];
 }
 
 export async function followUser(followingId: string): Promise<void> {

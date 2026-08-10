@@ -109,6 +109,17 @@ async function userColumnNames(db: any) {
     .all<{ name: string }>();
   return new Set(results.map((column) => column.name));
 }
+
+export function normalizePublicHandle(value: unknown): string | null {
+  if (typeof value !== "string") return null;
+  const normalized = value.trim().replace(/^@/, "").toLowerCase();
+  return /^[a-z0-9_]{3,20}$/.test(normalized) ? normalized : null;
+}
+
+export function escapeUserSearchTerm(value: string): string {
+  return value.replace(/[\\%_]/g, (character) => `\\${character}`);
+}
+
 async function ensurePublicUser(db: any, session: GoogleSession) {
   const columns = await userColumnNames(db);
   if (columns.has("username") && columns.has("profile_image_url")) {
@@ -123,6 +134,14 @@ async function ensurePublicUser(db: any, session: GoogleSession) {
         Date.now(),
       )
       .run();
+    if (columns.has("handle")) {
+      await db
+        .prepare(
+          "UPDATE users SET handle = 'user_' || printf('%08x', rowid) WHERE id = ? AND handle IS NULL",
+        )
+        .bind(session.sub)
+        .run();
+    }
     return true;
   }
   // A developer can still authenticate against a pre-D1 local database. The
@@ -253,7 +272,7 @@ app.get("/api/auth/session", async (c) => {
   const profile =
     session && hasPublicProfile
       ? await c.env.DB.prepare(
-          "SELECT id, username, profile_image_url, bio, location FROM users WHERE id = ?",
+          "SELECT id, username, handle, profile_image_url, bio, location FROM users WHERE id = ?",
         )
           .bind(session.sub)
           .first<any>()
@@ -562,12 +581,14 @@ app.patch("/api/profile", async (c) => {
       { error: "로컬 사용자 스키마를 갱신한 뒤 프로필을 수정할 수 있습니다." },
       409,
     );
-  const body = await c.req.json<{ avatarUrl?: unknown; username?: unknown }>().catch(() => ({}));
+  const body = await c.req.json<{ avatarUrl?: unknown; username?: unknown; handle?: unknown }>().catch(() => ({}));
   const hasAvatarUrl = "avatarUrl" in body;
   const hasUsername = "username" in body;
-  if (!hasAvatarUrl && !hasUsername)
+  const hasHandle = "handle" in body;
+  if (!hasAvatarUrl && !hasUsername && !hasHandle)
     return c.json({ error: "변경할 프로필 정보가 없습니다." }, 400);
 
+  const statements: any[] = [];
   if (hasAvatarUrl) {
     const avatarUrl = body.avatarUrl;
     if (
@@ -581,9 +602,10 @@ app.patch("/api/profile", async (c) => {
         400,
       );
     }
-    await c.env.DB.prepare("UPDATE users SET profile_image_url = ? WHERE id = ?")
-      .bind(avatarUrl, session.sub)
-      .run();
+    statements.push(
+      c.env.DB.prepare("UPDATE users SET profile_image_url = ? WHERE id = ?")
+        .bind(avatarUrl, session.sub),
+    );
   }
 
   if (hasUsername) {
@@ -592,12 +614,35 @@ app.patch("/api/profile", async (c) => {
     const username = body.username.trim();
     if (!username || username.length > 80)
       return c.json({ error: "이름은 1~80자로 입력해 주세요." }, 400);
-    await c.env.DB.prepare("UPDATE users SET username = ? WHERE id = ?")
-      .bind(username, session.sub)
-      .run();
+    statements.push(
+      c.env.DB.prepare("UPDATE users SET username = ? WHERE id = ?")
+        .bind(username, session.sub),
+    );
+  }
+
+  if (hasHandle) {
+    const handle = normalizePublicHandle(body.handle);
+    if (!handle)
+      return c.json({ error: "아이디는 영문 소문자, 숫자, 밑줄로 3~20자까지 입력해 주세요." }, 400);
+    const owner = await c.env.DB.prepare(
+      "SELECT id FROM users WHERE handle = ? COLLATE NOCASE AND id <> ?",
+    ).bind(handle, session.sub).first<{ id: string }>();
+    if (owner)
+      return c.json({ error: "이미 사용 중인 아이디입니다.", code: "HANDLE_TAKEN" }, 409);
+    statements.push(
+      c.env.DB.prepare("UPDATE users SET handle = ? WHERE id = ?")
+        .bind(handle, session.sub),
+    );
+  }
+  try {
+    await c.env.DB.batch(statements);
+  } catch (error) {
+    if (hasHandle)
+      return c.json({ error: "이미 사용 중인 아이디입니다.", code: "HANDLE_TAKEN" }, 409);
+    throw error;
   }
   const profile = await c.env.DB.prepare(
-    "SELECT id, username, profile_image_url, bio, location FROM users WHERE id = ?",
+    "SELECT id, username, handle, profile_image_url, bio, location FROM users WHERE id = ?",
   )
     .bind(session.sub)
     .first<any>();
@@ -622,6 +667,66 @@ app.get("/api/health", async (c) => {
   }
 });
 
+async function requireGoogleSession(c: { req: { raw: Request }; env: EnvBindings }) {
+  const session = await readSession(c.req.raw, c.env.AUTH_SESSION_SECRET);
+  if (!session) return null;
+  await ensurePublicUser(c.env.DB, session);
+  return session;
+}
+
+// User search is limited to authenticated Lunchie accounts. Only public
+// profile fields are returned; OAuth subject IDs are used solely as route keys.
+app.get("/api/users/search", async (c) => {
+  const session = await requireGoogleSession(c);
+  if (!session) return c.json({ error: "로그인이 필요합니다." }, 401);
+  const rawQuery = (c.req.query("q") ?? "").trim();
+  const query = rawQuery.replace(/^@/, "");
+  if (!query || query.length > 40)
+    return c.json({ error: "검색어는 1~40자로 입력해 주세요." }, 400);
+  const escaped = escapeUserSearchTerm(query.toLowerCase());
+  const namePattern = `%${escaped}%`;
+  const handlePattern = `${escaped}%`;
+  const { results } = await c.env.DB.prepare(
+    `SELECT
+      u.id,
+      u.username,
+      COALESCE(u.handle, '') AS handle,
+      u.profile_image_url,
+      u.bio,
+      u.location,
+      u.created_at,
+      CASE WHEN u.id = ? THEN 1 ELSE 0 END AS is_self,
+      CASE WHEN EXISTS (
+        SELECT 1 FROM user_follows f
+        WHERE f.follower_id = ? AND f.following_id = u.id
+      ) THEN 1 ELSE 0 END AS is_following
+    FROM users u
+    WHERE lower(u.username) LIKE ? ESCAPE '\\'
+       OR lower(COALESCE(u.handle, '')) LIKE ? ESCAPE '\\'
+    ORDER BY
+      CASE
+        WHEN lower(COALESCE(u.handle, '')) = ? THEN 0
+        WHEN lower(u.username) = ? THEN 1
+        ELSE 2
+      END,
+      u.username COLLATE NOCASE ASC,
+      u.id ASC
+    LIMIT 20`,
+  ).bind(
+    session.sub,
+    session.sub,
+    namePattern,
+    handlePattern,
+    query.toLowerCase(),
+    query.toLowerCase(),
+  ).all<any>();
+  return c.json((results ?? []).map((user: any) => ({
+    ...user,
+    is_self: Boolean(user.is_self),
+    is_following: Boolean(user.is_following),
+  })));
+});
+
 // Public profile data comes from the same D1 identity store that owns a post.
 // D1 is the only public-profile source of truth.
 app.get("/api/users/:id", async (c) => {
@@ -629,7 +734,7 @@ app.get("/api/users/:id", async (c) => {
   if (!id || id.length > 256)
     return c.json({ error: "사용자 정보가 올바르지 않습니다." }, 400);
   const user = await c.env.DB.prepare(
-    "SELECT id, username, profile_image_url, bio, location, created_at FROM users WHERE id = ?",
+    "SELECT id, username, handle, profile_image_url, bio, location, created_at FROM users WHERE id = ?",
   )
     .bind(id)
     .first<any>();
@@ -642,6 +747,7 @@ app.get("/api/users/:id", async (c) => {
   return c.json({
     id: user.id,
     username: user.username,
+    handle: user.handle,
     profile_image_url: user.profile_image_url,
     bio: user.bio,
     location: user.location,
@@ -649,13 +755,6 @@ app.get("/api/users/:id", async (c) => {
     public_post_count: Number(count?.count ?? 0),
   });
 });
-
-async function requireGoogleSession(c: { req: { raw: Request }; env: EnvBindings }) {
-  const session = await readSession(c.req.raw, c.env.AUTH_SESSION_SECRET);
-  if (!session) return null;
-  await ensurePublicUser(c.env.DB, session);
-  return session;
-}
 
 async function requireAdminSession(c: { req: { raw: Request }; env: EnvBindings; json: (value: unknown, status?: number) => Response }) {
   const session = await readSession(c.req.raw, c.env.AUTH_SESSION_SECRET);
@@ -707,8 +806,8 @@ app.delete("/api/users/:id/follow", async (c) => {
 async function listFollows(c: any, list: "followers" | "following") {
   const id = c.req.param("id");
   const query = list === "followers"
-    ? "SELECT u.id, u.username, u.profile_image_url, u.bio, u.location, u.created_at FROM user_follows f JOIN users u ON u.id = f.follower_id WHERE f.following_id = ? ORDER BY f.created_at DESC"
-    : "SELECT u.id, u.username, u.profile_image_url, u.bio, u.location, u.created_at FROM user_follows f JOIN users u ON u.id = f.following_id WHERE f.follower_id = ? ORDER BY f.created_at DESC";
+    ? "SELECT u.id, u.username, u.handle, u.profile_image_url, u.bio, u.location, u.created_at FROM user_follows f JOIN users u ON u.id = f.follower_id WHERE f.following_id = ? ORDER BY f.created_at DESC"
+    : "SELECT u.id, u.username, u.handle, u.profile_image_url, u.bio, u.location, u.created_at FROM user_follows f JOIN users u ON u.id = f.following_id WHERE f.follower_id = ? ORDER BY f.created_at DESC";
   const { results } = await c.env.DB.prepare(query).bind(id).all();
   return c.json(results);
 }

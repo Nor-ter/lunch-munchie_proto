@@ -44,7 +44,10 @@ export function FollowerListSheet({ open, userId, mode, onOpenChange }: Follower
                   {user.profile_image_url && <AvatarImage src={user.profile_image_url} alt="" />}
                   <AvatarFallback>{user.username.slice(0, 1).toUpperCase()}</AvatarFallback>
                 </Avatar>
-                <span className="truncate text-sm font-bold text-[#2D211C]">{user.username}</span>
+                <span className="min-w-0">
+                  <span className="block truncate text-sm font-bold text-[#2D211C]">{user.username}</span>
+                  {user.handle && <span className="block truncate text-[11px] font-semibold text-[#9A8277]">@{user.handle}</span>}
+                </span>
               </button>
               <FollowButton userId={user.id} />
             </div>

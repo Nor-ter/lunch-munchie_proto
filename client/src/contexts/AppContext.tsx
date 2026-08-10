@@ -198,6 +198,8 @@ export interface SessionMember {
 export interface UserProfile {
   id: string;
   name: string;
+  /** 공개 프로필 검색에 사용하는 고유 @아이디 */
+  handle?: string;
   emoji: string;
   /** 업로드한 프로필 사진(data URL) — 있으면 emoji 대신 이 사진을 아바타로 보여준다 */
   avatarPhoto?: string;
@@ -258,6 +260,8 @@ export interface FeedPost {
   authorId?: string;
   authorName: string;
   authorEmoji: string;
+  /** 작성자의 프로필 사진. 없을 때는 authorEmoji를 표시한다. */
+  authorImage?: string;
   authorLevel?: number;
   authorLevelName?: string;
   courseId: string;
@@ -675,6 +679,7 @@ export function AppProvider({
       authorId: feed.creatorId,
       authorName: feed.authorName || (feed.creatorId === profile.id ? profile.name : feed.creatorId === 'user_minji' ? '김민지' : feed.creatorId === 'user_jenny' ? '제니' : feed.creatorId === 'user_minsu' ? '민수' : 'Lunchie 사용자'),
       authorEmoji: feed.creatorId === profile.id ? profile.emoji : feed.creatorId === 'user_minji' ? '🐰' : feed.creatorId === 'user_jenny' ? '🍓' : feed.creatorId === 'user_minsu' ? '🐻' : '🐳',
+      authorImage: typeof feed.authorImage === 'string' ? feed.authorImage : undefined,
       courseId: feed.courseId,
       photos: (Array.isArray(feed.photos) ? feed.photos : []).filter((photo: unknown): photo is string => typeof photo === 'string').map((photo: string) => photo.startsWith('http') || photo.startsWith('/') ? photo : `/photos/${photo}`),
       templateId: typeof feed.templateId === 'string' ? feed.templateId : undefined,
@@ -751,6 +756,7 @@ export function AppProvider({
             authorId: feed.creatorId,
             authorName: feed.authorName || (feed.creatorId === profile.id ? profile.name : feed.creatorId === 'user_minji' ? '김민지' : feed.creatorId === 'user_jenny' ? '제니' : feed.creatorId === 'user_minsu' ? '민수' : 'Lunchie 사용자'),
             authorEmoji: feed.creatorId === 'user_minji' ? '🐰' : feed.creatorId === 'user_jenny' ? '🍓' : feed.creatorId === 'user_minsu' ? '🐻' : '🐳',
+            authorImage: typeof feed.authorImage === 'string' ? feed.authorImage : undefined,
             courseId: feed.courseId,
             photos: (Array.isArray(feed.photos) ? feed.photos : []).filter((photo: unknown): photo is string => typeof photo === 'string').map((photo: string) => photo.startsWith('http') || photo.startsWith('/') ? photo : `/photos/${photo}`),
             templateId: typeof feed.templateId === 'string' ? feed.templateId : undefined,
@@ -854,7 +860,7 @@ export function AppProvider({
       .then(response => response.ok ? response.json() : null)
       .then((data: {
         user?: { sub?: string; name?: string; picture?: string };
-        profile?: { username?: string | null; profile_image_url?: string | null } | null;
+        profile?: { username?: string | null; handle?: string | null; profile_image_url?: string | null } | null;
       } | null) => {
         const googleUser = data?.user;
         if (!googleUser || googleUser.sub !== initialAuthUserId) return;
@@ -862,6 +868,7 @@ export function AppProvider({
         setProfile(previous => ({
           ...previous,
           ...(serverProfile?.username || googleUser.name ? { name: serverProfile?.username || googleUser.name! } : {}),
+          ...(serverProfile?.handle ? { handle: serverProfile.handle } : {}),
           // A null server value is meaningful: the user deliberately removed
           // their photo and chose the emoji avatar. Never fall back to Google
           // in that case.
@@ -1339,6 +1346,7 @@ export function AppProvider({
             ...post,
             authorName: updates.name ?? post.authorName,
             authorEmoji: updates.emoji ?? post.authorEmoji,
+            ...('avatarPhoto' in updates ? { authorImage: updates.avatarPhoto } : {}),
           }
         : post));
     }

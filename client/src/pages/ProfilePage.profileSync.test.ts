@@ -10,8 +10,8 @@ const progressSource = readFileSync(join(import.meta.dirname, '..', 'components'
 describe('Profile information and level synchronization', () => {
   it('keeps the sk profile copy and compact badge presentation', () => {
     expect(profileSource).not.toContain('value={editBio}');
-    expect(profileSource).toContain("body: JSON.stringify({ username })");
-    expect(profileSource).toContain("updateProfile({ name: saved.profile.username })");
+    expect(profileSource).toContain("body: JSON.stringify({ username, handle })");
+    expect(profileSource).toContain("updateProfile({ name: saved.profile.username, handle: saved.profile.handle })");
     expect(profileSource).toContain('오늘도 맛있는 하루를 위해');
     expect(profileSource).toContain('🏅 배지');
   });
