@@ -45,15 +45,13 @@ describe('Quick Match state normalization', () => {
     ]);
   });
 
-  it('restores valid solo/group values and clamps stale settings to product limits', () => {
+  it('restores the unified people count and clamps stale settings to product limits', () => {
     expect(normalizeQuickMatchSettings({ partySize: 1, togetherPartySize: 11, deadlineMinutes: 99 })).toMatchObject({
       partySize: 1,
-      togetherPartySize: 11,
       deadlineMinutes: 15,
     });
     expect(normalizeQuickMatchSettings({ partySize: 40, togetherPartySize: 40, deadlineMinutes: -2 })).toMatchObject({
       partySize: 12,
-      togetherPartySize: 12,
       deadlineMinutes: 1,
     });
   });

@@ -22,6 +22,7 @@ function cachedSession(overrides: Record<string, unknown> = {}) {
     name: 'E2E Quick Match',
     inviteCode: 'ABC123',
     hostId: userId,
+    memberKey: 'e2e-member-key',
     members: [{ id: userId, name: 'Tester', emoji: '😊', hasVoted: false, preferences: [], ready: true }],
     filters: { partySize: 4, dietary: [], budget: 2, radius: 2000, categories: [] },
     deadline: null,
@@ -95,7 +96,7 @@ async function seedIdentity(page: Page, session?: ReturnType<typeof cachedSessio
   }, { identity: userId, activeSession: session ?? null });
 }
 
-test('mobile settings keeps the timer and group ruler synchronized without horizontal overflow', async ({ page }) => {
+test('mobile settings keeps the timer and vertical people wheel synchronized without horizontal overflow', async ({ page }) => {
   const browserErrors = captureUnexpectedBrowserErrors(page);
   await page.setViewportSize({ width: 390, height: 844 });
   await mockCommonApi(page);
@@ -104,16 +105,26 @@ test('mobile settings keeps the timer and group ruler synchronized without horiz
 
   const deadline = page.getByRole('slider', { name: '마감 시간' });
   await expect(deadline).toHaveAttribute('aria-valuenow', '10');
-  await page.getByRole('button', { name: '15 min' }).click();
+  await deadline.focus();
+  for (let step = 0; step < 5; step += 1) await page.keyboard.press('ArrowRight');
   await expect(deadline).toHaveAttribute('aria-valuenow', '15');
+  await expect(page.getByRole('button', { name: '15 min' })).toHaveCount(0);
+  await expect(page.getByText('Deadline', { exact: true })).toHaveCount(0);
+  await expect(page.getByLabel('마감 분 직접 입력')).toHaveCount(0);
 
-  const groupSize = page.getByRole('slider', { name: 'Group size' });
+  const groupSize = page.getByRole('slider', { name: '인원 수' });
+  const peopleCard = groupSize.locator('xpath=ancestor::section[1]');
+  const [wheelBox, cardBox] = await Promise.all([groupSize.boundingBox(), peopleCard.boundingBox()]);
+  expect(wheelBox!.width).toBeGreaterThan(cardBox!.width - 40);
+  await groupSize.evaluate((element, itemHeight) => element.scrollTo({ top: itemHeight * 7 }), 48);
+  await expect(groupSize).toHaveAttribute('aria-valuenow', '8');
   await groupSize.focus();
-  await page.keyboard.press('ArrowRight');
-  await expect(groupSize).toHaveAttribute('aria-valuenow', '5');
-  await page.getByRole('button', { name: '혼자', exact: true }).click();
-  await page.getByRole('button', { name: '같이', exact: true }).click();
-  await expect(groupSize).toHaveAttribute('aria-valuenow', '5');
+  await page.keyboard.press('ArrowDown');
+  await expect(groupSize).toHaveAttribute('aria-valuenow', '9');
+  await page.getByRole('option', { name: '혼자', exact: true }).click();
+  await expect(groupSize).toHaveAttribute('aria-valuenow', '1');
+  await expect(groupSize).toHaveAttribute('aria-valuetext', '혼자');
+  await expect(page.getByRole('button', { name: '같이', exact: true })).toHaveCount(0);
 
   const pescatarian = page.getByRole('button', { name: '🐟 Pescatarian', exact: true });
   await pescatarian.click();
@@ -207,7 +218,7 @@ test('solo start sends the new member credential and opens the restaurant deck',
   await seedIdentity(page);
   await page.goto('/lunchie/settings');
 
-  await page.getByRole('button', { name: '혼자', exact: true }).click();
+  await page.getByRole('option', { name: '혼자', exact: true }).click();
   await page.getByRole('button', { name: '🥬 Vegetarian', exact: true }).click();
   await page.getByRole('button', { name: '🌾 Gluten-free', exact: true }).click();
   await page.getByRole('button', { name: /Ingredients to avoid/ }).click();

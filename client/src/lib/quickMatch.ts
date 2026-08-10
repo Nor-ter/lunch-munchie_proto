@@ -133,7 +133,6 @@ export function normalizeDietaryPreferences(value: unknown): string[] {
 export type QuickMatchSettingsSnapshot = {
   deadlineMinutes: number;
   partySize: number;
-  togetherPartySize: number;
   radius: number;
   intent: Intent | null;
   tags: string[];
@@ -143,7 +142,6 @@ export type QuickMatchSettingsSnapshot = {
 export const DEFAULT_QUICK_MATCH_SETTINGS: QuickMatchSettingsSnapshot = {
   deadlineMinutes: 10,
   partySize: 4,
-  togetherPartySize: 4,
   radius: 1000,
   intent: null,
   tags: ['맛집'],
@@ -155,16 +153,10 @@ const RADIUS_VALUES = new Set([1000, 2000, 3000, 4000, 5000]);
 export function normalizeQuickMatchSettings(value: unknown): QuickMatchSettingsSnapshot {
   if (!value || typeof value !== 'object') return DEFAULT_QUICK_MATCH_SETTINGS;
   const input = value as Record<string, unknown>;
-  const rawTogether = Number(input.togetherPartySize);
-  const togetherPartySize = Number.isFinite(rawTogether)
-    ? Math.max(2, Math.min(12, Math.round(rawTogether)))
-    : DEFAULT_QUICK_MATCH_SETTINGS.togetherPartySize;
   const rawParty = Number(input.partySize);
-  const partySize = rawParty === 1
-    ? 1
-    : Number.isFinite(rawParty)
-      ? Math.max(2, Math.min(12, Math.round(rawParty)))
-      : togetherPartySize;
+  const partySize = Number.isFinite(rawParty)
+    ? Math.max(1, Math.min(12, Math.round(rawParty)))
+    : DEFAULT_QUICK_MATCH_SETTINGS.partySize;
   const rawDeadline = Number(input.deadlineMinutes);
   const deadlineMinutes = Number.isFinite(rawDeadline)
     ? Math.max(1, Math.min(15, Math.round(rawDeadline)))
@@ -181,7 +173,6 @@ export function normalizeQuickMatchSettings(value: unknown): QuickMatchSettingsS
   return {
     deadlineMinutes,
     partySize,
-    togetherPartySize,
     radius,
     intent,
     tags: Array.from(new Set(tags)),

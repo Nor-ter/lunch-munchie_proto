@@ -43,9 +43,14 @@ const PREFERENCE_CARDS: { value: Intent | null; label: string; image?: string; c
   { value: null, label: 'RANDOM', color: '#FFF4D9' },
 ];
 
-const DEADLINE_OPTIONS = [5, 10, 15];
 const RADIUS_OPTIONS = [1000, 2000, 3000, 4000, 5000];
-const GROUP_SIZE_OPTIONS = Array.from({ length: 11 }, (_, index) => index + 2);
+const GROUP_SIZE_OPTIONS = Array.from({ length: 12 }, (_, index) => index + 1);
+const GROUP_SIZE_ITEM_HEIGHT = 48;
+const GROUP_SIZE_MAX_SCROLL = (GROUP_SIZE_OPTIONS.length - 1) * GROUP_SIZE_ITEM_HEIGHT;
+/** Strong Alarm-app-like coast: higher = longer carry after a flick. */
+const GROUP_SIZE_FLICK_FRICTION = 0.0032;
+const GROUP_SIZE_FLICK_MIN_VELOCITY = 0.04;
+const GROUP_SIZE_FLICK_MAX_VELOCITY = 3.2;
 const TAG_META: Record<string, { icon: string; hint: string }> = {
   맛집: { icon: '🍽️', hint: '검증된 인기 메뉴' },
   데이트코스: { icon: '💞', hint: '분위기 좋은 곳' },
@@ -56,7 +61,6 @@ const TAG_META: Record<string, { icon: string; hint: string }> = {
   디저트: { icon: '🍰', hint: '달콤한 마무리' },
   가성비: { icon: '✨', hint: '가격까지 만족' },
 };
-const tapSpring = { type: 'spring' as const, stiffness: 500, damping: 30 };
 
 function formatRadius(radius: number): string {
   return radius >= 5000 ? '5km+' : `${radius / 1000}km`;
@@ -80,44 +84,59 @@ function CardTitle({ icon, children, badge }: { icon: ReactNode; children: React
   );
 }
 
-function ChoiceChip({ selected, onClick, children, className = '' }: {
-  selected: boolean;
-  onClick: () => void;
-  children: ReactNode;
-  className?: string;
-}) {
-  return (
-    <motion.button
-      type="button"
-      onClick={onClick}
-      whileTap={{ scale: 0.93 }}
-      transition={tapSpring}
-      className={`min-h-9 rounded-xl px-3 text-[12px] font-bold transition-colors ${
-        selected ? 'bg-[#F4515E] text-white' : 'bg-[#F4F2F2] text-[#6E686C]'
-      } ${className}`}
-    >
-      {children}
-    </motion.button>
-  );
-}
-
 function DeadlineDial({ minutes, onChange }: { minutes: number; onChange: (minutes: number) => void }) {
   const radius = 70;
   const center = 88;
   const circumference = 2 * Math.PI * radius;
-  const progress = Math.min(minutes, 15) / 15;
-  const updateFromPointer = (event: ReactPointerEvent<HTMLDivElement>) => {
+  const minProgress = 1 / 15;
+  const dragRef = useRef<{
+    pointerId: number;
+    lastAngle: number;
+    progress: number;
+  } | null>(null);
+  const [dragging, setDragging] = useState(false);
+  const [visualProgress, setVisualProgress] = useState(() => Math.max(minProgress, Math.min(1, minutes / 15)));
+
+  useEffect(() => {
+    if (dragRef.current) return;
+    setVisualProgress(Math.max(minProgress, Math.min(1, minutes / 15)));
+  }, [minutes]);
+
+  const pointerAngle = (event: ReactPointerEvent<HTMLDivElement>) => {
     const rect = event.currentTarget.getBoundingClientRect();
     const x = event.clientX - rect.left - rect.width / 2;
     const y = event.clientY - rect.top - rect.height / 2;
-    let angle = Math.atan2(y, x) + Math.PI / 2;
-    if (angle < 0) angle += Math.PI * 2;
-    const ratio = angle / (Math.PI * 2);
-    onChange(ratio < 0.025 ? 15 : Math.max(1, Math.min(15, Math.ceil(ratio * 15))));
+    return Math.atan2(y, x);
   };
-  const handleAngle = progress * Math.PI * 2 - Math.PI / 2;
+
+  const shortestDelta = (from: number, to: number) => {
+    let delta = to - from;
+    while (delta > Math.PI) delta -= Math.PI * 2;
+    while (delta < -Math.PI) delta += Math.PI * 2;
+    return delta;
+  };
+
+  const commitProgress = (progress: number) => {
+    const clamped = Math.max(minProgress, Math.min(1, progress));
+    // Snap the ring to whole minutes so dragging ticks 1→2→3 instead of sliding.
+    const nextMinutes = Math.max(1, Math.min(15, Math.round(clamped * 15)));
+    setVisualProgress(nextMinutes / 15);
+    onChange(nextMinutes);
+  };
+
+  const endDrag = (pointerId: number, currentTarget: HTMLDivElement) => {
+    const drag = dragRef.current;
+    if (!drag || drag.pointerId !== pointerId) return;
+    dragRef.current = null;
+    setDragging(false);
+    if (currentTarget.hasPointerCapture(pointerId)) currentTarget.releasePointerCapture(pointerId);
+    commitProgress(drag.progress);
+  };
+
+  const handleAngle = visualProgress * Math.PI * 2 - Math.PI / 2;
   const handleX = center + radius * Math.cos(handleAngle);
   const handleY = center + radius * Math.sin(handleAngle);
+
   return (
     <div
       className="relative size-44 shrink-0 cursor-grab touch-none select-none rounded-full outline-none active:cursor-grabbing focus-visible:ring-4 focus-visible:ring-[#F4515E]/25"
@@ -129,15 +148,31 @@ function DeadlineDial({ minutes, onChange }: { minutes: number; onChange: (minut
       aria-valuenow={minutes}
       aria-valuetext={`${minutes}분`}
       onPointerDown={event => {
+        if (event.pointerType === 'mouse' && event.button !== 0) return;
+        event.preventDefault();
+        const progress = Math.max(minProgress, Math.min(1, minutes / 15));
+        dragRef.current = {
+          pointerId: event.pointerId,
+          lastAngle: pointerAngle(event),
+          progress,
+        };
+        setDragging(true);
+        setVisualProgress(progress);
         event.currentTarget.setPointerCapture(event.pointerId);
-        updateFromPointer(event);
       }}
       onPointerMove={event => {
-        if (event.currentTarget.hasPointerCapture(event.pointerId)) updateFromPointer(event);
+        const drag = dragRef.current;
+        if (!drag || drag.pointerId !== event.pointerId) return;
+        const angle = pointerAngle(event);
+        const delta = shortestDelta(drag.lastAngle, angle);
+        drag.lastAngle = angle;
+        // Clamp progress — never wrap past 15 into 1 (or 1 into 15).
+        drag.progress = Math.max(minProgress, Math.min(1, drag.progress + delta / (Math.PI * 2)));
+        commitProgress(drag.progress);
       }}
-      onPointerUp={event => {
-        if (event.currentTarget.hasPointerCapture(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId);
-      }}
+      onPointerUp={event => endDrag(event.pointerId, event.currentTarget)}
+      onPointerCancel={event => endDrag(event.pointerId, event.currentTarget)}
+      onLostPointerCapture={event => endDrag(event.pointerId, event.currentTarget)}
       onKeyDown={event => {
         if (event.key === 'ArrowRight' || event.key === 'ArrowUp') {
           event.preventDefault();
@@ -146,6 +181,14 @@ function DeadlineDial({ minutes, onChange }: { minutes: number; onChange: (minut
         if (event.key === 'ArrowLeft' || event.key === 'ArrowDown') {
           event.preventDefault();
           onChange(Math.max(1, minutes - 1));
+        }
+        if (event.key === 'Home') {
+          event.preventDefault();
+          onChange(1);
+        }
+        if (event.key === 'End') {
+          event.preventDefault();
+          onChange(15);
         }
       }}
     >
@@ -160,137 +203,271 @@ function DeadlineDial({ minutes, onChange }: { minutes: number; onChange: (minut
           strokeWidth="12"
           strokeLinecap="round"
           strokeDasharray={circumference}
-          strokeDashoffset={circumference * (1 - progress)}
+          strokeDashoffset={circumference * (1 - visualProgress)}
           transform={`rotate(-90 ${center} ${center})`}
-          className="transition-[stroke-dashoffset] duration-200"
+          style={{ transition: dragging ? 'stroke-dashoffset 55ms cubic-bezier(0.2, 0.85, 0.25, 1)' : 'stroke-dashoffset 160ms ease-out' }}
         />
-        <circle cx={handleX} cy={handleY} r="9" fill="white" stroke="#F4515E" strokeWidth="5" />
+        <g
+          style={{
+            transform: `translate(${handleX}px, ${handleY}px)`,
+            transition: dragging ? 'transform 55ms cubic-bezier(0.2, 0.85, 0.25, 1)' : 'transform 160ms ease-out',
+          }}
+        >
+          <circle cx={0} cy={0} r="9" fill="white" stroke="#F4515E" strokeWidth="5" />
+        </g>
       </svg>
       <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center">
-        <strong className="text-[30px] leading-none text-[#26232A]">{minutes} <span className="text-[17px]">min</span></strong>
-        <span className="mt-2 text-[10px] font-bold uppercase tracking-[0.14em] text-[#A6A0A3]">Deadline</span>
+        <strong className="text-[30px] leading-none text-[#26232A] tabular-nums">{minutes} <span className="text-[17px]">min</span></strong>
       </div>
     </div>
   );
 }
 
 function GroupSizeRuler({ value, onChange }: { value: number; onChange: (value: number) => void }) {
-  const stepWidth = 48;
-  const selectedIndex = Math.max(0, GROUP_SIZE_OPTIONS.indexOf(value));
-  const dragRef = useRef<{ pointerId: number; startX: number; startIndex: number } | null>(null);
-  const [dragOffset, setDragOffset] = useState(0);
+  const scrollerRef = useRef<HTMLDivElement>(null);
+  const initialIndexRef = useRef(Math.max(0, GROUP_SIZE_OPTIONS.indexOf(value)));
+  const dragRef = useRef<{
+    pointerId: number;
+    startY: number;
+    startScrollTop: number;
+    lastY: number;
+    lastTime: number;
+    velocity: number;
+    moved: boolean;
+  } | null>(null);
+  const suppressClickRef = useRef(false);
+  const inertiaFrameRef = useRef<number | null>(null);
+  const onChangeRef = useRef(onChange);
+  onChangeRef.current = onChange;
 
-  const finishDrag = (event: ReactPointerEvent<HTMLDivElement>) => {
+  const valueFromScrollTop = (scrollTop: number) => {
+    const nextIndex = Math.max(0, Math.min(GROUP_SIZE_OPTIONS.length - 1, Math.round(scrollTop / GROUP_SIZE_ITEM_HEIGHT)));
+    return GROUP_SIZE_OPTIONS[nextIndex]!;
+  };
+
+  const stopInertia = () => {
+    if (inertiaFrameRef.current == null) return;
+    cancelAnimationFrame(inertiaFrameRef.current);
+    inertiaFrameRef.current = null;
+  };
+
+  const setScrollerTop = (scrollTop: number, publish: boolean) => {
+    const scroller = scrollerRef.current;
+    if (!scroller) return;
+    const clamped = Math.max(0, Math.min(GROUP_SIZE_MAX_SCROLL, scrollTop));
+    scroller.scrollTop = clamped;
+    if (!publish) return;
+    const nextValue = valueFromScrollTop(clamped);
+    onChangeRef.current(nextValue);
+  };
+
+  const selectValue = (next: number) => {
+    const normalized = Math.max(1, Math.min(12, Math.round(next)));
+    onChangeRef.current(normalized);
+    setScrollerTop((normalized - 1) * GROUP_SIZE_ITEM_HEIGHT, false);
+  };
+
+  const snapToNearest = (fromScrollTop: number) => {
+    const scroller = scrollerRef.current;
+    if (!scroller) return;
+    const target = Math.round(fromScrollTop / GROUP_SIZE_ITEM_HEIGHT) * GROUP_SIZE_ITEM_HEIGHT;
+    const clampedTarget = Math.max(0, Math.min(GROUP_SIZE_MAX_SCROLL, target));
+    const start = performance.now();
+    const duration = 160;
+    const from = fromScrollTop;
+
+    const tick = (now: number) => {
+      const t = Math.min(1, (now - start) / duration);
+      const eased = 1 - (1 - t) ** 3;
+      setScrollerTop(from + (clampedTarget - from) * eased, true);
+      if (t < 1) {
+        inertiaFrameRef.current = requestAnimationFrame(tick);
+        return;
+      }
+      inertiaFrameRef.current = null;
+      scroller.style.scrollSnapType = 'y mandatory';
+      selectValue(valueFromScrollTop(clampedTarget));
+    };
+    inertiaFrameRef.current = requestAnimationFrame(tick);
+  };
+
+  const startInertia = (velocityPxPerMs: number) => {
+    const scroller = scrollerRef.current;
+    if (!scroller) return;
+    let velocity = Math.max(
+      -GROUP_SIZE_FLICK_MAX_VELOCITY,
+      Math.min(GROUP_SIZE_FLICK_MAX_VELOCITY, velocityPxPerMs),
+    );
+    if (Math.abs(velocity) < GROUP_SIZE_FLICK_MIN_VELOCITY) {
+      snapToNearest(scroller.scrollTop);
+      return;
+    }
+
+    scroller.style.scrollSnapType = 'none';
+    let scrollTop = scroller.scrollTop;
+    let lastFrame = performance.now();
+    let lastPublishedIndex = Math.round(scrollTop / GROUP_SIZE_ITEM_HEIGHT);
+
+    const tick = (now: number) => {
+      const dt = Math.min(34, Math.max(8, now - lastFrame));
+      lastFrame = now;
+      velocity *= Math.exp(-GROUP_SIZE_FLICK_FRICTION * dt);
+      scrollTop += velocity * dt;
+
+      if (scrollTop <= 0) {
+        scrollTop = 0;
+        velocity = 0;
+      } else if (scrollTop >= GROUP_SIZE_MAX_SCROLL) {
+        scrollTop = GROUP_SIZE_MAX_SCROLL;
+        velocity = 0;
+      }
+
+      setScrollerTop(scrollTop, false);
+      const index = Math.round(scrollTop / GROUP_SIZE_ITEM_HEIGHT);
+      if (index !== lastPublishedIndex) {
+        lastPublishedIndex = index;
+        onChangeRef.current(GROUP_SIZE_OPTIONS[Math.max(0, Math.min(GROUP_SIZE_OPTIONS.length - 1, index))]!);
+      }
+
+      if (Math.abs(velocity) < GROUP_SIZE_FLICK_MIN_VELOCITY) {
+        snapToNearest(scrollTop);
+        return;
+      }
+      inertiaFrameRef.current = requestAnimationFrame(tick);
+    };
+    inertiaFrameRef.current = requestAnimationFrame(tick);
+  };
+
+  useEffect(() => {
+    const scroller = scrollerRef.current;
+    if (!scroller) return;
+    scroller.scrollTop = initialIndexRef.current * GROUP_SIZE_ITEM_HEIGHT;
+    return () => stopInertia();
+  }, []);
+
+  const endDrag = (pointerId: number) => {
     const drag = dragRef.current;
-    if (!drag || drag.pointerId !== event.pointerId) return;
-    const rawIndex = drag.startIndex - (event.clientX - drag.startX) / stepWidth;
-    const nextIndex = Math.max(0, Math.min(GROUP_SIZE_OPTIONS.length - 1, Math.round(rawIndex)));
-    onChange(GROUP_SIZE_OPTIONS[nextIndex]!);
-    setDragOffset(0);
+    if (!drag || drag.pointerId !== pointerId) return;
+    const { moved, velocity } = drag;
     dragRef.current = null;
-    if (event.currentTarget.hasPointerCapture(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId);
+    suppressClickRef.current = moved;
+    const scroller = scrollerRef.current;
+    if (!scroller) return;
+    scroller.classList.remove('cursor-grabbing');
+    scroller.classList.add('cursor-grab');
+    if (!moved) {
+      scroller.style.scrollSnapType = 'y mandatory';
+      selectValue(valueFromScrollTop(scroller.scrollTop));
+      return;
+    }
+    startInertia(velocity);
   };
 
   return (
-    <div>
-      <p className="text-center text-[28px] font-black tracking-[-0.6px] text-[#F4515E]">{value} people</p>
-      <div
-        className="relative mt-3 h-[106px] w-full touch-none overflow-hidden rounded-[18px] bg-[#FFF8F6] outline-none focus-visible:ring-2 focus-visible:ring-[#F4515E] focus-visible:ring-offset-2"
-        role="slider"
-        tabIndex={0}
-        aria-label="Group size"
-        aria-valuemin={2}
-        aria-valuemax={12}
-        aria-valuenow={value}
-        aria-valuetext={`${value} people`}
-        onKeyDown={event => {
-          if (event.key === 'ArrowRight' || event.key === 'ArrowUp') {
-            event.preventDefault();
-            onChange(Math.min(12, value + 1));
-          }
-          if (event.key === 'ArrowLeft' || event.key === 'ArrowDown') {
-            event.preventDefault();
-            onChange(Math.max(2, value - 1));
-          }
-        }}
-        onPointerDown={event => {
-          if (event.target instanceof HTMLElement && event.target.closest('button')) return;
-          dragRef.current = { pointerId: event.pointerId, startX: event.clientX, startIndex: selectedIndex };
-          event.currentTarget.setPointerCapture(event.pointerId);
-        }}
-        onPointerMove={event => {
-          const drag = dragRef.current;
-          if (!drag || drag.pointerId !== event.pointerId) return;
-          const minOffset = -(GROUP_SIZE_OPTIONS.length - 1 - drag.startIndex) * stepWidth;
-          const maxOffset = drag.startIndex * stepWidth;
-          setDragOffset(Math.max(minOffset, Math.min(maxOffset, event.clientX - drag.startX)));
-        }}
-        onPointerUp={finishDrag}
-        onPointerCancel={finishDrag}
-      >
-        <div className="pointer-events-none absolute inset-x-0 top-0 z-10 flex flex-col items-center" aria-hidden="true">
-          <span className="h-5 w-0.5 bg-[#F4515E]" />
-          <span className="h-0 w-0 border-x-[6px] border-t-[7px] border-x-transparent border-t-[#F4515E]" />
-        </div>
+    <div className="w-full">
+      <div className="relative h-36 w-full overflow-hidden rounded-[20px] bg-[#FFF8F6]">
+        <div className="pointer-events-none absolute inset-x-3 top-1/2 z-10 h-12 -translate-y-1/2 rounded-[14px] border-y border-[#F7B9B4] bg-white/75 shadow-[0_4px_14px_rgba(244,81,94,0.08)]" aria-hidden="true" />
         <div
-          className={`absolute left-1/2 top-7 flex ${dragRef.current ? '' : 'transition-transform duration-200 ease-out'}`}
-          style={{ transform: `translate3d(${-(selectedIndex * stepWidth + stepWidth / 2) + dragOffset}px, 0, 0)` }}
-        >
-          {GROUP_SIZE_OPTIONS.map(option => (
-            <button
-              key={option}
-              type="button"
-              onClick={event => {
-                event.stopPropagation();
-                onChange(option);
-              }}
-              className="flex w-12 shrink-0 flex-col items-center gap-1.5 pt-2"
-              tabIndex={-1}
-              aria-label={`${option} people`}
-            >
-              <span className={`h-6 w-0.5 rounded-full ${option === value ? 'bg-[#F4515E]' : 'bg-[#D9CECA]'}`} />
-              <span className={`text-[14px] font-black ${option === value ? 'text-[#F4515E]' : 'text-[#857B7F]'}`}>{option}</span>
-            </button>
-          ))}
-        </div>
-        <div className="pointer-events-none absolute inset-y-0 left-0 w-12 bg-gradient-to-r from-[#FFF8F6] to-transparent" />
-        <div className="pointer-events-none absolute inset-y-0 right-0 w-12 bg-gradient-to-l from-[#FFF8F6] to-transparent" />
-      </div>
-      <p className="mt-2 text-center text-[10px] font-semibold text-[#A6A0A3]">Drag the ruler, tap a number, or use the arrow keys.</p>
-    </div>
-  );
-}
-
-function DeadlineMinuteInput({ minutes, onChange }: { minutes: number; onChange: (minutes: number) => void }) {
-  const [draft, setDraft] = useState(String(minutes));
-
-  useEffect(() => setDraft(String(minutes)), [minutes]);
-
-  const commit = () => {
-    const parsed = Number.parseInt(draft, 10);
-    const next = Number.isFinite(parsed) ? Math.max(1, Math.min(15, parsed)) : minutes;
-    onChange(next);
-    setDraft(String(next));
-  };
-
-  return (
-    <label className="mt-2 flex min-h-10 items-center rounded-[14px] bg-[#F5F3F3] px-3">
-        <input
-          type="number"
-          inputMode="numeric"
-          min={1}
-          max={15}
-          value={draft}
-          onChange={event => setDraft(event.target.value)}
-          onBlur={commit}
-          onKeyDown={event => {
-            if (event.key === 'Enter') event.currentTarget.blur();
+          ref={scrollerRef}
+          className="scrollbar-hide relative z-20 h-full cursor-grab touch-none snap-y snap-mandatory overflow-y-auto overscroll-y-contain outline-none focus:outline-none focus-visible:outline-none"
+          role="slider"
+          tabIndex={0}
+          aria-label="인원 수"
+          aria-valuemin={1}
+          aria-valuemax={12}
+          aria-valuenow={value}
+          aria-valuetext={value === 1 ? '혼자' : String(value)}
+          onScroll={event => {
+            if (dragRef.current || inertiaFrameRef.current != null) return;
+            const nextValue = valueFromScrollTop(event.currentTarget.scrollTop);
+            if (nextValue !== value) onChange(nextValue);
           }}
-          className="min-w-0 flex-1 bg-transparent text-left text-[12px] font-extrabold text-[#403A3D] outline-none"
-          aria-label="마감 분 직접 입력"
-        />
-        <span className="text-[10px] font-bold text-[#AAA3A6]">분 직접입력</span>
-    </label>
+          onPointerDown={event => {
+            if (event.pointerType === 'mouse' && event.button !== 0) return;
+            event.preventDefault();
+            stopInertia();
+            const now = performance.now();
+            dragRef.current = {
+              pointerId: event.pointerId,
+              startY: event.clientY,
+              startScrollTop: event.currentTarget.scrollTop,
+              lastY: event.clientY,
+              lastTime: now,
+              velocity: 0,
+              moved: false,
+            };
+            event.currentTarget.style.scrollSnapType = 'none';
+            event.currentTarget.classList.remove('cursor-grab');
+            event.currentTarget.classList.add('cursor-grabbing');
+            event.currentTarget.setPointerCapture(event.pointerId);
+          }}
+          onPointerMove={event => {
+            const drag = dragRef.current;
+            if (!drag || drag.pointerId !== event.pointerId) return;
+            const now = performance.now();
+            const dt = Math.max(1, now - drag.lastTime);
+            const scrollDelta = drag.lastY - event.clientY;
+            const instantVelocity = scrollDelta / dt;
+            drag.velocity = drag.velocity * 0.65 + instantVelocity * 0.35;
+            drag.lastY = event.clientY;
+            drag.lastTime = now;
+            const delta = event.clientY - drag.startY;
+            if (Math.abs(delta) > 3) drag.moved = true;
+            setScrollerTop(drag.startScrollTop - delta, true);
+          }}
+          onPointerUp={event => endDrag(event.pointerId)}
+          onPointerCancel={event => endDrag(event.pointerId)}
+          onLostPointerCapture={event => endDrag(event.pointerId)}
+          onKeyDown={event => {
+            stopInertia();
+            if (event.key === 'ArrowUp') {
+              event.preventDefault();
+              selectValue(value - 1);
+            }
+            if (event.key === 'ArrowDown') {
+              event.preventDefault();
+              selectValue(value + 1);
+            }
+            if (event.key === 'Home') {
+              event.preventDefault();
+              selectValue(1);
+            }
+            if (event.key === 'End') {
+              event.preventDefault();
+              selectValue(12);
+            }
+          }}
+          style={{ WebkitOverflowScrolling: 'touch', scrollSnapType: 'y mandatory' }}
+        >
+          <div className="h-12 shrink-0" aria-hidden="true" />
+          {GROUP_SIZE_OPTIONS.map(option => (
+            <div
+              key={option}
+              role="option"
+              aria-selected={option === value}
+              onClick={() => {
+                if (suppressClickRef.current) {
+                  suppressClickRef.current = false;
+                  return;
+                }
+                stopInertia();
+                selectValue(option);
+                scrollerRef.current && (scrollerRef.current.style.scrollSnapType = 'y mandatory');
+              }}
+              className={`flex h-12 w-full shrink-0 snap-center items-center justify-center text-[18px] font-black transition-[color,transform,opacity] ${
+                option === value ? 'scale-110 text-[#F4515E]' : 'scale-95 text-[#9F9699] opacity-55'
+              }`}
+              aria-label={option === 1 ? '혼자' : String(option)}
+            >
+              {option === 1 ? '혼자' : option}
+            </div>
+          ))}
+          <div className="h-12 shrink-0" aria-hidden="true" />
+        </div>
+        <div className="pointer-events-none absolute inset-x-0 top-0 z-30 h-12 bg-gradient-to-b from-[#FFF8F6] via-[#FFF8F6]/90 to-transparent" />
+        <div className="pointer-events-none absolute inset-x-0 bottom-0 z-30 h-12 bg-gradient-to-t from-[#FFF8F6] via-[#FFF8F6]/90 to-transparent" />
+      </div>
+    </div>
   );
 }
 
@@ -494,7 +671,6 @@ export default function LunchieSettingsPage() {
 
   const [deadlineMin, setDeadlineMin] = useState(storedSettings.deadlineMinutes);
   const [partySize, setPartySize] = useState(storedSettings.partySize);
-  const [togetherPartySize, setTogetherPartySize] = useState(storedSettings.togetherPartySize);
   const [radius, setRadius] = useState(storedSettings.radius);
   const [intent, setIntent] = useState<Intent | null>(initialIntent ?? storedSettings.intent);
   const [tags, setTags] = useState<string[]>(storedSettings.tags);
@@ -525,13 +701,12 @@ export default function LunchieSettingsPage() {
     localStorage.setItem(QUICK_MATCH_SETTINGS_STORAGE_KEY, JSON.stringify({
       deadlineMinutes: deadlineMin,
       partySize,
-      togetherPartySize,
       radius,
       intent,
       tags,
       dietary: normalizeDietaryPreferences(dietary),
     }));
-  }, [deadlineMin, partySize, togetherPartySize, radius, intent, tags, dietary]);
+  }, [deadlineMin, partySize, radius, intent, tags, dietary]);
 
   useEffect(() => {
     const token = currentSession?.inviteCode;
@@ -539,6 +714,15 @@ export default function LunchieSettingsPage() {
       setActiveSessionVerified(false);
       setIsCheckingSession(false);
       setSessionCheckFailed(false);
+      return;
+    }
+    // Resume/cancel need a private memberKey. Old local caches without one
+    // only block Start — clear them instead of showing a stuck progress card.
+    if (!currentSession.memberKey) {
+      setActiveSessionVerified(false);
+      setIsCheckingSession(false);
+      setSessionCheckFailed(false);
+      setCurrentSession(null);
       return;
     }
     let active = true;
@@ -562,23 +746,14 @@ export default function LunchieSettingsPage() {
         if (active) setIsCheckingSession(false);
       });
     return () => { active = false; };
-  }, [currentSession?.inviteCode, fetchSession, sessionCheckAttempt, setCurrentSession]);
+  }, [currentSession?.inviteCode, currentSession?.memberKey, fetchSession, sessionCheckAttempt, setCurrentSession]);
 
   const toggleMany = (value: string, setter: Dispatch<SetStateAction<string[]>>) => {
     setter(current => current.includes(value) ? current.filter(item => item !== value) : [...current, value]);
   };
 
-  const selectSolo = () => {
-    if (partySize > 1) setTogetherPartySize(partySize);
-    setPartySize(1);
-  };
-
-  const selectTogether = () => setPartySize(Math.max(2, togetherPartySize));
-
   const setGroupSize = (next: number) => {
-    const normalized = Math.max(2, Math.min(12, Math.round(next)));
-    setPartySize(normalized);
-    setTogetherPartySize(normalized);
+    setPartySize(Math.max(1, Math.min(12, Math.round(next))));
   };
 
   const handleStart = async () => {
@@ -664,10 +839,6 @@ export default function LunchieSettingsPage() {
           <h1 className="text-[19px] font-extrabold leading-none tracking-[-0.4px] text-[#F4515E]">Lunchie</h1>
           <p className="mt-1 text-[10px] font-bold tracking-[0.7px] text-[#9B959A]">QUICK MATCH</p>
         </div>
-        <div className="ml-auto flex rounded-full bg-white p-[3px] shadow-sm" aria-label="식사 인원 모드">
-          <button type="button" onClick={selectSolo} className={`rounded-full px-4 py-1.5 text-[13px] font-bold ${isSolo ? 'bg-[#F4515E] text-white' : 'text-[#9B959A]'}`}>혼자</button>
-          <button type="button" onClick={selectTogether} className={`rounded-full px-4 py-1.5 text-[13px] font-bold ${!isSolo ? 'bg-[#F4515E] text-white' : 'text-[#9B959A]'}`}>같이</button>
-        </div>
       </header>
 
       <main className="mx-auto max-w-[480px] space-y-3 px-4 pb-32">
@@ -675,7 +846,10 @@ export default function LunchieSettingsPage() {
           <section role="alert" className="rounded-[20px] border border-[#F2C6C1] bg-white p-4 shadow-sm">
             <h2 className="text-[14px] font-black text-[#302B2E]">We couldn’t check your Quick Match</h2>
             <p className="mt-1 text-[11px] leading-relaxed text-[#7C7276]">Your saved session is still here. Retry before creating another one.</p>
-            <button type="button" onClick={() => setSessionCheckAttempt(attempt => attempt + 1)} className="mt-3 min-h-10 rounded-xl bg-[#F4515E] px-4 text-[12px] font-bold text-white">Try again</button>
+            <div className="mt-3 flex flex-wrap gap-2">
+              <button type="button" onClick={() => setSessionCheckAttempt(attempt => attempt + 1)} className="min-h-10 rounded-xl bg-[#F4515E] px-4 text-[12px] font-bold text-white">Try again</button>
+              <button type="button" onClick={() => setCurrentSession(null)} className="min-h-10 rounded-xl bg-[#FFF0EE] px-4 text-[12px] font-bold text-[#C43B47]">Clear saved session</button>
+            </div>
           </section>
         )}
         {hasActiveSession && currentSession && (
@@ -712,28 +886,16 @@ export default function LunchieSettingsPage() {
           <CardTitle icon={<Clock3 size={16} />}>마감</CardTitle>
           <div className="flex flex-col items-center">
             <DeadlineDial minutes={deadlineMin} onChange={setDeadlineMin} />
-            <div className="mt-4 w-full max-w-[330px] min-w-0">
-              <div className="grid grid-cols-3 gap-1.5">
-                {DEADLINE_OPTIONS.map(minutes => (
-                  <ChoiceChip key={minutes} selected={deadlineMin === minutes} onClick={() => setDeadlineMin(minutes)} className="min-h-10 px-1">{minutes} min</ChoiceChip>
-                ))}
-              </div>
-              <DeadlineMinuteInput minutes={deadlineMin} onChange={setDeadlineMin} />
-            </div>
           </div>
-          <p className="mt-2 text-center text-[9px] font-semibold text-[#A6A0A3]">다이얼을 돌리거나 1–15분 사이로 직접 입력해요</p>
         </Card>
 
-        {!isSolo && (
-          <Card>
-            <div className="mb-3 flex items-center gap-2 text-[14px] font-extrabold text-[#26232A]">
-              <Users size={17} className="text-[#F4515E]" />
-              <span>인원</span>
-              <span className="ml-auto text-[10px] font-bold text-[#9B959A]">함께 먹을 정원</span>
-            </div>
-            <GroupSizeRuler value={partySize} onChange={setGroupSize} />
-          </Card>
-        )}
+        <Card>
+          <div className="mb-3 flex items-center gap-2 text-[14px] font-extrabold text-[#26232A]">
+            <Users size={17} className="text-[#F4515E]" />
+            <span>인원</span>
+          </div>
+          <GroupSizeRuler value={partySize} onChange={setGroupSize} />
+        </Card>
 
         <Card>
           <DistanceRuler radius={radius} onChange={setRadius} loadout={lunchmateLoadout} />
@@ -741,7 +903,6 @@ export default function LunchieSettingsPage() {
 
         <Card>
           <CardTitle icon={<UtensilsCrossed size={16} />} badge={`${chosenCount} 선택`}>오늘의 Quick Match</CardTitle>
-          <p className="-mt-1 mb-3 text-[11px] font-semibold text-[#A6A0A3]">끌리는 카드를 한 장 골라주세요</p>
           <div className="grid grid-cols-4 gap-2">
             {PREFERENCE_CARDS.map(option => (
               <PreferenceCard key={option.label} option={option} selected={intent === option.value} onClick={() => setIntent(option.value)} />
@@ -752,7 +913,6 @@ export default function LunchieSettingsPage() {
           <div className="mb-2 flex items-center gap-2">
             <Sparkles size={15} className="text-[#F4515E]" />
             <p className="text-[12px] font-extrabold text-[#524B4F]">어떤 분위기인가요?</p>
-            <span className="ml-auto text-[10px] font-bold text-[#A6A0A3]">여러 개 선택 가능</span>
           </div>
           <div className="grid grid-cols-2 gap-2">
             {FOOD_TAGS.map(tag => {
@@ -809,9 +969,6 @@ export default function LunchieSettingsPage() {
           </div>
           <div className="mt-3 border-t border-[#F0EAE8] pt-3">
             <IngredientAvoidancePicker selected={dietary} onToggle={value => toggleMany(value, setDietary)} />
-            <p className="mt-2 px-1 text-[9px] font-semibold leading-relaxed text-[#9A9094]">
-              Menu data helps filter choices. For severe allergies, please confirm ingredients and cross-contamination with the venue.
-            </p>
           </div>
         </Card>
 
