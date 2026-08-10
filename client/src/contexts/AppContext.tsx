@@ -1293,18 +1293,36 @@ export function AppProvider({
   }, [currentSession?.deadlineMinutes, fetchSession, profile.id]);
 
   const endSession = useCallback(async (token: string, action: 'cancel' | 'leave') => {
+    const memberKey = currentSessionRef.current?.inviteCode === token
+      ? currentSessionRef.current.memberKey
+      : undefined;
+
+    // Without a capability this device cannot cancel/leave on the server.
+    // Drop the local resume card so settings is not stuck forever.
+    if (!memberKey) {
+      if (currentSessionRef.current?.inviteCode === token) setCurrentSession(null);
+      return;
+    }
+
     const response = await fetch(`/api/sessions/${token}/${action}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         userId: profile.id,
-        memberKey: currentSessionRef.current?.inviteCode === token
-          ? currentSessionRef.current.memberKey
-          : undefined,
+        memberKey,
       }),
     });
     const payload = await response.json().catch(() => ({})) as { error?: string; code?: string };
     if (!response.ok) {
+      const isInvalidCredential = response.status === 403 && (
+        payload.code === 'INVALID_MEMBER_CREDENTIAL'
+        || payload.error === 'invalid_member_credential'
+        || (typeof payload.error === 'string' && payload.error.includes('자격 증명을 확인할 수 없습니다'))
+      );
+      if (isInvalidCredential) {
+        setCurrentSession(null);
+        return;
+      }
       const error = new Error(payload.error ?? '세션 상태를 바꾸지 못했어요.') as Error & { code?: string; status?: number };
       error.code = payload.code;
       error.status = response.status;

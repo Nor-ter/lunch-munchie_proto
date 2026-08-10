@@ -24,7 +24,7 @@ type SessionManagementMenuProps = {
 };
 
 export default function SessionManagementMenu({ className = '', onEnded }: SessionManagementMenuProps) {
-  const { currentSession, profile, cancelSession, leaveSession } = useApp();
+  const { currentSession, profile, cancelSession, leaveSession, setCurrentSession } = useApp();
   const [confirmationOpen, setConfirmationOpen] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -33,6 +33,13 @@ export default function SessionManagementMenu({ className = '', onEnded }: Sessi
 
   const isHost = currentSession.hostId === profile.id || currentSession.filters.partySize === 1;
   const actionLabel = isHost ? 'Cancel Quick Match' : 'Leave lobby';
+
+  const clearLocalSession = () => {
+    setCurrentSession(null);
+    setConfirmationOpen(false);
+    setError(null);
+    onEnded?.();
+  };
 
   const handleConfirm = async (event: React.MouseEvent<HTMLButtonElement>) => {
     event.preventDefault();
@@ -90,7 +97,19 @@ export default function SessionManagementMenu({ className = '', onEnded }: Sessi
                 : "You’ll leave this Quick Match, but the session will stay open for the others."}
             </AlertDialogDescription>
           </AlertDialogHeader>
-          {error && <p role="alert" className="rounded-xl bg-[#FFF0EE] px-3 py-2 text-[12px] font-semibold text-[#C93742]">{error}</p>}
+          {error && (
+            <div className="space-y-2">
+              <p role="alert" className="rounded-xl bg-[#FFF0EE] px-3 py-2 text-[12px] font-semibold text-[#C93742]">{error}</p>
+              <button
+                type="button"
+                disabled={busy}
+                onClick={clearLocalSession}
+                className="min-h-10 w-full rounded-xl bg-white px-3 text-[12px] font-bold text-[#C43B47] outline-none ring-1 ring-[#F2C6C1] transition-colors hover:bg-[#FFF0EE] focus-visible:ring-2 focus-visible:ring-[#F4515E]"
+              >
+                Clear saved session on this device
+              </button>
+            </div>
+          )}
           <AlertDialogFooter>
             <AlertDialogCancel disabled={busy} className="min-h-11 rounded-xl">{isHost ? 'Keep session' : 'Stay'}</AlertDialogCancel>
             <AlertDialogAction
