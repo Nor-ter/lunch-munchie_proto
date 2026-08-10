@@ -116,14 +116,21 @@ const TABS = [
 
 export default function TabBar() {
   const [location, navigate] = useLocation();
-  const isFlat = location === "/" || location === "/feed" || location === "/saved" || location === "/profile";
+  const isFlat = location === "/" ||
+    location === "/feed" ||
+    location === "/saved" ||
+    location === "/profile" ||
+    location === "/lunchie/settings" ||
+    location === "/session/lobby";
 
   return (
     <div className={`tab-bar ${isFlat ? "tab-bar--flat" : ""}`}>
       <div className="tab-bar-content grid grid-cols-5 items-center px-[22px]">
         {TABS.map((tab) => {
           const isActive =
-            location === tab.path || (tab.path !== "/" && location.startsWith(tab.path));
+            location === tab.path ||
+            (tab.path !== "/" && location.startsWith(tab.path)) ||
+            (tab.path === "/lunchie/settings" && location === "/session/lobby");
           const isProfile = tab.path === "/profile";
 
           return (

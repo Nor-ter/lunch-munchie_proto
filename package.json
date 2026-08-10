@@ -25,7 +25,7 @@
     "cf:d1:seed:local": "node scripts/generateD1Seed.mjs && wrangler d1 execute lunchie-db --local --file scripts/seed.sql",
     "cf:pages:deploy": "wrangler pages deploy dist/public --project-name=lunchie-munchie",
     "cf:auth:secrets": "node scripts/configureGoogleAuthSecrets.mjs",
-    "dev:pages": "vite build && concurrently \"vite build --watch\" \"wrangler pages dev dist/public --port 8788\"",
+    "dev:pages": "vite build && concurrently \"vite build --watch\" \"wrangler pages dev dist/public --port 8788 --ip 0.0.0.0\"",
     "preview": "vite preview --host",
     "check": "tsc --noEmit",
     "test": "vitest run",

@@ -316,8 +316,8 @@ export default function UnifiedMunchieCard({
                 role="button"
                 tabIndex={0}
                 aria-label="스토리로 공유"
-                onClick={event => { event.stopPropagation(); interactive && go(`/course/${course.id}/share`); }}
-                onKeyDown={event => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); event.stopPropagation(); interactive && go(`/course/${course.id}/share`); } }}
+                onClick={event => { event.stopPropagation(); interactive && go(`/course/${course.id}/share?post=${encodeURIComponent(post.id)}`); }}
+                onKeyDown={event => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); event.stopPropagation(); interactive && go(`/course/${course.id}/share?post=${encodeURIComponent(post.id)}`); } }}
                 className="flex h-6 items-center rounded-lg border border-[#CDDED3] bg-[#F7FCF8] px-1.5 text-[#668574]"
               ><Share2 size={10} /></span>
             </div>}
@@ -441,7 +441,7 @@ export default function UnifiedMunchieCard({
             </button>
           </div>
           <div className="flex items-center gap-2">
-            <button type="button" onClick={() => interactive && go(`/course/${course.id}/share`)} className="flex h-10 w-10 items-center justify-center rounded-xl text-current" aria-label="공유하기"><Share2 size={20} strokeWidth={2} /></button>
+            <button type="button" onClick={() => interactive && go(`/course/${course.id}/share?post=${encodeURIComponent(post.id)}`)} className="flex h-10 w-10 items-center justify-center rounded-xl text-current" aria-label="공유하기"><Share2 size={20} strokeWidth={2} /></button>
             <button
               type="button"
               onClick={() => {
