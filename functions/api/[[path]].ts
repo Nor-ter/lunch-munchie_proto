@@ -400,7 +400,7 @@ app.get("/api/admin/metrics", async (c) => {
     : 30;
   const start = Date.now() - (days - 1) * 86_400_000;
   const count = (row: { count?: number | string } | null | undefined) => Number(row?.count ?? 0);
-  const [registered, newRegistered, activeActors, activeSignedIn, activeGuests, eventResult, trendResult, personaResult, modelResult, impressionCoverage, persistedSlates, servedImpressions, attributableSwipes, categoryResult, contributionResult] = await Promise.all([
+  const [registered, newRegistered, activeActors, activeSignedIn, activeGuests, eventResult, trendResult, personaResult, modelResult, impressionCoverage, persistedSlates, servedImpressions, attributableSwipes, categoryResult, contributionResult, catalogueSummary, photoAssetSummary, menuSummary, catalogueCategories, dietarySupport, sourceDistribution, restaurantSamples] = await Promise.all([
     c.env.DB.prepare("SELECT COUNT(*) AS count FROM users").first<{ count: number }>(),
     c.env.DB.prepare("SELECT COUNT(*) AS count FROM users WHERE created_at >= ?").bind(start).first<{ count: number }>(),
     c.env.DB.prepare("SELECT COUNT(DISTINCT user_id) AS count FROM rec_events WHERE created_at >= ? AND user_id IS NOT NULL").bind(start).first<{ count: number }>(),
@@ -416,6 +416,13 @@ app.get("/api/admin/metrics", async (c) => {
     c.env.DB.prepare("SELECT COUNT(*) AS count FROM rec_events e INNER JOIN recommendation_slates s ON s.id = e.slate_id WHERE e.created_at >= ? AND e.event_type = 'SWIPE'").bind(start).first<{ count: number }>(),
     c.env.DB.prepare("SELECT r.category AS category, SUM(CASE WHEN e.event_type = 'IMPRESSION' THEN 1 ELSE 0 END) AS impressions, SUM(CASE WHEN e.event_type = 'SWIPE' AND e.action = 'LIKE' THEN 1 ELSE 0 END) AS likes, SUM(CASE WHEN e.event_type = 'SWIPE' AND e.action = 'NOPE' THEN 1 ELSE 0 END) AS nopes, SUM(CASE WHEN e.event_type = 'WINNER' THEN 1 ELSE 0 END) AS decisions FROM rec_events e JOIN restaurants r ON r.id = e.restaurant_id WHERE e.created_at >= ? AND e.event_type IN ('IMPRESSION', 'SWIPE', 'WINNER') GROUP BY r.category ORDER BY impressions DESC, decisions DESC LIMIT 8").bind(start).all<{ category: string; impressions: number; likes: number; nopes: number; decisions: number }>(),
     c.env.DB.prepare("SELECT AVG(CAST(json_extract(item.value, '$.components.reputation') AS REAL)) AS reputation, AVG(CAST(json_extract(item.value, '$.components.context') AS REAL)) AS context, AVG(CAST(json_extract(item.value, '$.components.taste') AS REAL)) AS taste, AVG(CAST(json_extract(item.value, '$.components.exposureFatigue') AS REAL)) AS exposure_fatigue, AVG(CAST(json_extract(item.value, '$.components.satiation') AS REAL)) AS satiation, AVG(CAST(json_extract(item.value, '$.components.journeyChain') AS REAL)) AS journey_chain, COUNT(*) AS count FROM recommendation_slates s, json_each(s.items_json) AS item WHERE s.created_at >= ? AND json_type(item.value, '$.components') = 'object'").bind(start).first<{ reputation: number | null; context: number | null; taste: number | null; exposure_fatigue: number | null; satiation: number | null; journey_chain: number | null; count: number }>(),
+    c.env.DB.prepare("SELECT COUNT(*) AS restaurants, SUM(CASE WHEN address IS NOT NULL AND trim(address) != '' THEN 1 ELSE 0 END) AS with_address, SUM(CASE WHEN latitude != 0 OR longitude != 0 THEN 1 ELSE 0 END) AS with_coordinates, SUM(CASE WHEN short_description IS NOT NULL AND trim(short_description) != '' THEN 1 ELSE 0 END) AS with_description, SUM(CASE WHEN json_valid(photos) AND json_array_length(photos) > 0 THEN 1 ELSE 0 END) AS with_photo_reference, SUM(CASE WHEN json_valid(photos) THEN json_array_length(photos) ELSE 0 END) AS photo_references, SUM(CASE WHEN json_valid(menus) AND json_array_length(menus) > 0 THEN 1 ELSE 0 END) AS with_menu_reference, SUM(CASE WHEN json_valid(menus) THEN json_array_length(menus) ELSE 0 END) AS menu_references FROM restaurants").first<{ restaurants: number; with_address: number; with_coordinates: number; with_description: number; with_photo_reference: number; photo_references: number; with_menu_reference: number; menu_references: number }>(),
+    c.env.DB.prepare("SELECT COUNT(*) AS photo_assets, COUNT(DISTINCT restaurant_id) AS restaurants_with_photo_assets FROM restaurant_photos").first<{ photo_assets: number; restaurants_with_photo_assets: number }>(),
+    c.env.DB.prepare("SELECT COUNT(*) AS menu_items, COUNT(DISTINCT restaurant_id) AS restaurants_with_menus FROM restaurant_menu_items").first<{ menu_items: number; restaurants_with_menus: number }>(),
+    c.env.DB.prepare("SELECT COALESCE(NULLIF(trim(category), ''), '기타') AS category, COUNT(*) AS count FROM restaurants GROUP BY COALESCE(NULLIF(trim(category), ''), '기타') ORDER BY count DESC, category ASC LIMIT 12").all<{ category: string; count: number }>(),
+    c.env.DB.prepare("SELECT trim(diet.value) AS label, COUNT(DISTINCT r.id) AS count FROM restaurants r, json_each(CASE WHEN json_valid(r.dietary_options) THEN r.dietary_options ELSE '[]' END) AS diet WHERE trim(diet.value) != '' GROUP BY trim(diet.value) ORDER BY count DESC, label ASC LIMIT 12").all<{ label: string; count: number }>(),
+    c.env.DB.prepare("SELECT COALESCE(NULLIF(trim(source), ''), '미지정') AS source, COUNT(*) AS count FROM restaurants GROUP BY COALESCE(NULLIF(trim(source), ''), '미지정') ORDER BY count DESC, source ASC LIMIT 8").all<{ source: string; count: number }>(),
+    c.env.DB.prepare("SELECT r.name, COALESCE(NULLIF(trim(r.category), ''), '기타') AS category, CASE WHEN json_valid(r.photos) THEN json_array_length(r.photos) ELSE 0 END AS photo_count, CASE WHEN COALESCE(m.menu_count, 0) > 0 THEN m.menu_count WHEN json_valid(r.menus) THEN json_array_length(r.menus) ELSE 0 END AS menu_count FROM restaurants r LEFT JOIN (SELECT restaurant_id, COUNT(*) AS menu_count FROM restaurant_menu_items GROUP BY restaurant_id) m ON m.restaurant_id = r.id ORDER BY r.review_count DESC, r.rating DESC, r.name ASC LIMIT 10").all<{ name: string; category: string; photo_count: number; menu_count: number }>(),
   ]);
   const events = new Map<string, number>();
   for (const row of eventResult.results) events.set(`${row.event_type}:${row.action ?? ''}`, Number(row.count));
@@ -488,6 +495,28 @@ app.get("/api/admin/metrics", async (c) => {
       { factor: "여정 연쇄", contribution: Number(contributionResult.journey_chain ?? 0) },
     ] : [],
     contributionSampleSize: Number(contributionResult?.count ?? 0),
+    catalogue: {
+      restaurants: count(catalogueSummary),
+      photoReferences: Number(catalogueSummary?.photo_references ?? 0),
+      restaurantsWithPhotoReferences: Number(catalogueSummary?.with_photo_reference ?? 0),
+      photoAssets: count(photoAssetSummary),
+      restaurantsWithPhotoAssets: Number(photoAssetSummary?.restaurants_with_photo_assets ?? 0),
+      menuItems: Number(catalogueSummary?.menu_references ?? 0),
+      restaurantsWithMenus: Number(catalogueSummary?.with_menu_reference ?? 0),
+      normalisedMenuItems: count(menuSummary),
+      restaurantsWithNormalisedMenus: Number(menuSummary?.restaurants_with_menus ?? 0),
+      completeness: {
+        address: Number(catalogueSummary?.with_address ?? 0),
+        coordinates: Number(catalogueSummary?.with_coordinates ?? 0),
+        description: Number(catalogueSummary?.with_description ?? 0),
+        photoReference: Number(catalogueSummary?.with_photo_reference ?? 0),
+        menu: Number(catalogueSummary?.with_menu_reference ?? 0),
+      },
+      categories: catalogueCategories.results.map((row) => ({ category: row.category, count: Number(row.count) })),
+      dietarySupport: dietarySupport.results.map((row) => ({ label: row.label, count: Number(row.count) })),
+      sources: sourceDistribution.results.map((row) => ({ source: row.source, count: Number(row.count) })),
+      samples: restaurantSamples.results.map((row) => ({ name: row.name, category: row.category, photoCount: Number(row.photo_count), menuCount: Number(row.menu_count) })),
+    },
     updatedAt: new Date().toISOString(),
   });
 });
