@@ -72,17 +72,6 @@ function AccessState({ code }: { code: number | null }) {
   </main>;
 }
 
-function MobileNotice() {
-  return <main className="flex min-h-dvh items-center justify-center bg-[#171717] p-6 text-white lg:hidden">
-    <section className="w-full max-w-sm rounded-3xl border border-white/10 bg-[#272727] p-7 text-center shadow-2xl">
-      <LayoutDashboard className="mx-auto h-10 w-10 text-[#FF9092]" />
-      <h1 className="mt-4 text-xl font-bold">운영 대시보드</h1>
-      <p className="mt-3 text-sm leading-6 text-white/60">운영 지표는 표와 차트를 함께 비교할 수 있도록 데스크탑 화면용으로 제공됩니다.</p>
-      <p className="mt-5 rounded-xl bg-white/[0.06] px-4 py-3 text-xs font-medium text-white/75">1024px 이상의 화면에서 열어 주세요.</p>
-    </section>
-  </main>;
-}
-
 export default function AdminDashboardPage() {
   const [period, setPeriod] = useState<7 | 30 | 365>(30);
   const [metrics, setMetrics] = useState<AdminMetrics | null>(null);
@@ -116,11 +105,9 @@ export default function AdminDashboardPage() {
   ] : [], [metrics]);
 
   if (errorCode === 401 || errorCode === 403) return <AccessState code={errorCode} />;
-  return <>
-    <MobileNotice />
-    <main className="hidden min-h-dvh bg-[#171717] text-white lg:block">
-      <div className="mx-auto grid min-h-dvh max-w-[1680px] grid-cols-[248px_minmax(0,1fr)]">
-        <aside className="sticky top-0 flex h-dvh flex-col border-r border-white/10 bg-[#1D1D1D] px-5 py-7">
+  return <main className="min-h-dvh bg-[#171717] text-white">
+      <div className="mx-auto grid min-h-dvh max-w-[1680px] grid-cols-1 lg:grid-cols-[248px_minmax(0,1fr)]">
+        <aside className="sticky top-0 hidden h-dvh flex-col border-r border-white/10 bg-[#1D1D1D] px-5 py-7 lg:flex">
           <div className="flex items-center gap-3">
             <div className="grid h-10 w-10 place-items-center rounded-xl bg-[#EB5053] font-black">LM</div>
             <div><p className="text-sm font-bold">Lunchie Munchie</p><p className="mt-0.5 text-[10px] font-bold tracking-[0.16em] text-[#FF9092]">OPERATIONS</p></div>
@@ -136,8 +123,8 @@ export default function AdminDashboardPage() {
             <p className="mt-2 text-[11px] leading-5 text-white/50">개인 식별 정보와 정확한 위치는 집계 API·화면 어디에도 제공하지 않습니다.</p>
           </div>
         </aside>
-        <div className="min-w-0 px-9 py-8 xl:px-12">
-          <header className="mb-8 flex items-start justify-between gap-8">
+        <div className="min-w-0 px-4 py-6 sm:px-6 lg:px-9 lg:py-8 xl:px-12">
+          <header className="mb-6 flex flex-col gap-4 sm:mb-8 sm:flex-row sm:items-start sm:justify-between sm:gap-8">
         <div>
           <div className="flex items-center gap-2 text-[#FF9092]"><ShieldCheck size={20} /><span className="text-xs font-bold tracking-[0.18em]">LUNCHIE MUNCHIE · ADMIN</span></div>
           <h1 className="mt-2 text-3xl font-bold tracking-tight xl:text-4xl">운영 및 학습 현황</h1>
@@ -152,7 +139,7 @@ export default function AdminDashboardPage() {
           </header>
 
           {loading && !metrics ? <p className="py-28 text-center text-sm text-white/60">집계 지표를 불러오는 중…</p> : metrics ? <>
-        <section id="overview" className="grid grid-cols-3 gap-4 xl:grid-cols-6">
+        <section id="overview" className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 xl:gap-4">
           <MetricCard label="가입 이용자" value={String(metrics.users.registered)} detail={`기간 내 신규 ${metrics.users.newRegistered}명`} />
           <MetricCard label="활성 로그인 이용자" value={String(metrics.users.activeSignedIn)} detail={`${periodLabel(period)} 동안 행동 기록`} />
           <MetricCard label="익명 체험 이용자" value={String(metrics.users.activeGuests)} detail="기기 쿠키 기준, 중복 제거" />
@@ -161,11 +148,11 @@ export default function AdminDashboardPage() {
           <MetricCard label="학습 상태" value={metrics.learning.label} detail={`근거 스와이프 ${metrics.instrumentation.attributableSwipes}건`} />
         </section>
 
-        <section className="mt-5 grid grid-cols-12 gap-5">
-          <Panel className="col-span-7" title="이용 추이" detail="일별 고유 행위자·세션·최종 결정">
+        <section className="mt-5 grid grid-cols-1 gap-4 sm:gap-5 md:grid-cols-2 xl:grid-cols-12">
+          <Panel className="xl:col-span-7" title="이용 추이" detail="일별 고유 행위자·세션·최종 결정">
             <div className="h-72"><ResponsiveContainer><LineChart data={metrics.trend}><CartesianGrid stroke="#ffffff14" vertical={false} /><XAxis dataKey="day" tickFormatter={dayLabel} tick={{ fill: '#ffffff88', fontSize: 11 }} axisLine={false} tickLine={false} minTickGap={28} /><YAxis allowDecimals={false} tick={{ fill: '#ffffff88', fontSize: 11 }} axisLine={false} tickLine={false} /><Tooltip contentStyle={{ background: '#171717', border: '1px solid #ffffff22', borderRadius: 10 }} labelFormatter={dayLabel} /><Line type="monotone" dataKey="activeActors" name="활성 이용자" stroke="#FF7376" strokeWidth={2.5} dot={false} /><Line type="monotone" dataKey="sessions" name="세션" stroke="#F7C873" strokeWidth={2} dot={false} /><Line type="monotone" dataKey="decisions" name="결정" stroke="#85B8A9" strokeWidth={2} dot={false} /></LineChart></ResponsiveContainer></div>
           </Panel>
-          <Panel id="learning" className="col-span-5" title="알고리즘 학습 준비도" detail="자동 최적화의 성과가 아니라, 문서에 정의된 오프라인 평가를 시작해도 되는지의 전제 조건입니다.">
+          <Panel id="learning" className="xl:col-span-5" title="알고리즘 학습 준비도" detail="자동 최적화의 성과가 아니라, 문서에 정의된 오프라인 평가를 시작해도 되는지의 전제 조건입니다.">
             <div className={`rounded-xl border p-4 ${readinessTone(metrics.learning.level)}`}>
               <p className="text-sm font-bold">{metrics.learning.label}</p>
               <p className="mt-2 text-xs leading-5 opacity-90">{metrics.learning.detail}</p>
@@ -173,11 +160,11 @@ export default function AdminDashboardPage() {
             </div>
             <div className="mt-3 grid grid-cols-3 gap-2 text-center text-xs"><Stat label="불변 슬레이트" value={`${metrics.instrumentation.persistedSlates}개`} /><Stat label="서버 노출" value={`${metrics.instrumentation.servedImpressions}건`} /><Stat label="행동 연결" value={`${metrics.instrumentation.attributableSwipes}건`} /></div>
           </Panel>
-          <Panel id="funnel" className="col-span-4" title="Lunchie 퍼널" detail="추천 노출부터 길찾기까지의 행동 전환">
+          <Panel id="funnel" className="xl:col-span-4" title="Lunchie 퍼널" detail="추천 노출부터 길찾기까지의 행동 전환">
             <div className="h-72"><ResponsiveContainer><BarChart data={funnel} layout="vertical" margin={{ left: 12 }}><XAxis type="number" allowDecimals={false} tick={{ fill: '#ffffff88', fontSize: 11 }} axisLine={false} tickLine={false} /><YAxis dataKey="label" type="category" width={54} tick={{ fill: '#ffffffcc', fontSize: 12 }} axisLine={false} tickLine={false} /><Tooltip contentStyle={{ background: '#171717', border: '1px solid #ffffff22', borderRadius: 10 }} /><Bar dataKey="value" name="건수" fill="#FF7376" radius={[0, 8, 8, 0]} /></BarChart></ResponsiveContainer></div>
             <div className="grid grid-cols-3 gap-2 text-center text-xs"><Stat label="재추천" value={percentage(metrics.quality.rerollRate)} /><Stat label="Propensity 기록" value={percentage(metrics.quality.propensityCoverage)} /><Stat label="Score 기록" value={percentage(metrics.quality.scoreCoverage)} /></div>
           </Panel>
-          <Panel id="data-contract" className="col-span-4" title="계측 계약" detail="추천을 받은 뒤의 클라이언트 값이 아니라, 서버가 저장한 노출 증거를 기준으로 합니다.">
+          <Panel id="data-contract" className="xl:col-span-4" title="계측 계약" detail="추천을 받은 뒤의 클라이언트 값이 아니라, 서버가 저장한 노출 증거를 기준으로 합니다.">
             <div className="space-y-3">
               {[
                 ['포함 확률 (propensity)', metrics.instrumentation.propensityCoverage],
@@ -190,25 +177,24 @@ export default function AdminDashboardPage() {
               </div>)}
             </div>
           </Panel>
-          <Panel className="col-span-4" title="추천 정책 학습 신호" detail="정책 버전별 노출·스와이프·수락률입니다. 표본이 작을 때는 의사결정에 사용하지 마세요.">
+          <Panel className="xl:col-span-4" title="추천 정책 학습 신호" detail="정책 버전별 노출·스와이프·수락률입니다. 표본이 작을 때는 의사결정에 사용하지 마세요.">
             {metrics.models.length ? <div className="space-y-3">{metrics.models.map((model) => <div key={model.version} className="rounded-xl bg-white/[0.05] p-3"><div className="flex justify-between gap-3"><span className="font-mono text-xs text-[#FFB3B5]">{model.version}</span><span className="text-sm font-bold">수락 {percentage(model.likeRate)}</span></div><div className="mt-2 grid grid-cols-3 text-xs text-white/60"><span>노출 {model.impressions}</span><span>스와이프 {model.swipes}</span><span>좋아요 {model.likes}</span></div></div>)}</div> : <Empty label="아직 모델 버전이 기록된 추천 데이터가 없습니다." />}
           </Panel>
-          <Panel className="col-span-8" title="현재 정책의 점수 구성" detail={`서버가 실제로 낸 슬레이트 ${metrics.contributionSampleSize}개 항목의 평균 점수 기여입니다. ‘왜 추천됐는지’의 정책 설명이며, 사용자의 결정 원인이나 인과 효과는 아닙니다.`}>
+          <Panel className="md:col-span-2 xl:col-span-8" title="현재 정책의 점수 구성" detail={`서버가 실제로 낸 슬레이트 ${metrics.contributionSampleSize}개 항목의 평균 점수 기여입니다. ‘왜 추천됐는지’의 정책 설명이며, 사용자의 결정 원인이나 인과 효과는 아닙니다.`}>
             {metrics.policyContributions.length ? <div className="h-72"><ResponsiveContainer><BarChart data={metrics.policyContributions} layout="vertical" margin={{ left: 16 }}><CartesianGrid stroke="#ffffff14" vertical={false} /><XAxis type="number" tick={{ fill: '#ffffff88', fontSize: 11 }} axisLine={false} tickLine={false} /><YAxis dataKey="factor" type="category" width={68} tick={{ fill: '#ffffffcc', fontSize: 12 }} axisLine={false} tickLine={false} /><Tooltip contentStyle={{ background: '#171717', border: '1px solid #ffffff22', borderRadius: 10 }} formatter={(value: number) => [value.toFixed(3), '평균 점수 기여']} /><Bar dataKey="contribution" name="기여도" fill="#F7C873" radius={[0, 6, 6, 0]} /></BarChart></ResponsiveContainer></div> : <Empty label="새 추천 슬레이트가 쌓이면 점수 구성부터 표시합니다." />}
           </Panel>
-          <Panel className="col-span-7" title="카테고리별 결정 반응" detail="노출 후 LIKE/NOPE 반응의 관측 차이입니다. 카테고리는 무작위 배정되지 않으므로 ‘결정에 미친 인과 영향’이 아니라 다음 정책 가설을 위한 신호입니다.">
+          <Panel className="md:col-span-2 xl:col-span-7" title="카테고리별 결정 반응" detail="노출 후 LIKE/NOPE 반응의 관측 차이입니다. 카테고리는 무작위 배정되지 않으므로 ‘결정에 미친 인과 영향’이 아니라 다음 정책 가설을 위한 신호입니다.">
             {metrics.categoryPerformance.length ? <><div className="h-56"><ResponsiveContainer><BarChart data={metrics.categoryPerformance} margin={{ left: -16 }}><CartesianGrid stroke="#ffffff14" vertical={false} /><XAxis dataKey="category" tick={{ fill: '#ffffff88', fontSize: 10 }} axisLine={false} tickLine={false} interval={0} /><YAxis allowDecimals={false} tick={{ fill: '#ffffff88', fontSize: 11 }} axisLine={false} tickLine={false} /><Tooltip contentStyle={{ background: '#171717', border: '1px solid #ffffff22', borderRadius: 10 }} formatter={(value: number, name: string) => [value, name === 'impressions' ? '노출' : name === 'decisions' ? '결정' : name]} /><Bar dataKey="impressions" name="impressions" fill="#86A8E7" radius={[5, 5, 0, 0]} /><Bar dataKey="decisions" name="decisions" fill="#FF7376" radius={[5, 5, 0, 0]} /></BarChart></ResponsiveContainer></div><div className="mt-3 grid gap-2 sm:grid-cols-2">{metrics.categoryPerformance.map((row) => <div key={row.category} className="rounded-lg bg-white/[0.05] px-3 py-2 text-xs"><div className="flex justify-between"><span>{row.category}</span><span className="font-semibold">반응 {percentage(row.likeRate)}</span></div><p className="mt-1 text-white/55">전체 대비 {row.responseLift === null ? '데이터 없음' : `${row.responseLift >= 0 ? '+' : ''}${(row.responseLift * 100).toFixed(1)}%p`} · 노출 {row.impressions}</p></div>)}</div></> : <Empty label="카테고리별 추천 증거가 아직 없습니다." />}
           </Panel>
-          <Panel className="col-span-5" title="관찰된 취향 분포" detail="기간 내 최종 선택 카테고리를 익명·집계해 표시합니다. 개인 페르소나는 노출하지 않습니다.">
-            {metrics.personas.length ? <div className="flex h-72"><ResponsiveContainer width="58%" height="100%"><PieChart><Pie data={metrics.personas} dataKey="decisions" nameKey="category" innerRadius={48} outerRadius={92} paddingAngle={3}>{metrics.personas.map((row, index) => <Cell key={row.category} fill={COLORS[index % COLORS.length]} />)}</Pie><Tooltip contentStyle={{ background: '#171717', border: '1px solid #ffffff22', borderRadius: 10 }} /></PieChart></ResponsiveContainer><div className="grid flex-1 content-center gap-2 text-xs text-white/75">{metrics.personas.map((row, index) => <div key={row.category} className="flex items-center gap-2"><span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: COLORS[index % COLORS.length] }} /><span>{row.category}</span><span className="ml-auto">{row.decisions}회 · {row.selectors}명</span></div>)}</div></div> : <Empty label="아직 최종 결정 데이터가 없습니다." />}
+          <Panel className="md:col-span-2 xl:col-span-5" title="관찰된 취향 분포" detail="기간 내 최종 선택 카테고리를 익명·집계해 표시합니다. 개인 페르소나는 노출하지 않습니다.">
+            {metrics.personas.length ? <div className="flex h-auto flex-col sm:h-72 sm:flex-row"><div className="h-56 sm:h-full sm:w-[58%]"><ResponsiveContainer width="100%" height="100%"><PieChart><Pie data={metrics.personas} dataKey="decisions" nameKey="category" innerRadius={48} outerRadius={92} paddingAngle={3}>{metrics.personas.map((row, index) => <Cell key={row.category} fill={COLORS[index % COLORS.length]} />)}</Pie><Tooltip contentStyle={{ background: '#171717', border: '1px solid #ffffff22', borderRadius: 10 }} /></PieChart></ResponsiveContainer></div><div className="grid flex-1 content-center gap-2 pb-2 text-xs text-white/75 sm:pb-0">{metrics.personas.map((row, index) => <div key={row.category} className="flex items-center gap-2"><span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: COLORS[index % COLORS.length] }} /><span>{row.category}</span><span className="ml-auto">{row.decisions}회 · {row.selectors}명</span></div>)}</div></div> : <Empty label="아직 최종 결정 데이터가 없습니다." />}
           </Panel>
         </section>
         <footer className="mt-6 flex items-center gap-2 text-xs text-white/40"><DatabaseZap size={14} /><span>개인 식별자·정확 위치·개별 취향 벡터는 이 화면과 API에 포함되지 않습니다. 마지막 집계 {new Date(metrics.updatedAt).toLocaleString('ko-KR')}</span></footer>
       </> : <div className="rounded-2xl bg-[#4E2528] p-5 text-sm text-[#FFB8B8]">운영 지표를 불러오지 못했습니다. 잠시 후 다시 시도해 주세요.</div>}
         </div>
       </div>
-  </main>
-  </>;
+  </main>;
 }
 
 function Stat({ label, value }: { label: string; value: string }) {
