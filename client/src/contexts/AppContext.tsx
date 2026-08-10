@@ -157,6 +157,8 @@ export interface SessionMember {
 export interface UserProfile {
   id: string;
   name: string;
+  /** 공개 프로필 검색에 사용하는 고유 @아이디 */
+  handle?: string;
   emoji: string;
   /** 업로드한 프로필 사진(data URL) — 있으면 emoji 대신 이 사진을 아바타로 보여준다 */
   avatarPhoto?: string;
@@ -807,7 +809,7 @@ export function AppProvider({
       .then(response => response.ok ? response.json() : null)
       .then((data: {
         user?: { sub?: string; name?: string; picture?: string };
-        profile?: { username?: string | null; profile_image_url?: string | null } | null;
+        profile?: { username?: string | null; handle?: string | null; profile_image_url?: string | null } | null;
       } | null) => {
         const googleUser = data?.user;
         if (!googleUser || googleUser.sub !== initialAuthUserId) return;
@@ -815,6 +817,7 @@ export function AppProvider({
         setProfile(previous => ({
           ...previous,
           ...(serverProfile?.username || googleUser.name ? { name: serverProfile?.username || googleUser.name! } : {}),
+          ...(serverProfile?.handle ? { handle: serverProfile.handle } : {}),
           // A null server value is meaningful: the user deliberately removed
           // their photo and chose the emoji avatar. Never fall back to Google
           // in that case.
