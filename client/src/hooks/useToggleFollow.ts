@@ -21,6 +21,7 @@ export function useToggleFollow(followingId: string) {
       queryClient.invalidateQueries({ queryKey: ['followCounts'] });
       queryClient.invalidateQueries({ queryKey: ['followers'] });
       queryClient.invalidateQueries({ queryKey: ['following'] });
+      queryClient.invalidateQueries({ queryKey: ['userSearch'] });
     },
   });
 }
