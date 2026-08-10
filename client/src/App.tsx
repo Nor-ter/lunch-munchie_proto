@@ -73,8 +73,9 @@ function RequireGoogleAuth({ userId, children }: { userId: string | null; childr
 function AppShell({ userId }: { userId: string | null }) {
   const [location] = useLocation();
   const showTabBar = !NO_TABBAR.some(p => location.startsWith(p));
+  const isAdminDashboard = location.startsWith('/admin');
   return (
-    <div className="app-shell">
+    <div className={isAdminDashboard ? "app-shell app-shell--admin" : "app-shell"}>
       <div className={showTabBar ? "app-content-with-tab-bar min-h-dvh" : "min-h-dvh"}>
         <SlideTransitionRoutes>
           <Switch>
