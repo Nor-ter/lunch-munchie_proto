@@ -9,6 +9,22 @@ type Instrumentation = { persistedSlates: number; servedImpressions: number; att
 type Learning = { level: 'blocked' | 'instrumenting' | 'measuring' | 'evaluation-ready'; label: string; detail: string; nextStep: string };
 type CategoryPerformance = { category: string; impressions: number; likes: number; nopes: number; decisions: number; likeRate: number | null; responseLift: number | null };
 type PolicyContribution = { factor: string; contribution: number };
+type Catalogue = {
+  restaurants: number;
+  photoReferences: number;
+  restaurantsWithPhotoReferences: number;
+  photoAssets: number;
+  restaurantsWithPhotoAssets: number;
+  menuItems: number;
+  restaurantsWithMenus: number;
+  normalisedMenuItems: number;
+  restaurantsWithNormalisedMenus: number;
+  completeness: { address: number; coordinates: number; description: number; photoReference: number; menu: number };
+  categories: { category: string; count: number }[];
+  dietarySupport: { label: string; count: number }[];
+  sources: { source: string; count: number }[];
+  samples: { name: string; category: string; photoCount: number; menuCount: number }[];
+};
 type AdminMetrics = {
   days: number;
   updatedAt: string;
@@ -23,6 +39,7 @@ type AdminMetrics = {
   categoryPerformance: CategoryPerformance[];
   policyContributions: PolicyContribution[];
   contributionSampleSize: number;
+  catalogue: Catalogue;
 };
 
 const COLORS = ['#FF6B6F', '#F49A8A', '#F7C873', '#85B8A9', '#86A8E7', '#AA95D9'];
@@ -32,6 +49,7 @@ const dayLabel = (day: string) => {
   return `${Number(month)}/${Number(date)}`;
 };
 const percentage = (value: number | null) => value === null ? '데이터 없음' : `${(value * 100).toFixed(1)}%`;
+const coverage = (value: number, total: number) => total ? `${((value / total) * 100).toFixed(0)}%` : '데이터 없음';
 const readinessTone = (level: Learning['level']) => ({
   blocked: 'border-[#FF7679]/40 bg-[#52282A] text-[#FFB9BA]',
   instrumenting: 'border-[#F7C873]/35 bg-[#4C4227] text-[#FFE1A2]',
@@ -114,6 +132,7 @@ export default function AdminDashboardPage() {
           </div>
           <div className="mt-9 space-y-1">
             <a href="#overview" className="flex items-center gap-3 rounded-xl bg-white/[0.09] px-3 py-2.5 text-sm font-semibold"><LayoutDashboard size={17} className="text-[#FF9092]" />개요</a>
+            <a href="#catalogue" className="flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm text-white/60 hover:bg-white/[0.05] hover:text-white"><DatabaseZap size={17} />카탈로그 현황</a>
             <a href="#funnel" className="flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm text-white/60 hover:bg-white/[0.05] hover:text-white"><Activity size={17} />이용·전환</a>
             <a href="#learning" className="flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm text-white/60 hover:bg-white/[0.05] hover:text-white"><SlidersHorizontal size={17} />추천 정책</a>
             <a href="#data-contract" className="flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm text-white/60 hover:bg-white/[0.05] hover:text-white"><DatabaseZap size={17} />데이터 계약</a>
@@ -148,7 +167,37 @@ export default function AdminDashboardPage() {
           <MetricCard label="학습 상태" value={metrics.learning.label} detail={`근거 스와이프 ${metrics.instrumentation.attributableSwipes}건`} />
         </section>
 
+        <section id="catalogue" className="mt-5">
+          <div className="mb-3 flex flex-wrap items-end justify-between gap-2"><div><p className="text-xs font-bold tracking-[0.14em] text-[#FF9092]">CATALOGUE HEALTH</p><h2 className="mt-1 text-xl font-bold">현재 데이터 현황</h2></div><p className="text-xs text-white/45">식당 카탈로그와 연결된 사진·메뉴 데이터의 집계입니다.</p></div>
+          <div className="grid grid-cols-2 gap-3 md:grid-cols-4 xl:grid-cols-5">
+            <MetricCard label="등록 식당" value={`${metrics.catalogue.restaurants}곳`} detail={`카테고리 ${metrics.catalogue.categories.length}개`} />
+            <MetricCard label="사진 연결" value={`${metrics.catalogue.photoReferences}장`} detail={`${metrics.catalogue.restaurantsWithPhotoReferences}곳 · ${coverage(metrics.catalogue.restaurantsWithPhotoReferences, metrics.catalogue.restaurants)}`} />
+            <MetricCard label="원본 사진 레코드" value={`${metrics.catalogue.photoAssets}장`} detail={`${metrics.catalogue.restaurantsWithPhotoAssets}곳에서 수집`} />
+            <MetricCard label="메뉴 항목" value={`${metrics.catalogue.menuItems}개`} detail={`${metrics.catalogue.restaurantsWithMenus}곳 · 정규화 ${metrics.catalogue.normalisedMenuItems}개`} />
+            <MetricCard label="좌표 완성도" value={coverage(metrics.catalogue.completeness.coordinates, metrics.catalogue.restaurants)} detail={`${metrics.catalogue.completeness.coordinates}/${metrics.catalogue.restaurants}곳 위치 보유`} />
+          </div>
+        </section>
+
         <section className="mt-5 grid grid-cols-1 gap-4 sm:gap-5 md:grid-cols-2 xl:grid-cols-12">
+          <Panel id="catalogue-coverage" className="md:col-span-2 xl:col-span-5" title="카탈로그 완성도" detail="추천 가능한 식당 레코드에 필요한 핵심 필드의 충족률입니다.">
+            <div className="space-y-3">{[
+              ['주소', metrics.catalogue.completeness.address],
+              ['좌표', metrics.catalogue.completeness.coordinates],
+              ['설명', metrics.catalogue.completeness.description],
+              ['사진 연결', metrics.catalogue.completeness.photoReference],
+              ['구조화 메뉴', metrics.catalogue.completeness.menu],
+            ].map(([label, value]) => <div key={String(label)}><div className="flex justify-between gap-3 text-xs"><span className="text-white/70">{label}</span><span className="font-semibold text-white">{coverage(Number(value), metrics.catalogue.restaurants)} · {Number(value)}곳</span></div><div className="mt-1.5 h-2 overflow-hidden rounded-full bg-white/10"><div className="h-full rounded-full bg-[#85B8A9]" style={{ width: `${metrics.catalogue.restaurants ? (Number(value) / metrics.catalogue.restaurants) * 100 : 0}%` }} /></div></div>)}</div>
+            <div className="mt-5 flex flex-wrap gap-2">{metrics.catalogue.sources.map((source) => <span key={source.source} className="rounded-full bg-white/[0.07] px-2.5 py-1 text-xs text-white/65">{source.source} {source.count}곳</span>)}</div>
+          </Panel>
+          <Panel className="md:col-span-2 xl:col-span-7" title="식당 카테고리 구성" detail="현재 카탈로그의 업종·음식 분류 분포입니다.">
+            {metrics.catalogue.categories.length ? <div className="h-72"><ResponsiveContainer><BarChart data={metrics.catalogue.categories} margin={{ left: -16 }}><CartesianGrid stroke="#ffffff14" vertical={false} /><XAxis dataKey="category" tick={{ fill: '#ffffff88', fontSize: 10 }} axisLine={false} tickLine={false} interval={0} /><YAxis allowDecimals={false} tick={{ fill: '#ffffff88', fontSize: 11 }} axisLine={false} tickLine={false} /><Tooltip contentStyle={{ background: '#171717', border: '1px solid #ffffff22', borderRadius: 10 }} formatter={(value: number) => [value, '식당 수']} /><Bar dataKey="count" name="식당 수" fill="#86A8E7" radius={[6, 6, 0, 0]} /></BarChart></ResponsiveContainer></div> : <Empty label="등록된 카테고리 데이터가 없습니다." />}
+          </Panel>
+          <Panel className="md:col-span-2 xl:col-span-5" title="지원 식단·제약" detail="식당 레코드에 명시된 식단 옵션입니다. 알레르기 안전성 보증이 아니라, 필터·추천에 사용할 수 있는 카탈로그 태그 현황입니다.">
+            {metrics.catalogue.dietarySupport.length ? <div className="flex flex-wrap gap-2">{metrics.catalogue.dietarySupport.map((diet, index) => <div key={diet.label} className="flex min-w-[calc(50%-0.25rem)] flex-1 items-center justify-between rounded-xl bg-white/[0.05] px-3 py-3 text-xs"><span className="flex items-center gap-2"><span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: COLORS[index % COLORS.length] }} />{diet.label}</span><strong>{diet.count}곳</strong></div>)}</div> : <Empty label="아직 식단 옵션 태그가 없습니다." />}
+          </Panel>
+          <Panel className="md:col-span-2 xl:col-span-7" title="카탈로그 예시" detail="리뷰 수와 평점을 기준으로 확인하는 대표 레코드입니다. 개인화 추천 순위가 아닙니다.">
+            {metrics.catalogue.samples.length ? <div className="overflow-x-auto"><table className="w-full min-w-[520px] text-left text-xs"><thead className="border-b border-white/10 text-white/45"><tr><th className="pb-2 font-medium">식당</th><th className="pb-2 font-medium">분류</th><th className="pb-2 text-right font-medium">사진</th><th className="pb-2 text-right font-medium">메뉴</th></tr></thead><tbody>{metrics.catalogue.samples.map((restaurant) => <tr key={`${restaurant.name}-${restaurant.category}`} className="border-b border-white/[0.06]"><td className="py-2.5 font-medium text-white/90">{restaurant.name}</td><td className="py-2.5 text-white/60">{restaurant.category}</td><td className="py-2.5 text-right tabular-nums text-white/70">{restaurant.photoCount}</td><td className="py-2.5 text-right tabular-nums text-white/70">{restaurant.menuCount}</td></tr>)}</tbody></table></div> : <Empty label="표시할 식당 카탈로그가 없습니다." />}
+          </Panel>
           <Panel className="xl:col-span-7" title="이용 추이" detail="일별 고유 행위자·세션·최종 결정">
             <div className="h-72"><ResponsiveContainer><LineChart data={metrics.trend}><CartesianGrid stroke="#ffffff14" vertical={false} /><XAxis dataKey="day" tickFormatter={dayLabel} tick={{ fill: '#ffffff88', fontSize: 11 }} axisLine={false} tickLine={false} minTickGap={28} /><YAxis allowDecimals={false} tick={{ fill: '#ffffff88', fontSize: 11 }} axisLine={false} tickLine={false} /><Tooltip contentStyle={{ background: '#171717', border: '1px solid #ffffff22', borderRadius: 10 }} labelFormatter={dayLabel} /><Line type="monotone" dataKey="activeActors" name="활성 이용자" stroke="#FF7376" strokeWidth={2.5} dot={false} /><Line type="monotone" dataKey="sessions" name="세션" stroke="#F7C873" strokeWidth={2} dot={false} /><Line type="monotone" dataKey="decisions" name="결정" stroke="#85B8A9" strokeWidth={2} dot={false} /></LineChart></ResponsiveContainer></div>
           </Panel>
