@@ -12,8 +12,6 @@ import {
   ChevronDown,
   CircleHelp,
   Clock3,
-  Minus,
-  Plus,
   Ruler,
   Sparkles,
   Users,
@@ -27,6 +25,16 @@ import { toast } from 'sonner';
 import type { Intent } from '@shared/intent';
 import type { LunchmateLoadout } from '@/types/lunchmateCustomization';
 import { logSessionCreated } from '@/lib/eventLogger';
+import SessionManagementMenu from '@/components/lunchie/SessionManagementMenu';
+import {
+  DEFAULT_QUICK_MATCH_SETTINGS,
+  DIETARY_REQUIREMENTS,
+  INGREDIENT_AVOIDANCES,
+  QUICK_MATCH_SETTINGS_STORAGE_KEY,
+  isActiveQuickMatchStatus,
+  normalizeDietaryPreferences,
+  normalizeQuickMatchSettings,
+} from '@/lib/quickMatch';
 
 const PREFERENCE_CARDS: { value: Intent | null; label: string; image?: string; color: string }[] = [
   { value: 'cafe', label: 'COFFEE', image: '/assets/characters/quick-match/coffee.png', color: '#FFF0E7' },
@@ -37,23 +45,7 @@ const PREFERENCE_CARDS: { value: Intent | null; label: string; image?: string; c
 
 const DEADLINE_OPTIONS = [5, 10, 15];
 const RADIUS_OPTIONS = [1000, 2000, 3000, 4000, 5000];
-const DIETARY_OPTIONS = [
-  { label: 'Vegan', value: '비건', icon: '🌱' },
-  { label: 'Vegetarian', value: '채식', icon: '🥬' },
-  { label: 'Gluten-Free', value: '글루텐프리', icon: '🌾' },
-  { label: 'Halal', value: '할랄', icon: '🌙' },
-  { label: 'Carnivore', value: '육식', icon: '🥩' },
-  { label: 'Small Appetite', value: 'Small Appetite', icon: '🍽️' },
-  { label: 'Buffet', value: 'Buffet', icon: '♨️' },
-  { label: 'Asian', value: 'Asian', icon: '🥢' },
-];
-const DIETARY_EXCLUSIONS = [
-  { label: 'Beef', value: 'No Beef', icon: '🐄' },
-  { label: 'Seafood', value: '해산물 제외', icon: '🐟' },
-  { label: 'Lamb', value: 'No Lamb', icon: '🐑' },
-  { label: 'Pork', value: 'No Pork', icon: '🐖' },
-  { label: 'Nuts', value: 'No Nuts', icon: '🥜' },
-];
+const GROUP_SIZE_OPTIONS = Array.from({ length: 11 }, (_, index) => index + 2);
 const TAG_META: Record<string, { icon: string; hint: string }> = {
   맛집: { icon: '🍽️', hint: '검증된 인기 메뉴' },
   데이트코스: { icon: '💞', hint: '분위기 좋은 곳' },
@@ -110,7 +102,9 @@ function ChoiceChip({ selected, onClick, children, className = '' }: {
 }
 
 function DeadlineDial({ minutes, onChange }: { minutes: number; onChange: (minutes: number) => void }) {
-  const circumference = 2 * Math.PI * 44;
+  const radius = 70;
+  const center = 88;
+  const circumference = 2 * Math.PI * radius;
   const progress = Math.min(minutes, 15) / 15;
   const updateFromPointer = (event: ReactPointerEvent<HTMLDivElement>) => {
     const rect = event.currentTarget.getBoundingClientRect();
@@ -121,9 +115,12 @@ function DeadlineDial({ minutes, onChange }: { minutes: number; onChange: (minut
     const ratio = angle / (Math.PI * 2);
     onChange(ratio < 0.025 ? 15 : Math.max(1, Math.min(15, Math.ceil(ratio * 15))));
   };
+  const handleAngle = progress * Math.PI * 2 - Math.PI / 2;
+  const handleX = center + radius * Math.cos(handleAngle);
+  const handleY = center + radius * Math.sin(handleAngle);
   return (
     <div
-      className="relative size-[104px] shrink-0 cursor-grab touch-none select-none active:cursor-grabbing"
+      className="relative size-44 shrink-0 cursor-grab touch-none select-none rounded-full outline-none active:cursor-grabbing focus-visible:ring-4 focus-visible:ring-[#F4515E]/25"
       role="slider"
       tabIndex={0}
       aria-label="마감 시간"
@@ -138,30 +135,128 @@ function DeadlineDial({ minutes, onChange }: { minutes: number; onChange: (minut
       onPointerMove={event => {
         if (event.currentTarget.hasPointerCapture(event.pointerId)) updateFromPointer(event);
       }}
+      onPointerUp={event => {
+        if (event.currentTarget.hasPointerCapture(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId);
+      }}
       onKeyDown={event => {
-        if (event.key === 'ArrowRight' || event.key === 'ArrowUp') onChange(Math.min(15, minutes + 1));
-        if (event.key === 'ArrowLeft' || event.key === 'ArrowDown') onChange(Math.max(1, minutes - 1));
+        if (event.key === 'ArrowRight' || event.key === 'ArrowUp') {
+          event.preventDefault();
+          onChange(Math.min(15, minutes + 1));
+        }
+        if (event.key === 'ArrowLeft' || event.key === 'ArrowDown') {
+          event.preventDefault();
+          onChange(Math.max(1, minutes - 1));
+        }
       }}
     >
-      <svg width="104" height="104" className="-rotate-90" aria-hidden="true">
-        <circle cx="52" cy="52" r="44" fill="none" stroke="#F4F0EF" strokeWidth="9" />
+      <svg width="176" height="176" className="drop-shadow-[0_8px_18px_rgba(244,81,94,0.10)]" aria-hidden="true">
+        <circle cx={center} cy={center} r={radius} fill="#FFFBF8" stroke="#F0E9E6" strokeWidth="12" />
         <circle
-          cx="52"
-          cy="52"
-          r="44"
+          cx={center}
+          cy={center}
+          r={radius}
           fill="none"
           stroke="#F4515E"
-          strokeWidth="9"
+          strokeWidth="12"
           strokeLinecap="round"
           strokeDasharray={circumference}
           strokeDashoffset={circumference * (1 - progress)}
+          transform={`rotate(-90 ${center} ${center})`}
           className="transition-[stroke-dashoffset] duration-200"
         />
+        <circle cx={handleX} cy={handleY} r="9" fill="white" stroke="#F4515E" strokeWidth="5" />
       </svg>
-      <div className="absolute inset-0 flex flex-col items-center justify-center">
-        <strong className="text-[26px] leading-none text-[#26232A]">{minutes}</strong>
-        <span className="mt-1 text-[10px] font-bold text-[#A6A0A3]">MIN</span>
+      <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center">
+        <strong className="text-[30px] leading-none text-[#26232A]">{minutes} <span className="text-[17px]">min</span></strong>
+        <span className="mt-2 text-[10px] font-bold uppercase tracking-[0.14em] text-[#A6A0A3]">Deadline</span>
       </div>
+    </div>
+  );
+}
+
+function GroupSizeRuler({ value, onChange }: { value: number; onChange: (value: number) => void }) {
+  const stepWidth = 48;
+  const selectedIndex = Math.max(0, GROUP_SIZE_OPTIONS.indexOf(value));
+  const dragRef = useRef<{ pointerId: number; startX: number; startIndex: number } | null>(null);
+  const [dragOffset, setDragOffset] = useState(0);
+
+  const finishDrag = (event: ReactPointerEvent<HTMLDivElement>) => {
+    const drag = dragRef.current;
+    if (!drag || drag.pointerId !== event.pointerId) return;
+    const rawIndex = drag.startIndex - (event.clientX - drag.startX) / stepWidth;
+    const nextIndex = Math.max(0, Math.min(GROUP_SIZE_OPTIONS.length - 1, Math.round(rawIndex)));
+    onChange(GROUP_SIZE_OPTIONS[nextIndex]!);
+    setDragOffset(0);
+    dragRef.current = null;
+    if (event.currentTarget.hasPointerCapture(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId);
+  };
+
+  return (
+    <div>
+      <p className="text-center text-[28px] font-black tracking-[-0.6px] text-[#F4515E]">{value} people</p>
+      <div
+        className="relative mt-3 h-[106px] w-full touch-none overflow-hidden rounded-[18px] bg-[#FFF8F6] outline-none focus-visible:ring-2 focus-visible:ring-[#F4515E] focus-visible:ring-offset-2"
+        role="slider"
+        tabIndex={0}
+        aria-label="Group size"
+        aria-valuemin={2}
+        aria-valuemax={12}
+        aria-valuenow={value}
+        aria-valuetext={`${value} people`}
+        onKeyDown={event => {
+          if (event.key === 'ArrowRight' || event.key === 'ArrowUp') {
+            event.preventDefault();
+            onChange(Math.min(12, value + 1));
+          }
+          if (event.key === 'ArrowLeft' || event.key === 'ArrowDown') {
+            event.preventDefault();
+            onChange(Math.max(2, value - 1));
+          }
+        }}
+        onPointerDown={event => {
+          if (event.target instanceof HTMLElement && event.target.closest('button')) return;
+          dragRef.current = { pointerId: event.pointerId, startX: event.clientX, startIndex: selectedIndex };
+          event.currentTarget.setPointerCapture(event.pointerId);
+        }}
+        onPointerMove={event => {
+          const drag = dragRef.current;
+          if (!drag || drag.pointerId !== event.pointerId) return;
+          const minOffset = -(GROUP_SIZE_OPTIONS.length - 1 - drag.startIndex) * stepWidth;
+          const maxOffset = drag.startIndex * stepWidth;
+          setDragOffset(Math.max(minOffset, Math.min(maxOffset, event.clientX - drag.startX)));
+        }}
+        onPointerUp={finishDrag}
+        onPointerCancel={finishDrag}
+      >
+        <div className="pointer-events-none absolute inset-x-0 top-0 z-10 flex flex-col items-center" aria-hidden="true">
+          <span className="h-5 w-0.5 bg-[#F4515E]" />
+          <span className="h-0 w-0 border-x-[6px] border-t-[7px] border-x-transparent border-t-[#F4515E]" />
+        </div>
+        <div
+          className={`absolute left-1/2 top-7 flex ${dragRef.current ? '' : 'transition-transform duration-200 ease-out'}`}
+          style={{ transform: `translate3d(${-(selectedIndex * stepWidth + stepWidth / 2) + dragOffset}px, 0, 0)` }}
+        >
+          {GROUP_SIZE_OPTIONS.map(option => (
+            <button
+              key={option}
+              type="button"
+              onClick={event => {
+                event.stopPropagation();
+                onChange(option);
+              }}
+              className="flex w-12 shrink-0 flex-col items-center gap-1.5 pt-2"
+              tabIndex={-1}
+              aria-label={`${option} people`}
+            >
+              <span className={`h-6 w-0.5 rounded-full ${option === value ? 'bg-[#F4515E]' : 'bg-[#D9CECA]'}`} />
+              <span className={`text-[14px] font-black ${option === value ? 'text-[#F4515E]' : 'text-[#857B7F]'}`}>{option}</span>
+            </button>
+          ))}
+        </div>
+        <div className="pointer-events-none absolute inset-y-0 left-0 w-12 bg-gradient-to-r from-[#FFF8F6] to-transparent" />
+        <div className="pointer-events-none absolute inset-y-0 right-0 w-12 bg-gradient-to-l from-[#FFF8F6] to-transparent" />
+      </div>
+      <p className="mt-2 text-center text-[10px] font-semibold text-[#A6A0A3]">Drag the ruler, tap a number, or use the arrow keys.</p>
     </div>
   );
 }
@@ -199,12 +294,12 @@ function DeadlineMinuteInput({ minutes, onChange }: { minutes: number; onChange:
   );
 }
 
-function DietaryExclusionPicker({ selected, onToggle }: { selected: string[]; onToggle: (value: string) => void }) {
+function IngredientAvoidancePicker({ selected, onToggle }: { selected: string[]; onToggle: (value: string) => void }) {
   const [open, setOpen] = useState(false);
-  const selectedLabels = DIETARY_EXCLUSIONS.filter(option => selected.includes(option.value)).map(option => option.label);
+  const selectedLabels = INGREDIENT_AVOIDANCES.filter(option => selected.includes(option.value)).map(option => option.label);
 
   return (
-    <div className="relative col-span-2">
+    <div className="relative">
       <button
         type="button"
         onClick={() => setOpen(current => !current)}
@@ -213,16 +308,16 @@ function DietaryExclusionPicker({ selected, onToggle }: { selected: string[]; on
         className={`flex min-h-11 w-full items-center rounded-[12px] border px-3 text-left transition-colors ${selectedLabels.length ? 'border-[#55A964] bg-[#EDF8EE]' : 'border-transparent bg-[#F8F5F3]'}`}
       >
         <span className="mr-2 text-base">🚫</span>
-        <strong className="text-[11px] text-[#514A4D]">No</strong>
+        <strong className="text-[11px] text-[#514A4D]">Ingredients to avoid</strong>
         <span className="ml-2 min-w-0 flex-1 truncate text-[10px] font-semibold text-[#7B7276]">
-          {selectedLabels.length ? selectedLabels.join(', ') : 'Select ingredients'}
+          {selectedLabels.length ? selectedLabels.join(', ') : 'No ingredients selected'}
         </span>
         {selectedLabels.length > 0 && <span className="mr-2 rounded-full bg-[#55A964] px-1.5 py-0.5 text-[9px] font-bold text-white">{selectedLabels.length}</span>}
         <ChevronDown size={15} className={`shrink-0 text-[#8A8084] transition-transform ${open ? 'rotate-180' : ''}`} />
       </button>
       {open && (
         <div id="dietary-exclusion-menu" className="mt-1 max-h-[156px] overflow-y-auto rounded-[14px] border border-[#E8DFDC] bg-white p-1.5 shadow-[0_10px_24px_rgba(92,69,62,0.14)]">
-          {DIETARY_EXCLUSIONS.map(option => {
+          {INGREDIENT_AVOIDANCES.map(option => {
             const isSelected = selected.includes(option.value);
             return (
               <button
@@ -389,15 +484,27 @@ export default function LunchieSettingsPage() {
   const { createSession, startSession, fetchSession, currentSession, setCurrentSession, restaurants, profile } = useApp();
   const urlIntent = new URLSearchParams(search).get('intent');
   const initialIntent: Intent | null = urlIntent === 'meal' || urlIntent === 'cafe' || urlIntent === 'dessert' ? urlIntent : null;
+  const [storedSettings] = useState(() => {
+    try {
+      return normalizeQuickMatchSettings(JSON.parse(localStorage.getItem(QUICK_MATCH_SETTINGS_STORAGE_KEY) ?? 'null'));
+    } catch {
+      return DEFAULT_QUICK_MATCH_SETTINGS;
+    }
+  });
 
-  const [deadlineMin, setDeadlineMin] = useState(10);
-  const [partySize, setPartySize] = useState(4);
-  const [togetherPartySize, setTogetherPartySize] = useState(4);
-  const [radius, setRadius] = useState(1000);
-  const [intent, setIntent] = useState<Intent | null>(initialIntent);
-  const [tags, setTags] = useState<string[]>(['맛집']);
-  const [dietary, setDietary] = useState<string[]>([]);
+  const [deadlineMin, setDeadlineMin] = useState(storedSettings.deadlineMinutes);
+  const [partySize, setPartySize] = useState(storedSettings.partySize);
+  const [togetherPartySize, setTogetherPartySize] = useState(storedSettings.togetherPartySize);
+  const [radius, setRadius] = useState(storedSettings.radius);
+  const [intent, setIntent] = useState<Intent | null>(initialIntent ?? storedSettings.intent);
+  const [tags, setTags] = useState<string[]>(storedSettings.tags);
+  const [dietary, setDietary] = useState<string[]>(storedSettings.dietary);
   const [isCreating, setIsCreating] = useState(false);
+  const creationLockRef = useRef(false);
+  const [activeSessionVerified, setActiveSessionVerified] = useState(false);
+  const [isCheckingSession, setIsCheckingSession] = useState(Boolean(currentSession?.inviteCode));
+  const [sessionCheckFailed, setSessionCheckFailed] = useState(false);
+  const [sessionCheckAttempt, setSessionCheckAttempt] = useState(0);
   const lunchmateLoadout = useMemo(
     () => lunchmateLoadoutFromProfile(profile.lunchmateLoadout),
     [profile.lunchmateLoadout],
@@ -406,8 +513,56 @@ export default function LunchieSettingsPage() {
   const isSolo = partySize === 1;
   const budget = 2 as const;
   const chosenCount = tags.length + dietary.length + 1;
-  const hasActiveSession = currentSession?.status === 'waiting' || currentSession?.status === 'voting';
+  const hasActiveSession = Boolean(
+    activeSessionVerified
+    && currentSession
+    && currentSession.membershipActive !== false
+    && isActiveQuickMatchStatus(currentSession.status),
+  );
   const realCategories = useMemo(() => new Set(restaurants.map(restaurant => restaurant.category)), [restaurants]);
+
+  useEffect(() => {
+    localStorage.setItem(QUICK_MATCH_SETTINGS_STORAGE_KEY, JSON.stringify({
+      deadlineMinutes: deadlineMin,
+      partySize,
+      togetherPartySize,
+      radius,
+      intent,
+      tags,
+      dietary: normalizeDietaryPreferences(dietary),
+    }));
+  }, [deadlineMin, partySize, togetherPartySize, radius, intent, tags, dietary]);
+
+  useEffect(() => {
+    const token = currentSession?.inviteCode;
+    if (!token) {
+      setActiveSessionVerified(false);
+      setIsCheckingSession(false);
+      setSessionCheckFailed(false);
+      return;
+    }
+    let active = true;
+    setIsCheckingSession(true);
+    setSessionCheckFailed(false);
+    void fetchSession(token)
+      .then(session => {
+        if (!active) return;
+        const valid = session.membershipActive !== false && isActiveQuickMatchStatus(session.status);
+        setActiveSessionVerified(valid);
+        if (!valid) setCurrentSession(null);
+      })
+      .catch(error => {
+        if (!active) return;
+        const status = (error as { status?: number }).status;
+        if (status === 404 || status === 410) setCurrentSession(null);
+        else setSessionCheckFailed(true);
+        setActiveSessionVerified(false);
+      })
+      .finally(() => {
+        if (active) setIsCheckingSession(false);
+      });
+    return () => { active = false; };
+  }, [currentSession?.inviteCode, fetchSession, sessionCheckAttempt, setCurrentSession]);
 
   const toggleMany = (value: string, setter: Dispatch<SetStateAction<string[]>>) => {
     setter(current => current.includes(value) ? current.filter(item => item !== value) : [...current, value]);
@@ -420,18 +575,37 @@ export default function LunchieSettingsPage() {
 
   const selectTogether = () => setPartySize(Math.max(2, togetherPartySize));
 
+  const setGroupSize = (next: number) => {
+    const normalized = Math.max(2, Math.min(12, Math.round(next)));
+    setPartySize(normalized);
+    setTogetherPartySize(normalized);
+  };
+
   const handleStart = async () => {
-    if (hasActiveSession) {
+    if (creationLockRef.current || isCheckingSession || sessionCheckFailed) return;
+    creationLockRef.current = true;
+    if (hasActiveSession && currentSession) {
       setIsCreating(true);
       try {
         const activeSession = await fetchSession(currentSession.inviteCode);
-        const isWaiting = activeSession.status === 'waiting';
-        toast.info(isWaiting ? '진행 중인 대기방으로 이동합니다.' : '진행 중인 투표로 이동합니다.');
-        navigate(isWaiting ? '/session/lobby' : '/lunchie/swipe');
-        return;
-      } catch {
+        if (activeSession.membershipActive !== false && isActiveQuickMatchStatus(activeSession.status)) {
+          const isWaiting = activeSession.status === 'waiting';
+          toast.info(isWaiting ? '진행 중인 대기방으로 이동합니다.' : '진행 중인 투표로 이동합니다.');
+          navigate(isWaiting ? '/session/lobby' : '/lunchie/swipe');
+          creationLockRef.current = false;
+          return;
+        }
         // A locally cached session can outlive its server record. Clear only
         // that stale cache before creating a replacement session.
+        setCurrentSession(null);
+      } catch (error) {
+        const status = (error as { status?: number }).status;
+        if (status !== 404 && status !== 410) {
+          toast.error('We could not verify the current Quick Match. Please try again.');
+          setIsCreating(false);
+          creationLockRef.current = false;
+          return;
+        }
         setCurrentSession(null);
       }
     }
@@ -470,6 +644,7 @@ export default function LunchieSettingsPage() {
       toast.error(error instanceof Error ? error.message : '세션 생성에 실패했습니다.');
     } finally {
       setIsCreating(false);
+      creationLockRef.current = false;
     }
   };
 
@@ -496,28 +671,51 @@ export default function LunchieSettingsPage() {
       </header>
 
       <main className="mx-auto max-w-[480px] space-y-3 px-4 pb-32">
-        {hasActiveSession && (
-          <button
-            type="button"
-            onClick={() => navigate(currentSession.status === 'waiting' ? '/session/lobby' : '/lunchie/swipe')}
-            className="flex w-full items-center justify-between rounded-2xl bg-[#2B3440] px-4 py-3 text-left text-white"
-          >
-            <span>
-              <strong className="block text-[13px]">진행 중인 Quick Match</strong>
-              <span className="text-[11px] text-[#AEB9C7]">새 세션을 만들지 않고 이어서 진행해요</span>
-            </span>
-            <span className="text-[12px] font-bold text-[#FF7A83]">{currentSession.status === 'waiting' ? '대기방' : '투표'} ›</span>
-          </button>
+        {sessionCheckFailed && currentSession && (
+          <section role="alert" className="rounded-[20px] border border-[#F2C6C1] bg-white p-4 shadow-sm">
+            <h2 className="text-[14px] font-black text-[#302B2E]">We couldn’t check your Quick Match</h2>
+            <p className="mt-1 text-[11px] leading-relaxed text-[#7C7276]">Your saved session is still here. Retry before creating another one.</p>
+            <button type="button" onClick={() => setSessionCheckAttempt(attempt => attempt + 1)} className="mt-3 min-h-10 rounded-xl bg-[#F4515E] px-4 text-[12px] font-bold text-white">Try again</button>
+          </section>
+        )}
+        {hasActiveSession && currentSession && (
+          <section className="rounded-[22px] border border-[#F5B8B4] bg-[#FFFCFA] p-4 shadow-[0_8px_24px_rgba(180,100,90,0.10)]" aria-label="Quick Match in progress">
+            <div className="flex items-start gap-3">
+              <div className="min-w-0 flex-1">
+                <div className="flex flex-wrap items-center gap-2">
+                  <h2 className="text-[15px] font-black text-[#26232A]">Quick Match in progress</h2>
+                  <span className="rounded-full bg-[#FFF0EE] px-2.5 py-1 text-[10px] font-black uppercase tracking-wide text-[#D83D49]">
+                    {currentSession.status === 'waiting' ? 'Waiting' : currentSession.status === 'choosing' ? 'Choosing' : 'Voting'}
+                  </span>
+                </div>
+                <p className="mt-1 text-[11px] font-semibold text-[#8A8084]">Server-verified and ready to resume.</p>
+              </div>
+              <SessionManagementMenu onEnded={() => navigate('/lunchie/settings')} className="text-[#6F6468]" />
+            </div>
+            <div className="mt-3 grid grid-cols-2 gap-2 text-[11px]">
+              <span className="rounded-xl bg-[#FFF6F2] px-3 py-2 font-bold text-[#645A5E]">👥 {currentSession.members.length}/{currentSession.filters.partySize} people</span>
+              <span className="rounded-xl bg-[#FFF6F2] px-3 py-2 font-bold text-[#645A5E]">⏱ {currentSession.deadlineMinutes ?? deadlineMin} min</span>
+              <span className="rounded-xl bg-[#FFF6F2] px-3 py-2 font-bold text-[#645A5E]">📍 {formatRadius(currentSession.filters.radius)}</span>
+              <span className="rounded-xl bg-[#FFF6F2] px-3 py-2 font-bold text-[#645A5E]">{currentSession.filters.partySize === 1 ? '🙋 Solo' : '🤝 Group'}</span>
+            </div>
+            <button
+              type="button"
+              onClick={() => navigate(currentSession.status === 'waiting' ? '/session/lobby' : '/lunchie/swipe')}
+              className="mt-3 min-h-11 w-full rounded-[14px] bg-[#F4515E] px-4 text-[13px] font-black text-white outline-none transition-transform active:scale-[0.98] focus-visible:ring-2 focus-visible:ring-[#F4515E] focus-visible:ring-offset-2"
+            >
+              {currentSession.status === 'waiting' ? 'Return to lobby' : 'Continue Quick Match'}
+            </button>
+          </section>
         )}
 
         <Card>
           <CardTitle icon={<Clock3 size={16} />}>마감</CardTitle>
-          <div className="grid grid-cols-[112px_minmax(0,1fr)] items-center gap-4">
+          <div className="flex flex-col items-center">
             <DeadlineDial minutes={deadlineMin} onChange={setDeadlineMin} />
-            <div className="min-w-0">
+            <div className="mt-4 w-full max-w-[330px] min-w-0">
               <div className="grid grid-cols-3 gap-1.5">
                 {DEADLINE_OPTIONS.map(minutes => (
-                  <ChoiceChip key={minutes} selected={deadlineMin === minutes} onClick={() => setDeadlineMin(minutes)} className="min-h-9 px-1">{minutes}분</ChoiceChip>
+                  <ChoiceChip key={minutes} selected={deadlineMin === minutes} onClick={() => setDeadlineMin(minutes)} className="min-h-10 px-1">{minutes} min</ChoiceChip>
                 ))}
               </div>
               <DeadlineMinuteInput minutes={deadlineMin} onChange={setDeadlineMin} />
@@ -533,44 +731,7 @@ export default function LunchieSettingsPage() {
               <span>인원</span>
               <span className="ml-auto text-[10px] font-bold text-[#9B959A]">함께 먹을 정원</span>
             </div>
-            <div className="flex min-h-[66px] items-center rounded-[18px] bg-[#FFF8F6] px-2.5">
-              <button
-                type="button"
-                onClick={() => {
-                  const next = Math.max(2, partySize - 1);
-                  setPartySize(next);
-                  setTogetherPartySize(next);
-                }}
-                disabled={partySize <= 2}
-                className="flex size-10 shrink-0 items-center justify-center rounded-[14px] bg-white text-[#645D61] shadow-sm disabled:opacity-30"
-                aria-label="초대 인원 줄이기"
-              >
-                <Minus size={17} />
-              </button>
-              <div className="flex min-w-0 flex-1 flex-col items-center justify-center">
-                <div className="flex items-center justify-center -space-x-1 text-[#F4515E]" aria-hidden="true">
-                  {Array.from({ length: Math.min(partySize, 6) }, (_, index) => (
-                    <span key={index} className="flex size-6 items-center justify-center rounded-full border-2 border-[#FFF8F6] bg-[#FFE4E3]">
-                      <Users size={12} />
-                    </span>
-                  ))}
-                </div>
-                <strong className="mt-1 text-[18px] leading-none text-[#F4515E]">{partySize}명</strong>
-              </div>
-              <button
-                type="button"
-                onClick={() => {
-                  const next = Math.min(8, partySize + 1);
-                  setPartySize(next);
-                  setTogetherPartySize(next);
-                }}
-                disabled={partySize >= 8}
-                className="flex size-10 shrink-0 items-center justify-center rounded-[14px] bg-white text-[#645D61] shadow-sm disabled:opacity-30"
-                aria-label="초대 인원 늘리기"
-              >
-                <Plus size={17} />
-              </button>
-            </div>
+            <GroupSizeRuler value={partySize} onChange={setGroupSize} />
           </Card>
         )}
 
@@ -618,12 +779,18 @@ export default function LunchieSettingsPage() {
           </div>
 
           <div className="my-3 h-px bg-[#F0EAE8]" />
-          <div className="mb-2 flex items-center justify-between">
-            <p className="text-[12px] font-extrabold text-[#524B4F]">Dietary preferences</p>
-            <span className="text-[9px] font-bold text-[#A6A0A3]">Select all that apply</span>
+          <div className="mb-2 flex items-center justify-between gap-3">
+            <p className="text-[12px] font-extrabold text-[#524B4F]">Dietary requirements</p>
+            <button
+              type="button"
+              onClick={() => setDietary(current => current.filter(value => !DIETARY_REQUIREMENTS.some(option => option.value === value)))}
+              className="min-h-9 rounded-lg px-2 text-[10px] font-bold text-[#C43B47] outline-none focus-visible:ring-2 focus-visible:ring-[#F4515E]"
+            >
+              Clear requirements
+            </button>
           </div>
           <div className="grid grid-cols-2 gap-1.5">
-            {DIETARY_OPTIONS.map(option => {
+            {DIETARY_REQUIREMENTS.map(option => {
               const selected = dietary.includes(option.value);
               return (
                 <button
@@ -631,7 +798,7 @@ export default function LunchieSettingsPage() {
                   type="button"
                   onClick={() => toggleMany(option.value, setDietary)}
                   aria-pressed={selected}
-                  className={`flex min-h-10 w-full items-center rounded-[12px] px-2.5 text-left transition-colors ${selected ? 'bg-[#EDF8EE]' : 'bg-[#F8F5F3]'}`}
+                  className={`flex min-h-11 w-full items-center rounded-[12px] px-2.5 text-left transition-colors ${selected ? 'bg-[#EDF8EE]' : 'bg-[#F8F5F3] hover:bg-[#F1ECE9]'}`}
                 >
                   <span className="mr-2 text-base">{option.icon}</span>
                   <span className="truncate text-[11px] font-bold text-[#514A4D]">{option.label}</span>
@@ -639,7 +806,12 @@ export default function LunchieSettingsPage() {
                 </button>
               );
             })}
-            <DietaryExclusionPicker selected={dietary} onToggle={value => toggleMany(value, setDietary)} />
+          </div>
+          <div className="mt-3 border-t border-[#F0EAE8] pt-3">
+            <IngredientAvoidancePicker selected={dietary} onToggle={value => toggleMany(value, setDietary)} />
+            <p className="mt-2 px-1 text-[9px] font-semibold leading-relaxed text-[#9A9094]">
+              Menu data helps filter choices. For severe allergies, please confirm ingredients and cross-contamination with the venue.
+            </p>
           </div>
         </Card>
 
@@ -647,13 +819,15 @@ export default function LunchieSettingsPage() {
           <motion.button
             type="button"
             onClick={() => void handleStart()}
-            disabled={isCreating}
+            disabled={isCreating || isCheckingSession || sessionCheckFailed}
             whileTap={{ scale: 0.98 }}
             className="lunchie-session-primary-action w-full disabled:cursor-not-allowed disabled:opacity-60"
           >
-            {isCreating
+            {isCheckingSession
+              ? 'Checking current session…'
+              : isCreating
               ? '준비하는 중…'
-              : hasActiveSession
+              : hasActiveSession && currentSession
                 ? currentSession.status === 'waiting' ? '대기방으로 돌아가기' : '투표 계속하기'
                 : isSolo ? 'Swipe 시작하기' : '세션 만들고 초대하기'}
           </motion.button>

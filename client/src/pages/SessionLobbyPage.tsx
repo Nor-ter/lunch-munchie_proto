@@ -33,6 +33,8 @@ import {
 import { useApp } from '@/contexts/AppContext';
 import { getLobbyPresentation } from '@/lib/lobbyPresentation';
 import { lunchmateLoadoutFromProfile } from '@/utils/lunchmateProfile';
+import SessionManagementMenu from '@/components/lunchie/SessionManagementMenu';
+import { isActiveQuickMatchStatus } from '@/lib/quickMatch';
 
 function isAbortError(error: unknown): boolean {
   return typeof error === 'object' && error !== null && 'name' in error && error.name === 'AbortError';
@@ -51,7 +53,7 @@ export function resolveInviteOrigin(configuredOrigin: string | undefined, browse
 
 export default function SessionLobbyPage() {
   const [, navigate] = useLocation();
-  const { currentSession, fetchSession, startSession, profile } = useApp();
+  const { currentSession, fetchSession, startSession, setCurrentSession, profile } = useApp();
   const [showQR, setShowQR] = useState(true);
   const [showMembers, setShowMembers] = useState(true);
   const [isStarting, setIsStarting] = useState(false);
@@ -66,11 +68,34 @@ export default function SessionLobbyPage() {
   // Keep this above the early return: hooks must never be conditional.
   useEffect(() => {
     if (!currentSession?.inviteCode) return;
-    const interval = window.setInterval(() => {
-      fetchSession(currentSession.inviteCode).catch(console.error);
-    }, 3000);
-    return () => window.clearInterval(interval);
-  }, [currentSession?.inviteCode, fetchSession]);
+    let active = true;
+    const refresh = () => {
+      void fetchSession(currentSession.inviteCode)
+        .then(session => {
+          if (!active) return;
+          if (session.membershipActive === false || !isActiveQuickMatchStatus(session.status)) {
+            toast.info(session.status === 'cancelled' ? 'This Quick Match was cancelled.' : 'This Quick Match is no longer active.');
+            setCurrentSession(null);
+            navigate('/lunchie/settings');
+          }
+        })
+        .catch(error => {
+          const status = (error as { status?: number }).status;
+          if (!active || (status !== 404 && status !== 410)) {
+            if (active) console.error('Failed to refresh Quick Match lobby', error);
+            return;
+          }
+          setCurrentSession(null);
+          navigate('/lunchie/settings');
+        });
+    };
+    refresh();
+    const interval = window.setInterval(refresh, 3000);
+    return () => {
+      active = false;
+      window.clearInterval(interval);
+    };
+  }, [currentSession?.inviteCode, fetchSession, navigate, setCurrentSession]);
 
   const previousMemberIds = currentSession && previousMembersRef.current?.sessionId === currentSession.id
     ? previousMembersRef.current.ids
@@ -155,7 +180,7 @@ export default function SessionLobbyPage() {
       navigate('/lunchie/swipe');
     } catch (error) {
       console.error(error);
-      toast.error('투표를 시작하지 못했습니다.');
+      toast.error(error instanceof Error ? error.message : '투표를 시작하지 못했습니다.');
       setIsStarting(false);
     }
   };
@@ -190,6 +215,7 @@ export default function SessionLobbyPage() {
         >
           {presentation.statusLabel}
         </StatusBadge>
+        <SessionManagementMenu onEnded={() => navigate('/lunchie/settings')} className="shrink-0 text-[var(--lm-text)]" />
       </header>
 
       <main className="flex-1">

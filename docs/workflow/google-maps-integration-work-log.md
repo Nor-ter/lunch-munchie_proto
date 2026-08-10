@@ -402,3 +402,78 @@
 - 수정: 레벨별 필요 XP를 20부터 10씩 증가(최대 100)시키는 공용 계산으로 교체하고, XP clamp 제거 및 다중 레벨 이벤트 큐를 적용.
 - 검증: 성장/reward/profile 단위 테스트 47개, typecheck, production build 통과. 전체 테스트는 403개 중 402개 통과; 기존 옷장 manifest count 기대값 불일치 1개 실패.
 - 보안 게이트: DB/API/env/Google 키/asset manifest 변경 없음. `.env`, `.env.*`, `env.enc` gitignore 유지.
+
+---
+
+## 17. Quick Match UI·세션 수명주기·preference 정합성 (2026-08-08)
+
+### 17.1 TRIAGE / RCA
+- 증상 태그: `data-state`, `edge-function`. Cloudflare D1·Durable Objects·Pages 및 Supabase/Google 외부 상태를 먼저 확인했다. 핵심 서비스는 정상이며 당시 R2 일부 지역 이슈는 이 흐름과 무관했다.
+- 흰 화면의 직접 원인은 빈 식당 배열이 swipe 단계를 즉시 결과 단계로 넘기고 winner가 없을 때 `null`을 반환하던 조합이었다. 복원 상태 `SWIPING_1`을 `swiping_1`로 잘못 취급한 상태 매핑도 별도 원인이었다.
+- shared-deck SQL이 `price_level`을 조회하지 않은 채 기본 예산 필터를 적용해 모든 식당을 고가로 판단했다. 전체 catalogue fallback이 이 오류와 preference 0건을 가리고 있었다.
+- 기존 host 권한 검사는 요청 본문의 공개 `userId`만 비교해 host ID 가장이 가능했다.
+
+### 17.2 FIX
+- 176px 원형 타이머(1–15분), 2–12명 고정 중앙 눈금 ruler, 혼자/같이 전환값 복원, 모바일 overflow 방지와 키보드/ARIA 조작을 추가했다.
+- 서버 검증된 활성 세션 카드, 공용 관리 메뉴, host/solo 취소와 participant 나가기 확인창을 Settings·Lobby·후보 0건 상태에서 제공했다.
+- swipe 진입을 loading/API 오류/catalogue 0건/preference 0건/session 없음·종료·미시작으로 분리해 모든 경로가 명시적 화면과 재시도/복귀 동작을 갖도록 했다.
+- canonical dietary 집합을 공용화하고 실제 엔진이 보장하지 못하는 선택지는 이유와 함께 disabled 처리했다. legacy 값은 restore 시 정규화한다.
+- 세션 status 정규화와 server-first restore/polling, terminal·membership 판정, 생성 중복 잠금을 추가했다. 빈 catalogue와 preference 0건은 각각 `CATALOG_EMPTY`, `NO_MATCHES`로 분리하고 무조건 fallback을 제거했다.
+- `0008_session_member_credentials.sql`을 새로 추가했다. 생성/참여 시 멤버 capability를 한 번만 반환하고 D1에는 SHA-256 해시만 저장해 cancel/start/ready/leave 권한을 서버에서 검증한다. 기존 migration은 수정하지 않았다.
+
+### 17.3 VERIFY
+- Playwright: 390×844 모바일 및 1280×900 데스크톱 Quick Match UI 3/3 PASS. 타이머·인원수 동기화, solo/group 복원, overflow 없음, 활성 카드·취소 dialog, catalogue 0건 화면과 예상 밖 `pageerror`/`console.error` 0건을 확인했다(선택적 로컬 Maps 키 미설정 메시지는 별도 환경 경고로 분리).
+- 전체 Vitest 50 files / 447 tests PASS, `tsc --noEmit` PASS, production build PASS, Cloudflare allowlist와 `git diff --check` PASS.
+- 로컬 D1 migration 적용 후 실제 Pages API 검증: 생성 201, 잘못된 capability로 host ID 가장 취소 403, catalogue 0건 시작 409/`CATALOG_EMPTY`, 정상 host 취소 200, participant join/leave 200, participant capability로 host 취소 가장 403. 생성한 `test:codex-credential-*` 행은 모두 정리해 잔여 0건을 확인했다.
+
+### 17.4 GATE
+- **코드 범위 PASS (메인 에이전트 1회 검토)**: capability 원문은 GET 응답·DB·로그에 저장하지 않으며 신규 secret/env/Google 키 노출이 없다. `.env`, `.env.*`, `.dev.vars`, `env.enc` ignore 및 미추적 상태를 확인했고 클라이언트용 서버 키 참조도 추가되지 않았다.
+- 원격 migration/deploy는 실행하지 않았다. 배포 전 `0008` 원격 적용이 필요하다.
+- GCP 콘솔의 전체 키 API restriction 재확인과 Android 패키지명+SHA-1 Application restriction은 기존 미완료 보안 TODO로 남아 있으며 이번 Quick Match 변경 범위 밖이다.
+
+---
+
+## 18. Quick Match dietary 전체 활성화 (2026-08-08)
+
+### 18.1 구현
+- `PESCATARIAN`, `NO_PORK`, `NO_BEEF`, `NO_LAMB`, `NO_SHELLFISH`, `NO_NUTS`, `NO_DAIRY`, `NO_EGGS`를 canonical hard restriction에 추가하고 Settings·Join 화면의 `Soon`/`Not available` 및 disabled 처리를 제거했다.
+- 공용 restaurant evidence 판정기를 추가해 restaurant dietary tag와 menu name/category/description을 함께 검사한다. pescatarian은 명시 태그·vegetarian/vegan 옵션·육류 없는 seafood 메뉴를 인정하고, ingredient avoidance는 해당 재료 근거가 있는 후보를 제외한다.
+- 클라이언트 단독 덱, Cloudflare D1 recommend, 그룹 shared slate, Express fallback이 같은 판정기를 사용한다. hard restriction 결과가 0건일 때 전체 catalogue로 되돌아가 제한을 무시하던 fallback을 제거했다.
+- 메뉴 데이터 기반 필터의 한계를 숨기지 않도록 Settings와 Join에 심한 알레르기의 재료·교차오염 매장 확인 안내를 추가했다.
+
+### 18.2 검증 / GATE
+- 공용 dietary evidence 및 legacy canonical normalization 집중 테스트 29개 PASS. 전체 Vitest 51 files / 458 tests, TypeScript, production build, Cloudflare policy, `git diff --check` PASS.
+- Playwright 390×844에서 Pescatarian·Nuts·Eggs 실제 클릭과 `aria-pressed=true`, 기존 timer/ruler/overflow 흐름을 포함해 3/3 PASS.
+- schema/migration/env/secret 변경 없음. Google 키 노출이나 신규 외부 요청 없음. 실제 메뉴 데이터가 비어 있거나 불완전한 식당은 정확한 알레르기 안전성을 보장할 수 없으므로 매장 확인 안내를 유지한다.
+
+---
+
+## 19. 혼자 Quick Match 식당 카드 진입 복구 (2026-08-08)
+
+### 19.1 TRIAGE / RCA
+- 증상 태그: `data-state`, `auth`. 같이 모드는 로비를 거쳐 정상 진입하지만 혼자 모드는 생성 직후 식당 선택 화면이 뜨지 않았다.
+- 첫 원인은 `createSession`의 React 상태 갱신이 commit되기 전에 같은 클릭 흐름의 `startSession`이 실행되어, 생성 응답의 `memberKey` 없이 시작 요청을 보내던 타이밍 경합이었다.
+- 인증키 경합 수정 후에도 restaurant catalogue 등록이 `fetchSession` callback 정체성을 매번 바꿔 swipe 준비 effect를 취소·재시작시켰다. 그 결과 URL은 `/lunchie/swipe`로 이동해도 준비 화면에서 반복됐다.
+
+### 19.2 FIX / VERIFY
+- 세션 생성 응답을 받은 즉시 `currentSessionRef`도 동기 갱신해 혼자 모드의 첫 시작 요청부터 올바른 member capability를 전송한다.
+- catalogue fallback은 `restaurantsRef`에서 읽도록 바꿔 `fetchSession`을 안정화하고, 식당 등록 중에도 swipe 준비 effect가 카드 상태까지 완료되도록 했다.
+- Playwright 회귀 테스트를 추가해 `groupSize=1` 생성, 새 `memberKey`가 포함된 `SWIPING_1` 요청, `/lunchie/swipe` 이동, 실제 식당 카드 제목 노출을 한 흐름으로 검증했다. Quick Match E2E 4/4 및 `tsc --noEmit`, `git diff --check` PASS.
+
+### 19.3 GATE
+- 기존 member capability를 클라이언트 메모리/ref에서 전달하는 순서만 수정했으며 신규 secret/env/Google 키·외부 요청·DB schema 변경은 없다. capability를 로그나 GET 응답에 추가하지 않았다.
+- 기존 미완료 보안 TODO인 GCP 콘솔 키 restriction 전수 확인과 Android 패키지명+SHA-1 Application restriction은 그대로 남아 있다.
+
+---
+
+## 20. 복합 dietary 선택 시 Quick Match 후보 복구 (2026-08-08)
+
+### 20.1 RCA / FIX
+- 실제 혼자 세션은 `VEGETARIAN + GLUTEN_FREE + NO_DAIRY + NO_EGGS + NO_SEAFOOD`를 동시에 AND 필터링했고, 77개 catalogue에서 정확한 교집합이 0개였다. 특히 Gluten-free의 명시 venue/menu 근거는 0개였다.
+- 정확한 식단 유형 교집합이 없을 때만 diet-style requirement를 best-effort로 전환한다. `NO_*` 재료 제외는 계속 하드 필터로 유지하며, 재료 제외 자체가 후보를 0개로 만들면 기존 `NO_MATCHES`를 유지한다.
+- 클라이언트 덱, Express 추천, Cloudflare 추천과 그룹 shared deck에 같은 fallback 경계를 적용했다. fallback 카드 화면에는 매장 확인이 필요하다는 안내를 명시한다.
+
+### 20.2 VERIFY / GATE
+- 실제 로컬 catalogue 77개와 문제의 5개 조건으로 71개 후보, `dietaryBestEffort=true`를 확인했다.
+- 전체 Vitest 52 files / 462 tests, TypeScript, production build, Cloudflare policy, Quick Match Playwright 4/4 PASS. E2E는 문제의 5개 조건 생성부터 식당 카드와 best-effort 안내 노출까지 검증한다.
+- 신규 env/secret/Google 키/DB schema 변경 없음. 식단 유형을 무조건 충족한다고 표시하지 않으며, 재료 제외는 완화하지 않는다. 기존 GCP 키 restriction 및 Android SHA-1 제한 TODO는 그대로 남아 있다.

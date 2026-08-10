@@ -1,0 +1,108 @@
+import { useState } from 'react';
+import { LogOut, MoreHorizontal, XCircle } from 'lucide-react';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
+import { useApp } from '@/contexts/AppContext';
+
+type SessionManagementMenuProps = {
+  className?: string;
+  onEnded?: () => void;
+};
+
+export default function SessionManagementMenu({ className = '', onEnded }: SessionManagementMenuProps) {
+  const { currentSession, profile, cancelSession, leaveSession } = useApp();
+  const [confirmationOpen, setConfirmationOpen] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  if (!currentSession) return null;
+
+  const isHost = currentSession.hostId === profile.id || currentSession.filters.partySize === 1;
+  const actionLabel = isHost ? 'Cancel Quick Match' : 'Leave lobby';
+
+  const handleConfirm = async (event: React.MouseEvent<HTMLButtonElement>) => {
+    event.preventDefault();
+    if (busy) return;
+    setBusy(true);
+    setError(null);
+    try {
+      if (isHost) await cancelSession(currentSession.inviteCode);
+      else await leaveSession(currentSession.inviteCode);
+      setConfirmationOpen(false);
+      onEnded?.();
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : 'Please try again.');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <>
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <button
+            type="button"
+            aria-label="Quick Match management"
+            className={`flex size-10 items-center justify-center rounded-full outline-none transition-colors hover:bg-[#FFF0EE] focus-visible:ring-2 focus-visible:ring-[#F4515E] focus-visible:ring-offset-2 ${className}`}
+          >
+            <MoreHorizontal size={20} aria-hidden="true" />
+          </button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="end" className="min-w-[190px] rounded-xl border-[#F0D9D3] bg-white p-1.5 shadow-xl">
+          <DropdownMenuItem
+            variant="destructive"
+            className="min-h-10 cursor-pointer rounded-lg font-bold"
+            onSelect={() => {
+              setError(null);
+              setConfirmationOpen(true);
+            }}
+          >
+            {isHost ? <XCircle aria-hidden="true" /> : <LogOut aria-hidden="true" />}
+            {actionLabel}
+          </DropdownMenuItem>
+        </DropdownMenuContent>
+      </DropdownMenu>
+
+      <AlertDialog open={confirmationOpen} onOpenChange={open => !busy && setConfirmationOpen(open)}>
+        <AlertDialogContent className="max-w-[390px] rounded-[22px] border-[#F0D9D3] bg-[#FFFBF8] p-5">
+          <AlertDialogHeader className="text-left">
+            <AlertDialogTitle className="text-[19px] font-black text-[#26232A]">
+              {isHost ? 'Cancel this Quick Match?' : 'Leave this lobby?'}
+            </AlertDialogTitle>
+            <AlertDialogDescription className="text-[13px] leading-relaxed text-[#746A6E]">
+              {isHost
+                ? "Everyone in the lobby will be removed and this session can’t be resumed."
+                : "You’ll leave this Quick Match, but the session will stay open for the others."}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          {error && <p role="alert" className="rounded-xl bg-[#FFF0EE] px-3 py-2 text-[12px] font-semibold text-[#C93742]">{error}</p>}
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={busy} className="min-h-11 rounded-xl">{isHost ? 'Keep session' : 'Stay'}</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={event => void handleConfirm(event)}
+              disabled={busy}
+              className="min-h-11 rounded-xl bg-[#C93742] font-bold text-white hover:bg-[#AE2D37]"
+            >
+              {busy ? 'Working…' : actionLabel}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    </>
+  );
+}
