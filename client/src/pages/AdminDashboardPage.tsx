@@ -176,7 +176,7 @@ export default function AdminDashboardPage() {
               label="사진 메타데이터 색인"
               value={metrics.catalogue.photoAssets ? `${metrics.catalogue.photoAssets}장` : '미색인'}
               detail={metrics.catalogue.photoAssets
-                ? `${metrics.catalogue.restaurantsWithPhotoAssets}곳에서 분류`
+                ? `${metrics.catalogue.restaurantsWithPhotoAssets}곳에서 색인`
                 : `연결 사진 ${metrics.catalogue.photoReferences}장은 사용 가능`}
             />
             <MetricCard label="메뉴 항목" value={`${metrics.catalogue.menuItems}개`} detail={`${metrics.catalogue.restaurantsWithMenus}곳 · 정규화 ${metrics.catalogue.normalisedMenuItems}개`} />

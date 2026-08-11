@@ -56,6 +56,16 @@ for (const restaurant of candidates) {
   const menus = menusByRestaurant.get(restaurant.id) ?? [];
   const dietary = [...new Set(menus.flatMap((menu) => menu.dietary ?? []))];
   lines.push(`INSERT OR REPLACE INTO restaurants (id, name, category, address, latitude, longitude, menus, dietary_options, price_level, photos, short_description) VALUES (${quote(restaurant.id)}, ${quote(restaurant.name)}, ${quote(restaurant.category ?? restaurant.cuisine_guess ?? "기타")}, ${quote(restaurant.resolved_address ?? "")}, ${restaurant.lat}, ${restaurant.lng}, ${json(menus)}, ${json(dietary)}, ${priceLevel(menus)}, ${json(photosByRestaurant.get(restaurant.id))}, NULL);`);
+  // Keep a first-class index for every image that is already present in the
+  // canonical Drive manifest.  Fresh local D1 databases therefore receive the
+  // evidence-backed kind/tags/quality values rather than only the migration's
+  // intentionally conservative `unclassified` fallback.
+  const cataloguePhotos = data.photos
+    .filter((photo) => photo.restaurant_id === restaurant.id && photo.url?.startsWith("/photos/"))
+    .sort((a, b) => (rank[a.kind ?? "other"] ?? 9) - (rank[b.kind ?? "other"] ?? 9) || (b.quality ?? 0) - (a.quality ?? 0));
+  for (const photo of cataloguePhotos) {
+    lines.push(`INSERT OR REPLACE INTO restaurant_photos (id, restaurant_id, r2_key, drive_file_id, kind, dishes, vibe_tags, quality, source, created_at) VALUES (${quote(photo.id)}, ${quote(restaurant.id)}, ${quote(photo.url.slice("/photos/".length))}, ${quote(photo.drive_file_id ?? null)}, ${quote(photo.kind ?? "unclassified")}, ${json(photo.dishes ?? [])}, ${json(photo.vibe_tags ?? [])}, ${typeof photo.quality === "number" ? photo.quality : "NULL"}, ${quote(photo.source ?? "drive")}, 0);`);
+  }
   const feature = featuresByRestaurant.get(restaurant.id);
   if (feature?.taste) {
     lines.push(`INSERT OR REPLACE INTO restaurant_features (restaurant_id, taste, price_stats, signature_dishes, vibe_tags, photo_kinds, evidence, feature_version, updated_at) VALUES (${quote(restaurant.id)}, ${json(feature.taste)}, ${json(feature.price_stats ?? null)}, ${json(feature.signature_dishes ?? [])}, ${json(feature.vibe_tags ?? [])}, ${json(feature.photo_kinds ?? {})}, ${json(feature.evidence ?? {})}, ${quote(feature.feature_version ?? "v1-photo")}, 0);`);
