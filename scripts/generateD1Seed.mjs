@@ -66,6 +66,14 @@ for (const restaurant of candidates) {
   for (const photo of cataloguePhotos) {
     lines.push(`INSERT OR REPLACE INTO restaurant_photos (id, restaurant_id, r2_key, drive_file_id, kind, dishes, vibe_tags, quality, source, created_at) VALUES (${quote(photo.id)}, ${quote(restaurant.id)}, ${quote(photo.url.slice("/photos/".length))}, ${quote(photo.drive_file_id ?? null)}, ${quote(photo.kind ?? "unclassified")}, ${json(photo.dishes ?? [])}, ${json(photo.vibe_tags ?? [])}, ${typeof photo.quality === "number" ? photo.quality : "NULL"}, ${quote(photo.source ?? "drive")}, 0);`);
   }
+  // Keep the same source facts in the queryable menu index.  `menus` above is
+  // intentionally retained as the original catalogue snapshot, while this
+  // index supports aggregation and future menu-aware filtering without JSON
+  // scans.  Signature/dietary values are never inferred during seeding.
+  for (const menu of menus) {
+    if (!menu.name?.trim() || !(menu.normalized_name ?? menu.name)?.trim()) continue;
+    lines.push(`INSERT OR REPLACE INTO restaurant_menu_items (id, restaurant_id, name, normalized_name, price, currency, category, description, dietary, source, confidence, is_signature, extracted_at) VALUES (${quote(menu.id ?? `${restaurant.id}:${menu.normalized_name}`)}, ${quote(restaurant.id)}, ${quote(menu.name.trim())}, ${quote((menu.normalized_name ?? menu.name).trim().toLowerCase())}, ${typeof menu.price === "number" ? menu.price : "NULL"}, ${quote(menu.currency ?? "AUD")}, ${quote(menu.category ?? null)}, ${quote(menu.description ?? null)}, ${json(menu.dietary ?? [])}, ${quote(menu.source ?? "catalogue-seed")}, ${typeof menu.confidence === "number" ? menu.confidence : "NULL"}, 0, 0);`);
+  }
   const feature = featuresByRestaurant.get(restaurant.id);
   if (feature?.taste) {
     lines.push(`INSERT OR REPLACE INTO restaurant_features (restaurant_id, taste, price_stats, signature_dishes, vibe_tags, photo_kinds, evidence, feature_version, updated_at) VALUES (${quote(restaurant.id)}, ${json(feature.taste)}, ${json(feature.price_stats ?? null)}, ${json(feature.signature_dishes ?? [])}, ${json(feature.vibe_tags ?? [])}, ${json(feature.photo_kinds ?? {})}, ${json(feature.evidence ?? {})}, ${quote(feature.feature_version ?? "v1-photo")}, 0);`);
