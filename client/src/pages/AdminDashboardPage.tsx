@@ -28,6 +28,7 @@ type Catalogue = {
   completeness: { address: number; coordinates: number; description: number; photoReference: number; menu: number };
   categories: { category: string; count: number }[];
   dietarySupport: { label: string; count: number }[];
+  menuIntentEvidence: { intent: 'meal' | 'cafe' | 'dessert'; count: number }[];
   sources: { source: string; count: number }[];
   samples: { name: string; category: string; photoCount: number; menuCount: number }[];
 };
@@ -207,6 +208,10 @@ export default function AdminDashboardPage() {
           </Panel>
           <Panel className="md:col-span-2 xl:col-span-5" title="지원 식단·제약" detail="식당 레코드에 명시된 식단 옵션입니다. 알레르기 안전성 보증이 아니라, 필터·추천에 사용할 수 있는 카탈로그 태그 현황입니다.">
             {metrics.catalogue.dietarySupport.length ? <div className="flex flex-wrap gap-2">{metrics.catalogue.dietarySupport.map((diet, index) => <div key={diet.label} className="flex min-w-[calc(50%-0.25rem)] flex-1 items-center justify-between rounded-xl bg-white/[0.05] px-3 py-3 text-xs"><span className="flex items-center gap-2"><span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: COLORS[index % COLORS.length] }} />{diet.label}</span><strong>{diet.count}곳</strong></div>)}</div> : <Empty label="아직 식단 옵션 태그가 없습니다." />}
+          </Panel>
+          <Panel className="md:col-span-2 xl:col-span-7" title="메뉴 구성 근거" detail="구조화된 메뉴판 섹션에서 보수적으로 분류한 메뉴 항목 수입니다. 이 신호는 식당 분류를 덮어쓰지 않고, 추천 맥락 점수만 보강합니다.">
+            <div className="grid grid-cols-3 gap-3">{metrics.catalogue.menuIntentEvidence.map((item, index) => <div key={item.intent} className="rounded-xl bg-white/[0.05] p-4"><p className="text-xs text-white/55">{item.intent === 'meal' ? '식사' : item.intent === 'cafe' ? '카페' : '디저트'} 메뉴 항목</p><p className="mt-1 text-2xl font-bold tabular-nums">{item.count}개</p><div className="mt-2 h-1.5 overflow-hidden rounded-full bg-white/10"><div className="h-full rounded-full" style={{ width: `${metrics.catalogue.normalisedMenuItems ? Math.min(100, (item.count / metrics.catalogue.normalisedMenuItems) * 100) : 0}%`, backgroundColor: COLORS[index] }} /></div></div>)}</div>
+            <p className="mt-4 text-xs leading-5 text-white/45">음료·주류 전용, ‘SPECIAL’처럼 의미가 모호한 섹션은 근거로 집계하지 않습니다.</p>
           </Panel>
           <Panel className="md:col-span-2 xl:col-span-7" title="카탈로그 예시" detail="리뷰 수와 평점을 기준으로 확인하는 대표 레코드입니다. 개인화 추천 순위가 아닙니다.">
             {metrics.catalogue.samples.length ? <div className="overflow-x-auto"><table className="w-full min-w-[520px] text-left text-xs"><thead className="border-b border-white/10 text-white/45"><tr><th className="pb-2 font-medium">식당</th><th className="pb-2 font-medium">분류</th><th className="pb-2 text-right font-medium">사진</th><th className="pb-2 text-right font-medium">메뉴</th></tr></thead><tbody>{metrics.catalogue.samples.map((restaurant) => <tr key={`${restaurant.name}-${restaurant.category}`} className="border-b border-white/[0.06]"><td className="py-2.5 font-medium text-white/90">{restaurant.name}</td><td className="py-2.5 text-white/60">{restaurant.category}</td><td className="py-2.5 text-right tabular-nums text-white/70">{restaurant.photoCount}</td><td className="py-2.5 text-right tabular-nums text-white/70">{restaurant.menuCount}</td></tr>)}</tbody></table></div> : <Empty label="표시할 식당 카탈로그가 없습니다." />}

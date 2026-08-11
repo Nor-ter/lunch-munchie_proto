@@ -48,6 +48,8 @@ export interface Candidate {
   price_level?: number;
   category?: string;
   dietary_options?: string[];
+  /** Structured menu-section evidence, never inferred from a venue name. */
+  menu_intents?: Intent[];
 }
 
 // 스코어러 출력 — 실제로 보여줄 슬레이트 한 칸

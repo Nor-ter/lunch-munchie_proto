@@ -5,6 +5,7 @@ import {
   matchesDietaryRestrictions,
 } from "../../shared/const";
 import { categoryMatchesIntent, type Intent } from "../../shared/intent";
+import { intentForMenuSection, menuSectionIntents } from "../../shared/menuTaxonomy";
 import { isValidCoordinate, isWithinRadius } from "../../shared/geo";
 import { buildSlate, scoreCandidateBreakdown } from "../../server/engine/scorer";
 import type { Candidate, RecContext, SlateType } from "../../shared/engine";
@@ -319,6 +320,10 @@ function matchesMenuBudget(evidence: IndexedMenuEvidence | undefined, budget: nu
   const level = menuPriceLevel(evidence);
   return level === null || level <= budget;
 }
+
+function withMenuIntentEvidence<T extends Candidate>(restaurant: T, evidence: IndexedMenuEvidence | undefined): T {
+  return { ...restaurant, menu_intents: menuSectionIntents(evidence?.categories ?? []) };
+}
 const isoDate = (value: unknown) => {
   const numeric = typeof value === "number" ? value : Number(value);
   const date = Number.isFinite(numeric)
@@ -440,7 +445,7 @@ app.get("/api/admin/metrics", async (c) => {
     : 30;
   const start = Date.now() - (days - 1) * 86_400_000;
   const count = (row: { count?: number | string } | null | undefined) => Number(row?.count ?? 0);
-  const [registered, newRegistered, activeActors, activeSignedIn, activeGuests, eventResult, trendResult, personaResult, modelResult, impressionCoverage, persistedSlates, servedImpressions, attributableSwipes, categoryResult, contributionResult, catalogueSummary, photoAssetSummary, coursePhotoSummary, menuSummary, catalogueCategories, dietarySupport, sourceDistribution, restaurantSamples] = await Promise.all([
+  const [registered, newRegistered, activeActors, activeSignedIn, activeGuests, eventResult, trendResult, personaResult, modelResult, impressionCoverage, persistedSlates, servedImpressions, attributableSwipes, categoryResult, contributionResult, catalogueSummary, photoAssetSummary, coursePhotoSummary, menuSummary, menuSectionRows, catalogueCategories, dietarySupport, sourceDistribution, restaurantSamples] = await Promise.all([
     c.env.DB.prepare("SELECT COUNT(*) AS count FROM users").first<{ count: number }>(),
     c.env.DB.prepare("SELECT COUNT(*) AS count FROM users WHERE created_at >= ?").bind(start).first<{ count: number }>(),
     c.env.DB.prepare("SELECT COUNT(DISTINCT user_id) AS count FROM rec_events WHERE created_at >= ? AND user_id IS NOT NULL").bind(start).first<{ count: number }>(),
@@ -460,6 +465,7 @@ app.get("/api/admin/metrics", async (c) => {
     c.env.DB.prepare("SELECT COUNT(*) AS photo_assets, COUNT(DISTINCT restaurant_id) AS restaurants_with_photo_assets FROM restaurant_photos").first<{ photo_assets: number; restaurants_with_photo_assets: number }>(),
     c.env.DB.prepare("SELECT COUNT(*) AS count, SUM(CASE WHEN classification = 'restaurant' THEN 1 ELSE 0 END) AS restaurant_count, SUM(CASE WHEN classification = 'other' THEN 1 ELSE 0 END) AS other_count FROM course_photo_attributions").first<{ count: number; restaurant_count: number; other_count: number }>(),
     c.env.DB.prepare("SELECT COUNT(*) AS menu_items, COUNT(DISTINCT restaurant_id) AS restaurants_with_menus, SUM(CASE WHEN price IS NOT NULL THEN 1 ELSE 0 END) AS priced_menu_items, SUM(CASE WHEN json_valid(dietary) AND json_array_length(dietary) > 0 THEN 1 ELSE 0 END) AS dietary_menu_items, SUM(CASE WHEN confidence IS NOT NULL THEN 1 ELSE 0 END) AS evidenced_menu_items FROM restaurant_menu_items").first<{ menu_items: number; restaurants_with_menus: number; priced_menu_items: number; dietary_menu_items: number; evidenced_menu_items: number }>(),
+    c.env.DB.prepare("SELECT category, COUNT(*) AS count FROM restaurant_menu_items WHERE category IS NOT NULL AND trim(category) != '' GROUP BY category").all<{ category: string; count: number }>(),
     c.env.DB.prepare("SELECT COALESCE(NULLIF(trim(category), ''), '기타') AS category, COUNT(*) AS count FROM restaurants GROUP BY COALESCE(NULLIF(trim(category), ''), '기타') ORDER BY count DESC, category ASC LIMIT 12").all<{ category: string; count: number }>(),
     c.env.DB.prepare("SELECT trim(diet.value) AS label, COUNT(DISTINCT r.id) AS count FROM restaurants r, json_each(CASE WHEN json_valid(r.dietary_options) THEN r.dietary_options ELSE '[]' END) AS diet WHERE trim(diet.value) != '' GROUP BY trim(diet.value) ORDER BY count DESC, label ASC LIMIT 12").all<{ label: string; count: number }>(),
     c.env.DB.prepare("SELECT COALESCE(NULLIF(trim(source), ''), '미지정') AS source, COUNT(*) AS count FROM restaurants GROUP BY COALESCE(NULLIF(trim(source), ''), '미지정') ORDER BY count DESC, source ASC LIMIT 8").all<{ source: string; count: number }>(),
@@ -560,6 +566,13 @@ app.get("/api/admin/metrics", async (c) => {
         menu: Number(menuSummary?.restaurants_with_menus ?? 0),
       },
       categories: catalogueCategories.results.map((row) => ({ category: row.category, count: Number(row.count) })),
+      menuIntentEvidence: (["meal", "cafe", "dessert"] as const).map((intent) => ({
+        intent,
+        count: menuSectionRows.results.reduce(
+          (total, row) => total + (intentForMenuSection(row.category) === intent ? Number(row.count) : 0),
+          0,
+        ),
+      })),
       dietarySupport: dietarySupport.results.map((row) => ({ label: row.label, count: Number(row.count) })),
       sources: sourceDistribution.results.map((row) => ({ source: row.source, count: Number(row.count) })),
       samples: restaurantSamples.results.map((row) => ({ name: row.name, category: row.category, photoCount: Number(row.photo_count), menuCount: Number(row.menu_count) })),
@@ -861,15 +874,20 @@ app.post("/api/recommend", async (c) => {
     const requestedBudget = Number.isInteger(ctx.budget) && ctx.budget >= 1 && ctx.budget <= 4
       ? Number(ctx.budget)
       : null;
-    const results = rawRestaurants.filter((restaurant) =>
-      categoryMatchesIntent(restaurant.category, selectedIntent) &&
-      matchesDietaryRestrictions(
-        restaurant.category,
-        menuEvidence.get(restaurant.id)?.dietary ?? json<string[]>(restaurant.dietary_options, []),
-        diets,
-      ) &&
-      matchesMenuBudget(menuEvidence.get(restaurant.id), requestedBudget),
-    );
+    const results = rawRestaurants
+      .filter((restaurant) =>
+        categoryMatchesIntent(restaurant.category, selectedIntent) &&
+        matchesDietaryRestrictions(
+          restaurant.category,
+          menuEvidence.get(restaurant.id)?.dietary ?? json<string[]>(restaurant.dietary_options, []),
+          diets,
+        ) &&
+        matchesMenuBudget(menuEvidence.get(restaurant.id), requestedBudget),
+      )
+      // Menu taxonomy never widens the hard intent filter above. It simply
+      // gives the contextual ranker a verified cafe/dessert signal when an
+      // otherwise broad restaurant category has a structured menu section.
+      .map((restaurant) => withMenuIntentEvidence(restaurant, menuEvidence.get(restaurant.id)));
 
     let exposureMap: Record<string, { count?: number; updatedAt?: number }> =
       {};
