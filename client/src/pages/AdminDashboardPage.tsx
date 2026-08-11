@@ -172,7 +172,13 @@ export default function AdminDashboardPage() {
           <div className="grid grid-cols-2 gap-3 md:grid-cols-4 xl:grid-cols-5">
             <MetricCard label="등록 식당" value={`${metrics.catalogue.restaurants}곳`} detail={`카테고리 ${metrics.catalogue.categories.length}개`} />
             <MetricCard label="사진 연결" value={`${metrics.catalogue.photoReferences}장`} detail={`${metrics.catalogue.restaurantsWithPhotoReferences}곳 · ${coverage(metrics.catalogue.restaurantsWithPhotoReferences, metrics.catalogue.restaurants)}`} />
-            <MetricCard label="원본 사진 레코드" value={`${metrics.catalogue.photoAssets}장`} detail={`${metrics.catalogue.restaurantsWithPhotoAssets}곳에서 수집`} />
+            <MetricCard
+              label="사진 메타데이터 색인"
+              value={metrics.catalogue.photoAssets ? `${metrics.catalogue.photoAssets}장` : '미색인'}
+              detail={metrics.catalogue.photoAssets
+                ? `${metrics.catalogue.restaurantsWithPhotoAssets}곳에서 분류`
+                : `연결 사진 ${metrics.catalogue.photoReferences}장은 사용 가능`}
+            />
             <MetricCard label="메뉴 항목" value={`${metrics.catalogue.menuItems}개`} detail={`${metrics.catalogue.restaurantsWithMenus}곳 · 정규화 ${metrics.catalogue.normalisedMenuItems}개`} />
             <MetricCard label="좌표 완성도" value={coverage(metrics.catalogue.completeness.coordinates, metrics.catalogue.restaurants)} detail={`${metrics.catalogue.completeness.coordinates}/${metrics.catalogue.restaurants}곳 위치 보유`} />
           </div>
