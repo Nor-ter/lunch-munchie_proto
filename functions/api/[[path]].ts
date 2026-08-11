@@ -1434,6 +1434,7 @@ type SessionRow = {
   filter_dietary: string;
   intent: Intent | null;
   top_restaurant_ids: string;
+  recommendation_slate_id: string | null;
   status: string;
   deadline_at: number | null;
   created_at: number;
@@ -1505,7 +1506,7 @@ function buildSharedSessionDeck(
   restaurants: any[],
   memberRows: any[],
   size = 7,
-) {
+): Array<{ id: string; score: number; position: number }> {
   const members = memberRows.map((member) =>
     sessionPreferences(member.preferences_json),
   );
@@ -1536,7 +1537,7 @@ function buildSharedSessionDeck(
       Math.min(1, Number(restaurant.rating ?? 0) / 5) * 0.15 +
       hash(`${sessionId}:${restaurant.id}`) * 0.03,
   }));
-  const selected: any[] = [];
+  const selected: Array<{ restaurant: any; selectionScore: number }> = [];
   const categoryCount = new Map<string, number>();
   while (remaining.length && selected.length < size) {
     remaining.sort(
@@ -1546,14 +1547,21 @@ function buildSharedSessionDeck(
           (a.score - (categoryCount.get(a.restaurant.category) ?? 0) * 0.22) ||
         a.restaurant.id.localeCompare(b.restaurant.id),
     );
-    const next = remaining.shift()!.restaurant;
-    selected.push(next);
+    const next = remaining.shift()!;
+    selected.push({
+      restaurant: next.restaurant,
+      selectionScore: next.score - (categoryCount.get(next.restaurant.category) ?? 0) * 0.22,
+    });
     categoryCount.set(
-      next.category,
-      (categoryCount.get(next.category) ?? 0) + 1,
+      next.restaurant.category,
+      (categoryCount.get(next.restaurant.category) ?? 0) + 1,
     );
   }
-  return selected.map((restaurant) => restaurant.id);
+  return selected.map(({ restaurant, selectionScore }, position) => ({
+    id: restaurant.id,
+    score: Number(selectionScore.toFixed(4)),
+    position,
+  }));
 }
 
 export function sessionResults(
@@ -1802,6 +1810,7 @@ app.post("/api/sessions/create", async (c) => {
         filter_dietary: JSON.stringify(dietary),
         intent,
         top_restaurant_ids: "[]",
+        recommendation_slate_id: null,
         status: "WAITING",
         deadline_at: null,
         created_at: createdAt,
@@ -1831,7 +1840,20 @@ app.get("/api/sessions/:token", async (c) => {
   )
     .bind(session.id)
     .all();
-  return c.json({ session: sessionPayload(session), members });
+  const slate = session.recommendation_slate_id
+    ? await c.env.DB.prepare(
+      "SELECT id, policy_version, items_json FROM recommendation_slates WHERE id = ? AND session_id = ?",
+    ).bind(session.recommendation_slate_id, session.id).first<{ id: string; policy_version: string; items_json: string }>()
+    : null;
+  return c.json({
+    session: sessionPayload(session),
+    members,
+    slate: slate ? {
+      id: slate.id,
+      policy_version: slate.policy_version,
+      items: json<Array<{ restaurant_id: string; position: number; score: number; propensity: number }>>(slate.items_json, []),
+    } : null,
+  });
 });
 
 app.post("/api/sessions/:token/join", async (c) => {
@@ -1934,6 +1956,10 @@ app.post("/api/sessions/:token/status", async (c) => {
   if (status === "SWIPING_1") {
     if (!userId || userId !== session.host_user_id)
       return c.json({ error: "세션 시작은 호스트만 할 수 있습니다." }, 403);
+    // Starting twice must preserve both the shared deck and its attribution
+    // identity. Replacing it after people began swiping would corrupt the
+    // evidence chain.
+    if (session.status === "SWIPING_1") return c.json({ ok: true, already_started: true });
     const { results: members } = await c.env.DB.prepare(
       "SELECT user_id, preferences_json FROM session_members WHERE session_id = ? ORDER BY joined_at",
     )
@@ -1988,8 +2014,8 @@ app.post("/api/sessions/:token/status", async (c) => {
     );
     // Never fall back to the full catalogue: that would silently violate a
     // user's explicit meal/cafe/dessert, category, budget, or dietary choice.
-    const deckIds = buildSharedSessionDeck(session.id, pool, members as any[]);
-    if (!deckIds.length)
+    const deck = buildSharedSessionDeck(session.id, pool, members as any[]);
+    if (!deck.length)
       return c.json(
         {
           error: Number(session.distance_enabled) !== 0
@@ -1999,11 +2025,41 @@ app.post("/api/sessions/:token/status", async (c) => {
         },
         409,
       );
-    await c.env.DB.prepare(
-      "UPDATE sessions SET top_restaurant_ids = ? WHERE id = ?",
-    )
-      .bind(JSON.stringify(deckIds), session.id)
-      .run();
+    const slateId = crypto.randomUUID();
+    const now = Date.now();
+    const groupContext: RecContext = {
+      intent: session.intent,
+      budget: Number(session.filter_budget) as 1 | 2 | 3 | 4,
+      companions: Number(session.group_size),
+      diet: requiredDietary,
+    };
+    // The group deck is deterministic for the exact member-preference
+    // snapshot. Therefore each selected item has conditional inclusion
+    // probability 1. It is attributable evidence, but it remains distinct
+    // from the exploratory individual policy in `policy_version`.
+    const slateItems = deck.map((item) => ({
+      restaurant_id: item.id,
+      position: item.position,
+      score: item.score,
+      propensity: 1,
+    }));
+    await c.env.DB.batch([
+      c.env.DB.prepare(
+        "UPDATE sessions SET top_restaurant_ids = ?, recommendation_slate_id = ? WHERE id = ?",
+      ).bind(JSON.stringify(deck.map((item) => item.id)), slateId, session.id),
+      c.env.DB.prepare(
+        "INSERT INTO recommendation_slates (id, owner_user_id, session_id, slate_type, policy_version, variant, context_json, items_json, candidate_count, created_at, expires_at) VALUES (?, ?, ?, 'PRELIM', ?, 'group', ?, ?, ?, ?, ?)",
+      ).bind(slateId, session.host_user_id, session.id, "session-group-deterministic-v1", JSON.stringify(groupContext), JSON.stringify(slateItems), pool.length, now, now + 24 * 60 * 60 * 1000),
+      ...(members as any[]).flatMap((member) => slateItems.map((item) =>
+        c.env.DB.prepare(
+          "INSERT INTO rec_events (id, event_type, slate_id, slate_type, user_id, session_id, restaurant_id, position, propensity, score, model_version, variant, context_json, idempotency_key, created_at) VALUES (?, 'IMPRESSION', ?, 'PRELIM', ?, ?, ?, ?, ?, ?, ?, 'group', ?, ?, ?)",
+        ).bind(
+          crypto.randomUUID(), slateId, member.user_id, session.id, item.restaurant_id, item.position,
+          item.propensity, item.score, "session-group-deterministic-v1", JSON.stringify(groupContext),
+          `session-slate:${slateId}:impression:${member.user_id}:${item.position}`, now,
+        ),
+      )),
+    ]);
   }
   const deadlineMinutes =
     typeof body.deadlineMinutes === "number" &&

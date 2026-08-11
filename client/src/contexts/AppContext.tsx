@@ -1156,6 +1156,15 @@ export function AppProvider({
     const sharedDeckIds: string[] = Array.isArray(data.session.deck_ids)
       ? data.session.deck_ids.filter((id: unknown): id is string => typeof id === 'string')
       : [];
+    const sharedSlateItems: Array<{ restaurant_id: string; position: number; propensity: number }> = Array.isArray(data.slate?.items)
+      ? data.slate.items.filter((item: unknown): item is { restaurant_id: string; position: number; propensity: number } =>
+        Boolean(item) && typeof item === 'object' && typeof (item as any).restaurant_id === 'string',
+      )
+      : [];
+    const sharedRecMeta: NonNullable<GroupSession['recMeta']> = Object.fromEntries(sharedSlateItems.map((item) => [item.restaurant_id, {
+      propensity: typeof item.propensity === 'number' ? item.propensity : 1,
+      position: typeof item.position === 'number' ? item.position : 0,
+    }]));
     // New sessions always use the server-persisted candidate order. Waiting
     // rooms deliberately have no cards: the slate is made only after every
     // participant has supplied a preference snapshot and marked ready.
@@ -1166,9 +1175,9 @@ export function AppProvider({
     const deck = distanceAwareRestaurants.length === sharedDeckIds.length && distanceAwareRestaurants.length > 0
       ? {
           restaurants: distanceAwareRestaurants,
-          slateId: `session:${data.session.id}`,
-          recMeta: Object.fromEntries(distanceAwareRestaurants.map((restaurant, index) => [restaurant.id, { propensity: 1 / distanceAwareRestaurants.length, position: index }])),
-          modelVersion: 'session-shared-slate-v1',
+          slateId: typeof data.session.recommendation_slate_id === 'string' ? data.session.recommendation_slate_id : undefined,
+          recMeta: Object.keys(sharedRecMeta).length ? sharedRecMeta : undefined,
+          modelVersion: typeof data.slate?.policy_version === 'string' ? data.slate.policy_version : 'session-group-legacy-v1',
         }
       : status === 'waiting'
         ? { restaurants: [], slateId: undefined, recMeta: undefined, modelVersion: 'session-group-pending-v1' }

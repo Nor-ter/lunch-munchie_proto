@@ -149,6 +149,7 @@ export const sessions = pgTable("sessions", {
   filter_vibe: jsonb("filter_vibe").$type<string[]>(),
   swipe_limit: integer("swipe_limit").notNull(),
   top_restaurant_ids: jsonb("top_restaurant_ids").$type<string[]>(),
+  recommendation_slate_id: text("recommendation_slate_id"),
   final_restaurant_id: text("final_restaurant_id"),
   created_at: timestamp("created_at").notNull(),
 });
