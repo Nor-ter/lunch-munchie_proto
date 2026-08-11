@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { categoryMatchesIntent, intentForCategory, intentForHour } from "./intent";
+import { matchesDietaryRestrictions } from "./const";
 
 describe("intentForCategory (규칙 기반 — 한국어 + 영문 멜번)", () => {
   it("카페류 → cafe (KR·EN)", () => {
@@ -30,6 +31,18 @@ describe("intentForHour", () => {
   it("점심=밥, 오후=카페", () => {
     expect(intentForHour(12)).toBe("meal");
     expect(intentForHour(15)).toBe("cafe");
+  });
+});
+
+describe("matchesDietaryRestrictions (menu evidence)", () => {
+  it("normalizes UI labels and source-menu abbreviations before enforcing a hard restriction", () => {
+    expect(matchesDietaryRestrictions("Cafe", ["VG", "GFO"], ["비건", "글루텐프리"])).toBe(true);
+    expect(matchesDietaryRestrictions("Cafe", ["V"], ["비건"])).toBe(false);
+  });
+
+  it("never silently ignores an unsupported hard restriction", () => {
+    expect(matchesDietaryRestrictions("한식", [], ["견과류 알러지"])).toBe(false);
+    expect(matchesDietaryRestrictions("한식", ["NF"], ["견과류 알러지"])).toBe(true);
   });
 });
 
