@@ -2,9 +2,7 @@ import { Hono } from "hono";
 import { handle } from "hono/cloudflare-pages";
 import { decideGroup } from "../../server/engine/group";
 import {
-  isHardRestriction,
-  normalizeDiet,
-  type DietTag,
+  matchesDietaryRestrictions,
 } from "../../shared/const";
 import { categoryMatchesIntent, type Intent } from "../../shared/intent";
 import { isValidCoordinate, isWithinRadius } from "../../shared/geo";
@@ -279,6 +277,28 @@ const json = <T>(value: string | null | undefined, fallback: T): T => {
     return fallback;
   }
 };
+
+/**
+ * The menu index is the current evidence source for dietary eligibility.
+ * Restaurants without indexed menus retain their legacy catalogue tag as a
+ * migration fallback. It can be removed after full catalogue indexing; until
+ * then this keeps deployment backwards-compatible without treating an unknown
+ * restaurant as compliant with a selected restriction.
+ */
+async function indexedDietaryByRestaurant(db: any, ids: string[]) {
+  const uniqueIds = [...new Set(ids.filter(Boolean))];
+  const dietary = new Map<string, string[]>();
+  if (!uniqueIds.length) return dietary;
+  const { results } = await db.prepare(
+    `SELECT restaurant_id, dietary FROM restaurant_menu_items WHERE restaurant_id IN (${uniqueIds.map(() => "?").join(",")})`,
+  ).bind(...uniqueIds).all<{ restaurant_id: string; dietary: string }>();
+  for (const row of results) {
+    const values = dietary.get(row.restaurant_id) ?? [];
+    values.push(...json<string[]>(row.dietary, []));
+    dietary.set(row.restaurant_id, values);
+  }
+  return dietary;
+}
 const isoDate = (value: unknown) => {
   const numeric = typeof value === "number" ? value : Number(value);
   const date = Number.isFinite(numeric)
@@ -783,20 +803,15 @@ app.post("/api/recommend", async (c) => {
       params.push(...candidateIds);
     }
 
-    // 1. Dietary Hard Filter (JSON_CONTAINS equivalent logic for SQLite)
+    // 1. Dietary Hard Filter.  This runs below against the structured menu
+    // index so Korean UI labels and source-menu abbreviations share one
+    // normalisation contract.  Do not use SQL LIKE: "비건" and "VG" are the
+    // same constraint but are not the same stored string.
     const diets = Array.isArray(ctx.dietary)
       ? ctx.dietary
       : Array.isArray(ctx.diet)
         ? ctx.diet
         : [];
-    if (diets.length > 0) {
-      // D1 doesn't have JSON_CONTAINS natively, we use LIKE for simple arrays
-      for (const diet of diets) {
-        query += ` AND dietary_options LIKE ?`;
-        params.push(`%${diet}%`);
-      }
-    }
-
     // 2. Budget (Price Range)
     if (typeof ctx.budget === "number") {
       if (ctx.budget === 1) {
@@ -829,8 +844,18 @@ app.post("/api/recommend", async (c) => {
     // Do not approximate cafe/dessert with a shared SQL list. The canonical
     // classifier is also used by shared Lunchie sessions, so every serving
     // path has one hard-category contract.
-    const results = (rawResults as any[]).filter((restaurant) =>
-      categoryMatchesIntent(restaurant.category, selectedIntent),
+    const rawRestaurants = rawResults as any[];
+    const indexedDietary = await indexedDietaryByRestaurant(
+      c.env.DB,
+      rawRestaurants.map((restaurant) => String(restaurant.id)),
+    );
+    const results = rawRestaurants.filter((restaurant) =>
+      categoryMatchesIntent(restaurant.category, selectedIntent) &&
+      matchesDietaryRestrictions(
+        restaurant.category,
+        indexedDietary.get(restaurant.id) ?? json<string[]>(restaurant.dietary_options, []),
+        diets,
+      ),
     );
 
     let exposureMap: Record<string, { count?: number; updatedAt?: number }> =
@@ -1439,30 +1464,6 @@ const sessionPreferences = (value: unknown): SessionPreference[] =>
     }))
     .filter((item) => item.category);
 const sessionDietary = (value: unknown) => preferenceSnapshot(value).dietary;
-const SESSION_SEAFOOD_RE =
-  /해산물|seafood|스시|sushi|초밥|회|sashimi|오마카세|omakase/i;
-function matchesGroupDiet(
-  category: string,
-  optionText: unknown,
-  rawRestrictions: string[],
-) {
-  const required = rawRestrictions
-    .map(normalizeDiet)
-    .filter(
-      (diet): diet is DietTag => Boolean(diet) && isHardRestriction(diet),
-    );
-  if (!required.length) return true;
-  const offered = json<string[]>(
-    typeof optionText === "string" ? optionText : "[]",
-    [],
-  ).map(normalizeDiet);
-  return required.every((diet) =>
-    diet === "NO_SEAFOOD"
-      ? !SESSION_SEAFOOD_RE.test(category)
-      : offered.includes(diet),
-  );
-}
-
 // A group slate is intentionally computed once on the server. Ranking averages
 // member preference signals, then applies a category-coverage penalty so the
 // first seven cards do not collapse into one cuisine. The stable tie-break is
@@ -1915,6 +1916,10 @@ app.post("/api/sessions/:token/status", async (c) => {
     const { results: catalogue } = await c.env.DB.prepare(
       "SELECT id, category, rating, price_level, dietary_options, latitude, longitude FROM restaurants",
     ).all();
+    const indexedDietary = await indexedDietaryByRestaurant(
+      c.env.DB,
+      (catalogue as any[]).map((restaurant) => String(restaurant.id)),
+    );
     const categories = json<string[]>(session.filter_categories, []);
     const memberDietary = (members as any[]).flatMap((member) =>
       sessionDietary(member.preferences_json),
@@ -1945,9 +1950,9 @@ app.post("/api/sessions/:token/status", async (c) => {
         (Number(session.filter_budget) >= 4 ||
           Number(restaurant.price_level ?? 4) <=
             Number(session.filter_budget)) &&
-        matchesGroupDiet(
+        matchesDietaryRestrictions(
           restaurant.category,
-          restaurant.dietary_options,
+          indexedDietary.get(restaurant.id) ?? json<string[]>(restaurant.dietary_options, []),
           requiredDietary,
         ),
     );

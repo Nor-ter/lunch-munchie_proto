@@ -5,7 +5,7 @@
  */
 
 import React, { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
-import { normalizeDiet, isHardRestriction, type DietTag } from '@shared/const';
+import { matchesDietaryRestrictions } from '@shared/const';
 import { categoryMatchesIntent, intentForHour, type Intent } from '@shared/intent';
 import { distanceMetres, isWithinRadius } from '@shared/geo';
 import { normalizeFoodTag, type TagType } from '@/constants/foodTags';
@@ -25,19 +25,8 @@ export type { TagType } from '@/constants/foodTags';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
-// diet 하드 제약 매칭: 필터('비건')와 식당 태그('비건 옵션')를 enum으로 정규화해 비교.
-const SEAFOOD_RE = /해산물|seafood|스시|sushi|초밥|회|sashimi|오마카세|omakase/i;
 function matchesDiet(category: string, restaurantDietary: string[], filterDietary: string[]): boolean {
-  const required: DietTag[] = [];
-  for (const raw of filterDietary || []) {
-    const n = normalizeDiet(raw);
-    if (n && isHardRestriction(n)) required.push(n);
-  }
-  if (required.length === 0) return true;
-  const offered = (restaurantDietary || []).map(normalizeDiet);
-  return required.every((tag) =>
-    tag === 'NO_SEAFOOD' ? !SEAFOOD_RE.test(category) : offered.includes(tag),
-  );
+  return matchesDietaryRestrictions(category, restaurantDietary, filterDietary);
 }
 
 // TagType은 @/constants/foodTags 로 이동(위 import+re-export). 인라인 정의 제거 — 태그 taxonomy 단일화.
