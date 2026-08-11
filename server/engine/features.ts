@@ -53,6 +53,7 @@ export interface ItemMeta {
   id?: string | null;
   category?: string | null;
   price_level?: number | null;
+  menu_intents?: Array<"meal" | "cafe" | "dessert"> | null;
 }
 
 // ── 피처 스토어 (콜드스타트 해소) ─────────────────────────────────────────────
@@ -92,8 +93,11 @@ export function buildItemVector(item: ItemMeta): number[] {
   const price = typeof median === "number" && median > 0
     ? priceFromMedian(median)
     : typeof item.price_level === "number" ? clamp01((item.price_level - 1) / 3) : 0.5;
-  const dessert = /디저트|베이커리|빵/.test(cat) ? 1 : 0;
-  const cafe = /카페/.test(cat) ? 1 : 0;
+  // A structured menu heading is stronger evidence than a broad venue
+  // category (e.g. a restaurant with a real espresso section).  It only
+  // enriches ranking; hard Lunchie intent eligibility remains server-owned.
+  const dessert = /디저트|베이커리|빵|dessert|bakery|gelato|ice.?cream/i.test(cat) || item.menu_intents?.includes("dessert") ? 1 : 0;
+  const cafe = /카페|cafe|coffee|tea/i.test(cat) || item.menu_intents?.includes("cafe") ? 1 : 0;
   return [clamp01(spicy), clamp01(salty), clamp01(sweet), clamp01(oily), clamp01(light), price, dessert, cafe, 1];
 }
 

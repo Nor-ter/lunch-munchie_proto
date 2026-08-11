@@ -72,7 +72,7 @@ export function contextWeights(ctx: RecContext): number[] {
 // 맥락 적합도 [0,1] — 0.5 기준으로 피처가 원하는 방향이면 가산, 반대면 감산.
 // 피처가 중립(0.5)이면 정확히 0.5가 나온다.
 export function contextFit(c: Candidate, ctx: RecContext): number {
-  const x = buildItemVector({ id: c.id, category: c.category, price_level: c.price_level });
+  const x = buildItemVector({ id: c.id, category: c.category, price_level: c.price_level, menu_intents: c.menu_intents });
   const w = contextWeights(ctx);
   let s = 0;
   for (let i = 0; i < FEATURE_DIM; i++) {

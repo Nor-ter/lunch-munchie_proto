@@ -96,6 +96,12 @@ describe("contextFit 피처 기반 (감사 개선 3)", () => {
     const c: Candidate = { id: "x", category: "한식", rating: 0, review_count: 0, price_level: 2 };
     expect(contextFit(c, {})).toBeCloseTo(0.5, 6);
   });
+
+  it("구조화 메뉴의 카페 섹션은 넓은 업종 분류를 덮지 않고 카페 맥락 점수만 보강한다", () => {
+    const generic: Candidate = { id: "g", category: "레스토랑", rating: 0, review_count: 0, price_level: 2 };
+    const withEspresso: Candidate = { ...generic, id: "e", menu_intents: ["cafe"] };
+    expect(contextFit(withEspresso, { intent: "cafe" })).toBeGreaterThan(contextFit(generic, { intent: "cafe" }));
+  });
 });
 
 describe("절편 항 (감사 개선 2)", () => {
