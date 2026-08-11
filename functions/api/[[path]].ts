@@ -285,19 +285,39 @@ const json = <T>(value: string | null | undefined, fallback: T): T => {
  * then this keeps deployment backwards-compatible without treating an unknown
  * restaurant as compliant with a selected restriction.
  */
-async function indexedDietaryByRestaurant(db: any, ids: string[]) {
+type IndexedMenuEvidence = { dietary: string[]; prices: number[]; categories: string[] };
+
+async function indexedMenuEvidenceByRestaurant(db: any, ids: string[]) {
   const uniqueIds = [...new Set(ids.filter(Boolean))];
-  const dietary = new Map<string, string[]>();
-  if (!uniqueIds.length) return dietary;
+  const evidence = new Map<string, IndexedMenuEvidence>();
+  if (!uniqueIds.length) return evidence;
   const { results } = await db.prepare(
-    `SELECT restaurant_id, dietary FROM restaurant_menu_items WHERE restaurant_id IN (${uniqueIds.map(() => "?").join(",")})`,
-  ).bind(...uniqueIds).all<{ restaurant_id: string; dietary: string }>();
+    `SELECT restaurant_id, dietary, price, category FROM restaurant_menu_items WHERE restaurant_id IN (${uniqueIds.map(() => "?").join(",")})`,
+  ).bind(...uniqueIds).all<{ restaurant_id: string; dietary: string; price: number | null; category: string | null }>();
   for (const row of results) {
-    const values = dietary.get(row.restaurant_id) ?? [];
-    values.push(...json<string[]>(row.dietary, []));
-    dietary.set(row.restaurant_id, values);
+    const value = evidence.get(row.restaurant_id) ?? { dietary: [], prices: [], categories: [] };
+    value.dietary.push(...json<string[]>(row.dietary, []));
+    if (typeof row.price === "number" && Number.isFinite(row.price) && row.price > 0)
+      value.prices.push(row.price);
+    if (row.category?.trim()) value.categories.push(row.category.trim());
+    evidence.set(row.restaurant_id, value);
   }
-  return dietary;
+  return evidence;
+}
+
+/** Uses the same evidence-backed tiers as seed generation, from the menu median. */
+function menuPriceLevel(evidence: IndexedMenuEvidence | undefined): 1 | 2 | 3 | 4 | null {
+  const prices = evidence?.prices.filter((price) => Number.isFinite(price) && price > 0).sort((a, b) => a - b) ?? [];
+  if (!prices.length) return null;
+  const median = prices[Math.floor(prices.length / 2)];
+  return median <= 15 ? 1 : median <= 30 ? 2 : median <= 50 ? 3 : 4;
+}
+
+/** A missing menu is unknown, never an invented mid-price restaurant. */
+function matchesMenuBudget(evidence: IndexedMenuEvidence | undefined, budget: number | null) {
+  if (!budget || budget >= 4) return true;
+  const level = menuPriceLevel(evidence);
+  return level === null || level <= budget;
 }
 const isoDate = (value: unknown) => {
   const numeric = typeof value === "number" ? value : Number(value);
@@ -812,18 +832,7 @@ app.post("/api/recommend", async (c) => {
       : Array.isArray(ctx.diet)
         ? ctx.diet
         : [];
-    // 2. Budget (Price Range)
-    if (typeof ctx.budget === "number") {
-      if (ctx.budget === 1) {
-        query += ` AND price_level = 1`;
-      } else if (ctx.budget === 2) {
-        query += ` AND price_level <= 2`;
-      } else if (ctx.budget === 3) {
-        query += ` AND price_level <= 3`;
-      }
-    }
-
-    // 3. Taste (Categories) mapping
+    // 2. Taste (Categories) mapping
     if (ctx.categories && ctx.categories.length > 0) {
       query += ` AND category IN (${ctx.categories.map(() => "?").join(",")})`;
       params.push(...ctx.categories);
@@ -845,17 +854,21 @@ app.post("/api/recommend", async (c) => {
     // classifier is also used by shared Lunchie sessions, so every serving
     // path has one hard-category contract.
     const rawRestaurants = rawResults as any[];
-    const indexedDietary = await indexedDietaryByRestaurant(
+    const menuEvidence = await indexedMenuEvidenceByRestaurant(
       c.env.DB,
       rawRestaurants.map((restaurant) => String(restaurant.id)),
     );
+    const requestedBudget = Number.isInteger(ctx.budget) && ctx.budget >= 1 && ctx.budget <= 4
+      ? Number(ctx.budget)
+      : null;
     const results = rawRestaurants.filter((restaurant) =>
       categoryMatchesIntent(restaurant.category, selectedIntent) &&
       matchesDietaryRestrictions(
         restaurant.category,
-        indexedDietary.get(restaurant.id) ?? json<string[]>(restaurant.dietary_options, []),
+        menuEvidence.get(restaurant.id)?.dietary ?? json<string[]>(restaurant.dietary_options, []),
         diets,
-      ),
+      ) &&
+      matchesMenuBudget(menuEvidence.get(restaurant.id), requestedBudget),
     );
 
     let exposureMap: Record<string, { count?: number; updatedAt?: number }> =
@@ -876,6 +889,7 @@ app.post("/api/recommend", async (c) => {
     const recommendationContext: RecContext = {
       ...(ctx as RecContext),
       diet: Array.isArray(ctx.dietary) ? ctx.dietary : Array.isArray(ctx.diet) ? ctx.diet : undefined,
+      budget: requestedBudget as 1 | 2 | 3 | 4 | undefined,
     };
     const now = Date.now();
     const exposurePenalty = (restaurantId: string) => {
@@ -1916,7 +1930,7 @@ app.post("/api/sessions/:token/status", async (c) => {
     const { results: catalogue } = await c.env.DB.prepare(
       "SELECT id, category, rating, price_level, dietary_options, latitude, longitude FROM restaurants",
     ).all();
-    const indexedDietary = await indexedDietaryByRestaurant(
+    const menuEvidence = await indexedMenuEvidenceByRestaurant(
       c.env.DB,
       (catalogue as any[]).map((restaurant) => String(restaurant.id)),
     );
@@ -1947,12 +1961,10 @@ app.post("/api/sessions/:token/status", async (c) => {
             restaurant.longitude,
             Number(session.filter_distance),
           )) &&
-        (Number(session.filter_budget) >= 4 ||
-          Number(restaurant.price_level ?? 4) <=
-            Number(session.filter_budget)) &&
+        matchesMenuBudget(menuEvidence.get(restaurant.id), Number(session.filter_budget)) &&
         matchesDietaryRestrictions(
           restaurant.category,
-          indexedDietary.get(restaurant.id) ?? json<string[]>(restaurant.dietary_options, []),
+          menuEvidence.get(restaurant.id)?.dietary ?? json<string[]>(restaurant.dietary_options, []),
           requiredDietary,
         ),
     );

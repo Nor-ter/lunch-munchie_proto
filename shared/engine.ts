@@ -36,6 +36,8 @@ export interface RecContext {
   lat?: number;
   lng?: number;
   diet?: string[];
+  /** User-selected price ceiling (₩…₩₩₩₩). Enforced only with menu-price evidence. */
+  budget?: 1 | 2 | 3 | 4;
 }
 
 // 스코어러 입력 후보 (레스토랑 최소 피처)

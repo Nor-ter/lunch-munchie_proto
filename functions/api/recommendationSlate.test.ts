@@ -73,4 +73,32 @@ describe("canonical recommendation serving", () => {
     expect(response.status).toBe(200);
     expect(body.slate.map((item) => item.id)).toEqual(["r1"]);
   });
+
+  it("uses menu-price evidence for a budget ceiling without inventing a price for missing menus", async () => {
+    const db = {
+      prepare(query: string) {
+        return { bind: () => ({
+          all: async () => query.includes("FROM restaurant_menu_items")
+            ? { results: [
+              { restaurant_id: "r1", dietary: "[\"VG\"]", price: 35, category: "Mains" },
+              { restaurant_id: "r2", dietary: "[\"V\"]", price: 10, category: "Mains" },
+            ] }
+            : query.includes("FROM restaurants") ? { results: restaurants } : { results: [] },
+          first: async () => null,
+        }) };
+      },
+      batch: async (statements: unknown[]) => ({ results: statements.map(() => ({ meta: { changes: 1 } })) }),
+    };
+    const response = await onRequest({
+      request: new Request("https://example.test/api/recommend", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ k: 7, context: { intent: "meal", budget: 1 } }),
+      }),
+      env: { DB: db, AUTH_SESSION_SECRET: "test-secret", USER_DO: { idFromName: (name: string) => name, get: () => ({ fetch: async () => Response.json({ exposureMap: {} }) }) } },
+    } as any);
+    const body = await response.json() as { slate: { id: string }[] };
+    // r3 has no menu evidence and stays eligible; r1 is evidence-backed but exceeds ₩.
+    expect(body.slate.map((item) => item.id).sort()).toEqual(["r2", "r3"]);
+  });
 });
