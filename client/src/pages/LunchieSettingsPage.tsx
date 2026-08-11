@@ -539,6 +539,11 @@ export default function LunchieSettingsPage() {
                           );
                         })}
                       </div>
+                      {filter === '예산' && (
+                        <p className="mt-2 text-[10px] leading-relaxed text-[#9B9B9B]">
+                          메뉴 가격이 확인된 식당에만 예산 상한을 적용해요. 가격 정보가 없는 식당은 임의 가격으로 제외하지 않습니다.
+                        </p>
+                      )}
                     </div>
                   ))}
                 </div>
