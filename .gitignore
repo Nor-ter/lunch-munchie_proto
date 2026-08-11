@@ -25,6 +25,11 @@ playwright-report/
 .e2e/
 config/e2e.config.local.json
 
+# Generated from the canonical Drive manifest by `pnpm data:seed:d1`.
+# Developers regenerate it immediately before local D1 seeding; never track a
+# large, duplicate catalogue export in Git.
+scripts/seed.sql
+
 # Superpowers brainstorm mockups
 .superpowers/
 docs/superpowers/
