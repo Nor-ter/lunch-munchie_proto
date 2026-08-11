@@ -496,7 +496,7 @@ app.get("/api/admin/metrics", async (c) => {
     ] : [],
     contributionSampleSize: Number(contributionResult?.count ?? 0),
     catalogue: {
-      restaurants: count(catalogueSummary),
+      restaurants: Number(catalogueSummary?.restaurants ?? 0),
       photoReferences: Number(catalogueSummary?.photo_references ?? 0),
       restaurantsWithPhotoReferences: Number(catalogueSummary?.with_photo_reference ?? 0),
       photoAssets: count(photoAssetSummary),
