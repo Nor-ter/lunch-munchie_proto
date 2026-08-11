@@ -22,6 +22,9 @@ type Catalogue = {
   restaurantsWithMenus: number;
   normalisedMenuItems: number;
   restaurantsWithNormalisedMenus: number;
+  pricedMenuItems: number;
+  dietaryMenuItems: number;
+  evidencedMenuItems: number;
   completeness: { address: number; coordinates: number; description: number; photoReference: number; menu: number };
   categories: { category: string; count: number }[];
   dietarySupport: { label: string; count: number }[];
@@ -183,7 +186,7 @@ export default function AdminDashboardPage() {
                 : `연결 사진 ${metrics.catalogue.photoReferences}장은 사용 가능`}
             />
             <MetricCard label="사용자 사진 분류" value={`${metrics.catalogue.communityPhotoAttributions}장`} detail={`식당 연결 ${metrics.catalogue.restaurantPhotoAttributions}장 · 기타 ${metrics.catalogue.otherPhotoAttributions}장`} />
-            <MetricCard label="메뉴 항목" value={`${metrics.catalogue.menuItems}개`} detail={`${metrics.catalogue.restaurantsWithMenus}곳 · 정규화 ${metrics.catalogue.normalisedMenuItems}개`} />
+            <MetricCard label="구조화 메뉴" value={`${metrics.catalogue.normalisedMenuItems}개`} detail={`${metrics.catalogue.restaurantsWithNormalisedMenus}곳 · 가격 ${metrics.catalogue.pricedMenuItems}개 · 식단 근거 ${metrics.catalogue.dietaryMenuItems}개`} />
             <MetricCard label="좌표 완성도" value={coverage(metrics.catalogue.completeness.coordinates, metrics.catalogue.restaurants)} detail={`${metrics.catalogue.completeness.coordinates}/${metrics.catalogue.restaurants}곳 위치 보유`} />
           </div>
         </section>
