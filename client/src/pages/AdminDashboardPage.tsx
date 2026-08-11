@@ -15,6 +15,9 @@ type Catalogue = {
   restaurantsWithPhotoReferences: number;
   photoAssets: number;
   restaurantsWithPhotoAssets: number;
+  communityPhotoAttributions: number;
+  restaurantPhotoAttributions: number;
+  otherPhotoAttributions: number;
   menuItems: number;
   restaurantsWithMenus: number;
   normalisedMenuItems: number;
@@ -179,6 +182,7 @@ export default function AdminDashboardPage() {
                 ? `${metrics.catalogue.restaurantsWithPhotoAssets}곳에서 색인`
                 : `연결 사진 ${metrics.catalogue.photoReferences}장은 사용 가능`}
             />
+            <MetricCard label="사용자 사진 분류" value={`${metrics.catalogue.communityPhotoAttributions}장`} detail={`식당 연결 ${metrics.catalogue.restaurantPhotoAttributions}장 · 기타 ${metrics.catalogue.otherPhotoAttributions}장`} />
             <MetricCard label="메뉴 항목" value={`${metrics.catalogue.menuItems}개`} detail={`${metrics.catalogue.restaurantsWithMenus}곳 · 정규화 ${metrics.catalogue.normalisedMenuItems}개`} />
             <MetricCard label="좌표 완성도" value={coverage(metrics.catalogue.completeness.coordinates, metrics.catalogue.restaurants)} detail={`${metrics.catalogue.completeness.coordinates}/${metrics.catalogue.restaurants}곳 위치 보유`} />
           </div>

@@ -400,7 +400,7 @@ app.get("/api/admin/metrics", async (c) => {
     : 30;
   const start = Date.now() - (days - 1) * 86_400_000;
   const count = (row: { count?: number | string } | null | undefined) => Number(row?.count ?? 0);
-  const [registered, newRegistered, activeActors, activeSignedIn, activeGuests, eventResult, trendResult, personaResult, modelResult, impressionCoverage, persistedSlates, servedImpressions, attributableSwipes, categoryResult, contributionResult, catalogueSummary, photoAssetSummary, menuSummary, catalogueCategories, dietarySupport, sourceDistribution, restaurantSamples] = await Promise.all([
+  const [registered, newRegistered, activeActors, activeSignedIn, activeGuests, eventResult, trendResult, personaResult, modelResult, impressionCoverage, persistedSlates, servedImpressions, attributableSwipes, categoryResult, contributionResult, catalogueSummary, photoAssetSummary, coursePhotoSummary, menuSummary, catalogueCategories, dietarySupport, sourceDistribution, restaurantSamples] = await Promise.all([
     c.env.DB.prepare("SELECT COUNT(*) AS count FROM users").first<{ count: number }>(),
     c.env.DB.prepare("SELECT COUNT(*) AS count FROM users WHERE created_at >= ?").bind(start).first<{ count: number }>(),
     c.env.DB.prepare("SELECT COUNT(DISTINCT user_id) AS count FROM rec_events WHERE created_at >= ? AND user_id IS NOT NULL").bind(start).first<{ count: number }>(),
@@ -418,6 +418,7 @@ app.get("/api/admin/metrics", async (c) => {
     c.env.DB.prepare("SELECT AVG(CAST(json_extract(item.value, '$.components.reputation') AS REAL)) AS reputation, AVG(CAST(json_extract(item.value, '$.components.context') AS REAL)) AS context, AVG(CAST(json_extract(item.value, '$.components.taste') AS REAL)) AS taste, AVG(CAST(json_extract(item.value, '$.components.exposureFatigue') AS REAL)) AS exposure_fatigue, AVG(CAST(json_extract(item.value, '$.components.satiation') AS REAL)) AS satiation, AVG(CAST(json_extract(item.value, '$.components.journeyChain') AS REAL)) AS journey_chain, COUNT(*) AS count FROM recommendation_slates s, json_each(s.items_json) AS item WHERE s.created_at >= ? AND json_type(item.value, '$.components') = 'object'").bind(start).first<{ reputation: number | null; context: number | null; taste: number | null; exposure_fatigue: number | null; satiation: number | null; journey_chain: number | null; count: number }>(),
     c.env.DB.prepare("SELECT COUNT(*) AS restaurants, SUM(CASE WHEN address IS NOT NULL AND trim(address) != '' THEN 1 ELSE 0 END) AS with_address, SUM(CASE WHEN latitude != 0 OR longitude != 0 THEN 1 ELSE 0 END) AS with_coordinates, SUM(CASE WHEN short_description IS NOT NULL AND trim(short_description) != '' THEN 1 ELSE 0 END) AS with_description, SUM(CASE WHEN json_valid(photos) AND json_array_length(photos) > 0 THEN 1 ELSE 0 END) AS with_photo_reference, SUM(CASE WHEN json_valid(photos) THEN json_array_length(photos) ELSE 0 END) AS photo_references, SUM(CASE WHEN json_valid(menus) AND json_array_length(menus) > 0 THEN 1 ELSE 0 END) AS with_menu_reference, SUM(CASE WHEN json_valid(menus) THEN json_array_length(menus) ELSE 0 END) AS menu_references FROM restaurants").first<{ restaurants: number; with_address: number; with_coordinates: number; with_description: number; with_photo_reference: number; photo_references: number; with_menu_reference: number; menu_references: number }>(),
     c.env.DB.prepare("SELECT COUNT(*) AS photo_assets, COUNT(DISTINCT restaurant_id) AS restaurants_with_photo_assets FROM restaurant_photos").first<{ photo_assets: number; restaurants_with_photo_assets: number }>(),
+    c.env.DB.prepare("SELECT COUNT(*) AS count, SUM(CASE WHEN classification = 'restaurant' THEN 1 ELSE 0 END) AS restaurant_count, SUM(CASE WHEN classification = 'other' THEN 1 ELSE 0 END) AS other_count FROM course_photo_attributions").first<{ count: number; restaurant_count: number; other_count: number }>(),
     c.env.DB.prepare("SELECT COUNT(*) AS menu_items, COUNT(DISTINCT restaurant_id) AS restaurants_with_menus FROM restaurant_menu_items").first<{ menu_items: number; restaurants_with_menus: number }>(),
     c.env.DB.prepare("SELECT COALESCE(NULLIF(trim(category), ''), '기타') AS category, COUNT(*) AS count FROM restaurants GROUP BY COALESCE(NULLIF(trim(category), ''), '기타') ORDER BY count DESC, category ASC LIMIT 12").all<{ category: string; count: number }>(),
     c.env.DB.prepare("SELECT trim(diet.value) AS label, COUNT(DISTINCT r.id) AS count FROM restaurants r, json_each(CASE WHEN json_valid(r.dietary_options) THEN r.dietary_options ELSE '[]' END) AS diet WHERE trim(diet.value) != '' GROUP BY trim(diet.value) ORDER BY count DESC, label ASC LIMIT 12").all<{ label: string; count: number }>(),
@@ -501,6 +502,9 @@ app.get("/api/admin/metrics", async (c) => {
       restaurantsWithPhotoReferences: Number(catalogueSummary?.with_photo_reference ?? 0),
       photoAssets: count(photoAssetSummary),
       restaurantsWithPhotoAssets: Number(photoAssetSummary?.restaurants_with_photo_assets ?? 0),
+      communityPhotoAttributions: count(coursePhotoSummary),
+      restaurantPhotoAttributions: Number(coursePhotoSummary?.restaurant_count ?? 0),
+      otherPhotoAttributions: Number(coursePhotoSummary?.other_count ?? 0),
       menuItems: Number(catalogueSummary?.menu_references ?? 0),
       restaurantsWithMenus: Number(catalogueSummary?.with_menu_reference ?? 0),
       normalisedMenuItems: count(menuSummary),
@@ -1077,11 +1081,14 @@ app.post("/api/courses", async (c) => {
             .filter(Boolean)
             .slice(0, limit)
         : [];
+    const isAuthorUpload = (value: unknown): value is string =>
+      typeof value === "string" &&
+      value.startsWith(`/photos/uploads/${session.sub}/`) &&
+      value.length <= 512;
     // Feed artwork must be an author-uploaded R2 path. Restaurant imagery is
     // recommendation metadata and must never stand in for a user's post.
     const requestedHero =
-      typeof body.heroImage === "string" &&
-      body.heroImage.startsWith("/photos/")
+      isAuthorUpload(body.heroImage)
         ? body.heroImage
         : null;
     // URL은 태그와 달리 잘라내면 안 된다. 과거 generic `strings()`를 써서
@@ -1091,9 +1098,7 @@ app.post("/api/courses", async (c) => {
           new Set(
             body.feedPhotos.filter(
               (photo): photo is string =>
-                typeof photo === "string" &&
-                photo.startsWith("/photos/") &&
-                photo.length <= 512,
+                isAuthorUpload(photo),
             ),
           ),
         ).slice(0, MAX_MUNCHIE_FEED_PHOTOS)
@@ -1105,8 +1110,7 @@ app.post("/api/courses", async (c) => {
             if (
               !raw ||
               typeof raw !== "object" ||
-              typeof raw.src !== "string" ||
-              !raw.src.startsWith("/photos/")
+              !isAuthorUpload(raw.src)
             )
               return [];
             const number = (
@@ -1140,6 +1144,37 @@ app.post("/api/courses", async (c) => {
         400,
       );
     }
+    const rawAttributions = Array.isArray(body.photoAttributions)
+      ? body.photoAttributions
+      : [];
+    const attributionByPath = new Map<string, {
+      r2Path: string;
+      classification: "restaurant" | "other";
+      restaurantId: string | null;
+      source: "gps_suggestion" | "user_selected" | "other";
+    }>();
+    for (const raw of rawAttributions) {
+      if (!raw || typeof raw !== "object") continue;
+      const item = raw as Record<string, unknown>;
+      if (!isAuthorUpload(item.r2Path) || !feedPhotos.includes(item.r2Path)) continue;
+      const classification = item.classification === "restaurant" ? "restaurant" : "other";
+      const restaurantId = typeof item.restaurantId === "string" && restaurantIds.includes(item.restaurantId)
+        ? item.restaurantId
+        : null;
+      if (classification === "restaurant" && !restaurantId) {
+        return c.json({ error: "사진은 이 코스에 포함된 식당에만 연결할 수 있습니다." }, 400);
+      }
+      const source = item.source === "gps_suggestion" || item.source === "user_selected"
+        ? item.source
+        : "other";
+      attributionByPath.set(item.r2Path, { r2Path: item.r2Path, classification, restaurantId, source });
+    }
+    const photoAttributions = feedPhotos.map((r2Path) => attributionByPath.get(r2Path) ?? {
+      r2Path,
+      classification: "other" as const,
+      restaurantId: null,
+      source: "other" as const,
+    });
     const heroImage = requestedHero ?? feedPhotos[0];
     const templateId =
       typeof body.templateId === "string" ? body.templateId.slice(0, 80) : null;
@@ -1196,6 +1231,19 @@ app.post("/api/courses", async (c) => {
           photo.w,
           photo.h ?? photo.w,
           photo.rotate,
+          createdAt,
+        ),
+      ),
+      ...photoAttributions.map((attribution) =>
+        c.env.DB.prepare(
+          "INSERT INTO course_photo_attributions (id, course_id, r2_path, restaurant_id, classification, attribution_source, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
+        ).bind(
+          crypto.randomUUID(),
+          id,
+          attribution.r2Path,
+          attribution.restaurantId,
+          attribution.classification,
+          attribution.source,
           createdAt,
         ),
       ),
@@ -2300,6 +2348,9 @@ app.delete("/api/feed-post", async (c) => {
     .bind(courseId)
     .all<{ id: string }>();
   const statements = [
+    c.env.DB.prepare("DELETE FROM course_photo_attributions WHERE course_id = ?").bind(
+      courseId,
+    ),
     c.env.DB.prepare("DELETE FROM course_media WHERE course_id = ?").bind(
       courseId,
     ),
