@@ -15,7 +15,9 @@ async function interceptGoogleStart(page: import('playwright/test').Page) {
 test('anonymous profile never renders a prototype user', async ({ page }) => {
   await mockAnonymousAuth(page);
   await page.goto('/profile');
-  await expect(page.getByRole('heading', { name: '내 프로필' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: '로그인이 필요해요' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: '나의 피드 0' })).toBeVisible();
+  await expect(page.getByText('로그인하면 나의 피드를 볼 수 있어요')).toBeVisible();
   await expect(page.getByText('지민', { exact: true })).toHaveCount(0);
   await expect(page.getByRole('button', { name: 'Google로 로그인' })).toBeVisible();
 });

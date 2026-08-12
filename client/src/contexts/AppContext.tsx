@@ -5,8 +5,9 @@
  */
 
 import React, { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
-import { normalizeDiet, isHardRestriction, type DietTag } from '@shared/const';
-import { intentForHour, type Intent } from '@shared/intent';
+import { matchesDietaryRestrictions } from '@shared/const';
+import { categoryMatchesIntent, intentForHour, type Intent } from '@shared/intent';
+import { distanceMetres, isWithinRadius } from '@shared/geo';
 import { normalizeFoodTag, type TagType } from '@/constants/foodTags';
 import { DRIVE_COURSES, DRIVE_FEED_POSTS } from '@/data/driveFeed';
 import { demoAuthorIdFor } from '@/data/demoAuthors';
@@ -24,19 +25,8 @@ export type { TagType } from '@/constants/foodTags';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
-// diet 하드 제약 매칭: 필터('비건')와 식당 태그('비건 옵션')를 enum으로 정규화해 비교.
-const SEAFOOD_RE = /해산물|seafood|스시|sushi|초밥|회|sashimi|오마카세|omakase/i;
 function matchesDiet(category: string, restaurantDietary: string[], filterDietary: string[]): boolean {
-  const required: DietTag[] = [];
-  for (const raw of filterDietary || []) {
-    const n = normalizeDiet(raw);
-    if (n && isHardRestriction(n)) required.push(n);
-  }
-  if (required.length === 0) return true;
-  const offered = (restaurantDietary || []).map(normalizeDiet);
-  return required.every((tag) =>
-    tag === 'NO_SEAFOOD' ? !SEAFOOD_RE.test(category) : offered.includes(tag),
-  );
+  return matchesDietaryRestrictions(category, restaurantDietary, filterDietary);
 }
 
 // TagType은 @/constants/foodTags 로 이동(위 import+re-export). 인라인 정의 제거 — 태그 taxonomy 단일화.
@@ -69,6 +59,41 @@ export interface Restaurant {
   openHours: string;
   dietary: string[];
   description: string;
+}
+
+function hasSessionOrigin(filters: GroupSession['filters']) {
+  return (
+    filters.distanceEnabled !== false &&
+    typeof filters.originLatitude === 'number' &&
+    typeof filters.originLongitude === 'number' &&
+    Number.isFinite(filters.originLatitude) &&
+    Number.isFinite(filters.originLongitude)
+  );
+}
+
+function formatSessionDistance(metres: number) {
+  const rounded = metres < 1_000
+    ? `${Math.round(metres / 10) * 10}m`
+    : `${(metres / 1_000).toFixed(metres < 10_000 ? 1 : 0)}km`;
+  return `직선거리 ${rounded}`;
+}
+
+function withSessionDistances(
+  restaurants: Restaurant[],
+  filters: GroupSession['filters'],
+) {
+  if (!hasSessionOrigin(filters)) return restaurants;
+  return restaurants.map((restaurant) => ({
+    ...restaurant,
+    distance: formatSessionDistance(
+      distanceMetres(
+        filters.originLatitude!,
+        filters.originLongitude!,
+        restaurant.lat,
+        restaurant.lng,
+      ),
+    ),
+  }));
 }
 
 export interface CourseStop {
@@ -125,6 +150,11 @@ export interface GroupSession {
     dietary: string[];
     budget: 1 | 2 | 3 | 4;
     radius: number;
+    /** false면 위치 권한 없이 전체 후보에서 공통 덱을 만든다. */
+    distanceEnabled?: boolean;
+    /** 세션을 만든 호스트의 1회성 기준 위치. 공유 카드 덱의 공통 원점이다. */
+    originLatitude?: number;
+    originLongitude?: number;
     categories: string[];
     /** 명시적으로 고른 밥/카페/디저트. 없으면(undefined) 시간대로 자동 판정. */
     intent?: Intent;
@@ -391,7 +421,11 @@ export async function buildDeck(
 ): Promise<{ restaurants: Restaurant[]; slateId?: string; recMeta?: GroupSession['recMeta']; modelVersion?: string }> {
   const base = allRestaurants.filter(r =>
     (filters.categories.length === 0 || filters.categories.includes(r.category)) &&
-    matchesDiet(r.category, r.dietary, filters.dietary),
+    categoryMatchesIntent(r.category, filters.intent ?? intentForHour(new Date().getHours())) &&
+    matchesDiet(r.category, r.dietary, filters.dietary) &&
+    (!hasSessionOrigin(filters) || isWithinRadius(
+      filters.originLatitude!, filters.originLongitude!, r.lat, r.lng, filters.radius,
+    )),
   );
   if (base.length === 0) return { restaurants: base };
   try {
@@ -409,14 +443,14 @@ export async function buildDeck(
       body: JSON.stringify({
         candidate_ids: base.map(r => r.id),
         // 앱이 이미 아는 맥락은 클라가 실어 보낸다 (companions=인원수). 나머지는 서버가 보강.
-        context: { diet: filters.dietary, companions: filters.partySize, intent: filters.intent ?? intentForHour(new Date().getHours()) },
+        context: { diet: filters.dietary, budget: filters.budget, companions: filters.partySize, intent: filters.intent ?? intentForHour(new Date().getHours()) },
         // 예선 = 엔진 추천 top-7 (결정 플로우 ①). 스와이프 덱 = 슬레이트와 1:1.
         k: 7,
         slate_type: 'PRELIM',
         user_id: userId,
       }),
     });
-    if (!res.ok) return { restaurants: base };
+    if (!res.ok) return { restaurants: withSessionDistances(base, filters) };
     const data = await res.json();
     const meta: GroupSession['recMeta'] = {};
     const slate: Restaurant[] = [];
@@ -426,9 +460,9 @@ export async function buildDeck(
       if (r) slate.push(r);
     }
     // 덱 = 슬레이트(top-7)만. 노출(IMPRESSION)·스와이프가 정확히 일치한다.
-    return { restaurants: slate.length ? slate : base, slateId: data.slate_id, recMeta: meta, modelVersion: data.model_version };
+    return { restaurants: withSessionDistances(slate.length ? slate : base, filters), slateId: data.slate_id, recMeta: meta, modelVersion: data.model_version };
   } catch {
-    return { restaurants: base };
+    return { restaurants: withSessionDistances(base, filters) };
   }
 }
 
@@ -673,10 +707,16 @@ export function AppProvider({
             const merged = new Map(
               previous.filter(r => !mockIds.has(r.id)).map(restaurant => [restaurant.id, restaurant]),
             );
-            resData.forEach((restaurant: Restaurant) => merged.set(restaurant.id, {
-              ...restaurant,
-              tags: Array.isArray(restaurant.tags) ? restaurant.tags.map(tag => normalizeFoodTag(tag)) : [],
-              photos: Array.isArray(restaurant.photos) ? restaurant.photos.map(p => p.startsWith('http') || p.startsWith('/') ? p : `/photos/${p}`) : [],
+            resData.forEach((rawRestaurant: Restaurant & { latitude?: number; longitude?: number }) => merged.set(rawRestaurant.id, {
+              ...rawRestaurant,
+              // D1 uses latitude/longitude; the established browser contract
+              // uses lat/lng. Normalise at this boundary so map and distance
+              // UI never accidentally render a stale mock value.
+              lat: Number(rawRestaurant.latitude ?? rawRestaurant.lat),
+              lng: Number(rawRestaurant.longitude ?? rawRestaurant.lng),
+              distance: typeof rawRestaurant.distance === 'string' ? rawRestaurant.distance : '',
+              tags: Array.isArray(rawRestaurant.tags) ? rawRestaurant.tags.map(tag => normalizeFoodTag(tag)) : [],
+              photos: Array.isArray(rawRestaurant.photos) ? rawRestaurant.photos.map(p => p.startsWith('http') || p.startsWith('/') ? p : `/photos/${p}`) : [],
             }));
             return Array.from(merged.values());
           });
@@ -1047,9 +1087,13 @@ export function AppProvider({
             name,
             groupSize: filters.partySize,
             filterDistance: filters.radius,
+            distanceEnabled: filters.distanceEnabled !== false,
+            originLatitude: filters.originLatitude,
+            originLongitude: filters.originLongitude,
             filterBudget: filters.budget,
             filterCategories: filters.categories,
             filterDietary: filters.dietary,
+            intent: filters.intent,
             hostPreferences: profile.categoryPrefs,
             hostDietary: profile.dietary,
             deadlineMinutes,
@@ -1093,31 +1137,47 @@ export function AppProvider({
     if (!res.ok) throw new Error('Session not found');
     const data = await res.json();
     const status = (data.session.status as string).toLowerCase() as GroupSession['status'];
-    // 서버 sessions 테이블에 intent 컬럼이 없어 서버 응답엔 안 실려옴 — 직전 로컬 세션의 intent를 승계.
+    const serverIntent = data.session.intent === 'meal' || data.session.intent === 'cafe' || data.session.intent === 'dessert'
+      ? data.session.intent as Intent
+      : undefined;
+    // Migration 전 로컬 D1에서 읽은 레거시 세션만, 직전 화면의 선택을 보조적으로 유지한다.
     const prevIntent = currentSessionRef.current?.inviteCode === token ? currentSessionRef.current.filters.intent : undefined;
     const sessFilters = {
       partySize: data.session.group_size,
       dietary: data.session.filter_dietary || [],
       budget: data.session.filter_budget,
       radius: data.session.filter_distance,
+      distanceEnabled: data.session.distance_enabled !== 0,
+      originLatitude: data.session.origin_latitude,
+      originLongitude: data.session.origin_longitude,
       categories: data.session.filter_vibe || [],
-      intent: prevIntent,
+      intent: serverIntent ?? prevIntent,
     };
     const sharedDeckIds: string[] = Array.isArray(data.session.deck_ids)
       ? data.session.deck_ids.filter((id: unknown): id is string => typeof id === 'string')
       : [];
+    const sharedSlateItems: Array<{ restaurant_id: string; position: number; propensity: number }> = Array.isArray(data.slate?.items)
+      ? data.slate.items.filter((item: unknown): item is { restaurant_id: string; position: number; propensity: number } =>
+        Boolean(item) && typeof item === 'object' && typeof (item as any).restaurant_id === 'string',
+      )
+      : [];
+    const sharedRecMeta: NonNullable<GroupSession['recMeta']> = Object.fromEntries(sharedSlateItems.map((item) => [item.restaurant_id, {
+      propensity: typeof item.propensity === 'number' ? item.propensity : 1,
+      position: typeof item.position === 'number' ? item.position : 0,
+    }]));
     // New sessions always use the server-persisted candidate order. Waiting
     // rooms deliberately have no cards: the slate is made only after every
     // participant has supplied a preference snapshot and marked ready.
     const sharedRestaurants = sharedDeckIds
       .map(id => restaurants.find(restaurant => restaurant.id === id))
       .filter((restaurant): restaurant is Restaurant => Boolean(restaurant));
-    const deck = sharedRestaurants.length === sharedDeckIds.length && sharedRestaurants.length > 0
+    const distanceAwareRestaurants = withSessionDistances(sharedRestaurants, sessFilters);
+    const deck = distanceAwareRestaurants.length === sharedDeckIds.length && distanceAwareRestaurants.length > 0
       ? {
-          restaurants: sharedRestaurants,
-          slateId: `session:${data.session.id}`,
-          recMeta: Object.fromEntries(sharedRestaurants.map((restaurant, index) => [restaurant.id, { propensity: 1 / sharedRestaurants.length, position: index }])),
-          modelVersion: 'session-shared-slate-v1',
+          restaurants: distanceAwareRestaurants,
+          slateId: typeof data.session.recommendation_slate_id === 'string' ? data.session.recommendation_slate_id : undefined,
+          recMeta: Object.keys(sharedRecMeta).length ? sharedRecMeta : undefined,
+          modelVersion: typeof data.slate?.policy_version === 'string' ? data.slate.policy_version : 'session-group-legacy-v1',
         }
       : status === 'waiting'
         ? { restaurants: [], slateId: undefined, recMeta: undefined, modelVersion: 'session-group-pending-v1' }
@@ -1190,8 +1250,12 @@ export function AppProvider({
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ status: 'SWIPING_1', deadlineMinutes: minutes, userId: profile.id }),
     });
-    const payload = await res.json().catch(() => ({})) as { error?: string };
-    if (!res.ok) throw new Error(payload.error ?? '세션을 시작하지 못했어요.');
+    const payload = await res.json().catch(() => ({})) as { error?: string; code?: string };
+    if (!res.ok) {
+      const error = new Error(payload.error ?? '세션을 시작하지 못했어요.') as Error & { code?: string };
+      error.code = payload.code;
+      throw error;
+    }
     return fetchSession(token);
   }, [fetchSession]);
 

@@ -1,0 +1,54 @@
+import { describe, expect, it } from "vitest";
+import { onRequest } from "./[[path]]";
+
+describe("group-session recommendation attribution", () => {
+  it("persists one immutable group slate and participant impressions before voting starts", async () => {
+    const queries: string[] = [];
+    const session = {
+      id: "session-1", host_user_id: "host", share_token: "ABC123", group_size: 1,
+      filter_distance: 1000, distance_enabled: 0, origin_latitude: null, origin_longitude: null,
+      filter_budget: 4, filter_categories: "[]", filter_dietary: "[]", intent: "meal",
+      top_restaurant_ids: "[]", recommendation_slate_id: null, status: "WAITING", deadline_at: null, created_at: 1,
+    };
+    const db = {
+      prepare(query: string) {
+        queries.push(query);
+        const all = async () => {
+          if (query.includes("FROM session_members")) return { results: [{ user_id: "host", preferences_json: "{}" }] };
+          if (query.includes("FROM restaurants")) return { results: [
+            { id: "r1", category: "한식", rating: 4.5, price_level: 2, dietary_options: "[]", latitude: 0, longitude: 0 },
+            { id: "r2", category: "일식", rating: 4.2, price_level: 2, dietary_options: "[]", latitude: 0, longitude: 0 },
+          ] };
+          return { results: [] };
+        };
+        const statement = {
+          query,
+          all,
+          bind: () => ({
+            first: async () => query.includes("FROM sessions") ? session : null,
+            all,
+            run: async () => ({ meta: { changes: 1 } }),
+          }),
+        };
+        return statement;
+      },
+      batch: async (statements: Array<{ query: string }>) => {
+        queries.push(...statements.map((statement) => statement.query));
+        return [];
+      },
+    };
+
+    const response = await onRequest({
+      request: new Request("https://example.test/api/sessions/ABC123/status", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ status: "SWIPING_1", userId: "host" }),
+      }),
+      env: { DB: db, AUTH_SESSION_SECRET: "test" },
+    } as any);
+
+    expect(response.status).toBe(200);
+    expect(queries.some((query) => query.includes("INSERT INTO recommendation_slates"))).toBe(true);
+    expect(queries.some((query) => query.includes("'IMPRESSION'"))).toBe(true);
+    expect(queries.some((query) => query.includes("recommendation_slate_id"))).toBe(true);
+  });
+});

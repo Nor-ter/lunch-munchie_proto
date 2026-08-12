@@ -9,6 +9,10 @@ GOOGLE_CLIENT_SECRET=
 # Create a distinct random value for local development; do not reuse production.
 AUTH_SESSION_SECRET=
 
+# Comma-separated Google account emails permitted to view /admin.
+# Do not put this value in the browser or in source code.
+ADMIN_EMAILS=
+
 # Development reads catalogue images from this public, read-only media service.
 # Do not seed or sync the full production R2 bucket into the local emulator.
 MEDIA_ORIGIN=https://lunchie-munchie.pages.dev

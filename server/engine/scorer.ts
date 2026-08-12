@@ -72,7 +72,7 @@ export function contextWeights(ctx: RecContext): number[] {
 // 맥락 적합도 [0,1] — 0.5 기준으로 피처가 원하는 방향이면 가산, 반대면 감산.
 // 피처가 중립(0.5)이면 정확히 0.5가 나온다.
 export function contextFit(c: Candidate, ctx: RecContext): number {
-  const x = buildItemVector({ id: c.id, category: c.category, price_level: c.price_level });
+  const x = buildItemVector({ id: c.id, category: c.category, price_level: c.price_level, menu_intents: c.menu_intents });
   const w = contextWeights(ctx);
   let s = 0;
   for (let i = 0; i < FEATURE_DIM; i++) {
@@ -82,10 +82,25 @@ export function contextFit(c: Candidate, ctx: RecContext): number {
   return Math.max(0, Math.min(1, 0.5 + s));
 }
 
-export function scoreCandidate(
+export interface ScoreBreakdown {
+  reputation: number;
+  context: number;
+  taste: number;
+  exposureFatigue: number;
+  satiation: number;
+  journeyChain: number;
+  total: number;
+}
+
+/**
+ * Returns policy-internal additive contributions.  These explain why the
+ * current policy ranked an item; they are not a causal explanation of why a
+ * person ultimately chose it.
+ */
+export function scoreCandidateBreakdown(
   c: Candidate, ctx: RecContext, pool: Candidate[], tasteFit: number | null = null, fatigue = 0, sat = 0, chain = 0,
   repPrior: number | null = null,
-): number {
+): ScoreBreakdown {
   const ratings = pool.map((p) => p.rating ?? 0);
   const reviews = pool.map((p) => p.review_count ?? 0);
   const rLo = Math.min(...ratings, 0), rHi = Math.max(...ratings, 5);
@@ -98,11 +113,30 @@ export function scoreCandidate(
     : (repPrior ?? 0.5);
   const cf = contextFit(c, ctx);
   // v3: 취향 적합도(단일 유저 또는 그룹 least-misery)가 있으면 섞는다. 아니면 v0 가중(콜드).
-  const base = tasteFit != null
-    ? 0.4 * reputation + 0.3 * cf + 0.3 * tasteFit
-    : 0.6 * reputation + 0.4 * cf;
+  const reputationContribution = (tasteFit != null ? 0.4 : 0.6) * reputation;
+  const contextContribution = (tasteFit != null ? 0.3 : 0.4) * cf;
+  const tasteContribution = tasteFit != null ? 0.3 * tasteFit : 0;
+  const exposureFatigue = -W_FATIGUE * fatigue;
+  const satiation = W_SATIATION * sat;
+  const journeyChain = W_CHAIN * chain;
+  return {
+    reputation: reputationContribution,
+    context: contextContribution,
+    taste: tasteContribution,
+    exposureFatigue,
+    satiation,
+    journeyChain,
+    total: reputationContribution + contextContribution + tasteContribution + exposureFatigue + satiation + journeyChain,
+  };
+}
+
+export function scoreCandidate(
+  c: Candidate, ctx: RecContext, pool: Candidate[], tasteFit: number | null = null, fatigue = 0, sat = 0, chain = 0,
+  repPrior: number | null = null,
+): number {
+  const breakdown = scoreCandidateBreakdown(c, ctx, pool, tasteFit, fatigue, sat, chain, repPrior);
   // v1 노출 피로(−) + v2 재소비 갈망(±) + v2 음식 연쇄(직전 스톱 다음 적합 +)
-  return base - W_FATIGUE * fatigue + W_SATIATION * sat + W_CHAIN * chain;
+  return breakdown.total;
 }
 
 // 간단한 시드 RNG (테스트 재현용). seed 없으면 Math.random.

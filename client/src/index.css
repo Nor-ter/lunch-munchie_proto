@@ -107,6 +107,15 @@
     box-shadow: 0 0 60px rgba(0,0,0,0.08);
   }
 
+  /* The consumer app intentionally uses a phone-sized shell. Operations is a
+     separate information-dense surface and must use the browser viewport. */
+  .app-shell--admin {
+    max-width: none;
+    margin: 0;
+    background: #171717;
+    box-shadow: none;
+  }
+
   .lm-btn-primary {
     background: var(--lm-primary); color: white; border-radius: 16px;
     height: 52px; font-weight: 700; font-size: 15px;

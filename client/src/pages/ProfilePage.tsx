@@ -8,7 +8,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useLocation } from 'wouter';
 import {
-  Menu, X, Camera, Upload,
+  Settings, X, Camera, Upload,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { useApp, type FeedPost } from '@/contexts/AppContext';
@@ -18,7 +18,7 @@ import UnifiedMunchieCard from '@/components/munchie/UnifiedMunchieCard';
 import FoodieBuddy, { type FoodieBuddyUiState } from '@/components/munchie/FoodieBuddy';
 import { ProfileStats } from '@/components/follow/ProfileStats';
 import { FollowerListSheet, type FollowListMode } from '@/components/follow/FollowerListSheet';
-import { AccountBanner } from '@/components/auth/AccountBanner';
+import { AccountBanner, AccountLogoutButton } from '@/components/auth/AccountBanner';
 import {
   GOOGLE_PROFILE_IMPORT_PARAM, GOOGLE_PROFILE_PROMPTED_KEY, IDENTITY_CONFLICT_CODE,
 } from '@/services/authApi';
@@ -271,10 +271,25 @@ function ProfilePageContent() {
   const foodieScore = courses.length + myPosts.length;
 
 
-  const saveSettings = () => {
-    updateProfile({ name: editName });
-    setActiveSheet(null);
-    toast.success('프로필 업데이트 완료! ✅');
+  const saveSettings = async () => {
+    const username = editName.trim();
+    if (!username) {
+      toast.error('이름을 입력해 주세요.');
+      return;
+    }
+    try {
+      const response = await fetch('/api/profile', {
+        method: 'PATCH', credentials: 'same-origin', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username }),
+      });
+      const saved = await response.json().catch(() => ({})) as { profile?: { username?: string }; error?: string };
+      if (!response.ok || !saved.profile?.username) throw new Error(saved.error || '이름을 저장하지 못했어요.');
+      updateProfile({ name: saved.profile.username });
+      setActiveSheet(null);
+      toast.success('프로필 업데이트 완료! ✅');
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : '이름을 저장하지 못했어요.');
+    }
   };
 
   const toggleDiet = (d: string) => {
@@ -324,7 +339,7 @@ function ProfilePageContent() {
           onClick={() => { setEditName(profile.name); setActiveSheet('settings'); }}
           aria-label="프로필 설정"
         >
-          <Menu size={18} color="#4A4A4A" />
+          <Settings size={18} color="#4A4A4A" />
         </HeaderIconButton>
 
         {/* 아바타 업로드용 숨은 파일 입력 — 헤더 아바타 탭 시트/설정 시트 공용 */}
@@ -486,21 +501,11 @@ function ProfilePageContent() {
               <div className="mx-auto mb-4 h-1 w-10 rounded-full bg-gray-200" />
               <p className="mb-4 font-bold text-[16px]">프로필 설정</p>
 
-               <div className="mb-5">
+              <div className="mb-5">
                  <p className="mb-1.5 text-[12px] font-semibold text-[#9B9B9B]">계정</p>
-                 {/* Google 계정 정보와 로그아웃은 AccountBanner가 직접 OAuth 세션으로 처리한다. */}
+                 {/* Google 계정 정보를 설정 화면에서 바로 확인한다. */}
                  <AccountBanner />
               </div>
-
-              {/* 아바타 — 탭하면 사진 업로드/이모지 변경 시트로 */}
-              <button
-                onClick={() => setActiveSheet('avatar')}
-                className="mb-5 flex w-full items-center gap-3 rounded-xl bg-[#FAF6F1] border border-[#F0E8E0] p-3 active:scale-[0.99] transition-transform"
-              >
-                <Avatar photo={profile.avatarPhoto} emoji={profile.emoji} size={48} />
-                <span className="flex-1 text-left text-[13px] font-semibold text-[#4A4A4A]">아바타 변경</span>
-                <Camera size={16} color="#9B9B9B" />
-              </button>
 
               <p className="mb-1.5 text-[12px] font-semibold text-[#9B9B9B]">이름</p>
               <input
@@ -531,6 +536,8 @@ function ProfilePageContent() {
               >
                 저장하기
               </button>
+
+              <AccountLogoutButton onLoggedOut={() => setActiveSheet(null)} />
             </motion.div>
           </>
         )}
@@ -611,23 +618,102 @@ function ProfilePageContent() {
   );
 }
 
-// 익명 사용자는 개인 프로필 데이터를 볼 수 없다. 프로토타입 기본값(지민 등)을
-// 랜더링하지 않고, 로그인 안내만 제공한다.
+const PROFILE_GOOGLE_LOGIN = '/api/auth/google/start?next=%2Fprofile';
+
+/** 익명 프리뷰 — 레이아웃은 로그인 프로필과 같되, 프로토타입 유저 데이터는 절대 그리지 않는다. */
+function ProfileGuestPreview() {
+  const goToLogin = useCallback(() => {
+    window.location.assign(PROFILE_GOOGLE_LOGIN);
+  }, []);
+
+  return (
+    <div className="min-h-dvh bg-[#FCF4EE] pb-24">
+      <HeaderActionRow className="header-action-row--raised">
+        <HeaderIconButton onClick={goToLogin} aria-label="프로필 설정">
+          <Settings size={18} color="#4A4A4A" />
+        </HeaderIconButton>
+      </HeaderActionRow>
+
+      <div className="mx-4 mt-2 rounded-[30px] p-4 pb-5" style={{ background: '#F8DCD2' }}>
+        <FoodieBuddy
+          score={0}
+          onCustomize={goToLogin}
+          uiState={LUNCHMATE_PREVIEW_FIXTURE.uiState}
+          unseenFoodCount={LUNCHMATE_PREVIEW_FIXTURE.unseenFoodCount}
+          onLunchboxOpen={goToLogin}
+          onProgressOpen={goToLogin}
+        />
+        <div className="relative z-20 -mt-9 px-3">
+          <div className="flex items-start gap-4">
+            <button
+              type="button"
+              onClick={goToLogin}
+              className="relative shrink-0 rounded-full border-4 border-[#F8DCD2] shadow-md active:scale-95 transition-transform"
+              aria-label="아바타 변경"
+            >
+              <Avatar emoji="😊" size={78} />
+              <span className="absolute bottom-0 right-0 w-6 h-6 rounded-full bg-[#EB5053] border-2 border-white flex items-center justify-center">
+                <Camera size={11} color="white" />
+              </span>
+            </button>
+            <div className="min-w-0 flex-1 pt-11">
+              <h1 className="text-[19px] font-black text-[#3B2A22]">로그인이 필요해요</h1>
+              <p className="mt-1.5 text-[13px] font-medium leading-5 text-[#8A6E60]">
+                로그인하면 나의 코스·피드·저장을 볼 수 있어요.
+              </p>
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={goToLogin}
+            className="mt-4 h-12 w-full rounded-2xl bg-[#E85053] text-sm font-bold text-white active:scale-[0.98] transition-transform"
+          >
+            Google로 로그인
+          </button>
+        </div>
+        <div className="mt-5 grid grid-cols-3">
+          {(['팔로워', '팔로잉'] as const).map((label) => (
+            <button
+              key={label}
+              type="button"
+              onClick={goToLogin}
+              className="border-r border-[#EBC5B8] text-center"
+              aria-label={`${label} 목록`}
+            >
+              <p className="font-black text-[17px] text-[#3B2A22]">0</p>
+              <p className="mt-0.5 text-[10px] text-[#8A6E60]">{label}</p>
+            </button>
+          ))}
+          <button type="button" onClick={goToLogin} className="text-center">
+            <p className="font-black text-[17px] text-[#3B2A22]">0</p>
+            <p className="mt-0.5 text-[10px] text-[#8A6E60]">좋아요</p>
+          </button>
+        </div>
+      </div>
+
+      <div className="px-4 mt-8">
+        <h2 className="font-black text-[18px] text-[#1A1A1A] mb-3">나의 피드 0</h2>
+        <button
+          type="button"
+          onClick={goToLogin}
+          className="w-full rounded-2xl border-2 border-dashed border-[#E5CFC5] py-8 text-center"
+        >
+          <p className="text-3xl mb-1">📔</p>
+          <p className="text-[13px] font-bold text-[#8A7A6C]">로그인하면 나의 피드를 볼 수 있어요</p>
+        </button>
+      </div>
+    </div>
+  );
+}
+
+// 익명 사용자는 개인 프로필 데이터(지민 등)를 그리지 않고, 동일 레이아웃의 로그인 유도 프리뷰만 보여준다.
 export default function ProfilePage() {
   const auth = useAuthStatus();
-  const [, navigate] = useLocation();
   if (auth.isLoading) {
     return <main className="flex min-h-dvh items-center justify-center bg-[#FCF4EE]"><p className="text-sm font-bold text-[#8C7D74]">프로필 확인 중…</p></main>;
   }
   if (!auth.data || auth.isError || auth.data.isAnonymous) {
-    return (
-      <main className="flex min-h-dvh flex-col items-center justify-center bg-[#FCF4EE] px-8 text-center">
-        <div className="flex h-16 w-16 items-center justify-center rounded-full bg-[#FFF0EB] text-2xl">👤</div>
-        <h1 className="mt-5 text-xl font-black text-[#342C28]">내 프로필</h1>
-        <p className="mt-2 text-sm leading-6 text-[#8C7D74]">로그인하면 내가 만든 코스와 피드,<br />저장한 기록을 볼 수 있어요.</p>
-        <button onClick={() => window.location.assign('/api/auth/google/start?next=%2Fprofile')} className="mt-6 h-12 rounded-2xl bg-[#E85053] px-6 text-sm font-bold text-white">Google로 로그인</button>
-      </main>
-    );
+    return <ProfileGuestPreview />;
   }
   return <ProfilePageContent />;
 }

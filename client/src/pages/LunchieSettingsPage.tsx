@@ -7,11 +7,12 @@
 import { useState, type ReactNode, type CSSProperties } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useLocation, useSearch } from 'wouter';
-import { ArrowLeft, Clock, SlidersHorizontal, Users, Minus, Plus, X } from 'lucide-react';
+import { ArrowLeft, Clock, SlidersHorizontal, Users, Minus, Plus, Navigation, X } from 'lucide-react';
 import { useApp } from '@/contexts/AppContext';
 import { FOOD_TAGS } from '@/constants/foodTags';
 import { toast } from 'sonner';
 import type { Intent } from '@shared/intent';
+import { localityForCoordinate } from '@shared/melbourneLocality';
 import { logSessionCreated } from '@/lib/eventLogger';
 
 const INTENT_OPTIONS: { value: Intent | null; label: string; icon: string }[] = [
@@ -29,11 +30,11 @@ const DEADLINE_OPTIONS = [
   { label: '15분', min: 15 },
 ];
 
-const FILTER_OPTIONS = ['식단', '거리', '예산', '카드수', '취향', '평점'];
+const FILTER_OPTIONS = ['식단', '반경', '예산', '카드수', '취향', '평점'];
 
 const DETAIL_OPTIONS: Record<string, string[]> = {
   '식단': ['비건', '채식', '육식', '글루텐프리', '할랄', '해산물 제외'],
-  '거리': ['500m 이내', '1km 이내', '3km 이내', '5km 이내'],
+  '반경': ['500m 이내', '1km 이내', '3km 이내', '5km 이내'],
   '예산': ['₩', '₩₩', '₩₩₩', '₩₩₩₩'],
   '카드수': ['5장', '7장', '10장', '15장'],
   '취향': [...FOOD_TAGS],
@@ -47,6 +48,24 @@ function formatRadius(r: number): string {
 }
 
 const tapSpring = { type: "spring" as const, stiffness: 500, damping: 30 };
+
+type LocationFix = { latitude: number; longitude: number; accuracy: number };
+
+function currentPosition(): Promise<LocationFix> {
+  if (!navigator.geolocation)
+    return Promise.reject(new Error('이 브라우저에서는 위치 정보를 사용할 수 없습니다.'));
+  return new Promise((resolve, reject) => {
+    navigator.geolocation.getCurrentPosition(
+      ({ coords }) => resolve({ latitude: coords.latitude, longitude: coords.longitude, accuracy: coords.accuracy }),
+      (error) => reject(new Error(
+        error.code === error.PERMISSION_DENIED
+          ? '위치 권한이 꺼져 있어요. 주소창의 사이트 설정에서 위치를 허용한 뒤 다시 시도해 주세요.'
+          : '현재 위치를 확인하지 못했습니다. 잠시 후 다시 시도해 주세요.',
+      )),
+      { enableHighAccuracy: false, timeout: 10_000, maximumAge: 5 * 60_000 },
+    );
+  });
+}
 
 function IconButton({
   onClick,
@@ -150,6 +169,8 @@ export default function LunchieSettingsPage() {
   const [deadlineMin, setDeadlineMin] = useState(10);
   const [partySize, setPartySize] = useState(4);
   const [radius, setRadius] = useState(1000);
+  // Location should enrich Lunchie, never prevent someone from using it.
+  const [distanceEnabled, setDistanceEnabled] = useState(false);
   const [intent, setIntent] = useState<Intent | null>(initialIntent);
   const [activeFilters, setActiveFilters] = useState<string[]>(['취향', '평점']);
   const [details, setDetails] = useState<Record<string, string[]>>({
@@ -158,6 +179,33 @@ export default function LunchieSettingsPage() {
   });
   const [showDetailModal, setShowDetailModal] = useState(false);
   const [isCreating, setIsCreating] = useState(false);
+  const [origin, setOrigin] = useState<LocationFix | null>(null);
+  const [originLabel, setOriginLabel] = useState<string | null>(null);
+  const [isLocating, setIsLocating] = useState(false);
+
+  const confirmCurrentLocation = async () => {
+    setIsLocating(true);
+    try {
+      const fix = await currentPosition();
+      const label = localityForCoordinate(fix.latitude, fix.longitude);
+      setOrigin(fix);
+      setOriginLabel(label);
+      toast.success(`현재 위치를 ${label}(으)로 확인했어요.`);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : '현재 위치를 확인하지 못했습니다.');
+    } finally {
+      setIsLocating(false);
+    }
+  };
+
+  const selectRadius = (nextRadius: number) => {
+    setRadius(nextRadius);
+    setDistanceEnabled(true);
+    // Selecting a radius is an explicit user gesture, so browsers can show
+    // the native permission prompt immediately instead of failing later at
+    // the "start" button.
+    if (!origin && !isLocating) void confirmCurrentLocation();
+  };
 
   const toggleFilter = (f: string) => {
     setActiveFilters(prev => (prev.includes(f) ? prev.filter(x => x !== f) : [...prev, f]));
@@ -186,10 +234,25 @@ export default function LunchieSettingsPage() {
 
       const hostName = profile.name && profile.name !== '사용자' ? profile.name : '호스트';
       const sessionName = `${hostName}의 점심 세션`;
+      // Only a room using a radius needs the host location. It becomes the
+      // shared reference point, rather than tracking every participant.
+      const currentOrigin = distanceEnabled
+        ? origin ?? await currentPosition()
+        : null;
 
       const session = await createSession(
         sessionName,
-        { partySize, dietary, budget, radius, categories, intent: intent ?? undefined },
+        {
+          partySize,
+          dietary,
+          budget,
+          radius,
+          distanceEnabled,
+          categories,
+          intent: intent ?? undefined,
+          originLatitude: currentOrigin?.latitude,
+          originLongitude: currentOrigin?.longitude,
+        },
         hostName,
         profile.emoji,
         deadlineMin,
@@ -197,7 +260,7 @@ export default function LunchieSettingsPage() {
       logSessionCreated(session.id, {
         intent: intent ?? 'auto',
         party_size: partySize,
-        radius_m: radius,
+        radius_m: distanceEnabled ? radius : null,
         budget,
         dietary_count: dietary.length,
         category_count: categories.length,
@@ -208,8 +271,8 @@ export default function LunchieSettingsPage() {
         style: { marginTop: 'calc(env(safe-area-inset-top, 0px) + 64px)' },
       });
       navigate('/session/lobby');
-    } catch {
-      toast.error('세션 생성에 실패했습니다.');
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : '세션 생성에 실패했습니다.');
     } finally {
       setIsCreating(false);
     }
@@ -323,22 +386,54 @@ export default function LunchieSettingsPage() {
             )}
           </div>
 
-          {/* 반경 */}
+          {/* 반경 — 반경을 선택할 때만 위치 권한을 요청한다. */}
           <div className="bg-[#F5F5F5] rounded-xl p-3">
-            <p className="text-[11px] text-[#9B9B9B] mb-2">검색 반경</p>
-            <div className="flex gap-1.5">
+            <p className="text-[11px] text-[#9B9B9B] mb-2">반경</p>
+            <div className="flex flex-wrap gap-1.5">
+              <ChipButton
+                selected={!distanceEnabled}
+                onClick={() => setDistanceEnabled(false)}
+                unselectedBg="#FFFFFF"
+                className="px-3 py-2 rounded-lg text-[12px] font-bold"
+              >
+                반경 제한 없음
+              </ChipButton>
               {RADIUS_OPTIONS.map(r => (
                 <ChipButton
                   key={r}
-                  selected={radius === r}
-                  onClick={() => setRadius(r)}
+                  selected={distanceEnabled && radius === r}
+                  onClick={() => selectRadius(r)}
                   unselectedBg="#FFFFFF"
-                  className="flex-1 py-2 rounded-lg text-[12px] font-bold"
+                  className="px-3 py-2 rounded-lg text-[12px] font-bold"
                 >
                   {formatRadius(r)}
                 </ChipButton>
               ))}
             </div>
+            <div className="mt-2 flex items-center justify-between gap-2">
+              {origin ? (
+                <div>
+                  <p className="text-[10px] text-[#6B7A72] leading-relaxed">
+                    <Navigation size={11} className="inline mr-1" />현재 위치 · {originLabel ?? '현재 위치 주변'}
+                  </p>
+                  <p className="text-[9px] text-[#B0B0B0] mt-0.5">지역 기준: © OpenStreetMap contributors · 좌표는 표시하지 않아요.</p>
+                </div>
+              ) : (
+                <p className="text-[10px] text-[#B0B0B0]">현재 위치를 확인하면 지명과 반경 기준점을 보여드려요.</p>
+              )}
+              <button
+                type="button"
+                onClick={() => void confirmCurrentLocation()}
+                disabled={isLocating}
+                className="shrink-0 text-[10px] font-bold text-[#EB5053] disabled:opacity-50"
+              >
+                {isLocating ? '확인 중…' : origin ? '다시 확인' : '현재 위치 확인'}
+              </button>
+            </div>
+            {!distanceEnabled && (
+              <p className="text-[10px] text-[#6B7A72] mt-2">반경 제한 없이 현재 조건에 맞는 전체 후보에서 추천해요.</p>
+            )}
+            <p className="text-[10px] text-[#B0B0B0] mt-1.5">반경은 현재 위치부터 식당까지의 직선거리로 적용됩니다. 반경을 선택하면 권한 요청이 열립니다.</p>
           </div>
         </div>
 
@@ -444,6 +539,11 @@ export default function LunchieSettingsPage() {
                           );
                         })}
                       </div>
+                      {filter === '예산' && (
+                        <p className="mt-2 text-[10px] leading-relaxed text-[#9B9B9B]">
+                          메뉴 가격이 확인된 식당에만 예산 상한을 적용해요. 가격 정보가 없는 식당은 임의 가격으로 제외하지 않습니다.
+                        </p>
+                      )}
                     </div>
                   ))}
                 </div>

@@ -109,7 +109,7 @@ Lunchie Munchie는 두 가지 핵심 경험을 하나의 앱으로 제공합니�
 
 ### 분석 화면
 
-- `/metrics` 엔진·제품 지표 대시보드
+- `/admin` 관리자 전용 엔진·제품 지표 대시보드
 - 데이터 신뢰성, 만족도, 피로도, feature 효과, A/B readout
 - 이벤트 디버그 및 집계 API
 
@@ -136,7 +136,7 @@ Lunchie Munchie는 두 가지 핵심 경험을 하나의 앱으로 제공합니�
 | `/lunchie/swipe` | 스와이프 및 그룹 결정 |
 | `/lunchie/results` | 결정 결과 |
 | `/lunchie/map` | 결과 지도 |
-| `/metrics` | 지표 대시보드 |
+| `/admin` | 관리자 전용 지표 대시보드 |
 
 ## API
 
@@ -159,7 +159,7 @@ Lunchie Munchie는 두 가지 핵심 경험을 하나의 앱으로 제공합니�
 | `POST` | `/recommend` | 엔진 추천 요청 |
 | `GET` | `/journey/today` | 오늘의 스톱과 다음 스톱 제안 |
 | `GET` | `/events/_debug` | 개발용 이벤트 조회 |
-| `GET` | `/metrics` | 엔진·제품 지표 집계 |
+| `GET` | `/api/admin/metrics` | 관리자 전용 제품·추천·익명 취향 집계 |
 
 ## 데이터 구조
 
@@ -227,6 +227,8 @@ corepack pnpm dev:pages
 GOOGLE_CLIENT_ID="...apps.googleusercontent.com"
 GOOGLE_CLIENT_SECRET="..."
 AUTH_SESSION_SECRET="긴-무작위-문자열"
+# /admin을 볼 Google 계정. 쉼표로 여러 명을 등록할 수 있다.
+ADMIN_EMAILS="owner@example.com,developer@example.com"
 # 로컬은 운영 R2 원본을 복제하지 않고, 공개 사진 URL만 읽는다.
 MEDIA_ORIGIN="https://lunchie-munchie.pages.dev"
 ```
@@ -237,6 +239,18 @@ Google Cloud OAuth 클라이언트의 **Authorized redirect URIs**에는 다음 
 http://localhost:8788/api/auth/google/callback
 https://lunchie-munchie.pages.dev/api/auth/google/callback
 ```
+
+### 관리자 대시보드
+
+`/admin`은 공개 링크나 앱 메뉴에 노출하지 않으며 Google 로그인과 `ADMIN_EMAILS`
+허용 목록을 모두 통과한 계정만 볼 수 있습니다. 운영 환경에서는 Cloudflare Pages
+프로젝트의 **Settings → Variables and Secrets → Add**에서 `ADMIN_EMAILS`를
+**Secret**으로 등록합니다. 값은 대시보드 접근을 허용할 Google 이메일을 쉼표로
+구분한 문자열입니다. 이 값은 GitHub Secrets나 저장소 파일에 넣지 않습니다.
+
+대시보드는 개인별 프로필·정확 위치·원본 이벤트를 보여주지 않습니다. 로그인/익명
+이용자 수, 세션 퍼널, 추천 수락률, 모델 버전 로그, 카테고리 기반 익명 취향 분포만
+집계해 표시합니다.
 
 로컬 개발은 Pages Functions까지 함께 띄우는 명령을 사용합니다. `MEDIA_ORIGIN`은
 `.dev.vars`에서 Wrangler가 읽으므로 macOS, Linux, Windows PowerShell 모두 같은

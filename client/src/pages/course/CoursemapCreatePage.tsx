@@ -30,6 +30,7 @@ import {
 import { getCourseMapPoints, getCurvedCourseSegments } from '@/lib/courseMapSync';
 import CourseSequenceMarker from '@/components/course/CourseSequenceMarker';
 import { fileToResizedDataUrl } from '@/lib/imageUtils';
+import { readJpegGps, suggestPhotoRestaurant } from '@/lib/photoAttribution';
 import OneLineReviewBox from '@/components/munchie/OneLineReviewBox';
 import UnifiedMunchieCard from '@/components/munchie/UnifiedMunchieCard';
 import { TemplateBackgroundLayer, TemplateFrameLayer } from '@/components/munchie/TemplateLayers';
@@ -58,6 +59,13 @@ interface CoursePin {
   /** null이면 사진 없이 진행 */
   photo: string | null;
 }
+
+type PhotoAttribution = {
+  classification: 'restaurant' | 'other';
+  restaurantId?: string;
+  source: 'gps_suggestion' | 'user_selected' | 'other';
+  suggestedDistanceMetres?: number;
+};
 
 // ── ① 코스맵 정하기 ───────────────────────────────────────────────────────────
 
@@ -319,7 +327,7 @@ function PinsStep({
 // ── ② 템플릿 꾸미기 (drag & drop) ─────────────────────────────────────────────
 
 export function DecorateStep({
-  template, templateIndex, setTemplateIndex, placed, setPlaced, canvasStrokes, setCanvasStrokes, photoPool, onAddUpload, onRemoveFromPool, onEditPhoto,
+  template, templateIndex, setTemplateIndex, placed, setPlaced, canvasStrokes, setCanvasStrokes, photoPool, restaurants = [], photoAttributions = {}, onAddUpload, onRemoveFromPool, onUpdateAttribution = () => undefined, onEditPhoto,
 }: {
   template: CoursemapTemplate;
   templateIndex: number;
@@ -329,8 +337,11 @@ export function DecorateStep({
   canvasStrokes: CoursemapCanvasStroke[];
   setCanvasStrokes: React.Dispatch<React.SetStateAction<CoursemapCanvasStroke[]>>;
   photoPool: string[];
-  onAddUpload: (url: string) => void;
+  restaurants?: Restaurant[];
+  photoAttributions?: Record<string, PhotoAttribution>;
+  onAddUpload: (url: string, attribution: PhotoAttribution) => void;
   onRemoveFromPool: (url: string) => void;
+  onUpdateAttribution?: (url: string, attribution: PhotoAttribution) => void;
   onEditPhoto: (id: string) => void;
 }) {
   type CanvasTool = 'pointer' | 'pen' | 'highlight' | 'eraser';
@@ -526,6 +537,8 @@ export function DecorateStep({
     for (const file of files) {
       if (addedCount >= remainingSlots) break;
       try {
+        const gps = await readJpegGps(file).catch(() => null);
+        const suggestion = gps ? suggestPhotoRestaurant(gps, restaurants) : null;
         const url = await fileToResizedDataUrl(file, 900, 0.8);
         if (knownPhotos.has(url)) {
           duplicateFound = true;
@@ -533,7 +546,9 @@ export function DecorateStep({
         }
         knownPhotos.add(url);
         addedCount += 1;
-        onAddUpload(url);
+        onAddUpload(url, suggestion
+          ? { classification: 'restaurant', restaurantId: suggestion.restaurantId, source: 'gps_suggestion', suggestedDistanceMetres: suggestion.distanceMetres }
+          : { classification: 'other', source: 'other' });
         addToCanvas(url);
       } catch {
         toast.error('사진을 불러오지 못했어요');
@@ -794,8 +809,10 @@ export function DecorateStep({
       {/* 업로드한 사진목록 */}
       <p className="mt-4 mb-1.5 text-xs text-gray-400">업로드한 사진목록 — 눌러서 템플릿에 올리기 (최대 {MAX_MUNCHIE_FEED_PHOTOS}장)</p>
       <div className="flex gap-2 overflow-x-auto pb-1.5 scrollbar-hide">
-        {photoPool.map(src => (
-          <div key={src.slice(0, 80)} className="relative h-16 w-16 shrink-0">
+        {photoPool.map(src => {
+          const attribution = photoAttributions[src] ?? { classification: 'other' as const, source: 'other' as const };
+          return (
+          <div key={src.slice(0, 80)} className="relative h-[94px] w-24 shrink-0">
           <button
             type="button"
             onClick={() => { returnToPointerTool(); addToCanvas(src); }}
@@ -804,8 +821,26 @@ export function DecorateStep({
             <img src={src} alt="" className="h-full w-full object-cover" draggable={false} />
           </button>
           <button type="button" onClick={() => { returnToPointerTool(); onRemoveFromPool(src); setPlaced(prev => prev.filter(photo => photo.src !== src && photo.originalSrc !== src)); }} aria-label="사진 목록에서 삭제" className="absolute right-1 top-1 flex h-5 w-5 items-center justify-center rounded-full border border-white/80 bg-[#D94447] text-white shadow"><X size={11} /></button>
+          <select
+            aria-label="사진 식당 분류"
+            value={attribution.classification === 'restaurant' ? attribution.restaurantId : 'other'}
+            onChange={event => {
+              const restaurantId = event.target.value;
+              onUpdateAttribution(src, restaurantId === 'other'
+                ? { classification: 'other', source: 'other' }
+                : { classification: 'restaurant', restaurantId, source: 'user_selected' });
+            }}
+            className="absolute bottom-0 left-0 z-10 h-6 w-24 rounded border border-[#E8DED4] bg-white px-1 text-[8px] font-bold text-[#6E5B50]"
+          >
+            <option value="other">기타 사진</option>
+            {restaurants.map(restaurant => <option key={restaurant.id} value={restaurant.id}>{restaurant.name}</option>)}
+          </select>
+          {attribution.source === 'gps_suggestion' && attribution.restaurantId && (
+            <span title={`사진 GPS 기준 ${attribution.suggestedDistanceMetres}m`} className="absolute bottom-7 left-[68px] rounded-full bg-[#FFF0EC] px-1 py-0.5 text-[7px] font-black text-[#D94D52]">GPS</span>
+          )}
           </div>
-        ))}
+          );
+        })}
         {photoPool.length < MAX_MUNCHIE_FEED_PHOTOS && (
           <button
             type="button"
@@ -818,7 +853,7 @@ export function DecorateStep({
         )}
         <input ref={uploadRef} type="file" accept="image/*" multiple className="hidden" onChange={handleUpload} />
       </div>
-      <p className="mt-1 text-[10px] text-gray-300">사진을 끌어 옮기고, 선택한 사진의 오른쪽·아래 edge를 끌어 가로·세로 크기를 자유롭게 바꿔보세요</p>
+      <p className="mt-9 text-[10px] text-gray-400">사진마다 식당을 확인해 선택하세요. JPEG 위치 정보가 식당 가까이 있으면 제안만 표시하며, 정확한 좌표는 저장하지 않아요.</p>
     </div>
   );
 }
@@ -1490,6 +1525,7 @@ function CoursemapCreateContent() {
   const [placed, setPlaced] = useState<PlacedPhoto[]>([]);
   const [canvasStrokes, setCanvasStrokes] = useState<CoursemapCanvasStroke[]>([]);
   const [uploads, setUploads] = useState<string[]>([]);
+  const [photoAttributions, setPhotoAttributions] = useState<Record<string, PhotoAttribution>>({});
   const [hiddenPhotoSources, setHiddenPhotoSources] = useState<string[]>([]);
   const [editingPhotoId, setEditingPhotoId] = useState<string | null>(null);
   const [reward, setReward] = useState<{
@@ -1502,9 +1538,10 @@ function CoursemapCreateContent() {
   const filledPins = pins.filter((pin): pin is CoursePin => !!pin);
   const template = COURSEMAP_TEMPLATES[templateIndex]!;
   const photoPool = useMemo(() => {
-    const pinPhotos = filledPins.map(pin => pin.photo).filter((photo): photo is string => !!photo);
-    return Array.from(new Set([...pinPhotos, ...uploads])).filter(photo => !hiddenPhotoSources.includes(photo));
-  }, [hiddenPhotoSources, pins, uploads]);
+    // Restaurant catalogue photos are recommendation context, never a stand-in
+    // for what this author actually uploaded to the public feed.
+    return Array.from(new Set(uploads)).filter(photo => !hiddenPhotoSources.includes(photo));
+  }, [hiddenPhotoSources, uploads]);
   const previewCourse: Course = {
     id: '__munchie_preview__',
     title: caption.trim() || '새 먼치맵',
@@ -1613,13 +1650,22 @@ function CoursemapCreateContent() {
       };
       const serverPlaced = await Promise.all(publishedPhotos.map(async photo => ({ ...photo, src: await persistPhoto(photo.src) })));
       const serverPhotos = Array.from(new Set(serverPlaced.map(photo => photo.src)));
+      const serverAttributions = serverPlaced.map(photo => {
+        const attribution = photoAttributions[photo.originalSrc ?? photo.src] ?? { classification: 'other' as const, source: 'other' as const };
+        return {
+          r2Path: photo.src,
+          classification: attribution.classification,
+          ...(attribution.classification === 'restaurant' && attribution.restaurantId ? { restaurantId: attribution.restaurantId } : {}),
+          source: attribution.source,
+        };
+      });
       const response = await fetch('/api/courses', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           title: course.title, description: course.description, heroImage: serverPhotos[0] ?? course.heroImage,
           tags: course.tags, hashtags: course.hashtags, region: course.region,
           metadata: course.metadata, stops: course.stops, feedPhotos: serverPhotos,
-          feedDecor: serverPlaced, templateId: template.id,
+          feedDecor: serverPlaced, templateId: template.id, photoAttributions: serverAttributions,
         }),
       });
       const saved = await response.json() as { id?: string; authorId?: string; error?: string; code?: string };
@@ -1721,14 +1767,23 @@ function CoursemapCreateContent() {
                 canvasStrokes={canvasStrokes}
                 setCanvasStrokes={setCanvasStrokes}
                 photoPool={photoPool}
-                onAddUpload={url => {
+                restaurants={filledPins.map(pin => pin.restaurant)}
+                photoAttributions={photoAttributions}
+                onAddUpload={(url, attribution) => {
                   setHiddenPhotoSources(prev => prev.filter(photo => photo !== url));
                   setUploads(prev => prev.includes(url) ? prev : [...prev, url]);
+                  setPhotoAttributions(prev => ({ ...prev, [url]: attribution }));
                 }}
                 onRemoveFromPool={url => {
                   setHiddenPhotoSources(prev => prev.includes(url) ? prev : [...prev, url]);
                   setUploads(prev => prev.filter(photo => photo !== url));
+                  setPhotoAttributions(prev => {
+                    const next = { ...prev };
+                    delete next[url];
+                    return next;
+                  });
                 }}
+                onUpdateAttribution={(url, attribution) => setPhotoAttributions(prev => ({ ...prev, [url]: attribution }))}
                 onEditPhoto={id => setEditingPhotoId(id)}
               />
           )}
