@@ -29,6 +29,9 @@ const filters = {
   budget: 2 as const,
   radius: 2000,
   categories: [] as string[],
+  // This suite isolates dietary fallback behavior. Pin the meal intent so the
+  // result cannot change when CI happens to run during the 14:00–17:00 cafe window.
+  intent: 'meal' as const,
 };
 
 const offlineRecommendation = {
