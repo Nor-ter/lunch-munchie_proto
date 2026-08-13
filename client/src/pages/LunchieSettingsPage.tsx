@@ -3,19 +3,16 @@
  * Session persistence remains server-first through AppContext.
  */
 
-import { useEffect, useId, useMemo, useRef, useState, type Dispatch, type PointerEvent as ReactPointerEvent, type ReactNode, type SetStateAction } from 'react';
+import { useEffect, useMemo, useRef, useState, type Dispatch, type PointerEvent as ReactPointerEvent, type ReactNode, type SetStateAction } from 'react';
 import { motion } from 'framer-motion';
 import { useLocation, useSearch } from 'wouter';
 import {
   ArrowLeft,
   Check,
   ChevronDown,
-  ChevronUp,
   CircleHelp,
   Clock3,
-  Minus,
   Navigation,
-  Plus,
   Ruler,
   Sparkles,
   Users,
@@ -30,6 +27,16 @@ import type { Intent } from '@shared/intent';
 import { localityForCoordinate } from '@shared/melbourneLocality';
 import type { LunchmateLoadout } from '@/types/lunchmateCustomization';
 import { logSessionCreated } from '@/lib/eventLogger';
+import SessionManagementMenu from '@/components/lunchie/SessionManagementMenu';
+import {
+  DEFAULT_QUICK_MATCH_SETTINGS,
+  DIETARY_REQUIREMENTS,
+  INGREDIENT_AVOIDANCES,
+  QUICK_MATCH_SETTINGS_STORAGE_KEY,
+  isActiveQuickMatchStatus,
+  normalizeDietaryPreferences,
+  normalizeQuickMatchSettings,
+} from '@/lib/quickMatch';
 
 const PREFERENCE_CARDS: { value: Intent | null; label: string; image?: string; color: string }[] = [
   { value: 'cafe', label: 'COFFEE', image: '/assets/characters/quick-match/coffee.png', color: '#FFF0E7' },
@@ -38,25 +45,14 @@ const PREFERENCE_CARDS: { value: Intent | null; label: string; image?: string; c
   { value: null, label: 'RANDOM', color: '#FFF4D9' },
 ];
 
-const DEADLINE_OPTIONS = [5, 10, 15];
 const RADIUS_OPTIONS = [1000, 2000, 3000, 4000, 5000];
-const DIETARY_OPTIONS = [
-  { label: 'Vegan', value: '비건', icon: '🌱' },
-  { label: 'Vegetarian', value: '채식', icon: '🥬' },
-  { label: 'Gluten-Free', value: '글루텐프리', icon: '🌾' },
-  { label: 'Halal', value: '할랄', icon: '🌙' },
-  { label: 'Carnivore', value: '육식', icon: '🥩' },
-  { label: 'Small Appetite', value: 'Small Appetite', icon: '🍽️' },
-  { label: 'Buffet', value: 'Buffet', icon: '♨️' },
-  { label: 'Asian', value: 'Asian', icon: '🥢' },
-];
-const DIETARY_EXCLUSIONS = [
-  { label: 'Beef', value: 'No Beef', icon: '🐄' },
-  { label: 'Seafood', value: '해산물 제외', icon: '🐟' },
-  { label: 'Lamb', value: 'No Lamb', icon: '🐑' },
-  { label: 'Pork', value: 'No Pork', icon: '🐖' },
-  { label: 'Nuts', value: 'No Nuts', icon: '🥜' },
-];
+const GROUP_SIZE_OPTIONS = Array.from({ length: 12 }, (_, index) => index + 1);
+const GROUP_SIZE_ITEM_HEIGHT = 48;
+const GROUP_SIZE_MAX_SCROLL = (GROUP_SIZE_OPTIONS.length - 1) * GROUP_SIZE_ITEM_HEIGHT;
+/** Strong Alarm-app-like coast: higher = longer carry after a flick. */
+const GROUP_SIZE_FLICK_FRICTION = 0.0032;
+const GROUP_SIZE_FLICK_MIN_VELOCITY = 0.04;
+const GROUP_SIZE_FLICK_MAX_VELOCITY = 3.2;
 const TAG_META: Record<string, { icon: string; hint: string }> = {
   맛집: { icon: '🍽️', hint: '검증된 인기 메뉴' },
   데이트코스: { icon: '💞', hint: '분위기 좋은 곳' },
@@ -67,7 +63,6 @@ const TAG_META: Record<string, { icon: string; hint: string }> = {
   디저트: { icon: '🍰', hint: '달콤한 마무리' },
   가성비: { icon: '✨', hint: '가격까지 만족' },
 };
-const tapSpring = { type: 'spring' as const, stiffness: 500, damping: 30 };
 
 function formatRadius(radius: number): string {
   return radius >= 5000 ? '5km+' : `${radius / 1000}km`;
@@ -110,231 +105,399 @@ function CardTitle({ icon, children, badge }: { icon: ReactNode; children: React
   );
 }
 
-function ChoiceChip({ selected, onClick, children, className = '' }: {
-  selected: boolean;
-  onClick: () => void;
-  children: ReactNode;
-  className?: string;
-}) {
-  return (
-    <motion.button
-      type="button"
-      onClick={onClick}
-      whileTap={{ scale: 0.93 }}
-      transition={tapSpring}
-      className={`min-h-9 rounded-xl px-3 text-[12px] font-bold transition-colors ${
-        selected ? 'bg-[#F4515E] text-white' : 'bg-[#F4F2F2] text-[#6E686C]'
-      } ${className}`}
-    >
-      {children}
-    </motion.button>
-  );
-}
-
 function DeadlineDial({ minutes, onChange }: { minutes: number; onChange: (minutes: number) => void }) {
-  const gradientId = useId();
-  const [now, setNow] = useState(() => Date.now());
-  const [draftMinutes, setDraftMinutes] = useState(String(minutes));
-  const radius = 96;
+  const radius = 70;
+  const center = 88;
   const circumference = 2 * Math.PI * radius;
-  const progress = Math.min(minutes, 15) / 15;
+  const minProgress = 1 / 15;
+  const dragRef = useRef<{
+    pointerId: number;
+    lastAngle: number;
+    progress: number;
+  } | null>(null);
+  const [dragging, setDragging] = useState(false);
+  const [visualProgress, setVisualProgress] = useState(() => Math.max(minProgress, Math.min(1, minutes / 15)));
 
   useEffect(() => {
-    const updateClock = () => setNow(Date.now());
-    window.addEventListener('focus', updateClock);
-    const interval = window.setInterval(updateClock, 30_000);
-    return () => {
-      window.removeEventListener('focus', updateClock);
-      window.clearInterval(interval);
-    };
-  }, []);
+    if (dragRef.current) return;
+    setVisualProgress(Math.max(minProgress, Math.min(1, minutes / 15)));
+  }, [minutes]);
 
-  useEffect(() => setDraftMinutes(String(minutes)), [minutes]);
-
-  const commitDraftMinutes = () => {
-    const parsed = Number.parseInt(draftMinutes, 10);
-    const next = Number.isFinite(parsed) ? Math.max(1, Math.min(15, parsed)) : minutes;
-    onChange(next);
-    setDraftMinutes(String(next));
-  };
-
-  const deadlineLabel = useMemo(() => {
-    const deadline = new Date(now + minutes * 60_000);
-    return deadline.toLocaleTimeString('ko-KR', {
-      hour: '2-digit',
-      minute: '2-digit',
-      hour12: false,
-    });
-  }, [minutes, now]);
-
-  const updateFromPointer = (event: ReactPointerEvent<HTMLDivElement>) => {
+  const pointerAngle = (event: ReactPointerEvent<HTMLDivElement>) => {
     const rect = event.currentTarget.getBoundingClientRect();
     const x = event.clientX - rect.left - rect.width / 2;
     const y = event.clientY - rect.top - rect.height / 2;
-    let angle = Math.atan2(y, x) + Math.PI / 2;
-    if (angle < 0) angle += Math.PI * 2;
-    const ratio = angle / (Math.PI * 2);
-    onChange(Math.max(1, Math.min(15, Math.ceil(ratio * 15))));
+    return Math.atan2(y, x);
   };
 
-  return (
-    <div className="flex w-full flex-col items-center">
-      <div className="text-center" aria-live="polite">
-        <div className="flex items-baseline justify-center text-[#211E20]">
-          <strong className="text-[58px] font-medium leading-[0.95] tracking-[-4px] tabular-nums">{minutes}</strong>
-          <span className="ml-1 text-[34px] font-medium leading-none">분</span>
-        </div>
-        <div className="mt-3 inline-flex min-h-10 items-center gap-2 rounded-[13px] bg-[#F5F3F3] px-4 text-[#4F494C]">
-          <Clock3 size={17} strokeWidth={2.4} aria-hidden="true" />
-          <span className="text-[13px] font-extrabold tabular-nums">{deadlineLabel} 종료</span>
-        </div>
-      </div>
+  const shortestDelta = (from: number, to: number) => {
+    let delta = to - from;
+    while (delta > Math.PI) delta -= Math.PI * 2;
+    while (delta < -Math.PI) delta += Math.PI * 2;
+    return delta;
+  };
 
-      <div
-        className="relative mt-3 size-[236px] shrink-0 cursor-grab touch-none select-none active:cursor-grabbing"
-        role="slider"
-        tabIndex={0}
-        aria-label="마감 시간"
-        aria-valuemin={1}
-        aria-valuemax={15}
-        aria-valuenow={minutes}
-        aria-valuetext={`${minutes}분, ${deadlineLabel} 종료`}
-        onPointerDown={event => {
-          event.currentTarget.setPointerCapture(event.pointerId);
-          updateFromPointer(event);
-        }}
-        onPointerMove={event => {
-          if (event.currentTarget.hasPointerCapture(event.pointerId)) updateFromPointer(event);
-        }}
-        onPointerUp={event => {
-          if (event.currentTarget.hasPointerCapture(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId);
-        }}
-        onPointerCancel={event => {
-          if (event.currentTarget.hasPointerCapture(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId);
-        }}
-        onKeyDown={event => {
-          if (event.key === 'ArrowRight' || event.key === 'ArrowUp') {
-            event.preventDefault();
-            onChange(Math.min(15, minutes + 1));
-          }
-          if (event.key === 'ArrowLeft' || event.key === 'ArrowDown') {
-            event.preventDefault();
-            onChange(Math.max(1, minutes - 1));
-          }
-          if (event.key === 'Home') onChange(1);
-          if (event.key === 'End') onChange(15);
-        }}
-      >
-        <svg viewBox="0 0 236 236" className="size-full drop-shadow-[0_8px_14px_rgba(72,47,55,0.08)]" aria-hidden="true">
-          <defs>
-            <linearGradient id={gradientId} x1="34" y1="24" x2="207" y2="74" gradientUnits="userSpaceOnUse">
-              <stop stopColor="#8F297F" />
-              <stop offset="0.52" stopColor="#D93687" />
-              <stop offset="1" stopColor="#FF5B78" />
-            </linearGradient>
-          </defs>
-          <circle cx="118" cy="118" r={radius} fill="#FFFFFF" stroke="#F1EEEE" strokeWidth="10" />
-          <circle
-            cx="118"
-            cy="118"
-            r={radius}
-            fill="none"
-            stroke={`url(#${gradientId})`}
-            strokeWidth="10"
-            strokeLinecap="round"
-            strokeDasharray={circumference}
-            strokeDashoffset={circumference * (1 - progress)}
-            transform="rotate(-90 118 118)"
-            className="transition-[stroke-dashoffset] duration-200"
-          />
-          {Array.from({ length: 30 }, (_, index) => {
-            const angle = (index / 30) * Math.PI * 2 - Math.PI / 2;
-            const innerRadius = index % 5 === 0 ? 70 : 76;
-            const outerRadius = 84;
-            return (
-              <line
-                key={index}
-                x1={118 + Math.cos(angle) * innerRadius}
-                y1={118 + Math.sin(angle) * innerRadius}
-                x2={118 + Math.cos(angle) * outerRadius}
-                y2={118 + Math.sin(angle) * outerRadius}
-                stroke="#2D292B"
-                strokeWidth={index % 5 === 0 ? 4 : 3}
-                strokeLinecap="round"
-              />
-            );
-          })}
-        </svg>
-        <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
-          <div
-            className="pointer-events-auto flex min-h-14 w-[130px] items-stretch overflow-hidden rounded-[17px] bg-[#F5F3F3] shadow-[inset_0_0_0_1px_rgba(70,55,60,0.03)]"
-            onPointerDown={event => event.stopPropagation()}
-          >
-            <label className="flex min-w-0 flex-1 items-center pl-4">
-              <input
-                type="number"
-                inputMode="numeric"
-                min={1}
-                max={15}
-                step={1}
-                value={draftMinutes}
-                onChange={event => {
-                  const value = event.target.value;
-                  setDraftMinutes(value);
-                  const parsed = Number.parseInt(value, 10);
-                  if (Number.isFinite(parsed) && parsed >= 1 && parsed <= 15) onChange(parsed);
-                }}
-                onBlur={commitDraftMinutes}
-                onKeyDown={event => {
-                  event.stopPropagation();
-                  if (event.key === 'Enter') event.currentTarget.blur();
-                }}
-                className="w-10 appearance-none bg-transparent text-center text-[24px] font-black leading-none tabular-nums text-[#2D292B] outline-none [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
-                aria-label="마감 분 직접 입력"
-              />
-              <span className="ml-1 text-[12px] font-extrabold text-[#91898D]">분</span>
-            </label>
-            <div className="flex w-9 shrink-0 flex-col border-l border-[#E7E1E3]">
-              <button
-                type="button"
-                onClick={() => onChange(Math.min(15, minutes + 1))}
-                disabled={minutes >= 15}
-                className="flex flex-1 items-center justify-center text-[#5D565A] transition-colors hover:bg-white/70 disabled:text-[#CFC8CB]"
-                aria-label="마감 시간 1분 늘리기"
-              >
-                <ChevronUp size={15} strokeWidth={2.5} />
-              </button>
-              <button
-                type="button"
-                onClick={() => onChange(Math.max(1, minutes - 1))}
-                disabled={minutes <= 1}
-                className="flex flex-1 items-center justify-center border-t border-[#E7E1E3] text-[#5D565A] transition-colors hover:bg-white/70 disabled:text-[#CFC8CB]"
-                aria-label="마감 시간 1분 줄이기"
-              >
-                <ChevronDown size={15} strokeWidth={2.5} />
-              </button>
-            </div>
-          </div>
-        </div>
-        <span
-          className="pointer-events-none absolute size-4 -translate-x-1/2 -translate-y-1/2 rounded-full border-[3px] border-white bg-[#FF5B78] shadow-[0_2px_6px_rgba(143,41,127,0.35)] transition-[left,top] duration-200"
-          style={{
-            left: 118 + Math.sin(progress * Math.PI * 2) * radius,
-            top: 118 - Math.cos(progress * Math.PI * 2) * radius,
-          }}
-          aria-hidden="true"
+  const commitProgress = (progress: number) => {
+    const clamped = Math.max(minProgress, Math.min(1, progress));
+    // Snap the ring to whole minutes so dragging ticks 1→2→3 instead of sliding.
+    const nextMinutes = Math.max(1, Math.min(15, Math.round(clamped * 15)));
+    setVisualProgress(nextMinutes / 15);
+    onChange(nextMinutes);
+  };
+
+  const endDrag = (pointerId: number, currentTarget: HTMLDivElement) => {
+    const drag = dragRef.current;
+    if (!drag || drag.pointerId !== pointerId) return;
+    dragRef.current = null;
+    setDragging(false);
+    if (currentTarget.hasPointerCapture(pointerId)) currentTarget.releasePointerCapture(pointerId);
+    commitProgress(drag.progress);
+  };
+
+  const handleAngle = visualProgress * Math.PI * 2 - Math.PI / 2;
+  const handleX = center + radius * Math.cos(handleAngle);
+  const handleY = center + radius * Math.sin(handleAngle);
+
+  return (
+    <div
+      className="relative size-44 shrink-0 cursor-grab touch-none select-none rounded-full outline-none active:cursor-grabbing focus-visible:ring-4 focus-visible:ring-[#F4515E]/25"
+      role="slider"
+      tabIndex={0}
+      aria-label="마감 시간"
+      aria-valuemin={1}
+      aria-valuemax={15}
+      aria-valuenow={minutes}
+      aria-valuetext={`${minutes}분`}
+      onPointerDown={event => {
+        if (event.pointerType === 'mouse' && event.button !== 0) return;
+        event.preventDefault();
+        const progress = Math.max(minProgress, Math.min(1, minutes / 15));
+        dragRef.current = {
+          pointerId: event.pointerId,
+          lastAngle: pointerAngle(event),
+          progress,
+        };
+        setDragging(true);
+        setVisualProgress(progress);
+        event.currentTarget.setPointerCapture(event.pointerId);
+      }}
+      onPointerMove={event => {
+        const drag = dragRef.current;
+        if (!drag || drag.pointerId !== event.pointerId) return;
+        const angle = pointerAngle(event);
+        const delta = shortestDelta(drag.lastAngle, angle);
+        drag.lastAngle = angle;
+        // Clamp progress — never wrap past 15 into 1 (or 1 into 15).
+        drag.progress = Math.max(minProgress, Math.min(1, drag.progress + delta / (Math.PI * 2)));
+        commitProgress(drag.progress);
+      }}
+      onPointerUp={event => endDrag(event.pointerId, event.currentTarget)}
+      onPointerCancel={event => endDrag(event.pointerId, event.currentTarget)}
+      onLostPointerCapture={event => endDrag(event.pointerId, event.currentTarget)}
+      onKeyDown={event => {
+        if (event.key === 'ArrowRight' || event.key === 'ArrowUp') {
+          event.preventDefault();
+          onChange(Math.min(15, minutes + 1));
+        }
+        if (event.key === 'ArrowLeft' || event.key === 'ArrowDown') {
+          event.preventDefault();
+          onChange(Math.max(1, minutes - 1));
+        }
+        if (event.key === 'Home') {
+          event.preventDefault();
+          onChange(1);
+        }
+        if (event.key === 'End') {
+          event.preventDefault();
+          onChange(15);
+        }
+      }}
+    >
+      <svg width="176" height="176" className="drop-shadow-[0_8px_18px_rgba(244,81,94,0.10)]" aria-hidden="true">
+        <circle cx={center} cy={center} r={radius} fill="#FFFBF8" stroke="#F0E9E6" strokeWidth="12" />
+        <circle
+          cx={center}
+          cy={center}
+          r={radius}
+          fill="none"
+          stroke="#F4515E"
+          strokeWidth="12"
+          strokeLinecap="round"
+          strokeDasharray={circumference}
+          strokeDashoffset={circumference * (1 - visualProgress)}
+          transform={`rotate(-90 ${center} ${center})`}
+          style={{ transition: dragging ? 'stroke-dashoffset 55ms cubic-bezier(0.2, 0.85, 0.25, 1)' : 'stroke-dashoffset 160ms ease-out' }}
         />
+        <g
+          style={{
+            transform: `translate(${handleX}px, ${handleY}px)`,
+            transition: dragging ? 'transform 55ms cubic-bezier(0.2, 0.85, 0.25, 1)' : 'transform 160ms ease-out',
+          }}
+        >
+          <circle cx={0} cy={0} r="9" fill="white" stroke="#F4515E" strokeWidth="5" />
+        </g>
+      </svg>
+      <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center">
+        <strong className="text-[30px] leading-none text-[#26232A] tabular-nums">{minutes} <span className="text-[17px]">min</span></strong>
       </div>
     </div>
   );
 }
 
-function DietaryExclusionPicker({ selected, onToggle }: { selected: string[]; onToggle: (value: string) => void }) {
-  const [open, setOpen] = useState(false);
-  const selectedLabels = DIETARY_EXCLUSIONS.filter(option => selected.includes(option.value)).map(option => option.label);
+function GroupSizeRuler({ value, onChange }: { value: number; onChange: (value: number) => void }) {
+  const scrollerRef = useRef<HTMLDivElement>(null);
+  const initialIndexRef = useRef(Math.max(0, GROUP_SIZE_OPTIONS.indexOf(value)));
+  const dragRef = useRef<{
+    pointerId: number;
+    startY: number;
+    startScrollTop: number;
+    lastY: number;
+    lastTime: number;
+    velocity: number;
+    moved: boolean;
+  } | null>(null);
+  const suppressClickRef = useRef(false);
+  const inertiaFrameRef = useRef<number | null>(null);
+  const onChangeRef = useRef(onChange);
+  onChangeRef.current = onChange;
+
+  const valueFromScrollTop = (scrollTop: number) => {
+    const nextIndex = Math.max(0, Math.min(GROUP_SIZE_OPTIONS.length - 1, Math.round(scrollTop / GROUP_SIZE_ITEM_HEIGHT)));
+    return GROUP_SIZE_OPTIONS[nextIndex]!;
+  };
+
+  const stopInertia = () => {
+    if (inertiaFrameRef.current == null) return;
+    cancelAnimationFrame(inertiaFrameRef.current);
+    inertiaFrameRef.current = null;
+  };
+
+  const setScrollerTop = (scrollTop: number, publish: boolean) => {
+    const scroller = scrollerRef.current;
+    if (!scroller) return;
+    const clamped = Math.max(0, Math.min(GROUP_SIZE_MAX_SCROLL, scrollTop));
+    scroller.scrollTop = clamped;
+    if (!publish) return;
+    const nextValue = valueFromScrollTop(clamped);
+    onChangeRef.current(nextValue);
+  };
+
+  const selectValue = (next: number) => {
+    const normalized = Math.max(1, Math.min(12, Math.round(next)));
+    onChangeRef.current(normalized);
+    setScrollerTop((normalized - 1) * GROUP_SIZE_ITEM_HEIGHT, false);
+  };
+
+  const snapToNearest = (fromScrollTop: number) => {
+    const scroller = scrollerRef.current;
+    if (!scroller) return;
+    const target = Math.round(fromScrollTop / GROUP_SIZE_ITEM_HEIGHT) * GROUP_SIZE_ITEM_HEIGHT;
+    const clampedTarget = Math.max(0, Math.min(GROUP_SIZE_MAX_SCROLL, target));
+    const start = performance.now();
+    const duration = 160;
+    const from = fromScrollTop;
+
+    const tick = (now: number) => {
+      const t = Math.min(1, (now - start) / duration);
+      const eased = 1 - (1 - t) ** 3;
+      setScrollerTop(from + (clampedTarget - from) * eased, true);
+      if (t < 1) {
+        inertiaFrameRef.current = requestAnimationFrame(tick);
+        return;
+      }
+      inertiaFrameRef.current = null;
+      scroller.style.scrollSnapType = 'y mandatory';
+      selectValue(valueFromScrollTop(clampedTarget));
+    };
+    inertiaFrameRef.current = requestAnimationFrame(tick);
+  };
+
+  const startInertia = (velocityPxPerMs: number) => {
+    const scroller = scrollerRef.current;
+    if (!scroller) return;
+    let velocity = Math.max(
+      -GROUP_SIZE_FLICK_MAX_VELOCITY,
+      Math.min(GROUP_SIZE_FLICK_MAX_VELOCITY, velocityPxPerMs),
+    );
+    if (Math.abs(velocity) < GROUP_SIZE_FLICK_MIN_VELOCITY) {
+      snapToNearest(scroller.scrollTop);
+      return;
+    }
+
+    scroller.style.scrollSnapType = 'none';
+    let scrollTop = scroller.scrollTop;
+    let lastFrame = performance.now();
+    let lastPublishedIndex = Math.round(scrollTop / GROUP_SIZE_ITEM_HEIGHT);
+
+    const tick = (now: number) => {
+      const dt = Math.min(34, Math.max(8, now - lastFrame));
+      lastFrame = now;
+      velocity *= Math.exp(-GROUP_SIZE_FLICK_FRICTION * dt);
+      scrollTop += velocity * dt;
+
+      if (scrollTop <= 0) {
+        scrollTop = 0;
+        velocity = 0;
+      } else if (scrollTop >= GROUP_SIZE_MAX_SCROLL) {
+        scrollTop = GROUP_SIZE_MAX_SCROLL;
+        velocity = 0;
+      }
+
+      setScrollerTop(scrollTop, false);
+      const index = Math.round(scrollTop / GROUP_SIZE_ITEM_HEIGHT);
+      if (index !== lastPublishedIndex) {
+        lastPublishedIndex = index;
+        onChangeRef.current(GROUP_SIZE_OPTIONS[Math.max(0, Math.min(GROUP_SIZE_OPTIONS.length - 1, index))]!);
+      }
+
+      if (Math.abs(velocity) < GROUP_SIZE_FLICK_MIN_VELOCITY) {
+        snapToNearest(scrollTop);
+        return;
+      }
+      inertiaFrameRef.current = requestAnimationFrame(tick);
+    };
+    inertiaFrameRef.current = requestAnimationFrame(tick);
+  };
+
+  useEffect(() => {
+    const scroller = scrollerRef.current;
+    if (!scroller) return;
+    scroller.scrollTop = initialIndexRef.current * GROUP_SIZE_ITEM_HEIGHT;
+    return () => stopInertia();
+  }, []);
+
+  const endDrag = (pointerId: number) => {
+    const drag = dragRef.current;
+    if (!drag || drag.pointerId !== pointerId) return;
+    const { moved, velocity } = drag;
+    dragRef.current = null;
+    suppressClickRef.current = moved;
+    const scroller = scrollerRef.current;
+    if (!scroller) return;
+    scroller.classList.remove('cursor-grabbing');
+    scroller.classList.add('cursor-grab');
+    if (!moved) {
+      scroller.style.scrollSnapType = 'y mandatory';
+      selectValue(valueFromScrollTop(scroller.scrollTop));
+      return;
+    }
+    startInertia(velocity);
+  };
 
   return (
-    <div className="relative col-span-2">
+    <div className="w-full">
+      <div className="relative h-36 w-full overflow-hidden rounded-[20px] bg-[#FFF8F6]">
+        <div className="pointer-events-none absolute inset-x-3 top-1/2 z-10 h-12 -translate-y-1/2 rounded-[14px] border-y border-[#F7B9B4] bg-white/75 shadow-[0_4px_14px_rgba(244,81,94,0.08)]" aria-hidden="true" />
+        <div
+          ref={scrollerRef}
+          className="scrollbar-hide relative z-20 h-full cursor-grab touch-none snap-y snap-mandatory overflow-y-auto overscroll-y-contain outline-none focus:outline-none focus-visible:outline-none"
+          role="slider"
+          tabIndex={0}
+          aria-label="인원 수"
+          aria-valuemin={1}
+          aria-valuemax={12}
+          aria-valuenow={value}
+          aria-valuetext={value === 1 ? '혼자' : String(value)}
+          onScroll={event => {
+            if (dragRef.current || inertiaFrameRef.current != null) return;
+            const nextValue = valueFromScrollTop(event.currentTarget.scrollTop);
+            if (nextValue !== value) onChange(nextValue);
+          }}
+          onPointerDown={event => {
+            if (event.pointerType === 'mouse' && event.button !== 0) return;
+            event.preventDefault();
+            stopInertia();
+            const now = performance.now();
+            dragRef.current = {
+              pointerId: event.pointerId,
+              startY: event.clientY,
+              startScrollTop: event.currentTarget.scrollTop,
+              lastY: event.clientY,
+              lastTime: now,
+              velocity: 0,
+              moved: false,
+            };
+            event.currentTarget.style.scrollSnapType = 'none';
+            event.currentTarget.classList.remove('cursor-grab');
+            event.currentTarget.classList.add('cursor-grabbing');
+            event.currentTarget.setPointerCapture(event.pointerId);
+          }}
+          onPointerMove={event => {
+            const drag = dragRef.current;
+            if (!drag || drag.pointerId !== event.pointerId) return;
+            const now = performance.now();
+            const dt = Math.max(1, now - drag.lastTime);
+            const scrollDelta = drag.lastY - event.clientY;
+            const instantVelocity = scrollDelta / dt;
+            drag.velocity = drag.velocity * 0.65 + instantVelocity * 0.35;
+            drag.lastY = event.clientY;
+            drag.lastTime = now;
+            const delta = event.clientY - drag.startY;
+            if (Math.abs(delta) > 3) drag.moved = true;
+            setScrollerTop(drag.startScrollTop - delta, true);
+          }}
+          onPointerUp={event => endDrag(event.pointerId)}
+          onPointerCancel={event => endDrag(event.pointerId)}
+          onLostPointerCapture={event => endDrag(event.pointerId)}
+          onKeyDown={event => {
+            stopInertia();
+            if (event.key === 'ArrowUp') {
+              event.preventDefault();
+              selectValue(value - 1);
+            }
+            if (event.key === 'ArrowDown') {
+              event.preventDefault();
+              selectValue(value + 1);
+            }
+            if (event.key === 'Home') {
+              event.preventDefault();
+              selectValue(1);
+            }
+            if (event.key === 'End') {
+              event.preventDefault();
+              selectValue(12);
+            }
+          }}
+          style={{ WebkitOverflowScrolling: 'touch', scrollSnapType: 'y mandatory' }}
+        >
+          <div className="h-12 shrink-0" aria-hidden="true" />
+          {GROUP_SIZE_OPTIONS.map(option => (
+            <div
+              key={option}
+              role="option"
+              aria-selected={option === value}
+              onClick={() => {
+                if (suppressClickRef.current) {
+                  suppressClickRef.current = false;
+                  return;
+                }
+                stopInertia();
+                selectValue(option);
+                scrollerRef.current && (scrollerRef.current.style.scrollSnapType = 'y mandatory');
+              }}
+              className={`flex h-12 w-full shrink-0 snap-center items-center justify-center text-[18px] font-black transition-[color,transform,opacity] ${
+                option === value ? 'scale-110 text-[#F4515E]' : 'scale-95 text-[#9F9699] opacity-55'
+              }`}
+              aria-label={option === 1 ? '혼자' : String(option)}
+            >
+              {option === 1 ? '혼자' : option}
+            </div>
+          ))}
+          <div className="h-12 shrink-0" aria-hidden="true" />
+        </div>
+        <div className="pointer-events-none absolute inset-x-0 top-0 z-30 h-12 bg-gradient-to-b from-[#FFF8F6] via-[#FFF8F6]/90 to-transparent" />
+        <div className="pointer-events-none absolute inset-x-0 bottom-0 z-30 h-12 bg-gradient-to-t from-[#FFF8F6] via-[#FFF8F6]/90 to-transparent" />
+      </div>
+    </div>
+  );
+}
+
+function IngredientAvoidancePicker({ selected, onToggle }: { selected: string[]; onToggle: (value: string) => void }) {
+  const [open, setOpen] = useState(false);
+  const selectedLabels = INGREDIENT_AVOIDANCES.filter(option => selected.includes(option.value)).map(option => option.label);
+
+  return (
+    <div className="relative">
       <button
         type="button"
         onClick={() => setOpen(current => !current)}
@@ -343,16 +506,16 @@ function DietaryExclusionPicker({ selected, onToggle }: { selected: string[]; on
         className={`flex min-h-11 w-full items-center rounded-[12px] border px-3 text-left transition-colors ${selectedLabels.length ? 'border-[#55A964] bg-[#EDF8EE]' : 'border-transparent bg-[#F8F5F3]'}`}
       >
         <span className="mr-2 text-base">🚫</span>
-        <strong className="text-[11px] text-[#514A4D]">No</strong>
+        <strong className="text-[11px] text-[#514A4D]">Ingredients to avoid</strong>
         <span className="ml-2 min-w-0 flex-1 truncate text-[10px] font-semibold text-[#7B7276]">
-          {selectedLabels.length ? selectedLabels.join(', ') : 'Select ingredients'}
+          {selectedLabels.length ? selectedLabels.join(', ') : 'No ingredients selected'}
         </span>
         {selectedLabels.length > 0 && <span className="mr-2 rounded-full bg-[#55A964] px-1.5 py-0.5 text-[9px] font-bold text-white">{selectedLabels.length}</span>}
         <ChevronDown size={15} className={`shrink-0 text-[#8A8084] transition-transform ${open ? 'rotate-180' : ''}`} />
       </button>
       {open && (
         <div id="dietary-exclusion-menu" className="mt-1 max-h-[156px] overflow-y-auto rounded-[14px] border border-[#E8DFDC] bg-white p-1.5 shadow-[0_10px_24px_rgba(92,69,62,0.14)]">
-          {DIETARY_EXCLUSIONS.map(option => {
+          {INGREDIENT_AVOIDANCES.map(option => {
             const isSelected = selected.includes(option.value);
             return (
               <button
@@ -519,20 +682,30 @@ export default function LunchieSettingsPage() {
   const { createSession, startSession, fetchSession, currentSession, setCurrentSession, restaurants, profile } = useApp();
   const urlIntent = new URLSearchParams(search).get('intent');
   const initialIntent: Intent | null = urlIntent === 'meal' || urlIntent === 'cafe' || urlIntent === 'dessert' ? urlIntent : null;
+  const [storedSettings] = useState(() => {
+    try {
+      return normalizeQuickMatchSettings(JSON.parse(localStorage.getItem(QUICK_MATCH_SETTINGS_STORAGE_KEY) ?? 'null'));
+    } catch {
+      return DEFAULT_QUICK_MATCH_SETTINGS;
+    }
+  });
 
-  const [deadlineMin, setDeadlineMin] = useState(10);
-  const [partySize, setPartySize] = useState(4);
-  const [togetherPartySize, setTogetherPartySize] = useState(4);
-  const [radius, setRadius] = useState(1000);
-  // Location enriches Lunchie only when the user explicitly enables a radius.
-  const [distanceEnabled, setDistanceEnabled] = useState(false);
-  const [intent, setIntent] = useState<Intent | null>(initialIntent);
-  const [tags, setTags] = useState<string[]>(['맛집']);
-  const [dietary, setDietary] = useState<string[]>([]);
+  const [deadlineMin, setDeadlineMin] = useState(storedSettings.deadlineMinutes);
+  const [partySize, setPartySize] = useState(storedSettings.partySize);
+  const [radius, setRadius] = useState(storedSettings.radius);
+  const [distanceEnabled, setDistanceEnabled] = useState(storedSettings.distanceEnabled);
+  const [intent, setIntent] = useState<Intent | null>(initialIntent ?? storedSettings.intent);
+  const [tags, setTags] = useState<string[]>(storedSettings.tags);
+  const [dietary, setDietary] = useState<string[]>(storedSettings.dietary);
   const [isCreating, setIsCreating] = useState(false);
   const [origin, setOrigin] = useState<LocationFix | null>(null);
   const [originLabel, setOriginLabel] = useState<string | null>(null);
   const [isLocating, setIsLocating] = useState(false);
+  const creationLockRef = useRef(false);
+  const [activeSessionVerified, setActiveSessionVerified] = useState(false);
+  const [isCheckingSession, setIsCheckingSession] = useState(Boolean(currentSession?.inviteCode));
+  const [sessionCheckFailed, setSessionCheckFailed] = useState(false);
+  const [sessionCheckAttempt, setSessionCheckAttempt] = useState(0);
   const lunchmateLoadout = useMemo(
     () => lunchmateLoadoutFromProfile(profile.lunchmateLoadout),
     [profile.lunchmateLoadout],
@@ -541,19 +714,73 @@ export default function LunchieSettingsPage() {
   const isSolo = partySize === 1;
   const budget = 2 as const;
   const chosenCount = tags.length + dietary.length + 1;
-  const hasActiveSession = currentSession?.status === 'waiting' || currentSession?.status === 'voting';
+  const hasActiveSession = Boolean(
+    activeSessionVerified
+    && currentSession
+    && currentSession.membershipActive !== false
+    && isActiveQuickMatchStatus(currentSession.status),
+  );
   const realCategories = useMemo(() => new Set(restaurants.map(restaurant => restaurant.category)), [restaurants]);
+
+  useEffect(() => {
+    localStorage.setItem(QUICK_MATCH_SETTINGS_STORAGE_KEY, JSON.stringify({
+      deadlineMinutes: deadlineMin,
+      partySize,
+      radius,
+      distanceEnabled,
+      intent,
+      tags,
+      dietary: normalizeDietaryPreferences(dietary),
+    }));
+  }, [deadlineMin, partySize, radius, distanceEnabled, intent, tags, dietary]);
+
+  useEffect(() => {
+    const token = currentSession?.inviteCode;
+    if (!token) {
+      setActiveSessionVerified(false);
+      setIsCheckingSession(false);
+      setSessionCheckFailed(false);
+      return;
+    }
+    // Resume/cancel need a private memberKey. Old local caches without one
+    // only block Start — clear them instead of showing a stuck progress card.
+    if (!currentSession.memberKey) {
+      setActiveSessionVerified(false);
+      setIsCheckingSession(false);
+      setSessionCheckFailed(false);
+      setCurrentSession(null);
+      return;
+    }
+    let active = true;
+    setIsCheckingSession(true);
+    setSessionCheckFailed(false);
+    void fetchSession(token)
+      .then(session => {
+        if (!active) return;
+        const valid = session.membershipActive !== false && isActiveQuickMatchStatus(session.status);
+        setActiveSessionVerified(valid);
+        if (!valid) setCurrentSession(null);
+      })
+      .catch(error => {
+        if (!active) return;
+        const status = (error as { status?: number }).status;
+        if (status === 404 || status === 410) setCurrentSession(null);
+        else setSessionCheckFailed(true);
+        setActiveSessionVerified(false);
+      })
+      .finally(() => {
+        if (active) setIsCheckingSession(false);
+      });
+    return () => { active = false; };
+  }, [currentSession?.inviteCode, currentSession?.memberKey, fetchSession, sessionCheckAttempt, setCurrentSession]);
 
   const toggleMany = (value: string, setter: Dispatch<SetStateAction<string[]>>) => {
     setter(current => current.includes(value) ? current.filter(item => item !== value) : [...current, value]);
   };
 
-  const selectSolo = () => {
-    if (partySize > 1) setTogetherPartySize(partySize);
-    setPartySize(1);
+  const setGroupSize = (next: number) => {
+    setPartySize(Math.max(1, Math.min(12, Math.round(next))));
   };
-
-  const selectTogether = () => setPartySize(Math.max(2, togetherPartySize));
 
   const confirmCurrentLocation = async () => {
     setIsLocating(true);
@@ -563,8 +790,10 @@ export default function LunchieSettingsPage() {
       setOrigin(fix);
       setOriginLabel(label);
       toast.success(`현재 위치를 ${label}(으)로 확인했어요.`);
+      return fix;
     } catch (error) {
       toast.error(error instanceof Error ? error.message : '현재 위치를 확인하지 못했습니다.');
+      throw error;
     } finally {
       setIsLocating(false);
     }
@@ -573,21 +802,34 @@ export default function LunchieSettingsPage() {
   const selectRadius = (nextRadius: number) => {
     setRadius(nextRadius);
     setDistanceEnabled(true);
-    if (!origin && !isLocating) void confirmCurrentLocation();
+    if (!origin && !isLocating) void confirmCurrentLocation().catch(() => undefined);
   };
 
   const handleStart = async () => {
-    if (hasActiveSession) {
+    if (creationLockRef.current || isCheckingSession || sessionCheckFailed) return;
+    creationLockRef.current = true;
+    if (hasActiveSession && currentSession) {
       setIsCreating(true);
       try {
         const activeSession = await fetchSession(currentSession.inviteCode);
-        const isWaiting = activeSession.status === 'waiting';
-        toast.info(isWaiting ? '진행 중인 대기방으로 이동합니다.' : '진행 중인 투표로 이동합니다.');
-        navigate(isWaiting ? '/session/lobby' : '/lunchie/swipe');
-        return;
-      } catch {
+        if (activeSession.membershipActive !== false && isActiveQuickMatchStatus(activeSession.status)) {
+          const isWaiting = activeSession.status === 'waiting';
+          toast.info(isWaiting ? '진행 중인 대기방으로 이동합니다.' : '진행 중인 투표로 이동합니다.');
+          navigate(isWaiting ? '/session/lobby' : '/lunchie/swipe');
+          creationLockRef.current = false;
+          return;
+        }
         // A locally cached session can outlive its server record. Clear only
         // that stale cache before creating a replacement session.
+        setCurrentSession(null);
+      } catch (error) {
+        const status = (error as { status?: number }).status;
+        if (status !== 404 && status !== 410) {
+          toast.error('We could not verify the current Quick Match. Please try again.');
+          setIsCreating(false);
+          creationLockRef.current = false;
+          return;
+        }
         setCurrentSession(null);
       }
     }
@@ -596,8 +838,6 @@ export default function LunchieSettingsPage() {
     try {
       const categories = tags.filter(tag => realCategories.has(tag));
       const hostName = profile.name && profile.name !== '사용자' ? profile.name : '호스트';
-      // A radius uses the host's location as the shared server-side origin.
-      // Without a radius, sessions remain usable when location permission is unavailable.
       const currentOrigin = distanceEnabled
         ? origin ?? await currentPosition()
         : null;
@@ -609,10 +849,10 @@ export default function LunchieSettingsPage() {
           budget,
           radius,
           distanceEnabled,
-          categories,
-          intent: intent ?? undefined,
           originLatitude: currentOrigin?.latitude,
           originLongitude: currentOrigin?.longitude,
+          categories,
+          intent: intent ?? undefined,
         },
         hostName,
         profile.emoji,
@@ -641,6 +881,7 @@ export default function LunchieSettingsPage() {
       toast.error(error instanceof Error ? error.message : '세션 생성에 실패했습니다.');
     } finally {
       setIsCreating(false);
+      creationLockRef.current = false;
     }
   };
 
@@ -660,97 +901,79 @@ export default function LunchieSettingsPage() {
           <h1 className="text-[19px] font-extrabold leading-none tracking-[-0.4px] text-[#F4515E]">Lunchie</h1>
           <p className="mt-1 text-[10px] font-bold tracking-[0.7px] text-[#9B959A]">QUICK MATCH</p>
         </div>
-        <div className="ml-auto flex rounded-full bg-white p-[3px] shadow-sm" aria-label="식사 인원 모드">
-          <button type="button" onClick={selectSolo} className={`rounded-full px-4 py-1.5 text-[13px] font-bold ${isSolo ? 'bg-[#F4515E] text-white' : 'text-[#9B959A]'}`}>혼자</button>
-          <button type="button" onClick={selectTogether} className={`rounded-full px-4 py-1.5 text-[13px] font-bold ${!isSolo ? 'bg-[#F4515E] text-white' : 'text-[#9B959A]'}`}>같이</button>
-        </div>
       </header>
 
       <main className="mx-auto max-w-[480px] space-y-3 px-4 pb-32">
-        {hasActiveSession && (
-          <button
-            type="button"
-            onClick={() => navigate(currentSession.status === 'waiting' ? '/session/lobby' : '/lunchie/swipe')}
-            className="flex w-full items-center justify-between rounded-2xl bg-[#2B3440] px-4 py-3 text-left text-white"
-          >
-            <span>
-              <strong className="block text-[13px]">진행 중인 Quick Match</strong>
-              <span className="text-[11px] text-[#AEB9C7]">새 세션을 만들지 않고 이어서 진행해요</span>
-            </span>
-            <span className="text-[12px] font-bold text-[#FF7A83]">{currentSession.status === 'waiting' ? '대기방' : '투표'} ›</span>
-          </button>
+        {sessionCheckFailed && currentSession && (
+          <section role="alert" className="rounded-[20px] border border-[#F2C6C1] bg-white p-4 shadow-sm">
+            <h2 className="text-[14px] font-black text-[#302B2E]">We couldn’t check your Quick Match</h2>
+            <p className="mt-1 text-[11px] leading-relaxed text-[#7C7276]">Your saved session is still here. Retry before creating another one.</p>
+            <div className="mt-3 flex flex-wrap gap-2">
+              <button type="button" onClick={() => setSessionCheckAttempt(attempt => attempt + 1)} className="min-h-10 rounded-xl bg-[#F4515E] px-4 text-[12px] font-bold text-white">Try again</button>
+              <button type="button" onClick={() => setCurrentSession(null)} className="min-h-10 rounded-xl bg-[#FFF0EE] px-4 text-[12px] font-bold text-[#C43B47]">Clear saved session</button>
+            </div>
+          </section>
+        )}
+        {hasActiveSession && currentSession && (
+          <section className="rounded-[22px] border border-[#F5B8B4] bg-[#FFFCFA] p-4 shadow-[0_8px_24px_rgba(180,100,90,0.10)]" aria-label="Quick Match in progress">
+            <div className="flex items-start gap-3">
+              <div className="min-w-0 flex-1">
+                <div className="flex flex-wrap items-center gap-2">
+                  <h2 className="text-[15px] font-black text-[#26232A]">Quick Match in progress</h2>
+                  <span className="rounded-full bg-[#FFF0EE] px-2.5 py-1 text-[10px] font-black uppercase tracking-wide text-[#D83D49]">
+                    {currentSession.status === 'waiting' ? 'Waiting' : currentSession.status === 'choosing' ? 'Choosing' : 'Voting'}
+                  </span>
+                </div>
+                <p className="mt-1 text-[11px] font-semibold text-[#8A8084]">Server-verified and ready to resume.</p>
+              </div>
+              <SessionManagementMenu onEnded={() => navigate('/lunchie/settings')} className="text-[#6F6468]" />
+            </div>
+            <div className="mt-3 grid grid-cols-2 gap-2 text-[11px]">
+              <span className="rounded-xl bg-[#FFF6F2] px-3 py-2 font-bold text-[#645A5E]">👥 {currentSession.members.length}/{currentSession.filters.partySize} people</span>
+              <span className="rounded-xl bg-[#FFF6F2] px-3 py-2 font-bold text-[#645A5E]">⏱ {currentSession.deadlineMinutes ?? deadlineMin} min</span>
+              <span className="rounded-xl bg-[#FFF6F2] px-3 py-2 font-bold text-[#645A5E]">📍 {formatRadius(currentSession.filters.radius)}</span>
+              <span className="rounded-xl bg-[#FFF6F2] px-3 py-2 font-bold text-[#645A5E]">{currentSession.filters.partySize === 1 ? '🙋 Solo' : '🤝 Group'}</span>
+            </div>
+            <button
+              type="button"
+              onClick={() => navigate(currentSession.status === 'waiting' ? '/session/lobby' : '/lunchie/swipe')}
+              className="mt-3 min-h-11 w-full rounded-[14px] bg-[#F4515E] px-4 text-[13px] font-black text-white outline-none transition-transform active:scale-[0.98] focus-visible:ring-2 focus-visible:ring-[#F4515E] focus-visible:ring-offset-2"
+            >
+              {currentSession.status === 'waiting' ? 'Return to lobby' : 'Continue Quick Match'}
+            </button>
+          </section>
         )}
 
         <Card>
           <CardTitle icon={<Clock3 size={16} />}>마감</CardTitle>
-          <DeadlineDial minutes={deadlineMin} onChange={setDeadlineMin} />
-          <div className="mx-auto mt-4 w-full max-w-[320px]">
-            <div className="grid grid-cols-3 gap-1.5">
-              {DEADLINE_OPTIONS.map(minutes => (
-                <ChoiceChip key={minutes} selected={deadlineMin === minutes} onClick={() => setDeadlineMin(minutes)} className="min-h-9 px-1">{minutes}분</ChoiceChip>
-              ))}
-            </div>
+          <div className="flex flex-col items-center">
+            <DeadlineDial minutes={deadlineMin} onChange={setDeadlineMin} />
           </div>
         </Card>
 
-        {!isSolo && (
-          <Card>
-            <div className="mb-3 flex items-center gap-2 text-[14px] font-extrabold text-[#26232A]">
-              <Users size={17} className="text-[#F4515E]" />
-              <span>인원</span>
-              <span className="ml-auto text-[10px] font-bold text-[#9B959A]">함께 먹을 정원</span>
-            </div>
-            <div className="flex min-h-[66px] items-center rounded-[18px] bg-[#FFF8F6] px-2.5">
-              <button
-                type="button"
-                onClick={() => {
-                  const next = Math.max(2, partySize - 1);
-                  setPartySize(next);
-                  setTogetherPartySize(next);
-                }}
-                disabled={partySize <= 2}
-                className="flex size-10 shrink-0 items-center justify-center rounded-[14px] bg-white text-[#645D61] shadow-sm disabled:opacity-30"
-                aria-label="초대 인원 줄이기"
-              >
-                <Minus size={17} />
-              </button>
-              <div className="flex min-w-0 flex-1 flex-col items-center justify-center">
-                <div className="flex items-center justify-center -space-x-1 text-[#F4515E]" aria-hidden="true">
-                  {Array.from({ length: Math.min(partySize, 6) }, (_, index) => (
-                    <span key={index} className="flex size-6 items-center justify-center rounded-full border-2 border-[#FFF8F6] bg-[#FFE4E3]">
-                      <Users size={12} />
-                    </span>
-                  ))}
-                </div>
-                <strong className="mt-1 text-[18px] leading-none text-[#F4515E]">{partySize}명</strong>
-              </div>
-              <button
-                type="button"
-                onClick={() => {
-                  const next = Math.min(8, partySize + 1);
-                  setPartySize(next);
-                  setTogetherPartySize(next);
-                }}
-                disabled={partySize >= 8}
-                className="flex size-10 shrink-0 items-center justify-center rounded-[14px] bg-white text-[#645D61] shadow-sm disabled:opacity-30"
-                aria-label="초대 인원 늘리기"
-              >
-                <Plus size={17} />
-              </button>
-            </div>
-          </Card>
-        )}
+        <Card>
+          <div className="mb-3 flex items-center gap-2 text-[14px] font-extrabold text-[#26232A]">
+            <Users size={17} className="text-[#F4515E]" />
+            <span>인원</span>
+          </div>
+          <GroupSizeRuler value={partySize} onChange={setGroupSize} />
+        </Card>
 
         <Card>
           <div className="mb-3 flex items-center justify-between gap-2">
-            <ChoiceChip selected={!distanceEnabled} onClick={() => setDistanceEnabled(false)}>
-              반경 제한 없음
-            </ChoiceChip>
             <button
               type="button"
-              onClick={() => void confirmCurrentLocation()}
+              onClick={() => setDistanceEnabled(false)}
+              aria-pressed={!distanceEnabled}
+              className={`min-h-9 rounded-full px-3 text-[10px] font-bold ${!distanceEnabled ? 'bg-[#F4515E] text-white' : 'bg-[#FFF0EE] text-[#C43B47]'}`}
+            >
+              반경 제한 없음
+            </button>
+            <button
+              type="button"
+              onClick={() => void confirmCurrentLocation().catch(() => undefined)}
               disabled={isLocating}
-              className="flex items-center gap-1 text-[10px] font-bold text-[#F4515E] disabled:opacity-50"
+              className="flex min-h-9 items-center gap-1 rounded-full px-2 text-[10px] font-bold text-[#F4515E] disabled:opacity-50"
             >
               <Navigation size={12} /> {isLocating ? '확인 중…' : origin ? '위치 다시 확인' : '현재 위치 확인'}
             </button>
@@ -767,7 +990,6 @@ export default function LunchieSettingsPage() {
 
         <Card>
           <CardTitle icon={<UtensilsCrossed size={16} />} badge={`${chosenCount} 선택`}>오늘의 Quick Match</CardTitle>
-          <p className="-mt-1 mb-3 text-[11px] font-semibold text-[#A6A0A3]">끌리는 카드를 한 장 골라주세요</p>
           <div className="grid grid-cols-4 gap-2">
             {PREFERENCE_CARDS.map(option => (
               <PreferenceCard key={option.label} option={option} selected={intent === option.value} onClick={() => setIntent(option.value)} />
@@ -778,7 +1000,6 @@ export default function LunchieSettingsPage() {
           <div className="mb-2 flex items-center gap-2">
             <Sparkles size={15} className="text-[#F4515E]" />
             <p className="text-[12px] font-extrabold text-[#524B4F]">어떤 분위기인가요?</p>
-            <span className="ml-auto text-[10px] font-bold text-[#A6A0A3]">여러 개 선택 가능</span>
           </div>
           <div className="grid grid-cols-2 gap-2">
             {FOOD_TAGS.map(tag => {
@@ -805,12 +1026,18 @@ export default function LunchieSettingsPage() {
           </div>
 
           <div className="my-3 h-px bg-[#F0EAE8]" />
-          <div className="mb-2 flex items-center justify-between">
-            <p className="text-[12px] font-extrabold text-[#524B4F]">Dietary preferences</p>
-            <span className="text-[9px] font-bold text-[#A6A0A3]">Select all that apply</span>
+          <div className="mb-2 flex items-center justify-between gap-3">
+            <p className="text-[12px] font-extrabold text-[#524B4F]">Dietary requirements</p>
+            <button
+              type="button"
+              onClick={() => setDietary(current => current.filter(value => !DIETARY_REQUIREMENTS.some(option => option.value === value)))}
+              className="min-h-9 rounded-lg px-2 text-[10px] font-bold text-[#C43B47] outline-none focus-visible:ring-2 focus-visible:ring-[#F4515E]"
+            >
+              Clear requirements
+            </button>
           </div>
           <div className="grid grid-cols-2 gap-1.5">
-            {DIETARY_OPTIONS.map(option => {
+            {DIETARY_REQUIREMENTS.map(option => {
               const selected = dietary.includes(option.value);
               return (
                 <button
@@ -818,7 +1045,7 @@ export default function LunchieSettingsPage() {
                   type="button"
                   onClick={() => toggleMany(option.value, setDietary)}
                   aria-pressed={selected}
-                  className={`flex min-h-10 w-full items-center rounded-[12px] px-2.5 text-left transition-colors ${selected ? 'bg-[#EDF8EE]' : 'bg-[#F8F5F3]'}`}
+                  className={`flex min-h-11 w-full items-center rounded-[12px] px-2.5 text-left transition-colors ${selected ? 'bg-[#EDF8EE]' : 'bg-[#F8F5F3] hover:bg-[#F1ECE9]'}`}
                 >
                   <span className="mr-2 text-base">{option.icon}</span>
                   <span className="truncate text-[11px] font-bold text-[#514A4D]">{option.label}</span>
@@ -826,7 +1053,9 @@ export default function LunchieSettingsPage() {
                 </button>
               );
             })}
-            <DietaryExclusionPicker selected={dietary} onToggle={value => toggleMany(value, setDietary)} />
+          </div>
+          <div className="mt-3 border-t border-[#F0EAE8] pt-3">
+            <IngredientAvoidancePicker selected={dietary} onToggle={value => toggleMany(value, setDietary)} />
           </div>
         </Card>
 
@@ -834,13 +1063,15 @@ export default function LunchieSettingsPage() {
           <motion.button
             type="button"
             onClick={() => void handleStart()}
-            disabled={isCreating}
+            disabled={isCreating || isCheckingSession || sessionCheckFailed}
             whileTap={{ scale: 0.98 }}
             className="lunchie-session-primary-action w-full disabled:cursor-not-allowed disabled:opacity-60"
           >
-            {isCreating
+            {isCheckingSession
+              ? 'Checking current session…'
+              : isCreating
               ? '준비하는 중…'
-              : hasActiveSession
+              : hasActiveSession && currentSession
                 ? currentSession.status === 'waiting' ? '대기방으로 돌아가기' : '투표 계속하기'
                 : isSolo ? 'Swipe 시작하기' : '세션 만들고 초대하기'}
           </motion.button>

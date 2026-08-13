@@ -7,7 +7,7 @@
 import { useState, useCallback, useEffect, useRef } from 'react';
 import { motion, useMotionValue, useTransform, useMotionTemplate, AnimatePresence, type MotionValue } from 'framer-motion';
 import { useLocation } from 'wouter';
-import { ArrowLeft, Heart, X, Star, MapPin, Clock, Phone, Navigation, Share2, Download, Link2, Home, Bookmark, RotateCcw } from 'lucide-react';
+import { ArrowLeft, Heart, X, Star, MapPin, Clock, Phone, Navigation, Share2, Download, Link2, Home, Bookmark, RotateCcw, Loader2, RefreshCw, SlidersHorizontal } from 'lucide-react';
 import { toast } from 'sonner';
 import { useApp, type Restaurant, type MenuItem } from '@/contexts/AppContext';
 import { useCourseShare } from '@/hooks/useCourseShare';
@@ -19,10 +19,100 @@ import MenuItemDetail from '@/components/MenuItemDetail';
 import { logSwipe, logWinner, logNavigate, logEvent, flushEvents } from '@/lib/eventLogger';
 import { lunchmateLoadoutFromProfile } from '@/utils/lunchmateProfile';
 import { intentForCategory } from '@shared/intent';
+import { classifySwipeAvailability, type SwipeAvailability } from '@/lib/swipeAvailability';
+import { isActiveQuickMatchStatus } from '@/lib/quickMatch';
+import SessionManagementMenu from '@/components/lunchie/SessionManagementMenu';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 type SwipeAction = 'like' | 'dislike';
+
+function SwipeStateScreen({
+  state,
+  onRetry,
+}: {
+  state: Exclude<SwipeAvailability, 'ready'>;
+  onRetry?: () => void;
+}) {
+  const [, navigate] = useLocation();
+  const { currentSession } = useApp();
+  const content = {
+    loading: {
+      title: '결승 후보를 준비하고 있어요',
+      description: 'Preparing your Quick Match and restaurant options…',
+    },
+    'api-error': {
+      title: 'We couldn’t load Quick Match',
+      description: 'Check your connection and try again.',
+    },
+    'catalog-empty': {
+      title: 'Restaurants aren’t available yet',
+      description: 'We couldn’t load restaurant options for this Quick Match.',
+    },
+    'no-matches': {
+      title: 'No matches found',
+      description: 'Try increasing the distance or adjusting your preferences.',
+    },
+    'session-missing': {
+      title: 'Quick Match를 다시 준비할게요',
+      description: 'No Quick Match found. Start a new Quick Match from settings.',
+    },
+    'session-invalid': {
+      title: 'This Quick Match is no longer available',
+      description: 'It may have ended, expired, been cancelled, or you may have left the lobby.',
+    },
+    'session-not-started': {
+      title: 'This Quick Match hasn’t started yet',
+      description: 'Return to the lobby and wait for the host to begin.',
+    },
+  }[state];
+  const canRetry = state === 'api-error' || state === 'catalog-empty';
+  const primaryLabel = state === 'no-matches'
+    ? 'Edit preferences'
+    : state === 'session-not-started'
+      ? 'Return to lobby'
+      : 'Back to settings';
+  const primaryPath = state === 'session-not-started' ? '/session/lobby' : '/lunchie/settings';
+
+  return (
+    <div className="flex min-h-dvh items-center justify-center bg-[#FFF6F2] px-5 py-10">
+      <section role={state === 'loading' ? 'status' : 'alert'} aria-live="polite" className="w-full max-w-[390px] rounded-[26px] border border-[#F2DDD8] bg-white p-6 text-center shadow-[0_16px_44px_rgba(137,89,79,0.12)]">
+        <div className="mx-auto flex size-16 items-center justify-center rounded-full bg-[#FFF0EE] text-[#F4515E]">
+          {state === 'loading'
+            ? <Loader2 size={30} className="animate-spin motion-reduce:animate-none" aria-hidden="true" />
+            : state === 'no-matches'
+              ? <SlidersHorizontal size={28} aria-hidden="true" />
+              : <span className="text-3xl" aria-hidden="true">🍽️</span>}
+        </div>
+        <h1 className="mt-4 text-[20px] font-black tracking-[-0.3px] text-[#26232A]">{content.title}</h1>
+        <p className="mx-auto mt-2 max-w-[300px] text-[13px] leading-relaxed text-[#776E72]">{content.description}</p>
+        {state === 'loading' ? (
+          <div className="mt-6 space-y-2" aria-hidden="true">
+            <div className="h-3 animate-pulse rounded-full bg-[#F4ECE9] motion-reduce:animate-none" />
+            <div className="mx-auto h-3 w-3/4 animate-pulse rounded-full bg-[#F4ECE9] motion-reduce:animate-none" />
+          </div>
+        ) : (
+          <div className="mt-6 space-y-2">
+            <button type="button" onClick={() => navigate(primaryPath)} className="min-h-12 w-full rounded-2xl bg-[#F4515E] px-4 text-[14px] font-black text-white outline-none focus-visible:ring-2 focus-visible:ring-[#F4515E] focus-visible:ring-offset-2">
+              {primaryLabel}
+            </button>
+            {canRetry && onRetry && (
+              <button type="button" onClick={onRetry} className="flex min-h-11 w-full items-center justify-center gap-2 rounded-2xl border border-[#E9D8D3] bg-[#FFF9F6] px-4 text-[13px] font-bold text-[#5E5559] outline-none focus-visible:ring-2 focus-visible:ring-[#F4515E]">
+                <RefreshCw size={15} aria-hidden="true" /> Try again
+              </button>
+            )}
+            {currentSession && (state === 'catalog-empty' || state === 'no-matches' || state === 'session-not-started') && (
+              <div className="flex items-center justify-center gap-1 pt-2 text-[11px] font-semibold text-[#81767A]">
+                Manage this session
+                <SessionManagementMenu onEnded={() => navigate('/lunchie/settings')} className="text-[#81767A]" />
+              </div>
+            )}
+          </div>
+        )}
+      </section>
+    </div>
+  );
+}
 
 // 소스 메뉴판의 섹션 구조 그대로 유지 — 등장 순서대로 그룹핑(알파벳 재정렬 X).
 function groupByCategory(items: MenuItem[]): [string, MenuItem[]][] {
@@ -597,7 +687,7 @@ function WinnerScreen({ selectedWinner, onReset }: { selectedWinner?: Restaurant
     }
   }, [winner?.id]);
 
-  if (!winner) return null;
+  if (!winner) return <SwipeStateScreen state="loading" />;
 
   // 실제 사진만. 없으면 이모지 플레이스홀더.
   const foodPhotos = (winner.photos ?? []).slice(0, 4);
@@ -1586,10 +1676,11 @@ function WaitingOrDecidedScreen({ onContinue, onReroll }: { onContinue: (winner?
 
 type Phase = 'swipe' | 'decided' | 'results';
 
-export default function QuickMatchPage() {
+function QuickMatchExperience() {
   const [, navigate] = useLocation();
   const { currentSession, addSwipe, swipeRecords, profile, rerollSession } = useApp();
   const [phase, setPhase] = useState<Phase>('swipe');
+  const lunchmateLoadout = lunchmateLoadoutFromProfile(profile.lunchmateLoadout);
   const targetRestaurants = currentSession?.restaurants || [];
   const currentSessionSwipes = swipeRecords.filter(s => s.sessionId === currentSession?.id);
   const [currentIndex, setCurrentIndex] = useState(() => {
@@ -1607,6 +1698,7 @@ export default function QuickMatchPage() {
   const rejectRoundRef = useRef(1);
   const SOLO_REROLL_CAP = 3;
   const [rerollPrompt, setRerollPrompt] = useState<'none' | 'lastChance' | 'exhausted'>('none');
+  const [showIntro, setShowIntro] = useState(true);
   const [remainingMs, setRemainingMs] = useState(() => {
     if (!currentSession?.deadline) return 0;
     return Math.max(0, new Date(currentSession.deadline).getTime() - Date.now());
@@ -1621,13 +1713,6 @@ export default function QuickMatchPage() {
     }, 1000);
     return () => clearInterval(iv);
   }, [currentSession?.deadline]);
-
-  // If no session, go to create session page
-  useEffect(() => {
-    if (!currentSession) {
-      navigate('/lunchie/settings');
-    }
-  }, [currentSession, navigate]);
 
   // Expiry check — 예선(swipe) 중에만 만료로 강제 전환. 결정/결과 단계에선 되돌리지 않음.
   useEffect(() => {
@@ -1738,6 +1823,16 @@ export default function QuickMatchPage() {
     };
   }, [phase, currentSession?.id, currentSession?.generation, profile.id]);
 
+  useEffect(() => {
+    if (!showIntro) return;
+    const timer = window.setTimeout(() => setShowIntro(false), 2800);
+    return () => window.clearTimeout(timer);
+  }, [showIntro]);
+
+  useEffect(() => {
+    if (!showIntro) cardShownAtRef.current = Date.now();
+  }, [showIntro]);
+
   const handleAction = useCallback((action: SwipeAction) => {
     const restaurant = targetRestaurants[currentIndex];
     if (!restaurant) return;
@@ -1808,26 +1903,7 @@ export default function QuickMatchPage() {
 
   const topPick = swipeData.find(s => s.action === 'like')?.restaurant || targetRestaurants[0];
 
-  if (!currentSession) {
-    return (
-      <div className="flex min-h-dvh flex-col items-center justify-center bg-[#FCF4EE] px-6 text-center">
-        <div className="mb-4 flex size-16 items-center justify-center rounded-full bg-white text-[#EB5053] shadow-sm">
-          <RotateCcw size={26} />
-        </div>
-        <h1 className="text-[20px] font-black text-[#2A2525]">Quick Match를 다시 준비할게요</h1>
-        <p className="mt-2 max-w-[280px] text-[13px] leading-relaxed text-[#8A7F7A]">
-          진행 중인 세션을 찾지 못했어요. 설정 화면에서 바로 다시 시작할 수 있어요.
-        </p>
-        <button
-          type="button"
-          onClick={() => navigate('/lunchie/settings')}
-          className="mt-6 min-h-12 w-full max-w-[300px] rounded-2xl bg-[#EB5053] px-5 text-[14px] font-black text-white shadow-md active:scale-[0.98]"
-        >
-          Quick Match 설정으로
-        </button>
-      </div>
-    );
-  }
+  if (!currentSession) return <SwipeStateScreen state="session-missing" />;
 
   // 새 추천으로 재시작. 같은 덱(targetRestaurants)은 이미 swipeRecords에 다 기록돼 있어서,
   // rerollSession으로 새 덱을 먼저 받아온 뒤에 phase를 'swipe'로 돌려야 한다 — 순서를 바꾸면
@@ -1903,16 +1979,7 @@ export default function QuickMatchPage() {
       }
       // 솔로: 좋아요 수로 구성된 듀얼(준결승→결승). 로컬 즉시 — /results 폴링/플래시 없음.
       if (duel) return <FinalBattleResultScreen key={(duel.a?.id ?? '') + (duel.b?.id ?? '')} finalist1={duel.a} finalist2={duel.b} onContinue={handleDuelChoice} onRejectBoth={handleRejectBoth} />;
-      return (
-        <div className="flex min-h-dvh flex-col items-center justify-center bg-[#FCF4EE] px-6 text-center" role="status">
-          <motion.div
-            className="size-10 rounded-full border-4 border-[#F5CBC5] border-t-[#EB5053]"
-            animate={{ rotate: 360 }}
-            transition={{ duration: 0.8, repeat: Infinity, ease: 'linear' }}
-          />
-          <p className="mt-4 text-[14px] font-black text-[#4B4240]">결승 후보를 준비하고 있어요</p>
-        </div>
-      );
+      return <SwipeStateScreen state="loading" />; // 효과가 듀얼/우승 구성 중
     }
     return <WaitingOrDecidedScreen
       onContinue={(w) => { if (w) setSelectedWinner(w); setPhase('results'); }}
@@ -1958,6 +2025,104 @@ export default function QuickMatchPage() {
         )}
       </div>
 
+      {currentSession.dietaryBestEffort && (
+        <div role="note" className="mx-5 mb-2 rounded-2xl border border-[#F3CFAE] bg-[#FFF7E8] px-4 py-3 text-center">
+          <p className="text-[12px] font-black text-[#7A4B20]">Closest available matches</p>
+          <p className="mt-1 text-[10px] font-semibold leading-relaxed text-[#8A6747]">
+            No venue verifies every selected diet style. Ingredient exclusions are still applied—please confirm dietary requirements with the venue.
+          </p>
+        </div>
+      )}
+
+      {/* Intro overlay */}
+      <AnimatePresence>
+        {showIntro && (
+          <motion.div
+            className="absolute inset-0 bg-[#1A1A1A] z-50 flex flex-col items-center justify-center"
+            exit={{ opacity: 0, scale: 1.05 }}
+            transition={{ duration: 0.3 }}
+          >
+            <div className="flex flex-col items-center">
+              <motion.div
+                className="mb-5 flex items-center justify-center"
+                animate={{ y: [0, -10, 0], rotate: [0, -1.2, 1.2, 0] }}
+                transition={{ duration: 2.2, repeat: Infinity, ease: 'easeInOut' }}
+              >
+                <LunchmateCharacterRenderer
+                  flowState="idle"
+                  loadout={lunchmateLoadout}
+                  size={128}
+                  renderSize="compact"
+                  animated
+                  alt="Quick Match를 시작하는 나의 런치킨"
+                />
+              </motion.div>
+              <p className="font-black text-white text-[22px]">예선전 시작! 🍽️</p>
+            </div>
+            <p className="text-white/60 text-[14px] mt-2">카드를 좌우로 스와이프 해보세요</p>
+            <div className="mt-5 w-56">
+              <div className="mb-2 flex items-center justify-between text-[11px] text-white/55">
+                <span>추천 카드를 준비하고 있어요</span>
+                <span>약 3초</span>
+              </div>
+              <div className="h-2 overflow-hidden rounded-full bg-white/15">
+                <motion.div
+                  className="h-full origin-left rounded-full bg-[#EB5053]"
+                  initial={{ scaleX: 0 }}
+                  animate={{ scaleX: 1 }}
+                  transition={{ duration: 2.8, ease: 'linear' }}
+                />
+              </div>
+            </div>
+
+            {/* Swipe gesture demo card */}
+            <div className="relative w-36 h-48 mt-6 flex items-center justify-center">
+              <motion.div
+                className="absolute w-32 h-44 rounded-2xl shadow-2xl flex items-center justify-center text-6xl overflow-hidden"
+                style={{ background: '#FFF1E0' }}
+                animate={{
+                  x: [0, -90, -90, 0, 90, 90, 0],
+                  rotate: [0, -16, -16, 0, 16, 16, 0],
+                }}
+                transition={{ duration: 2.6, times: [0, 0.2, 0.32, 0.5, 0.7, 0.82, 1], repeat: Infinity, ease: 'easeInOut' }}
+              >
+                🍱
+                <motion.div
+                  className="absolute top-4 right-4 border-[3px] rounded-lg px-2 py-0.5 font-black text-[13px]"
+                  style={{ borderColor: '#EB5053', color: '#EB5053', transform: 'rotate(15deg)' }}
+                  animate={{ opacity: [0, 0, 1, 1, 0, 0] }}
+                  transition={{ duration: 2.6, times: [0, 0.15, 0.18, 0.34, 0.37, 1], repeat: Infinity, ease: 'easeInOut' }}
+                >
+                  NOPE
+                </motion.div>
+                <motion.div
+                  className="absolute top-4 left-4 border-[3px] rounded-lg px-2 py-0.5 font-black text-[13px]"
+                  style={{ borderColor: '#3CBA44', color: '#3CBA44', transform: 'rotate(-15deg)' }}
+                  animate={{ opacity: [0, 0, 1, 1, 0, 0] }}
+                  transition={{ duration: 2.6, times: [0, 0.65, 0.68, 0.84, 0.87, 1], repeat: Infinity, ease: 'easeInOut' }}
+                >
+                  LIKE
+                </motion.div>
+              </motion.div>
+            </div>
+
+            <div className="flex gap-8 mt-8">
+              <div className="flex flex-col items-center gap-2">
+                <div className="w-14 h-14 rounded-full bg-white flex items-center justify-center">
+                  <X size={24} color="#EB5053" strokeWidth={2.5} />
+                </div>
+                <span className="text-white/70 text-[12px]">← 싫어요</span>
+              </div>
+              <div className="flex flex-col items-center gap-2">
+                <div className="w-14 h-14 rounded-full flex items-center justify-center" style={{ background: '#EB5053' }}>
+                  <Heart size={24} color="white" fill="white" />
+                </div>
+                <span className="text-white/70 text-[12px]">좋아요 →</span>
+              </div>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
       {/* Card stack — 9:12 ratio */}
       <div className="px-5 py-2 relative flex items-center justify-center">
         <div className="relative w-full" style={{ aspectRatio: '9/12', maxHeight: '64dvh' }}>
@@ -1999,4 +2164,82 @@ export default function QuickMatchPage() {
       </div>
     </div>
   );
+}
+
+export default function QuickMatchPage() {
+  const { currentSession, fetchSession, registerRestaurants, profile } = useApp();
+  const [availability, setAvailability] = useState<SwipeAvailability>('loading');
+  const [retryAttempt, setRetryAttempt] = useState(0);
+
+  useEffect(() => {
+    let active = true;
+    const token = currentSession?.inviteCode;
+    if (!token) {
+      setAvailability('session-missing');
+      return () => { active = false; };
+    }
+
+    setAvailability('loading');
+    void (async () => {
+      try {
+        const serverSession = await fetchSession(token, []);
+        const baseState = classifySwipeAvailability({
+          loading: false,
+          hasSession: true,
+          isMember: serverSession.membershipActive !== false && serverSession.members.some(member => member.id === profile.id),
+          status: serverSession.status,
+          catalogLoaded: false,
+          catalogCount: 0,
+          candidateCount: serverSession.restaurants.length,
+        });
+        if (baseState === 'session-invalid' || baseState === 'session-not-started') {
+          if (active) setAvailability(baseState);
+          return;
+        }
+        if (!isActiveQuickMatchStatus(serverSession.status)) {
+          if (active) setAvailability('session-invalid');
+          return;
+        }
+
+        const response = await fetch('/api/restaurants');
+        if (!response.ok) throw Object.assign(new Error(`Restaurant request failed (${response.status})`), { status: response.status });
+        const payload = await response.json();
+        if (!Array.isArray(payload)) throw new Error('Restaurant response was not a list');
+        const catalogue = payload as Restaurant[];
+        if (catalogue.length > 0) registerRestaurants(catalogue);
+        const refreshedSession = await fetchSession(token, catalogue);
+        const nextState = classifySwipeAvailability({
+          loading: false,
+          hasSession: true,
+          isMember: refreshedSession.membershipActive !== false && refreshedSession.members.some(member => member.id === profile.id),
+          status: refreshedSession.status,
+          catalogLoaded: true,
+          catalogCount: catalogue.length,
+          candidateCount: refreshedSession.restaurants.length,
+        });
+        if (active) setAvailability(nextState);
+      } catch (error) {
+        if (!active) return;
+        const status = (error as { status?: number }).status;
+        const code = (error as { code?: string }).code;
+        if (status === 404 || status === 410 || code === 'SESSION_NOT_FOUND') {
+          setAvailability('session-invalid');
+          return;
+        }
+        console.error('Failed to prepare Quick Match', {
+          status,
+          code,
+          message: error instanceof Error ? error.message : 'Unknown error',
+        });
+        setAvailability('api-error');
+      }
+    })();
+
+    return () => { active = false; };
+  }, [currentSession?.inviteCode, fetchSession, profile.id, registerRestaurants, retryAttempt]);
+
+  if (availability !== 'ready') {
+    return <SwipeStateScreen state={availability} onRetry={() => setRetryAttempt(attempt => attempt + 1)} />;
+  }
+  return <QuickMatchExperience />;
 }

@@ -33,6 +33,8 @@ import {
 import { useApp } from '@/contexts/AppContext';
 import { getLobbyPresentation } from '@/lib/lobbyPresentation';
 import { lunchmateLoadoutFromProfile } from '@/utils/lunchmateProfile';
+import SessionManagementMenu from '@/components/lunchie/SessionManagementMenu';
+import { isActiveQuickMatchStatus } from '@/lib/quickMatch';
 
 function isAbortError(error: unknown): boolean {
   return typeof error === 'object' && error !== null && 'name' in error && error.name === 'AbortError';
@@ -51,7 +53,7 @@ export function resolveInviteOrigin(configuredOrigin: string | undefined, browse
 
 export default function SessionLobbyPage() {
   const [, navigate] = useLocation();
-  const { currentSession, fetchSession, startSession, profile } = useApp();
+  const { currentSession, fetchSession, startSession, setCurrentSession, profile } = useApp();
   const [showQR, setShowQR] = useState(true);
   const [showMembers, setShowMembers] = useState(true);
   const [isStarting, setIsStarting] = useState(false);
@@ -68,22 +70,36 @@ export default function SessionLobbyPage() {
   // everyone into the shared preliminary round on the next short poll.
   useEffect(() => {
     if (!currentSession?.inviteCode) return;
-    let cancelled = false;
-    const syncSession = async () => {
-      try {
-        const session = await fetchSession(currentSession.inviteCode);
-        if (!cancelled && session.status !== 'waiting') navigate('/lunchie/swipe');
-      } catch (error) {
-        if (!cancelled) console.error(error);
-      }
+    let active = true;
+    const refresh = () => {
+      void fetchSession(currentSession.inviteCode)
+        .then(session => {
+          if (!active) return;
+          if (session.membershipActive === false || !isActiveQuickMatchStatus(session.status)) {
+            toast.info(session.status === 'cancelled' ? 'This Quick Match was cancelled.' : 'This Quick Match is no longer active.');
+            setCurrentSession(null);
+            navigate('/lunchie/settings');
+          } else if (session.status !== 'waiting') {
+            navigate('/lunchie/swipe');
+          }
+        })
+        .catch(error => {
+          const status = (error as { status?: number }).status;
+          if (!active || (status !== 404 && status !== 410)) {
+            if (active) console.error('Failed to refresh Quick Match lobby', error);
+            return;
+          }
+          setCurrentSession(null);
+          navigate('/lunchie/settings');
+        });
     };
-    void syncSession();
-    const interval = window.setInterval(() => void syncSession(), 1000);
+    refresh();
+    const interval = window.setInterval(refresh, 1000);
     return () => {
-      cancelled = true;
+      active = false;
       window.clearInterval(interval);
     };
-  }, [currentSession?.inviteCode, fetchSession, navigate]);
+  }, [currentSession?.inviteCode, fetchSession, navigate, setCurrentSession]);
 
   const previousMemberIds = currentSession && previousMembersRef.current?.sessionId === currentSession.id
     ? previousMembersRef.current.ids
@@ -270,6 +286,7 @@ export default function SessionLobbyPage() {
         >
           {presentation.statusLabel}
         </StatusBadge>
+        <SessionManagementMenu onEnded={() => navigate('/lunchie/settings')} className="shrink-0 text-[var(--lm-text)]" />
       </header>
 
       <main className="flex-1">
