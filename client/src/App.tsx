@@ -44,6 +44,7 @@ import CourseFeedsPage from "./pages/course/CourseFeedsPage";
 import PlaceExplorePage from "./pages/PlaceExplorePage";
 import StorySharePage from "./pages/StorySharePage";
 import LunchieWaitingCompanion from "./components/lunchie/LunchieWaitingCompanion";
+import { startGoogleAuth } from "./services/authApi";
 
 const NO_TABBAR = ['/onboarding', '/tour-mode', '/course/', '/coursemap', '/template/', '/templates', '/lunchie', '/session', '/join', '/feed/', '/explore/places', '/auth', '/admin'];
 const LUNCHIE_TABBAR_ROUTES = new Set(['/lunchie/settings', '/session/lobby']);
@@ -67,7 +68,7 @@ function IntegratedCourseEditorRedirect() {
 function RequireGoogleAuth({ userId, children }: { userId: string | null; children: ReactNode }) {
   const [location] = useLocation();
   useEffect(() => {
-    if (!userId) window.location.assign(`/api/auth/google/start?next=${encodeURIComponent(location)}`);
+    if (!userId) startGoogleAuth(location);
   }, [location, userId]);
   return userId ? <>{children}</> : null;
 }

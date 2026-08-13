@@ -105,6 +105,18 @@
 - Quick Match 프레젠테이션 회귀 테스트 추가
 - Quick Match·Munchie Feed·데이터 연결·Lunchmate 렌더러를 포함한 전체 51개 테스트 파일, 445개 테스트 통과
 - TypeScript 검사 및 Pages 프로덕션 빌드 통과
+## `main_Photo_Editing_Bug_Fixing_Branch` 최근 업데이트
+
+- Munchie 코스맵 작성 플로우의 4:3 템플릿을 `munchie-01.png`부터 `munchie-10.png`까지 10종으로 교체했습니다.
+- 새 템플릿은 최상단 프레임 레이어로 렌더링되고, 업로드한 사진과 그리기 레이어는 템플릿 아래에 배치됩니다.
+- 템플릿 선택 단계에서 팔레트 버튼과 안내 문구·카운터를 제거하고, 좌우 화살표 및 빈 영역 스와이프로 다음/이전 템플릿을 넘길 수 있게 했습니다.
+- 업로드 사진은 원본 비율로 배치되며, 휠 또는 두 손가락 핀치로 비율을 유지한 채 확대·축소하고 두 손가락으로 회전할 수 있습니다.
+- 사진의 가로·세로 슬라이더 UI를 제거하고, 선택 사진은 회전·포토에디터·삭제 중심의 간단한 컨트롤로 정리했습니다.
+- 포토에디터는 원본 이미지를 기준으로 열리며, 1:1 작업대가 아니라 사진 원본 비율 그대로 보면서 크롭할 수 있습니다.
+- 포토에디터 안에 자르기 도구를 추가하고, 저장 시 원본 비율 캔버스에서 선택한 크롭 영역을 잘라 결과물에 반영합니다.
+- Munchie Feed 상단에는 템플릿 팔레트 버튼 옆에 필터 버튼을 추가하고, 새 글 작성 `+` 버튼은 오른쪽 하단 플로팅 버튼으로 이동했습니다.
+- 피드 카드의 공유 버튼은 스토리 템플릿 꾸미기 화면으로 이동하지 않고, 피드 상세 링크를 네이티브 공유하거나 클립보드에 복사합니다.
+- 코스맵 작성 플로우와 Munchie 카드의 주요 텍스트 굵기를 한 단계 낮추고, 한줄평 박스의 따옴표 장식이 테두리에 걸치지 않도록 위치를 조정했습니다.
 
 ## 제품 구성
 
@@ -291,6 +303,7 @@ Lunchie Munchie는 두 가지 핵심 경험을 하나의 앱으로 제공합니�
 ```bash
 git clone <repository-url>
 cd lunch-munchie_proto
+node -v # v22 이상이어야 함
 corepack enable
 pnpm install
 node scripts/installGitHooks.mjs # 기존 worktree라면 한 번 실행
@@ -301,6 +314,15 @@ node scripts/installGitHooks.mjs # 기존 worktree라면 한 번 실행
 커밋하거나 재공유하지 않습니다. 이미 전달받은 `.dev.vars`가 있다면
 `cp .dev.vars.example .dev.vars`를 실행하지 마세요. 빈 템플릿이 기존 Google
 로그인 설정을 덮어쓸 수 있습니다.
+
+macOS 등에서 `corepack enable`이 `/usr/local/bin/pnpm` 권한 문제로 실패하면 전역 shim을 만들지 말고 Corepack을 통해 pnpm을 직접 실행합니다.
+
+```bash
+corepack pnpm install
+corepack pnpm cf:d1:migrate:local
+corepack pnpm cf:d1:seed:local
+corepack pnpm dev:pages
+```
 
 ```dotenv
 GOOGLE_CLIENT_ID="...apps.googleusercontent.com"
@@ -336,9 +358,13 @@ https://lunchie-munchie.pages.dev/api/auth/google/callback
 명령을 사용합니다. 단순 `pnpm dev`는 Vite/기존 Express 개발용이며 Cloudflare D1·R2·Google OAuth Functions를 검증하지 않습니다.
 
 ```bash
+pnpm cf:d1:migrate:local
+pnpm cf:d1:seed:local
 pnpm dev:pages
 # http://localhost:8788
 ```
+
+서버가 준비되면 `http://localhost:8788`에서 Pages 앱이 열립니다. 정상 기동 시 Wrangler 로그에 `Ready on http://localhost:8788`가 표시되고, 로컬 D1 바인딩은 `.wrangler/state/v3/d1` 아래의 `lunchie-db`를 사용합니다.
 
 #### LAN 기기에서 테스트할 때
 

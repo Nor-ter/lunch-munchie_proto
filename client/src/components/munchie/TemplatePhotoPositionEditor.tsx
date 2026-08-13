@@ -39,6 +39,8 @@ export default function TemplatePhotoPositionEditor({
   const canvasRef = useRef<HTMLDivElement>(null);
   const uploadRef = useRef<HTMLInputElement>(null);
   const dragRef = useRef<{ id: string; pointerId: number; offsetX: number; offsetY: number } | null>(null);
+  const pointersRef = useRef(new Map<number, { id: string; x: number; y: number }>());
+  const pinchRef = useRef<{ id: string; distance: number; angle: number; w: number; h: number; rotate: number } | null>(null);
   const [selectedId, setSelectedId] = useState<string | null>(placed[0]?.id ?? null);
   const [hiddenSources, setHiddenSources] = useState<string[]>([]);
   const selected = placed.find(photo => photo.id === selectedId) ?? null;
@@ -73,6 +75,26 @@ export default function TemplatePhotoPositionEditor({
   };
 
   const handlePointerMove = (event: PointerEvent<HTMLDivElement>) => {
+    const trackedPointer = pointersRef.current.get(event.pointerId);
+    if (trackedPointer) {
+      pointersRef.current.set(event.pointerId, { ...trackedPointer, x: event.clientX, y: event.clientY });
+      const pinch = pinchRef.current;
+      const pinchPointers = Array.from(pointersRef.current.values()).filter(pointer => pointer.id === pinch?.id);
+      if (pinch && pinchPointers.length >= 2) {
+        event.preventDefault();
+        const [first, second] = pinchPointers;
+        const distance = Math.hypot(second.x - first.x, second.y - first.y);
+        const scale = Math.max(0.45, Math.min(2.35, distance / Math.max(pinch.distance, 1)));
+        const angle = Math.atan2(second.y - first.y, second.x - first.x) * 180 / Math.PI;
+        setPlaced(current => current.map(photo => photo.id === pinch.id ? {
+          ...photo,
+          w: Math.max(14, Math.min(88, pinch.w * scale)),
+          h: Math.max(10, Math.min(88, pinch.h * scale)),
+          rotate: pinch.rotate + angle - pinch.angle,
+        } : photo));
+        return;
+      }
+    }
     const drag = dragRef.current;
     const bounds = canvasRef.current?.getBoundingClientRect();
     if (!drag || !bounds || event.pointerId !== drag.pointerId) return;
@@ -114,9 +136,7 @@ export default function TemplatePhotoPositionEditor({
       <div className="mb-2 flex items-end justify-between">
         <div>
           <p className="text-[13px] font-black text-[#3B2A22]">템플릿에서 바로 편집</p>
-          <p className="mt-0.5 text-[10px] text-[#9A8579]">사진을 터치해서 선택하고 끌어서 위치를 옮겨보세요.</p>
         </div>
-        <span className="text-[10px] font-bold text-[#D76A68]">{placed.length}/{MAX_MUNCHIE_FEED_PHOTOS}</span>
       </div>
 
       <div
@@ -125,8 +145,8 @@ export default function TemplatePhotoPositionEditor({
         className="relative isolate mx-auto w-full max-w-[350px] touch-none select-none overflow-hidden rounded-[22px] border border-[#E9D6CC] bg-[#F1E7DE] shadow-[0_12px_30px_rgba(91,57,42,0.12)]"
         style={{ aspectRatio: '3 / 4' }}
         onPointerMove={handlePointerMove}
-        onPointerUp={() => { dragRef.current = null; }}
-        onPointerCancel={() => { dragRef.current = null; }}
+        onPointerUp={event => { pointersRef.current.delete(event.pointerId); if (pointersRef.current.size < 2) pinchRef.current = null; dragRef.current = null; }}
+        onPointerCancel={event => { pointersRef.current.delete(event.pointerId); pinchRef.current = null; dragRef.current = null; }}
         onClick={() => setSelectedId(null)}
       >
         <TemplateBackgroundLayer template={template} loading="eager" />
@@ -147,6 +167,22 @@ export default function TemplatePhotoPositionEditor({
               event.preventDefault();
               event.stopPropagation();
               selectAndBringToFront(photo.id);
+              pointersRef.current.set(event.pointerId, { id: photo.id, x: event.clientX, y: event.clientY });
+              const samePhotoPointers = Array.from(pointersRef.current.values()).filter(pointer => pointer.id === photo.id);
+              if (samePhotoPointers.length >= 2) {
+                const [first, second] = samePhotoPointers;
+                pinchRef.current = {
+                  id: photo.id,
+                  distance: Math.hypot(second.x - first.x, second.y - first.y),
+                  angle: Math.atan2(second.y - first.y, second.x - first.x) * 180 / Math.PI,
+                  w: photo.w,
+                  h: photo.h ?? photo.w,
+                  rotate: photo.rotate,
+                };
+                dragRef.current = null;
+                event.currentTarget.setPointerCapture?.(event.pointerId);
+                return;
+              }
               const bounds = canvasRef.current?.getBoundingClientRect();
               if (!bounds) return;
               const pointerX = ((event.clientX - bounds.left) / bounds.width) * 100;
@@ -181,11 +217,7 @@ export default function TemplatePhotoPositionEditor({
 
       {selected && (
         <div className="mx-auto mt-3 w-full max-w-[350px] rounded-2xl border border-[#EFE3D8] bg-white px-3 py-2.5 shadow-sm">
-          <div className="grid grid-cols-2 gap-3">
-            <label className="min-w-0 text-[10px] font-bold text-[#6E5B50]"><span className="mb-1 block">가로</span><input type="range" min="14" max="88" value={selected.w} onChange={event => updateSelected({ w: Number(event.target.value) })} className="block w-full accent-[#EB5053]" /></label>
-            <label className="min-w-0 text-[10px] font-bold text-[#6E5B50]"><span className="mb-1 block">세로</span><input type="range" min="10" max="88" value={selected.h ?? selected.w} onChange={event => updateSelected({ h: Number(event.target.value) })} className="block w-full accent-[#EB5053]" /></label>
-          </div>
-          <div className="mt-2 flex items-center justify-center gap-1.5">
+          <div className="flex items-center justify-center gap-1.5">
             <button type="button" onClick={() => updateSelected({ rotate: selected.rotate - 8 })} aria-label="사진 반시계 방향 회전" className="flex h-8 w-8 items-center justify-center rounded-full bg-[#FFF4EF] active:scale-90"><RotateCcw size={14} /></button>
             <button type="button" onClick={() => updateSelected({ rotate: selected.rotate + 8 })} aria-label="사진 시계 방향 회전" className="flex h-8 w-8 items-center justify-center rounded-full bg-[#FFF4EF] active:scale-90"><RotateCw size={14} /></button>
             <button type="button" onClick={() => { setPlaced(current => current.filter(photo => photo.id !== selected.id)); setSelectedId(null); }} aria-label="사진 삭제" className="flex h-8 w-8 items-center justify-center rounded-full bg-[#FFF0F0] text-[#D94447] active:scale-90"><Trash2 size={14} /></button>

@@ -11,6 +11,7 @@ import { LunchieLogo } from '@/components/brand/LunchieLogo';
 import { BRAND } from '@/constants/brand';
 import { useApp } from '@/contexts/AppContext';
 import { logOnboardingCompleted } from '@/lib/eventLogger';
+import { startGoogleAuth } from '@/services/authApi';
 
 const DIETARY_OPTIONS = ['비건', '채식', '글루텐프리', '할랄', '해산물 제외'];
 
@@ -32,7 +33,7 @@ export default function OnboardingPage() {
     // 고유 uid가 프로필·추천 상태의 기준이 된다.
     updateProfile({ dietary });
     localStorage.setItem('lm_onboarded', 'true');
-    window.location.assign('/api/auth/google/start?next=%2F');
+    startGoogleAuth('/');
   };
 
   return (

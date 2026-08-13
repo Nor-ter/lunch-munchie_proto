@@ -19,4 +19,11 @@ describe('Munchie Feed user search', () => {
     expect(source).toContain('<FollowButton userId={user.id} initialFollowing={user.is_following} />');
     expect(source).toContain('내 프로필');
   });
+
+  it('keeps user search and the source collapsible food filters together', () => {
+    expect(source).toContain("const [showFilters, setShowFilters] = useState(true)");
+    expect(source).toContain('aria-label="필터 보기"');
+    expect(source).toContain('{!searchActive && <AnimatePresence');
+    expect(source).toContain('{showFilters && (');
+  });
 });

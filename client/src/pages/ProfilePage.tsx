@@ -85,12 +85,24 @@ type ProfileSheet = 'settings' | 'avatar' | 'lunchbox' | 'progress' | 'levelUp';
 
 /** 프로필 아바타 — 업로드 사진이 있으면 사진, 없으면 이모지. 공통 렌더링으로 항상 최신 profile을 반영한다 */
 function Avatar({ photo, emoji, size }: { photo?: string; emoji: string; size: number }) {
+  const [imageFailed, setImageFailed] = useState(false);
+  useEffect(() => setImageFailed(false), [photo]);
+  const showPhoto = Boolean(photo && !imageFailed);
+
   return (
     <div
       className="rounded-full bg-[#EFE3DA] flex items-center justify-center overflow-hidden shrink-0"
       style={{ width: size, height: size, fontSize: size * 0.49 }}
     >
-      {photo ? <img src={photo} alt="" className="w-full h-full object-cover" /> : emoji}
+      {showPhoto ? (
+        <img
+          src={photo}
+          alt=""
+          className="w-full h-full object-cover"
+          referrerPolicy="no-referrer"
+          onError={() => setImageFailed(true)}
+        />
+      ) : emoji}
     </div>
   );
 }

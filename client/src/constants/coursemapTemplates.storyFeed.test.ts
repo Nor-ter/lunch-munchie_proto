@@ -5,7 +5,7 @@ import { SHARE_TEMPLATES } from '@/constants/shareTemplates';
 describe('converted story templates in the Munchie feed catalog', () => {
   it('adds every former story template as a 4:3 feed option', () => {
     expect(STORY_FEED_TEMPLATES).toHaveLength(SHARE_TEMPLATES.length);
-    expect(COURSEMAP_TEMPLATES).toHaveLength(6 + SHARE_TEMPLATES.length);
+    expect(COURSEMAP_TEMPLATES).toHaveLength(10 + SHARE_TEMPLATES.length);
   });
 
   it('uses unique feed ids, converted assets, and usable photo slots', () => {

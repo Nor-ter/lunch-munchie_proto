@@ -30,6 +30,16 @@ describe('Profile information and level synchronization', () => {
     expect(contextSource).toContain('authorEmoji: updates.emoji ?? post.authorEmoji');
   });
 
+  it('loads Google-backed profile avatars without leaking referrers and falls back cleanly', () => {
+    expect(profileSource).toContain('referrerPolicy="no-referrer"');
+    expect(profileSource).toContain('onError={() => setImageFailed(true)}');
+  });
+
+  it('retains the current production guest profile preview', () => {
+    expect(profileSource).toContain('function ProfileGuestPreview()');
+    expect(profileSource).toContain('return <ProfileGuestPreview />;');
+  });
+
   it('shows every level stage with its configured icon', () => {
     expect(progressSource).toContain('LUNCHMATE_LEVELS.map(level =>');
     expect(progressSource).toContain('getLunchmateLevelIcon(level.level)');
