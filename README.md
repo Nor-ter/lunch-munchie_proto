@@ -184,9 +184,9 @@ Lunchie Munchie는 두 가지 핵심 경험을 하나의 앱으로 제공합니�
 | Course editor | dnd-kit |
 | Map | Leaflet, React Leaflet, Google Maps 연동 |
 | Share | html-to-image, html2canvas, QRCode |
-| API | Express, TypeScript |
-| Data | Drizzle ORM, PostgreSQL |
-| Test | Vitest, TypeScript compiler |
+| API | Cloudflare Pages Functions, Hono, TypeScript |
+| Data | Cloudflare D1, R2, Durable Objects |
+| Test | Vitest, Playwright, TypeScript compiler |
 | Mobile prototype | Expo, NativeWind (`mobile/`) |
 
 ## 시작하기
@@ -195,23 +195,49 @@ Lunchie Munchie는 두 가지 핵심 경험을 하나의 앱으로 제공합니�
 
 - Node.js **22 이상** (Cloudflare CI도 Node 22 사용)
 - Corepack 및 pnpm (`package.json`의 `packageManager` 기준)
-- 로컬 Pages/Functions 개발 시 Cloudflare Wrangler 로그인: `npx wrangler login`
+- 로컬 Pages/Functions 실행에는 Cloudflare 로그인·운영 토큰이 필요하지 않음
 
 ### 처음 한 번: 로컬 개발 환경
 
+`main`을 이미 받아 둔 팀원은 아래 순서만 따르면 됩니다. `.dev.vars`는 별도
+전달받아 **먼저** 프로젝트 최상단에 넣습니다. `cp .dev.vars.example .dev.vars`는
+전달받은 로그인 설정을 빈 값으로 덮어쓰므로 실행하지 않습니다.
+
 ```bash
-git clone <repository-url>
-cd lunch-munchie_proto
+# 0. Node 22인지 확인합니다. 22 미만이면 Node 22를 설치/선택합니다.
+node -v
+
+# 1. pnpm을 활성화합니다. 이 컴퓨터에서 한 번만 하면 됩니다.
 corepack enable
-pnpm install
-node scripts/installGitHooks.mjs # 기존 worktree라면 한 번 실행
+
+# 2. main의 잠금 파일과 정확히 같은 의존성을 설치합니다.
+pnpm install --frozen-lockfile
+
+# 3. 내 컴퓨터 전용 D1에 스키마와 데모 식당 데이터를 준비합니다.
+pnpm cf:d1:migrate:local
+pnpm cf:d1:seed:local
+
+# 4. React 화면 + Pages Functions API + 로컬 D1을 한 번에 실행합니다.
+pnpm dev:pages
+# http://localhost:8788
 ```
+
+`corepack enable`에서 macOS `EACCES ... /usr/local/bin/pnpm`이 나오면, Node를
+설치한 관리자 권한이 필요한 경우입니다. 아래를 **한 번만** 실행하고 터미널을
+새로 연 뒤 1번부터 계속합니다.
+
+```bash
+sudo corepack enable
+```
+
+`pnpm: command not found`는 Corepack이 아직 활성화되지 않았거나 새 터미널이
+이전 PATH를 쓰는 경우입니다. `corepack enable` 후 터미널을 다시 열어 확인합니다.
+운영 Cloudflare에 로그인하거나 `wrangler login` 할 필요는 없습니다.
 
 프로젝트 관리자에게 받은 `.dev.vars`를 프로젝트 최상단(`package.json`과 같은
 위치)에 둡니다. 이 파일에는 로컬 Functions만 읽는 비밀값이 있으므로 절대
-커밋하거나 재공유하지 않습니다. 이미 전달받은 `.dev.vars`가 있다면
-`cp .dev.vars.example .dev.vars`를 실행하지 마세요. 빈 템플릿이 기존 Google
-로그인 설정을 덮어쓸 수 있습니다.
+커밋하거나 재공유하지 않습니다. 저장소에 보이지 않는 것이 정상이며 `.gitignore`로
+의도적으로 제외됩니다.
 
 ```dotenv
 GOOGLE_CLIENT_ID="...apps.googleusercontent.com"
@@ -244,7 +270,8 @@ https://lunchie-munchie.pages.dev/api/auth/google/callback
 
 로컬 개발은 Pages Functions까지 함께 띄우는 명령을 사용합니다. `MEDIA_ORIGIN`은
 `.dev.vars`에서 Wrangler가 읽으므로 macOS, Linux, Windows PowerShell 모두 같은
-명령을 사용합니다. 단순 `pnpm dev`는 Vite/기존 Express 개발용이며 Cloudflare D1·R2·Google OAuth Functions를 검증하지 않습니다.
+명령을 사용합니다. 단순 `pnpm dev`는 이 데모의 Cloudflare D1·R2·Google OAuth
+Functions를 검증하지 않으므로 사용하지 않습니다.
 
 ```bash
 pnpm dev:pages
@@ -264,7 +291,7 @@ pnpm cf:d1:migrate:local
 pnpm cf:d1:seed:local
 ```
 
-`server/data/photos/`는 Git에 넣지 않는 운영 원본 캐시이므로 팀원이 내려받을 파일이 아닙니다. 로컬 시드는 `drive_ingest.json`의 사진 경로와 `MEDIA_ORIGIN`을 사용해 원본 파일 없이도 식당 카탈로그를 채웁니다.
+`server/data/photos/`는 Git에 넣지 않는 운영 원본 캐시이므로 팀원이 내려받을 파일이 아닙니다. 로컬 시드는 `drive_ingest.json`의 사진 경로와 `MEDIA_ORIGIN`을 사용해 원본 파일 없이도 식당 카탈로그를 채웁니다. 즉, 로컬에서 식당·세션·추천은 검증하지만 운영 R2 원본 429장을 내려받거나 복제하지 않습니다.
 
 ### 테스트와 커밋
 
