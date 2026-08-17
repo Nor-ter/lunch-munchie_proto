@@ -1,10 +1,13 @@
-import { readFileSync } from 'node:fs';
+import { readFileSync, readdirSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 
-const migration = readFileSync(
-  new URL('../../migrations/0017_restore_catalogue_photo_metadata.sql', import.meta.url),
-  'utf8',
-);
+const migrationDirectory = new URL('../../migrations/', import.meta.url);
+const migrationFiles = readdirSync(migrationDirectory)
+  .filter(name => name.startsWith('0017_') && name.endsWith('.sql'))
+  .sort();
+const migration = migrationFiles
+  .map(name => readFileSync(new URL(name, migrationDirectory), 'utf8'))
+  .join('\n');
 const manifest = JSON.parse(
   readFileSync(new URL('../../server/data/drive_ingest.json', import.meta.url), 'utf8'),
 ) as { photos: Array<{ url?: string; kind?: string }> };
@@ -26,5 +29,10 @@ describe('production photo metadata restoration', () => {
     expect(updates).toHaveLength(429);
     expect(migration).not.toContain('INSERT OR REPLACE');
     expect(migration).toContain("AND kind = 'unclassified'");
+    expect(migrationFiles).toHaveLength(6);
+    for (const name of migrationFiles) {
+      const bytes = readFileSync(new URL(name, migrationDirectory)).byteLength;
+      expect(bytes).toBeLessThan(30_000);
+    }
   });
 });
