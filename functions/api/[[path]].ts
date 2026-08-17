@@ -334,6 +334,36 @@ const isoDate = (value: unknown) => {
     : new Date(0).toISOString();
 };
 
+/**
+ * Lunchie is a restaurant-decision surface, so its hero photos must be
+ * evidence-backed food/table media.  Do not fall back to an arbitrary
+ * catalogue image: it may be a person, storefront, or a duplicate of the
+ * previous dish.  An empty result intentionally renders the neutral
+ * placeholder rather than misleading the user.
+ */
+async function lunchiePresentationPhotos(db: any, restaurantId: string) {
+  const { results } = await db.prepare(
+    "SELECT r2_key, kind, dishes, perceptual_hash FROM restaurant_photos WHERE restaurant_id = ? AND kind IN ('dish', 'table') AND has_person = 0 ORDER BY COALESCE(quality, 0) DESC, id ASC LIMIT 12",
+  ).bind(restaurantId).all<{ r2_key: string; kind: string; dishes: string; perceptual_hash: string | null }>();
+  const seen = new Set<string>();
+  const safe: string[] = [];
+  for (const row of results) {
+    const dishes = json<string[]>(row.dishes, [])
+      .map((dish) => dish.trim().toLowerCase())
+      .filter(Boolean)
+      .sort()
+      .join("|");
+    // Exact/near-duplicate classifications share a supplied perceptual hash;
+    // dish labels are the safe fallback for assets not yet hashed.
+    const fingerprint = row.perceptual_hash || `${row.kind}:${dishes || row.r2_key}`;
+    if (seen.has(fingerprint)) continue;
+    seen.add(fingerprint);
+    safe.push(`/photos/${row.r2_key}`);
+    if (safe.length === 4) break;
+  }
+  return safe;
+}
+
 const EVENT_TYPES = new Set([
   "ONBOARDING_COMPLETED",
   "SESSION_CREATED",
@@ -990,16 +1020,17 @@ app.post("/api/recommend", async (c) => {
         ),
       ),
     ]);
-    const response = c.json({
-      slate: finalResults.map((item) => ({
+    const safeSlate = await Promise.all(finalResults.map(async (item) => ({
         ...item.restaurant,
-        photos: json<string[]>(item.restaurant.photos, []),
+        photos: await lunchiePresentationPhotos(c.env.DB, item.restaurant.id),
         menu_items: json(item.restaurant.menus, []),
         tags: json<string[]>(item.restaurant.tags, []),
         rank: item.rank,
         score: item.score,
         propensity: item.propensity,
-      })),
+      })));
+    const response = c.json({
+      slate: safeSlate,
       user_id: userId,
       k,
       slate_id: slateId,
@@ -1029,12 +1060,12 @@ app.get("/api/restaurants", async (c) => {
     .bind(limit)
     .all();
   return c.json(
-    results.map((r: any) => ({
+    await Promise.all(results.map(async (r: any) => ({
       ...r,
-      photos: json<string[]>(r.photos, []),
+      photos: await lunchiePresentationPhotos(c.env.DB, r.id),
       menu_items: json(r.menus, []),
       tags: json<string[]>(r.tags, []),
-    })),
+    }))),
   );
 });
 
@@ -2569,6 +2600,13 @@ app.post("/api/reports", async (c) => {
 // REST API — /api/feed (Munchie 피드 개인화 랭킹)
 app.get("/api/feed", async (c) => {
   try {
+    const requestedLimit = Number(c.req.query("limit"));
+    const paged = c.req.query("limit") !== undefined || c.req.query("cursor") !== undefined;
+    const pageSize = Number.isFinite(requestedLimit)
+      ? Math.max(1, Math.min(Math.floor(requestedLimit), 20))
+      : 8;
+    const cursor = Math.max(0, Math.floor(Number(c.req.query("cursor")) || 0));
+    const viewer = await readSession(c.req.raw, c.env.AUTH_SESSION_SECRET);
     // Older local databases may predate the public-profile columns. Keep the
     // feed readable while still joining author data whenever the canonical
     // schema is present.
@@ -2661,7 +2699,64 @@ app.get("/api/feed", async (c) => {
       });
     }
 
-    return c.json(feedItems);
+    // Preserve the legacy array response for initial/home hydration. The
+    // Munchie page opts into a stable, personalised page contract with
+    // `limit`/`cursor`; this avoids rendering every post at once.
+    if (!paged) return c.json(feedItems);
+
+    const categoryAffinity = new Map<string, number>();
+    const following = new Set<string>();
+    if (viewer) {
+      const [winnerRows, likedRows, followRows] = await Promise.all([
+        c.env.DB.prepare(
+          "SELECT r.category, COUNT(*) AS count FROM rec_events e JOIN restaurants r ON r.id = e.restaurant_id WHERE e.user_id = ? AND e.event_type IN ('WINNER', 'SWIPE') AND (e.event_type != 'SWIPE' OR e.action = 'LIKE') GROUP BY r.category",
+        ).bind(viewer.sub).all<{ category: string; count: number }>(),
+        c.env.DB.prepare(
+          "SELECT c.tags FROM feed_likes l JOIN courses c ON c.id = l.course_id WHERE l.user_id = ?",
+        ).bind(viewer.sub).all<{ tags: string }>(),
+        c.env.DB.prepare(
+          "SELECT following_id FROM user_follows WHERE follower_id = ?",
+        ).bind(viewer.sub).all<{ following_id: string }>(),
+      ]);
+      for (const row of winnerRows.results)
+        categoryAffinity.set(row.category, (categoryAffinity.get(row.category) ?? 0) + Math.min(1, Number(row.count) * 0.2));
+      for (const row of likedRows.results)
+        for (const tag of json<string[]>(row.tags, []))
+          categoryAffinity.set(tag, (categoryAffinity.get(tag) ?? 0) + 0.45);
+      for (const row of followRows.results) following.add(row.following_id);
+    }
+    const stableNoise = (value: string) => {
+      let hash = 2166136261;
+      for (let index = 0; index < value.length; index += 1)
+        hash = Math.imul(hash ^ value.charCodeAt(index), 16777619);
+      return (hash >>> 0) / 0xffffffff;
+    };
+    const day = Math.floor(Date.now() / 86_400_000);
+    const ranked = feedItems
+      .map((item) => {
+        const tags = Array.isArray(item.tags) ? item.tags : [];
+        const stopCategories = item.stops.map((stop: any) => stop.restaurant.category);
+        const affinity = [...tags, ...stopCategories]
+          .reduce((sum, key) => sum + (categoryAffinity.get(key) ?? 0), 0);
+        const ageDays = Math.max(0, (Date.now() - Number(item.createdAt)) / 86_400_000);
+        const recency = Math.max(0, 1 - ageDays / 21);
+        const followBoost = viewer && following.has(item.creatorId) ? 1.2 : 0;
+        const ownPenalty = viewer?.sub === item.creatorId ? 0.25 : 0;
+        const engagement = Math.log1p(Number(item.likesCount ?? 0) + Number(item.commentsCount ?? 0)) * 0.08;
+        // Daily seeded exploration changes the order without a refresh
+        // flicker, while relevance and follows remain the dominant signal.
+        const exploration = stableNoise(`${viewer?.sub ?? 'guest'}:${day}:${item.id}`) * 0.14;
+        return { item, score: affinity + followBoost + recency * 0.35 + engagement + exploration - ownPenalty };
+      })
+      .sort((a, b) => b.score - a.score || b.item.createdAt - a.item.createdAt || a.item.id.localeCompare(b.item.id));
+    const items = ranked.slice(cursor, cursor + pageSize).map(({ item }) => item);
+    const nextCursor = cursor + items.length;
+    return c.json({
+      items,
+      nextCursor: nextCursor < ranked.length ? String(nextCursor) : null,
+      hasMore: nextCursor < ranked.length,
+      policyVersion: "feed-personal-v1",
+    });
   } catch (err: any) {
     return c.json({ error: err.message }, 400);
   }

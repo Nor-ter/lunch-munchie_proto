@@ -357,6 +357,10 @@ interface AppContextValue {
   feedPosts: FeedPost[];
   /** 서버 원본을 다시 읽어 현재 세션의 피드 캐시를 동기화한다. */
   refreshFeedPosts: () => Promise<void>;
+  /** Munchie 피드의 다음 개인화 배치를 서버에서 이어받는다. */
+  loadMoreFeedPosts: () => Promise<void>;
+  hasMoreFeedPosts: boolean;
+  isLoadingMoreFeedPosts: boolean;
   addFeedPost: (post: Omit<FeedPost, 'id' | 'likes' | 'shares' | 'saves' | 'comments' | 'createdAt'>) => FeedPost;
   updateFeedPost: (postId: string, updates: Partial<Pick<FeedPost, 'courseId' | 'caption' | 'skinId' | 'photos' | 'photoPlacements' | 'canvasStrokes' | 'tags'>>) => void;
   deleteFeedPost: (postId: string) => void;
@@ -653,11 +657,15 @@ export function AppProvider({
   });
   const initialStoredProfileRef = useRef(localStorage.getItem('lm_profile'));
   const isInitialProfilePersistenceRef = useRef(true);
+  const [feedCursor, setFeedCursor] = useState<string | null>('0');
+  const [hasMoreFeedPosts, setHasMoreFeedPosts] = useState(true);
+  const [isLoadingMoreFeedPosts, setIsLoadingMoreFeedPosts] = useState(false);
 
-  const refreshFeedPosts = useCallback(async () => {
-    const response = await fetch('/api/feed');
+  const readFeedBatch = useCallback(async (cursor: string, replace: boolean) => {
+    const response = await fetch(`/api/feed?limit=8&cursor=${encodeURIComponent(cursor)}`);
     if (!response.ok) throw new Error('피드를 불러오지 못했어요.');
-    const feedData = await response.json();
+    const page = await response.json();
+    const feedData = Array.isArray(page) ? page : page.items;
     if (!Array.isArray(feedData)) throw new Error('피드 형식이 올바르지 않아요.');
     const remoteFeeds = feedData.map((feed: any): FeedPost => ({
       id: feed.id,
@@ -684,18 +692,39 @@ export function AppProvider({
       createdAt: feed.createdAt || new Date().toISOString(),
     }));
     setFeedPosts(previous => {
-      const merged = new Map(previous.map(post => [post.id, post]));
+      const merged = new Map((replace ? [] : previous).map(post => [post.id, post]));
       remoteFeeds.forEach(post => merged.set(post.id, post));
-      return Array.from(merged.values()).sort((a, b) => createdAtMs(b.createdAt) - createdAtMs(a.createdAt));
+      // Server order is already a stable, viewer-specific ranking. Keep that
+      // order across batches instead of re-sorting every item by recency.
+      const order = [...(replace ? [] : previous.map(post => post.id)), ...remoteFeeds.map(post => post.id)];
+      return Array.from(new Set(order)).map(id => merged.get(id)!).filter(Boolean);
     });
+    const nextCursor = typeof page?.nextCursor === 'string' ? page.nextCursor : null;
+    setFeedCursor(nextCursor);
+    setHasMoreFeedPosts(Boolean(page?.hasMore && nextCursor));
   }, [profile.id, profile.name, profile.emoji]);
+
+  const refreshFeedPosts = useCallback(async () => {
+    setIsLoadingMoreFeedPosts(true);
+    try { await readFeedBatch('0', true); }
+    finally { setIsLoadingMoreFeedPosts(false); }
+  }, [readFeedBatch]);
+
+  const loadMoreFeedPosts = useCallback(async () => {
+    if (isLoadingMoreFeedPosts || !hasMoreFeedPosts || !feedCursor) return;
+    setIsLoadingMoreFeedPosts(true);
+    try { await readFeedBatch(feedCursor, false); }
+    finally { setIsLoadingMoreFeedPosts(false); }
+  }, [feedCursor, hasMoreFeedPosts, isLoadingMoreFeedPosts, readFeedBatch]);
 
   useEffect(() => {
     setIsLoading(true);
     Promise.all([
       fetch('/api/restaurants').then(r => (r.ok ? r.json() : Promise.reject())),
       fetch('/api/courses').then(r => (r.ok ? r.json() : Promise.reject())),
-      fetch('/api/feed').then(r => (r.ok ? r.json() : Promise.reject())),
+      // The home preview shares the same bounded first page as Munchie Feed.
+      // Never hydrate the entire public feed just because the app booted.
+      fetch('/api/feed?limit=8&cursor=0').then(r => (r.ok ? r.json() : Promise.reject())),
     ])
       .then(([resData, courseData, feedData]) => {
         if (Array.isArray(resData) && resData.length > 0) {
@@ -734,8 +763,9 @@ export function AppProvider({
             return Array.from(merged.values());
           });
         }
-        if (Array.isArray(feedData) && feedData.length > 0) {
-          const remoteFeeds = feedData.map((feed: any): FeedPost => ({
+        const initialFeedItems = Array.isArray(feedData) ? feedData : feedData?.items;
+        if (Array.isArray(initialFeedItems) && initialFeedItems.length > 0) {
+          const remoteFeeds = initialFeedItems.map((feed: any): FeedPost => ({
             id: feed.id,
             authorId: feed.creatorId,
             authorName: feed.authorName || (feed.creatorId === profile.id ? profile.name : feed.creatorId === 'user_minji' ? '김민지' : feed.creatorId === 'user_jenny' ? '제니' : feed.creatorId === 'user_minsu' ? '민수' : 'Lunchie 사용자'),
@@ -765,6 +795,9 @@ export function AppProvider({
             return Array.from(merged.values());
           });
         }
+        const initialNextCursor = typeof feedData?.nextCursor === 'string' ? feedData.nextCursor : null;
+        setFeedCursor(initialNextCursor);
+        setHasMoreFeedPosts(Boolean(feedData?.hasMore && initialNextCursor));
         setApiAvailable(true);
       })
       .catch(() => setApiAvailable(false))
@@ -1361,7 +1394,7 @@ export function AppProvider({
       swipeRecords, addSwipe, clearSessionSwipes, rerollSession, likedRestaurantIds,
       savedRestaurantIds, saveRestaurant, unsaveRestaurant,
       profile, updateProfile,
-      feedPosts, refreshFeedPosts, addFeedPost, updateFeedPost, deleteFeedPost, incrementFeedShare,
+      feedPosts, refreshFeedPosts, loadMoreFeedPosts, hasMoreFeedPosts, isLoadingMoreFeedPosts, addFeedPost, updateFeedPost, deleteFeedPost, incrementFeedShare,
       likedFeedIds, dislikedFeedIds, toggleFeedLike, toggleFeedDislike, addFeedComment,
       reactToFeedComment, reportFeedComment, toggleCommentHidden, isMyPost,
       courseSkins, setCourseSkin,
