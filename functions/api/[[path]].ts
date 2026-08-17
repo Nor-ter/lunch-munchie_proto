@@ -334,41 +334,60 @@ const isoDate = (value: unknown) => {
     : new Date(0).toISOString();
 };
 
-/**
- * Lunchie is a restaurant-decision surface, so its hero photos must be
- * evidence-backed food/table media whenever that metadata exists. Existing
- * production catalogue rows predate visual classification, so an empty
- * classified set falls back only to that restaurant's own R2 records. It
- * never substitutes another restaurant's cover; known people stay excluded.
- * The fallback is deliberately temporary until the classifier backfill adds
- * kind/person/hash evidence to the legacy catalogue.
- */
-async function lunchiePresentationPhotos(db: any, restaurantId: string) {
-  const classified = await db.prepare(
-    "SELECT r2_key, kind, dishes, perceptual_hash FROM restaurant_photos WHERE restaurant_id = ? AND kind IN ('dish', 'table') AND has_person = 0 ORDER BY COALESCE(quality, 0) DESC, id ASC LIMIT 12",
-  ).bind(restaurantId).all<{ r2_key: string; kind: string; dishes: string; perceptual_hash: string | null }>();
-  const { results } = classified.results.length
-    ? classified
-    : await db.prepare(
-      "SELECT r2_key, kind, dishes, perceptual_hash FROM restaurant_photos WHERE restaurant_id = ? AND kind = 'unclassified' AND has_person = 0 ORDER BY id ASC LIMIT 12",
-    ).bind(restaurantId).all<{ r2_key: string; kind: string; dishes: string; perceptual_hash: string | null }>();
-  const seen = new Set<string>();
+type PresentationPhotoRow = {
+  r2_key: string;
+  kind: string;
+  dishes: string;
+  perceptual_hash: string | null;
+};
+
+function hashDistance(left: string, right: string) {
+  if (!/^[0-9a-f]+$/i.test(left) || left.length !== right.length) return Infinity;
+  let distance = 0;
+  for (let index = 0; index < left.length; index += 1) {
+    let bits = Number.parseInt(left[index], 16) ^ Number.parseInt(right[index], 16);
+    while (bits) {
+      distance += bits & 1;
+      bits >>>= 1;
+    }
+  }
+  return distance;
+}
+
+export function selectLunchiePresentationPhotoKeys(
+  rows: PresentationPhotoRow[],
+  limit = 4,
+) {
+  const hashes: string[] = [];
+  const semanticFingerprints = new Set<string>();
   const safe: string[] = [];
-  for (const row of results) {
+  for (const row of rows) {
+    const hash = row.perceptual_hash?.trim().toLowerCase() || null;
+    if (hash && hashes.some((known) => hashDistance(hash, known) <= 8)) continue;
     const dishes = json<string[]>(row.dishes, [])
       .map((dish) => dish.trim().toLowerCase())
       .filter(Boolean)
       .sort()
       .join("|");
-    // Exact/near-duplicate classifications share a supplied perceptual hash;
-    // dish labels are the safe fallback for assets not yet hashed.
-    const fingerprint = row.perceptual_hash || `${row.kind}:${dishes || row.r2_key}`;
-    if (seen.has(fingerprint)) continue;
-    seen.add(fingerprint);
+    // Until the ingestion pipeline supplies a perceptual hash, repeated dish
+    // labels provide a conservative diversity guard. An unlabelled photo is
+    // unique only by its own R2 key; no other restaurant is ever substituted.
+    const semanticFingerprint = `${row.kind}:${dishes || row.r2_key}`;
+    if (!hash && semanticFingerprints.has(semanticFingerprint)) continue;
+    if (hash) hashes.push(hash);
+    semanticFingerprints.add(semanticFingerprint);
     safe.push(`/photos/${row.r2_key}`);
-    if (safe.length === 4) break;
+    if (safe.length === limit) break;
   }
   return safe;
+}
+
+/** Lunchie cards only present evidence-backed food/table media. */
+async function lunchiePresentationPhotos(db: any, restaurantId: string) {
+  const { results } = await db.prepare(
+    "SELECT r2_key, kind, dishes, perceptual_hash FROM restaurant_photos WHERE restaurant_id = ? AND kind IN ('dish', 'table') AND has_person = 0 ORDER BY CASE kind WHEN 'dish' THEN 0 ELSE 1 END, COALESCE(quality, 0) DESC, id ASC LIMIT 24",
+  ).bind(restaurantId).all<PresentationPhotoRow>();
+  return selectLunchiePresentationPhotoKeys(results);
 }
 
 const EVENT_TYPES = new Set([
@@ -390,6 +409,57 @@ const EVENT_TYPES = new Set([
   "ABANDON",
   "NO_CONSENSUS",
 ]);
+
+type MunchieRankSignals = {
+  viewerId: string | null;
+  categoryAffinity: Map<string, number>;
+  following: Set<string>;
+  now?: number;
+};
+
+function stableFeedNoise(value: string) {
+  let hash = 2166136261;
+  for (let index = 0; index < value.length; index += 1)
+    hash = Math.imul(hash ^ value.charCodeAt(index), 16777619);
+  return (hash >>> 0) / 0xffffffff;
+}
+
+/** Stable per-viewer ordering: relevance dominates bounded daily exploration. */
+export function rankMunchieFeedItems<T extends {
+  id: string;
+  creatorId: string;
+  tags?: string[];
+  stops?: Array<{ restaurant?: { category?: string } }>;
+  createdAt: unknown;
+  likesCount?: number;
+  commentsCount?: number;
+}>(feedItems: T[], signals: MunchieRankSignals) {
+  const now = signals.now ?? Date.now();
+  const day = Math.floor(now / 86_400_000);
+  return feedItems
+    .map((item) => {
+      const tags = Array.isArray(item.tags) ? item.tags : [];
+      const stopCategories = (item.stops ?? [])
+        .map(stop => stop.restaurant?.category)
+        .filter((category): category is string => typeof category === "string");
+      const affinity = [...tags, ...stopCategories]
+        .reduce((sum, key) => sum + (signals.categoryAffinity.get(key) ?? 0), 0);
+      const createdAtMs = new Date(isoDate(item.createdAt)).getTime();
+      const ageDays = Math.max(0, (now - createdAtMs) / 86_400_000);
+      const recency = Math.max(0, 1 - ageDays / 21);
+      const followBoost = signals.viewerId && signals.following.has(item.creatorId) ? 1.2 : 0;
+      const ownPenalty = signals.viewerId === item.creatorId ? 0.25 : 0;
+      const engagement = Math.log1p(Number(item.likesCount ?? 0) + Number(item.commentsCount ?? 0)) * 0.08;
+      const exploration = stableFeedNoise(`${signals.viewerId ?? "guest"}:${day}:${item.id}`) * 0.14;
+      return { item, score: affinity + followBoost + recency * 0.35 + engagement + exploration - ownPenalty, createdAtMs };
+    })
+    .sort((left, right) =>
+      right.score - left.score ||
+      right.createdAtMs - left.createdAtMs ||
+      left.item.id.localeCompare(right.item.id)
+    )
+    .map(({ item }) => item);
+}
 const MAX_MUNCHIE_FEED_PHOTOS = 6;
 const nullableText = (value: unknown, max = 200) =>
   typeof value === "string" ? value.trim().slice(0, max) || null : null;
@@ -2632,8 +2702,8 @@ app.get("/api/feed", async (c) => {
       userColumnNames.has("profile_image_url");
     const { results: courses } = await c.env.DB.prepare(
       hasPublicProfiles
-        ? "SELECT c.*, u.username AS author_name, u.profile_image_url AS author_image FROM courses c LEFT JOIN users u ON u.id = c.author_id WHERE c.is_public = 1 ORDER BY c.created_at DESC LIMIT 20"
-        : "SELECT c.* FROM courses c WHERE c.is_public = 1 ORDER BY c.created_at DESC LIMIT 20",
+        ? "SELECT c.*, u.username AS author_name, u.profile_image_url AS author_image FROM courses c LEFT JOIN users u ON u.id = c.author_id WHERE c.is_public = 1 ORDER BY c.created_at DESC LIMIT 80"
+        : "SELECT c.* FROM courses c WHERE c.is_public = 1 ORDER BY c.created_at DESC LIMIT 80",
     ).all();
 
     const feedItems = [];
@@ -2738,31 +2808,12 @@ app.get("/api/feed", async (c) => {
           categoryAffinity.set(tag, (categoryAffinity.get(tag) ?? 0) + 0.45);
       for (const row of followRows.results) following.add(row.following_id);
     }
-    const stableNoise = (value: string) => {
-      let hash = 2166136261;
-      for (let index = 0; index < value.length; index += 1)
-        hash = Math.imul(hash ^ value.charCodeAt(index), 16777619);
-      return (hash >>> 0) / 0xffffffff;
-    };
-    const day = Math.floor(Date.now() / 86_400_000);
-    const ranked = feedItems
-      .map((item) => {
-        const tags = Array.isArray(item.tags) ? item.tags : [];
-        const stopCategories = item.stops.map((stop: any) => stop.restaurant.category);
-        const affinity = [...tags, ...stopCategories]
-          .reduce((sum, key) => sum + (categoryAffinity.get(key) ?? 0), 0);
-        const ageDays = Math.max(0, (Date.now() - Number(item.createdAt)) / 86_400_000);
-        const recency = Math.max(0, 1 - ageDays / 21);
-        const followBoost = viewer && following.has(item.creatorId) ? 1.2 : 0;
-        const ownPenalty = viewer?.sub === item.creatorId ? 0.25 : 0;
-        const engagement = Math.log1p(Number(item.likesCount ?? 0) + Number(item.commentsCount ?? 0)) * 0.08;
-        // Daily seeded exploration changes the order without a refresh
-        // flicker, while relevance and follows remain the dominant signal.
-        const exploration = stableNoise(`${viewer?.sub ?? 'guest'}:${day}:${item.id}`) * 0.14;
-        return { item, score: affinity + followBoost + recency * 0.35 + engagement + exploration - ownPenalty };
-      })
-      .sort((a, b) => b.score - a.score || b.item.createdAt - a.item.createdAt || a.item.id.localeCompare(b.item.id));
-    const items = ranked.slice(cursor, cursor + pageSize).map(({ item }) => item);
+    const ranked = rankMunchieFeedItems(feedItems, {
+      viewerId: viewer?.sub ?? null,
+      categoryAffinity,
+      following,
+    });
+    const items = ranked.slice(cursor, cursor + pageSize);
     const nextCursor = cursor + items.length;
     return c.json({
       items,
