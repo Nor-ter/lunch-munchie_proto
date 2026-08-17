@@ -336,15 +336,22 @@ const isoDate = (value: unknown) => {
 
 /**
  * Lunchie is a restaurant-decision surface, so its hero photos must be
- * evidence-backed food/table media.  Do not fall back to an arbitrary
- * catalogue image: it may be a person, storefront, or a duplicate of the
- * previous dish.  An empty result intentionally renders the neutral
- * placeholder rather than misleading the user.
+ * evidence-backed food/table media whenever that metadata exists. Existing
+ * production catalogue rows predate visual classification, so an empty
+ * classified set falls back only to that restaurant's own R2 records. It
+ * never substitutes another restaurant's cover; known people stay excluded.
+ * The fallback is deliberately temporary until the classifier backfill adds
+ * kind/person/hash evidence to the legacy catalogue.
  */
 async function lunchiePresentationPhotos(db: any, restaurantId: string) {
-  const { results } = await db.prepare(
+  const classified = await db.prepare(
     "SELECT r2_key, kind, dishes, perceptual_hash FROM restaurant_photos WHERE restaurant_id = ? AND kind IN ('dish', 'table') AND has_person = 0 ORDER BY COALESCE(quality, 0) DESC, id ASC LIMIT 12",
   ).bind(restaurantId).all<{ r2_key: string; kind: string; dishes: string; perceptual_hash: string | null }>();
+  const { results } = classified.results.length
+    ? classified
+    : await db.prepare(
+      "SELECT r2_key, kind, dishes, perceptual_hash FROM restaurant_photos WHERE restaurant_id = ? AND kind = 'unclassified' AND has_person = 0 ORDER BY id ASC LIMIT 12",
+    ).bind(restaurantId).all<{ r2_key: string; kind: string; dishes: string; perceptual_hash: string | null }>();
   const seen = new Set<string>();
   const safe: string[] = [];
   for (const row of results) {
