@@ -64,7 +64,7 @@ for (const restaurant of candidates) {
     .filter((photo) => photo.restaurant_id === restaurant.id && photo.url?.startsWith("/photos/"))
     .sort((a, b) => (rank[a.kind ?? "other"] ?? 9) - (rank[b.kind ?? "other"] ?? 9) || (b.quality ?? 0) - (a.quality ?? 0));
   for (const photo of cataloguePhotos) {
-    lines.push(`INSERT OR REPLACE INTO restaurant_photos (id, restaurant_id, r2_key, drive_file_id, kind, dishes, vibe_tags, quality, source, created_at) VALUES (${quote(photo.id)}, ${quote(restaurant.id)}, ${quote(photo.url.slice("/photos/".length))}, ${quote(photo.drive_file_id ?? null)}, ${quote(photo.kind ?? "unclassified")}, ${json(photo.dishes ?? [])}, ${json(photo.vibe_tags ?? [])}, ${typeof photo.quality === "number" ? photo.quality : "NULL"}, ${quote(photo.source ?? "drive")}, 0);`);
+    lines.push(`INSERT OR REPLACE INTO restaurant_photos (id, restaurant_id, r2_key, drive_file_id, kind, dishes, vibe_tags, quality, source, created_at, has_person, perceptual_hash) VALUES (${quote(photo.id)}, ${quote(restaurant.id)}, ${quote(photo.url.slice("/photos/".length))}, ${quote(photo.drive_file_id ?? null)}, ${quote(photo.kind ?? "unclassified")}, ${json(photo.dishes ?? [])}, ${json(photo.vibe_tags ?? [])}, ${typeof photo.quality === "number" ? photo.quality : "NULL"}, ${quote(photo.source ?? "drive")}, 0, ${photo.has_person === true ? 1 : 0}, ${quote(photo.perceptual_hash ?? null)});`);
   }
   // Keep the same source facts in the queryable menu index.  `menus` above is
   // intentionally retained as the original catalogue snapshot, while this
