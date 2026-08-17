@@ -19,6 +19,7 @@
     "data:geocode:review": "node scripts/geocodeUnresolved.mjs",
     "data:geocode:apply": "node scripts/geocodeUnresolved.mjs --apply",
     "cf:r2:upload": "tsx scripts/uploadPhotosR2.ts",
+    "cf:r2:restore-catalogue": "node scripts/restoreR2CataloguePhotos.mjs --remote --confirm",
     "cf:state:deploy": "wrangler deploy --config wrangler.state.toml",
     "cf:d1:migrate": "wrangler d1 migrations apply lunchie-db --remote",
     "cf:d1:migrate:local": "wrangler d1 migrations apply lunchie-db --local",
