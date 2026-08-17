@@ -16,6 +16,7 @@ import FoodImage from '@/components/FoodImage';
 import MenuItemDetail from '@/components/MenuItemDetail';
 import { logSwipe, logWinner, logNavigate, logEvent, flushEvents } from '@/lib/eventLogger';
 import { intentForCategory } from '@shared/intent';
+import { persistSessionSwipe } from '@/services/sessionApi';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -155,6 +156,7 @@ function SwipeCard({
   stackIndex,
   progress,
   total,
+  isLocked,
 }: {
   restaurant: any;
   onAction: (a: SwipeAction) => void;
@@ -162,6 +164,7 @@ function SwipeCard({
   stackIndex: number;
   progress: number;
   total: number;
+  isLocked: boolean;
 }) {
   const [isRevealed, setIsRevealed] = useState(false);
   // 큐브 회전 단계(단조). photoIndex는 foodPhotos 길이로 파생 — 도트/라벨 표시에 사용.
@@ -185,9 +188,10 @@ function SwipeCard({
   const photoIndex = foodPhotos.length ? ((photoStep % foodPhotos.length) + foodPhotos.length) % foodPhotos.length : 0;
 
   const handleDragEnd = useCallback((_: unknown, info: { offset: { x: number } }) => {
+    if (isLocked) return;
     if (info.offset.x > 90) onAction('like');
     else if (info.offset.x < -90) onAction('dislike');
-  }, [onAction]);
+  }, [isLocked, onAction]);
 
   if (!isTop) {
     return (
@@ -207,7 +211,7 @@ function SwipeCard({
     <motion.div
       className="absolute inset-0 rounded-3xl overflow-hidden"
       style={{ x, rotate, zIndex: 20 }}
-      drag={isRevealed ? false : 'x'}
+      drag={isRevealed || isLocked ? false : 'x'}
       dragConstraints={{ left: 0, right: 0 }}
       dragElastic={0.6}
       onDragEnd={handleDragEnd}
@@ -1214,21 +1218,31 @@ function WaitingOrDecidedScreen({ onContinue, onReroll }: { onContinue: (winner?
   });
   const [timeLeft, setTimeLeft] = useState('');
   const [voted, setVoted] = useState(false);
+  const [isVoting, setIsVoting] = useState(false);
 
   // 결승 한 표(round=2G). restaurantId가 REJECT면 "둘 다 별로". 멤버당 1표로 서버가 중복 제거.
   const castVote = async (restaurantId: string) => {
+    if (!currentSession || voted || isVoting) return;
     const round = 2 * (liveResults.generation ?? 1);
     const isReject = restaurantId === REJECT;
+    setIsVoting(true);
     try {
-      const response = await fetch('/api/swipes', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ id: `vote_${profile.id}_${restaurantId}_${Date.now()}`, session_id: currentSession?.id, user_id: profile.id, restaurant_id: restaurantId, round, swipe_action: 'LIKE' }),
+      await persistSessionSwipe({
+        id: `vote_${currentSession.id}_${profile.id}_${round}`,
+        sessionId: currentSession.id,
+        userId: profile.id,
+        restaurantId,
+        round,
+        action: 'LIKE',
       });
-      if (!response.ok) throw new Error('final_vote_failed');
       setVoted(true);
       // 신호: finalist 선택 = CHOOSE(pairwise), '둘 다 별로' = NOPE(명시 음성)
       logEvent({ event_type: 'SWIPE', action: isReject ? 'NOPE' : 'CHOOSE', slate_type: 'FINAL', restaurant_id: restaurantId, round, user_id: profile.id, session_id: currentSession?.id ?? null });
-    } catch { /* 표 전송 실패는 폴링으로 복구 */ }
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : '최종 선택을 저장하지 못했어요.');
+    } finally {
+      setIsVoting(false);
+    }
   };
 
   // Ticking effect for countdown
@@ -1359,8 +1373,8 @@ function WaitingOrDecidedScreen({ onContinue, onReroll }: { onContinue: (winner?
           <p className="text-white/70 text-[12px] text-center mb-6">한 곳만 골라주세요 · 1인 1표</p>
           <div className="space-y-3 max-w-[360px] mx-auto w-full">
             {finalistRs.slice(0, 2).map(r => (
-              <button key={r.id} onClick={() => castVote(r.id)}
-                className="w-full flex items-center gap-3 bg-white/10 border border-white/15 rounded-2xl p-3 active:scale-[0.98] transition-all">
+              <button key={r.id} onClick={() => castVote(r.id)} disabled={isVoting}
+                className="w-full flex items-center gap-3 bg-white/10 border border-white/15 rounded-2xl p-3 active:scale-[0.98] transition-all disabled:cursor-wait disabled:opacity-50">
                 <img src={r.image} alt="" className="w-14 h-14 rounded-xl object-cover" />
                 <div className="text-left flex-1 min-w-0">
                   <span className="text-[9px] bg-white/20 text-white font-bold px-1.5 py-0.5 rounded-full">{r.category}</span>
@@ -1370,8 +1384,8 @@ function WaitingOrDecidedScreen({ onContinue, onReroll }: { onContinue: (winner?
                 <span className="text-white/90 text-[13px] font-bold whitespace-nowrap">투표 →</span>
               </button>
             ))}
-            <button onClick={() => castVote(REJECT)}
-              className="w-full rounded-2xl border border-dashed border-white/40 py-3 text-white/80 text-[13px] font-bold active:scale-[0.98] transition-all">
+            <button onClick={() => castVote(REJECT)} disabled={isVoting}
+              className="w-full rounded-2xl border border-dashed border-white/40 py-3 text-white/80 text-[13px] font-bold active:scale-[0.98] transition-all disabled:cursor-wait disabled:opacity-50">
               둘 다 별로!
             </button>
           </div>
@@ -1542,6 +1556,8 @@ export default function QuickMatchPage() {
   const SOLO_REROLL_CAP = 3;
   const [rerollPrompt, setRerollPrompt] = useState<'none' | 'lastChance' | 'exhausted'>('none');
   const [showIntro, setShowIntro] = useState(true);
+  const [isSubmittingSwipe, setIsSubmittingSwipe] = useState(false);
+  const submittingSwipeRef = useRef(false);
   const [remainingMs, setRemainingMs] = useState(() => {
     if (!currentSession?.deadline) return 0;
     return Math.max(0, new Date(currentSession.deadline).getTime() - Date.now());
@@ -1595,18 +1611,13 @@ export default function QuickMatchPage() {
     const key = `${currentSession.id}:${profile.id}:${round}:deck`;
     if (progressSignalRef.current.has(key)) return;
     progressSignalRef.current.add(key);
-    void fetch('/api/swipes', {
-      method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        id: `deck_${currentSession.id}_${profile.id}_${round}`,
-        session_id: currentSession.id,
-        user_id: profile.id,
-        restaurant_id: `__deck_size__:${total}`,
-        round,
-        swipe_action: 'SYSTEM',
-      }),
-    }).then(response => {
-      if (!response.ok) progressSignalRef.current.delete(key);
+    void persistSessionSwipe({
+      id: `deck_${currentSession.id}_${profile.id}_${round}`,
+      sessionId: currentSession.id,
+      userId: profile.id,
+      restaurantId: `__deck_size__:${total}`,
+      round,
+      action: 'SYSTEM',
     }).catch(() => progressSignalRef.current.delete(key));
   }, [currentSession?.id, currentSession?.generation, profile.id, total]);
 
@@ -1630,18 +1641,13 @@ export default function QuickMatchPage() {
     const key = `${currentSession.id}:${profile.id}:${round}:done`;
     if (progressSignalRef.current.has(key)) return;
     progressSignalRef.current.add(key);
-    void fetch('/api/swipes', {
-      method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        id: `done_${currentSession.id}_${profile.id}_${round}`,
-        session_id: currentSession.id,
-        user_id: profile.id,
-        restaurant_id: '__prelim_done__',
-        round,
-        swipe_action: 'SYSTEM',
-      }),
-    }).then(response => {
-      if (!response.ok) progressSignalRef.current.delete(key);
+    void persistSessionSwipe({
+      id: `done_${currentSession.id}_${profile.id}_${round}`,
+      sessionId: currentSession.id,
+      userId: profile.id,
+      restaurantId: '__prelim_done__',
+      round,
+      action: 'SYSTEM',
     }).catch(() => progressSignalRef.current.delete(key));
   }, [phase, currentSession?.id, currentSession?.generation, profile.id]);
 
@@ -1653,11 +1659,21 @@ export default function QuickMatchPage() {
   }, [showIntro]);
   useEffect(() => { if (!showIntro) cardShownAtRef.current = Date.now(); }, [showIntro]); // 인트로 끝 → 첫 카드 dwell 시작
 
-  const handleAction = useCallback((action: SwipeAction) => {
+  const handleAction = useCallback(async (action: SwipeAction) => {
+    if (submittingSwipeRef.current) return;
     const restaurant = targetRestaurants[currentIndex];
     if (!restaurant) return;
 
-    addSwipe(restaurant.id, action === 'like' ? 'like' : 'skip');
+    submittingSwipeRef.current = true;
+    setIsSubmittingSwipe(true);
+    try {
+      await addSwipe(restaurant.id, action === 'like' ? 'like' : 'skip');
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : '선택을 저장하지 못했어요. 다시 눌러주세요.');
+      submittingSwipeRef.current = false;
+      setIsSubmittingSwipe(false);
+      return;
+    }
     const meta = currentSession?.recMeta?.[restaurant.id];
     const dwell = Date.now() - cardShownAtRef.current; // 이 카드를 본 시간
     cardShownAtRef.current = Date.now(); // 다음 카드 노출 시점 리셋
@@ -1679,7 +1695,9 @@ export default function QuickMatchPage() {
     } else {
       setCurrentIndex(i => i + 1);
     }
-  }, [currentIndex, targetRestaurants, addSwipe, total, currentSession]);
+    submittingSwipeRef.current = false;
+    setIsSubmittingSwipe(false);
+  }, [currentIndex, targetRestaurants, addSwipe, total, currentSession, profile.id]);
 
   // ── 중도 이탈(ABANDON): 예선 중 나가면 "어디서 몇 장 봤는지" 명시 로깅 ──
   const phaseRef = useRef(phase);
@@ -1942,6 +1960,7 @@ export default function QuickMatchPage() {
                 stackIndex={i}
                 progress={progress}
                 total={total}
+                isLocked={isSubmittingSwipe}
               />
             ))}
           </AnimatePresence>
@@ -1952,16 +1971,18 @@ export default function QuickMatchPage() {
       <div className="px-8 pb-10 pt-4 flex items-center justify-center gap-8">
         <motion.button
           onClick={() => handleAction('dislike')}
+          disabled={isSubmittingSwipe}
           aria-label="싫어요"
-          className="flex h-[75px] w-[75px] items-center justify-center rounded-full bg-white shadow-xl active:scale-90"
+          className="flex h-[75px] w-[75px] items-center justify-center rounded-full bg-white shadow-xl active:scale-90 disabled:cursor-wait disabled:opacity-50"
           whileTap={{ scale: 0.85 }}
         >
           <X size={30} color="#EB5053" strokeWidth={2.5} />
         </motion.button>
         <motion.button
           onClick={() => handleAction('like')}
+          disabled={isSubmittingSwipe}
           aria-label="좋아요"
-          className="flex h-[75px] w-[75px] items-center justify-center rounded-full shadow-xl active:scale-90"
+          className="flex h-[75px] w-[75px] items-center justify-center rounded-full shadow-xl active:scale-90 disabled:cursor-wait disabled:opacity-50"
           style={{ background: '#EB5053' }}
           whileTap={{ scale: 0.85 }}
         >
