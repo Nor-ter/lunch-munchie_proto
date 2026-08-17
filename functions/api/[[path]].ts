@@ -1532,29 +1532,27 @@ const sessionDietary = (value: unknown) => preferenceSnapshot(value).dietary;
 // member preference signals, then applies a category-coverage penalty so the
 // first seven cards do not collapse into one cuisine. The stable tie-break is
 // session-based: identical room state always produces the identical deck.
-function buildSharedSessionDeck(
+export function buildSharedSessionDeck(
   sessionId: string,
   restaurants: any[],
   memberRows: any[],
   size = 7,
 ): Array<{ id: string; score: number; position: number }> {
-  const members = memberRows.map((member) =>
-    sessionPreferences(member.preferences_json),
-  );
-  const categoryScores = new Map<string, number>();
-  for (const preferences of members) {
-    const perMember = new Map(
-      preferences.map((preference) => [preference.category, preference.score]),
-    );
-    for (const restaurant of restaurants) {
-      const previous = categoryScores.get(restaurant.category) ?? 0;
-      categoryScores.set(
-        restaurant.category,
-        previous + (perMember.get(restaurant.category) ?? 0.35),
-      );
-    }
-  }
-  const divisor = Math.max(1, members.length);
+  const memberPreferences = memberRows.map((member) => new Map(
+    sessionPreferences(member.preferences_json)
+      .map((preference) => [preference.category, preference.score]),
+  ));
+  const averagePreferenceFor = (category: string) => {
+    if (!memberPreferences.length) return 0.35;
+    // A neutral fallback means a member without an explicit category signal
+    // neither vetoes nor silently boosts a cuisine. Crucially, calculate this
+    // per restaurant: summing category scores while iterating candidates made
+    // categories with more catalogue entries unfairly dominate the group deck.
+    return memberPreferences.reduce(
+      (total, preferences) => total + (preferences.get(category) ?? 0.35),
+      0,
+    ) / memberPreferences.length;
+  };
   const hash = (value: string) => {
     let result = 2166136261;
     for (let index = 0; index < value.length; index++)
@@ -1564,7 +1562,7 @@ function buildSharedSessionDeck(
   const remaining = restaurants.map((restaurant) => ({
     restaurant,
     score:
-      (categoryScores.get(restaurant.category) ?? 0) / divisor +
+      averagePreferenceFor(restaurant.category) +
       Math.min(1, Number(restaurant.rating ?? 0) / 5) * 0.15 +
       hash(`${sessionId}:${restaurant.id}`) * 0.03,
   }));

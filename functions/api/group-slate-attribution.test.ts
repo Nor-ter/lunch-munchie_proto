@@ -1,7 +1,21 @@
 import { describe, expect, it } from "vitest";
-import { onRequest } from "./[[path]]";
+import { buildSharedSessionDeck, onRequest } from "./[[path]]";
 
 describe("group-session recommendation attribution", () => {
+  it("does not boost a cuisine merely because it has more candidate rows", () => {
+    const deck = buildSharedSessionDeck(
+      "stable-session",
+      [
+        { id: "fav", category: "한식", rating: 4 },
+        ...Array.from({ length: 12 }, (_, index) => ({ id: `neutral-${index}`, category: "카페", rating: 4 })),
+      ],
+      [{ preferences_json: JSON.stringify({ categories: [{ category: "한식", score: 1 }] }) }],
+      1,
+    );
+
+    expect(deck[0]?.id).toBe("fav");
+  });
+
   it("persists one immutable group slate and participant impressions before voting starts", async () => {
     const queries: string[] = [];
     const session = {
