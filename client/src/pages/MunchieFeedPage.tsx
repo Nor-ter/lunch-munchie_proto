@@ -9,7 +9,7 @@ import UnifiedMunchieCard from '@/components/munchie/UnifiedMunchieCard';
 
 export default function MunchieFeedPage() {
   const [, navigate] = useLocation();
-  const { feedPosts, refreshFeedPosts } = useApp();
+  const { feedPosts, refreshFeedPosts, loadMoreFeedPosts, hasMoreFeedPosts, isLoadingMoreFeedPosts } = useApp();
   const [activeFilter, setActiveFilter] = useState<TagType | 'all'>('all');
   useEffect(() => { void refreshFeedPosts().catch(() => undefined); }, [refreshFeedPosts]);
   const filteredPosts = activeFilter === 'all'
@@ -84,6 +84,17 @@ export default function MunchieFeedPage() {
             <p className="text-[16px] font-black text-[#2D211C]">아직 Munchie 피드가 없어요</p>
             <p className="mt-1 text-[12px] font-semibold text-[#9A8579]">첫 번째 Munchie 피드를 만들어보세요</p>
           </div>
+        )}
+
+        {activeFilter === 'all' && filteredPosts.length > 0 && hasMoreFeedPosts && (
+          <button
+            type="button"
+            onClick={() => { void loadMoreFeedPosts(); }}
+            disabled={isLoadingMoreFeedPosts}
+            className="mx-auto block rounded-full border border-[#F1C2B6] bg-white px-5 py-3 text-[13px] font-black text-[#D95359] disabled:opacity-50"
+          >
+            {isLoadingMoreFeedPosts ? '다음 피드를 불러오는 중…' : '더 많은 Munchie 보기'}
+          </button>
         )}
       </main>
     </div>
