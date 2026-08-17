@@ -21,6 +21,7 @@ import {
   type LunchmateRewardClaim,
 } from '@/utils/lunchmateProfile';
 import { logCourseSave, logFeedLike } from '@/lib/eventLogger';
+import { persistSessionSwipe } from '@/services/sessionApi';
 export type { TagType } from '@/constants/foodTags';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -292,7 +293,7 @@ function generateUserId() {
 
 const DEFAULT_PROFILE: UserProfile = {
   id: 'me',
-  name: '지민',
+  name: '사용자',
   emoji: '😊',
   dietary: [],
   categoryPrefs: [
@@ -338,7 +339,7 @@ interface AppContextValue {
   startSession: (token: string, deadlineMinutes?: number) => Promise<GroupSession>;
 
   swipeRecords: SwipeRecord[];
-  addSwipe: (restaurantId: string, action: SwipeRecord['action']) => void;
+  addSwipe: (restaurantId: string, action: SwipeRecord['action']) => Promise<void>;
   /** 세션의 로컬 스와이프 기록을 지운다 — "다시 고르기"로 카드를 처음부터 다시 보여주기 위한 용도 */
   clearSessionSwipes: (sessionId: string) => void;
   /** 그룹 reroll: 거절·다수미움 제외한 fresh 덱으로 다음 세대 예선 시작 */
@@ -1313,40 +1314,34 @@ export function AppProvider({
     return fetchSession(token);
   }, [fetchSession]);
 
-  const addSwipe = useCallback((restaurantId: string, action: SwipeRecord['action']) => {
+  const addSwipe = useCallback(async (restaurantId: string, action: SwipeRecord['action']) => {
     const record: SwipeRecord = {
       restaurantId,
       action,
       timestamp: new Date().toISOString(),
       sessionId: currentSession?.id,
     };
+
+    // A shared session may only advance after D1 accepted the vote. Otherwise
+    // the last card can disappear locally while other members never receive
+    // this participant's completion state.
+    if (currentSession) {
+      await persistSessionSwipe({
+        sessionId: currentSession.id,
+        userId: profile.id,
+        restaurantId,
+        round: 2 * (currentSession.generation ?? 1) - 1,
+        action: action === 'like' || action === 'save' ? 'LIKE' : 'DISLIKE',
+        createdAt: record.timestamp,
+      });
+    }
+
     setSwipeRecords(prev => [...prev, record]);
     setProfile(prev => ({
       ...prev,
       totalSwipes: prev.totalSwipes + 1,
       totalLikes: action === 'like' ? prev.totalLikes + 1 : prev.totalLikes,
     }));
-
-    // Sessions are created server-first, so their swipes must also be sent
-    // server-first.  `apiAvailable` is only a catalogue boot hint; using it
-    // here used to silently turn a valid shared session into local-only votes.
-    if (currentSession) {
-      fetch('/api/swipes', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          id: `swipe_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
-          session_id: currentSession.id,
-          user_id: profile.id,
-          restaurant_id: restaurantId,
-          round: 2 * (currentSession.generation ?? 1) - 1, // 세대별 예선 라운드 (gen1=1, gen2=3, …)
-          swipe_action: action === 'like' || action === 'save' ? 'LIKE' : 'DISLIKE',
-          created_at: new Date(),
-        }),
-      }).then(response => {
-        if (!response.ok) console.error('Failed to persist session swipe');
-      }).catch(() => { });
-    }
   }, [currentSession, profile.id]);
 
   // "다시 고르기": 로컬 스와이프 기록을 지워야 카드가 처음부터 다시 나온다.

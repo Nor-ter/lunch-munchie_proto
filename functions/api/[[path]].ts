@@ -1920,27 +1920,21 @@ app.post("/api/sessions/:token/join", async (c) => {
   )
     .bind(session.id, userId)
     .first();
-  if (!existing) {
-    const count = await c.env.DB.prepare(
-      "SELECT COUNT(*) AS count FROM session_members WHERE session_id = ?",
+  const preferencesJson = JSON.stringify({ categories: preferences, dietary });
+  if (existing) {
+    await c.env.DB.prepare(
+      "UPDATE session_members SET user_name = ?, emoji = ?, preferences_json = ? WHERE session_id = ? AND user_id = ?",
     )
-      .bind(session.id)
-      .first<{ count: number }>();
-    if (Number(count?.count ?? 0) >= Number(session.group_size)) {
-      const solo = Number(session.group_size) === 1;
-      return c.json(
-        {
-          error: solo
-            ? "호스트가 혼자 세션으로 만들었어요. 호스트가 '같이' 세션을 새로 만들어야 합니다."
-            : "정원이 찼어요.",
-          code: solo ? "SOLO_SESSION" : "SESSION_FULL",
-        },
-        409,
-      );
-    }
+      .bind(userName, emoji, preferencesJson, session.id, userId)
+      .run();
+    return c.json({ ok: true });
   }
-  await c.env.DB.prepare(
-    "INSERT INTO session_members (id, session_id, user_id, user_name, emoji, is_ready, preferences_json, joined_at) VALUES (?, ?, ?, ?, ?, 0, ?, ?) ON CONFLICT(session_id, user_id) DO UPDATE SET user_name = excluded.user_name, emoji = excluded.emoji, preferences_json = excluded.preferences_json",
+
+  // Capacity is checked inside the INSERT statement. A separate COUNT then
+  // INSERT lets two simultaneous invitees both observe the final free seat.
+  // D1/SQLite serializes this statement, so only one insertion can win it.
+  const inserted = await c.env.DB.prepare(
+    "INSERT INTO session_members (id, session_id, user_id, user_name, emoji, is_ready, preferences_json, joined_at) SELECT ?, ?, ?, ?, ?, 0, ?, ? WHERE (SELECT COUNT(*) FROM session_members WHERE session_id = ?) < ?",
   )
     .bind(
       crypto.randomUUID(),
@@ -1948,10 +1942,24 @@ app.post("/api/sessions/:token/join", async (c) => {
       userId,
       userName,
       emoji,
-      JSON.stringify({ categories: preferences, dietary }),
+      preferencesJson,
       Date.now(),
+      session.id,
+      session.group_size,
     )
     .run();
+  if ((inserted.meta?.changes ?? 0) === 0) {
+    const solo = Number(session.group_size) === 1;
+    return c.json(
+      {
+        error: solo
+          ? "호스트가 혼자 세션으로 만들었어요. 호스트가 '같이' 세션을 새로 만들어야 합니다."
+          : "정원이 찼어요.",
+        code: solo ? "SOLO_SESSION" : "SESSION_FULL",
+      },
+      409,
+    );
+  }
   return c.json({ ok: true });
 });
 
