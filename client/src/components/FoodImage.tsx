@@ -1,6 +1,6 @@
 // 식당 사진 — 없거나 로드 실패 시 카테고리 이모지 + 인텐트별 그라디언트 placeholder.
 // OSM 데이터엔 사진이 없어서, 외부 이미지 라이선스 없이 채운다.
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { intentForCategory } from "@shared/intent";
 
 const EMOJI: [RegExp, string][] = [
@@ -41,6 +41,10 @@ export default function FoodImage({
   src?: string; name?: string; category?: string; className?: string; emojiClass?: string;
 }) {
   const [failed, setFailed] = useState(false);
+  // A session card can receive a fresh R2 URL after the app hydrates its
+  // restaurant catalogue. A previous failed URL must not permanently lock the
+  // card into its emoji fallback.
+  useEffect(() => { setFailed(false); }, [src]);
   if (!src || failed) {
     return (
       <div className={`${className ?? ""} flex items-center justify-center`} style={{ background: gradientFor(category) }}>

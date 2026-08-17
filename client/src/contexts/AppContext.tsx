@@ -804,6 +804,27 @@ export function AppProvider({
       .finally(() => setIsLoading(false));
   }, []);
 
+  // A room can outlive a deployment in localStorage. Refresh only the card
+  // presentation from the canonical catalogue so an already-open Lunchie
+  // session gets repaired R2 image paths without changing its immutable deck,
+  // order, votes, or recommendation attribution.
+  useEffect(() => {
+    if (!currentSession?.restaurants?.length || !restaurants.length) return;
+    const catalogueById = new Map(restaurants.map(restaurant => [restaurant.id, restaurant]));
+    setCurrentSession(previous => {
+      if (!previous?.restaurants?.length) return previous;
+      let changed = false;
+      const hydratedRestaurants = previous.restaurants.map(restaurant => {
+        const canonical = catalogueById.get(restaurant.id);
+        const photos = canonical?.photos;
+        if (!photos?.length || JSON.stringify(photos) === JSON.stringify(restaurant.photos ?? [])) return restaurant;
+        changed = true;
+        return { ...restaurant, photos, image: photos[0] };
+      });
+      return changed ? { ...previous, restaurants: hydratedRestaurants } : previous;
+    });
+  }, [currentSession?.id, restaurants]);
+
   // 과거 게시물의 배치는 localStorage에만 있었으므로, 작성자가 다시 접속했을 때
   // 서버로 한 번 승계한다. 다른 사용자는 이후부터 같은 R2 사진·배치를 받는다.
   useEffect(() => {

@@ -238,7 +238,9 @@ function SwipeCard({
       {/* Restaurant photo */}
       <motion.div className="w-full h-full relative cursor-grab" style={{ scale: crackScale, filter: crackFilter }}>
         <FoodImage
-          src={restaurant.image || foodPhotos[0]}
+          // The server-backed photo list is canonical. `image` is a legacy
+          // browser snapshot and may point to a stale asset after deployment.
+          src={foodPhotos[0] || restaurant.image}
           name={restaurant.name}
           category={restaurant.category}
           className="w-full h-full object-cover"
@@ -530,7 +532,7 @@ function SwipeCard({
       <MenuItemDetail
         items={restaurant.menuItems || []}
         index={detailIndex}
-        fallbackImage={restaurant.image || foodPhotos[0]}
+        fallbackImage={foodPhotos[0] || restaurant.image}
         restaurantCategory={restaurant.category}
         onClose={() => setDetailIndex(null)}
         onIndexChange={setDetailIndex}
