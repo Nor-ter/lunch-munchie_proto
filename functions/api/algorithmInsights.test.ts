@@ -14,11 +14,16 @@ const complete = {
 
 describe("algorithm learning readiness", () => {
   it("blocks evaluation when immutable serving evidence is incomplete", () => {
-    expect(assessLearningReadiness({ ...complete, propensityCoverage: 0.95 }).level).toBe("blocked");
+    const result = assessLearningReadiness({ ...complete, propensityCoverage: 0.95 });
+    expect(result.level).toBe("blocked");
+    expect(result.detail).toContain("포함 확률");
   });
 
   it("does not call a small but complete dataset learned", () => {
-    expect(assessLearningReadiness({ ...complete, attributableSwipes: 49 }).level).toBe("instrumenting");
+    const result = assessLearningReadiness({ ...complete, attributableSwipes: 12, decisions: 3 });
+    expect(result.level).toBe("instrumenting");
+    expect(result.nextStep).toContain("12/50");
+    expect(result.nextStep).toContain("3/20");
   });
 
   it("requires a larger outcome sample before offline evaluation", () => {
