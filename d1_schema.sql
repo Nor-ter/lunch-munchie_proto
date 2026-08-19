@@ -172,6 +172,7 @@ CREATE TABLE IF NOT EXISTS session_members (
   user_name TEXT NOT NULL,
   emoji TEXT NOT NULL,
   is_ready INTEGER NOT NULL DEFAULT 0,
+  member_secret_hash TEXT,
   joined_at INTEGER NOT NULL,
   UNIQUE(session_id, user_id)
 );

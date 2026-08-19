@@ -59,6 +59,14 @@ function createFrameOverlay(template: CoursemapTemplate): Promise<string | null>
         });
       });
 
+      // 변환된 스토리 템플릿의 인쇄된 사진 칸도 투명하게 열어 실제 피드 사진이 보이게 한다.
+      template.slots.forEach(slot => {
+        enqueue(
+          Math.round(canvas.width * ((slot.left + slot.width / 2) / 100)),
+          Math.round(canvas.height * ((slot.top + slot.height / 2) / 100)),
+        );
+      });
+
       while (head < tail) {
         const pixelIndex = queue[head] ?? 0;
         head += 1;
@@ -85,6 +93,16 @@ function createFrameOverlay(template: CoursemapTemplate): Promise<string | null>
 }
 
 export function TemplateBackgroundLayer({ template, loading = 'lazy' }: LayerImageProps) {
+  if (template.transparentFrame) {
+    return (
+      <div
+        aria-hidden="true"
+        data-template-layer="background"
+        className="pointer-events-none absolute inset-0 z-0 h-full w-full select-none bg-white"
+      />
+    );
+  }
+
   return (
     <img
       src={template.image}
@@ -99,6 +117,7 @@ export function TemplateBackgroundLayer({ template, loading = 'lazy' }: LayerIma
 
 export function TemplateFrameLayer({ template, loading = 'lazy' }: LayerImageProps) {
   const [frameSource, setFrameSource] = useState<string | null>(null);
+  const [directFrameFailed, setDirectFrameFailed] = useState(false);
   const { top, right, bottom, left } = template.frameInset;
   const frameMask: CSSProperties = {
     padding: `${top}% ${right}% ${bottom}% ${left}%`,
@@ -113,6 +132,11 @@ export function TemplateFrameLayer({ template, loading = 'lazy' }: LayerImagePro
   };
 
   useEffect(() => {
+    setDirectFrameFailed(false);
+    if (template.transparentFrame && template.frameImage) {
+      setFrameSource(null);
+      return;
+    }
     let active = true;
     setFrameSource(null);
     createFrameOverlay(template).then(source => {
@@ -121,15 +145,29 @@ export function TemplateFrameLayer({ template, loading = 'lazy' }: LayerImagePro
     return () => { active = false; };
   }, [template]);
 
+  useEffect(() => {
+    if (!template.transparentFrame || !template.frameImage || !directFrameFailed) return;
+    let active = true;
+    createFrameOverlay(template).then(source => {
+      if (active) setFrameSource(source);
+    });
+    return () => { active = false; };
+  }, [directFrameFailed, template]);
+
+  const shouldUseDirectFrame = template.transparentFrame && template.frameImage && !directFrameFailed;
+
   return (
     <img
-      src={frameSource ?? template.image}
+      src={shouldUseDirectFrame ? template.frameImage : frameSource ?? template.image}
       alt=""
       aria-hidden="true"
       data-template-layer="frame"
-      data-frame-ready={frameSource ? 'true' : 'false'}
-      className="pointer-events-none absolute inset-0 z-30 h-full w-full select-none object-cover"
-      style={frameSource ? undefined : frameMask}
+      data-frame-ready={shouldUseDirectFrame || frameSource ? 'true' : 'false'}
+      className="pointer-events-none absolute inset-0 z-50 h-full w-full select-none object-cover"
+      style={shouldUseDirectFrame || frameSource ? undefined : frameMask}
+      onError={() => {
+        if (shouldUseDirectFrame) setDirectFrameFailed(true);
+      }}
       draggable={false}
       loading={loading}
     />

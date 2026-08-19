@@ -17,5 +17,10 @@ export async function getAuthStatus(): Promise<AuthStatus> {
 }
 
 export function useAuthStatus() {
-  return useQuery({ queryKey: ['authStatus'], queryFn: getAuthStatus, staleTime: Infinity });
+  return useQuery({
+    queryKey: ['authStatus'],
+    queryFn: getAuthStatus,
+    staleTime: 0,
+    refetchOnMount: 'always',
+  });
 }

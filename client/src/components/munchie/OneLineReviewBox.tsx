@@ -24,8 +24,8 @@ export default function OneLineReviewBox({
     >
       <span
         aria-hidden="true"
-        className={`pointer-events-none absolute left-1 font-serif font-black leading-none text-[#EE857B] ${
-          slim ? 'top-[-4px] text-[18px]' : compact ? 'top-[-3px] text-[21px]' : 'top-[-7px] text-[30px]'
+        className={`pointer-events-none absolute left-1.5 font-serif font-black leading-none text-[#EE857B] ${
+          slim ? 'top-0.5 text-[17px]' : compact ? 'top-0.5 text-[20px]' : 'top-0.5 text-[29px]'
         }`}
       >
         “
@@ -33,8 +33,8 @@ export default function OneLineReviewBox({
       <div className="min-w-0 flex-1">{children}</div>
       <span
         aria-hidden="true"
-        className={`pointer-events-none absolute right-1 font-serif font-black leading-none text-[#EE857B] ${
-          slim ? 'bottom-[-5px] text-[18px]' : compact ? 'bottom-[-6px] text-[21px]' : 'bottom-[-10px] text-[30px]'
+        className={`pointer-events-none absolute right-1.5 font-serif font-black leading-none text-[#EE857B] ${
+          slim ? 'bottom-0.5 text-[17px]' : compact ? 'bottom-0.5 text-[20px]' : 'bottom-0.5 text-[29px]'
         }`}
       >
         ”

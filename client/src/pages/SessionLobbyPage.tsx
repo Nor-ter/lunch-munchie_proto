@@ -4,7 +4,7 @@
  * host, capacity, participant, and waiting states.
  */
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { AnimatePresence, motion, useReducedMotion } from 'framer-motion';
 import { useLocation } from 'wouter';
 import {
@@ -21,6 +21,7 @@ import {
 import { QRCodeSVG } from 'qrcode.react';
 import { toast } from 'sonner';
 import { LunchieLogo } from '@/components/brand/LunchieLogo';
+import LunchmateCharacterRenderer from '@/components/munchie/LunchmateCharacterRenderer';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import {
   AppCard,
@@ -31,30 +32,74 @@ import {
 } from '@/components/ui/lunchie-ui';
 import { useApp } from '@/contexts/AppContext';
 import { getLobbyPresentation } from '@/lib/lobbyPresentation';
+import { lunchmateLoadoutFromProfile } from '@/utils/lunchmateProfile';
+import SessionManagementMenu from '@/components/lunchie/SessionManagementMenu';
+import { isActiveQuickMatchStatus } from '@/lib/quickMatch';
 
 function isAbortError(error: unknown): boolean {
   return typeof error === 'object' && error !== null && 'name' in error && error.name === 'AbortError';
 }
 
+export function resolveInviteOrigin(configuredOrigin: string | undefined, browserOrigin: string): string {
+  const candidate = configuredOrigin?.trim();
+  if (!candidate) return browserOrigin;
+  try {
+    const parsed = new URL(candidate);
+    return parsed.protocol === 'http:' || parsed.protocol === 'https:' ? parsed.origin : browserOrigin;
+  } catch {
+    return browserOrigin;
+  }
+}
+
 export default function SessionLobbyPage() {
   const [, navigate] = useLocation();
-  const { currentSession, fetchSession, startSession, profile } = useApp();
+  const { currentSession, fetchSession, startSession, setCurrentSession, profile } = useApp();
   const [showQR, setShowQR] = useState(true);
   const [showMembers, setShowMembers] = useState(true);
   const [isStarting, setIsStarting] = useState(false);
   const [startFailure, setStartFailure] = useState<{ message: string; code?: string } | null>(null);
   const reduceMotion = Boolean(useReducedMotion());
+  const lunchmateLoadout = useMemo(
+    () => lunchmateLoadoutFromProfile(profile.lunchmateLoadout),
+    [profile.lunchmateLoadout],
+  );
   const previousMembersRef = useRef<{ sessionId: string; ids: string[] } | undefined>(undefined);
 
-  // Poll the server so newly joined members (and the start signal) show up.
-  // Keep this above the early return: hooks must never be conditional.
+  // Keep every device on the same server-owned phase. A participant does not
+  // need to press through a second lobby action: the host's start signal moves
+  // everyone into the shared preliminary round on the next short poll.
   useEffect(() => {
     if (!currentSession?.inviteCode) return;
-    const interval = window.setInterval(() => {
-      fetchSession(currentSession.inviteCode).catch(console.error);
-    }, 3000);
-    return () => window.clearInterval(interval);
-  }, [currentSession?.inviteCode, fetchSession]);
+    let active = true;
+    const refresh = () => {
+      void fetchSession(currentSession.inviteCode)
+        .then(session => {
+          if (!active) return;
+          if (session.membershipActive === false || !isActiveQuickMatchStatus(session.status)) {
+            toast.info(session.status === 'cancelled' ? 'This Quick Match was cancelled.' : 'This Quick Match is no longer active.');
+            setCurrentSession(null);
+            navigate('/lunchie/settings');
+          } else if (session.status !== 'waiting') {
+            navigate('/lunchie/swipe');
+          }
+        })
+        .catch(error => {
+          const status = (error as { status?: number }).status;
+          if (!active || (status !== 404 && status !== 410)) {
+            if (active) console.error('Failed to refresh Quick Match lobby', error);
+            return;
+          }
+          setCurrentSession(null);
+          navigate('/lunchie/settings');
+        });
+    };
+    refresh();
+    const interval = window.setInterval(refresh, 1000);
+    return () => {
+      active = false;
+      window.clearInterval(interval);
+    };
+  }, [currentSession?.inviteCode, fetchSession, navigate, setCurrentSession]);
 
   const previousMemberIds = currentSession && previousMembersRef.current?.sessionId === currentSession.id
     ? previousMembersRef.current.ids
@@ -89,8 +134,72 @@ export default function SessionLobbyPage() {
     );
   }
 
-  const inviteUrl = `${window.location.origin}/join/${currentSession.inviteCode}`;
+  const inviteOrigin = resolveInviteOrigin(import.meta.env.VITE_INVITE_ORIGIN, window.location.origin);
+  const inviteUrl = `${inviteOrigin}/join/${currentSession.inviteCode}`;
   const isSoloSession = currentSession.filters.partySize <= 1;
+
+  // Invitees only need confirmation that they joined. QR controls and room
+  // management belong to the host; this screen disappears automatically as
+  // soon as the host starts the shared round.
+  if (!presentation.isHost) {
+    return (
+      <ScreenContainer className="flex min-h-dvh flex-col overflow-hidden bg-[#FCF4EE] px-5">
+        <header className="flex items-center justify-center pt-[max(34px,env(safe-area-inset-top))]">
+          <LunchieLogo size={54} />
+        </header>
+        <main className="flex flex-1 flex-col items-center justify-center pb-16 text-center">
+          <motion.div
+            className="relative mb-7 flex size-32 items-center justify-center rounded-[38px] bg-white shadow-[0_18px_50px_rgba(221,92,86,0.15)]"
+            animate={reduceMotion ? undefined : { y: [0, -7, 0] }}
+            transition={reduceMotion ? undefined : { duration: 1.8, repeat: Infinity, ease: 'easeInOut' }}
+          >
+            <LunchmateCharacterRenderer
+              flowState="idle"
+              loadout={lunchmateLoadout}
+              size={106}
+              renderSize="compact"
+              artwork="chicken"
+              chickenAssetKeyOverride="idle"
+              chickenFaceSystem
+              animated={false}
+              alt="예선전 출발을 기다리는 런치킨"
+            />
+            <span className="absolute -right-2 -top-2 flex size-9 items-center justify-center rounded-full bg-[#EB5053] text-lg text-white shadow-lg">✓</span>
+          </motion.div>
+          <span className="rounded-full bg-[#FFE3DF] px-3 py-1 text-[11px] font-black tracking-[0.4px] text-[#D8484B]">JOINED</span>
+          <h1 className="mt-4 text-[25px] font-black tracking-[-0.7px] text-[#2F2927]">참여 완료!</h1>
+          <p className="mt-2 max-w-[290px] text-[14px] font-semibold leading-relaxed text-[#8A7B75]">
+            {presentation.isWaiting ? (
+              <>{presentation.hostName}님이 시작하면<br />바로 예선전으로 함께 이동해요.</>
+            ) : (
+              <>예선전으로 함께 이동하고 있어요.</>
+            )}
+          </p>
+
+          <div className="mt-8 flex items-center justify-center -space-x-2" aria-label={`${presentation.memberCount}명 참여 중`}>
+            {presentation.members.map(member => (
+              <span key={member.id} className="flex size-12 items-center justify-center rounded-full border-[3px] border-[#FCF4EE] bg-white text-[22px] shadow-sm" title={member.name}>
+                {member.emoji}
+              </span>
+            ))}
+          </div>
+          <div className="mt-5 flex items-center gap-2 text-[12px] font-bold text-[#A18F88]" role="status" aria-live="polite">
+            <span className="flex gap-1" aria-hidden="true">
+              {[0, 1, 2].map(index => (
+                <motion.span
+                  key={index}
+                  className="size-1.5 rounded-full bg-[#EB5053]"
+                  animate={reduceMotion ? undefined : { opacity: [0.25, 1, 0.25], y: [0, -3, 0] }}
+                  transition={reduceMotion ? undefined : { duration: 1.1, repeat: Infinity, delay: index * 0.16 }}
+                />
+              ))}
+            </span>
+            시작 신호를 확인하고 있어요
+          </div>
+        </main>
+      </ScreenContainer>
+    );
+  }
 
   const copyInviteLink = async (): Promise<boolean> => {
     try {
@@ -161,7 +270,7 @@ export default function SessionLobbyPage() {
   return (
     <ScreenContainer className="lunchie-lobby flex min-h-dvh flex-col overflow-x-hidden px-5">
       <header className="flex items-center gap-3 pb-5 pt-[max(32px,env(safe-area-inset-top))]">
-        <IconButton aria-label="홈으로 돌아가기" onClick={() => navigate('/')} className="shrink-0">
+        <IconButton aria-label="Quick Match 설정으로 돌아가기" onClick={() => navigate('/lunchie/settings')} className="shrink-0">
           <ArrowLeft size={20} aria-hidden="true" />
         </IconButton>
         <div className="min-w-0 flex-1">
@@ -177,6 +286,7 @@ export default function SessionLobbyPage() {
         >
           {presentation.statusLabel}
         </StatusBadge>
+        <SessionManagementMenu onEnded={() => navigate('/lunchie/settings')} className="shrink-0 text-[var(--lm-text)]" />
       </header>
 
       <main className="flex-1">
@@ -311,13 +421,11 @@ export default function SessionLobbyPage() {
                           )}
                         </div>
                         <span
-                          className={`inline-flex shrink-0 items-center gap-1 rounded-full px-2 py-1 text-[10px] font-bold ${
-                            member.ready ? 'bg-[#EAF7EC] text-[#278836]' : 'bg-[#ECE8E5] text-[#8A817B]'
-                          }`}
-                          aria-label={member.ready ? '준비 완료' : '준비 중'}
+                          className="inline-flex shrink-0 items-center gap-1 rounded-full bg-[#EAF7EC] px-2 py-1 text-[10px] font-bold text-[#278836]"
+                          aria-label="세션 참여 완료"
                         >
-                          {member.ready ? <CheckCircle2 size={12} aria-hidden="true" /> : <span className="size-1.5 rounded-full bg-current" />}
-                          {member.ready ? '준비 완료' : '준비 중'}
+                          <CheckCircle2 size={12} aria-hidden="true" />
+                          참여 완료
                         </span>
                       </div>
                     ))}
@@ -347,17 +455,22 @@ export default function SessionLobbyPage() {
 
         <AppCard className="mb-4 flex items-center gap-3 p-3.5" role="status" aria-live="polite">
           <div className="flex size-16 shrink-0 items-center justify-center overflow-hidden rounded-2xl bg-[#FFF2EC]">
-            {reduceMotion ? (
-              <LunchieLogo size={48} />
-            ) : (
-              <img
-                src="/assets/lunchie-quick-match-jump.gif"
-                alt=""
-                aria-hidden="true"
-                className="h-16 w-20 object-contain mix-blend-multiply"
-                draggable={false}
+            <motion.div
+              animate={reduceMotion ? undefined : { y: [0, -3, 0], rotate: [-1, 1, -1] }}
+              transition={reduceMotion ? undefined : { duration: 1.35, repeat: Infinity, ease: 'easeInOut' }}
+            >
+              <LunchmateCharacterRenderer
+                flowState="idle"
+                loadout={lunchmateLoadout}
+                size={62}
+                renderSize="compact"
+                artwork="chicken"
+                chickenAssetKeyOverride="idle"
+                chickenFaceSystem
+                animated={false}
+                alt="참여자를 기다리는 나의 런치킨"
               />
-            )}
+            </motion.div>
           </div>
           <div className="min-w-0 flex-1">
             <p className="text-[13px] font-bold leading-snug text-[var(--lm-text)]">{presentation.statusCopy}</p>

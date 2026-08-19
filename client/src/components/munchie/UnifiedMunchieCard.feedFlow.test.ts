@@ -33,6 +33,20 @@ describe('UnifiedMunchieCard feed flow', () => {
     expect(source).toContain('pointer-events-none absolute inset-x-2');
   });
 
+  it('uses the author profile photo in place of the emoji when available', () => {
+    expect(source).toContain('function FeedAuthorAvatar');
+    expect(source).toContain('post.authorImage ?');
+    expect(source).toContain('referrerPolicy="no-referrer"');
+  });
+
+  it('uses the source compact identity styling and native feed sharing action', () => {
+    expect(source).toContain('`}>{post.authorEmoji}</button>');
+    expect(source).toContain('text-[10px] font-semibold');
+    expect(source).toContain('const shareFeedPost = async () =>');
+    expect(source).toContain('void shareFeedPost()');
+    expect(source).not.toContain('/share?post=');
+  });
+
   it('shows a translucent one-line review that gains a shaded backdrop when pressed', () => {
     expect(source).toContain('const [reviewRevealed, setReviewRevealed] = useState(false)');
     expect(source).toContain('setReviewRevealed(value => !value)');

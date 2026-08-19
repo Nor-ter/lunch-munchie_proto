@@ -1,4 +1,6 @@
 import { useEffect, useState, type ReactNode } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
+import { getAuthStatus, type AuthStatus } from '@/hooks/useAuthStatus';
 
 type AuthBootstrapProps = {
   children: (userId: string | null) => ReactNode;
@@ -8,6 +10,7 @@ type AuthBootstrapProps = {
  * Cloudflare가 발급한 직접 Google OAuth 세션을 확인한 뒤 사용자별 AppContext를 렌더한다.
  */
 export default function AuthBootstrap({ children }: AuthBootstrapProps) {
+  const queryClient = useQueryClient();
   const [state, setState] = useState<
     { status: 'loading' } | { status: 'ready'; userId: string | null }
   >({ status: 'loading' });
@@ -17,9 +20,10 @@ export default function AuthBootstrap({ children }: AuthBootstrapProps) {
 
     const bootstrap = async () => {
       try {
-        const response = await fetch('/api/auth/session', { credentials: 'same-origin' });
-        const { user } = response.ok ? await response.json() as { user: { sub?: string } | null } : { user: null };
-        if (active) setState({ status: 'ready', userId: user?.sub ?? null });
+        const auth = await getAuthStatus();
+        if (!active) return;
+        queryClient.setQueryData<AuthStatus>(['authStatus'], auth);
+        setState({ status: 'ready', userId: auth.isAnonymous ? null : auth.uid });
       } catch {
         if (active) setState({ status: 'ready', userId: null });
       }
@@ -30,7 +34,7 @@ export default function AuthBootstrap({ children }: AuthBootstrapProps) {
     return () => {
       active = false;
     };
-  }, []);
+  }, [queryClient]);
 
   if (state.status === 'loading') {
     return (
