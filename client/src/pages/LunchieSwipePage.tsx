@@ -1677,17 +1677,19 @@ export default function QuickMatchPage() {
     const meta = currentSession?.recMeta?.[restaurant.id];
     const dwell = Date.now() - cardShownAtRef.current; // 이 카드를 본 시간
     cardShownAtRef.current = Date.now(); // 다음 카드 노출 시점 리셋
-    logSwipe(restaurant.id, action === 'like' ? 'LIKE' : 'NOPE', {
-      user_id: profile.id,
-      session_id: currentSession?.id ?? null,
-      slate_id: currentSession?.slateId ?? null,
-      slate_type: 'PRELIM',
-      round: 1,
-      position: meta?.position ?? currentIndex,
-      propensity: meta?.propensity ?? null,
-      dwell_ms: dwell,
-      model_version: currentSession?.modelVersion ?? 'v0-heuristic',
-    });
+    // 서버 세션은 /api/swipes가 선택과 추천 근거를 원자적으로 기록한다.
+    // 세션이 없는 레거시 단독 흐름만 best-effort 브라우저 로그를 사용한다.
+    if (!currentSession) {
+      logSwipe(restaurant.id, action === 'like' ? 'LIKE' : 'NOPE', {
+        user_id: profile.id,
+        slate_type: 'PRELIM',
+        round: 1,
+        position: meta?.position ?? currentIndex,
+        propensity: meta?.propensity ?? null,
+        dwell_ms: dwell,
+        model_version: 'v0-heuristic',
+      });
+    }
     setSwipeData(prev => [...prev, { restaurant, action }]);
 
     if (currentIndex + 1 >= total) {
