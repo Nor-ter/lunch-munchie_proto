@@ -123,10 +123,11 @@ test('character grabs on a short move and carries its shadow with it', async ({ 
     await page.mouse.down();
     await expect(character).toHaveAttribute('data-lunchmate-profile-grab', 'pressing');
 
-    const pressingBox = await movingLayer.boundingBox();
-    expect(pressingBox).not.toBeNull();
-    const pressingCenterX = pressingBox!.x + (pressingBox!.width / 2);
-    expect(Math.abs(pressingCenterX - regrabX)).toBeLessThan(12);
+    await expect.poll(async () => {
+      const pressingBox = await movingLayer.boundingBox();
+      if (!pressingBox) return Number.POSITIVE_INFINITY;
+      return Math.abs((pressingBox.x + (pressingBox.width / 2)) - regrabX);
+    }).toBeLessThan(12);
 
     const direction = attempt % 2 === 0 ? -1 : 1;
     await page.mouse.move(regrabX + (direction * 6), regrabY - 2);

@@ -922,7 +922,29 @@ export interface LunchmateProfileGrabPointer {
   clientX: number;
   clientY: number;
   initialVisualX: number;
+  initialVisualY?: number;
   target: LunchmateProfilePointerCaptureTarget;
+}
+
+export function readLunchmateProfileVisualOffset(
+  moving: Pick<LunchmateProfileRect, 'left' | 'width' | 'bottom'> | null | undefined,
+  anchor: Pick<LunchmateProfileRect, 'left' | 'width' | 'bottom'> | null | undefined,
+) {
+  if (!moving || !anchor) return null;
+  return {
+    x: (moving.left + (moving.width / 2)) - (anchor.left + (anchor.width / 2)),
+    y: moving.bottom - anchor.bottom,
+  };
+}
+
+function snapMotionValue(value: MotionValue<number>, next: number) {
+  const motion = value as MotionValue<number> & {
+    jump?: (nextValue: number) => void;
+    stop?: () => void;
+  };
+  motion.stop?.();
+  if (typeof motion.jump === 'function') motion.jump(next);
+  else motion.set(next);
 }
 
 export interface LunchmateProfileGrabTarget {
@@ -1258,8 +1280,14 @@ export function createLunchmateProfileGrabController({
 
       // 놓기/복귀 애니메이션은 새 입력보다 우선하지 않는다. 사용자가 다시 잡으면
       // 남은 landing/recovering timer를 즉시 끊고 현재 제스처를 시작한다.
-      if (snapshot.phase === 'landing' || snapshot.phase === 'recovering') {
-        const rendered = getRendered();
+      const interruptVisual = snapshot.phase === 'landing' || snapshot.phase === 'recovering'
+        ? {
+            x: pointer.initialVisualX,
+            y: pointer.initialVisualY ?? getRendered().y,
+            rotate: getRendered().rotate,
+          }
+        : null;
+      if (interruptVisual) {
         clearPressTimers();
         clearLandingTimers();
         clearPendulumTimers();
@@ -1269,9 +1297,8 @@ export function createLunchmateProfileGrabController({
         activeBounds = null;
         filteredVelocityX = 0;
         // 화면에서 보이는 위치를 그대로 고정한 뒤 다시 잡아 snap-back을 막는다.
-        onTargetChange({ ...rendered, immediate: true });
-        snapshot = { ...INITIAL_PROFILE_GRAB };
-        onChange(snapshot);
+        // spring.get()이 페인트보다 먼저 착지점(0)에 도달해도 DOM offset을 쓴다.
+        onTargetChange({ ...interruptVisual, immediate: true });
       }
 
       activePointerId = pointer.pointerId;
@@ -1293,6 +1320,9 @@ export function createLunchmateProfileGrabController({
       emit({
         ...INITIAL_PROFILE_GRAB,
         phase: 'pressing',
+        x: interruptVisual?.x ?? 0,
+        y: interruptVisual?.y ?? 0,
+        rotate: interruptVisual?.rotate ?? 0,
         scaleX: reducedMotion ? 1 : 1.015,
         scaleY: reducedMotion ? 1 : 0.985,
         transitionMs: reducedMotion ? 0 : LUNCHMATE_PROFILE_LONG_PRESS_PREPARE_MS,
@@ -1479,7 +1509,7 @@ type LunchmateProfileMotionValue = Omit<
     positionY: MotionValue<number>;
     pendulumRotate: MotionValue<number>;
     handlePointerDown: (
-      pointer: Omit<LunchmateProfileGrabPointer, 'initialVisualX'>,
+      pointer: Omit<LunchmateProfileGrabPointer, 'initialVisualX' | 'initialVisualY'>,
     ) => boolean;
     handlePointerMove: (
       pointerId: number,
@@ -1612,16 +1642,16 @@ export function useLunchmateProfileMotion({
       onChange: setGrabSnapshot,
       onTargetChange: ({ x, y, rotate, immediate }) => {
         if (x !== undefined) {
-          if (immediate) grabSpringX.set(x);
           grabTargetX.set(x);
+          if (immediate) snapMotionValue(grabSpringX, x);
         }
         if (y !== undefined) {
-          if (immediate) grabSpringY.set(y);
           grabTargetY.set(y);
+          if (immediate) snapMotionValue(grabSpringY, y);
         }
         if (rotate !== undefined) {
-          if (immediate) grabSpringRotate.set(rotate);
           grabTargetRotate.set(rotate);
+          if (immediate) snapMotionValue(grabSpringRotate, rotate);
         }
       },
       onPauseAutomaticMotion: () => controllerRef.current?.setGrabPaused(true),
@@ -1752,25 +1782,23 @@ export function useLunchmateProfileMotion({
   );
 
   const handleGrabPointerDown = useCallback(
-    (pointer: Omit<LunchmateProfileGrabPointer, 'initialVisualX'>) => {
-      const currentGrabPhase = grabControllerRef.current?.getSnapshot().phase;
+    (pointer: Omit<LunchmateProfileGrabPointer, 'initialVisualX' | 'initialVisualY'>) => {
       const renderedCharacter = characterRef.current?.getBoundingClientRect();
+      const movingLayer = stageRef.current?.querySelector<HTMLElement>(
+        '[data-lunchmate-profile-grab-position="true"]',
+      )?.getBoundingClientRect();
       const fixedAnchor = stageRef.current?.querySelector<HTMLElement>(
         '[data-lunchmate-profile-grab-anchor="true"]',
       )?.getBoundingClientRect();
-      const initialVisualX = currentGrabPhase === 'landing'
-        || currentGrabPhase === 'recovering'
-        ? clampedGrabSpringX.get()
-        : renderedCharacter && fixedAnchor
-          ? (renderedCharacter.left + (renderedCharacter.width / 2))
-            - (fixedAnchor.left + (fixedAnchor.width / 2))
-          : snapshot.x;
+      const visualOffset = readLunchmateProfileVisualOffset(movingLayer, fixedAnchor)
+        ?? readLunchmateProfileVisualOffset(renderedCharacter, fixedAnchor);
       return grabControllerRef.current?.pointerDown({
         ...pointer,
-        initialVisualX,
+        initialVisualX: visualOffset?.x ?? snapshot.x,
+        initialVisualY: visualOffset?.y ?? 0,
       }) ?? false;
     },
-    [clampedGrabSpringX, snapshot.x],
+    [snapshot.x],
   );
   const handleGrabPointerMove = useCallback(
     (pointerId: number, clientX: number, clientY: number) => (
@@ -1814,7 +1842,11 @@ export function useLunchmateProfileMotion({
       isActive: grabSnapshot.phase !== 'idle',
       hasVisualControl: grabSnapshot.phase === 'grabbed'
         || grabSnapshot.phase === 'landing'
-        || grabSnapshot.phase === 'recovering',
+        || grabSnapshot.phase === 'recovering'
+        || (
+          grabSnapshot.phase === 'pressing'
+          && (grabSnapshot.x !== 0 || grabSnapshot.y !== 0)
+        ),
       positionX: reducedMotion ? grabTargetX : clampedGrabSpringX,
       positionY: reducedMotion ? grabTargetY : clampedGrabSpringY,
       pendulumRotate: reducedMotion

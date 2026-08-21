@@ -28,6 +28,7 @@ import {
   resolveLunchmateProfilePresentationAsset,
   scheduleLunchmateProfileInitialMeasurement,
   selectLunchmateProfileEmotion,
+  readLunchmateProfileVisualOffset,
   type LunchmateProfileMotionSnapshot,
   type LunchmateProfilePointerCaptureTarget,
 } from './useLunchmateProfileMotion';
@@ -248,6 +249,14 @@ describe('Lunchmate Profile pointer grab controller', () => {
     expect(Math.abs(bounds.maxX)).toBeGreaterThan(135);
     expect(Math.abs(bounds.minX)).toBeGreaterThan(135);
     expect(bounds.maxX).toBeGreaterThan(LUNCHMATE_PROFILE_MAX_OFFSET_PX);
+  });
+
+  it('reads the painted grab offset from the moving layer versus the drop anchor', () => {
+    expect(readLunchmateProfileVisualOffset(
+      { left: 140, width: 86, bottom: 410 },
+      { left: 152, width: 116, bottom: 418 },
+    )).toEqual({ x: -27, y: -8 });
+    expect(readLunchmateProfileVisualOffset(null, { left: 0, width: 1, bottom: 0 })).toBeNull();
   });
 
   it('captures immediately, then swaps to grabbed after a 400ms stationary press', () => {
@@ -472,9 +481,11 @@ describe('Lunchmate Profile pointer grab controller', () => {
       ...pointer,
       pointerId: pointer.pointerId + 1,
       initialVisualX: rendered.x,
+      initialVisualY: rendered.y,
     };
     expect(controller.pointerDown(nextPointer)).toBe(true);
     expect(controller.getSnapshot().phase).toBe('pressing');
+    expect(controller.getSnapshot()).toMatchObject({ x: 14, y: -7, rotate: 2 });
     expect(targetChanges).toContainEqual({ x: 14, y: -7, rotate: 2, immediate: true });
     expect(target.setPointerCapture).toHaveBeenLastCalledWith(nextPointer.pointerId);
     expect(controller.pointerMove(
@@ -483,6 +494,47 @@ describe('Lunchmate Profile pointer grab controller', () => {
       nextPointer.clientY,
     )).toBe(true);
     expect(controller.getSnapshot().phase).toBe('grabbed');
+    controller.stop();
+  });
+
+  it('freezes the painted offset when the spring has already landed', () => {
+    vi.useFakeTimers();
+    const {
+      controller,
+      pointer,
+      rendered,
+      targetChanges,
+    } = createGrabHarness();
+
+    controller.pointerDown(pointer);
+    controller.pointerMove(
+      pointer.pointerId,
+      pointer.clientX + LUNCHMATE_PROFILE_LONG_PRESS_MOVE_THRESHOLD_PX,
+      pointer.clientY,
+    );
+    controller.pointerUp(pointer.pointerId);
+    expect(controller.getSnapshot().phase).toBe('landing');
+    rendered.x = 0;
+    rendered.y = 0;
+    rendered.rotate = 0;
+
+    expect(controller.pointerDown({
+      ...pointer,
+      pointerId: pointer.pointerId + 1,
+      initialVisualX: 36,
+      initialVisualY: -8,
+    })).toBe(true);
+    expect(controller.getSnapshot()).toMatchObject({
+      phase: 'pressing',
+      x: 36,
+      y: -8,
+    });
+    expect(targetChanges).toContainEqual({
+      x: 36,
+      y: -8,
+      rotate: 0,
+      immediate: true,
+    });
     controller.stop();
   });
 
@@ -890,6 +942,11 @@ describe('Profile motion integration contract', () => {
     expect(HOOK_SOURCE).toContain('stiffness: 170');
     expect(HOOK_SOURCE).toContain('damping: 13');
     expect(HOOK_SOURCE).toContain('mass: 0.9');
+    expect(HOOK_SOURCE).toContain('readLunchmateProfileVisualOffset(movingLayer, fixedAnchor)');
+    expect(HOOK_SOURCE).toContain('snapMotionValue(grabSpringX, x)');
+    expect(HOOK_SOURCE).toContain(
+      "grabSnapshot.phase === 'pressing'",
+    );
   });
 
   it('keeps the drop target fixed and moves only the inner 86px wrapper', () => {
