@@ -85,12 +85,24 @@ type ProfileSheet = 'settings' | 'avatar' | 'lunchbox' | 'progress' | 'levelUp';
 
 /** 프로필 아바타 — 업로드 사진이 있으면 사진, 없으면 이모지. 공통 렌더링으로 항상 최신 profile을 반영한다 */
 function Avatar({ photo, emoji, size }: { photo?: string; emoji: string; size: number }) {
+  const [imageFailed, setImageFailed] = useState(false);
+  useEffect(() => setImageFailed(false), [photo]);
+  const showPhoto = Boolean(photo && !imageFailed);
+
   return (
     <div
       className="rounded-full bg-[#EFE3DA] flex items-center justify-center overflow-hidden shrink-0"
       style={{ width: size, height: size, fontSize: size * 0.49 }}
     >
-      {photo ? <img src={photo} alt="" className="w-full h-full object-cover" /> : emoji}
+      {showPhoto ? (
+        <img
+          src={photo}
+          alt=""
+          className="w-full h-full object-cover"
+          referrerPolicy="no-referrer"
+          onError={() => setImageFailed(true)}
+        />
+      ) : emoji}
     </div>
   );
 }
@@ -127,6 +139,7 @@ function ProfilePageContent() {
   const [followListMode, setFollowListMode] = useState<FollowListMode | null>(null);
   const [levelUpRewardItem, setLevelUpRewardItem] = useState<LunchmateLayerItem | null>(null);
   const [editName, setEditName] = useState(profile.name);
+  const [editHandle, setEditHandle] = useState(profile.handle ?? '');
   const avatarFileRef = useRef<HTMLInputElement>(null);
   const lunchboxButtonRef = useRef<HTMLButtonElement>(null);
   const foodieDropTargetRef = useRef<HTMLDivElement>(null);
@@ -273,18 +286,23 @@ function ProfilePageContent() {
 
   const saveSettings = async () => {
     const username = editName.trim();
+    const handle = editHandle.trim().replace(/^@/, '').toLowerCase();
     if (!username) {
       toast.error('이름을 입력해 주세요.');
+      return;
+    }
+    if (!/^[a-z0-9_]{3,20}$/.test(handle)) {
+      toast.error('아이디는 영문 소문자, 숫자, 밑줄로 3~20자까지 입력해 주세요.');
       return;
     }
     try {
       const response = await fetch('/api/profile', {
         method: 'PATCH', credentials: 'same-origin', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ username }),
+        body: JSON.stringify({ username, handle }),
       });
-      const saved = await response.json().catch(() => ({})) as { profile?: { username?: string }; error?: string };
-      if (!response.ok || !saved.profile?.username) throw new Error(saved.error || '이름을 저장하지 못했어요.');
-      updateProfile({ name: saved.profile.username });
+      const saved = await response.json().catch(() => ({})) as { profile?: { username?: string; handle?: string }; error?: string };
+      if (!response.ok || !saved.profile?.username || !saved.profile.handle) throw new Error(saved.error || '프로필을 저장하지 못했어요.');
+      updateProfile({ name: saved.profile.username, handle: saved.profile.handle });
       setActiveSheet(null);
       toast.success('프로필 업데이트 완료! ✅');
     } catch (error) {
@@ -336,7 +354,7 @@ function ProfilePageContent() {
       {/* 상단 메뉴 */}
       <HeaderActionRow className="header-action-row--raised">
         <HeaderIconButton
-          onClick={() => { setEditName(profile.name); setActiveSheet('settings'); }}
+          onClick={() => { setEditName(profile.name); setEditHandle(profile.handle ?? ''); setActiveSheet('settings'); }}
           aria-label="프로필 설정"
         >
           <Settings size={18} color="#4A4A4A" />
@@ -399,14 +417,14 @@ function ProfilePageContent() {
             <div className="min-w-0 flex-1 pt-11">
               <div className="flex min-w-0 items-center gap-2 whitespace-nowrap">
                 <p className="min-w-0 truncate text-[19px] font-black text-[#3B2A22]">
-                  @{profile.name}
+                  {profile.name}
                 </p>
                 <span className="shrink-0 rounded-full bg-white/80 px-1.5 py-0.5 text-[9px] font-bold text-[#C7864B]">
                   🏅 배지
                 </span>
               </div>
               <p className="mt-1.5 whitespace-nowrap text-[13px] font-medium text-[#8A6E60]">
-                오늘도 맛있는 하루를 위해
+                {profile.handle ? `@${profile.handle}` : '오늘도 맛있는 하루를 위해'}
               </p>
             </div>
           </div>
@@ -513,6 +531,21 @@ function ProfilePageContent() {
                 onChange={e => setEditName(e.target.value)}
                 className="w-full h-11 rounded-xl bg-[#FAF6F1] border border-[#F0E8E0] px-3 text-[14px] font-bold outline-none focus:border-[#E85053]"
               />
+
+              <p className="mt-4 mb-1.5 text-[12px] font-semibold text-[#9B9B9B]">아이디</p>
+              <div className="flex h-11 items-center rounded-xl border border-[#F0E8E0] bg-[#FAF6F1] px-3 focus-within:border-[#E85053]">
+                <span className="mr-1 text-[14px] font-bold text-[#9B887C]">@</span>
+                <input
+                  value={editHandle}
+                  onChange={event => setEditHandle(event.target.value.replace(/[^a-zA-Z0-9_]/g, '').toLowerCase().slice(0, 20))}
+                  autoCapitalize="none"
+                  autoCorrect="off"
+                  spellCheck={false}
+                  placeholder="lunchie_id"
+                  className="min-w-0 flex-1 bg-transparent text-[14px] font-bold outline-none"
+                />
+              </div>
+              <p className="mt-1 text-[10px] font-medium text-[#AA978C]">영문 소문자, 숫자, 밑줄 · 3~20자</p>
 
               <p className="mt-4 mb-1.5 text-[12px] font-semibold text-[#9B9B9B]">식단 제한 (그룹 세션에 자동 적용)</p>
               <div className="flex flex-wrap gap-2">

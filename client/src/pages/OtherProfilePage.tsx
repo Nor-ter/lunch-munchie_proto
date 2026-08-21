@@ -52,10 +52,12 @@ export default function OtherProfilePage() {
             <AvatarFallback className="bg-white/70 text-xl font-black">{avatarFallback}</AvatarFallback>
           </Avatar>
           <div className="min-w-0 flex-1">
-            <p className="truncate text-lg font-black text-[#3B2A22]">@{user.username}</p>
-            <p className="mt-1 break-all text-[11px] font-semibold text-[#9A7667]" data-testid="profile-user-id">
-              ID {user.id}
-            </p>
+            <p className="truncate text-lg font-black text-[#3B2A22]">{user.username}</p>
+            {user.handle && (
+              <p className="mt-1 truncate text-[11px] font-semibold text-[#9A7667]" data-testid="profile-user-handle">
+                @{user.handle}
+              </p>
+            )}
             {user.location && <p className="mt-1 flex items-center gap-1 text-xs text-[#8A6E60]"><MapPin size={12} />{user.location}</p>}
             {user.bio && <p className="mt-2 text-sm text-[#6F5549]">{user.bio}</p>}
           </div>

@@ -234,6 +234,10 @@ export default defineConfig({
       "127.0.0.1",
     ],
     proxy: {
+      "/api/auth/google/start": {
+        target: "http://localhost:8788",
+        changeOrigin: true,
+      },
       "/api": {
         target: "http://localhost:3000",
         changeOrigin: true,

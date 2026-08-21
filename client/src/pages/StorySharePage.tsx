@@ -1,109 +1,88 @@
-import { useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import { motion } from 'framer-motion';
 import { useLocation, useParams } from 'wouter';
-import { ChevronLeft, Download, ImagePlus, Instagram, Link2, Minus, Plus, RotateCcw, RotateCw, Share2 } from 'lucide-react';
+import { ChevronLeft, Download, Instagram, Link2, LockKeyhole, Map, Newspaper, Share2 } from 'lucide-react';
 import { toast } from 'sonner';
-import { useApp } from '@/contexts/AppContext';
-import OneLineReviewBox from '@/components/munchie/OneLineReviewBox';
-import { SHARE_TEMPLATES } from '@/constants/shareTemplates';
+import { CourseMap } from '@/components/course/CourseMap';
+import TemplateArtwork from '@/components/munchie/TemplateArtwork';
+import { getTemplateById, getTemplateForCourse } from '@/constants/coursemapTemplates';
+import { type Course, type FeedPost, useApp } from '@/contexts/AppContext';
 import { useCourseShare } from '@/hooks/useCourseShare';
-import { fileToResizedDataUrl } from '@/lib/imageUtils';
+import { getCoursePlacesFromStops } from '@/lib/courseMapSync';
+import { fromFeedPhotoPlacements } from '@/lib/coursemapDecor';
 
-interface StoryPhoto {
-  id: string;
-  src: string;
-  x: number;
-  y: number;
-  size: number;
-  rotate: number;
+type ShareView = 'feed' | 'map';
+
+function buildFallbackCourse(post: FeedPost): Course {
+  return {
+    id: post.courseId,
+    title: 'Munchie Feed',
+    description: post.caption,
+    heroImage: post.photos[0] ?? '',
+    tags: post.tags,
+    hashtags: [],
+    region: 'Munchie community',
+    metadata: { distance: 0, duration: 0, placeCount: 0 },
+    stops: [],
+    createdAt: post.createdAt,
+    isPublic: true,
+    creatorId: post.authorId ?? '',
+    savedCount: 0,
+  };
 }
-
-const PHOTO_LAYOUTS = [
-  { x: 50, y: 43, size: 66, rotate: -2 },
-  { x: 37, y: 61, size: 43, rotate: 3 },
-  { x: 65, y: 62, size: 40, rotate: -4 },
-];
-
-const REVIEW_AREA_TOP = 84;
-const photoHeightPercent = (size: number) => size * (27 / 64);
-const maxPhotoY = (size: number) => REVIEW_AREA_TOP - (photoHeightPercent(size) / 2) - 1;
 
 export default function StorySharePage() {
   const { id } = useParams<{ id: string }>();
   const [, navigate] = useLocation();
-  const { getCourseById, getRestaurantById, feedPosts, incrementFeedShare } = useApp();
-  const { captureCard, copyLink, downloadImage, saveImageToDevice } = useCourseShare();
-  const [selectedIndex, setSelectedIndex] = useState(0);
+  const { courses, feedPosts, getCourseById, getRestaurantById, incrementFeedShare } = useApp();
+  const { captureCard, downloadImage, saveImageToDevice } = useCourseShare();
+  const [view, setView] = useState<ShareView>('feed');
   const [sharing, setSharing] = useState(false);
   const cardRef = useRef<HTMLDivElement>(null);
-  const fileInputRef = useRef<HTMLInputElement>(null);
-  const pointersRef = useRef(new Map<number, { x: number; y: number }>());
-  const gestureRef = useRef<{
-    photoId: string;
-    startPhoto: StoryPhoto;
-    startPoint: { x: number; y: number };
-    pinchDistance?: number;
-    pinchSize?: number;
-  } | null>(null);
-  const course = getCourseById(id);
-  const post = feedPosts.find(item => item.courseId === id);
-  const selectedTemplate = SHARE_TEMPLATES[selectedIndex]!;
 
+  const requestedPostId = typeof window === 'undefined'
+    ? null
+    : new URLSearchParams(window.location.search).get('post');
+  const post = (requestedPostId
+    ? feedPosts.find(item => item.id === requestedPostId && item.courseId === id)
+    : undefined) ?? feedPosts.find(item => item.courseId === id);
+  const storedCourse = getCourseById(id);
+  const course = storedCourse ?? (post ? buildFallbackCourse(post) : undefined);
+  const courseIndex = Math.max(courses.findIndex(item => item.id === id), 0);
+  const template = post
+    ? getTemplateById(post.templateId) ?? getTemplateById(post.skinId) ?? getTemplateForCourse(id, courseIndex)
+    : undefined;
+  const decor = post
+    ? post.decor ?? fromFeedPhotoPlacements(post.photoPlacements, post.photos) ?? undefined
+    : undefined;
   const places = useMemo(
-    () => course?.stops.slice(0, 3).map(stop => getRestaurantById(stop.placeId)).filter(Boolean) ?? [],
+    () => course ? getCoursePlacesFromStops(course, getRestaurantById).slice(0, 3) : [],
     [course, getRestaurantById],
   );
-  const photos = useMemo(() => {
-    const feedPhotos = post?.photos.filter(Boolean) ?? [];
-    const placePhotos = places.map(place => place?.image).filter((photo): photo is string => Boolean(photo));
-    return Array.from(new Set([...feedPhotos, ...placePhotos])).slice(0, 3);
-  }, [places, post]);
-  const initialStoryPhotos = useMemo<StoryPhoto[]>(() => photos.map((src, index) => ({
-    id: `story-photo-${index}`,
-    src,
-    ...(PHOTO_LAYOUTS[index] ?? PHOTO_LAYOUTS[PHOTO_LAYOUTS.length - 1]!),
-  })), [photos]);
-  const [storyPhotos, setStoryPhotos] = useState<StoryPhoto[]>(initialStoryPhotos);
-  const [activePhotoId, setActivePhotoId] = useState<string | null>(initialStoryPhotos[0]?.id ?? null);
 
-  useEffect(() => {
-    const card = cardRef.current;
-    if (!card) return;
-    const handleWheel = (event: WheelEvent) => {
-      const photoElement = (event.target as HTMLElement).closest<HTMLElement>('[data-story-photo-id]');
-      const photoId = photoElement?.dataset.storyPhotoId;
-      if (!photoId || !card.contains(photoElement)) return;
-      event.preventDefault();
-      event.stopPropagation();
-      setStoryPhotos(current => current.map(photo => {
-        if (photo.id !== photoId) return photo;
-        const delta = event.deltaY < 0 ? 4 : -4;
-        const size = Math.min(92, Math.max(18, photo.size + delta));
-        return { ...photo, size, y: Math.min(photo.y, maxPhotoY(size)) };
-      }));
-    };
-    card.addEventListener('wheel', handleWheel, { passive: false });
-    return () => card.removeEventListener('wheel', handleWheel);
-  }, [course?.id]);
-
-  if (!course) {
+  if (!course || !post || !template) {
     return (
       <main className="mx-auto flex min-h-dvh max-w-[430px] flex-col items-center justify-center bg-[#FFF8F3] px-6 text-center">
-        <p className="text-[17px] font-black text-[#3B2A23]">공유할 먼치맵을 찾을 수 없어요</p>
-        <button type="button" onClick={() => navigate('/feed')} className="mt-5 rounded-2xl bg-[#EF575B] px-6 py-3 text-[13px] font-black text-white">먼치 홈으로</button>
+        <p className="text-[17px] font-black text-[#3B2A23]">공유할 Munchie 피드를 찾을 수 없어요</p>
+        <p className="mt-2 text-[12px] font-semibold text-[#9A8377]">먼치피드에서 게시물의 공유 버튼을 다시 눌러주세요.</p>
+        <button type="button" onClick={() => navigate('/feed')} className="mt-5 rounded-2xl bg-[#EF575B] px-6 py-3 text-[13px] font-black text-white">먼치피드로</button>
       </main>
     );
   }
 
+  const shareFilename = `munchie-${view}-story-${post.id}.png`;
+
   const shareToStory = async () => {
     try {
       setSharing(true);
-      const delivery = await saveImageToDevice(cardRef, `munchie-story-${course.id}.png`, { preferNativeShare: true });
-      if (delivery === 'share' && post) incrementFeedShare(post.id);
-      toast.success(delivery === 'share' ? '인스타그램을 선택해 스토리에 공유하세요.' : '스토리 이미지가 저장됐어요.');
+      const delivery = await saveImageToDevice(cardRef, shareFilename, { preferNativeShare: true, targetWidth: 1080 });
+      incrementFeedShare(post.id);
+      toast.success(delivery === 'share'
+        ? '공유 앱에서 Instagram 스토리를 선택해 주세요.'
+        : '9:16 스토리 이미지가 저장됐어요.');
     } catch (error) {
       if (error instanceof DOMException && error.name === 'AbortError') return;
-      toast.error('스토리 공유 이미지를 만들지 못했어요.');
+      toast.error('스토리 이미지를 공유하지 못했어요.');
     } finally {
       setSharing(false);
     }
@@ -113,7 +92,7 @@ export default function StorySharePage() {
     try {
       setSharing(true);
       const dataUrl = await captureCard(cardRef, { targetWidth: 1080 });
-      await downloadImage(dataUrl, `munchie-story-${course.id}.png`);
+      await downloadImage(dataUrl, shareFilename);
       toast.success('9:16 스토리 이미지를 저장했어요.');
     } catch {
       toast.error('이미지를 저장하지 못했어요.');
@@ -122,232 +101,118 @@ export default function StorySharePage() {
     }
   };
 
-  const copyCourseLink = async () => {
+  const copyFeedLink = async () => {
     try {
-      await copyLink(course.id);
-      if (post) incrementFeedShare(post.id);
-      toast.success('먼치맵 링크를 복사했어요.');
+      await navigator.clipboard.writeText(`${window.location.origin}/feed/${post.id}`);
+      incrementFeedShare(post.id);
+      toast.success('Munchie 피드 링크를 복사했어요.');
     } catch {
       toast.error('링크를 복사하지 못했어요.');
     }
   };
 
-  const updatePhoto = (photoId: string, updates: Partial<StoryPhoto>) => {
-    setStoryPhotos(current => current.map(photo => photo.id === photoId ? { ...photo, ...updates } : photo));
-  };
-
-  const removePhoto = (photoId: string) => {
-    setStoryPhotos(current => {
-      const next = current.filter(photo => photo.id !== photoId);
-      setActivePhotoId(active => active === photoId ? (next[0]?.id ?? null) : active);
-      return next;
-    });
-  };
-
-  const distanceBetweenPointers = () => {
-    const points = Array.from(pointersRef.current.values());
-    if (points.length < 2) return 0;
-    return Math.hypot(points[0]!.x - points[1]!.x, points[0]!.y - points[1]!.y);
-  };
-
-  const beginPhotoGesture = (photo: StoryPhoto, event: ReactPointerEvent<HTMLDivElement>) => {
-    event.preventDefault();
-    setActivePhotoId(photo.id);
-    event.currentTarget.setPointerCapture(event.pointerId);
-    pointersRef.current.set(event.pointerId, { x: event.clientX, y: event.clientY });
-
-    if (pointersRef.current.size === 1) {
-      gestureRef.current = {
-        photoId: photo.id,
-        startPhoto: { ...photo },
-        startPoint: { x: event.clientX, y: event.clientY },
-      };
-      return;
-    }
-
-    if (gestureRef.current?.photoId === photo.id) {
-      gestureRef.current.pinchDistance = distanceBetweenPointers();
-      gestureRef.current.pinchSize = photo.size;
-    }
-  };
-
-  const movePhotoGesture = (photoId: string, event: ReactPointerEvent<HTMLDivElement>) => {
-    const gesture = gestureRef.current;
-    if (!gesture || gesture.photoId !== photoId || !pointersRef.current.has(event.pointerId)) return;
-    event.preventDefault();
-    pointersRef.current.set(event.pointerId, { x: event.clientX, y: event.clientY });
-
-    if (pointersRef.current.size >= 2 && gesture.pinchDistance && gesture.pinchSize) {
-      const scale = distanceBetweenPointers() / gesture.pinchDistance;
-      const size = Math.min(92, Math.max(18, Math.round(gesture.pinchSize * scale)));
-      updatePhoto(photoId, { size, y: Math.min(gesture.startPhoto.y, maxPhotoY(size)) });
-      return;
-    }
-
-    const canvas = cardRef.current?.getBoundingClientRect();
-    if (!canvas) return;
-    const x = gesture.startPhoto.x + ((event.clientX - gesture.startPoint.x) / canvas.width) * 100;
-    const y = gesture.startPhoto.y + ((event.clientY - gesture.startPoint.y) / canvas.height) * 100;
-    updatePhoto(photoId, {
-      x: Math.min(100, Math.max(0, x)),
-      y: Math.min(maxPhotoY(gesture.startPhoto.size), Math.max(0, y)),
-    });
-  };
-
-  const endPhotoGesture = (event: ReactPointerEvent<HTMLDivElement>) => {
-    pointersRef.current.delete(event.pointerId);
-    if (pointersRef.current.size < 2 && gestureRef.current?.pinchDistance) gestureRef.current = null;
-    if (pointersRef.current.size === 0) gestureRef.current = null;
-  };
-
-  const addPhoto = async (file?: File) => {
-    if (!file || storyPhotos.length >= 5) return;
-    try {
-      const src = await fileToResizedDataUrl(file, 1200, 0.88);
-      const id = `story-upload-${Date.now()}`;
-      const offset = storyPhotos.length % 3;
-      const layout = PHOTO_LAYOUTS[offset]!;
-      setStoryPhotos(current => [...current, { id, src, ...layout, rotate: layout.rotate + current.length * 2 }]);
-      setActivePhotoId(id);
-    } catch {
-      toast.error('사진을 추가하지 못했어요.');
-    }
-  };
-
   return (
-    <main className="mx-auto min-h-dvh max-w-[430px] overscroll-contain bg-[#FFF8F3] pb-32">
+    <main className="mx-auto min-h-dvh max-w-[430px] overscroll-contain bg-[#FFF8F3] pb-32 text-[#35241D]">
       <header className="sticky top-0 z-30 flex items-center border-b border-[#F0E1D9] bg-[#FFFDFC]/95 px-4 py-3 backdrop-blur">
-        <button type="button" onClick={() => navigate('/feed')} aria-label="먼치피드 홈으로 돌아가기" className="flex h-9 w-9 items-center justify-center rounded-full border border-[#EADBD3] bg-white text-[#6B554B] shadow-sm">
+        <button type="button" onClick={() => navigate(`/feed/${post.id}`)} aria-label="피드로 돌아가기" className="flex h-9 w-9 items-center justify-center rounded-full border border-[#EADBD3] bg-white text-[#6B554B] shadow-sm">
           <ChevronLeft size={20} />
         </button>
         <div className="min-w-0 flex-1 text-center">
           <p className="text-[9px] font-black uppercase tracking-[0.18em] text-[#EA7472]">Munchie story</p>
-          <h1 className="mt-0.5 text-[16px] font-black text-[#2E211C]">9:16 템플릿 선택 · 공유하기</h1>
+          <h1 className="mt-0.5 text-[16px] font-black">스토리 공유하기</h1>
         </div>
         <span className="w-9" />
       </header>
 
-      <section className="pt-5">
-        <div className="overflow-x-hidden">
-          <motion.div
-            key={selectedTemplate.id}
-            initial={{ opacity: 0.6, scale: 0.97 }}
-            animate={{ opacity: 1, scale: 1 }}
-            className="mx-auto w-[72%] max-w-[292px] rounded-[27px] bg-white p-2 shadow-[0_18px_42px_rgba(96,57,40,0.18)]"
-          >
-            <div
-              ref={cardRef}
-              className="relative aspect-[9/16] w-full overflow-hidden rounded-[21px] bg-[#F8EDE6]"
-              onPointerDown={event => {
-                if (!(event.target as HTMLElement).closest('[data-story-photo]')) setActivePhotoId(null);
-              }}
-            >
-              <img src={selectedTemplate.background} alt={`${selectedTemplate.name} 9:16 스토리 템플릿`} className="absolute inset-0 h-full w-full object-cover" crossOrigin="anonymous" />
-              {storyPhotos.length === 0 && (
-                <button
-                  type="button"
-                  data-share-editor-control
-                  onClick={() => fileInputRef.current?.click()}
-                  aria-label="템플릿에 첫 사진 추가"
-                  className="absolute left-1/2 top-1/2 z-40 flex -translate-x-1/2 -translate-y-1/2 items-center gap-2 rounded-2xl border-2 border-white bg-[#2DBE73] px-4 py-3 text-[11px] font-black text-white shadow-lg"
-                >
-                  <ImagePlus size={17} /> 사진 추가
-                </button>
-              )}
-              {storyPhotos.map(photo => (
-                  <div
-                    key={photo.id}
-                    data-story-photo
-                    data-story-photo-id={photo.id}
-                    role="button"
-                    tabIndex={0}
-                    aria-label="스토리 사진 편집 선택"
-                    onPointerDown={event => beginPhotoGesture(photo, event)}
-                    onPointerMove={event => movePhotoGesture(photo.id, event)}
-                    onPointerUp={endPhotoGesture}
-                    onPointerCancel={endPhotoGesture}
-                    onKeyDown={event => {
-                      if (event.key === 'Delete' || event.key === 'Backspace') removePhoto(photo.id);
-                      if (event.key === 'ArrowLeft') updatePhoto(photo.id, { x: Math.max(0, photo.x - 1) });
-                      if (event.key === 'ArrowRight') updatePhoto(photo.id, { x: Math.min(100, photo.x + 1) });
-                      if (event.key === 'ArrowUp') updatePhoto(photo.id, { y: Math.max(0, photo.y - 1) });
-                      if (event.key === 'ArrowDown') updatePhoto(photo.id, { y: Math.min(100, photo.y + 1) });
-                    }}
-                    className={`absolute aspect-[4/3] touch-none select-none overflow-visible rounded-[10px] border-4 border-white bg-[#F3E7DF] shadow-[0_5px_14px_rgba(57,35,27,0.2)] active:cursor-grabbing ${activePhotoId === photo.id ? 'z-30' : 'z-10'}`}
-                    style={{
-                      left: `${photo.x}%`,
-                      top: `${photo.y}%`,
-                      width: `${photo.size}%`,
-                      transform: `translate(-50%, -50%) rotate(${photo.rotate}deg)`,
-                    }}
-                  >
-                    <img src={photo.src} alt="" className="pointer-events-none h-full w-full rounded-[6px] object-cover" crossOrigin="anonymous" draggable={false} />
-                    {activePhotoId === photo.id && (
-                      <div data-share-editor-control className="absolute inset-0 rounded-[7px] ring-2 ring-inset ring-[#EF575B]">
-                        <button type="button" onPointerDown={event => event.stopPropagation()} onClick={event => { event.stopPropagation(); fileInputRef.current?.click(); }} disabled={storyPhotos.length >= 5} aria-label="사진 추가하기" className="absolute -left-3 -top-3 flex h-7 w-7 items-center justify-center rounded-full border-2 border-white bg-[#2DBE73] text-white shadow disabled:opacity-40"><Plus size={14} /></button>
-                        <button type="button" onPointerDown={event => event.stopPropagation()} onClick={event => { event.stopPropagation(); removePhoto(photo.id); }} aria-label="사진 삭제하기" className="absolute -right-3 -top-3 flex h-7 w-7 items-center justify-center rounded-full border-2 border-white bg-[#F05258] text-white shadow"><Minus size={14} /></button>
-                        <button type="button" onPointerDown={event => event.stopPropagation()} onClick={event => { event.stopPropagation(); updatePhoto(photo.id, { rotate: photo.rotate - 15 }); }} aria-label="사진 반시계 방향 회전" className="absolute -bottom-3 -left-3 flex h-7 w-7 items-center justify-center rounded-full border-2 border-white bg-[#4776E6] text-white shadow"><RotateCcw size={14} /></button>
-                        <button type="button" onPointerDown={event => event.stopPropagation()} onClick={event => { event.stopPropagation(); updatePhoto(photo.id, { rotate: photo.rotate + 15 }); }} aria-label="사진 시계 방향 회전" className="absolute -bottom-3 -right-3 flex h-7 w-7 items-center justify-center rounded-full border-2 border-white bg-[#4776E6] text-white shadow"><RotateCw size={14} /></button>
-                      </div>
-                    )}
-                  </div>
-                ))}
-              <div className="absolute inset-x-[5%] bottom-[3.5%] z-20 opacity-50">
-                <OneLineReviewBox compact className="min-h-[38px] px-5 py-2 shadow-sm">
-                  <p className="line-clamp-1 text-left text-[11px] font-black text-[#36251F]">{post?.caption || course.description}</p>
-                </OneLineReviewBox>
-              </div>
-            </div>
-            <input ref={fileInputRef} type="file" accept="image/*" className="hidden" onChange={event => { void addPhoto(event.target.files?.[0]); event.currentTarget.value = ''; }} />
-          </motion.div>
-        </div>
-
-        <div className="mt-4 px-5 text-center">
-          <h2 className="text-[18px] font-black text-[#33231D]">{selectedTemplate.name}</h2>
-          <p className="mt-1 text-[11px] font-semibold text-[#9A8377]">사진을 드래그하고, 휠 또는 두 손가락으로 크기를 조절하세요</p>
-          <p className="mt-0.5 text-[10px] font-semibold text-[#B29A8E]">9:16 · 스토리 공유용 · 전체 {SHARE_TEMPLATES.length}종</p>
-        </div>
-
-        <div aria-label="9:16 스토리 템플릿 선택" className="mt-4 flex snap-x gap-2.5 overflow-x-auto px-5 pb-3 scrollbar-hide">
-          {SHARE_TEMPLATES.map((template, index) => (
-            <button
-              key={template.id}
-              type="button"
-              onClick={() => {
-                setSelectedIndex(index);
-                setActivePhotoId(null);
-              }}
-              aria-label={`${template.name} 선택`}
-              aria-pressed={selectedIndex === index}
-              className={`w-[66px] shrink-0 snap-start rounded-[13px] border-2 p-1 transition ${selectedIndex === index ? 'border-[#EF5A5E] bg-[#FFF0EC]' : 'border-[#E9DCD5] bg-white'}`}
-            >
-              <img src={template.background} alt="" className="aspect-[9/16] w-full rounded-[9px] object-cover" />
+      <section className="px-5 pt-5">
+        <div className="mx-auto flex max-w-[292px] rounded-[17px] border border-[#E9D8CF] bg-white p-1.5 shadow-[0_7px_20px_rgba(91,57,42,0.08)]" aria-label="공유할 화면 선택">
+          {([
+            { id: 'feed' as const, label: '피드', Icon: Newspaper },
+            { id: 'map' as const, label: '맵', Icon: Map },
+          ]).map(item => (
+            <button key={item.id} type="button" onClick={() => setView(item.id)} aria-pressed={view === item.id} className={`flex h-10 flex-1 items-center justify-center gap-1.5 rounded-[12px] text-[12px] font-black transition ${view === item.id ? 'bg-[#EF575B] text-white shadow-sm' : 'text-[#8A7469]'}`}>
+              <item.Icon size={15} /> {item.label}
             </button>
           ))}
         </div>
 
+        <motion.div key={view} initial={{ opacity: 0, y: 8, scale: 0.98 }} animate={{ opacity: 1, y: 0, scale: 1 }} transition={{ duration: 0.2 }} className="mx-auto mt-4 w-[76%] max-w-[292px] rounded-[28px] bg-white p-2 shadow-[0_18px_42px_rgba(96,57,40,0.18)]">
+            <div ref={cardRef} data-testid="locked-story-preview" className="relative aspect-[9/16] w-full overflow-hidden rounded-[21px] bg-[#FFF2EA]">
+              <div className="absolute -right-16 -top-16 h-44 w-44 rounded-full bg-[#FFD8CB]" />
+              <div className="absolute -bottom-20 -left-20 h-52 w-52 rounded-full bg-[#FFE6B8]/70" />
+
+              <div className="absolute inset-x-[7%] top-[4.2%] z-10 flex items-center justify-between">
+                <div>
+                  <p className="text-[7px] font-black uppercase tracking-[0.24em] text-[#E85E60]">Lunchie Munchie</p>
+                  <p className="mt-0.5 text-[11px] font-black text-[#34241E]">{view === 'feed' ? 'Munchie Feed' : 'Munchie Map'}</p>
+                </div>
+                <span className="rounded-full border border-[#F2C7BC] bg-white/75 px-2 py-1 text-[6px] font-black uppercase tracking-[0.15em] text-[#B1665A]">9:16 story</span>
+              </div>
+
+              {view === 'feed' ? (
+                <div className="absolute inset-x-[6.5%] top-[14%] z-10">
+                  <div className="overflow-hidden rounded-[16px] border-[3px] border-white bg-white shadow-[0_10px_24px_rgba(74,43,30,0.18)]">
+                    <TemplateArtwork course={course} template={template} photoSources={post.photos} decorOverride={decor} strokesOverride={post.canvasStrokes} eager />
+                  </div>
+                  <div className="mt-3 rounded-[13px] border border-white/80 bg-white/76 px-3 py-2.5 shadow-sm backdrop-blur-sm">
+                    <div className="flex items-center gap-1.5">
+                      <span className="flex h-5 w-5 items-center justify-center rounded-full bg-[#FFE1D8] text-[10px]">{post.authorEmoji}</span>
+                      <strong className="truncate text-[8px] text-[#4A342B]">{post.authorName}</strong>
+                      <span className="ml-auto text-[7px] font-bold text-[#B17C6E]">앨범 {post.photos.length}장</span>
+                    </div>
+                    <p className="mt-1.5 line-clamp-2 text-[9px] font-bold leading-[1.45] text-[#3B2A23]">{post.caption}</p>
+                  </div>
+                </div>
+              ) : (
+                <div className="absolute inset-x-[6.5%] top-[15%] z-10">
+                  <div className="overflow-hidden rounded-[17px] border-[3px] border-white bg-[#F5EFE9] shadow-[0_10px_24px_rgba(74,43,30,0.16)]">
+                    {places.length > 0 ? (
+                      <CourseMap places={places} width={300} height={270} className="block h-auto w-full !rounded-none" />
+                    ) : (
+                      <div className="flex aspect-square items-center justify-center bg-[#F4ECE6] text-[10px] font-bold text-[#A58A7D]">저장된 코스 위치가 없어요</div>
+                    )}
+                  </div>
+                  <div className="mt-3 space-y-1.5">
+                    {places.map((place, index) => (
+                      <div key={place.id} className="flex items-center gap-2 rounded-[11px] border border-white/80 bg-white/78 px-2.5 py-2 shadow-sm">
+                        <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-[#EF575B] text-[8px] font-black text-white">{index + 1}</span>
+                        <div className="min-w-0 flex-1">
+                          <p className="truncate text-[8px] font-black text-[#3A2922]">{place.name}</p>
+                          <p className="truncate text-[6px] font-bold text-[#9D8174]">{place.category} · {place.time}</p>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              <div className="absolute inset-x-[7%] bottom-[3.5%] z-10 flex items-end justify-between gap-2">
+                <p className="max-w-[78%] line-clamp-1 text-[7px] font-black text-[#8E685B]">{course.title || post.caption}</p>
+                <span className="text-[7px] font-black text-[#E85E60]">@MUNCHIE</span>
+              </div>
+            </div>
+        </motion.div>
+
+        <div className="mt-4 text-center">
+          <div className="inline-flex items-center gap-1.5 rounded-full bg-[#F5E9E3] px-3 py-1.5 text-[10px] font-black text-[#8A6C5F]">
+            <LockKeyhole size={12} /> 원본 피드 고정 · 사진 변경 불가
+          </div>
+          <p className="mt-2 text-[11px] font-semibold text-[#9A8377]">작성한 사진 앨범과 배치를 그대로 9:16 스토리로 공유해요.</p>
+        </div>
       </section>
 
-      <section className="mx-5 mt-4 rounded-[22px] border border-[#EEDDD5] bg-white px-4 py-4 shadow-[0_8px_22px_rgba(91,57,42,0.07)]">
+      <section className="mx-5 mt-5 rounded-[22px] border border-[#EEDDD5] bg-white px-4 py-4 shadow-[0_8px_22px_rgba(91,57,42,0.07)]">
         <p className="text-[12px] font-black text-[#4A342A]">어디에 공유할까요?</p>
         <div className="mt-3 grid grid-cols-3 gap-2">
-          <button type="button" onClick={shareToStory} disabled={sharing} className="flex flex-col items-center gap-1.5 rounded-2xl bg-[#EF575B] px-2 py-3 text-white disabled:opacity-60">
-            <Instagram size={20} /><span className="text-[10px] font-black">IG 스토리</span>
-          </button>
-          <button type="button" onClick={copyCourseLink} className="flex flex-col items-center gap-1.5 rounded-2xl border border-[#E7DCD5] bg-[#FFFDFC] px-2 py-3 text-[#71877B]">
-            <Link2 size={20} /><span className="text-[10px] font-black">앱 링크</span>
-          </button>
-          <button type="button" onClick={saveImage} disabled={sharing} className="flex flex-col items-center gap-1.5 rounded-2xl border border-[#E7DCD5] bg-[#FFFDFC] px-2 py-3 text-[#897367] disabled:opacity-60">
-            <Download size={20} /><span className="text-[10px] font-black">저장하기</span>
-          </button>
+          <button type="button" onClick={shareToStory} disabled={sharing} className="flex flex-col items-center gap-1.5 rounded-2xl bg-[#EF575B] px-2 py-3 text-white disabled:opacity-60"><Instagram size={20} /><span className="text-[10px] font-black">IG 스토리</span></button>
+          <button type="button" onClick={copyFeedLink} className="flex flex-col items-center gap-1.5 rounded-2xl border border-[#E7DCD5] bg-[#FFFDFC] px-2 py-3 text-[#71877B]"><Link2 size={20} /><span className="text-[10px] font-black">피드 링크</span></button>
+          <button type="button" onClick={saveImage} disabled={sharing} className="flex flex-col items-center gap-1.5 rounded-2xl border border-[#E7DCD5] bg-[#FFFDFC] px-2 py-3 text-[#897367] disabled:opacity-60"><Download size={20} /><span className="text-[10px] font-black">저장하기</span></button>
         </div>
       </section>
 
       <div className="page-bottom-bar fixed bottom-0 left-1/2 z-40 w-full max-w-[430px] -translate-x-1/2 gap-2 border-t border-[#F0E1D9] bg-[#FFFDFC]/96 px-4 backdrop-blur">
-        <button type="button" onClick={shareToStory} disabled={sharing} className="flex h-13 flex-1 items-center justify-center gap-2 rounded-2xl bg-[#EF575B] text-[13px] font-black text-white disabled:opacity-60">
-          <Share2 size={16} /> {sharing ? '이미지 만드는 중…' : '스토리에 공유'}
-        </button>
-        <button type="button" onClick={() => navigate('/feed')} className="h-13 flex-1 rounded-2xl border border-[#E9D9D1] bg-white text-[13px] font-black text-[#6B554B]">Munchie 홈으로</button>
+        <button type="button" onClick={shareToStory} disabled={sharing} className="flex h-13 flex-1 items-center justify-center gap-2 rounded-2xl bg-[#EF575B] text-[13px] font-black text-white disabled:opacity-60"><Share2 size={16} /> {sharing ? '스토리 만드는 중…' : `${view === 'feed' ? '피드' : '맵'} 스토리 공유`}</button>
+        <button type="button" onClick={() => navigate(`/feed/${post.id}`)} className="h-13 flex-1 rounded-2xl border border-[#E9D9D1] bg-white text-[13px] font-black text-[#6B554B]">피드로 돌아가기</button>
       </div>
     </main>
   );

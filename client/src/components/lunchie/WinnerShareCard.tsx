@@ -7,6 +7,8 @@ import {
   type LunchieShareParticipant,
 } from '@/lib/lunchieShare';
 import type { Restaurant } from '@/contexts/AppContext';
+import LunchmateCharacterRenderer from '@/components/munchie/LunchmateCharacterRenderer';
+import type { LunchmateLoadout } from '@/types/lunchmateCustomization';
 
 interface WinnerShareCardProps {
   restaurant: Restaurant;
@@ -15,9 +17,10 @@ interface WinnerShareCardProps {
   menuLabel?: string;
   locationLabel?: string;
   dateLabel?: string;
+  loadout?: LunchmateLoadout;
 }
 
-const BRAND_MARK = '/assets/lunchie-brand-mark.png';
+const BRAND_MARK = '/assets/lunchmate/chicken/chicken-idle.png';
 
 function handleFoodImageError(event: SyntheticEvent<HTMLImageElement>, foodFallback: string) {
   const image = event.currentTarget;
@@ -44,6 +47,7 @@ const WinnerShareCard = forwardRef<HTMLDivElement, WinnerShareCardProps>(({
   menuLabel,
   locationLabel,
   dateLabel,
+  loadout,
 }, ref) => {
   const foodFallback = restaurant.photos?.[0]; // 실제 사진만 (스톡 폴백 제거)
   const resolvedVoteLabel = voteLabel?.trim() || (
@@ -78,13 +82,24 @@ const WinnerShareCard = forwardRef<HTMLDivElement, WinnerShareCardProps>(({
       }}
     >
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', minHeight: 28 }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 6, minWidth: 0 }}>
-          <img src={BRAND_MARK} alt="" style={{ width: 24, height: 24, objectFit: 'contain', display: 'block' }} />
-          <img
-            src="/assets/lunchie-wordmark.png"
-            alt="Lunchie Munchie"
-            style={{ width: 94, height: 'auto', objectFit: 'contain', display: 'block' }}
-          />
+        <div style={{ display: 'flex', alignItems: 'center', gap: 7, minWidth: 0 }}>
+          <div style={{ width: 42, height: 42, display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: 14, background: '#FFE8DE' }}>
+            <LunchmateCharacterRenderer
+              flowState="idle"
+              artwork="chicken"
+              chickenAssetKeyOverride="idle"
+              chickenFaceSystem
+              animated={false}
+              loadout={loadout}
+              size={40}
+              renderSize="compact"
+              alt="Lunchie 런치킨"
+            />
+          </div>
+          <div style={{ minWidth: 0 }}>
+            <p style={{ margin: 0, color: '#E85053', fontSize: 11, fontWeight: 950, letterSpacing: '0.03em' }}>LUNCHIE PICK</p>
+            <p style={{ margin: '1px 0 0', color: '#9A7665', fontSize: 8.5, fontWeight: 750 }}>picked with friends</p>
+          </div>
         </div>
         <span style={{ color: '#A26B54', fontSize: 10, fontWeight: 800, letterSpacing: '0.08em' }}>
           MEAL RECORD

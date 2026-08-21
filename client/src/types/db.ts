@@ -1,10 +1,17 @@
 export interface User {
   id: string;
   username: string;
+  handle?: string | null;
   profile_image_url: string | null;
   bio: string | null;
   location: string | null;
   created_at: string;
+}
+
+export interface UserSearchResult extends User {
+  handle: string;
+  is_self: boolean;
+  is_following: boolean;
 }
 
 export interface UserFollow {

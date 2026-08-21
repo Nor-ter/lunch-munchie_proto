@@ -2,7 +2,11 @@ import { Hono } from "hono";
 import { handle } from "hono/cloudflare-pages";
 import { decideGroup } from "../../server/engine/group";
 import {
-  matchesDietaryRestrictions,
+  isHardRestriction,
+  isIngredientAvoidance,
+  normalizeDiet,
+  restaurantSatisfiesDietRestriction,
+  type DietRestriction,
 } from "../../shared/const";
 import { categoryMatchesIntent, type Intent } from "../../shared/intent";
 import { intentForMenuSection, menuSectionIntents } from "../../shared/menuTaxonomy";
@@ -40,7 +44,37 @@ async function fetchConfiguredMedia(origin: string | undefined, key: string) {
   return response.ok ? response : null;
 }
 
-const app = new Hono<{ Bindings: EnvBindings }>();
+const mediaAvailability = new Map<string, Promise<boolean>>();
+function photoPathToKey(path: unknown) {
+  return typeof path === "string" && path.startsWith("/photos/")
+    ? path.slice("/photos/".length)
+    : null;
+}
+async function photoExists(env: Pick<EnvBindings, "MEDIA_ORIGIN" | "PHOTOS_R2">, path: unknown) {
+  const key = photoPathToKey(path);
+  if (!key || key.includes("..")) return false;
+  const cacheKey = `${env.MEDIA_ORIGIN ?? "local-r2"}:${key}`;
+  const cached = mediaAvailability.get(cacheKey);
+  if (cached) return cached;
+  const check = (async () => {
+    const remoteObject = await fetchConfiguredMedia(env.MEDIA_ORIGIN, key);
+    if (remoteObject) {
+      await remoteObject.body?.cancel().catch(() => undefined);
+      return true;
+    }
+    return Boolean(await env.PHOTOS_R2.get(`photos/${key}`));
+  })();
+  mediaAvailability.set(cacheKey, check);
+  return check;
+}
+async function filterExistingPhotos(
+  env: Pick<EnvBindings, "MEDIA_ORIGIN" | "PHOTOS_R2">,
+  paths: string[],
+) {
+  const checks = await Promise.all(paths.map(async (path) => [path, await photoExists(env, path)] as const));
+  return checks.filter(([, exists]) => exists).map(([path]) => path);
+}
+export const app = new Hono<{ Bindings: EnvBindings }>();
 
 type GoogleSession = {
   sub: string;
@@ -108,6 +142,17 @@ async function userColumnNames(db: any) {
     .all<{ name: string }>();
   return new Set(results.map((column) => column.name));
 }
+
+export function normalizePublicHandle(value: unknown): string | null {
+  if (typeof value !== "string") return null;
+  const normalized = value.trim().replace(/^@/, "").toLowerCase();
+  return /^[a-z0-9_]{3,20}$/.test(normalized) ? normalized : null;
+}
+
+export function escapeUserSearchTerm(value: string): string {
+  return value.replace(/[\\%_]/g, (character) => `\\${character}`);
+}
+
 async function ensurePublicUser(db: any, session: GoogleSession) {
   const columns = await userColumnNames(db);
   if (columns.has("username") && columns.has("profile_image_url")) {
@@ -122,6 +167,14 @@ async function ensurePublicUser(db: any, session: GoogleSession) {
         Date.now(),
       )
       .run();
+    if (columns.has("handle")) {
+      await db
+        .prepare(
+          "UPDATE users SET handle = 'user_' || printf('%08x', rowid) WHERE id = ? AND handle IS NULL",
+        )
+        .bind(session.sub)
+        .run();
+    }
     return true;
   }
   // A developer can still authenticate against a pre-D1 local database. The
@@ -252,7 +305,7 @@ app.get("/api/auth/session", async (c) => {
   const profile =
     session && hasPublicProfile
       ? await c.env.DB.prepare(
-          "SELECT id, username, profile_image_url, bio, location FROM users WHERE id = ?",
+          "SELECT id, username, handle, profile_image_url, bio, location FROM users WHERE id = ?",
         )
           .bind(session.sub)
           .first<any>()
@@ -763,12 +816,14 @@ app.patch("/api/profile", async (c) => {
       { error: "로컬 사용자 스키마를 갱신한 뒤 프로필을 수정할 수 있습니다." },
       409,
     );
-  const body = await c.req.json<{ avatarUrl?: unknown; username?: unknown }>().catch(() => ({}));
+  const body = await c.req.json<{ avatarUrl?: unknown; username?: unknown; handle?: unknown }>().catch(() => ({}));
   const hasAvatarUrl = "avatarUrl" in body;
   const hasUsername = "username" in body;
-  if (!hasAvatarUrl && !hasUsername)
+  const hasHandle = "handle" in body;
+  if (!hasAvatarUrl && !hasUsername && !hasHandle)
     return c.json({ error: "변경할 프로필 정보가 없습니다." }, 400);
 
+  const statements: any[] = [];
   if (hasAvatarUrl) {
     const avatarUrl = body.avatarUrl;
     if (
@@ -782,9 +837,10 @@ app.patch("/api/profile", async (c) => {
         400,
       );
     }
-    await c.env.DB.prepare("UPDATE users SET profile_image_url = ? WHERE id = ?")
-      .bind(avatarUrl, session.sub)
-      .run();
+    statements.push(
+      c.env.DB.prepare("UPDATE users SET profile_image_url = ? WHERE id = ?")
+        .bind(avatarUrl, session.sub),
+    );
   }
 
   if (hasUsername) {
@@ -793,12 +849,35 @@ app.patch("/api/profile", async (c) => {
     const username = body.username.trim();
     if (!username || username.length > 80)
       return c.json({ error: "이름은 1~80자로 입력해 주세요." }, 400);
-    await c.env.DB.prepare("UPDATE users SET username = ? WHERE id = ?")
-      .bind(username, session.sub)
-      .run();
+    statements.push(
+      c.env.DB.prepare("UPDATE users SET username = ? WHERE id = ?")
+        .bind(username, session.sub),
+    );
+  }
+
+  if (hasHandle) {
+    const handle = normalizePublicHandle(body.handle);
+    if (!handle)
+      return c.json({ error: "아이디는 영문 소문자, 숫자, 밑줄로 3~20자까지 입력해 주세요." }, 400);
+    const owner = await c.env.DB.prepare(
+      "SELECT id FROM users WHERE handle = ? COLLATE NOCASE AND id <> ?",
+    ).bind(handle, session.sub).first<{ id: string }>();
+    if (owner)
+      return c.json({ error: "이미 사용 중인 아이디입니다.", code: "HANDLE_TAKEN" }, 409);
+    statements.push(
+      c.env.DB.prepare("UPDATE users SET handle = ? WHERE id = ?")
+        .bind(handle, session.sub),
+    );
+  }
+  try {
+    await c.env.DB.batch(statements);
+  } catch (error) {
+    if (hasHandle)
+      return c.json({ error: "이미 사용 중인 아이디입니다.", code: "HANDLE_TAKEN" }, 409);
+    throw error;
   }
   const profile = await c.env.DB.prepare(
-    "SELECT id, username, profile_image_url, bio, location FROM users WHERE id = ?",
+    "SELECT id, username, handle, profile_image_url, bio, location FROM users WHERE id = ?",
   )
     .bind(session.sub)
     .first<any>();
@@ -823,6 +902,66 @@ app.get("/api/health", async (c) => {
   }
 });
 
+async function requireGoogleSession(c: { req: { raw: Request }; env: EnvBindings }) {
+  const session = await readSession(c.req.raw, c.env.AUTH_SESSION_SECRET);
+  if (!session) return null;
+  await ensurePublicUser(c.env.DB, session);
+  return session;
+}
+
+// User search is limited to authenticated Lunchie accounts. Only public
+// profile fields are returned; OAuth subject IDs are used solely as route keys.
+app.get("/api/users/search", async (c) => {
+  const session = await requireGoogleSession(c);
+  if (!session) return c.json({ error: "로그인이 필요합니다." }, 401);
+  const rawQuery = (c.req.query("q") ?? "").trim();
+  const query = rawQuery.replace(/^@/, "");
+  if (!query || query.length > 40)
+    return c.json({ error: "검색어는 1~40자로 입력해 주세요." }, 400);
+  const escaped = escapeUserSearchTerm(query.toLowerCase());
+  const namePattern = `%${escaped}%`;
+  const handlePattern = `${escaped}%`;
+  const { results } = await c.env.DB.prepare(
+    `SELECT
+      u.id,
+      u.username,
+      COALESCE(u.handle, '') AS handle,
+      u.profile_image_url,
+      u.bio,
+      u.location,
+      u.created_at,
+      CASE WHEN u.id = ? THEN 1 ELSE 0 END AS is_self,
+      CASE WHEN EXISTS (
+        SELECT 1 FROM user_follows f
+        WHERE f.follower_id = ? AND f.following_id = u.id
+      ) THEN 1 ELSE 0 END AS is_following
+    FROM users u
+    WHERE lower(u.username) LIKE ? ESCAPE '\\'
+       OR lower(COALESCE(u.handle, '')) LIKE ? ESCAPE '\\'
+    ORDER BY
+      CASE
+        WHEN lower(COALESCE(u.handle, '')) = ? THEN 0
+        WHEN lower(u.username) = ? THEN 1
+        ELSE 2
+      END,
+      u.username COLLATE NOCASE ASC,
+      u.id ASC
+    LIMIT 20`,
+  ).bind(
+    session.sub,
+    session.sub,
+    namePattern,
+    handlePattern,
+    query.toLowerCase(),
+    query.toLowerCase(),
+  ).all<any>();
+  return c.json((results ?? []).map((user: any) => ({
+    ...user,
+    is_self: Boolean(user.is_self),
+    is_following: Boolean(user.is_following),
+  })));
+});
+
 // Public profile data comes from the same D1 identity store that owns a post.
 // D1 is the only public-profile source of truth.
 app.get("/api/users/:id", async (c) => {
@@ -830,7 +969,7 @@ app.get("/api/users/:id", async (c) => {
   if (!id || id.length > 256)
     return c.json({ error: "사용자 정보가 올바르지 않습니다." }, 400);
   const user = await c.env.DB.prepare(
-    "SELECT id, username, profile_image_url, bio, location, created_at FROM users WHERE id = ?",
+    "SELECT id, username, handle, profile_image_url, bio, location, created_at FROM users WHERE id = ?",
   )
     .bind(id)
     .first<any>();
@@ -843,6 +982,7 @@ app.get("/api/users/:id", async (c) => {
   return c.json({
     id: user.id,
     username: user.username,
+    handle: user.handle,
     profile_image_url: user.profile_image_url,
     bio: user.bio,
     location: user.location,
@@ -850,13 +990,6 @@ app.get("/api/users/:id", async (c) => {
     public_post_count: Number(count?.count ?? 0),
   });
 });
-
-async function requireGoogleSession(c: { req: { raw: Request }; env: EnvBindings }) {
-  const session = await readSession(c.req.raw, c.env.AUTH_SESSION_SECRET);
-  if (!session) return null;
-  await ensurePublicUser(c.env.DB, session);
-  return session;
-}
 
 async function requireAdminSession(c: { req: { raw: Request }; env: EnvBindings; json: (value: unknown, status?: number) => Response }) {
   const session = await readSession(c.req.raw, c.env.AUTH_SESSION_SECRET);
@@ -908,8 +1041,8 @@ app.delete("/api/users/:id/follow", async (c) => {
 async function listFollows(c: any, list: "followers" | "following") {
   const id = c.req.param("id");
   const query = list === "followers"
-    ? "SELECT u.id, u.username, u.profile_image_url, u.bio, u.location, u.created_at FROM user_follows f JOIN users u ON u.id = f.follower_id WHERE f.following_id = ? ORDER BY f.created_at DESC"
-    : "SELECT u.id, u.username, u.profile_image_url, u.bio, u.location, u.created_at FROM user_follows f JOIN users u ON u.id = f.following_id WHERE f.follower_id = ? ORDER BY f.created_at DESC";
+    ? "SELECT u.id, u.username, u.handle, u.profile_image_url, u.bio, u.location, u.created_at FROM user_follows f JOIN users u ON u.id = f.follower_id WHERE f.following_id = ? ORDER BY f.created_at DESC"
+    : "SELECT u.id, u.username, u.handle, u.profile_image_url, u.bio, u.location, u.created_at FROM user_follows f JOIN users u ON u.id = f.following_id WHERE f.follower_id = ? ORDER BY f.created_at DESC";
   const { results } = await c.env.DB.prepare(query).bind(id).all();
   return c.json(results);
 }
@@ -957,6 +1090,13 @@ app.post("/api/recommend", async (c) => {
       : Array.isArray(ctx.diet)
         ? ctx.diet
         : [];
+    const requiredDiets = diets
+      .map((diet: unknown) => typeof diet === "string" ? normalizeDiet(diet) : null)
+      .filter(
+        (diet: ReturnType<typeof normalizeDiet>): diet is DietRestriction =>
+          Boolean(diet) && isHardRestriction(diet),
+      );
+
     // 2. Taste (Categories) mapping
     if (ctx.categories && ctx.categories.length > 0) {
       query += ` AND category IN (${ctx.categories.map(() => "?").join(",")})`;
@@ -986,16 +1126,39 @@ app.post("/api/recommend", async (c) => {
     const requestedBudget = Number.isInteger(ctx.budget) && ctx.budget >= 1 && ctx.budget <= 4
       ? Number(ctx.budget)
       : null;
-    const results = rawRestaurants
-      .filter((restaurant) =>
-        categoryMatchesIntent(restaurant.category, selectedIntent) &&
-        matchesDietaryRestrictions(
-          restaurant.category,
-          menuEvidence.get(restaurant.id)?.dietary ?? json<string[]>(restaurant.dietary_options, []),
-          diets,
-        ) &&
-        matchesMenuBudget(menuEvidence.get(restaurant.id), requestedBudget),
-      )
+    const intentResults = rawRestaurants.filter((restaurant) =>
+      categoryMatchesIntent(restaurant.category, selectedIntent) &&
+      matchesMenuBudget(menuEvidence.get(restaurant.id), requestedBudget),
+    );
+    const exactResults = intentResults.filter((restaurant) =>
+      requiredDiets.every((restriction) =>
+        restaurantSatisfiesDietRestriction(
+          {
+            category: restaurant.category,
+            dietaryOptions: menuEvidence.get(restaurant.id)?.dietary ?? json<string[]>(restaurant.dietary_options, []),
+            menuItems: json(restaurant.menus, []),
+          },
+          restriction,
+        ),
+      ),
+    );
+    const ingredientAvoidances = requiredDiets.filter(isIngredientAvoidance);
+    const dietRelaxed = exactResults.length === 0 && requiredDiets.some(restriction => !isIngredientAvoidance(restriction));
+    const filteredResults = dietRelaxed
+      ? intentResults.filter((restaurant) =>
+          ingredientAvoidances.every((restriction) =>
+            restaurantSatisfiesDietRestriction(
+              {
+                category: restaurant.category,
+                dietaryOptions: menuEvidence.get(restaurant.id)?.dietary ?? json<string[]>(restaurant.dietary_options, []),
+                menuItems: json(restaurant.menus, []),
+              },
+              restriction,
+            ),
+          ),
+        )
+      : exactResults;
+    const results = filteredResults
       // Menu taxonomy never widens the hard intent filter above. It simply
       // gives the contextual ranker a verified cafe/dessert signal when an
       // otherwise broad restaurant category has a structured menu section.
@@ -1119,6 +1282,7 @@ app.post("/api/recommend", async (c) => {
       slate_type: slateType,
       model_version: policyVersion,
       engine: "cloudflare-hono-d1",
+      diet_relaxed: dietRelaxed && results.length > 0,
     });
     if (!session && !existingGuestId)
       response.headers.append("Set-Cookie", cookie("lm_guest_id", guestId, 30 * 24 * 60 * 60, requestIsSecure(c.req.raw)));
@@ -1168,6 +1332,23 @@ app.get("/api/courses", async (c) => {
 
       // 브라우저가 사용하는 Course 계약으로 정규화한다. DB의 JSON TEXT/스네이크 케이스를
       // 그대로 내보내면 tags.map에서 초기 동기화가 멈춰, 뒤의 피드 갱신도 실행되지 않는다.
+      const courseStops = await Promise.all(stops.map(async (s: any) => ({
+        placeId: s.restaurant_id,
+        order: s.order_index,
+        startTime: s.start_time || "",
+        endTime: s.end_time || "",
+        isBookmarked: Boolean(s.is_bookmarked),
+        restaurant: {
+          id: s.restaurant_id,
+          name: s.name,
+          category: s.category,
+          photos: await filterExistingPhotos(c.env, json<string[]>(s.photos, [])),
+          rating: s.rating,
+          latitude: s.latitude,
+          longitude: s.longitude,
+        },
+      })));
+
       populatedCourses.push({
         id: course.id,
         title: course.title,
@@ -1185,22 +1366,7 @@ app.get("/api/courses", async (c) => {
         savedCount: Number(course.saves_count ?? 0),
         isPublic: Boolean(course.is_public),
         createdAt: isoDate(course.created_at),
-        stops: stops.map((s: any) => ({
-          placeId: s.restaurant_id,
-          order: s.order_index,
-          startTime: s.start_time || "",
-          endTime: s.end_time || "",
-          isBookmarked: Boolean(s.is_bookmarked),
-          restaurant: {
-            id: s.restaurant_id,
-            name: s.name,
-            category: s.category,
-            photos: json<string[]>(s.photos, []),
-            rating: s.rating,
-            latitude: s.latitude,
-            longitude: s.longitude,
-          },
-        })),
+        stops: courseStops,
       });
     }
 
@@ -1552,6 +1718,9 @@ type SessionRow = {
   deadline_at: number | null;
   created_at: number;
 };
+const TERMINAL_SESSION_STATUSES = new Set(["CANCELLED", "COMPLETED", "EXPIRED"]);
+const sessionStatus = (value: unknown) =>
+  typeof value === "string" ? value.trim().toUpperCase() : "";
 const sessionPayload = (session: SessionRow) => ({
   ...session,
   // The existing app named this field filter_vibe. Keep that client contract
@@ -1563,6 +1732,31 @@ const sessionPayload = (session: SessionRow) => ({
 });
 const sessionToken = () =>
   crypto.randomUUID().replaceAll("-", "").slice(0, 6).toUpperCase();
+const sessionMemberKey = () =>
+  `${crypto.randomUUID().replaceAll("-", "")}${crypto.randomUUID().replaceAll("-", "")}`;
+const sessionMemberKeyHash = async (value: string) => {
+  const digest = await crypto.subtle.digest("SHA-256", encoder.encode(value));
+  return Array.from(new Uint8Array(digest), (byte) =>
+    byte.toString(16).padStart(2, "0"),
+  ).join("");
+};
+const authorizedSessionMember = async (
+  db: EnvBindings["DB"],
+  sessionId: string,
+  userId: string | null,
+  memberKey: string | null,
+) => {
+  if (!userId || !memberKey) return null;
+  const member = await db
+    .prepare(
+      "SELECT user_id, member_secret_hash FROM session_members WHERE session_id = ? AND user_id = ?",
+    )
+    .bind(sessionId, userId)
+    .first<{ user_id: string; member_secret_hash: string | null }>();
+  if (!member?.member_secret_hash) return null;
+  const suppliedHash = await sessionMemberKeyHash(memberKey);
+  return suppliedHash === member.member_secret_hash ? member : null;
+};
 const PRELIM_DONE_ID = "__prelim_done__";
 const DECK_SIZE_PREFIX = "__deck_size__:";
 const FORCE_PREFIX = "__force__:";
@@ -1610,6 +1804,25 @@ const sessionPreferences = (value: unknown): SessionPreference[] =>
     }))
     .filter((item) => item.category);
 const sessionDietary = (value: unknown) => preferenceSnapshot(value).dietary;
+function matchesGroupDiet(
+  category: string,
+  optionText: unknown,
+  menuItems: unknown,
+  rawRestrictions: string[],
+) {
+  const required = rawRestrictions
+    .map(normalizeDiet)
+    .filter(
+      (diet): diet is DietRestriction => Boolean(diet) && isHardRestriction(diet),
+    );
+  if (!required.length) return true;
+  return required.every((restriction) =>
+    restaurantSatisfiesDietRestriction(
+      { category, dietaryOptions: optionText, menuItems },
+      restriction,
+    ),
+  );
+}
 // A group slate is intentionally computed once on the server. Ranking averages
 // member preference signals, then applies a category-coverage penalty so the
 // first seven cards do not collapse into one cuisine. The stable tie-break is
@@ -1875,6 +2088,8 @@ app.post("/api/sessions/create", async (c) => {
   for (let attempt = 0; attempt < 3; attempt += 1) {
     const id = crypto.randomUUID();
     const token = sessionToken();
+    const memberKey = sessionMemberKey();
+    const memberSecretHash = await sessionMemberKeyHash(memberKey);
     try {
       await c.env.DB.batch([
         c.env.DB.prepare(
@@ -1896,7 +2111,7 @@ app.post("/api/sessions/create", async (c) => {
           createdAt,
         ),
         c.env.DB.prepare(
-          "INSERT INTO session_members (id, session_id, user_id, user_name, emoji, is_ready, preferences_json, joined_at) VALUES (?, ?, ?, ?, ?, 0, ?, ?)",
+          "INSERT INTO session_members (id, session_id, user_id, user_name, emoji, is_ready, preferences_json, member_secret_hash, joined_at) VALUES (?, ?, ?, ?, ?, 0, ?, ?, ?)",
         ).bind(
           crypto.randomUUID(),
           id,
@@ -1904,6 +2119,7 @@ app.post("/api/sessions/create", async (c) => {
           hostName,
           emoji,
           JSON.stringify({ categories: hostPreferences, dietary: hostDietary }),
+          memberSecretHash,
           createdAt,
         ),
       ]);
@@ -1926,7 +2142,7 @@ app.post("/api/sessions/create", async (c) => {
         deadline_at: null,
         created_at: createdAt,
       };
-      return c.json({ session: sessionPayload(session), token }, 201);
+      return c.json({ session: sessionPayload(session), token, memberKey }, 201);
     } catch (error: any) {
       // A random invite-code collision is safe to retry; any other D1 error
       // is surfaced so the client never gives out a non-existent invitation.
@@ -1981,35 +2197,59 @@ app.post("/api/sessions/:token/join", async (c) => {
         .filter((item): item is string => typeof item === "string")
         .slice(0, 12)
     : [];
+  const suppliedMemberKey = nullableText(body.memberKey, 256);
   if (!userId || !userName)
     return c.json({ error: "참여자 정보가 필요합니다." }, 400);
   const session = await c.env.DB.prepare(
-    "SELECT id, group_size FROM sessions WHERE share_token = ?",
+    "SELECT id, group_size, status FROM sessions WHERE share_token = ?",
   )
     .bind(token)
-    .first<{ id: string; group_size: number }>();
+    .first<{ id: string; group_size: number; status: string }>();
   if (!session)
     return c.json({ error: "세션을 찾을 수 없거나 만료되었습니다." }, 404);
   const existing = await c.env.DB.prepare(
-    "SELECT id FROM session_members WHERE session_id = ? AND user_id = ?",
+    "SELECT id, member_secret_hash FROM session_members WHERE session_id = ? AND user_id = ?",
   )
     .bind(session.id, userId)
-    .first();
-  const preferencesJson = JSON.stringify({ categories: preferences, dietary });
+    .first<{ id: string; member_secret_hash: string | null }>();
+  const currentStatus = sessionStatus(session.status);
+  if (TERMINAL_SESSION_STATUSES.has(currentStatus))
+    return c.json({ error: "이미 종료된 세션입니다.", code: `SESSION_${currentStatus}` }, 410);
+  if (currentStatus !== "WAITING" && !existing)
+    return c.json({ error: "이미 투표가 시작된 세션입니다.", code: "SESSION_STARTED" }, 409);
   if (existing) {
+    if (
+      !suppliedMemberKey ||
+      !existing.member_secret_hash ||
+      (await sessionMemberKeyHash(suppliedMemberKey)) !== existing.member_secret_hash
+    ) {
+      return c.json(
+        { error: "이 기기의 세션 자격 증명을 확인할 수 없습니다.", code: "MEMBER_CREDENTIAL_REQUIRED" },
+        403,
+      );
+    }
     await c.env.DB.prepare(
       "UPDATE session_members SET user_name = ?, emoji = ?, preferences_json = ? WHERE session_id = ? AND user_id = ?",
     )
-      .bind(userName, emoji, preferencesJson, session.id, userId)
+      .bind(
+        userName,
+        emoji,
+        JSON.stringify({ categories: preferences, dietary }),
+        session.id,
+        userId,
+      )
       .run();
-    return c.json({ ok: true });
+    return c.json({ ok: true, memberKey: suppliedMemberKey });
   }
 
   // Capacity is checked inside the INSERT statement. A separate COUNT then
   // INSERT lets two simultaneous invitees both observe the final free seat.
   // D1/SQLite serializes this statement, so only one insertion can win it.
+  const preferencesJson = JSON.stringify({ categories: preferences, dietary });
+  const memberKey = sessionMemberKey();
+  const memberSecretHash = await sessionMemberKeyHash(memberKey);
   const inserted = await c.env.DB.prepare(
-    "INSERT INTO session_members (id, session_id, user_id, user_name, emoji, is_ready, preferences_json, joined_at) SELECT ?, ?, ?, ?, ?, 0, ?, ? WHERE (SELECT COUNT(*) FROM session_members WHERE session_id = ?) < ?",
+    "INSERT INTO session_members (id, session_id, user_id, user_name, emoji, is_ready, preferences_json, member_secret_hash, joined_at) SELECT ?, ?, ?, ?, ?, 0, ?, ?, ? WHERE (SELECT COUNT(*) FROM session_members WHERE session_id = ?) < ?",
   )
     .bind(
       crypto.randomUUID(),
@@ -2018,6 +2258,7 @@ app.post("/api/sessions/:token/join", async (c) => {
       userName,
       emoji,
       preferencesJson,
+      memberSecretHash,
       Date.now(),
       session.id,
       session.group_size,
@@ -2035,21 +2276,88 @@ app.post("/api/sessions/:token/join", async (c) => {
       409,
     );
   }
+  return c.json({ ok: true, memberKey });
+});
+
+app.post("/api/sessions/:token/cancel", async (c) => {
+  const token = c.req.param("token").trim().toUpperCase();
+  const body = await c.req.json<Record<string, unknown>>().catch(() => ({}));
+  const userId = nullableText(body.userId, 256);
+  const memberKey = nullableText(body.memberKey, 256);
+  if (!userId) return c.json({ error: "사용자 정보가 필요합니다." }, 400);
+  const session = await c.env.DB.prepare(
+    "SELECT id, host_user_id, status FROM sessions WHERE share_token = ?",
+  )
+    .bind(token)
+    .first<Pick<SessionRow, "id" | "host_user_id" | "status">>();
+  if (!session) return c.json({ error: "세션을 찾을 수 없습니다." }, 404);
+  if (session.host_user_id !== userId)
+    return c.json({ error: "세션 취소는 호스트만 할 수 있습니다.", code: "HOST_ONLY" }, 403);
+  if (!(await authorizedSessionMember(c.env.DB, session.id, userId, memberKey)))
+    return c.json({ error: "호스트 자격 증명을 확인할 수 없습니다.", code: "INVALID_MEMBER_CREDENTIAL" }, 403);
+  const currentStatus = sessionStatus(session.status);
+  if (currentStatus === "CANCELLED") return c.json({ ok: true, alreadyCancelled: true });
+  if (currentStatus === "COMPLETED" || currentStatus === "EXPIRED")
+    return c.json({ error: "이미 종료된 세션입니다.", code: `SESSION_${currentStatus}` }, 409);
+  await c.env.DB.prepare("UPDATE sessions SET status = 'CANCELLED' WHERE id = ?")
+    .bind(session.id)
+    .run();
   return c.json({ ok: true });
+});
+
+app.post("/api/sessions/:token/leave", async (c) => {
+  const token = c.req.param("token").trim().toUpperCase();
+  const body = await c.req.json<Record<string, unknown>>().catch(() => ({}));
+  const userId = nullableText(body.userId, 256);
+  const memberKey = nullableText(body.memberKey, 256);
+  if (!userId) return c.json({ error: "사용자 정보가 필요합니다." }, 400);
+  const session = await c.env.DB.prepare(
+    "SELECT id, host_user_id, status FROM sessions WHERE share_token = ?",
+  )
+    .bind(token)
+    .first<Pick<SessionRow, "id" | "host_user_id" | "status">>();
+  if (!session) return c.json({ error: "세션을 찾을 수 없습니다." }, 404);
+  if (session.host_user_id === userId)
+    return c.json({ error: "호스트는 세션을 취소해야 합니다.", code: "HOST_MUST_CANCEL" }, 409);
+  if (TERMINAL_SESSION_STATUSES.has(sessionStatus(session.status)))
+    return c.json({ ok: true, alreadyEnded: true });
+  const existingMember = await c.env.DB.prepare(
+    "SELECT user_id, member_secret_hash FROM session_members WHERE session_id = ? AND user_id = ?",
+  )
+    .bind(session.id, userId)
+    .first<{ user_id: string; member_secret_hash: string | null }>();
+  if (!existingMember) return c.json({ ok: true, alreadyLeft: true });
+  if (
+    !memberKey ||
+    !existingMember.member_secret_hash ||
+    (await sessionMemberKeyHash(memberKey)) !== existingMember.member_secret_hash
+  )
+    return c.json({ error: "참여자 자격 증명을 확인할 수 없습니다.", code: "INVALID_MEMBER_CREDENTIAL" }, 403);
+  const result = await c.env.DB.prepare(
+    "DELETE FROM session_members WHERE session_id = ? AND user_id = ?",
+  )
+    .bind(session.id, userId)
+    .run();
+  return c.json({ ok: true, alreadyLeft: (result.meta?.changes ?? 0) === 0 });
 });
 
 app.post("/api/sessions/:token/ready", async (c) => {
   const token = c.req.param("token").trim().toUpperCase();
   const body = await c.req.json<Record<string, unknown>>().catch(() => ({}));
   const userId = nullableText(body.userId, 256);
+  const memberKey = nullableText(body.memberKey, 256);
   if (!userId || typeof body.isReady !== "boolean")
     return c.json({ error: "준비 상태 정보가 필요합니다." }, 400);
   const session = await c.env.DB.prepare(
-    "SELECT id FROM sessions WHERE share_token = ?",
+    "SELECT id, status FROM sessions WHERE share_token = ?",
   )
     .bind(token)
-    .first<{ id: string }>();
+    .first<{ id: string; status: string }>();
   if (!session) return c.json({ error: "세션을 찾을 수 없습니다." }, 404);
+  if (sessionStatus(session.status) !== "WAITING")
+    return c.json({ error: "대기 중인 세션에서만 준비 상태를 바꿀 수 있습니다." }, 409);
+  if (!(await authorizedSessionMember(c.env.DB, session.id, userId, memberKey)))
+    return c.json({ error: "참여자 자격 증명을 확인할 수 없습니다.", code: "INVALID_MEMBER_CREDENTIAL" }, 403);
   const result = await c.env.DB.prepare(
     "UPDATE session_members SET is_ready = ? WHERE session_id = ? AND user_id = ?",
   )
@@ -2065,7 +2373,10 @@ app.post("/api/sessions/:token/status", async (c) => {
   const body = await c.req.json<Record<string, unknown>>().catch(() => ({}));
   const status = nullableText(body.status, 40)?.toUpperCase();
   if (!status) return c.json({ error: "세션 상태가 필요합니다." }, 400);
+  if (status !== "SWIPING_1")
+    return c.json({ error: "지원하지 않는 세션 상태입니다." }, 400);
   const userId = nullableText(body.userId, 256);
+  const memberKey = nullableText(body.memberKey, 256);
   const session = await c.env.DB.prepare(
     "SELECT * FROM sessions WHERE share_token = ?",
   )
@@ -2075,10 +2386,15 @@ app.post("/api/sessions/:token/status", async (c) => {
   if (status === "SWIPING_1") {
     if (!userId || userId !== session.host_user_id)
       return c.json({ error: "세션 시작은 호스트만 할 수 있습니다." }, 403);
+    if (!(await authorizedSessionMember(c.env.DB, session.id, userId, memberKey)))
+      return c.json({ error: "호스트 자격 증명을 확인할 수 없습니다.", code: "INVALID_MEMBER_CREDENTIAL" }, 403);
+    const currentStatus = sessionStatus(session.status);
     // Starting twice must preserve both the shared deck and its attribution
     // identity. Replacing it after people began swiping would corrupt the
     // evidence chain.
-    if (session.status === "SWIPING_1") return c.json({ ok: true, already_started: true });
+    if (currentStatus === "SWIPING_1") return c.json({ ok: true, alreadyStarted: true, already_started: true });
+    if (currentStatus !== "WAITING")
+      return c.json({ error: "종료되거나 취소된 세션은 시작할 수 없습니다.", code: `SESSION_${currentStatus}` }, 409);
     const { results: members } = await c.env.DB.prepare(
       "SELECT user_id, preferences_json FROM session_members WHERE session_id = ? ORDER BY joined_at",
     )
@@ -2091,7 +2407,7 @@ app.post("/api/sessions/:token/status", async (c) => {
         409,
       );
     const { results: catalogue } = await c.env.DB.prepare(
-      "SELECT id, category, rating, price_level, dietary_options, latitude, longitude FROM restaurants",
+      "SELECT id, category, rating, price_level, dietary_options, menus, latitude, longitude FROM restaurants",
     ).all();
     const menuEvidence = await indexedMenuEvidenceByRestaurant(
       c.env.DB,
@@ -2112,7 +2428,7 @@ app.post("/api/sessions/:token/status", async (c) => {
       session.origin_latitude,
       session.origin_longitude,
     );
-    const pool = (catalogue as any[]).filter(
+    const eligibleCatalogue = (catalogue as any[]).filter(
       (restaurant) =>
         (categories.length === 0 || categories.includes(restaurant.category)) &&
         categoryMatchesIntent(restaurant.category, session.intent) &&
@@ -2124,15 +2440,39 @@ app.post("/api/sessions/:token/status", async (c) => {
             restaurant.longitude,
             Number(session.filter_distance),
           )) &&
-        matchesMenuBudget(menuEvidence.get(restaurant.id), Number(session.filter_budget)) &&
-        matchesDietaryRestrictions(
+        matchesMenuBudget(menuEvidence.get(restaurant.id), Number(session.filter_budget)),
+    );
+    let pool = eligibleCatalogue.filter(
+      (restaurant) =>
+        matchesGroupDiet(
           restaurant.category,
           menuEvidence.get(restaurant.id)?.dietary ?? json<string[]>(restaurant.dietary_options, []),
+          restaurant.menus,
           requiredDietary,
         ),
     );
     // Never fall back to the full catalogue: that would silently violate a
     // user's explicit meal/cafe/dessert, category, budget, or dietary choice.
+    const normalizedDietary = requiredDietary
+      .map(normalizeDiet)
+      .filter((restriction): restriction is DietRestriction => restriction !== null && isHardRestriction(restriction));
+    if (!pool.length && normalizedDietary.some(restriction => !isIngredientAvoidance(restriction))) {
+      const ingredientAvoidances = normalizedDietary.filter(isIngredientAvoidance);
+      pool = eligibleCatalogue.filter((restaurant) =>
+        ingredientAvoidances.every((restriction) =>
+            restaurantSatisfiesDietRestriction(
+              {
+                category: restaurant.category,
+                dietaryOptions: menuEvidence.get(restaurant.id)?.dietary ?? json<string[]>(restaurant.dietary_options, []),
+                menuItems: restaurant.menus,
+            },
+            restriction,
+          ),
+        ),
+      );
+    }
+    if (!(catalogue as any[]).length)
+      return c.json({ error: "식당 후보를 준비하지 못했습니다.", code: "CATALOG_EMPTY" }, 409);
     const deck = buildSharedSessionDeck(session.id, pool, members as any[]);
     if (!deck.length)
       return c.json(
@@ -2781,6 +3121,26 @@ app.get("/api/feed", async (c) => {
       const photos = canonicalMedia.length
         ? Array.from(new Set(canonicalMedia.map((media) => media.src)))
         : json<string[]>(course.feed_photos, []);
+      const availablePhotos = await filterExistingPhotos(c.env, photos);
+      const availablePhotoSet = new Set(availablePhotos);
+      const availableDecor = decor.filter((item) => {
+        const src = typeof item?.src === "string" ? item.src : null;
+        return !src?.startsWith("/photos/") || availablePhotoSet.has(src);
+      });
+      const heroImage =
+        typeof course.hero_image === "string" && course.hero_image.startsWith("/photos/")
+          ? (await photoExists(c.env, course.hero_image) ? course.hero_image : availablePhotos[0] ?? "")
+          : course.hero_image;
+      const feedStops = await Promise.all(stops.map(async (s: any) => ({
+        placeId: s.restaurant_id,
+        restaurant: {
+          id: s.restaurant_id,
+          name: s.name,
+          category: s.category,
+          photos: await filterExistingPhotos(c.env, json<string[]>(s.photos, [])),
+          rating: s.rating,
+        },
+      })));
 
       feedItems.push({
         id: `post_${course.id}`,
@@ -2790,21 +3150,12 @@ app.get("/api/feed", async (c) => {
         authorImage: hasPublicProfiles ? course.author_image || null : null,
         title: course.title,
         description: course.description,
-        heroImage: course.hero_image,
-        photos,
-        decor,
+        heroImage,
+        photos: availablePhotos,
+        decor: availableDecor,
         templateId: course.template_id || null,
         tags: json<string[]>(course.tags, []),
-        stops: stops.map((s: any) => ({
-          placeId: s.restaurant_id,
-          restaurant: {
-            id: s.restaurant_id,
-            name: s.name,
-            category: s.category,
-            photos: json<string[]>(s.photos, []),
-            rating: s.rating,
-          },
-        })),
+        stops: feedStops,
         likesCount: course.likes_count ?? 0,
         savesCount: course.saves_count ?? 0,
         commentsCount: course.comments_count ?? 0,

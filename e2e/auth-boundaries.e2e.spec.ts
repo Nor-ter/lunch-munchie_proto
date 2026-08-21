@@ -55,3 +55,47 @@ test('winner persistence sends a stable idempotency key across a result re-rende
   });
   expect(keys).toEqual(['winner:session-e2e:restaurant-e2e', 'winner:session-e2e:restaurant-e2e']);
 });
+
+test('authenticated users can search a profile and follow it from Munchie Feed', async ({ page }) => {
+  let followRequests = 0;
+  await page.route('**/api/auth/session', route => route.fulfill({
+    contentType: 'application/json',
+    body: JSON.stringify({
+      user: { sub: 'viewer-user', name: '뷰어', email: 'viewer@example.com' },
+      profile: { id: 'viewer-user', username: '뷰어', handle: 'viewer', profile_image_url: null },
+    }),
+  }));
+  await page.route('**/api/feed', route => route.fulfill({ contentType: 'application/json', body: '[]' }));
+  await page.route('**/api/users/search**', route => route.fulfill({
+    contentType: 'application/json',
+    body: JSON.stringify([{
+      id: 'friend-user', username: '맛친구', handle: 'munch_friend', profile_image_url: null,
+      bio: null, location: null, created_at: 0, is_self: false, is_following: false,
+    }]),
+  }));
+  await page.route('**/api/users/friend-user/follow', async route => {
+    if (route.request().method() === 'POST') followRequests += 1;
+    await route.fulfill({ contentType: 'application/json', body: JSON.stringify({ following: true }) });
+  });
+  await page.route('**/api/users/friend-user/follows', route => route.fulfill({
+    contentType: 'application/json', body: JSON.stringify({ followers: 1, following: 0 }),
+  }));
+  await page.route('**/api/users/friend-user', route => route.fulfill({
+    contentType: 'application/json',
+    body: JSON.stringify({
+      id: 'friend-user', username: '맛친구', handle: 'munch_friend', profile_image_url: null,
+      bio: null, location: null, created_at: 0, public_post_count: 0,
+    }),
+  }));
+
+  await page.goto('/feed');
+  await page.getByRole('button', { name: '사용자 검색 열기' }).click();
+  await page.getByRole('searchbox', { name: '사용자 검색' }).fill('맛친구');
+  await expect(page.getByText('@munch_friend')).toBeVisible();
+  await page.getByRole('button', { name: '팔로우' }).click();
+  await expect(page.getByRole('button', { name: '언팔로우' })).toBeVisible();
+  expect(followRequests).toBe(1);
+  await page.getByText('맛친구', { exact: true }).click();
+  await expect(page).toHaveURL('/profile/friend-user');
+  await expect(page.getByTestId('profile-user-handle')).toHaveText('@munch_friend');
+});

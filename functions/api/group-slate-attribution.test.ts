@@ -1,6 +1,9 @@
 import { describe, expect, it } from "vitest";
 import { buildSharedSessionDeck, onRequest } from "./[[path]]";
 
+const HOST_KEY = "host-key";
+const HOST_KEY_HASH = "09f10e4bdc37a471382a5aa37101705b258c9b246fbcfa1e8727723214f1a738";
+
 describe("group-session recommendation attribution", () => {
   it("does not boost a cuisine merely because it has more candidate rows", () => {
     const deck = buildSharedSessionDeck(
@@ -39,7 +42,13 @@ describe("group-session recommendation attribution", () => {
           query,
           all,
           bind: () => ({
-            first: async () => query.includes("FROM sessions") ? session : null,
+            first: async () => {
+              if (query.includes("FROM sessions")) return session;
+              if (query.includes("member_secret_hash FROM session_members")) {
+                return { user_id: "host", member_secret_hash: HOST_KEY_HASH };
+              }
+              return null;
+            },
             all,
             run: async () => ({ meta: { changes: 1 } }),
           }),
@@ -55,7 +64,7 @@ describe("group-session recommendation attribution", () => {
     const response = await onRequest({
       request: new Request("https://example.test/api/sessions/ABC123/status", {
         method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ status: "SWIPING_1", userId: "host" }),
+        body: JSON.stringify({ status: "SWIPING_1", userId: "host", memberKey: HOST_KEY }),
       }),
       env: { DB: db, AUTH_SESSION_SECRET: "test" },
     } as any);

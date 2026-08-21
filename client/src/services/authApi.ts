@@ -7,6 +7,33 @@ export function getAuthRedirectTo(origin: string = window.location.origin): stri
   return `${origin.replace(/\/$/, '')}/profile?${GOOGLE_PROFILE_IMPORT_PARAM}=ask`;
 }
 
+function getPagesDevOrigin(origin: string) {
+  const url = new URL(origin);
+  if ((url.hostname === 'localhost' || url.hostname === '127.0.0.1') && url.port === '5173') {
+    url.hostname = 'localhost';
+    url.port = '8788';
+    return url.origin;
+  }
+  return url.origin;
+}
+
+export function getGoogleAuthStartUrl(
+  nextPath: string,
+  origin: string = window.location.origin,
+): string {
+  const baseOrigin = getPagesDevOrigin(origin);
+  const path = `/api/auth/google/start?next=${encodeURIComponent(nextPath)}`;
+  return baseOrigin === origin.replace(/\/$/, '') ? path : `${baseOrigin}${path}`;
+}
+
+export function startGoogleAuth(nextPath: string): void {
+  window.location.assign(getGoogleAuthStartUrl(nextPath));
+}
+
+export function replaceWithGoogleAuth(nextPath: string): void {
+  window.location.replace(getGoogleAuthStartUrl(nextPath));
+}
+
 export function shouldPromptForGoogleProfile(
   search: string = window.location.search,
   alreadyPrompted: boolean = localStorage.getItem(GOOGLE_PROFILE_PROMPTED_KEY) === 'true',
@@ -52,11 +79,11 @@ export function clearAuthRedirectError(): void {
 }
 
 export async function linkIdentityWithGoogle(): Promise<void> {
-  window.location.assign(`/api/auth/google/start?next=${encodeURIComponent('/profile')}`);
+  startGoogleAuth('/profile');
 }
 
 export async function confirmConflictSignIn(): Promise<void> {
-  window.location.assign(`/api/auth/google/start?next=${encodeURIComponent('/profile')}`);
+  startGoogleAuth('/profile');
 }
 
 export async function signOutToAnonymous(): Promise<void> {

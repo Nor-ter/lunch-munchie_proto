@@ -10,8 +10,8 @@ const progressSource = readFileSync(join(import.meta.dirname, '..', 'components'
 describe('Profile information and level synchronization', () => {
   it('keeps the sk profile copy and compact badge presentation', () => {
     expect(profileSource).not.toContain('value={editBio}');
-    expect(profileSource).toContain("body: JSON.stringify({ username })");
-    expect(profileSource).toContain("updateProfile({ name: saved.profile.username })");
+    expect(profileSource).toContain("body: JSON.stringify({ username, handle })");
+    expect(profileSource).toContain("updateProfile({ name: saved.profile.username, handle: saved.profile.handle })");
     expect(profileSource).toContain('오늘도 맛있는 하루를 위해');
     expect(profileSource).toContain('🏅 배지');
   });
@@ -28,6 +28,16 @@ describe('Profile information and level synchronization', () => {
     expect(contextSource).toContain('post.authorId === profile.id');
     expect(contextSource).toContain('authorName: updates.name ?? post.authorName');
     expect(contextSource).toContain('authorEmoji: updates.emoji ?? post.authorEmoji');
+  });
+
+  it('loads Google-backed profile avatars without leaking referrers and falls back cleanly', () => {
+    expect(profileSource).toContain('referrerPolicy="no-referrer"');
+    expect(profileSource).toContain('onError={() => setImageFailed(true)}');
+  });
+
+  it('retains the current production guest profile preview', () => {
+    expect(profileSource).toContain('function ProfileGuestPreview()');
+    expect(profileSource).toContain('return <ProfileGuestPreview />;');
   });
 
   it('shows every level stage with its configured icon', () => {
