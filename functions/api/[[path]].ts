@@ -15,6 +15,14 @@ import { buildSlate, scoreCandidateBreakdown } from "../../server/engine/scorer"
 import type { Candidate, RecContext, SlateType } from "../../shared/engine";
 import { isAdminEmail } from "./adminAccess";
 import { assessLearningReadiness, coverage } from "./algorithmInsights";
+import {
+  autocompleteGooglePlaces,
+  autocompleteGoogleLocations,
+  getGoogleDirections,
+  getGoogleLocationDetails,
+  getGooglePlaceDetails,
+  googlePlacesErrorResponse,
+} from "./googlePlaces";
 
 export interface EnvBindings {
   DB: any;
@@ -26,6 +34,7 @@ export interface EnvBindings {
   GOOGLE_CLIENT_ID: string;
   GOOGLE_CLIENT_SECRET: string;
   AUTH_SESSION_SECRET: string;
+  GOOGLE_MAPS_SERVER_API_KEY?: string;
   /** Comma-separated Google account emails allowed to access /admin. */
   ADMIN_EMAILS?: string;
 }
@@ -322,6 +331,51 @@ app.post("/api/auth/logout", (c) => {
     cookie("lm_guest_id", "", 0, requestIsSecure(c.req.raw)),
   );
   return c.json({ ok: true });
+});
+
+app.post("/api/places-autocomplete", async (c) => {
+  try {
+    const body = await c.req.json<Record<string, unknown>>();
+    return c.json(await autocompleteGooglePlaces(c.env, body));
+  } catch (error) {
+    return googlePlacesErrorResponse(error);
+  }
+});
+
+app.post("/api/location-autocomplete", async (c) => {
+  try {
+    const body = await c.req.json<Record<string, unknown>>();
+    return c.json(await autocompleteGoogleLocations(c.env, body));
+  } catch (error) {
+    return googlePlacesErrorResponse(error);
+  }
+});
+
+app.post("/api/location-details", async (c) => {
+  try {
+    const body = await c.req.json<Record<string, unknown>>();
+    return c.json(await getGoogleLocationDetails(c.env, body));
+  } catch (error) {
+    return googlePlacesErrorResponse(error);
+  }
+});
+
+app.post("/api/place-details", async (c) => {
+  try {
+    const body = await c.req.json<Record<string, unknown>>();
+    return c.json(await getGooglePlaceDetails(c.env, body));
+  } catch (error) {
+    return googlePlacesErrorResponse(error);
+  }
+});
+
+app.post("/api/directions", async (c) => {
+  try {
+    const body = await c.req.json<Record<string, unknown>>();
+    return c.json(await getGoogleDirections(c.env, body));
+  } catch (error) {
+    return googlePlacesErrorResponse(error);
+  }
 });
 
 const json = <T>(value: string | null | undefined, fallback: T): T => {

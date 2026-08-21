@@ -6,6 +6,10 @@
 GOOGLE_CLIENT_ID=
 GOOGLE_CLIENT_SECRET=
 
+# Server-only key restricted to Places API (New) and Directions API.
+# Never prefix this with VITE_.
+GOOGLE_MAPS_SERVER_API_KEY=
+
 # Create a distinct random value for local development; do not reuse production.
 AUTH_SESSION_SECRET=
 
