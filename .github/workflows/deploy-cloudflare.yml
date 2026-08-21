@@ -47,3 +47,6 @@ jobs:
           # Vite embeds the browser-restricted Maps key at build time. The
           # Cloudflare runtime secret alone cannot reach the GitHub runner.
           VITE_GOOGLE_MAPS_API_KEY: ${{ secrets.VITE_GOOGLE_MAPS_API_KEY }}
+          # Keep the Next.js-compatible name available for the planned client
+          # migration without removing the current Vite build variable.
+          NEXT_PUBLIC_GOOGLE_MAPS_API_KEY: ${{ secrets.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY }}
