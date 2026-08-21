@@ -30,6 +30,7 @@ import {
   selectLunchmateProfileEmotion,
   readLunchmateProfileVisualOffset,
   parseLunchmateProfileTransform,
+  pickLunchmateProfileCarryOffset,
   readLunchmateProfileTransformOffset,
   type LunchmateProfileMotionSnapshot,
   type LunchmateProfilePointerCaptureTarget,
@@ -269,6 +270,15 @@ describe('Lunchmate Profile pointer grab controller', () => {
       y: -12,
     });
     expect(readLunchmateProfileTransformOffset(null)).toBeNull();
+  });
+
+  it('keeps the least-landed candidate when spring, transform, and box disagree', () => {
+    expect(pickLunchmateProfileCarryOffset([
+      { x: 0, y: 0 },
+      { x: 28, y: -8 },
+      { x: 4, y: -1 },
+    ])).toEqual({ x: 28, y: -8 });
+    expect(pickLunchmateProfileCarryOffset([null, undefined])).toBeNull();
   });
 
   it('captures immediately, then swaps to grabbed after a 400ms stationary press', () => {
@@ -954,6 +964,7 @@ describe('Profile motion integration contract', () => {
     expect(HOOK_SOURCE).toContain('stiffness: 170');
     expect(HOOK_SOURCE).toContain('damping: 13');
     expect(HOOK_SOURCE).toContain('mass: 0.9');
+    expect(HOOK_SOURCE).toContain('pickLunchmateProfileCarryOffset([');
     expect(HOOK_SOURCE).toContain('readLunchmateProfileTransformOffset(movingLayerEl)');
     expect(HOOK_SOURCE).toContain('snapMotionValue(grabSpringX, x)');
     expect(HOOK_SOURCE).toContain(
