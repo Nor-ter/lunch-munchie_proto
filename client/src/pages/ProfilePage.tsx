@@ -31,6 +31,12 @@ import LunchmateProgressSheet from '@/components/munchie/LunchmateProgressSheet'
 import LunchmateLevelUpModal from '@/components/munchie/LunchmateLevelUpModal';
 import HeaderIconButton, { HeaderActionRow } from '@/components/ui/HeaderIconButton';
 import { useLunchmateFlow } from '@/hooks/useLunchmateFlow';
+import {
+  consumeLunchboxFood,
+  getLunchboxFoodItems,
+  markLunchboxFoodSeen,
+  normalizeLunchboxInventory,
+} from '@/constants/lunchboxFoods';
 import type { FoodieRoomNavigationState } from '@/pages/FoodieRoomPage';
 import type { LunchmateLayerItem } from '@/types/lunchmateCustomization';
 import {
@@ -42,7 +48,7 @@ import {
 const EMOJIS = ['😊', '🍱', '🍜', '🍣', '🥩', '🍕', '🌮', '🍔', '🥗', '☕', '🎂', '🍰'];
 const DIETARY_OPTIONS = ['비건', '채식', '글루텐프리', '할랄', '유제품 제외', '견과류 알러지', '해산물 제외'];
 
-/** Phase 1A 표시 전용 fixture — AppContext/localStorage의 실제 사용자 데이터와 섞지 않는다. */
+/** 로그인 전 프로필 미리보기에서만 사용하는 fixture. */
 const LUNCHMATE_PREVIEW_FIXTURE = {
   uiState: 'foodAvailable',
   unseenFoodCount: 2,
@@ -122,6 +128,18 @@ function ProfilePageContent() {
     () => lunchmateLoadoutFromProfile(profile.lunchmateLoadout),
     [profile.lunchmateLoadout],
   );
+  const lunchboxInventory = useMemo(
+    () => normalizeLunchboxInventory(profile.lunchboxInventory),
+    [profile.lunchboxInventory],
+  );
+  const lunchboxFoodItems = useMemo(
+    () => getLunchboxFoodItems(lunchboxInventory),
+    [lunchboxInventory],
+  );
+  const unseenFoodCount = useMemo(
+    () => lunchboxFoodItems.reduce((total, item) => total + item.unseenQuantity, 0),
+    [lunchboxFoodItems],
+  );
 
   const [activeSheet, setActiveSheet] = useState<ProfileSheet | null>(() => {
     const params = new URLSearchParams(window.location.search);
@@ -154,10 +172,15 @@ function ProfilePageContent() {
   const persistLunchmateTotalXp = useCallback((nextTotalXp: number) => {
     updateProfile({ lunchmateTotalXp: nextTotalXp });
   }, [updateProfile]);
+  const persistConsumedFood = useCallback((item: LunchboxFoodItem) => {
+    const result = consumeLunchboxFood(profile.lunchboxInventory, item.id);
+    if (result.consumed) updateProfile({ lunchboxInventory: result.inventory });
+  }, [profile.lunchboxInventory, updateProfile]);
   const lunchmateFlow = useLunchmateFlow({
-    initialState: LUNCHMATE_PREVIEW_FIXTURE.uiState,
+    initialState: unseenFoodCount > 0 ? 'foodAvailable' : 'idle',
     initialTotalXp: lunchmateTotalXp,
     onTotalXpChange: persistLunchmateTotalXp,
+    onFoodConsumed: persistConsumedFood,
     onSuccessClose: closeActiveSheet,
   });
   const clearFoodDragState = useCallback(() => {
@@ -175,6 +198,12 @@ function ProfilePageContent() {
     (item: LunchboxFoodItem) => lunchmateFlow.shareFood(item),
     [lunchmateFlow.shareFood],
   );
+  const stageLunchmateFood = useCallback((item: LunchboxFoodItem) => {
+    if (lunchmateFlow.isBusy || item.quantity <= 0) return;
+    lunchmateFlow.selectFood(item);
+    clearFoodDragState();
+    closeActiveSheet();
+  }, [clearFoodDragState, closeActiveSheet, lunchmateFlow.isBusy, lunchmateFlow.selectFood]);
   const handleFoodDragStart = useCallback((payload: LunchboxFoodDragPayload) => {
     if (lunchmateFlow.isBusy || payload.item.quantity <= 0) return;
     activeFoodDragIdRef.current = payload.item.id;
@@ -186,7 +215,28 @@ function ProfilePageContent() {
     const nextIsOver = isOverFoodieDropTarget(payload);
     setIsFoodDragOver(current => current === nextIsOver ? current : nextIsOver);
   }, [isOverFoodieDropTarget, lunchmateFlow.isBusy]);
-  const handleFoodDrop = useCallback((payload: LunchboxFoodDragPayload) => {
+  const handleLunchboxFoodDrop = useCallback((payload: LunchboxFoodDragPayload) => {
+    const validDrag = activeFoodDragIdRef.current === payload.item.id;
+    const droppedOnFoodie = isOverFoodieDropTarget(payload);
+    clearFoodDragState();
+
+    if (
+      !validDrag
+      || !droppedOnFoodie
+      || payload.item.quantity <= 0
+      || lunchmateFlow.isBusy
+    ) return;
+
+    lunchmateFlow.selectFood(payload.item);
+    closeActiveSheet();
+  }, [
+    clearFoodDragState,
+    closeActiveSheet,
+    isOverFoodieDropTarget,
+    lunchmateFlow.isBusy,
+    lunchmateFlow.selectFood,
+  ]);
+  const handleStagedFoodDrop = useCallback((payload: LunchboxFoodDragPayload) => {
     const validDrag = activeFoodDragIdRef.current === payload.item.id;
     const droppedOnFoodie = isOverFoodieDropTarget(payload);
     clearFoodDragState();
@@ -200,7 +250,6 @@ function ProfilePageContent() {
     ) return;
 
     feedingDropGuardRef.current = true;
-    lunchmateFlow.selectFood(payload.item);
     void submitLunchmateFood(payload.item).finally(() => {
       feedingDropGuardRef.current = false;
     });
@@ -208,12 +257,15 @@ function ProfilePageContent() {
     clearFoodDragState,
     isOverFoodieDropTarget,
     lunchmateFlow.isBusy,
-    lunchmateFlow.selectFood,
     submitLunchmateFood,
   ]);
   const openLunchbox = useCallback(() => {
-    if (lunchmateFlow.beginSelecting()) setActiveSheet('lunchbox');
-  }, [lunchmateFlow.beginSelecting]);
+    if (!lunchmateFlow.beginSelecting()) return;
+    if (unseenFoodCount > 0) {
+      updateProfile({ lunchboxInventory: markLunchboxFoodSeen(profile.lunchboxInventory) });
+    }
+    setActiveSheet('lunchbox');
+  }, [lunchmateFlow.beginSelecting, profile.lunchboxInventory, unseenFoodCount, updateProfile]);
   const closeLunchbox = useCallback(() => {
     clearFoodDragState();
     if (!lunchmateFlow.selectedFood) lunchmateFlow.cancel();
@@ -381,7 +433,7 @@ function ProfilePageContent() {
           loadout={lunchmateLoadout}
           onCustomize={openFoodieRoom}
           uiState={lunchmateFlow.state}
-          unseenFoodCount={LUNCHMATE_PREVIEW_FIXTURE.unseenFoodCount}
+          unseenFoodCount={unseenFoodCount}
           onLunchboxOpen={openLunchbox}
           lunchboxButtonRef={lunchboxButtonRef}
           onProgressOpen={openProgress}
@@ -399,7 +451,7 @@ function ProfilePageContent() {
           selectedFood={lunchmateFlow.isBusy ? null : lunchmateFlow.selectedFood}
           onFoodDragStart={handleFoodDragStart}
           onFoodDragMove={handleFoodDragMove}
-          onFoodDrop={handleFoodDrop}
+          onFoodDrop={handleStagedFoodDrop}
           onFoodDragCancel={clearFoodDragState}
         />
         <div className="relative z-20 -mt-9 px-3">
@@ -471,14 +523,14 @@ function ProfilePageContent() {
 
       <LunchboxBottomSheet
         open={activeSheet === 'lunchbox'}
-        items={LUNCHMATE_PREVIEW_FIXTURE.foodItems}
+        items={lunchboxFoodItems}
         flowState={lunchmateFlow.state}
         errorMessage={lunchmateFlow.errorMessage}
         onFoodSelect={lunchmateFlow.selectFood}
-        onShare={submitLunchmateFood}
+        onShare={stageLunchmateFood}
         onFoodDragStart={handleFoodDragStart}
         onFoodDragMove={handleFoodDragMove}
-        onFoodDrop={handleFoodDrop}
+        onFoodDrop={handleLunchboxFoodDrop}
         onFoodDragCancel={clearFoodDragState}
         dropTargetRef={foodieDropTargetRef}
         onClose={closeLunchbox}

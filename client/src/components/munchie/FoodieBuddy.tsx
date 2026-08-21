@@ -5,6 +5,7 @@ import {
   type PointerEvent as ReactPointerEvent,
   type Ref,
 } from 'react';
+import { createPortal } from 'react-dom';
 import { motion, useReducedMotion } from 'framer-motion';
 import { Sparkles } from 'lucide-react';
 import { getSkinById, MUNCHIE_SKINS, type MunchieSkin } from '@/constants/skins';
@@ -408,6 +409,8 @@ export default function FoodieBuddy({
 
   const profileMotion = useLunchmateProfileMotion({
     suspended: isFeeding || isFoodDragging || isLunchboxOpen || isProfileTapReactionActive,
+    // 탭 표정 반응은 자동 순찰만 멈춘다. 사용자가 다시 잡는 입력까지 막지 않는다.
+    grabBlocked: profileTapInteractionBlocked,
   });
   const automaticProfileChickenAsset = resolveLunchmateProfilePresentationAsset(
     profileMotion.assetKey,
@@ -416,15 +419,15 @@ export default function FoodieBuddy({
   );
   const profileChickenAsset = isFeeding
     ? automaticProfileChickenAsset
-    : isProfileTapReactionActive
-      ? 'idle'
-      : profileMotion.grab.assetKeyOverride ?? automaticProfileChickenAsset;
+    : profileMotion.grab.assetKeyOverride
+      ?? (isProfileTapReactionActive ? 'idle' : automaticProfileChickenAsset);
   const profileAutomaticX = profileMotion.grab.hasVisualControl
     ? 0
     : profileMotion.x;
   const profileFaceSystemEnabled = !profileTapInteractionBlocked
     && (isProfileTapReactionActive || profileChickenAsset === 'idle');
   const [profileFoodDragPreview, setProfileFoodDragPreview] = useState<LunchboxFoodDragPayload | null>(null);
+  const [isProfileFoodPointerActive, setIsProfileFoodPointerActive] = useState(false);
   const profileFoodDragRef = useRef<{
     pointerId: number;
     item: LunchboxFoodItem;
@@ -435,7 +438,6 @@ export default function FoodieBuddy({
   const canDragSelectedFood = Boolean(
     selectedFood
     && selectedFood.quantity > 0
-    && !isFoodDragging
     && !isFeeding
     && !isLunchboxOpen
     && !profileMotion.grab.isActive,
@@ -445,12 +447,14 @@ export default function FoodieBuddy({
     if (cancel && activeDrag?.dragging) onFoodDragCancel?.();
     profileFoodDragRef.current = null;
     setProfileFoodDragPreview(null);
+    setIsProfileFoodPointerActive(false);
   };
   const handleProfileFoodPointerDown = (event: ReactPointerEvent<HTMLButtonElement>) => {
     if (!selectedFood || !canDragSelectedFood) return;
     if (event.pointerType === 'mouse' && event.button !== 0) return;
 
     event.currentTarget.setPointerCapture(event.pointerId);
+    setIsProfileFoodPointerActive(true);
     profileFoodDragRef.current = {
       pointerId: event.pointerId,
       item: selectedFood,
@@ -660,7 +664,7 @@ export default function FoodieBuddy({
         {selectedFood && !isLunchboxOpen && !isFeeding && (
           <motion.button
             type="button"
-            disabled={!canDragSelectedFood}
+            disabled={!canDragSelectedFood && !isProfileFoodPointerActive}
             className="absolute bottom-1 z-30 flex h-[70px] w-[70px] cursor-grab items-end justify-center bg-transparent p-0 text-[38px] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#E85053] disabled:cursor-default disabled:opacity-100 active:cursor-grabbing"
             style={{
               right: 66,
@@ -772,7 +776,9 @@ export default function FoodieBuddy({
           <div
             ref={profileMotion.characterRef}
             className={`pointer-events-auto w-[86px] will-change-transform ${
-              profileMotion.grab.phase === 'grabbed' ? 'cursor-grabbing' : 'cursor-grab'
+              profileMotion.grab.phase === 'pressing' || profileMotion.grab.phase === 'grabbed'
+                ? 'cursor-grabbing'
+                : 'cursor-grab'
             }`}
             style={{
               transform: `translate3d(${profileAutomaticX}px, 0, 0)`,
@@ -791,8 +797,11 @@ export default function FoodieBuddy({
             data-lunchmate-profile-frame={profileMotion.frame}
             data-lunchmate-profile-ready={profileMotion.motionReady ? 'true' : 'false'}
             data-lunchmate-profile-grab={profileMotion.grab.phase}
+            data-lunchmate-profile-expression={profileMotion.grab.phase === 'grabbed' ? 'surprised' : 'default'}
             role="img"
-            aria-label="런치메이트 캐릭터"
+            aria-label={profileMotion.grab.phase === 'grabbed'
+              ? '놀란 런치메이트 캐릭터, 드래그 중'
+              : '런치메이트 캐릭터'}
             onPointerDown={(event) => {
               const tapEligible = event.isPrimary
                 && !(event.pointerType === 'mouse' && event.button !== 0)
@@ -804,14 +813,6 @@ export default function FoodieBuddy({
                 clientX: event.clientX,
                 clientY: event.clientY,
               }, tapEligible);
-              if (tapEligible) {
-                try {
-                  // Short touch에도 capture를 걸어 iOS에서 pointerup이 wrapper 밖으로 빠지지 않게 한다.
-                  event.currentTarget.setPointerCapture(event.pointerId);
-                } catch {
-                  // capture 미지원 환경에서도 일반 tap 판정은 계속한다.
-                }
-              }
               const started = profileMotion.grab.handlePointerDown({
                 pointerId: event.pointerId,
                 isPrimary: event.isPrimary,
@@ -958,7 +959,9 @@ export default function FoodieBuddy({
                             artwork="chicken"
                             chickenAssetKeyOverride={profileChickenAsset}
                             chickenFaceSystem={profileFaceSystemEnabled}
-                            chickenFaceOverride={profileTapFace ?? 'default'}
+                            chickenFaceOverride={profileMotion.grab.phase === 'grabbed'
+                              ? 'default'
+                              : profileTapFace ?? 'default'}
                             onChickenImageLoad={profileMotion.handleCharacterImageLoad}
                             animated={false}
                             fallback={(
@@ -973,12 +976,22 @@ export default function FoodieBuddy({
                   </div>
                 </div>
               </motion.div>
+              {/* 캐릭터와 같은 position layer 안에서 함께 이동하는 그림자 */}
+              <motion.div
+                className="mx-auto rounded-full"
+                style={{
+                  width: LUNCHMATE_RENDER_SIZE * 0.52,
+                  height: 5,
+                  background: 'rgba(0,0,0,0.14)',
+                  marginTop: -1,
+                }}
+                animate={profileMotion.grab.phase === 'grabbed' && !motionIsReduced
+                  ? { scaleX: 0.82, opacity: 0.7 }
+                  : { scaleX: 1, opacity: 1 }}
+                transition={{ duration: motionIsReduced ? 0 : 0.12, ease: 'easeOut' }}
+                data-lunchmate-profile-moving-shadow="true"
+              />
             </motion.div>
-            {/* 그림자 */}
-            <div
-              className="mx-auto rounded-full"
-              style={{ width: LUNCHMATE_RENDER_SIZE * 0.52, height: 5, background: 'rgba(0,0,0,0.14)', marginTop: -1 }}
-            />
           </div>
         </div>
 
@@ -1006,7 +1019,7 @@ export default function FoodieBuddy({
           </>
         )}
       </div>
-      {profileFoodDragPreview && (
+      {profileFoodDragPreview && typeof document !== 'undefined' && createPortal(
         <div
           className="pointer-events-none fixed z-[120] h-[70px] w-[70px]"
           style={{
@@ -1037,7 +1050,8 @@ export default function FoodieBuddy({
               </span>
             )}
           </motion.div>
-        </div>
+        </div>,
+        document.body,
       )}
     </div>
   );

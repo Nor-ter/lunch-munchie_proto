@@ -13,7 +13,9 @@ separate deployed Worker integration and should be verified in preview E2E.
 2. `.env` is optional: copy `.env.example` only when testing Google Maps. Values
    prefixed with `VITE_` are browser-visible by design.
 3. Put the administrator-provided `.dev.vars` next to `package.json` and fill the
-   server-only OAuth values. `.dev.vars` is ignored by Git. Do **not** copy
+   server-only OAuth values plus `GOOGLE_MAPS_SERVER_API_KEY` for Places search
+   and walking directions.
+   `.dev.vars` is ignored by Git. Do **not** copy
    `.dev.vars.example` over an existing file: that would replace working local
    Google credentials with blank values.
 4. In Google Cloud Console, add this authorised redirect URI for the development
@@ -58,4 +60,9 @@ separate deployed Worker integration and should be verified in preview E2E.
   remote production database.
 - Google client secrets and `AUTH_SESSION_SECRET` belong only in `.dev.vars` for
   local Pages Functions, and Cloudflare Pages Secrets for production.
+- `VITE_GOOGLE_MAPS_API_KEY` loads browser map tiles at build time. It does not
+  replace the server-only `GOOGLE_MAPS_SERVER_API_KEY`, which must also exist as
+  a Cloudflare Pages Secret in production for autocomplete, place details, and
+  directions. Enable and allow both **Places API (New)** and **Directions API**
+  on that server key.
 - Values prefixed with `VITE_` are visible to the browser by design.

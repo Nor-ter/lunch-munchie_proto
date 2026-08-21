@@ -538,7 +538,7 @@ export default function LunchboxBottomSheet({
                           : '한입 나누기'}
                   </button>
                   <p className="mt-2 text-center text-[10px] text-[#B09D92]">
-                    맛추억 XP는 미리보기이며, 나눈 음식은 1개 차감돼요.
+                    음식이 캐릭터 옆에 놓이면 끌어다 먹여주세요. 먹인 음식은 1개 차감돼요.
                   </p>
                 </footer>
               </>

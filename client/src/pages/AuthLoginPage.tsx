@@ -45,7 +45,9 @@ export default function AuthLoginPage() {
   };
 
   if (authError) {
-    const message = authError === 'oauth_profile'
+    const message = authError === 'oauth_config'
+      ? '로컬 Google 로그인 설정이 없어요. 프로젝트 루트의 .dev.vars에 Google OAuth 설정을 복구한 뒤 개발 서버를 다시 시작해 주세요.'
+      : authError === 'oauth_profile'
       ? 'Google 계정 정보를 읽지 못했어요. 계정에 이름이나 프로필 사진이 없어도 로그인은 가능해야 하므로, 다시 시도해도 반복되면 이 오류 코드를 알려주세요.'
       : authError === 'oauth_exchange'
         ? 'Google 인증 코드를 앱 세션으로 바꾸지 못했어요.'

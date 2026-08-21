@@ -40,6 +40,20 @@ function createEnv(db = createDb()): EnvBindings {
 }
 
 describe("Google OAuth callback", () => {
+  it("reports missing local OAuth configuration before redirecting to Google", async () => {
+    const env = createEnv();
+    delete (env as Partial<EnvBindings>).GOOGLE_CLIENT_ID;
+
+    const response = await app.request(
+      "http://localhost/api/auth/google/start?next=/coursemap/new",
+      undefined,
+      env,
+    );
+
+    expect(response.status).toBe(302);
+    expect(response.headers.get("location")).toBe("/auth/login?error=oauth_config");
+  });
+
   it("creates a readable login session when Google profile has no name or picture", async () => {
     const fetchMock = vi.spyOn(globalThis, "fetch").mockImplementation(
       async (input) => {

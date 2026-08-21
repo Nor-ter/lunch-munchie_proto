@@ -51,4 +51,6 @@ export interface GoogleRestaurantRow {
   google_place_id: string | null;
   synced_at: string | null;
   source: 'seed' | 'google';
+  /** Google Places 원본 type 목록. 음식 장소 검증 캐시에 사용한다. */
+  place_types?: string[];
 }

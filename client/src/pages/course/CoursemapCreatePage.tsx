@@ -10,7 +10,7 @@ import { AnimatePresence, motion } from 'framer-motion';
 import { useLocation, useSearch } from 'wouter';
 import {
   ChevronLeft, ChevronRight, Crop, Pencil, Plus,
-  Eraser, Highlighter, MousePointer2, RotateCcw, RotateCw, Search, Share2,
+  Eraser, Highlighter, MapPin as MapPointIcon, MousePointer2, RotateCcw, RotateCw, Search, Share2,
   Trash2, Type, X, Wand2, Undo2,
 } from 'lucide-react';
 import { toast } from 'sonner';
@@ -27,7 +27,7 @@ import {
   type CoursemapCanvasStroke,
   type PlacedPhoto,
 } from '@/lib/coursemapDecor';
-import { getCourseMapPoints, getCurvedCourseSegments } from '@/lib/courseMapSync';
+import { CourseMap as GoogleCourseMap, type MapPoint } from '@/components/map/CourseMap';
 import CourseSequenceMarker from '@/components/course/CourseSequenceMarker';
 import { fileToResizedDataUrl } from '@/lib/imageUtils';
 import { readJpegGps, suggestPhotoRestaurant } from '@/lib/photoAttribution';
@@ -39,6 +39,10 @@ import {
   type LunchboxFoodDefinition,
 } from '@/constants/lunchboxFoods';
 import { useAuthStatus } from '@/hooks/useAuthStatus';
+import { usePlacesSearch } from '@/hooks/usePlacesSearch';
+import { useDirections } from '@/hooks/useDirections';
+import { getPlaceDetails } from '@/services/placesApi';
+import { mapGoogleRestaurant } from '@/lib/googlePlaces';
 import { replaceWithGoogleAuth, startGoogleAuth } from '@/services/authApi';
 
 const STEP_TITLES = [
@@ -103,16 +107,64 @@ type PhotoAttribution = {
 
 // ── ① 코스맵 정하기 ───────────────────────────────────────────────────────────
 
-function PinMap({ pins, activeBubble, onMarkerTap }: {
+function PinMap({ pins, activeBubble, isPickingPlace, onMarkerTap, onMapPlaceTap }: {
   pins: (CoursePin | null)[];
   activeBubble: number | null;
+  isPickingPlace: boolean;
   onMarkerTap: (slot: number) => void;
+  onMapPlaceTap: (placeId: string) => void;
 }) {
-  const filled = pins.filter((pin): pin is CoursePin => !!pin);
-  const points = getCourseMapPoints(filled.map(pin => pin.restaurant));
-  const segments = getCurvedCourseSegments(points);
-  // slot 인덱스 → 채워진 핀 순번
-  let filledIdx = -1;
+  const hasMapsKey = Boolean(import.meta.env.VITE_GOOGLE_MAPS_API_KEY);
+  const points = useMemo<MapPoint[]>(() => pins.flatMap((pin, slot) => {
+    if (!pin || !Number.isFinite(pin.restaurant.lat) || !Number.isFinite(pin.restaurant.lng)) return [];
+    return [{
+      id: String(slot),
+      name: pin.restaurant.name,
+      latitude: pin.restaurant.lat,
+      longitude: pin.restaurant.lng,
+      subtitle: pin.restaurant.address,
+      sequenceNumber: slot + 1,
+    }];
+  }), [pins]);
+  const directionsPoints = useMemo(
+    () => points.map(point => ({ latitude: point.latitude, longitude: point.longitude })),
+    [points],
+  );
+  const { coordinates: routeCoordinates } = useDirections(directionsPoints, 'walking');
+
+  if (hasMapsKey) {
+    return (
+      <div className="relative aspect-[4/3] w-full overflow-hidden rounded-2xl border border-[#E8DED4] bg-[#F8F5F0]">
+        <GoogleCourseMap
+          points={points}
+          width="100%"
+          height="100%"
+          routeCoordinates={routeCoordinates}
+          selectedPointId={activeBubble === null ? null : String(activeBubble)}
+          onPressPoint={point => onMarkerTap(Number(point.id))}
+          onPressPlaceId={activeBubble === null ? undefined : onMapPlaceTap}
+        />
+        {activeBubble !== null && (
+          <p
+            role="status"
+            data-ui="map-place-picker-status"
+            className="pointer-events-none absolute inset-x-3 top-3 z-10 rounded-xl bg-[#3B2A23]/90 px-3 py-2 text-center text-[11px] font-bold text-white shadow-lg backdrop-blur-sm"
+          >
+            {isPickingPlace
+              ? '장소 정보를 불러오는 중…'
+              : `지도 위 장소 아이콘을 누르면 ${activeBubble + 1}번 장소로 선택돼요`}
+          </p>
+        )}
+        {points.length === 0 && (
+          <p className="pointer-events-none absolute inset-x-4 top-1/2 -translate-y-1/2 rounded-xl bg-white/90 px-3 py-2 text-center text-[12px] font-semibold text-[#8F8175] shadow-sm backdrop-blur-sm">
+            {activeBubble === null
+              ? <>아래 숫자 마커를 먼저 눌러주세요<br />지도 또는 검색으로 장소를 고를 수 있어요 🗺️</>
+              : <>지도에 표시된 장소 아이콘을 누르거나<br />아래 검색창에서 장소를 찾아보세요</>}
+          </p>
+        )}
+      </div>
+    );
+  }
 
   return (
     <div className="relative aspect-[4/3] w-full overflow-hidden rounded-2xl border border-[#E8DED4] bg-[#F8F5F0]">
@@ -124,53 +176,10 @@ function PinMap({ pins, activeBubble, onMarkerTap }: {
             <line x1="0" y1={step} x2="100" y2={step} />
           </g>
         ))}
-        {segments.map((segment, i) => (
-          <path
-            key={i}
-            d={segment.path}
-            fill="none"
-            stroke="#F25055"
-            strokeWidth="1.4"
-            strokeDasharray="1.5 3.5"
-            strokeLinecap="round"
-            opacity="0.8"
-          />
-        ))}
       </svg>
-      <span className="absolute left-2.5 top-2 text-[10px] font-bold text-[#B4A79A]">MAP</span>
-
-      {pins.map((pin, slot) => {
-        if (!pin) return null;
-        filledIdx += 1;
-        const pt = points[filledIdx] ?? { x: 50, y: 50 };
-        return (
-          <div
-            key={slot}
-            className="absolute"
-            style={{ left: `${pt.x}%`, top: `${pt.y}%`, transform: 'translate(-50%, -50%)' }}
-          >
-            <button
-              type="button"
-              onClick={() => onMarkerTap(slot)}
-              className="block active:scale-90"
-              aria-label={`${slot + 1}번 장소 마커`}
-            >
-              <CourseSequenceMarker index={slot} selected={activeBubble === slot} />
-            </button>
-            <span className="absolute left-1/2 top-full mt-0.5 max-w-[92px] -translate-x-1/2 truncate rounded-full bg-white/90 px-1.5 py-0.5 text-[8.5px] font-black text-[#3B2A22] shadow-sm">
-              {pin.restaurant.name}
-            </span>
-          </div>
-        );
-      })}
-
-      {filled.length === 0 && (
-        <p className="absolute inset-x-4 top-1/2 -translate-y-1/2 text-center text-[12px] font-semibold text-[#B4A79A]">
-          아래 숫자 마커를 눌러 말풍선에서
-          <br />
-          지도검색으로 장소를 찍어보세요 🗺️
-        </p>
-      )}
+      <p className="absolute inset-x-4 top-1/2 -translate-y-1/2 text-center text-[12px] font-semibold text-[#B4A79A]">
+        Google 지도 설정을 확인해 주세요.
+      </p>
     </div>
   );
 }
@@ -185,10 +194,25 @@ function PinsStep({
   caption: string;
   setCaption: (value: string) => void;
 }) {
-  const { restaurants } = useApp();
+  const { restaurants, registerRestaurants } = useApp();
   const [bubbleSlot, setBubbleSlot] = useState<number | null>(null);
-  const [query, setQuery] = useState('');
+  const [detailsLoadingId, setDetailsLoadingId] = useState<string | null>(null);
   const [newTag, setNewTag] = useState('');
+  const searchPanelRefs = useRef<Array<HTMLDivElement | null>>([]);
+
+  const firstPinnedRestaurant = pins.find((pin): pin is CoursePin => Boolean(pin))?.restaurant;
+  const bias = firstPinnedRestaurant
+    ? { lat: firstPinnedRestaurant.lat, lng: firstPinnedRestaurant.lng }
+    : undefined;
+  const {
+    input: query,
+    setInput: setQuery,
+    sessionToken,
+    suggestions,
+    isLoading: isGoogleLoading,
+    isError: isGoogleError,
+    reset: resetSearch,
+  } = usePlacesSearch(bias);
 
   const results = query.trim().length >= 1
     ? restaurants.filter(r =>
@@ -200,13 +224,58 @@ function PinsStep({
   const pickRestaurant = (slot: number, restaurant: Restaurant) => {
     if (pins.some((pin, i) => i !== slot && pin?.restaurant.id === restaurant.id)) {
       toast.info('이미 코스에 담긴 장소예요');
-      return;
+      return false;
     }
     setPins(prev => prev.map((pin, i) =>
       i === slot ? { restaurant, photo: restaurant.image ?? null } : pin,
     ));
     setBubbleSlot(null);
     setQuery('');
+    return true;
+  };
+
+  const handlePickGoogle = async (slot: number, placeId: string) => {
+    if (detailsLoadingId) return;
+    setDetailsLoadingId(placeId);
+    try {
+      const row = await getPlaceDetails(placeId, sessionToken);
+      const restaurant = mapGoogleRestaurant(row);
+      registerRestaurants([restaurant]);
+      // 입력과 debounced query를 함께 비워 새 토큰으로 이전 검색이 한 번 더 호출되지 않게 한다.
+      resetSearch();
+      pickRestaurant(slot, restaurant);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : '식당 정보를 가져오지 못했어요');
+    } finally {
+      setDetailsLoadingId(null);
+    }
+  };
+
+  const openBubble = (slot: number, revealSearch = false) => {
+    resetSearch();
+    setBubbleSlot(slot);
+    if (revealSearch) {
+      window.setTimeout(() => {
+        searchPanelRefs.current[slot]?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      }, 180);
+    }
+  };
+
+  const toggleBubble = (slot: number) => {
+    if (bubbleSlot === slot) {
+      resetSearch();
+      setBubbleSlot(null);
+      return;
+    }
+    openBubble(slot, true);
+  };
+
+  const handleMapPlaceTap = (placeId: string) => {
+    if (bubbleSlot === null) {
+      toast.info('먼저 아래 번호 마커를 눌러주세요');
+      return;
+    }
+    void handlePickGoogle(bubbleSlot, placeId);
   };
 
   const commitTag = () => {
@@ -257,7 +326,13 @@ function PinsStep({
       {/* 코스맵 지도 */}
       <div>
         <p className="mb-1.5 text-xs text-gray-400">코스맵</p>
-        <PinMap pins={pins} activeBubble={bubbleSlot} onMarkerTap={slot => setBubbleSlot(prev => prev === slot ? null : slot)} />
+        <PinMap
+          pins={pins}
+          activeBubble={bubbleSlot}
+          isPickingPlace={detailsLoadingId !== null}
+          onMarkerTap={slot => openBubble(slot, true)}
+          onMapPlaceTap={handleMapPlaceTap}
+        />
       </div>
 
       {/* 코스 순서 — 숫자핀 슬롯 (최대 3개) */}
@@ -272,7 +347,7 @@ function PinsStep({
               >
                 <button
                   type="button"
-                  onClick={() => setBubbleSlot(prev => prev === slot ? null : slot)}
+                  onClick={() => toggleBubble(slot)}
                   className="shrink-0 active:scale-90"
                   aria-label={`${slot + 1}번 장소 검색`}
                 >
@@ -297,7 +372,7 @@ function PinsStep({
                 ) : (
                   <button
                     type="button"
-                    onClick={() => setBubbleSlot(slot)}
+                    onClick={() => toggleBubble(slot)}
                     className="flex-1 py-1.5 text-left text-[12px] text-gray-400"
                   >
                     번호를 눌러 장소를 검색해보세요
@@ -315,6 +390,11 @@ function PinsStep({
                     className="overflow-hidden"
                   >
                     <div className="relative ml-5 mt-1.5 rounded-2xl border border-[#EAD9CE] bg-white p-3 shadow-[0_6px_16px_rgba(60,35,22,0.1)]">
+                      <div
+                        ref={element => { searchPanelRefs.current[slot] = element; }}
+                        className="absolute inset-x-0 top-0"
+                        aria-hidden="true"
+                      />
                       <span className="absolute -top-2 left-6 h-4 w-4 rotate-45 border-l border-t border-[#EAD9CE] bg-white" />
                       <div className="flex items-center gap-2 rounded-xl bg-gray-100 px-3 h-9">
                         <Search size={14} className="text-gray-400" />
@@ -327,6 +407,36 @@ function PinsStep({
                         />
                       </div>
                       <div className="mt-2 space-y-1.5">
+                        {query.trim().length >= 2 && (
+                          <div>
+                            <p className="mb-1 px-2 text-[10px] font-bold text-gray-400">Google 장소</p>
+                            {isGoogleLoading && (
+                              <p className="py-2 text-center text-[11px] text-gray-400">검색 중…</p>
+                            )}
+                            {isGoogleError && (
+                              <p className="py-2 text-center text-[11px] text-red-500">Google 장소 검색에 실패했어요</p>
+                            )}
+                            {!isGoogleLoading && !isGoogleError && suggestions.length === 0 && (
+                              <p className="py-2 text-center text-[11px] text-gray-400">Google 검색 결과가 없어요</p>
+                            )}
+                            {suggestions.map(suggestion => (
+                              <button
+                                key={`google-${suggestion.placeId}`}
+                                type="button"
+                                onClick={() => void handlePickGoogle(slot, suggestion.placeId)}
+                                disabled={Boolean(detailsLoadingId)}
+                                className="flex w-full items-center gap-2.5 rounded-xl px-2 py-2 text-left active:bg-[#FFF6F2] disabled:opacity-50"
+                              >
+                                <MapPointIcon size={15} className="shrink-0 text-[#E85053]" />
+                                <span className="min-w-0 flex-1 truncate text-[12.5px] font-semibold">{suggestion.text}</span>
+                                <Plus size={14} className="shrink-0 text-[#E85053]" />
+                              </button>
+                            ))}
+                          </div>
+                        )}
+                        {query.trim().length >= 1 && results.length > 0 && (
+                          <p className="px-2 pt-1 text-[10px] font-bold text-gray-400">저장된 식당</p>
+                        )}
                         {results.map(r => (
                           <button
                             key={r.id}
@@ -342,8 +452,8 @@ function PinsStep({
                             <Plus size={14} className="shrink-0 text-[#E85053]" />
                           </button>
                         ))}
-                        {query.trim().length >= 1 && results.length === 0 && (
-                          <p className="py-2 text-center text-[11px] text-gray-400">일치하는 장소가 없어요</p>
+                        {query.trim().length === 1 && results.length === 0 && (
+                          <p className="py-2 text-center text-[11px] text-gray-400">두 글자 이상 입력하면 Google 장소도 검색해요</p>
                         )}
                       </div>
                     </div>

@@ -15,6 +15,15 @@ import { buildSlate, scoreCandidateBreakdown } from "../../server/engine/scorer"
 import type { Candidate, RecContext, SlateType } from "../../shared/engine";
 import { isAdminEmail } from "./adminAccess";
 import { assessLearningReadiness, coverage } from "./algorithmInsights";
+import {
+  autocompleteGooglePlaces,
+  autocompleteGoogleLocations,
+  getGoogleDirections,
+  getGoogleLocationDetails,
+  getGooglePlaceDetails,
+  googlePlacesErrorResponse,
+} from "./googlePlaces";
+import { feedItemMatchesLocation, parseFeedLocationFilter } from "./feedLocation";
 
 export interface EnvBindings {
   DB: any;
@@ -26,6 +35,7 @@ export interface EnvBindings {
   GOOGLE_CLIENT_ID: string;
   GOOGLE_CLIENT_SECRET: string;
   AUTH_SESSION_SECRET: string;
+  GOOGLE_MAPS_SERVER_API_KEY?: string;
   /** Comma-separated Google account emails allowed to access /admin. */
   ADMIN_EMAILS?: string;
 }
@@ -207,7 +217,22 @@ const cookieValue = (request: Request, name: string) =>
     .get("cookie")
     ?.match(new RegExp(`(?:^|; )${name}=([^;]+)`))?.[1] ?? null;
 
+const hasGoogleOAuthConfig = (
+  env: Partial<Pick<EnvBindings, "GOOGLE_CLIENT_ID" | "GOOGLE_CLIENT_SECRET" | "AUTH_SESSION_SECRET">>,
+): env is EnvBindings & {
+  GOOGLE_CLIENT_ID: string;
+  GOOGLE_CLIENT_SECRET: string;
+  AUTH_SESSION_SECRET: string;
+} =>
+  Boolean(
+    env.GOOGLE_CLIENT_ID?.trim()
+      && env.GOOGLE_CLIENT_SECRET?.trim()
+      && env.AUTH_SESSION_SECRET?.trim(),
+  );
+
 app.get("/api/auth/google/start", (c) => {
+  if (!hasGoogleOAuthConfig(c.env))
+    return c.redirect("/auth/login?error=oauth_config");
   const next = c.req.query("next")?.startsWith("/")
     ? c.req.query("next")!
     : "/";
@@ -230,6 +255,8 @@ app.get("/api/auth/google/start", (c) => {
 });
 
 app.get("/api/auth/google/callback", async (c) => {
+  if (!hasGoogleOAuthConfig(c.env))
+    return c.redirect("/auth/login?error=oauth_config");
   const [state, encodedNext] = (c.req.query("state") ?? "").split(".");
   const expected = c.req
     .header("cookie")
@@ -322,6 +349,51 @@ app.post("/api/auth/logout", (c) => {
     cookie("lm_guest_id", "", 0, requestIsSecure(c.req.raw)),
   );
   return c.json({ ok: true });
+});
+
+app.post("/api/places-autocomplete", async (c) => {
+  try {
+    const body = await c.req.json<Record<string, unknown>>();
+    return c.json(await autocompleteGooglePlaces(c.env, body));
+  } catch (error) {
+    return googlePlacesErrorResponse(error);
+  }
+});
+
+app.post("/api/location-autocomplete", async (c) => {
+  try {
+    const body = await c.req.json<Record<string, unknown>>();
+    return c.json(await autocompleteGoogleLocations(c.env, body));
+  } catch (error) {
+    return googlePlacesErrorResponse(error);
+  }
+});
+
+app.post("/api/location-details", async (c) => {
+  try {
+    const body = await c.req.json<Record<string, unknown>>();
+    return c.json(await getGoogleLocationDetails(c.env, body));
+  } catch (error) {
+    return googlePlacesErrorResponse(error);
+  }
+});
+
+app.post("/api/place-details", async (c) => {
+  try {
+    const body = await c.req.json<Record<string, unknown>>();
+    return c.json(await getGooglePlaceDetails(c.env, body));
+  } catch (error) {
+    return googlePlacesErrorResponse(error);
+  }
+});
+
+app.post("/api/directions", async (c) => {
+  try {
+    const body = await c.req.json<Record<string, unknown>>();
+    return c.json(await getGoogleDirections(c.env, body));
+  } catch (error) {
+    return googlePlacesErrorResponse(error);
+  }
 });
 
 const json = <T>(value: string | null | undefined, fallback: T): T => {
@@ -3074,6 +3146,7 @@ app.get("/api/feed", async (c) => {
       ? Math.max(1, Math.min(Math.floor(requestedLimit), 20))
       : 8;
     const cursor = Math.max(0, Math.floor(Number(c.req.query("cursor")) || 0));
+    const locationFilter = parseFeedLocationFilter((name) => c.req.query(name));
     const viewer = await readSession(c.req.raw, c.env.AUTH_SESSION_SECRET);
     // Older local databases may predate the public-profile columns. Keep the
     // feed readable while still joining author data whenever the canonical
@@ -3095,7 +3168,7 @@ app.get("/api/feed", async (c) => {
     for (const course of courses as any[]) {
       // Fetch course items for this course
       const { results: stops } = await c.env.DB.prepare(
-        "SELECT ci.*, r.name, r.category, r.photos, r.rating FROM course_items ci JOIN restaurants r ON ci.restaurant_id = r.id WHERE ci.course_id = ? ORDER BY ci.order_index",
+        "SELECT ci.*, r.name, r.category, r.photos, r.rating, r.latitude, r.longitude FROM course_items ci JOIN restaurants r ON ci.restaurant_id = r.id WHERE ci.course_id = ? ORDER BY ci.order_index",
       )
         .bind(course.id)
         .all();
@@ -3139,6 +3212,8 @@ app.get("/api/feed", async (c) => {
           category: s.category,
           photos: await filterExistingPhotos(c.env, json<string[]>(s.photos, [])),
           rating: s.rating,
+          latitude: Number(s.latitude),
+          longitude: Number(s.longitude),
         },
       })));
 
@@ -3181,7 +3256,10 @@ app.get("/api/feed", async (c) => {
     // Preserve the legacy array response for initial/home hydration. The
     // Munchie page opts into a stable, personalised page contract with
     // `limit`/`cursor`; this avoids rendering every post at once.
-    if (!paged) return c.json(feedItems);
+    const locationItems = locationFilter
+      ? feedItems.filter((item) => feedItemMatchesLocation(item, locationFilter))
+      : feedItems;
+    if (!paged) return c.json(locationItems);
 
     const categoryAffinity = new Map<string, number>();
     const following = new Set<string>();
@@ -3204,7 +3282,7 @@ app.get("/api/feed", async (c) => {
           categoryAffinity.set(tag, (categoryAffinity.get(tag) ?? 0) + 0.45);
       for (const row of followRows.results) following.add(row.following_id);
     }
-    const ranked = rankMunchieFeedItems(feedItems, {
+    const ranked = rankMunchieFeedItems(locationItems, {
       viewerId: viewer?.sub ?? null,
       categoryAffinity,
       following,
@@ -3215,7 +3293,7 @@ app.get("/api/feed", async (c) => {
       items,
       nextCursor: nextCursor < ranked.length ? String(nextCursor) : null,
       hasMore: nextCursor < ranked.length,
-      policyVersion: "feed-personal-v1",
+      policyVersion: locationFilter ? "feed-personal-location-v1" : "feed-personal-v1",
     });
   } catch (err: any) {
     return c.json({ error: err.message }, 400);

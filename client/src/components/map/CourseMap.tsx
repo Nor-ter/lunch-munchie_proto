@@ -25,6 +25,8 @@ export interface MapPoint {
   latitude: number;
   longitude: number;
   subtitle?: string;
+  /** 빈 슬롯이 있어도 원래 코스 순번을 유지한다. */
+  sequenceNumber?: number;
 }
 
 interface Props {
@@ -32,6 +34,8 @@ interface Props {
   width: number | string;
   height: number | string;
   onPressPoint?: (point: MapPoint) => void;
+  /** Google 지도에 표시된 식당·카페 같은 POI를 직접 눌렀을 때의 place id. */
+  onPressPlaceId?: (placeId: string) => void;
   selectedPointId?: string | null;
   /** Directions(실제 도보 경로) 좌표. 없으면 마커를 잇는 직선으로 폴백. */
   routeCoordinates?: { latitude: number; longitude: number }[];
@@ -60,7 +64,7 @@ function FitBounds({ points }: { points: MapPoint[] }) {
   return null;
 }
 
-export function CourseMap({ points, width, height, onPressPoint, selectedPointId, routeCoordinates }: Props) {
+export function CourseMap({ points, width, height, onPressPoint, onPressPlaceId, selectedPointId, routeCoordinates }: Props) {
   const path = useMemo(() => {
     const coords =
       routeCoordinates && routeCoordinates.length >= 2
@@ -77,6 +81,13 @@ export function CourseMap({ points, width, height, onPressPoint, selectedPointId
         defaultZoom={13}
         gestureHandling="greedy"
         disableDefaultUI
+        clickableIcons={Boolean(onPressPlaceId)}
+        onClick={(event) => {
+          const placeId = event.detail.placeId;
+          if (!placeId || !onPressPlaceId) return;
+          event.stop();
+          onPressPlaceId(placeId);
+        }}
         style={{ width: '100%', height: '100%' }}
       >
         <FitBounds points={points} />
@@ -120,7 +131,7 @@ export function CourseMap({ points, width, height, onPressPoint, selectedPointId
                   transition: 'width 160ms ease, height 160ms ease, transform 160ms ease, box-shadow 160ms ease',
                 }}
               >
-                {idx + 1}
+                {point.sequenceNumber ?? idx + 1}
               </div>
             </AdvancedMarker>
           );

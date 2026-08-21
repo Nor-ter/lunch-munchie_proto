@@ -44,6 +44,14 @@ export interface PlaceSuggestion {
   text: string;
 }
 
+export interface LocationDetails {
+  placeId: string;
+  name: string;
+  address: string;
+  latitude: number;
+  longitude: number;
+}
+
 /** Places Text Search — 명시적 "검색" 액션(자동완성에서 결과가 없을 때 폴백 등)용. */
 export async function searchPlaces(query: string, bias?: Bias): Promise<PlaceSearchResult[]> {
   const { results } = await invokeEdgeFunction<{ results: PlaceSearchResult[] }>(
@@ -64,6 +72,29 @@ export async function autocompletePlaces(
     sessionToken: string;
   }>('places-autocomplete', { input, sessionToken, ...(bias ? { bias } : {}) });
   return suggestions;
+}
+
+export async function autocompleteLocations(
+  input: string,
+  sessionToken: string,
+  bias?: Bias,
+): Promise<PlaceSuggestion[]> {
+  const { suggestions } = await invokeEdgeFunction<{
+    suggestions: PlaceSuggestion[];
+    sessionToken: string;
+  }>('location-autocomplete', { input, sessionToken, ...(bias ? { bias } : {}) });
+  return suggestions;
+}
+
+export async function getLocationDetails(
+  placeId: string,
+  sessionToken?: string,
+): Promise<LocationDetails> {
+  const { location } = await invokeEdgeFunction<{ location: LocationDetails }>(
+    'location-details',
+    { placeId, ...(sessionToken ? { sessionToken } : {}) },
+  );
+  return location;
 }
 
 /**

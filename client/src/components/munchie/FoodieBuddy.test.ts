@@ -127,4 +127,19 @@ describe('FoodieBuddy Profile touch face integration', () => {
     expect(source).toContain('pointerType: event.pointerType');
     expect(source).not.toContain('event.buttons !== 1');
   });
+
+  it('keeps the selected food enabled while its floating preview follows the pointer', () => {
+    const source = readFileSync(join(process.cwd(), 'client', 'src', 'components', 'munchie', 'FoodieBuddy.tsx'), 'utf8');
+    const eligibilityStart = source.indexOf('const canDragSelectedFood');
+    const eligibilityEnd = source.indexOf('const clearProfileFoodDrag', eligibilityStart);
+
+    expect(source.slice(eligibilityStart, eligibilityEnd)).not.toContain('&& !isFoodDragging');
+    expect(source).toContain('setProfileFoodDragPreview(payload)');
+    expect(source).toContain('data-profile-food-drag-preview="true"');
+    expect(source).toContain('left: profileFoodDragPreview.clientX');
+    expect(source).toContain('top: profileFoodDragPreview.clientY');
+    expect(source).toContain("import { createPortal } from 'react-dom'");
+    expect(source).toContain('document.body');
+    expect(source).toContain('disabled={!canDragSelectedFood && !isProfileFoodPointerActive}');
+  });
 });
