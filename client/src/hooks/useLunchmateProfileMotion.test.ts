@@ -29,6 +29,8 @@ import {
   scheduleLunchmateProfileInitialMeasurement,
   selectLunchmateProfileEmotion,
   readLunchmateProfileVisualOffset,
+  parseLunchmateProfileTransform,
+  readLunchmateProfileTransformOffset,
   type LunchmateProfileMotionSnapshot,
   type LunchmateProfilePointerCaptureTarget,
 } from './useLunchmateProfileMotion';
@@ -257,6 +259,16 @@ describe('Lunchmate Profile pointer grab controller', () => {
       { left: 152, width: 116, bottom: 418 },
     )).toEqual({ x: -27, y: -8 });
     expect(readLunchmateProfileVisualOffset(null, { left: 0, width: 1, bottom: 0 })).toBeNull();
+  });
+
+  it('reads the painted grab translate from the moving layer transform', () => {
+    expect(parseLunchmateProfileTransform('none')).toEqual({ x: 0, y: 0 });
+    expect(parseLunchmateProfileTransform('matrix(1, 0, 0, 1, 36, -8)')).toEqual({ x: 36, y: -8 });
+    expect(parseLunchmateProfileTransform('matrix3d(1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 22, -12, 0, 1)')).toEqual({
+      x: 22,
+      y: -12,
+    });
+    expect(readLunchmateProfileTransformOffset(null)).toBeNull();
   });
 
   it('captures immediately, then swaps to grabbed after a 400ms stationary press', () => {
@@ -942,7 +954,7 @@ describe('Profile motion integration contract', () => {
     expect(HOOK_SOURCE).toContain('stiffness: 170');
     expect(HOOK_SOURCE).toContain('damping: 13');
     expect(HOOK_SOURCE).toContain('mass: 0.9');
-    expect(HOOK_SOURCE).toContain('readLunchmateProfileVisualOffset(movingLayer, fixedAnchor)');
+    expect(HOOK_SOURCE).toContain('readLunchmateProfileTransformOffset(movingLayerEl)');
     expect(HOOK_SOURCE).toContain('snapMotionValue(grabSpringX, x)');
     expect(HOOK_SOURCE).toContain(
       "grabSnapshot.phase === 'pressing'",

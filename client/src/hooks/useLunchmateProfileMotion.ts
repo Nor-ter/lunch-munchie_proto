@@ -937,6 +937,38 @@ export function readLunchmateProfileVisualOffset(
   };
 }
 
+export function parseLunchmateProfileTransform(transform: string | null | undefined) {
+  if (!transform || transform === 'none') return { x: 0, y: 0 };
+  if (typeof DOMMatrixReadOnly === 'function') {
+    try {
+      const matrix = new DOMMatrixReadOnly(transform);
+      return { x: matrix.m41, y: matrix.m42 };
+    } catch {
+      // Fall through to the regex parser for Node test environments.
+    }
+  }
+  const matrix3d = transform.match(/^matrix3d\((.+)\)$/);
+  if (matrix3d) {
+    const values = matrix3d[1].split(',').map(value => Number(value.trim()));
+    if (values.length === 16 && values.every(Number.isFinite)) {
+      return { x: values[12], y: values[13] };
+    }
+  }
+  const matrix = transform.match(/^matrix\((.+)\)$/);
+  if (matrix) {
+    const values = matrix[1].split(',').map(value => Number(value.trim()));
+    if (values.length === 6 && values.every(Number.isFinite)) {
+      return { x: values[4], y: values[5] };
+    }
+  }
+  return null;
+}
+
+export function readLunchmateProfileTransformOffset(element: HTMLElement | null | undefined) {
+  if (!element || typeof getComputedStyle !== 'function') return null;
+  return parseLunchmateProfileTransform(getComputedStyle(element).transform);
+}
+
 function snapMotionValue(value: MotionValue<number>, next: number) {
   const motion = value as MotionValue<number> & {
     jump?: (nextValue: number) => void;
@@ -1783,14 +1815,15 @@ export function useLunchmateProfileMotion({
 
   const handleGrabPointerDown = useCallback(
     (pointer: Omit<LunchmateProfileGrabPointer, 'initialVisualX' | 'initialVisualY'>) => {
-      const renderedCharacter = characterRef.current?.getBoundingClientRect();
-      const movingLayer = stageRef.current?.querySelector<HTMLElement>(
+      const movingLayerEl = stageRef.current?.querySelector<HTMLElement>(
         '[data-lunchmate-profile-grab-position="true"]',
-      )?.getBoundingClientRect();
+      );
+      const renderedCharacter = characterRef.current?.getBoundingClientRect();
       const fixedAnchor = stageRef.current?.querySelector<HTMLElement>(
         '[data-lunchmate-profile-grab-anchor="true"]',
       )?.getBoundingClientRect();
-      const visualOffset = readLunchmateProfileVisualOffset(movingLayer, fixedAnchor)
+      const visualOffset = readLunchmateProfileTransformOffset(movingLayerEl)
+        ?? readLunchmateProfileVisualOffset(movingLayerEl?.getBoundingClientRect(), fixedAnchor)
         ?? readLunchmateProfileVisualOffset(renderedCharacter, fixedAnchor);
       return grabControllerRef.current?.pointerDown({
         ...pointer,
