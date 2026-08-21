@@ -15,6 +15,7 @@ Cloudflare에서 이 정책이 허용하는 리소스는 아래뿐이다. 이름
 | Worker / Durable Objects | 스크립트 `lunchie-munchie-state` | `USER_DO`, `SESSION_DO` 상태 객체 배포·실행 |
 | R2 | 버킷 `lunchie-photos` | 앱이 소유권 확인을 거친 게시물 사진 저장·조회·삭제 |
 | Pages 런타임 비밀값 | `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `AUTH_SESSION_SECRET` | Google OAuth 및 세션 서명 |
+| Pages 브라우저 빌드 설정 | `VITE_GOOGLE_MAPS_API_KEY` | HTTP referrer 제한을 적용한 Google Maps 브라우저 키를 운영 Vite 번들에 주입 |
 
 다음은 명시적으로 **금지**한다: 다른 Pages/Workers/D1/R2, Vationo·researchq 등 다른 서비스, DNS·Zone, WAF·Access·Zero Trust 전역 관리, 계정 멤버·그룹·결제, 계정 API 토큰, 이메일·사용자 디렉터리, KV·Queues·AI·Analytics 설정 변경.
 
@@ -40,10 +41,11 @@ Cloudflare UI가 특정 권한을 리소스 단위로 좁힐 수 있으면 반�
 | `CLOUDFLARE_D1_MIGRATIONS_TOKEN` | D1 Edit — `lunchie-db`만 | `wrangler d1 migrations apply lunchie-db --remote` | 다른 DB, 임의 SQL·데이터 내보내기, R2, Pages, Worker, DNS, 멤버, 결제 |
 | `CLOUDFLARE_WORKER_DEPLOY_TOKEN` | Workers Scripts Edit — `lunchie-munchie-state`; Durable Objects Edit — 해당 스크립트; Pages Edit — `lunchie-munchie` | `wrangler deploy --config wrangler.state.toml`, `wrangler pages deploy … --project-name=lunchie-munchie --branch=main` | D1, R2, 비밀값 읽기/변경, DNS, Access/Zero Trust, 멤버, 결제, 다른 Worker/Pages |
 | `CLOUDFLARE_ACCOUNT_ID` | 권한 없음(식별자) | 위 두 명령의 대상 계정 지정 | 인증 수단으로 사용 금지 |
+| `VITE_GOOGLE_MAPS_API_KEY` | Cloudflare 권한 없음(브라우저용 Google API 키) | GitHub `production` 환경에서 Pages 운영 번들을 빌드할 때만 `VITE_GOOGLE_MAPS_API_KEY`로 주입 | 서버용 Google API, OAuth, 다른 저장소·환경, 로컬 기본값으로 사용 금지 |
 
 배포 토큰은 R2 권한을 갖지 않는다. 사진은 Pages Functions가 `PHOTOS_R2` 바인딩으로 처리하며, 앱은 게시물·계정 소유권을 확인한 뒤 해당 객체만 조작한다. 대량 목록 조회·버킷 전체 삭제·다른 버킷 접근은 금지한다.
 
-Cloudflare Pages Secrets는 GitHub에 복제하지 않는다. 지정된 비상 담당자만 Cloudflare Dashboard에서 값을 등록·교체하며, 값 자체를 채팅·이슈·PR·로그·`.dev.vars.example`에 남기지 않는다.
+Cloudflare Pages 런타임 Secrets는 GitHub에 복제하지 않는다. 단, `VITE_GOOGLE_MAPS_API_KEY`는 브라우저에 전달되는 빌드 설정이므로 직접 업로드 CI가 접근할 수 있도록 GitHub `production` 환경에도 같은 값을 등록한다. 이 키에는 Google Cloud HTTP referrer 제한을 적용한다. 지정된 비상 담당자만 값을 등록·교체하며, 값 자체를 채팅·이슈·PR·로그·`.dev.vars.example`에 남기지 않는다.
 
 ## 4. 배포 정책
 
@@ -71,7 +73,7 @@ feature branch → Pull Request → quality.yml 통과 → main 병합
 
 매월 한 번 다음을 점검한다.
 
-- GitHub Actions secrets가 위 세 개뿐인지와 마지막 사용 시각
+- GitHub Actions secrets가 위 네 개뿐인지와 마지막 사용 시각
 - Cloudflare API token의 대상·권한이 3절과 일치하는지
 - Lunchie Munchie 그룹의 사람 권한이 읽기 전용인지
 - Cloudflare Audit Log와 GitHub 배포 이력이 `main` 병합 이력과 일치하는지
