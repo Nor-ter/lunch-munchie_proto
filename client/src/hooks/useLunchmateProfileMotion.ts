@@ -969,6 +969,22 @@ export function readLunchmateProfileTransformOffset(element: HTMLElement | null 
   return parseLunchmateProfileTransform(getComputedStyle(element).transform);
 }
 
+export function pickLunchmateProfileCarryOffset(
+  candidates: Array<{ x: number; y: number } | null | undefined>,
+) {
+  const valid = candidates.filter((candidate): candidate is { x: number; y: number } => (
+    Boolean(candidate)
+    && Number.isFinite(candidate!.x)
+    && Number.isFinite(candidate!.y)
+  ));
+  if (valid.length === 0) return null;
+  return valid.reduce((best, next) => (
+    Math.abs(next.x) + Math.abs(next.y) > Math.abs(best.x) + Math.abs(best.y)
+      ? next
+      : best
+  ));
+}
+
 function snapMotionValue(value: MotionValue<number>, next: number) {
   const motion = value as MotionValue<number> & {
     jump?: (nextValue: number) => void;
@@ -1818,20 +1834,24 @@ export function useLunchmateProfileMotion({
       const movingLayerEl = stageRef.current?.querySelector<HTMLElement>(
         '[data-lunchmate-profile-grab-position="true"]',
       );
-      const renderedCharacter = characterRef.current?.getBoundingClientRect();
-      const fixedAnchor = stageRef.current?.querySelector<HTMLElement>(
-        '[data-lunchmate-profile-grab-anchor="true"]',
-      )?.getBoundingClientRect();
-      const visualOffset = readLunchmateProfileTransformOffset(movingLayerEl)
-        ?? readLunchmateProfileVisualOffset(movingLayerEl?.getBoundingClientRect(), fixedAnchor)
-        ?? readLunchmateProfileVisualOffset(renderedCharacter, fixedAnchor);
+      const visualOffset = pickLunchmateProfileCarryOffset([
+        {
+          x: clampedGrabSpringX.get(),
+          y: clampedGrabSpringY.get(),
+        },
+        readLunchmateProfileTransformOffset(movingLayerEl),
+        readLunchmateProfileVisualOffset(
+          movingLayerEl?.getBoundingClientRect(),
+          characterRef.current?.getBoundingClientRect(),
+        ),
+      ]) ?? { x: snapshot.x, y: 0 };
       return grabControllerRef.current?.pointerDown({
         ...pointer,
-        initialVisualX: visualOffset?.x ?? snapshot.x,
-        initialVisualY: visualOffset?.y ?? 0,
+        initialVisualX: visualOffset.x,
+        initialVisualY: visualOffset.y,
       }) ?? false;
     },
-    [snapshot.x],
+    [clampedGrabSpringX, clampedGrabSpringY, snapshot.x],
   );
   const handleGrabPointerMove = useCallback(
     (pointerId: number, clientX: number, clientY: number) => (
