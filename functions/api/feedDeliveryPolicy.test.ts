@@ -7,8 +7,9 @@ const source = readFileSync(new URL("./[[path]].ts", import.meta.url), "utf8");
 describe("Munchie feed delivery policy", () => {
   it("keeps legacy hydration while exposing a cursor-based personalised feed contract", () => {
     expect(source).toContain('const paged = c.req.query("limit") !== undefined || c.req.query("cursor") !== undefined');
-    expect(source).toContain("if (!paged) return c.json(feedItems)");
-    expect(source).toContain('policyVersion: "feed-personal-v1"');
+    expect(source).toContain("if (!paged) return c.json(locationItems)");
+    expect(source).toContain(": feedItems;");
+    expect(source).toContain('"feed-personal-location-v1" : "feed-personal-v1"');
     expect(source).toContain("nextCursor");
     expect(source).toContain("hasMore");
   });

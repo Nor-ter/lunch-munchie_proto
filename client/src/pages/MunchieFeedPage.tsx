@@ -1,15 +1,20 @@
 import { useEffect, useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
-import { LoaderCircle, Palette, Plus, Search, SlidersHorizontal, X } from 'lucide-react';
+import { LoaderCircle, MapPin, Palette, Plus, RotateCcw, Search, SlidersHorizontal, X } from 'lucide-react';
+import { toast } from 'sonner';
 import { useLocation } from 'wouter';
 import { FOOD_FILTER_TAGS, hasFoodTag } from '@/constants/foodTags';
 import { getCourseTagStyle } from '@/constants/courseTheme';
-import { type TagType, useApp } from '@/contexts/AppContext';
+import { type FeedLocationFilter, type TagType, useApp } from '@/contexts/AppContext';
+import FeedRadiusMap, { type FeedRadiusCenter } from '@/components/feed/FeedRadiusMap';
 import UnifiedMunchieCard from '@/components/munchie/UnifiedMunchieCard';
 import { FollowButton } from '@/components/follow/FollowButton';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { useAuthStatus } from '@/hooks/useAuthStatus';
 import { useUserSearch } from '@/hooks/useUserSearch';
+import { isWithinRadius } from '@shared/geo';
+import { useLocationSearch } from '@/hooks/useLocationSearch';
+import { getLocationDetails } from '@/services/placesApi';
 
 export default function MunchieFeedPage() {
   const [, navigate] = useLocation();
@@ -22,17 +27,79 @@ export default function MunchieFeedPage() {
   const canSearch = Boolean(auth.data && !auth.data.isAnonymous);
   const userSearch = useUserSearch(searchTerm, canSearch);
   const [showFilters, setShowFilters] = useState(true);
-  useEffect(() => { void refreshFeedPosts().catch(() => undefined); }, [refreshFeedPosts]);
+  const [draftCenter, setDraftCenter] = useState<FeedRadiusCenter | null>(null);
+  const [draftRadiusKm, setDraftRadiusKm] = useState(5);
+  const [appliedLocation, setAppliedLocation] = useState<FeedLocationFilter | null>(null);
+  const [isApplyingLocation, setIsApplyingLocation] = useState(false);
+  const [locationDetailsLoadingId, setLocationDetailsLoadingId] = useState<string | null>(null);
+  const locationSearch = useLocationSearch(draftCenter ?? undefined);
+  const hasMapsKey = Boolean(import.meta.env.VITE_GOOGLE_MAPS_API_KEY);
+  useEffect(() => { void refreshFeedPosts(null).catch(() => undefined); }, [refreshFeedPosts]);
   useEffect(() => {
     const timer = window.setTimeout(() => setSearchTerm(searchInput.trim()), 300);
     return () => window.clearTimeout(timer);
   }, [searchInput]);
-  const filteredPosts = activeFilter === 'all'
+  const categoryPosts = activeFilter === 'all'
     ? feedPosts
     : feedPosts.filter(post => hasFoodTag(post.tags, activeFilter as TagType));
+  const filteredPosts = appliedLocation
+    ? categoryPosts.filter(post => post.stops?.some(stop => isWithinRadius(
+        appliedLocation.latitude,
+        appliedLocation.longitude,
+        stop.latitude,
+        stop.longitude,
+        appliedLocation.radiusKm * 1_000,
+      )))
+    : categoryPosts;
   const searchActive = searchInput.trim().length > 0;
   const searchPending = searchActive
     && (searchTerm !== searchInput.trim() || userSearch.isLoading || userSearch.isFetching);
+
+  const pickLocation = async (placeId: string) => {
+    if (locationDetailsLoadingId) return;
+    setLocationDetailsLoadingId(placeId);
+    try {
+      const location = await getLocationDetails(placeId, locationSearch.sessionToken);
+      setDraftCenter({ lat: location.latitude, lng: location.longitude });
+      locationSearch.reset();
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : '장소 위치를 불러오지 못했어요');
+    } finally {
+      setLocationDetailsLoadingId(null);
+    }
+  };
+
+  const applyLocationFilter = async () => {
+    if (!draftCenter || isApplyingLocation) return;
+    const next = {
+      latitude: draftCenter.lat,
+      longitude: draftCenter.lng,
+      radiusKm: draftRadiusKm,
+    };
+    setIsApplyingLocation(true);
+    try {
+      await refreshFeedPosts(next);
+      setAppliedLocation(next);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : '근처 피드를 불러오지 못했어요');
+    } finally {
+      setIsApplyingLocation(false);
+    }
+  };
+
+  const clearLocationFilter = async () => {
+    if (isApplyingLocation) return;
+    setIsApplyingLocation(true);
+    try {
+      await refreshFeedPosts(null);
+      setAppliedLocation(null);
+      setDraftCenter(null);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : '전체 피드를 불러오지 못했어요');
+    } finally {
+      setIsApplyingLocation(false);
+    }
+  };
 
   return (
     <div className="min-h-dvh bg-[#FFF7F2] pb-[calc(65px+43px+1rem)]">
@@ -111,22 +178,136 @@ export default function MunchieFeedPage() {
               exit={{ opacity: 0, height: 0 }}
               className="overflow-hidden"
             >
-              <div className="mt-3 flex gap-1.5 overflow-x-auto pb-0.5 scrollbar-hide">
-                {FOOD_FILTER_TAGS.map(filter => (
-                  <button
-                    type="button"
-                    key={filter.value}
-                    onClick={() => setActiveFilter(filter.value)}
-                    className="h-8 shrink-0 rounded-[10px] px-3 text-[10px] font-black transition-transform active:scale-95"
-                    style={filter.value === 'all'
-                      ? activeFilter === filter.value
-                        ? { background: '#EE7775', color: '#FFFFFF' }
-                        : { background: '#FFF9F5', color: '#6E5B51', border: '1.5px solid #CDBDB4' }
-                      : getCourseTagStyle(filter.value, activeFilter === filter.value)}
-                  >
-                    {filter.label}
-                  </button>
-                ))}
+              <div className="mt-3 border-t border-[#F0E4DE] pt-3">
+                <div className="flex gap-1.5 overflow-x-auto pb-0.5 scrollbar-hide">
+                  {FOOD_FILTER_TAGS.map(filter => (
+                    <button
+                      type="button"
+                      key={filter.value}
+                      onClick={() => setActiveFilter(filter.value)}
+                      className="h-8 shrink-0 rounded-[10px] px-3 text-[10px] font-black transition-transform active:scale-95"
+                      style={filter.value === 'all'
+                        ? activeFilter === filter.value
+                          ? { background: '#EE7775', color: '#FFFFFF' }
+                          : { background: '#FFF9F5', color: '#6E5B51', border: '1.5px solid #CDBDB4' }
+                        : getCourseTagStyle(filter.value, activeFilter === filter.value)}
+                    >
+                      {filter.label}
+                    </button>
+                  ))}
+                </div>
+
+                <div className="mt-3 border-t border-[#F0E4DE] pt-3" data-ui="feed-radius-filter">
+                  <div className="mb-2 flex items-center justify-between gap-3">
+                    <div>
+                      <p className="flex items-center gap-1.5 text-[12px] font-black text-[#49382F]"><MapPin size={14} className="text-[#DB5158]" />근처 피드</p>
+                    </div>
+                    {appliedLocation && (
+                      <motion.span
+                        initial={{ opacity: 0, scale: 0.9 }}
+                        animate={{ opacity: 1, scale: 1 }}
+                        className="shrink-0 rounded-full bg-[#EAF5EE] px-2.5 py-1 text-[10px] font-black text-[#4D7D63]"
+                      >
+                        {appliedLocation.radiusKm}km 적용 중
+                      </motion.span>
+                    )}
+                  </div>
+
+                  {hasMapsKey ? (
+                    <>
+                      <div className="relative mb-2">
+                        <div className="flex h-10 items-center gap-2 rounded-xl border border-[#DED3CD] bg-white px-3 focus-within:border-[#DA6468] focus-within:ring-2 focus-within:ring-[#F6DADB]">
+                          {locationSearch.isLoading || locationDetailsLoadingId ? (
+                            <LoaderCircle size={14} className="shrink-0 animate-spin text-[#D6575C]" />
+                          ) : (
+                            <Search size={14} className="shrink-0 text-[#9B887E]" />
+                          )}
+                          <input
+                            value={locationSearch.input}
+                            onChange={event => locationSearch.setInput(event.target.value)}
+                            placeholder="동네, 주소 또는 장소 검색"
+                            aria-label="기준 위치 검색"
+                            className="min-w-0 flex-1 bg-transparent text-[12px] font-semibold text-[#49382F] outline-none placeholder:text-[#B3A49C]"
+                          />
+                          {locationSearch.input && (
+                            <button
+                              type="button"
+                              onClick={locationSearch.reset}
+                              className="flex h-6 w-6 items-center justify-center rounded-full text-[#A9978D]"
+                              aria-label="위치 검색어 지우기"
+                            >
+                              <X size={13} />
+                            </button>
+                          )}
+                        </div>
+                        {locationSearch.input.trim().length >= 2 && (
+                          <div className="absolute inset-x-0 top-[calc(100%+4px)] z-20 max-h-44 overflow-y-auto rounded-xl border border-[#E2D6CF] bg-white p-1.5 shadow-[0_10px_24px_rgba(66,45,36,0.16)]">
+                            {locationSearch.isError && (
+                              <p className="px-3 py-2 text-[11px] font-semibold text-[#C44D52]">위치 검색에 실패했어요</p>
+                            )}
+                            {!locationSearch.isLoading && !locationSearch.isError && locationSearch.suggestions.length === 0 && (
+                              <p className="px-3 py-2 text-[11px] font-semibold text-[#9B887E]">검색 결과가 없어요</p>
+                            )}
+                            {locationSearch.suggestions.map(suggestion => (
+                              <button
+                                key={suggestion.placeId}
+                                type="button"
+                                disabled={Boolean(locationDetailsLoadingId)}
+                                onClick={() => { void pickLocation(suggestion.placeId); }}
+                                className="flex w-full items-start gap-2 rounded-lg px-2.5 py-2 text-left transition-colors hover:bg-[#FFF5F1] disabled:opacity-50"
+                              >
+                                <MapPin size={13} className="mt-0.5 shrink-0 text-[#D6575C]" />
+                                <span className="text-[11px] font-semibold leading-snug text-[#59463C]">{suggestion.text}</span>
+                              </button>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                      <FeedRadiusMap center={draftCenter} radiusKm={draftRadiusKm} onCenterChange={setDraftCenter} />
+                    </>
+                  ) : (
+                    <div className="flex h-24 items-center justify-center rounded-[18px] border border-dashed border-[#D7E5DB] bg-[#F4F8F5] px-5 text-center text-[11px] font-bold text-[#789082]">
+                      지도 API 설정 후 위치 반경 필터를 사용할 수 있어요.
+                    </div>
+                  )}
+
+                  <div className="mt-3 flex items-center gap-3">
+                    <label htmlFor="feed-radius" className="shrink-0 text-[11px] font-black text-[#5D493F]">반경</label>
+                    <input
+                      id="feed-radius"
+                      type="range"
+                      min="1"
+                      max="30"
+                      step="1"
+                      value={draftRadiusKm}
+                      onChange={event => setDraftRadiusKm(Number(event.target.value))}
+                      className="h-1.5 min-w-0 flex-1 accent-[#E95259]"
+                    />
+                    <output htmlFor="feed-radius" className="w-12 text-right text-[12px] font-black tabular-nums text-[#D94C55]">{draftRadiusKm} km</output>
+                  </div>
+
+                  <div className="mt-3 flex gap-2">
+                    {appliedLocation && (
+                      <button
+                        type="button"
+                        onClick={() => { void clearLocationFilter(); }}
+                        disabled={isApplyingLocation}
+                        className="flex h-10 items-center justify-center gap-1.5 rounded-xl border border-[#DCCFC8] bg-white px-3 text-[11px] font-black text-[#806D63] disabled:opacity-50"
+                      >
+                        <RotateCcw size={13} />초기화
+                      </button>
+                    )}
+                    <button
+                      type="button"
+                      onClick={() => { void applyLocationFilter(); }}
+                      disabled={!draftCenter || isApplyingLocation || !hasMapsKey}
+                      className="flex h-10 flex-1 items-center justify-center gap-2 rounded-xl bg-[#E95259] text-[12px] font-black text-white shadow-[0_6px_14px_rgba(217,76,85,0.18)] transition-transform active:scale-[0.98] disabled:bg-[#D8CBC5] disabled:shadow-none"
+                    >
+                      {isApplyingLocation && <LoaderCircle size={14} className="animate-spin" />}
+                      {draftCenter ? `${draftRadiusKm}km 안의 피드 보기` : '지도에 위치를 찍어주세요'}
+                    </button>
+                  </div>
+                </div>
               </div>
             </motion.div>
           )}
@@ -199,8 +380,8 @@ export default function MunchieFeedPage() {
         {filteredPosts.length === 0 && (
           <div className="rounded-[26px] border border-dashed border-[#DCCBC0] bg-white px-6 py-16 text-center">
             <div className="mb-3 text-5xl">🍽️</div>
-            <p className="text-[16px] font-black text-[#2D211C]">아직 Munchie 피드가 없어요</p>
-            <p className="mt-1 text-[12px] font-semibold text-[#9A8579]">첫 번째 Munchie 피드를 만들어보세요</p>
+            <p className="text-[16px] font-black text-[#2D211C]">{appliedLocation ? '이 반경에는 피드가 없어요' : '아직 Munchie 피드가 없어요'}</p>
+            <p className="mt-1 text-[12px] font-semibold text-[#9A8579]">{appliedLocation ? '핀을 옮기거나 반경을 넓혀보세요' : '첫 번째 Munchie 피드를 만들어보세요'}</p>
           </div>
         )}
         {activeFilter === 'all' && filteredPosts.length > 0 && hasMoreFeedPosts && (

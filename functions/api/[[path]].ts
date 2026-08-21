@@ -23,6 +23,7 @@ import {
   getGooglePlaceDetails,
   googlePlacesErrorResponse,
 } from "./googlePlaces";
+import { feedItemMatchesLocation, parseFeedLocationFilter } from "./feedLocation";
 
 export interface EnvBindings {
   DB: any;
@@ -3128,6 +3129,7 @@ app.get("/api/feed", async (c) => {
       ? Math.max(1, Math.min(Math.floor(requestedLimit), 20))
       : 8;
     const cursor = Math.max(0, Math.floor(Number(c.req.query("cursor")) || 0));
+    const locationFilter = parseFeedLocationFilter((name) => c.req.query(name));
     const viewer = await readSession(c.req.raw, c.env.AUTH_SESSION_SECRET);
     // Older local databases may predate the public-profile columns. Keep the
     // feed readable while still joining author data whenever the canonical
@@ -3149,7 +3151,7 @@ app.get("/api/feed", async (c) => {
     for (const course of courses as any[]) {
       // Fetch course items for this course
       const { results: stops } = await c.env.DB.prepare(
-        "SELECT ci.*, r.name, r.category, r.photos, r.rating FROM course_items ci JOIN restaurants r ON ci.restaurant_id = r.id WHERE ci.course_id = ? ORDER BY ci.order_index",
+        "SELECT ci.*, r.name, r.category, r.photos, r.rating, r.latitude, r.longitude FROM course_items ci JOIN restaurants r ON ci.restaurant_id = r.id WHERE ci.course_id = ? ORDER BY ci.order_index",
       )
         .bind(course.id)
         .all();
@@ -3193,6 +3195,8 @@ app.get("/api/feed", async (c) => {
           category: s.category,
           photos: await filterExistingPhotos(c.env, json<string[]>(s.photos, [])),
           rating: s.rating,
+          latitude: Number(s.latitude),
+          longitude: Number(s.longitude),
         },
       })));
 
@@ -3235,7 +3239,10 @@ app.get("/api/feed", async (c) => {
     // Preserve the legacy array response for initial/home hydration. The
     // Munchie page opts into a stable, personalised page contract with
     // `limit`/`cursor`; this avoids rendering every post at once.
-    if (!paged) return c.json(feedItems);
+    const locationItems = locationFilter
+      ? feedItems.filter((item) => feedItemMatchesLocation(item, locationFilter))
+      : feedItems;
+    if (!paged) return c.json(locationItems);
 
     const categoryAffinity = new Map<string, number>();
     const following = new Set<string>();
@@ -3258,7 +3265,7 @@ app.get("/api/feed", async (c) => {
           categoryAffinity.set(tag, (categoryAffinity.get(tag) ?? 0) + 0.45);
       for (const row of followRows.results) following.add(row.following_id);
     }
-    const ranked = rankMunchieFeedItems(feedItems, {
+    const ranked = rankMunchieFeedItems(locationItems, {
       viewerId: viewer?.sub ?? null,
       categoryAffinity,
       following,
@@ -3269,7 +3276,7 @@ app.get("/api/feed", async (c) => {
       items,
       nextCursor: nextCursor < ranked.length ? String(nextCursor) : null,
       hasMore: nextCursor < ranked.length,
-      policyVersion: "feed-personal-v1",
+      policyVersion: locationFilter ? "feed-personal-location-v1" : "feed-personal-v1",
     });
   } catch (err: any) {
     return c.json({ error: err.message }, 400);

@@ -298,6 +298,14 @@ export interface FeedPost {
   comments: FeedComment[];
   createdAt: string;
   tags: TagType[];
+  /** 피드 위치 필터용 코스 장소 좌표. 서버가 공개 코스의 장소만 전달한다. */
+  stops?: Array<{ placeId: string; latitude: number; longitude: number }>;
+}
+
+export interface FeedLocationFilter {
+  latitude: number;
+  longitude: number;
+  radiusKm: number;
 }
 
 export const MOCK_RESTAURANTS: Restaurant[] = [];
@@ -389,7 +397,7 @@ interface AppContextValue {
   /** Munchie Feed */
   feedPosts: FeedPost[];
   /** 서버 원본을 다시 읽어 현재 세션의 피드 캐시를 동기화한다. */
-  refreshFeedPosts: () => Promise<void>;
+  refreshFeedPosts: (locationFilter?: FeedLocationFilter | null) => Promise<void>;
   /** Munchie 피드의 다음 개인화 배치를 서버에서 이어받는다. */
   loadMoreFeedPosts: () => Promise<void>;
   hasMoreFeedPosts: boolean;
@@ -724,9 +732,20 @@ export function AppProvider({
   const [feedCursor, setFeedCursor] = useState<string | null>('0');
   const [hasMoreFeedPosts, setHasMoreFeedPosts] = useState(true);
   const [isLoadingMoreFeedPosts, setIsLoadingMoreFeedPosts] = useState(false);
+  const feedLocationFilterRef = useRef<FeedLocationFilter | null>(null);
 
-  const readFeedBatch = useCallback(async (cursor: string, replace: boolean) => {
-    const response = await fetch(`/api/feed?limit=8&cursor=${encodeURIComponent(cursor)}`);
+  const readFeedBatch = useCallback(async (
+    cursor: string,
+    replace: boolean,
+    locationFilter = feedLocationFilterRef.current,
+  ) => {
+    const params = new URLSearchParams({ limit: '8', cursor });
+    if (locationFilter) {
+      params.set('latitude', String(locationFilter.latitude));
+      params.set('longitude', String(locationFilter.longitude));
+      params.set('radiusKm', String(locationFilter.radiusKm));
+    }
+    const response = await fetch(`/api/feed?${params.toString()}`);
     if (!response.ok) throw new Error('피드를 불러오지 못했어요.');
     const page = await response.json();
     const feedData = Array.isArray(page) ? page : page.items;
@@ -754,6 +773,13 @@ export function AppProvider({
         likes: 0, dislikes: 0,
       })) : [],
       tags: Array.isArray(feed.tags) ? feed.tags.map((tag: string) => normalizeFoodTag(tag)) : [],
+      stops: Array.isArray(feed.stops) ? feed.stops.flatMap((stop: any) => {
+        const latitude = Number(stop?.restaurant?.latitude);
+        const longitude = Number(stop?.restaurant?.longitude);
+        return typeof stop?.placeId === 'string' && Number.isFinite(latitude) && Number.isFinite(longitude)
+          ? [{ placeId: stop.placeId, latitude, longitude }]
+          : [];
+      }) : [],
       createdAt: feed.createdAt || new Date().toISOString(),
     }));
     setFeedPosts(previous => {
@@ -769,9 +795,10 @@ export function AppProvider({
     setHasMoreFeedPosts(Boolean(page?.hasMore && nextCursor));
   }, [profile.id, profile.name, profile.emoji]);
 
-  const refreshFeedPosts = useCallback(async () => {
+  const refreshFeedPosts = useCallback(async (locationFilter?: FeedLocationFilter | null) => {
+    if (locationFilter !== undefined) feedLocationFilterRef.current = locationFilter;
     setIsLoadingMoreFeedPosts(true);
-    try { await readFeedBatch('0', true); }
+    try { await readFeedBatch('0', true, feedLocationFilterRef.current); }
     finally { setIsLoadingMoreFeedPosts(false); }
   }, [readFeedBatch]);
 
@@ -853,6 +880,13 @@ export function AppProvider({
               likes: 0, dislikes: 0,
             })) : [],
             tags: Array.isArray(feed.tags) ? feed.tags.map((tag: string) => normalizeFoodTag(tag)) : [],
+            stops: Array.isArray(feed.stops) ? feed.stops.flatMap((stop: any) => {
+              const latitude = Number(stop?.restaurant?.latitude);
+              const longitude = Number(stop?.restaurant?.longitude);
+              return typeof stop?.placeId === 'string' && Number.isFinite(latitude) && Number.isFinite(longitude)
+                ? [{ placeId: stop.placeId, latitude, longitude }]
+                : [];
+            }) : [],
             createdAt: feed.createdAt || new Date().toISOString(),
           }));
           setFeedPosts(previous => {
