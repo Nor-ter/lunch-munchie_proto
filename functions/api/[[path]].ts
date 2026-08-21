@@ -217,7 +217,22 @@ const cookieValue = (request: Request, name: string) =>
     .get("cookie")
     ?.match(new RegExp(`(?:^|; )${name}=([^;]+)`))?.[1] ?? null;
 
+const hasGoogleOAuthConfig = (
+  env: Partial<Pick<EnvBindings, "GOOGLE_CLIENT_ID" | "GOOGLE_CLIENT_SECRET" | "AUTH_SESSION_SECRET">>,
+): env is EnvBindings & {
+  GOOGLE_CLIENT_ID: string;
+  GOOGLE_CLIENT_SECRET: string;
+  AUTH_SESSION_SECRET: string;
+} =>
+  Boolean(
+    env.GOOGLE_CLIENT_ID?.trim()
+      && env.GOOGLE_CLIENT_SECRET?.trim()
+      && env.AUTH_SESSION_SECRET?.trim(),
+  );
+
 app.get("/api/auth/google/start", (c) => {
+  if (!hasGoogleOAuthConfig(c.env))
+    return c.redirect("/auth/login?error=oauth_config");
   const next = c.req.query("next")?.startsWith("/")
     ? c.req.query("next")!
     : "/";
@@ -240,6 +255,8 @@ app.get("/api/auth/google/start", (c) => {
 });
 
 app.get("/api/auth/google/callback", async (c) => {
+  if (!hasGoogleOAuthConfig(c.env))
+    return c.redirect("/auth/login?error=oauth_config");
   const [state, encodedNext] = (c.req.query("state") ?? "").split(".");
   const expected = c.req
     .header("cookie")
