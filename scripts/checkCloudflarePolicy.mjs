@@ -24,6 +24,8 @@ const APPROVED_SECRET_NAMES = new Set([
   "CLOUDFLARE_ACCOUNT_ID",
   "CLOUDFLARE_WORKER_DEPLOY_TOKEN",
   "CLOUDFLARE_D1_MIGRATIONS_TOKEN",
+  "VITE_GOOGLE_MAPS_API_KEY",
+  "NEXT_PUBLIC_GOOGLE_MAPS_API_KEY",
 ]);
 const DOC_PATH = "docs/process/ci-cd-cloudflare-access-policy.md";
 

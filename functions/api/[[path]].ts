@@ -605,7 +605,7 @@ app.get("/api/admin/metrics", async (c) => {
     : 30;
   const start = Date.now() - (days - 1) * 86_400_000;
   const count = (row: { count?: number | string } | null | undefined) => Number(row?.count ?? 0);
-  const [registered, newRegistered, activeActors, activeSignedIn, activeGuests, eventResult, trendResult, personaResult, modelResult, impressionCoverage, persistedSlates, servedImpressions, attributableSwipes, categoryResult, contributionResult, catalogueSummary, photoAssetSummary, coursePhotoSummary, menuSummary, menuSectionRows, catalogueCategories, dietarySupport, sourceDistribution, restaurantSamples] = await Promise.all([
+  const [registered, newRegistered, activeActors, activeSignedIn, activeGuests, eventResult, trendResult, personaResult, modelResult, impressionCoverage, persistedSlates, servedImpressions, attributableSwipes, persistedSessionSwipes, attributableSessionSwipes, categoryResult, contributionResult, catalogueSummary, photoAssetSummary, coursePhotoSummary, menuSummary, menuSectionRows, catalogueCategories, dietarySupport, sourceDistribution, restaurantSamples] = await Promise.all([
     c.env.DB.prepare("SELECT COUNT(*) AS count FROM users").first<{ count: number }>(),
     c.env.DB.prepare("SELECT COUNT(*) AS count FROM users WHERE created_at >= ?").bind(start).first<{ count: number }>(),
     c.env.DB.prepare("SELECT COUNT(DISTINCT user_id) AS count FROM rec_events WHERE created_at >= ? AND user_id IS NOT NULL").bind(start).first<{ count: number }>(),
@@ -618,7 +618,9 @@ app.get("/api/admin/metrics", async (c) => {
     c.env.DB.prepare("SELECT COUNT(*) AS impressions, SUM(CASE WHEN propensity IS NOT NULL AND propensity > 0 AND propensity <= 1 THEN 1 ELSE 0 END) AS propensity_logged, SUM(CASE WHEN score IS NOT NULL THEN 1 ELSE 0 END) AS score_logged, SUM(CASE WHEN model_version IS NOT NULL AND model_version != '' THEN 1 ELSE 0 END) AS model_logged, SUM(CASE WHEN context_json IS NOT NULL AND context_json != '' THEN 1 ELSE 0 END) AS context_logged FROM rec_events WHERE created_at >= ? AND event_type = 'IMPRESSION' AND COALESCE(slate_type, '') != 'COURSE_FEED'").bind(start).first<{ impressions: number; propensity_logged: number; score_logged: number; model_logged: number; context_logged: number }>(),
     c.env.DB.prepare("SELECT COUNT(*) AS count FROM recommendation_slates WHERE created_at >= ?").bind(start).first<{ count: number }>(),
     c.env.DB.prepare("SELECT COUNT(*) AS count FROM rec_events e INNER JOIN recommendation_slates s ON s.id = e.slate_id WHERE e.created_at >= ? AND e.event_type = 'IMPRESSION'").bind(start).first<{ count: number }>(),
-    c.env.DB.prepare("SELECT COUNT(*) AS count FROM rec_events e INNER JOIN recommendation_slates s ON s.id = e.slate_id WHERE e.created_at >= ? AND e.event_type = 'SWIPE'").bind(start).first<{ count: number }>(),
+    c.env.DB.prepare("SELECT COUNT(DISTINCT CASE WHEN e.session_id IS NOT NULL THEN e.session_id || ':' || e.user_id || ':' || e.restaurant_id || ':' || COALESCE(e.round, 1) ELSE e.id END) AS count FROM rec_events e INNER JOIN recommendation_slates s ON s.id = e.slate_id WHERE e.created_at >= ? AND e.event_type = 'SWIPE'").bind(start).first<{ count: number }>(),
+    c.env.DB.prepare("SELECT COUNT(*) AS count FROM swipes WHERE created_at >= ? AND round % 2 = 1 AND swipe_action IN ('LIKE', 'DISLIKE') AND restaurant_id NOT LIKE '__%'").bind(start).first<{ count: number }>(),
+    c.env.DB.prepare("SELECT COUNT(DISTINCT e.session_id || ':' || e.user_id || ':' || e.restaurant_id || ':' || e.round) AS count FROM rec_events e INNER JOIN recommendation_slates s ON s.id = e.slate_id WHERE e.created_at >= ? AND e.event_type = 'SWIPE' AND e.session_id IS NOT NULL AND e.round % 2 = 1").bind(start).first<{ count: number }>(),
     c.env.DB.prepare("SELECT r.category AS category, SUM(CASE WHEN e.event_type = 'IMPRESSION' THEN 1 ELSE 0 END) AS impressions, SUM(CASE WHEN e.event_type = 'SWIPE' AND e.action = 'LIKE' THEN 1 ELSE 0 END) AS likes, SUM(CASE WHEN e.event_type = 'SWIPE' AND e.action = 'NOPE' THEN 1 ELSE 0 END) AS nopes, SUM(CASE WHEN e.event_type = 'WINNER' THEN 1 ELSE 0 END) AS decisions FROM rec_events e JOIN restaurants r ON r.id = e.restaurant_id WHERE e.created_at >= ? AND e.event_type IN ('IMPRESSION', 'SWIPE', 'WINNER') GROUP BY r.category ORDER BY impressions DESC, decisions DESC LIMIT 8").bind(start).all<{ category: string; impressions: number; likes: number; nopes: number; decisions: number }>(),
     c.env.DB.prepare("SELECT AVG(CAST(json_extract(item.value, '$.components.reputation') AS REAL)) AS reputation, AVG(CAST(json_extract(item.value, '$.components.context') AS REAL)) AS context, AVG(CAST(json_extract(item.value, '$.components.taste') AS REAL)) AS taste, AVG(CAST(json_extract(item.value, '$.components.exposureFatigue') AS REAL)) AS exposure_fatigue, AVG(CAST(json_extract(item.value, '$.components.satiation') AS REAL)) AS satiation, AVG(CAST(json_extract(item.value, '$.components.journeyChain') AS REAL)) AS journey_chain, COUNT(*) AS count FROM recommendation_slates s, json_each(s.items_json) AS item WHERE s.created_at >= ? AND json_type(item.value, '$.components') = 'object'").bind(start).first<{ reputation: number | null; context: number | null; taste: number | null; exposure_fatigue: number | null; satiation: number | null; journey_chain: number | null; count: number }>(),
     c.env.DB.prepare("SELECT COUNT(*) AS restaurants, SUM(CASE WHEN address IS NOT NULL AND trim(address) != '' THEN 1 ELSE 0 END) AS with_address, SUM(CASE WHEN latitude != 0 OR longitude != 0 THEN 1 ELSE 0 END) AS with_coordinates, SUM(CASE WHEN short_description IS NOT NULL AND trim(short_description) != '' THEN 1 ELSE 0 END) AS with_description, SUM(CASE WHEN json_valid(photos) AND json_array_length(photos) > 0 THEN 1 ELSE 0 END) AS with_photo_reference, SUM(CASE WHEN json_valid(photos) THEN json_array_length(photos) ELSE 0 END) AS photo_references, SUM(CASE WHEN json_valid(menus) AND json_array_length(menus) > 0 THEN 1 ELSE 0 END) AS with_menu_reference, SUM(CASE WHEN json_valid(menus) THEN json_array_length(menus) ELSE 0 END) AS menu_references FROM restaurants").first<{ restaurants: number; with_address: number; with_coordinates: number; with_description: number; with_photo_reference: number; photo_references: number; with_menu_reference: number; menu_references: number }>(),
@@ -654,6 +656,9 @@ app.get("/api/admin/metrics", async (c) => {
     persistedSlates: count(persistedSlates),
     servedImpressions: count(servedImpressions),
     attributableSwipes: count(attributableSwipes),
+    persistedSessionSwipes: count(persistedSessionSwipes),
+    attributableSessionSwipes: count(attributableSessionSwipes),
+    unattributedSessionSwipes: Math.max(0, count(persistedSessionSwipes) - count(attributableSessionSwipes)),
     propensityCoverage: coverage(Number(impressionCoverage?.propensity_logged ?? 0), impressionTotal),
     scoreCoverage: coverage(Number(impressionCoverage?.score_logged ?? 0), impressionTotal),
     modelVersionCoverage: coverage(Number(impressionCoverage?.model_logged ?? 0), impressionTotal),
@@ -2571,6 +2576,8 @@ app.post("/api/swipes", async (c) => {
     (isSignal && action === "SYSTEM");
   if (!allowedAction || restaurantId.startsWith(FORCE_PREFIX))
     return c.json({ error: "유효하지 않은 투표입니다." }, 400);
+  const now = Date.now();
+  const requestId = nullableText(body.id, 128) ?? crypto.randomUUID();
   // A final vote is replaceable before the group is completed, but there is
   // only one effective vote per person. This makes retries idempotent.
   const statements =
@@ -2582,28 +2589,66 @@ app.post("/api/swipes", async (c) => {
           c.env.DB.prepare(
             "INSERT OR IGNORE INTO swipes (id, session_id, user_id, restaurant_id, round, swipe_action, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
           ).bind(
-            nullableText(body.id, 128) ?? crypto.randomUUID(),
+            requestId,
             sessionId,
             userId,
             restaurantId,
             round,
             action,
-            Date.now(),
+            now,
           ),
         ]
       : [
           c.env.DB.prepare(
             "INSERT OR IGNORE INTO swipes (id, session_id, user_id, restaurant_id, round, swipe_action, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
           ).bind(
-            nullableText(body.id, 128) ?? crypto.randomUUID(),
+            requestId,
             sessionId,
             userId,
             restaurantId,
             round,
             action,
-            Date.now(),
+            now,
           ),
         ];
+  // 예선 선택은 UX용 swipes와 평가용 rec_events에 같은 요청으로 기록한다.
+  // 클라이언트의 pagehide/beacon 성공 여부가 학습 근거 수를 바꾸면 안 된다.
+  if (!isSignal && round % 2 === 1) {
+    const evidence = await c.env.DB.prepare(
+      "SELECT sess.recommendation_slate_id AS slate_id, s.policy_version, s.variant, s.context_json, json_extract(item.value, '$.position') AS position, json_extract(item.value, '$.propensity') AS propensity, json_extract(item.value, '$.score') AS score FROM sessions sess JOIN recommendation_slates s ON s.id = sess.recommendation_slate_id, json_each(s.items_json) AS item WHERE sess.id = ? AND json_extract(item.value, '$.restaurant_id') = ? LIMIT 1",
+    ).bind(sessionId, restaurantId).first<{
+      slate_id: string;
+      policy_version: string | null;
+      variant: string | null;
+      context_json: string | null;
+      position: number | null;
+      propensity: number | null;
+      score: number | null;
+    }>();
+    if (evidence) {
+      statements.push(
+        c.env.DB.prepare(
+          "INSERT OR IGNORE INTO rec_events (id, event_type, slate_id, slate_type, user_id, session_id, restaurant_id, round, position, action, propensity, score, model_version, variant, context_json, idempotency_key, created_at) VALUES (?, 'SWIPE', ?, 'PRELIM', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        ).bind(
+          crypto.randomUUID(),
+          evidence.slate_id,
+          userId,
+          sessionId,
+          restaurantId,
+          round,
+          evidence.position,
+          action === "DISLIKE" ? "NOPE" : action,
+          evidence.propensity,
+          evidence.score,
+          evidence.policy_version,
+          evidence.variant,
+          evidence.context_json,
+          `session-swipe:${sessionId}:${userId}:${restaurantId}:${round}`,
+          now,
+        ),
+      );
+    }
+  }
   await c.env.DB.batch(statements);
   return c.json({ ok: true });
 });
