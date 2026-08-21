@@ -79,13 +79,12 @@ export const LUNCHMATE_PROFILE_POST_SITTING_RANGE_MS = [2000, 3000] as const;
 export const LUNCHMATE_PROFILE_POSE_TRANSITION_RANGE_MS = [160, 220] as const;
 export const LUNCHMATE_PROFILE_LONG_PRESS_MS = 400;
 export const LUNCHMATE_PROFILE_LONG_PRESS_PREPARE_MS = 80;
-export const LUNCHMATE_PROFILE_LONG_PRESS_MOVE_THRESHOLD_PX = 8;
+export const LUNCHMATE_PROFILE_LONG_PRESS_MOVE_THRESHOLD_PX = 4;
 export const LUNCHMATE_PROFILE_GRAB_LIFT_PX = 12;
 export const LUNCHMATE_PROFILE_GRAB_MAX_ROTATE_DEG = 11;
 export const LUNCHMATE_PROFILE_GRAB_HARD_ROTATE_LIMIT_DEG = 12;
 export const LUNCHMATE_PROFILE_GRAB_MAX_SCALE = 1.03;
 export const LUNCHMATE_PROFILE_GRAB_LANDING_MS = 320;
-export const LUNCHMATE_PROFILE_GRAB_RECOVERY_RANGE_MS = [1000, 1500] as const;
 export const LUNCHMATE_PROFILE_GRAB_HORIZONTAL_PADDING_PX = 9;
 export const LUNCHMATE_PROFILE_GRAB_VERTICAL_PADDING_PX = 7;
 export const LUNCHMATE_PROFILE_GRAB_ROTATION_ALLOWANCE_PX = 6;
@@ -1050,7 +1049,6 @@ export function createLunchmateProfileGrabController({
   let prepareTimer: ReturnType<typeof setTimeout> | null = null;
   let activationTimer: ReturnType<typeof setTimeout> | null = null;
   let landingTimer: ReturnType<typeof setTimeout> | null = null;
-  let recoveryTimer: ReturnType<typeof setTimeout> | null = null;
   let pickupSwayTimer: ReturnType<typeof setTimeout> | null = null;
   let pickupSettleTimer: ReturnType<typeof setTimeout> | null = null;
   let velocitySettleTimer: ReturnType<typeof setTimeout> | null = null;
@@ -1069,9 +1067,7 @@ export function createLunchmateProfileGrabController({
 
   const clearLandingTimers = () => {
     if (landingTimer !== null) clearTimeout(landingTimer);
-    if (recoveryTimer !== null) clearTimeout(recoveryTimer);
     landingTimer = null;
-    recoveryTimer = null;
   };
 
   const clearPendulumTimers = () => {
@@ -1118,27 +1114,9 @@ export function createLunchmateProfileGrabController({
 
   const finishLanding = () => {
     if (stopped) return;
-    emit({
-      ...snapshot,
-      phase: 'recovering',
-      assetKeyOverride: 'idle',
-      x: 0,
-      y: 0,
-      rotate: 0,
-      scaleX: 1,
-      scaleY: 1,
-      transitionMs: 0,
-    });
-    const recoveryMs = durationFromRandom(
-      LUNCHMATE_PROFILE_GRAB_RECOVERY_RANGE_MS,
-      random,
-    );
-    recoveryTimer = setTimeout(() => {
-      recoveryTimer = null;
-      onTargetChange({ x: 0, y: 0, rotate: 0, immediate: true });
-      emit({ ...INITIAL_PROFILE_GRAB });
-      onRestartAutomaticMotion();
-    }, recoveryMs);
+    onTargetChange({ x: 0, y: 0, rotate: 0, immediate: true });
+    emit({ ...INITIAL_PROFILE_GRAB });
+    onRestartAutomaticMotion();
   };
 
   const beginLanding = () => {
@@ -1200,7 +1178,7 @@ export function createLunchmateProfileGrabController({
   };
 
   const activateGrab = () => {
-    activationTimer = null;
+    clearPressTimers();
     if (
       stopped
       || blocked
@@ -1210,13 +1188,18 @@ export function createLunchmateProfileGrabController({
       || snapshot.phase !== 'pressing'
     ) {
       resetImmediately();
-      return;
+      return false;
     }
     try {
-      captureTarget.setPointerCapture(activePointerId);
+      if (
+        captureTarget.hasPointerCapture === undefined
+        || !captureTarget.hasPointerCapture(activePointerId)
+      ) {
+        captureTarget.setPointerCapture(activePointerId);
+      }
     } catch {
       resetImmediately();
-      return;
+      return false;
     }
     const bounds = getBounds();
     activeBounds = bounds;
@@ -1259,6 +1242,7 @@ export function createLunchmateProfileGrabController({
         onTargetChange({ rotate: 0 });
       }, 360);
     }
+    return true;
   };
 
   return {
@@ -1268,8 +1252,27 @@ export function createLunchmateProfileGrabController({
         || blocked
         || !visible
         || !pointer.isPrimary
-        || snapshot.phase !== 'idle'
+        || snapshot.phase === 'pressing'
+        || snapshot.phase === 'grabbed'
       ) return false;
+
+      // 놓기/복귀 애니메이션은 새 입력보다 우선하지 않는다. 사용자가 다시 잡으면
+      // 남은 landing/recovering timer를 즉시 끊고 현재 제스처를 시작한다.
+      if (snapshot.phase === 'landing' || snapshot.phase === 'recovering') {
+        const rendered = getRendered();
+        clearPressTimers();
+        clearLandingTimers();
+        clearPendulumTimers();
+        releaseCapture();
+        activePointerId = null;
+        captureTarget = null;
+        activeBounds = null;
+        filteredVelocityX = 0;
+        // 화면에서 보이는 위치를 그대로 고정한 뒤 다시 잡아 snap-back을 막는다.
+        onTargetChange({ ...rendered, immediate: true });
+        snapshot = { ...INITIAL_PROFILE_GRAB };
+        onChange(snapshot);
+      }
 
       activePointerId = pointer.pointerId;
       const localPointer = toStageLocal(pointer.clientX, pointer.clientY);
@@ -1278,8 +1281,22 @@ export function createLunchmateProfileGrabController({
       initialVisualX = pointer.initialVisualX;
       captureTarget = pointer.target;
       suppressNextClick = false;
+      try {
+        // pointerdown 시점부터 소유권을 확보해 빠른 이동이나 캐릭터 경계 이탈에도
+        // pointermove/up을 놓치지 않는다.
+        captureTarget.setPointerCapture(activePointerId);
+      } catch {
+        resetImmediately();
+        return false;
+      }
       onPauseAutomaticMotion();
-      emit({ ...INITIAL_PROFILE_GRAB, phase: 'pressing' });
+      emit({
+        ...INITIAL_PROFILE_GRAB,
+        phase: 'pressing',
+        scaleX: reducedMotion ? 1 : 1.015,
+        scaleY: reducedMotion ? 1 : 0.985,
+        transitionMs: reducedMotion ? 0 : LUNCHMATE_PROFILE_LONG_PRESS_PREPARE_MS,
+      });
 
       if (!reducedMotion) {
         prepareTimer = setTimeout(() => {
@@ -1301,13 +1318,12 @@ export function createLunchmateProfileGrabController({
       const deltaX = localPointer.x - pointerStartLocalX;
       const deltaY = localPointer.y - pointerStartLocalY;
       if (snapshot.phase === 'pressing') {
-        if (
-          Math.hypot(deltaX, deltaY)
-          >= LUNCHMATE_PROFILE_LONG_PRESS_MOVE_THRESHOLD_PX
-        ) {
-          resetImmediately();
+        if (Math.hypot(deltaX, deltaY) < LUNCHMATE_PROFILE_LONG_PRESS_MOVE_THRESHOLD_PX) {
+          return false;
         }
-        return false;
+        // 빠르게 끌기 시작한 포인터도 즉시 잡기로 전환한다. 정지한 포인터의
+        // 400ms long-press 진입은 그대로 유지해 touch 사용성도 보존한다.
+        if (!activateGrab()) return false;
       }
       if (snapshot.phase !== 'grabbed') return false;
 
@@ -1442,6 +1458,8 @@ function preloadLunchmateProfileMotionAssets() {
 
 interface UseLunchmateProfileMotionOptions {
   suspended: boolean;
+  /** 자동 모션 정지와 별개로 실제 pointer grab을 막아야 하는 상태. */
+  grabBlocked?: boolean;
 }
 
 type LunchmateProfileMotionValue = Omit<
@@ -1478,6 +1496,7 @@ type LunchmateProfileMotionValue = Omit<
 
 export function useLunchmateProfileMotion({
   suspended,
+  grabBlocked = suspended,
 }: UseLunchmateProfileMotionOptions): LunchmateProfileMotionValue {
   const stageRef = useRef<HTMLDivElement>(null);
   const characterRef = useRef<HTMLDivElement>(null);
@@ -1609,7 +1628,7 @@ export function useLunchmateProfileMotion({
       onResumeAutomaticMotion: () => controllerRef.current?.setGrabPaused(false),
       onRestartAutomaticMotion: () => controllerRef.current?.restart(),
       reducedMotion,
-      initiallyBlocked: suspended,
+      initiallyBlocked: grabBlocked,
       initiallyVisible: typeof document === 'undefined'
         || document.visibilityState !== 'hidden',
     });
@@ -1639,8 +1658,8 @@ export function useLunchmateProfileMotion({
   ]);
 
   useEffect(() => {
-    grabControllerRef.current?.setBlocked(suspended);
-  }, [suspended]);
+    grabControllerRef.current?.setBlocked(grabBlocked);
+  }, [grabBlocked]);
 
   useLayoutEffect(() => {
     const measure = () => {
@@ -1734,20 +1753,24 @@ export function useLunchmateProfileMotion({
 
   const handleGrabPointerDown = useCallback(
     (pointer: Omit<LunchmateProfileGrabPointer, 'initialVisualX'>) => {
+      const currentGrabPhase = grabControllerRef.current?.getSnapshot().phase;
       const renderedCharacter = characterRef.current?.getBoundingClientRect();
       const fixedAnchor = stageRef.current?.querySelector<HTMLElement>(
         '[data-lunchmate-profile-grab-anchor="true"]',
       )?.getBoundingClientRect();
-      const initialVisualX = renderedCharacter && fixedAnchor
-        ? (renderedCharacter.left + (renderedCharacter.width / 2))
-          - (fixedAnchor.left + (fixedAnchor.width / 2))
-        : snapshot.x;
+      const initialVisualX = currentGrabPhase === 'landing'
+        || currentGrabPhase === 'recovering'
+        ? clampedGrabSpringX.get()
+        : renderedCharacter && fixedAnchor
+          ? (renderedCharacter.left + (renderedCharacter.width / 2))
+            - (fixedAnchor.left + (fixedAnchor.width / 2))
+          : snapshot.x;
       return grabControllerRef.current?.pointerDown({
         ...pointer,
         initialVisualX,
       }) ?? false;
     },
-    [snapshot.x],
+    [clampedGrabSpringX, snapshot.x],
   );
   const handleGrabPointerMove = useCallback(
     (pointerId: number, clientX: number, clientY: number) => (

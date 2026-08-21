@@ -130,17 +130,21 @@ describe('Lunchbox pointer feeding integration contract', () => {
     expect(SHEET_SOURCE).toContain('data-lunchbox-scroll-region="true"');
   });
 
-  it('selects before sharing a valid drop and guards duplicate execution', () => {
-    const dropStart = PROFILE_SOURCE.indexOf('const handleFoodDrop');
-    const dropEnd = PROFILE_SOURCE.indexOf('const openLunchbox', dropStart);
-    const dropHandler = PROFILE_SOURCE.slice(dropStart, dropEnd);
+  it('stages the first drop and feeds only after the staged food is dropped again', () => {
+    const stageStart = PROFILE_SOURCE.indexOf('const handleLunchboxFoodDrop');
+    const feedStart = PROFILE_SOURCE.indexOf('const handleStagedFoodDrop', stageStart);
+    const openStart = PROFILE_SOURCE.indexOf('const openLunchbox', feedStart);
+    const stageHandler = PROFILE_SOURCE.slice(stageStart, feedStart);
+    const feedHandler = PROFILE_SOURCE.slice(feedStart, openStart);
 
-    expect(dropHandler.indexOf('lunchmateFlow.selectFood(payload.item)'))
-      .toBeLessThan(dropHandler.indexOf('submitLunchmateFood(payload.item)'));
-    expect(dropHandler).toContain('feedingDropGuardRef.current');
-    expect(dropHandler).toContain('isOverFoodieDropTarget(payload)');
-    expect(PROFILE_SOURCE).toContain('onShare={submitLunchmateFood}');
-    expect(PROFILE_SOURCE).toContain('onFoodDrop={handleFoodDrop}');
+    expect(stageHandler).toContain('lunchmateFlow.selectFood(payload.item)');
+    expect(stageHandler).toContain('closeActiveSheet()');
+    expect(stageHandler).not.toContain('submitLunchmateFood(payload.item)');
+    expect(feedHandler).toContain('feedingDropGuardRef.current');
+    expect(feedHandler).toContain('submitLunchmateFood(payload.item)');
+    expect(PROFILE_SOURCE).toContain('onShare={stageLunchmateFood}');
+    expect(PROFILE_SOURCE).toContain('onFoodDrop={handleLunchboxFoodDrop}');
+    expect(PROFILE_SOURCE).toContain('onFoodDrop={handleStagedFoodDrop}');
   });
 
   it('shows the selected food prompt, drag-over, feeding, success, and error states', () => {
@@ -151,12 +155,16 @@ describe('Lunchbox pointer feeding integration contract', () => {
     expect(FOODIE_BUDDY_SOURCE).toContain("resultMessage ?? '맛있는 한입 고마워! 😋'");
   });
 
-  it('keeps preview food isolated while persisting canonical total XP', () => {
-    expect(PROFILE_SOURCE).toContain('items={LUNCHMATE_PREVIEW_FIXTURE.foodItems}');
+  it('uses canonical inventory and consumes one item only after a successful feed', () => {
+    expect(PROFILE_SOURCE).toContain('items={lunchboxFoodItems}');
+    expect(PROFILE_SOURCE).toContain('normalizeLunchboxInventory(profile.lunchboxInventory)');
+    expect(PROFILE_SOURCE).toContain('consumeLunchboxFood(profile.lunchboxInventory, item.id)');
     expect(PROFILE_SOURCE).toContain('initialTotalXp: lunchmateTotalXp');
     expect(PROFILE_SOURCE).toContain('onTotalXpChange: persistLunchmateTotalXp');
+    expect(PROFILE_SOURCE).toContain('onFoodConsumed: persistConsumedFood');
     expect(PROFILE_SOURCE).toContain('updateProfile({ lunchmateTotalXp: nextTotalXp })');
-    expect(FLOW_SOURCE).not.toContain('quantity -');
+    expect(FLOW_SOURCE.indexOf('await shareBiteMock(item, attempt, controller.signal)'))
+      .toBeLessThan(FLOW_SOURCE.indexOf('onFoodConsumed(item)'));
     expect(FLOW_SOURCE).not.toContain('localStorage');
     expect(FLOW_SOURCE).toContain('setPreviewXp(progressUpdate.nextTotalXp)');
   });
