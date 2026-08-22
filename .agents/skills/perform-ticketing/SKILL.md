@@ -15,16 +15,28 @@ Keep the human workflow small and move investigation, repository safety, and val
 
 ## Minimal human input
 
-Accept the report even when it contains only:
+Keep the ClickUp task name and description simple. The task name must be `[Surface] User-visible symptom`; never include Bug Type, severity, or priority in the name. Store Bug Type only in the ClickUp custom field.
 
-```text
-Bug Type: User Behaviour | Consistency | Basic Functionality | Unintended Behaviour
-A. Bug Description: what the person saw
-B. Steps to Reproduce: the shortest tap sequence
-C. Expected Outcome: what should happen
+Accept the report when it contains only the following exact A–D structure:
+
+```md
+#### A. Bug Description
+- <What the person saw>
+
+#### B. Steps to Reproduce
+1. <The shortest tap sequence>
+
+#### C. Expected Outcome
+- <What should happen>
+
+#### D. Note for AI
+- `/perform-ticketing`으로 처리한다.
+- 최신 main과 운영 환경에서 먼저 재현하고, 관련 기존 기능과 충돌하지 않게 수정한다.
+- 수정본이 포함된 검증 URL을 제공하고 `Human Verification`에서 멈춘다.
+- 사람이 실제 폰으로 Sign-off하기 전에는 Done 처리하지 않는다.
 ```
 
-Section D is optional for the human. The AI must generate or refresh it from repository evidence before implementation. Normalize `Not Intentional`, `Not Inentional`, and similar labels to `Unintended Behaviour` without blocking intake.
+The human may reuse section D unchanged on every bug. The AI may append concise evidence inside D, but must preserve the four A–D headings and should place lengthy investigation or completion reports in ClickUp comments. Normalize `Not Intentional`, `Not Inentional`, and similar custom-field labels to `Unintended Behaviour` without blocking intake.
 
 Infer device, route, login state, severity, and scope when evidence makes them clear. Ask only when a missing choice prevents reproduction or would materially change the intended behavior.
 
