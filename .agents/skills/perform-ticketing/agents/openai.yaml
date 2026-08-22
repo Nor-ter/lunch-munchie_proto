@@ -1,0 +1,4 @@
+interface:
+  display_name: "Perform Ticketing"
+  short_description: "Turn simple bug reports into verified fixes and sign-off"
+  default_prompt: "Use $perform-ticketing to create, execute, or verify this Lunchie Munchie bug ticket with minimal human input."
