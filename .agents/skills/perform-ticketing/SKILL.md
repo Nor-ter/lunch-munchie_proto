@@ -1,6 +1,6 @@
 ---
 name: perform-ticketing
-description: Turn minimal Lunchie Munchie bug reports into consistent ClickUp-ready tickets, or execute an existing ticket through conflict-safe reproduction, implementation, validation, and simple human phone sign-off. Use when creating, triaging, fixing, or verifying a bug ticket; keep open-ended UX redesign in a separate improvement ticket.
+description: Turn minimal Lunchie Munchie bug reports, including a title and phone screenshot alone, into reproduced ClickUp-ready tickets, or execute a ticket through conflict-safe implementation, validation, and simple human phone sign-off. Use when creating, triaging, fixing, or verifying a bug ticket; keep open-ended UX redesign in a separate improvement ticket.
 ---
 
 # Perform Ticketing
@@ -9,7 +9,7 @@ Keep the human workflow small and move investigation, repository safety, and val
 
 ## Choose the mode
 
-- **Create or triage a ticket:** read [references/ticket-contract.md](references/ticket-contract.md). Convert a short observation into the standard A–D ticket, deduplicate it, and put AI-owned detail in section D.
+- **Create or triage a ticket:** read [references/ticket-contract.md](references/ticket-contract.md). Accept a title and bug screenshot as sufficient intake, reproduce the flow in production, and return the standard A–D ticket with AI-owned detail in section D.
 - **Execute a ticket:** read both [references/ticket-contract.md](references/ticket-contract.md) and [references/execution-playbook.md](references/execution-playbook.md). Reproduce, fix, validate, and hand off for human verification.
 - **Verify a completed fix:** read the Human verification section of [references/ticket-contract.md](references/ticket-contract.md). Do not reopen implementation unless the same steps still reproduce the bug.
 
@@ -17,7 +17,16 @@ Keep the human workflow small and move investigation, repository safety, and val
 
 Keep the ClickUp task name and description simple. The task name must be `[Surface] User-visible symptom`; never include Bug Type, severity, or priority in the name. Store Bug Type only in the ClickUp custom field.
 
-Accept the report when it contains only the following exact A–D structure:
+The preferred intake is only:
+
+- the intended ClickUp task title; and
+- one phone screenshot showing the bug.
+
+Inspect the screenshot, then open `https://lunchie-munchie.pages.dev` and attempt to reproduce the same flow before drafting the ticket. Infer the Bug Type custom field and complete A–D from observed evidence. Preserve the supplied title unless its surface label needs a small normalization; never add Bug Type to it.
+
+Do not invent taps, login state, device-specific behavior, or expected behavior that the screen and live flow do not support. If the bug cannot be reproduced outside the reporter's phone, still complete A–D, label the reproduction result accurately in D, and ask for only the single missing condition that blocks reliable reproduction.
+
+Also accept a report already written in the following exact A–D structure:
 
 ```md
 #### A. Bug Description

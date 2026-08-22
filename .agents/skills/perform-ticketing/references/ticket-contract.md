@@ -1,5 +1,26 @@
 # Minimal bug ticket contract
 
+## Title-and-screenshot intake
+
+A task title plus one phone screenshot is sufficient input. The AI owns the remaining ticket preparation:
+
+1. Preserve the supplied `[Surface] User-visible symptom` title and never add Bug Type to it.
+2. Inspect only visible evidence in the screenshot; do not infer unseen actions as facts.
+3. Open `https://lunchie-munchie.pages.dev` and navigate the most direct matching user flow.
+4. Use the successfully observed path for section B and the actual/expected difference for A and C.
+5. Recommend one Bug Type custom-field value separately from the title.
+6. Record `Reproduced`, `Partially reproduced`, or `Not reproduced` in section D.
+
+If authentication, account data, phone-only browser behavior, or an unknown prior action blocks reproduction, complete the ticket with the best verified evidence and request only that missing condition. Do not manufacture a confident reproduction sequence.
+
+Return the result in this order:
+
+```text
+Bug Type field: <one allowed value>
+
+<A–D description in the standard format>
+```
+
 ## Human-authored input
 
 The reporter should need less than two minutes. Preserve their wording and do not require technical diagnosis. Bug Type belongs only in the ClickUp custom field; do not repeat it in the task name or description.
