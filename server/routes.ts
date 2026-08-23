@@ -774,6 +774,36 @@ router.get("/restaurants", async (req: any, res: any) => {
   res.json(mockRestaurantsResponse());
 });
 
+router.get("/restaurants/:id", async (req: any, res: any) => {
+  const formatRestaurant = (r: any) => ({
+    id: r.id,
+    name: r.name,
+    category: r.category,
+    tags: r.tags || [],
+    rating: r.rating,
+    reviewCount: r.review_count,
+    distance: "",
+    address: r.address,
+    image: r.photos?.[0] || "",
+    photos: r.photos || [],
+    menuItems: r.menu_items || [],
+    lat: r.latitude,
+    lng: r.longitude,
+    priceRange: r.price_level,
+    openHours: r.business_hours,
+    dietary: r.dietary_options || [],
+    description: r.short_description || "",
+  });
+  const dbRes = await tryDb(async () => {
+    const rows = await db.select().from(restaurants).where(eq(restaurants.id, req.params.id)).limit(1);
+    return rows[0] ?? null;
+  });
+  if (dbRes.ok && dbRes.value) return res.json(formatRestaurant(dbRes.value));
+  const fallback = MOCK_RESTAURANTS.find(restaurant => restaurant.id === req.params.id);
+  if (fallback) return res.json(formatRestaurant(fallback));
+  return res.status(404).json({ error: "restaurant_not_found" });
+});
+
 // Courses
 router.get("/courses", async (req: any, res: any) => {
   const dbRes = await tryDb(async () => {

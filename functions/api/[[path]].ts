@@ -1394,6 +1394,25 @@ app.get("/api/restaurants", async (c) => {
   );
 });
 
+// 저장된 Lunchie 여정은 식당 ID만 보관한다. 전체 카탈로그 초기화와 무관하게
+// 해당 식당을 다시 열 수 있도록 정본 행을 ID로 직접 조회한다.
+app.get("/api/restaurants/:id", async (c) => {
+  const restaurant = await c.env.DB.prepare(
+    "SELECT * FROM restaurants WHERE id = ? LIMIT 1",
+  )
+    .bind(c.req.param("id"))
+    .first();
+  if (!restaurant) return c.json({ error: "restaurant_not_found" }, 404);
+  const row = restaurant as any;
+  return c.json({
+    ...row,
+    photos: await lunchiePresentationPhotos(c.env.DB, row.id),
+    menu_items: json(row.menus, []),
+    tags: json<string[]>(row.tags, []),
+    dietary_options: json<string[]>(row.dietary_options, []),
+  });
+});
+
 // REST API — /api/courses (Munchie 코스 목록)
 app.get("/api/courses", async (c) => {
   try {
