@@ -1,6 +1,6 @@
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
-import { selectLunchiePresentationPhotoKeys } from "./[[path]]";
+import { lunchiePresentationPhotos, selectLunchiePresentationPhotoKeys } from "./[[path]]";
 
 const source = readFileSync(new URL("./[[path]].ts", import.meta.url), "utf8");
 
@@ -15,8 +15,8 @@ describe("Lunchie presentation-photo safety", () => {
   });
 
   it("uses the same safe resolver for catalogue and recommendation cards", () => {
-    expect(source).toContain("photos: await lunchiePresentationPhotos(c.env.DB, item.restaurant.id)");
-    expect(source).toContain("photos: await lunchiePresentationPhotos(c.env.DB, r.id)");
+    expect(source).toContain("photos: await lunchiePresentationPhotos(c.env, c.env.DB, item.restaurant.id)");
+    expect(source).toContain("photos: await lunchiePresentationPhotos(c.env, c.env.DB, r.id)");
   });
 
   it("removes near-identical perceptual hashes and repeated dish labels", () => {
@@ -32,6 +32,32 @@ describe("Lunchie presentation-photo safety", () => {
       "/photos/pizza-a.jpg",
       "/photos/pasta-a.jpg",
       "/photos/table.jpg",
+    ]);
+  });
+
+  it("removes duplicate object keys before presenting a card", () => {
+    const rows = [
+      { r2_key: "same.jpg", kind: "dish", dishes: '["pizza"]', perceptual_hash: null },
+      { r2_key: "same.jpg", kind: "dish", dishes: '["pasta"]', perceptual_hash: null },
+    ];
+
+    expect(selectLunchiePresentationPhotoKeys(rows)).toEqual(["/photos/same.jpg"]);
+  });
+
+  it("excludes a classified row when its R2 object is missing", async () => {
+    const rows = [
+      { r2_key: "exists.jpg", kind: "dish", dishes: '["pizza"]', perceptual_hash: null },
+      { r2_key: "missing.jpg", kind: "dish", dishes: '["pasta"]', perceptual_hash: null },
+    ];
+    const db = {
+      prepare: () => ({ bind: () => ({ all: async () => ({ results: rows }) }) }),
+    };
+    const env = {
+      PHOTOS_R2: { head: async (key: string) => key.endsWith("exists.jpg") ? {} : null },
+    };
+
+    await expect(lunchiePresentationPhotos(env, db, "restaurant-1")).resolves.toEqual([
+      "/photos/exists.jpg",
     ]);
   });
 });

@@ -281,7 +281,14 @@ function SwipeCard({
   const crackFilter = useMotionTemplate`grayscale(${crackGray}) brightness(${crackDark})`;
   // 그 식당의 실제 사진만 쓴다. 없으면 빈 배열 → FoodImage가 이모지 플레이스홀더를 보여준다.
   // 카테고리 스톡 사진 폴백은 제거했다(버거집에 피자가 뜨는 등 실제와 다른 사진은 거짓 정보다).
-  const foodPhotos = restaurant.photos ?? [];
+  const hasCanonicalPhotoList = Array.isArray(restaurant.photos);
+  const foodPhotos: string[] = Array.from(new Set<string>(
+    (Array.isArray(restaurant.photos) ? restaurant.photos : [])
+      .filter((photo: unknown): photo is string => typeof photo === 'string')
+      .map((photo: string) => photo.trim())
+      .filter(Boolean),
+  ));
+  const primaryPhoto = hasCanonicalPhotoList ? foodPhotos[0] : restaurant.image;
   const photoIndex = foodPhotos.length ? ((photoStep % foodPhotos.length) + foodPhotos.length) % foodPhotos.length : 0;
 
   const handleDragEnd = useCallback((_: unknown, info: { offset: { x: number } }) => {
@@ -341,7 +348,7 @@ function SwipeCard({
         <FoodImage
           // The server-backed photo list is canonical. `image` is a legacy
           // browser snapshot and may point to a stale asset after deployment.
-          src={foodPhotos[0] || restaurant.image}
+          src={primaryPhoto}
           name={restaurant.name}
           category={restaurant.category}
           className="w-full h-full object-cover"
@@ -551,24 +558,39 @@ function SwipeCard({
               /* 실 데이터 없을 때 폴백 — 스톡 사진 3D 큐브 캐러셀(tl_revise 애니메이션) */
               <div className="flex-1 px-5 pb-4 flex flex-col min-h-0">
                 <div className="rounded-2xl overflow-hidden relative flex-1">
-                  {/* 좌/우 탭 시 큐브가 Y축으로 90도씩 굴러간다 */}
-                  <MenuCube photos={foodPhotos} step={photoStep} />
-                  <button
-                    className="absolute inset-y-0 left-0 w-1/2"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      setPhotoStep(s => s - 1);
-                    }}
-                    aria-label="이전 메뉴"
-                  />
-                  <button
-                    className="absolute inset-y-0 right-0 w-1/2"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      setPhotoStep(s => s + 1);
-                    }}
-                    aria-label="다음 메뉴"
-                  />
+                  {foodPhotos.length > 0 ? (
+                    <>
+                      {/* 좌/우 탭 시 큐브가 Y축으로 90도씩 굴러간다 */}
+                      <MenuCube photos={foodPhotos} step={photoStep} />
+                      {foodPhotos.length > 1 && (
+                        <>
+                          <button
+                            className="absolute inset-y-0 left-0 w-1/2"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setPhotoStep(s => s - 1);
+                            }}
+                            aria-label="이전 메뉴"
+                          />
+                          <button
+                            className="absolute inset-y-0 right-0 w-1/2"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setPhotoStep(s => s + 1);
+                            }}
+                            aria-label="다음 메뉴"
+                          />
+                        </>
+                      )}
+                    </>
+                  ) : (
+                    <FoodImage
+                      name={restaurant.name}
+                      category={restaurant.category}
+                      className="h-full w-full"
+                      emojiClass="text-[80px]"
+                    />
+                  )}
                   <div className="absolute top-3 left-1/2 -translate-x-1/2 flex gap-1.5 pointer-events-none">
                     {foodPhotos.map((_: string, j: number) => (
                       <div key={j} className="w-1.5 h-1.5 rounded-full"
@@ -577,7 +599,9 @@ function SwipeCard({
                   </div>
                 </div>
                 <div className="pt-3 flex-shrink-0">
-                  <p className="font-bold text-[16px] text-white">메뉴 {photoIndex + 1}</p>
+                  <p className="font-bold text-[16px] text-white">
+                    {foodPhotos.length > 0 ? `메뉴 ${photoIndex + 1}` : '등록된 음식 사진이 없어요'}
+                  </p>
                   <p className="text-[12px] text-white/50 mt-0.5">{restaurant.description}</p>
                 </div>
               </div>
@@ -586,7 +610,11 @@ function SwipeCard({
             {/* hint */}
             <div className="text-center pb-2 flex-shrink-0">
               <p className="text-white/40 text-[11px]">
-                {restaurant.menuItems && restaurant.menuItems.length > 0 ? `메뉴 ${restaurant.menuItems.length}개` : '← 이전 / 다음 메뉴 →'} · ✕ 눌러서 닫기
+                {restaurant.menuItems && restaurant.menuItems.length > 0
+                  ? `메뉴 ${restaurant.menuItems.length}개`
+                  : foodPhotos.length > 1
+                    ? '← 이전 / 다음 메뉴 →'
+                    : '사진 정보'} · ✕ 눌러서 닫기
               </p>
             </div>
           </div>
@@ -596,7 +624,7 @@ function SwipeCard({
       <MenuItemDetail
         items={restaurant.menuItems || []}
         index={detailIndex}
-        fallbackImage={foodPhotos[0] || restaurant.image}
+        fallbackImage={primaryPhoto}
         restaurantCategory={restaurant.category}
         onClose={() => setDetailIndex(null)}
         onIndexChange={setDetailIndex}
