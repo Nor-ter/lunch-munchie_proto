@@ -1,52 +1,13 @@
 import { useEffect, useState } from 'react';
 import { useLocation, useSearch } from 'wouter';
 import { ArrowLeft, MapPin, Clock, Star } from 'lucide-react';
-import { MapContainer, TileLayer, Marker, Popup, useMap } from 'react-leaflet';
-import L from 'leaflet';
+import { Map, Marker } from '@vis.gl/react-google-maps';
+import { motion } from 'framer-motion';
 import { useApp, type Restaurant } from '@/contexts/AppContext';
 import { getRestaurantById as fetchRestaurantById } from '@/services/restaurantsApi';
 
-// Set up leaflet icons
-delete (L.Icon.Default.prototype as any)._getIconUrl;
-L.Icon.Default.mergeOptions({
-  iconRetinaUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/marker-icon-2x.png',
-  iconUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/marker-icon.png',
-  shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/marker-shadow.png',
-});
-
-function createCoralIcon() {
-  return L.divIcon({
-    className: '',
-    html: `<div style="
-      width:34px;height:34px;border-radius:50%;
-      background:#EB5053;color:white;
-      display:flex;align-items:center;justify-content:center;
-      border:3px solid white;
-      box-shadow:0 2px 8px rgba(235,80,83,0.4);
-      font-size:16px;
-    ">📍</div>`,
-    iconSize: [34, 34],
-    iconAnchor: [17, 17],
-  });
-}
-
-function MapResizeSync() {
-  const map = useMap();
-
-  useEffect(() => {
-    const container = map.getContainer();
-    const refreshSize = () => map.invalidateSize({ animate: false });
-    const frame = window.requestAnimationFrame(refreshSize);
-    const observer = new ResizeObserver(refreshSize);
-    observer.observe(container.parentElement ?? container);
-    return () => {
-      window.cancelAnimationFrame(frame);
-      observer.disconnect();
-    };
-  }, [map]);
-
-  return null;
-}
+const GOOGLE_MAPS_API_KEY = import.meta.env.VITE_GOOGLE_MAPS_API_KEY;
+const SAVED_LUNCHIE_PATH = '/saved?tab=restaurants';
 
 export default function LunchieMapPage() {
   const [, navigate] = useLocation();
@@ -95,50 +56,53 @@ export default function LunchieMapPage() {
     return (
       <div className="min-h-dvh flex flex-col items-center justify-center px-5 text-center">
         <p role={restaurantLoadFailed ? 'alert' : undefined} className="text-[14px] text-[#9B9B9B] mb-4">식당 정보를 찾을 수 없습니다.</p>
-        <button onClick={() => navigate('/saved')} className="lm-btn-primary px-6 py-3 flex items-center justify-center">
+        <button onClick={() => navigate(SAVED_LUNCHIE_PATH)} className="lm-btn-primary px-6 py-3 flex items-center justify-center">
           저장 목록으로
         </button>
       </div>
     );
   }
 
-  const position: [number, number] = [restaurant.lat, restaurant.lng];
+  const position = { lat: restaurant.lat, lng: restaurant.lng };
 
   return (
-    <div className="min-h-dvh bg-[#FCF4EE] flex flex-col">
+    <div className="flex min-h-dvh flex-col bg-[#FFF6F2]">
       {/* Header */}
-      <div className="flex items-center justify-between px-5 pt-12 pb-3 bg-white z-10 border-b border-[#E5E5E5]">
-        <button
-          onClick={() => window.history.back()}
-          className="w-9 h-9 rounded-full bg-[#F5F5F5] flex items-center justify-center active:scale-95"
+      <header className="sticky top-0 z-20 flex items-center justify-between border-b border-[#F0E8E0] bg-[#FFF6F2]/95 px-5 pb-3 pt-[max(12px,env(safe-area-inset-top))] backdrop-blur">
+        <motion.button
+          type="button"
+          onClick={() => navigate(SAVED_LUNCHIE_PATH)}
+          whileTap={{ scale: 0.9 }}
+          className="flex size-9 items-center justify-center rounded-full bg-white shadow-sm"
+          aria-label="Lunchie 런치픽으로 돌아가기"
         >
-          <ArrowLeft size={17} color="#1A1A1A" />
-        </button>
-        <span className="font-semibold text-[15px] text-[#1A1A1A]">식당 위치 안내</span>
-        <div className="w-9" />
-      </div>
+          <ArrowLeft size={17} aria-hidden="true" />
+        </motion.button>
+        <span className="text-[15px] font-extrabold text-[#2F292B]">식당 위치 안내</span>
+        <div className="size-9" aria-hidden="true" />
+      </header>
 
       {/* Map */}
       <div data-ui="lunchie-restaurant-map" className="relative min-h-[50vh] flex-1 overflow-hidden">
-        <MapContainer
-          center={position}
-          zoom={16}
-          className="absolute inset-0 !h-full !w-full !rounded-none"
-          scrollWheelZoom={true}
-          zoomControl={false}
-        >
-          <MapResizeSync />
-          <TileLayer
-            url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-            attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
-          />
-          <Marker position={position} icon={createCoralIcon()}>
-            <Popup>
-              <strong>{restaurant.name}</strong><br />
-              {restaurant.category}
-            </Popup>
-          </Marker>
-        </MapContainer>
+        {GOOGLE_MAPS_API_KEY ? (
+          <Map
+            defaultCenter={position}
+            defaultZoom={16}
+            gestureHandling="greedy"
+            disableDefaultUI
+            style={{ position: 'absolute', inset: 0, width: '100%', height: '100%' }}
+          >
+            <Marker position={position} title={restaurant.name} />
+          </Map>
+        ) : (
+          <div role="alert" className="flex h-full min-h-[50vh] items-center justify-center px-8 text-center">
+            <div>
+              <MapPin className="mx-auto text-[#E87874]" size={34} />
+              <p className="mt-3 text-[15px] font-black text-[#3A2922]">지도를 불러올 수 없어요</p>
+              <p className="mt-1 text-[12px] font-semibold text-[#9A8579]">Google 지도 설정을 확인해 주세요.</p>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Detail Card */}

@@ -16,20 +16,28 @@ const restaurant = {
   dietary_options: [],
 };
 
-test('saved Lunchie restaurant renders a full-height map and marker', async ({ page }) => {
+test('saved Lunchie restaurant uses Google Maps and returns to the Lunchie tab', async ({ page }) => {
+  let googleMapsLoaderRequested = false;
+  let openStreetMapRequested = false;
+  page.on('request', request => {
+    const url = request.url();
+    if (url.includes('maps.googleapis.com/maps/api/')) googleMapsLoaderRequested = true;
+    if (url.includes('openstreetmap.org')) openStreetMapRequested = true;
+  });
   await page.setViewportSize({ width: 390, height: 844 });
   await page.route('https://fonts.googleapis.com/**', route => route.fulfill({
     status: 200,
     contentType: 'text/css',
     body: '',
   }));
-  await page.route('https://*.tile.openstreetmap.org/**', route => route.fulfill({
-    status: 200,
-    contentType: 'image/svg+xml',
-    body: '<svg xmlns="http://www.w3.org/2000/svg" width="256" height="256"><rect width="256" height="256" fill="#efe9df"/><path d="M-20 180L280 40M-20 220L280 80" stroke="#fff" stroke-width="18"/><path d="M120-20L150 280" stroke="#d8cfc3" stroke-width="8"/></svg>',
-  }));
   await page.route('**/api/**', async route => {
     const path = new URL(route.request().url()).pathname;
+    // Google Maps also loads from a `/maps/api/...` URL. Only mock this app's
+    // own API namespace so the real map loader can initialise in this test.
+    if (!path.startsWith('/api/')) {
+      await route.continue();
+      return;
+    }
     if (path === `/api/restaurants/${restaurant.id}`) {
       await route.fulfill({ contentType: 'application/json', body: JSON.stringify(restaurant) });
       return;
@@ -50,13 +58,17 @@ test('saved Lunchie restaurant renders a full-height map and marker', async ({ p
   await expect(page.getByText(restaurant.name, { exact: true })).toBeVisible();
   await expect(page.getByText(restaurant.address, { exact: true })).toBeVisible();
   const region = page.locator('[data-ui="lunchie-restaurant-map"]');
-  const map = region.locator('.leaflet-container');
+  const map = region.locator('.gm-style');
   await expect(map).toBeVisible();
-  await expect(map.locator('.leaflet-marker-icon')).toBeVisible();
-  await expect(map.locator('.leaflet-tile-loaded').first()).toBeVisible();
 
   const [regionBox, mapBox] = await Promise.all([region.boundingBox(), map.boundingBox()]);
   expect(regionBox!.height).toBeGreaterThan(400);
   expect(mapBox!.height).toBeGreaterThanOrEqual(regionBox!.height - 1);
   expect(mapBox!.width).toBeGreaterThanOrEqual(regionBox!.width - 1);
+  expect(googleMapsLoaderRequested).toBe(true);
+  expect(openStreetMapRequested).toBe(false);
+
+  await page.getByRole('button', { name: 'Lunchie 런치픽으로 돌아가기' }).click();
+  await expect(page).toHaveURL('/saved?tab=restaurants');
+  await expect(page.getByRole('button', { name: /Lunchie 런치픽/ })).toHaveAttribute('aria-pressed', 'true');
 });
