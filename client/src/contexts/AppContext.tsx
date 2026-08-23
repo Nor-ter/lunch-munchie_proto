@@ -8,6 +8,7 @@ import React, { createContext, useContext, useState, useEffect, useCallback, use
 import { normalizeDiet, isHardRestriction, isIngredientAvoidance, restaurantSatisfiesDietRestriction, type DietRestriction } from '@shared/const';
 import { categoryMatchesIntent, intentForHour, type Intent } from '@shared/intent';
 import { distanceMetres, isWithinRadius } from '@shared/geo';
+import { normalizeQuickMatchPartySize } from '@shared/quickMatchParty';
 import { normalizeFoodTag, type TagType } from '@/constants/foodTags';
 import { DRIVE_COURSES, DRIVE_FEED_POSTS } from '@/data/driveFeed';
 import { demoAuthorIdFor } from '@/data/demoAuthors';
@@ -638,7 +639,7 @@ export function AppProvider({
         membershipActive: parsed.membershipActive !== false,
         filters: {
           ...parsed.filters,
-          partySize: parsed.filters.partySize === 1 ? 1 : Math.max(2, Math.min(12, Number(parsed.filters.partySize) || 4)),
+          partySize: normalizeQuickMatchPartySize(parsed.filters.partySize),
           dietary: normalizeDietaryPreferences(parsed.filters.dietary),
         },
       };

@@ -25,6 +25,10 @@ import { lunchmateLoadoutFromProfile } from '@/utils/lunchmateProfile';
 import { toast } from 'sonner';
 import type { Intent } from '@shared/intent';
 import { localityForCoordinate } from '@shared/melbourneLocality';
+import {
+  QUICK_MATCH_PARTY_SIZE_MAX,
+  normalizeQuickMatchPartySize,
+} from '@shared/quickMatchParty';
 import type { LunchmateLoadout } from '@/types/lunchmateCustomization';
 import { logSessionCreated } from '@/lib/eventLogger';
 import SessionManagementMenu from '@/components/lunchie/SessionManagementMenu';
@@ -46,7 +50,8 @@ const PREFERENCE_CARDS: { value: Intent | null; label: string; image?: string; c
 ];
 
 const RADIUS_OPTIONS = [1000, 2000, 3000, 4000, 5000];
-const GROUP_SIZE_OPTIONS = Array.from({ length: 12 }, (_, index) => index + 1);
+const GROUP_SIZE_OPTIONS = Array.from({ length: QUICK_MATCH_PARTY_SIZE_MAX }, (_, index) => index + 1);
+const GROUP_SIZE_QUICK_OPTIONS = [1, 2, 4, 10, 20, QUICK_MATCH_PARTY_SIZE_MAX];
 const GROUP_SIZE_ITEM_HEIGHT = 48;
 const GROUP_SIZE_MAX_SCROLL = (GROUP_SIZE_OPTIONS.length - 1) * GROUP_SIZE_ITEM_HEIGHT;
 /** Strong Alarm-app-like coast: higher = longer carry after a flick. */
@@ -283,7 +288,7 @@ function GroupSizeRuler({ value, onChange }: { value: number; onChange: (value: 
   };
 
   const selectValue = (next: number) => {
-    const normalized = Math.max(1, Math.min(12, Math.round(next)));
+    const normalized = normalizeQuickMatchPartySize(next);
     onChangeRef.current(normalized);
     setScrollerTop((normalized - 1) * GROUP_SIZE_ITEM_HEIGHT, false);
   };
@@ -395,9 +400,9 @@ function GroupSizeRuler({ value, onChange }: { value: number; onChange: (value: 
           tabIndex={0}
           aria-label="인원 수"
           aria-valuemin={1}
-          aria-valuemax={12}
+          aria-valuemax={QUICK_MATCH_PARTY_SIZE_MAX}
           aria-valuenow={value}
-          aria-valuetext={value === 1 ? '혼자' : String(value)}
+          aria-valuetext={value === 1 ? '혼자' : `${value}명`}
           onScroll={event => {
             if (dragRef.current || inertiaFrameRef.current != null) return;
             const nextValue = valueFromScrollTop(event.currentTarget.scrollTop);
@@ -455,7 +460,7 @@ function GroupSizeRuler({ value, onChange }: { value: number; onChange: (value: 
             }
             if (event.key === 'End') {
               event.preventDefault();
-              selectValue(12);
+              selectValue(QUICK_MATCH_PARTY_SIZE_MAX);
             }
           }}
           style={{ WebkitOverflowScrolling: 'touch', scrollSnapType: 'y mandatory' }}
@@ -478,15 +483,31 @@ function GroupSizeRuler({ value, onChange }: { value: number; onChange: (value: 
               className={`flex h-12 w-full shrink-0 snap-center items-center justify-center text-[18px] font-black transition-[color,transform,opacity] ${
                 option === value ? 'scale-110 text-[#F4515E]' : 'scale-95 text-[#9F9699] opacity-55'
               }`}
-              aria-label={option === 1 ? '혼자' : String(option)}
+              aria-label={option === 1 ? '혼자' : `${option}명`}
             >
-              {option === 1 ? '혼자' : option}
+              {option === 1 ? '혼자' : `${option}명`}
             </div>
           ))}
           <div className="h-12 shrink-0" aria-hidden="true" />
         </div>
         <div className="pointer-events-none absolute inset-x-0 top-0 z-30 h-12 bg-gradient-to-b from-[#FFF8F6] via-[#FFF8F6]/90 to-transparent" />
         <div className="pointer-events-none absolute inset-x-0 bottom-0 z-30 h-12 bg-gradient-to-t from-[#FFF8F6] via-[#FFF8F6]/90 to-transparent" />
+      </div>
+      <div className="mt-2 grid grid-cols-6 gap-1.5" aria-label="빠른 인원 선택">
+        {GROUP_SIZE_QUICK_OPTIONS.map(option => (
+          <button
+            key={option}
+            type="button"
+            onClick={() => selectValue(option)}
+            aria-label={option === 1 ? '혼자 빠른 선택' : `${option}명 빠른 선택`}
+            aria-pressed={option === value}
+            className={`min-h-9 rounded-xl text-[11px] font-black transition-colors ${
+              option === value ? 'bg-[#F4515E] text-white' : 'bg-[#FFF0EE] text-[#B5444D]'
+            }`}
+          >
+            {option === 1 ? '혼자' : option}
+          </button>
+        ))}
       </div>
     </div>
   );
@@ -779,7 +800,7 @@ export default function LunchieSettingsPage() {
   };
 
   const setGroupSize = (next: number) => {
-    setPartySize(Math.max(1, Math.min(12, Math.round(next))));
+    setPartySize(normalizeQuickMatchPartySize(next));
   };
 
   const confirmCurrentLocation = async () => {
@@ -955,8 +976,14 @@ export default function LunchieSettingsPage() {
           <div className="mb-3 flex items-center gap-2 text-[14px] font-extrabold text-[#26232A]">
             <Users size={17} className="text-[#F4515E]" />
             <span>인원</span>
+            <span className="ml-auto rounded-full bg-[#FFE4E3] px-2.5 py-1 text-[11px] text-[#D83C49]">
+              {partySize === 1 ? '혼자' : `${partySize}명`}
+            </span>
           </div>
           <GroupSizeRuler value={partySize} onChange={setGroupSize} />
+          <p className="mt-2 text-center text-[10px] font-semibold text-[#948A8E]">
+            최대 {QUICK_MATCH_PARTY_SIZE_MAX}명까지 함께 선택할 수 있어요.
+          </p>
         </Card>
 
         <Card>

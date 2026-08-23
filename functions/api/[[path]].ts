@@ -11,6 +11,7 @@ import {
 import { categoryMatchesIntent, type Intent } from "../../shared/intent";
 import { intentForMenuSection, menuSectionIntents } from "../../shared/menuTaxonomy";
 import { isValidCoordinate, isWithinRadius } from "../../shared/geo";
+import { normalizeQuickMatchPartySize } from "../../shared/quickMatchParty";
 import { buildSlate, scoreCandidateBreakdown } from "../../server/engine/scorer";
 import type { Candidate, RecContext, SlateType } from "../../shared/engine";
 import { isAdminEmail } from "./adminAccess";
@@ -1966,6 +1967,19 @@ export function buildSharedSessionDeck(
   }));
 }
 
+// Each impression row binds 12 values. D1 allows at most 100 bound parameters
+// per statement, so eight rows keep a multi-row INSERT safely below the limit.
+// At 30 participants and a seven-card deck this produces 27 INSERT statements
+// instead of 210 one-row statements.
+export const SESSION_IMPRESSION_ROWS_PER_STATEMENT = 8;
+
+export function chunkSessionImpressionRows<T>(rows: T[]): T[][] {
+  const chunks: T[][] = [];
+  for (let index = 0; index < rows.length; index += SESSION_IMPRESSION_ROWS_PER_STATEMENT)
+    chunks.push(rows.slice(index, index + SESSION_IMPRESSION_ROWS_PER_STATEMENT));
+  return chunks;
+}
+
 export function sessionResults(
   session: SessionRow,
   members: any[],
@@ -2116,7 +2130,7 @@ app.post("/api/sessions/create", async (c) => {
   const emoji = nullableText(body.emoji, 16) ?? "👤";
   const groupSize =
     typeof body.groupSize === "number" && Number.isFinite(body.groupSize)
-      ? Math.max(1, Math.min(12, Math.floor(body.groupSize)))
+      ? normalizeQuickMatchPartySize(Math.floor(body.groupSize))
       : 4;
   const filterDistance =
     typeof body.filterDistance === "number" &&
@@ -2580,6 +2594,38 @@ app.post("/api/sessions/:token/status", async (c) => {
       score: item.score,
       propensity: 1,
     }));
+    const impressionRows = (members as any[]).flatMap((member) => slateItems.map((item) => ({
+      id: crypto.randomUUID(),
+      slateId,
+      userId: member.user_id,
+      sessionId: session.id,
+      restaurantId: item.restaurant_id,
+      position: item.position,
+      propensity: item.propensity,
+      score: item.score,
+      modelVersion: "session-group-deterministic-v1",
+      contextJson: JSON.stringify(groupContext),
+      idempotencyKey: `session-slate:${slateId}:impression:${member.user_id}:${item.position}`,
+      createdAt: now,
+    })));
+    const impressionStatements = chunkSessionImpressionRows(impressionRows).map((chunk) =>
+      c.env.DB.prepare(
+        `INSERT INTO rec_events (id, event_type, slate_id, slate_type, user_id, session_id, restaurant_id, position, propensity, score, model_version, variant, context_json, idempotency_key, created_at) VALUES ${chunk.map(() => "(?, 'IMPRESSION', ?, 'PRELIM', ?, ?, ?, ?, ?, ?, ?, 'group', ?, ?, ?)").join(", ")}`,
+      ).bind(...chunk.flatMap((row) => [
+        row.id,
+        row.slateId,
+        row.userId,
+        row.sessionId,
+        row.restaurantId,
+        row.position,
+        row.propensity,
+        row.score,
+        row.modelVersion,
+        row.contextJson,
+        row.idempotencyKey,
+        row.createdAt,
+      ])),
+    );
     await c.env.DB.batch([
       c.env.DB.prepare(
         "UPDATE sessions SET top_restaurant_ids = ?, recommendation_slate_id = ? WHERE id = ?",
@@ -2587,15 +2633,7 @@ app.post("/api/sessions/:token/status", async (c) => {
       c.env.DB.prepare(
         "INSERT INTO recommendation_slates (id, owner_user_id, session_id, slate_type, policy_version, variant, context_json, items_json, candidate_count, created_at, expires_at) VALUES (?, ?, ?, 'PRELIM', ?, 'group', ?, ?, ?, ?, ?)",
       ).bind(slateId, session.host_user_id, session.id, "session-group-deterministic-v1", JSON.stringify(groupContext), JSON.stringify(slateItems), pool.length, now, now + 24 * 60 * 60 * 1000),
-      ...(members as any[]).flatMap((member) => slateItems.map((item) =>
-        c.env.DB.prepare(
-          "INSERT INTO rec_events (id, event_type, slate_id, slate_type, user_id, session_id, restaurant_id, position, propensity, score, model_version, variant, context_json, idempotency_key, created_at) VALUES (?, 'IMPRESSION', ?, 'PRELIM', ?, ?, ?, ?, ?, ?, ?, 'group', ?, ?, ?)",
-        ).bind(
-          crypto.randomUUID(), slateId, member.user_id, session.id, item.restaurant_id, item.position,
-          item.propensity, item.score, "session-group-deterministic-v1", JSON.stringify(groupContext),
-          `session-slate:${slateId}:impression:${member.user_id}:${item.position}`, now,
-        ),
-      )),
+      ...impressionStatements,
     ]);
   }
   const deadlineMinutes =

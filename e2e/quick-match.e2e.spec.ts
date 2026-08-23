@@ -121,6 +121,9 @@ test('mobile settings keeps the timer and vertical people wheel synchronized wit
   await groupSize.focus();
   await page.keyboard.press('ArrowDown');
   await expect(groupSize).toHaveAttribute('aria-valuenow', '9');
+  await page.getByRole('button', { name: '30명 빠른 선택', exact: true }).click();
+  await expect(groupSize).toHaveAttribute('aria-valuenow', '30');
+  await expect(groupSize).toHaveAttribute('aria-valuetext', '30명');
   await page.getByRole('option', { name: '혼자', exact: true }).click();
   await expect(groupSize).toHaveAttribute('aria-valuenow', '1');
   await expect(groupSize).toHaveAttribute('aria-valuetext', '혼자');
