@@ -32,7 +32,10 @@ describe('Lunchie Quick Match presentation', () => {
     expect(settingsSource).not.toContain('함께 먹을 정원');
     expect(settingsSource).not.toContain('위아래로 스크롤해 인원을 선택해요');
     expect(settingsSource).not.toContain('focus-within:ring-2');
-    expect(settingsSource).toContain('aria-valuemax={12}');
+    expect(settingsSource).toContain('aria-valuemax={QUICK_MATCH_PARTY_SIZE_MAX}');
+    expect(settingsSource).toContain('GROUP_SIZE_QUICK_OPTIONS');
+    expect(settingsSource).toContain('`${option}명 빠른 선택`');
+    expect(settingsSource).toContain('최대 {QUICK_MATCH_PARTY_SIZE_MAX}명');
     expect(settingsSource).toContain('onScroll={event =>');
     expect(settingsSource).toContain('aria-label="검색 거리"');
     expect(settingsSource).not.toContain('런치킨을 좌우로 움직여 검색 범위를 정해요');

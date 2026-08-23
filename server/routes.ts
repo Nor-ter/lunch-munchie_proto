@@ -22,6 +22,7 @@ import type { Candidate, RecContext, RecEventInput } from "../shared/engine.js";
 import { normalizeDiet, isHardRestriction, isIngredientAvoidance, restaurantSatisfiesDietRestriction } from "../shared/const.js";
 import type { DietRestriction } from "../shared/const.js";
 import { intentForCategory, intentForHour } from "../shared/intent.js";
+import { normalizeQuickMatchPartySize } from "../shared/quickMatchParty.js";
 
 const router = Router();
 
@@ -350,7 +351,7 @@ router.post("/sessions/create", async (req: any, res: any) => {
       share_token: token,
       status: "WAITING",
       deadline_at: deadlineAt,
-      group_size: groupSize || 4,
+      group_size: normalizeQuickMatchPartySize(groupSize),
       filter_distance: filterDistance || 1000,
       filter_budget: filterBudget || 2,
       filter_min_rating: 0,

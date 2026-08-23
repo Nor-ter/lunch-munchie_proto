@@ -1,10 +1,25 @@
 import { describe, expect, it } from "vitest";
-import { buildSharedSessionDeck, onRequest } from "./[[path]]";
+import {
+  SESSION_IMPRESSION_ROWS_PER_STATEMENT,
+  buildSharedSessionDeck,
+  chunkSessionImpressionRows,
+  onRequest,
+} from "./[[path]]";
 
 const HOST_KEY = "host-key";
 const HOST_KEY_HASH = "09f10e4bdc37a471382a5aa37101705b258c9b246fbcfa1e8727723214f1a738";
 
 describe("group-session recommendation attribution", () => {
+  it("batches thirty participants worth of impression evidence within D1 parameter limits", () => {
+    const rows = Array.from({ length: 30 * 7 }, (_, index) => index);
+    const chunks = chunkSessionImpressionRows(rows);
+
+    expect(SESSION_IMPRESSION_ROWS_PER_STATEMENT * 12).toBeLessThanOrEqual(100);
+    expect(chunks).toHaveLength(27);
+    expect(chunks.every((chunk) => chunk.length <= SESSION_IMPRESSION_ROWS_PER_STATEMENT)).toBe(true);
+    expect(chunks.flat()).toEqual(rows);
+  });
+
   it("does not boost a cuisine merely because it has more candidate rows", () => {
     const deck = buildSharedSessionDeck(
       "stable-session",
