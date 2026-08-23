@@ -14,7 +14,7 @@ Cloudflare에서 이 정책이 허용하는 리소스는 아래뿐이다. 이름
 | D1 | `lunchie-db` (`7d0e2717-d86d-42f8-9104-e02f33797695`) | 커밋된 마이그레이션 적용 및 앱 런타임 데이터 저장 |
 | Worker / Durable Objects | 스크립트 `lunchie-munchie-state` | `USER_DO`, `SESSION_DO` 상태 객체 배포·실행 |
 | R2 | 버킷 `lunchie-photos` | 앱이 소유권 확인을 거친 게시물 사진 저장·조회·삭제 |
-| Pages 런타임 비밀값 | `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `AUTH_SESSION_SECRET` | Google OAuth 및 세션 서명 |
+| Pages 런타임 비밀값 | `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `AUTH_SESSION_SECRET`, `GOOGLE_MAPS_SERVER_API_KEY` | Google OAuth, 세션 서명, Places API (New) 및 Directions API 프록시 |
 | Pages 브라우저 빌드 설정 | `VITE_GOOGLE_MAPS_API_KEY`, `NEXT_PUBLIC_GOOGLE_MAPS_API_KEY` | HTTP referrer 제한을 적용한 동일한 Google Maps 브라우저 키를 현재 Vite 빌드와 향후 Next.js 빌드에 주입 |
 
 다음은 명시적으로 **금지**한다: 다른 Pages/Workers/D1/R2, Vationo·researchq 등 다른 서비스, DNS·Zone, WAF·Access·Zero Trust 전역 관리, 계정 멤버·그룹·결제, 계정 API 토큰, 이메일·사용자 디렉터리, KV·Queues·AI·Analytics 설정 변경.
@@ -39,24 +39,25 @@ Cloudflare UI가 특정 권한을 리소스 단위로 좁힐 수 있으면 반�
 | GitHub Secret | 필요한 Cloudflare 권한 | 사용할 수 있는 명령 / 대상 | 명시적 제외 |
 | --- | --- | --- | --- |
 | `CLOUDFLARE_D1_MIGRATIONS_TOKEN` | D1 Edit — `lunchie-db`만 | `wrangler d1 migrations apply lunchie-db --remote` | 다른 DB, 임의 SQL·데이터 내보내기, R2, Pages, Worker, DNS, 멤버, 결제 |
-| `CLOUDFLARE_WORKER_DEPLOY_TOKEN` | Workers Scripts Edit — `lunchie-munchie-state`; Durable Objects Edit — 해당 스크립트; Pages Edit — `lunchie-munchie` | `wrangler deploy --config wrangler.state.toml`, `wrangler pages deploy … --project-name=lunchie-munchie --branch=main` | D1, R2, 비밀값 읽기/변경, DNS, Access/Zero Trust, 멤버, 결제, 다른 Worker/Pages |
+| `CLOUDFLARE_WORKER_DEPLOY_TOKEN` | Workers Scripts Edit — `lunchie-munchie-state`; Durable Objects Edit — 해당 스크립트; Pages Edit — `lunchie-munchie` | `wrangler deploy --config wrangler.state.toml`, `wrangler pages secret put GOOGLE_MAPS_SERVER_API_KEY …`, `wrangler pages deploy … --project-name=lunchie-munchie --branch=main` | D1, R2, 다른 런타임 비밀값 읽기/변경, DNS, Access/Zero Trust, 멤버, 결제, 다른 Worker/Pages |
 | `CLOUDFLARE_ACCOUNT_ID` | 권한 없음(식별자) | 위 두 명령의 대상 계정 지정 | 인증 수단으로 사용 금지 |
 | `VITE_GOOGLE_MAPS_API_KEY` | Cloudflare 권한 없음(브라우저용 Google API 키) | GitHub `production` 환경에서 Pages 운영 번들을 빌드할 때만 `VITE_GOOGLE_MAPS_API_KEY`로 주입 | 서버용 Google API, OAuth, 다른 저장소·환경, 로컬 기본값으로 사용 금지 |
 | `NEXT_PUBLIC_GOOGLE_MAPS_API_KEY` | Cloudflare 권한 없음(브라우저용 Google API 키) | 향후 Next.js 클라이언트 빌드 호환용으로 동일한 GitHub `production` 환경에서만 주입 | 서버용 Google API, OAuth, 다른 저장소·환경, 로컬 기본값으로 사용 금지 |
+| `GOOGLE_MAPS_SERVER_API_KEY` | Cloudflare 권한 없음(서버용 Google API 키) | GitHub `production` 환경에서 `lunchie-munchie` Pages 런타임의 동일한 이름의 secret으로만 동기화 | 브라우저 번들, 로그, 다른 Pages/Worker, Google API 키 원문 조회 |
 
 배포 토큰은 R2 권한을 갖지 않는다. 사진은 Pages Functions가 `PHOTOS_R2` 바인딩으로 처리하며, 앱은 게시물·계정 소유권을 확인한 뒤 해당 객체만 조작한다. 대량 목록 조회·버킷 전체 삭제·다른 버킷 접근은 금지한다.
 
-Cloudflare Pages 런타임 Secrets는 GitHub에 복제하지 않는다. 단, `VITE_GOOGLE_MAPS_API_KEY`와 `NEXT_PUBLIC_GOOGLE_MAPS_API_KEY`는 브라우저에 전달되는 빌드 설정이므로 직접 업로드 CI가 접근할 수 있도록 GitHub `production` 환경에도 같은 값을 등록한다. 두 이름에는 동일한 브라우저 키를 사용하며 Google Cloud HTTP referrer 제한을 적용한다. 지정된 비상 담당자만 값을 등록·교체하며, 값 자체를 채팅·이슈·PR·로그·`.dev.vars.example`에 남기지 않는다.
+Cloudflare Pages 런타임 Secrets는 원칙적으로 GitHub에 복제하지 않는다. 예외는 배포에 필수인 `GOOGLE_MAPS_SERVER_API_KEY` 하나로, GitHub `production` secret에서 같은 이름의 Pages secret으로 단방향 동기화한다. 이 키는 브라우저 키와 분리하고 Google Cloud에서 Places API (New)와 Directions API만 허용한다. `VITE_GOOGLE_MAPS_API_KEY`와 `NEXT_PUBLIC_GOOGLE_MAPS_API_KEY`는 브라우저에 전달되는 빌드 설정이므로 직접 업로드 CI가 접근할 수 있도록 GitHub `production` 환경에도 같은 값을 등록한다. 두 브라우저 이름에는 동일한 키를 사용하며 Google Cloud HTTP referrer 제한을 적용한다. 지정된 비상 담당자만 값을 등록·교체하며, 값 자체를 채팅·이슈·PR·로그·`.dev.vars.example`에 남기지 않는다.
 
 ## 4. 배포 정책
 
 ```text
 feature branch → Pull Request → quality.yml 통과 → main 병합
- → D1 migrations → state Worker/DO → Pages production
+ → D1 migrations → state Worker/DO → Pages 지도 서버 secret → Pages production
 ```
 
 1. `.github/workflows/quality.yml`은 PR과 브랜치 푸시에서 타입 검사, Vitest, 로컬 Playwright E2E, Pages 빌드를 실행한다.
-2. `.github/workflows/deploy-cloudflare.yml`은 `main` push에서만 실행된다. 작업 순서는 **D1 마이그레이션 → Durable Object Worker → Pages**로 고정한다.
+2. `.github/workflows/deploy-cloudflare.yml`은 `main` push에서만 실행된다. 작업 순서는 **D1 마이그레이션 → Durable Object Worker → Pages 지도 서버 secret 동기화 → Pages**로 고정한다. 서버 키가 없으면 Pages 배포 전에 실패해야 한다.
 3. 일반 개발자는 `wrangler … --remote`, `wrangler deploy`, `wrangler pages deploy`를 운영 대상으로 직접 실행하지 않는다.
 4. `--no-verify`, 강제 푸시, CI 우회, GitHub secret을 로컬/코드에 복사하는 행위는 금지한다.
 5. `main`에는 PR·필수 quality check·최소 1명 리뷰를 요구한다. GitHub `production` Environment 승인 규칙을 켰다면 승인 후에만 배포한다.
@@ -66,7 +67,7 @@ feature branch → Pull Request → quality.yml 통과 → main 병합
 - 운영 마이그레이션은 저장소의 `migrations/`에 커밋된 forward-only SQL만 적용한다.
 - 자동 배포에는 테이블/컬럼 즉시 삭제, 무제한 데이터 갱신, 원복 불가능한 변환을 넣지 않는다. 이런 변경은 백업·되돌리기 계획·별도 승인 후 break-glass 절차로 실행한다.
 - D1 사용자 데이터, R2 사진, OAuth 비밀값은 테스트·데모·개발 편의 목적의 초기화 대상이 아니다.
-- 배포 후 최소 확인 항목은 `/api/auth/session`, 핵심 D1 API, 사진 업로드/조회, 신규 세션 참가 흐름이다.
+- 배포 후 최소 확인 항목은 `/api/auth/session`, `/api/directions`, 핵심 D1 API, 사진 업로드/조회, 신규 세션 참가 흐름이다.
 
 ## 6. 예외 및 감사
 
@@ -74,7 +75,7 @@ feature branch → Pull Request → quality.yml 통과 → main 병합
 
 매월 한 번 다음을 점검한다.
 
-- GitHub Actions secrets가 위 네 개뿐인지와 마지막 사용 시각
+- GitHub Actions secrets가 위에서 승인한 이름뿐인지와 마지막 사용 시각
 - Cloudflare API token의 대상·권한이 3절과 일치하는지
 - Lunchie Munchie 그룹의 사람 권한이 읽기 전용인지
 - Cloudflare Audit Log와 GitHub 배포 이력이 `main` 병합 이력과 일치하는지

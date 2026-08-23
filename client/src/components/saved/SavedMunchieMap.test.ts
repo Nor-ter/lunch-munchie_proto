@@ -14,11 +14,19 @@ describe('SavedMunchieMap course drill-down', () => {
 
   it('hides other courses and shows the selected course places and route', () => {
     expect(source).toContain("useDirections(directionStops, 'walking')");
-    expect(source).toContain('routeCoordinates.length >= 2 ? routeCoordinates : directionStops');
+    expect(source).toContain('toSavedCourseRoutePath(routeCoordinates)');
+    expect(source).not.toContain('routeCoordinates.length >= 2 ? routeCoordinates : directionStops');
     expect(source).toContain('routePath.length >= 2');
     expect(source).toContain('<Polyline');
     expect(source).toContain('selectedCourse.points.map((point, index)');
     expect(source).toContain('data-ui="saved-course-place"');
+  });
+
+  it('exposes loading and failure instead of drawing a straight fallback route', () => {
+    expect(source).toContain('data-route-state=');
+    expect(source).toContain('isDirectionsLoading');
+    expect(source).toContain('isDirectionsError');
+    expect(source).toContain('도보 경로를 불러오지 못했어요');
   });
 
   it('returns to all saved courses when the detail is unselected', () => {
