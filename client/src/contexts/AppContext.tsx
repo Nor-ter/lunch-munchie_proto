@@ -916,10 +916,15 @@ export function AppProvider({
       let changed = false;
       const hydratedRestaurants = previous.restaurants.map(restaurant => {
         const canonical = catalogueById.get(restaurant.id);
-        const photos = canonical?.photos;
-        if (!photos?.length || JSON.stringify(photos) === JSON.stringify(restaurant.photos ?? [])) return restaurant;
+        if (!canonical) return restaurant;
+        const photos = canonical.photos ?? [];
+        const image = photos[0] ?? '';
+        if (
+          JSON.stringify(photos) === JSON.stringify(restaurant.photos ?? []) &&
+          image === restaurant.image
+        ) return restaurant;
         changed = true;
-        return { ...restaurant, photos, image: photos[0] };
+        return { ...restaurant, photos, image };
       });
       return changed ? { ...previous, restaurants: hydratedRestaurants } : previous;
     });
