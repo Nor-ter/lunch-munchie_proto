@@ -245,12 +245,113 @@ test('desktop settings verifies the active session and cancels it through the sh
 
   await expect(page.getByRole('region', { name: 'Quick Match in progress' })).toBeVisible();
   await expect(page.getByText('👥 1/4 people', { exact: true })).toBeVisible();
+  await expect(page.getByRole('button', { name: '대기방으로 돌아가기' })).toBeVisible();
   await page.getByRole('button', { name: 'Quick Match management' }).click();
   await page.getByRole('menuitem', { name: 'Cancel Quick Match' }).click();
   await expect(page.getByRole('alertdialog')).toBeVisible();
   await page.getByRole('button', { name: 'Cancel Quick Match' }).click();
   await expect(page.getByRole('region', { name: 'Quick Match in progress' })).toHaveCount(0);
   expect(await page.evaluate(() => localStorage.getItem('lm_session'))).toBeNull();
+  expect(browserErrors).toEqual([]);
+});
+
+test('choosing solo replaces an active group room instead of resuming its two-person gate', async ({ page }) => {
+  const browserErrors = captureUnexpectedBrowserErrors(page);
+  const restaurant = {
+    id: 'replacement-restaurant',
+    name: 'Solo Replacement Kitchen',
+    category: '한식',
+    tags: ['맛집'],
+    rating: 4.7,
+    reviewCount: 42,
+    distance: '450m',
+    address: 'Melbourne',
+    image: '',
+    lat: -37.81,
+    lng: 144.96,
+    priceRange: 2,
+    openHours: '11:00 - 21:00',
+    dietary: [],
+    description: 'A restaurant card for replacement-session coverage.',
+  };
+  let cancelCount = 0;
+  let createCount = 0;
+
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.route('https://fonts.googleapis.com/**', route => route.fulfill({ status: 200, contentType: 'text/css', body: '' }));
+  await page.route('https://cdn.jsdelivr.net/**', route => route.fulfill({ status: 200, contentType: 'text/css', body: '' }));
+  await page.route('**/api/**', async route => {
+    const request = route.request();
+    const url = new URL(request.url());
+    if (url.pathname === '/api/auth/session') {
+      await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ user: { sub: userId, name: 'Tester' }, profile: null }) });
+      return;
+    }
+    if (url.pathname === '/api/restaurants') {
+      await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify([restaurant]) });
+      return;
+    }
+    if (url.pathname === '/api/courses' || url.pathname === '/api/feed') {
+      await route.fulfill({ status: 200, contentType: 'application/json', body: '[]' });
+      return;
+    }
+    if (url.pathname === '/api/sessions/ABC123' && request.method() === 'GET') {
+      await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(serverSession('WAITING')) });
+      return;
+    }
+    if (url.pathname === '/api/sessions/ABC123/cancel') {
+      cancelCount += 1;
+      expect(request.postDataJSON()).toMatchObject({ userId, memberKey: 'e2e-member-key' });
+      await route.fulfill({ status: 200, contentType: 'application/json', body: '{"ok":true}' });
+      return;
+    }
+    if (url.pathname === '/api/sessions/create') {
+      createCount += 1;
+      expect(request.postDataJSON()).toMatchObject({ groupSize: 1 });
+      await route.fulfill({
+        status: 201,
+        contentType: 'application/json',
+        body: JSON.stringify({ session: { id: 'replacement-solo' }, token: 'SOLO02', memberKey: 'replacement-member-key' }),
+      });
+      return;
+    }
+    if (url.pathname === '/api/sessions/SOLO02/status') {
+      expect(request.postDataJSON()).toMatchObject({
+        status: 'SWIPING_1',
+        userId,
+        memberKey: 'replacement-member-key',
+      });
+      await route.fulfill({ status: 200, contentType: 'application/json', body: '{"ok":true}' });
+      return;
+    }
+    if (url.pathname === '/api/sessions/SOLO02' && request.method() === 'GET') {
+      const response = serverSession('SWIPING_1');
+      response.session.id = 'replacement-solo';
+      response.session.share_token = 'SOLO02';
+      response.session.group_size = 1;
+      response.session.deck_ids = [restaurant.id];
+      await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(response) });
+      return;
+    }
+    await route.fulfill({ status: 200, contentType: 'application/json', body: '{}' });
+  });
+  await seedIdentity(page, cachedSession());
+  await page.goto('/lunchie/settings');
+
+  await expect(page.getByRole('region', { name: 'Quick Match in progress' })).toBeVisible();
+  await page.getByRole('option', { name: '혼자', exact: true }).click();
+  await page.getByRole('button', { name: '기존 세션 종료 후 혼자로 시작하기' }).click();
+
+  const confirmation = page.getByRole('alertdialog');
+  await expect(confirmation).toContainText('현재 4명 세션이 진행 중이에요.');
+  expect(cancelCount).toBe(0);
+  expect(createCount).toBe(0);
+  await confirmation.getByRole('button', { name: '종료 후 새로 시작' }).click();
+
+  await expect(page).toHaveURL(/\/lunchie\/swipe$/);
+  await expect(page.getByRole('heading', { name: restaurant.name })).toBeVisible();
+  expect(cancelCount).toBe(1);
+  expect(createCount).toBe(1);
   expect(browserErrors).toEqual([]);
 });
 
