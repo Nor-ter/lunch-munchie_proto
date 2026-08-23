@@ -54,7 +54,6 @@ async function fetchConfiguredMedia(origin: string | undefined, key: string) {
   return response.ok ? response : null;
 }
 
-const mediaAvailability = new Map<string, Promise<boolean>>();
 function photoPathToKey(path: unknown) {
   return typeof path === "string" && path.startsWith("/photos/")
     ? path.slice("/photos/".length)
@@ -63,19 +62,17 @@ function photoPathToKey(path: unknown) {
 async function photoExists(env: Pick<EnvBindings, "MEDIA_ORIGIN" | "PHOTOS_R2">, path: unknown) {
   const key = photoPathToKey(path);
   if (!key || key.includes("..")) return false;
-  const cacheKey = `${env.MEDIA_ORIGIN ?? "local-r2"}:${key}`;
-  const cached = mediaAvailability.get(cacheKey);
-  if (cached) return cached;
-  const check = (async () => {
-    const remoteObject = await fetchConfiguredMedia(env.MEDIA_ORIGIN, key);
-    if (remoteObject) {
-      await remoteObject.body?.cancel().catch(() => undefined);
-      return true;
-    }
-    return Boolean(await env.PHOTOS_R2.get(`photos/${key}`));
-  })();
-  mediaAvailability.set(cacheKey, check);
-  return check;
+  const remoteObject = await fetchConfiguredMedia(env.MEDIA_ORIGIN, key);
+  if (remoteObject) {
+    await remoteObject.body?.cancel().catch(() => undefined);
+    return true;
+  }
+  // R2 `head` verifies the object without reading the photo body. Keep the
+  // legacy `get` fallback for the small test doubles used by older suites.
+  const object = typeof env.PHOTOS_R2.head === "function"
+    ? await env.PHOTOS_R2.head(`photos/${key}`)
+    : await env.PHOTOS_R2.get(`photos/${key}`);
+  return Boolean(object);
 }
 async function filterExistingPhotos(
   env: Pick<EnvBindings, "MEDIA_ORIGIN" | "PHOTOS_R2">,
@@ -484,9 +481,11 @@ export function selectLunchiePresentationPhotoKeys(
   limit = 4,
 ) {
   const hashes: string[] = [];
+  const keys = new Set<string>();
   const semanticFingerprints = new Set<string>();
   const safe: string[] = [];
   for (const row of rows) {
+    if (keys.has(row.r2_key)) continue;
     const hash = row.perceptual_hash?.trim().toLowerCase() || null;
     if (hash && hashes.some((known) => hashDistance(hash, known) <= 8)) continue;
     const dishes = json<string[]>(row.dishes, [])
@@ -500,6 +499,7 @@ export function selectLunchiePresentationPhotoKeys(
     const semanticFingerprint = `${row.kind}:${dishes || row.r2_key}`;
     if (!hash && semanticFingerprints.has(semanticFingerprint)) continue;
     if (hash) hashes.push(hash);
+    keys.add(row.r2_key);
     semanticFingerprints.add(semanticFingerprint);
     safe.push(`/photos/${row.r2_key}`);
     if (safe.length === limit) break;
@@ -508,11 +508,15 @@ export function selectLunchiePresentationPhotoKeys(
 }
 
 /** Lunchie cards only present evidence-backed food/table media. */
-async function lunchiePresentationPhotos(db: any, restaurantId: string) {
+export async function lunchiePresentationPhotos(
+  env: Pick<EnvBindings, "MEDIA_ORIGIN" | "PHOTOS_R2">,
+  db: any,
+  restaurantId: string,
+) {
   const { results } = await db.prepare(
     "SELECT r2_key, kind, dishes, perceptual_hash FROM restaurant_photos WHERE restaurant_id = ? AND kind IN ('dish', 'table') AND has_person = 0 ORDER BY CASE kind WHEN 'dish' THEN 0 ELSE 1 END, COALESCE(quality, 0) DESC, id ASC LIMIT 24",
   ).bind(restaurantId).all<PresentationPhotoRow>();
-  return selectLunchiePresentationPhotoKeys(results);
+  return filterExistingPhotos(env, selectLunchiePresentationPhotoKeys(results));
 }
 
 const EVENT_TYPES = new Set([
@@ -1339,7 +1343,7 @@ app.post("/api/recommend", async (c) => {
     ]);
     const safeSlate = await Promise.all(finalResults.map(async (item) => ({
         ...item.restaurant,
-        photos: await lunchiePresentationPhotos(c.env.DB, item.restaurant.id),
+        photos: await lunchiePresentationPhotos(c.env, c.env.DB, item.restaurant.id),
         menu_items: json(item.restaurant.menus, []),
         tags: json<string[]>(item.restaurant.tags, []),
         rank: item.rank,
@@ -1380,7 +1384,7 @@ app.get("/api/restaurants", async (c) => {
   return c.json(
     await Promise.all(results.map(async (r: any) => ({
       ...r,
-      photos: await lunchiePresentationPhotos(c.env.DB, r.id),
+      photos: await lunchiePresentationPhotos(c.env, c.env.DB, r.id),
       menu_items: json(r.menus, []),
       tags: json<string[]>(r.tags, []),
     }))),

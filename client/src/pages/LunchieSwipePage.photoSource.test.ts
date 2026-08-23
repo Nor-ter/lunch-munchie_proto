@@ -6,14 +6,20 @@ const imageSource = readFileSync(new URL('../components/FoodImage.tsx', import.m
 const contextSource = readFileSync(new URL('../contexts/AppContext.tsx', import.meta.url), 'utf8');
 
 describe('Lunchie swipe photo recovery', () => {
-  it('uses canonical photos before a legacy card image', () => {
-    expect(source).toContain('src={foodPhotos[0] || restaurant.image}');
-    expect(source).toContain('fallbackImage={foodPhotos[0] || restaurant.image}');
+  it('never revives a legacy image after the server supplied a canonical photo list', () => {
+    expect(source).toContain('const primaryPhoto = hasCanonicalPhotoList ? foodPhotos[0] : restaurant.image');
+    expect(source).toContain('src={primaryPhoto}');
+    expect(source).toContain('fallbackImage={primaryPhoto}');
   });
 
   it('recovers when a hydrated image source replaces a failed legacy URL', () => {
     expect(imageSource).toContain('useEffect(() => { setFailed(false); }, [src])');
     expect(contextSource).toContain('catalogueById');
-    expect(contextSource).toContain('image: photos[0]');
+    expect(contextSource).toContain("const image = photos[0] ?? ''");
+  });
+
+  it('renders a deliberate fallback instead of an empty menu image', () => {
+    expect(source).toContain("foodPhotos.length > 0 ? `메뉴 ${photoIndex + 1}` : '등록된 음식 사진이 없어요'");
+    expect(source).toContain('foodPhotos.length > 0 ? (');
   });
 });
