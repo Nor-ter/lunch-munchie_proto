@@ -1,8 +1,10 @@
-import { useLocation } from 'wouter';
+import { useEffect, useState } from 'react';
+import { useLocation, useSearch } from 'wouter';
 import { ArrowLeft, MapPin, Clock, Star } from 'lucide-react';
 import { MapContainer, TileLayer, Marker, Popup } from 'react-leaflet';
 import L from 'leaflet';
-import { useApp } from '@/contexts/AppContext';
+import { useApp, type Restaurant } from '@/contexts/AppContext';
+import { getRestaurantById as fetchRestaurantById } from '@/services/restaurantsApi';
 
 // Set up leaflet icons
 delete (L.Icon.Default.prototype as any)._getIconUrl;
@@ -30,19 +32,53 @@ function createCoralIcon() {
 
 export default function LunchieMapPage() {
   const [, navigate] = useLocation();
-  const { getRestaurantById } = useApp();
+  const search = useSearch();
+  const { getRestaurantById, registerRestaurants } = useApp();
 
-  // Parse restaurant ID from URL query params
-  const searchParams = new URLSearchParams(window.location.search);
-  const restaurantId = searchParams.get('id');
-  const restaurant = restaurantId ? getRestaurantById(restaurantId) : null;
+  const restaurantId = new URLSearchParams(search).get('id');
+  const cachedRestaurant = restaurantId ? getRestaurantById(restaurantId) : null;
+  const [recoveredRestaurant, setRecoveredRestaurant] = useState<Restaurant | null>(null);
+  const [isLoadingRestaurant, setIsLoadingRestaurant] = useState(Boolean(restaurantId && !cachedRestaurant));
+  const [restaurantLoadFailed, setRestaurantLoadFailed] = useState(false);
+  const restaurant = cachedRestaurant ?? recoveredRestaurant;
+
+  useEffect(() => {
+    if (!restaurantId || cachedRestaurant) {
+      setIsLoadingRestaurant(false);
+      return;
+    }
+    let active = true;
+    setIsLoadingRestaurant(true);
+    setRestaurantLoadFailed(false);
+    void fetchRestaurantById(restaurantId)
+      .then(found => {
+        if (!active) return;
+        if (!found) {
+          setRestaurantLoadFailed(true);
+          return;
+        }
+        registerRestaurants([found]);
+        setRecoveredRestaurant(found);
+      })
+      .catch(() => { if (active) setRestaurantLoadFailed(true); })
+      .finally(() => { if (active) setIsLoadingRestaurant(false); });
+    return () => { active = false; };
+  }, [cachedRestaurant, registerRestaurants, restaurantId]);
+
+  if (isLoadingRestaurant) {
+    return (
+      <div role="status" className="min-h-dvh flex items-center justify-center bg-[#FCF4EE] px-5 text-[14px] text-[#9B9B9B]">
+        식당 위치를 불러오는 중…
+      </div>
+    );
+  }
 
   if (!restaurant) {
     return (
       <div className="min-h-dvh flex flex-col items-center justify-center px-5 text-center">
-        <p className="text-[14px] text-[#9B9B9B] mb-4">식당 정보를 찾을 수 없습니다.</p>
-        <button onClick={() => navigate('/')} className="lm-btn-primary px-6 py-3 flex items-center justify-center">
-          홈으로
+        <p role={restaurantLoadFailed ? 'alert' : undefined} className="text-[14px] text-[#9B9B9B] mb-4">식당 정보를 찾을 수 없습니다.</p>
+        <button onClick={() => navigate('/saved')} className="lm-btn-primary px-6 py-3 flex items-center justify-center">
+          저장 목록으로
         </button>
       </div>
     );
