@@ -39,6 +39,15 @@ jobs:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_WORKER_DEPLOY_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
 
+      - name: Sync Pages runtime maps secret
+        run: |
+          node -e "if (!process.env.GOOGLE_MAPS_SERVER_API_KEY) throw new Error('Missing GOOGLE_MAPS_SERVER_API_KEY in GitHub production secrets')"
+          printf '%s' "$GOOGLE_MAPS_SERVER_API_KEY" | pnpm exec wrangler pages secret put GOOGLE_MAPS_SERVER_API_KEY --project-name=lunchie-munchie
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_WORKER_DEPLOY_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          GOOGLE_MAPS_SERVER_API_KEY: ${{ secrets.GOOGLE_MAPS_SERVER_API_KEY }}
+
       - name: Build and deploy Pages
         run: |
           node -e "if (!process.env.VITE_GOOGLE_MAPS_API_KEY) throw new Error('Missing VITE_GOOGLE_MAPS_API_KEY in GitHub production secrets or variables')"

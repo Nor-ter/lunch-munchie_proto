@@ -26,6 +26,7 @@ const APPROVED_SECRET_NAMES = new Set([
   "CLOUDFLARE_D1_MIGRATIONS_TOKEN",
   "VITE_GOOGLE_MAPS_API_KEY",
   "NEXT_PUBLIC_GOOGLE_MAPS_API_KEY",
+  "GOOGLE_MAPS_SERVER_API_KEY",
 ]);
 const DOC_PATH = "docs/process/ci-cd-cloudflare-access-policy.md";
 
@@ -121,6 +122,7 @@ export function validateFile(file, content) {
     const required = [
       "wrangler d1 migrations apply lunchie-db --remote",
       "wrangler deploy --config wrangler.state.toml",
+      "wrangler pages secret put GOOGLE_MAPS_SERVER_API_KEY --project-name=lunchie-munchie",
       "wrangler pages deploy dist/public --project-name=lunchie-munchie --branch=main --commit-dirty",
     ];
     for (const command of required) {
