@@ -5,7 +5,7 @@
  */
 
 import React, { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
-import { matchesDietaryRestrictions } from '@shared/const';
+import { normalizeDiet, isHardRestriction, isIngredientAvoidance, restaurantSatisfiesDietRestriction, type DietRestriction } from '@shared/const';
 import { categoryMatchesIntent, intentForHour, type Intent } from '@shared/intent';
 import { distanceMetres, isWithinRadius } from '@shared/geo';
 import { normalizeFoodTag, type TagType } from '@/constants/foodTags';
@@ -21,12 +21,33 @@ import {
   type LunchmateRewardClaim,
 } from '@/utils/lunchmateProfile';
 import { logCourseSave, logFeedLike } from '@/lib/eventLogger';
+import { persistSessionSwipe } from '@/services/sessionApi';
+import {
+  isActiveQuickMatchStatus,
+  normalizeDietaryPreferences,
+  normalizeQuickMatchStatus,
+  type QuickMatchSessionStatus,
+} from '@/lib/quickMatch';
 export type { TagType } from '@/constants/foodTags';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
-function matchesDiet(category: string, restaurantDietary: string[], filterDietary: string[]): boolean {
-  return matchesDietaryRestrictions(category, restaurantDietary, filterDietary);
+// diet 하드 제약 매칭: 공용 판정기가 식당 태그와 메뉴 근거를 함께 검사한다.
+function matchesDiet(
+  restaurant: { category: string; dietary: string[]; menuItems?: unknown[] },
+  filterDietary: string[],
+): boolean {
+  const required: DietRestriction[] = [];
+  for (const raw of filterDietary || []) {
+    const n = normalizeDiet(raw);
+    if (n && isHardRestriction(n)) required.push(n as DietRestriction);
+  }
+  if (required.length === 0) return true;
+  return required.every(restriction => restaurantSatisfiesDietRestriction({
+    category: restaurant.category,
+    dietaryOptions: restaurant.dietary,
+    menuItems: restaurant.menuItems,
+  }, restriction));
 }
 
 // TagType은 @/constants/foodTags 로 이동(위 import+re-export). 인라인 정의 제거 — 태그 taxonomy 단일화.
@@ -162,7 +183,11 @@ export interface GroupSession {
   deadline: string | null;
   /** 마감 타이밍(분) — 투표 시작 시점에 deadline으로 변환 적용 */
   deadlineMinutes?: number;
-  status: 'waiting' | 'voting' | 'completed';
+  status: QuickMatchSessionStatus;
+  /** Server member list is authoritative after restore or cross-device leave. */
+  membershipActive?: boolean;
+  /** Private capability returned once by the server; never included in GET/session. */
+  memberKey?: string;
   restaurants: Restaurant[];
   results: { restaurantId: string; score: number }[];
   /** 런치 엔진 추천 슬레이트 식별자 (로깅 propensity 승계용) */
@@ -171,6 +196,8 @@ export interface GroupSession {
   recMeta?: Record<string, { propensity: number; position: number }>;
   /** 슬레이트를 만든 엔진 정책 버전 (스와이프 로깅의 model_version) */
   modelVersion?: string;
+  /** Exact diet-style intersection was empty; ingredient exclusions remain enforced. */
+  dietaryBestEffort?: boolean;
   /** 그룹 결정 세대 (reroll마다 +1). 예선 swipe round = 2*gen-1. 미설정=1. */
   generation?: number;
 }
@@ -187,6 +214,8 @@ export interface SessionMember {
 export interface UserProfile {
   id: string;
   name: string;
+  /** 공개 프로필 검색에 사용하는 고유 @아이디 */
+  handle?: string;
   emoji: string;
   /** 업로드한 프로필 사진(data URL) — 있으면 emoji 대신 이 사진을 아바타로 보여준다 */
   avatarPhoto?: string;
@@ -247,6 +276,8 @@ export interface FeedPost {
   authorId?: string;
   authorName: string;
   authorEmoji: string;
+  /** 작성자의 프로필 사진. 없을 때는 authorEmoji를 표시한다. */
+  authorImage?: string;
   authorLevel?: number;
   authorLevelName?: string;
   courseId: string;
@@ -267,6 +298,14 @@ export interface FeedPost {
   comments: FeedComment[];
   createdAt: string;
   tags: TagType[];
+  /** 피드 위치 필터용 코스 장소 좌표. 서버가 공개 코스의 장소만 전달한다. */
+  stops?: Array<{ placeId: string; latitude: number; longitude: number }>;
+}
+
+export interface FeedLocationFilter {
+  latitude: number;
+  longitude: number;
+  radiusKm: number;
 }
 
 export const MOCK_RESTAURANTS: Restaurant[] = [];
@@ -292,7 +331,7 @@ function generateUserId() {
 
 const DEFAULT_PROFILE: UserProfile = {
   id: 'me',
-  name: '지민',
+  name: '사용자',
   emoji: '😊',
   dietary: [],
   categoryPrefs: [
@@ -333,12 +372,14 @@ interface AppContextValue {
     deadlineMinutes?: number,
   ) => Promise<GroupSession>;
   joinSession: (token: string, name?: string, emoji?: string) => Promise<GroupSession>;
-  fetchSession: (token: string) => Promise<GroupSession>;
+  fetchSession: (token: string, catalogueOverride?: Restaurant[]) => Promise<GroupSession>;
   toggleReady: (token: string, isReady: boolean) => Promise<GroupSession>;
   startSession: (token: string, deadlineMinutes?: number) => Promise<GroupSession>;
+  cancelSession: (token: string) => Promise<void>;
+  leaveSession: (token: string) => Promise<void>;
 
   swipeRecords: SwipeRecord[];
-  addSwipe: (restaurantId: string, action: SwipeRecord['action']) => void;
+  addSwipe: (restaurantId: string, action: SwipeRecord['action']) => Promise<void>;
   /** 세션의 로컬 스와이프 기록을 지운다 — "다시 고르기"로 카드를 처음부터 다시 보여주기 위한 용도 */
   clearSessionSwipes: (sessionId: string) => void;
   /** 그룹 reroll: 거절·다수미움 제외한 fresh 덱으로 다음 세대 예선 시작 */
@@ -356,7 +397,11 @@ interface AppContextValue {
   /** Munchie Feed */
   feedPosts: FeedPost[];
   /** 서버 원본을 다시 읽어 현재 세션의 피드 캐시를 동기화한다. */
-  refreshFeedPosts: () => Promise<void>;
+  refreshFeedPosts: (locationFilter?: FeedLocationFilter | null) => Promise<void>;
+  /** Munchie 피드의 다음 개인화 배치를 서버에서 이어받는다. */
+  loadMoreFeedPosts: () => Promise<void>;
+  hasMoreFeedPosts: boolean;
+  isLoadingMoreFeedPosts: boolean;
   addFeedPost: (post: Omit<FeedPost, 'id' | 'likes' | 'shares' | 'saves' | 'comments' | 'createdAt'>) => FeedPost;
   updateFeedPost: (postId: string, updates: Partial<Pick<FeedPost, 'courseId' | 'caption' | 'skinId' | 'photos' | 'photoPlacements' | 'canvasStrokes' | 'tags'>>) => void;
   deleteFeedPost: (postId: string) => void;
@@ -418,16 +463,33 @@ export async function buildDeck(
   allRestaurants: Restaurant[],
   userId?: string,
   dependencies: BuildDeckDependencies = {},
-): Promise<{ restaurants: Restaurant[]; slateId?: string; recMeta?: GroupSession['recMeta']; modelVersion?: string }> {
-  const base = allRestaurants.filter(r =>
+): Promise<{ restaurants: Restaurant[]; slateId?: string; recMeta?: GroupSession['recMeta']; modelVersion?: string; dietaryBestEffort?: boolean }> {
+  const categoryPool = allRestaurants.filter(r =>
     (filters.categories.length === 0 || filters.categories.includes(r.category)) &&
     categoryMatchesIntent(r.category, filters.intent ?? intentForHour(new Date().getHours())) &&
-    matchesDiet(r.category, r.dietary, filters.dietary) &&
     (!hasSessionOrigin(filters) || isWithinRadius(
       filters.originLatitude!, filters.originLongitude!, r.lat, r.lng, filters.radius,
     )),
   );
-  if (base.length === 0) return { restaurants: base };
+  const exactMatches = categoryPool.filter(r => matchesDiet(r, filters.dietary));
+  const normalizedRestrictions = filters.dietary
+    .map(normalizeDiet)
+    .filter((restriction): restriction is DietRestriction => restriction !== null && isHardRestriction(restriction));
+  const ingredientAvoidances = normalizedRestrictions.filter(isIngredientAvoidance);
+  const hasDietStyleRequirement = normalizedRestrictions.some(restriction => !isIngredientAvoidance(restriction));
+  // Some venue/menu records cannot verify diet styles such as gluten-free.
+  // When their exact intersection is empty, ingredient exclusions stay hard
+  // and the UI explicitly labels the remaining slate as best-effort.
+  const bestEffortMatches = exactMatches.length === 0 && hasDietStyleRequirement
+    ? categoryPool.filter(r => ingredientAvoidances.every(restriction => restaurantSatisfiesDietRestriction({
+        category: r.category,
+        dietaryOptions: r.dietary,
+        menuItems: r.menuItems,
+      }, restriction)))
+    : [];
+  const dietaryBestEffort = exactMatches.length === 0 && bestEffortMatches.length > 0;
+  const base = exactMatches.length > 0 ? exactMatches : bestEffortMatches;
+  if (base.length === 0) return { restaurants: base, dietaryBestEffort };
   try {
     const auth = await (
       dependencies.resolveRequestAuth ?? resolveApiRequestAuth
@@ -450,7 +512,7 @@ export async function buildDeck(
         user_id: userId,
       }),
     });
-    if (!res.ok) return { restaurants: withSessionDistances(base, filters) };
+    if (!res.ok) return { restaurants: withSessionDistances(base, filters), dietaryBestEffort };
     const data = await res.json();
     const meta: GroupSession['recMeta'] = {};
     const slate: Restaurant[] = [];
@@ -460,9 +522,9 @@ export async function buildDeck(
       if (r) slate.push(r);
     }
     // 덱 = 슬레이트(top-7)만. 노출(IMPRESSION)·스와이프가 정확히 일치한다.
-    return { restaurants: withSessionDistances(slate.length ? slate : base, filters), slateId: data.slate_id, recMeta: meta, modelVersion: data.model_version };
+    return { restaurants: withSessionDistances(slate.length ? slate : base, filters), slateId: data.slate_id, recMeta: meta, modelVersion: data.model_version, dietaryBestEffort };
   } catch {
-    return { restaurants: withSessionDistances(base, filters) };
+    return { restaurants: withSessionDistances(base, filters), dietaryBestEffort };
   }
 }
 
@@ -490,7 +552,7 @@ function buildLocalSession(
     status: 'waiting',
     restaurants: restaurants.filter(r =>
       (filters.categories.length === 0 || filters.categories.includes(r.category)) &&
-      matchesDiet(r.category, r.dietary, filters.dietary),
+      matchesDiet(r, filters.dietary),
     ),
     results: [],
   };
@@ -567,7 +629,19 @@ export function AppProvider({
       // 기존 random id로 만들어진 활성 서버 세션의 host/member 권한을 새 auth uid로
       // 클라이언트만 바꿔치기하지 않는다. 서버 상태와 갈라지는 것보다 로컬 연결을 종료한다.
       if (s && isFirstAuthAdoption) return null;
-      return s ? JSON.parse(s) : null;
+      if (!s) return null;
+      const parsed = JSON.parse(s) as GroupSession;
+      if (!parsed?.id || !parsed?.inviteCode || !parsed?.filters) return null;
+      return {
+        ...parsed,
+        status: normalizeQuickMatchStatus(parsed.status),
+        membershipActive: parsed.membershipActive !== false,
+        filters: {
+          ...parsed.filters,
+          partySize: parsed.filters.partySize === 1 ? 1 : Math.max(2, Math.min(12, Number(parsed.filters.partySize) || 4)),
+          dietary: normalizeDietaryPreferences(parsed.filters.dietary),
+        },
+      };
     }
     catch { return null; }
   });
@@ -575,6 +649,8 @@ export function AppProvider({
   // (서버 sessions 테이블에 intent 컬럼이 없어 서버 왕복으로는 못 지킴 — 클라 로컬로 보존.)
   const currentSessionRef = useRef(currentSession);
   useEffect(() => { currentSessionRef.current = currentSession; }, [currentSession]);
+  const restaurantsRef = useRef(restaurants);
+  useEffect(() => { restaurantsRef.current = restaurants; }, [restaurants]);
 
   const [swipeRecords, setSwipeRecords] = useState<SwipeRecord[]>(() => {
     try { const s = localStorage.getItem('lm_swipes'); return s ? JSON.parse(s) : []; }
@@ -653,17 +729,33 @@ export function AppProvider({
   });
   const initialStoredProfileRef = useRef(localStorage.getItem('lm_profile'));
   const isInitialProfilePersistenceRef = useRef(true);
+  const [feedCursor, setFeedCursor] = useState<string | null>('0');
+  const [hasMoreFeedPosts, setHasMoreFeedPosts] = useState(true);
+  const [isLoadingMoreFeedPosts, setIsLoadingMoreFeedPosts] = useState(false);
+  const feedLocationFilterRef = useRef<FeedLocationFilter | null>(null);
 
-  const refreshFeedPosts = useCallback(async () => {
-    const response = await fetch('/api/feed');
+  const readFeedBatch = useCallback(async (
+    cursor: string,
+    replace: boolean,
+    locationFilter = feedLocationFilterRef.current,
+  ) => {
+    const params = new URLSearchParams({ limit: '8', cursor });
+    if (locationFilter) {
+      params.set('latitude', String(locationFilter.latitude));
+      params.set('longitude', String(locationFilter.longitude));
+      params.set('radiusKm', String(locationFilter.radiusKm));
+    }
+    const response = await fetch(`/api/feed?${params.toString()}`);
     if (!response.ok) throw new Error('피드를 불러오지 못했어요.');
-    const feedData = await response.json();
+    const page = await response.json();
+    const feedData = Array.isArray(page) ? page : page.items;
     if (!Array.isArray(feedData)) throw new Error('피드 형식이 올바르지 않아요.');
     const remoteFeeds = feedData.map((feed: any): FeedPost => ({
       id: feed.id,
       authorId: feed.creatorId,
       authorName: feed.authorName || (feed.creatorId === profile.id ? profile.name : feed.creatorId === 'user_minji' ? '김민지' : feed.creatorId === 'user_jenny' ? '제니' : feed.creatorId === 'user_minsu' ? '민수' : 'Lunchie 사용자'),
       authorEmoji: feed.creatorId === profile.id ? profile.emoji : feed.creatorId === 'user_minji' ? '🐰' : feed.creatorId === 'user_jenny' ? '🍓' : feed.creatorId === 'user_minsu' ? '🐻' : '🐳',
+      authorImage: typeof feed.authorImage === 'string' ? feed.authorImage : undefined,
       courseId: feed.courseId,
       photos: (Array.isArray(feed.photos) ? feed.photos : []).filter((photo: unknown): photo is string => typeof photo === 'string').map((photo: string) => photo.startsWith('http') || photo.startsWith('/') ? photo : `/photos/${photo}`),
       templateId: typeof feed.templateId === 'string' ? feed.templateId : undefined,
@@ -681,21 +773,50 @@ export function AppProvider({
         likes: 0, dislikes: 0,
       })) : [],
       tags: Array.isArray(feed.tags) ? feed.tags.map((tag: string) => normalizeFoodTag(tag)) : [],
+      stops: Array.isArray(feed.stops) ? feed.stops.flatMap((stop: any) => {
+        const latitude = Number(stop?.restaurant?.latitude);
+        const longitude = Number(stop?.restaurant?.longitude);
+        return typeof stop?.placeId === 'string' && Number.isFinite(latitude) && Number.isFinite(longitude)
+          ? [{ placeId: stop.placeId, latitude, longitude }]
+          : [];
+      }) : [],
       createdAt: feed.createdAt || new Date().toISOString(),
     }));
     setFeedPosts(previous => {
-      const merged = new Map(previous.map(post => [post.id, post]));
+      const merged = new Map((replace ? [] : previous).map(post => [post.id, post]));
       remoteFeeds.forEach(post => merged.set(post.id, post));
-      return Array.from(merged.values()).sort((a, b) => createdAtMs(b.createdAt) - createdAtMs(a.createdAt));
+      // Server order is already a stable, viewer-specific ranking. Keep that
+      // order across batches instead of re-sorting every item by recency.
+      const order = [...(replace ? [] : previous.map(post => post.id)), ...remoteFeeds.map(post => post.id)];
+      return Array.from(new Set(order)).map(id => merged.get(id)!).filter(Boolean);
     });
+    const nextCursor = typeof page?.nextCursor === 'string' ? page.nextCursor : null;
+    setFeedCursor(nextCursor);
+    setHasMoreFeedPosts(Boolean(page?.hasMore && nextCursor));
   }, [profile.id, profile.name, profile.emoji]);
+
+  const refreshFeedPosts = useCallback(async (locationFilter?: FeedLocationFilter | null) => {
+    if (locationFilter !== undefined) feedLocationFilterRef.current = locationFilter;
+    setIsLoadingMoreFeedPosts(true);
+    try { await readFeedBatch('0', true, feedLocationFilterRef.current); }
+    finally { setIsLoadingMoreFeedPosts(false); }
+  }, [readFeedBatch]);
+
+  const loadMoreFeedPosts = useCallback(async () => {
+    if (isLoadingMoreFeedPosts || !hasMoreFeedPosts || !feedCursor) return;
+    setIsLoadingMoreFeedPosts(true);
+    try { await readFeedBatch(feedCursor, false); }
+    finally { setIsLoadingMoreFeedPosts(false); }
+  }, [feedCursor, hasMoreFeedPosts, isLoadingMoreFeedPosts, readFeedBatch]);
 
   useEffect(() => {
     setIsLoading(true);
     Promise.all([
       fetch('/api/restaurants').then(r => (r.ok ? r.json() : Promise.reject())),
       fetch('/api/courses').then(r => (r.ok ? r.json() : Promise.reject())),
-      fetch('/api/feed').then(r => (r.ok ? r.json() : Promise.reject())),
+      // The home preview shares the same bounded first page as Munchie Feed.
+      // Never hydrate the entire public feed just because the app booted.
+      fetch('/api/feed?limit=8&cursor=0').then(r => (r.ok ? r.json() : Promise.reject())),
     ])
       .then(([resData, courseData, feedData]) => {
         if (Array.isArray(resData) && resData.length > 0) {
@@ -734,12 +855,14 @@ export function AppProvider({
             return Array.from(merged.values());
           });
         }
-        if (Array.isArray(feedData) && feedData.length > 0) {
-          const remoteFeeds = feedData.map((feed: any): FeedPost => ({
+        const initialFeedItems = Array.isArray(feedData) ? feedData : feedData?.items;
+        if (Array.isArray(initialFeedItems) && initialFeedItems.length > 0) {
+          const remoteFeeds = initialFeedItems.map((feed: any): FeedPost => ({
             id: feed.id,
             authorId: feed.creatorId,
             authorName: feed.authorName || (feed.creatorId === profile.id ? profile.name : feed.creatorId === 'user_minji' ? '김민지' : feed.creatorId === 'user_jenny' ? '제니' : feed.creatorId === 'user_minsu' ? '민수' : 'Lunchie 사용자'),
             authorEmoji: feed.creatorId === 'user_minji' ? '🐰' : feed.creatorId === 'user_jenny' ? '🍓' : feed.creatorId === 'user_minsu' ? '🐻' : '🐳',
+            authorImage: typeof feed.authorImage === 'string' ? feed.authorImage : undefined,
             courseId: feed.courseId,
             photos: (Array.isArray(feed.photos) ? feed.photos : []).filter((photo: unknown): photo is string => typeof photo === 'string').map((photo: string) => photo.startsWith('http') || photo.startsWith('/') ? photo : `/photos/${photo}`),
             templateId: typeof feed.templateId === 'string' ? feed.templateId : undefined,
@@ -757,6 +880,13 @@ export function AppProvider({
               likes: 0, dislikes: 0,
             })) : [],
             tags: Array.isArray(feed.tags) ? feed.tags.map((tag: string) => normalizeFoodTag(tag)) : [],
+            stops: Array.isArray(feed.stops) ? feed.stops.flatMap((stop: any) => {
+              const latitude = Number(stop?.restaurant?.latitude);
+              const longitude = Number(stop?.restaurant?.longitude);
+              return typeof stop?.placeId === 'string' && Number.isFinite(latitude) && Number.isFinite(longitude)
+                ? [{ placeId: stop.placeId, latitude, longitude }]
+                : [];
+            }) : [],
             createdAt: feed.createdAt || new Date().toISOString(),
           }));
           setFeedPosts(previous => {
@@ -765,11 +895,35 @@ export function AppProvider({
             return Array.from(merged.values());
           });
         }
+        const initialNextCursor = typeof feedData?.nextCursor === 'string' ? feedData.nextCursor : null;
+        setFeedCursor(initialNextCursor);
+        setHasMoreFeedPosts(Boolean(feedData?.hasMore && initialNextCursor));
         setApiAvailable(true);
       })
       .catch(() => setApiAvailable(false))
       .finally(() => setIsLoading(false));
   }, []);
+
+  // A room can outlive a deployment in localStorage. Refresh only the card
+  // presentation from the canonical catalogue so an already-open Lunchie
+  // session gets repaired R2 image paths without changing its immutable deck,
+  // order, votes, or recommendation attribution.
+  useEffect(() => {
+    if (!currentSession?.restaurants?.length || !restaurants.length) return;
+    const catalogueById = new Map(restaurants.map(restaurant => [restaurant.id, restaurant]));
+    setCurrentSession(previous => {
+      if (!previous?.restaurants?.length) return previous;
+      let changed = false;
+      const hydratedRestaurants = previous.restaurants.map(restaurant => {
+        const canonical = catalogueById.get(restaurant.id);
+        const photos = canonical?.photos;
+        if (!photos?.length || JSON.stringify(photos) === JSON.stringify(restaurant.photos ?? [])) return restaurant;
+        changed = true;
+        return { ...restaurant, photos, image: photos[0] };
+      });
+      return changed ? { ...previous, restaurants: hydratedRestaurants } : previous;
+    });
+  }, [currentSession?.id, restaurants]);
 
   // 과거 게시물의 배치는 localStorage에만 있었으므로, 작성자가 다시 접속했을 때
   // 서버로 한 번 승계한다. 다른 사용자는 이후부터 같은 R2 사진·배치를 받는다.
@@ -843,7 +997,7 @@ export function AppProvider({
       .then(response => response.ok ? response.json() : null)
       .then((data: {
         user?: { sub?: string; name?: string; picture?: string };
-        profile?: { username?: string | null; profile_image_url?: string | null } | null;
+        profile?: { username?: string | null; handle?: string | null; profile_image_url?: string | null } | null;
       } | null) => {
         const googleUser = data?.user;
         if (!googleUser || googleUser.sub !== initialAuthUserId) return;
@@ -851,6 +1005,7 @@ export function AppProvider({
         setProfile(previous => ({
           ...previous,
           ...(serverProfile?.username || googleUser.name ? { name: serverProfile?.username || googleUser.name! } : {}),
+          ...(serverProfile?.handle ? { handle: serverProfile.handle } : {}),
           // A null server value is meaningful: the user deliberately removed
           // their photo and chose the emoji avatar. Never fall back to Google
           // in that case.
@@ -1070,6 +1225,7 @@ export function AppProvider({
   ): Promise<GroupSession> => {
     const actualHostName = hostName || profile.name;
     const actualEmoji = emoji || profile.emoji;
+    const normalizedFilters = { ...filters, dietary: normalizeDietaryPreferences(filters.dietary) };
 
     // 항상 서버 등록을 먼저 시도한다. apiAvailable로 게이트하면 안 되는 이유:
     // apiAvailable은 부팅 시 /api/restaurants·courses 응답 후에야 true가 되는데,
@@ -1085,22 +1241,22 @@ export function AppProvider({
             hostName: actualHostName,
             emoji: actualEmoji,
             name,
-            groupSize: filters.partySize,
-            filterDistance: filters.radius,
-            distanceEnabled: filters.distanceEnabled !== false,
-            originLatitude: filters.originLatitude,
-            originLongitude: filters.originLongitude,
-            filterBudget: filters.budget,
-            filterCategories: filters.categories,
-            filterDietary: filters.dietary,
-            intent: filters.intent,
+            groupSize: normalizedFilters.partySize,
+            filterDistance: normalizedFilters.radius,
+            distanceEnabled: normalizedFilters.distanceEnabled !== false,
+            originLatitude: normalizedFilters.originLatitude,
+            originLongitude: normalizedFilters.originLongitude,
+            filterBudget: normalizedFilters.budget,
+            filterCategories: normalizedFilters.categories,
+            filterDietary: normalizedFilters.dietary,
+            intent: normalizedFilters.intent,
             hostPreferences: profile.categoryPrefs,
-            hostDietary: profile.dietary,
+            hostDietary: normalizeDietaryPreferences(profile.dietary),
             deadlineMinutes,
           }),
         });
-        const data = await res.json().catch(() => ({})) as { session?: { id: string }; token?: string; error?: string };
-        if (!res.ok || !data.session?.id || !data.token) throw new Error(data.error ?? '세션을 서버에 저장하지 못했어요.');
+        const data = await res.json().catch(() => ({})) as { session?: { id: string }; token?: string; memberKey?: string; error?: string };
+        if (!res.ok || !data.session?.id || !data.token || !data.memberKey) throw new Error(data.error ?? '세션을 서버에 저장하지 못했어요.');
         const session: GroupSession = {
             id: data.session.id,
             name,
@@ -1114,14 +1270,19 @@ export function AppProvider({
               preferences: profile.categoryPrefs.map(p => ({ categoryId: p.category, score: p.score })),
               ready: false,
             }],
-            filters,
+            filters: normalizedFilters,
             deadline: null, // 마감 타이머는 투표 시작 시점에 적용
             deadlineMinutes,
             status: 'waiting',
             restaurants: [],
             modelVersion: 'session-group-pending-v1',
             results: [],
+            memberKey: data.memberKey,
           };
+        // Solo Quick Match starts in the same click handler immediately after
+        // creation. React state is not committed synchronously, so keep the
+        // request-facing ref in sync before startSession reads the member key.
+        currentSessionRef.current = session;
         setCurrentSession(session);
         return session;
       } catch (error) {
@@ -1130,21 +1291,29 @@ export function AppProvider({
         throw error;
       }
     }
-  }, [profile, restaurants]);
+  }, [profile]);
 
-  const fetchSession = useCallback(async (token: string): Promise<GroupSession> => {
+  const fetchSession = useCallback(async (token: string, catalogueOverride?: Restaurant[]): Promise<GroupSession> => {
     const res = await fetch(`/api/sessions/${token}`);
-    if (!res.ok) throw new Error('Session not found');
-    const data = await res.json();
-    const status = (data.session.status as string).toLowerCase() as GroupSession['status'];
+    const data = await res.json().catch(() => ({})) as any;
+    if (!res.ok) {
+      const error = new Error(data.error ?? 'Session not found') as Error & { code?: string; status?: number };
+      error.code = data.code ?? (res.status === 404 ? 'SESSION_NOT_FOUND' : 'SESSION_FETCH_FAILED');
+      error.status = res.status;
+      throw error;
+    }
+    const status = normalizeQuickMatchStatus(data.session.status);
     const serverIntent = data.session.intent === 'meal' || data.session.intent === 'cafe' || data.session.intent === 'dessert'
       ? data.session.intent as Intent
       : undefined;
     // Migration 전 로컬 D1에서 읽은 레거시 세션만, 직전 화면의 선택을 보조적으로 유지한다.
     const prevIntent = currentSessionRef.current?.inviteCode === token ? currentSessionRef.current.filters.intent : undefined;
+    const previousMemberKey = currentSessionRef.current?.inviteCode === token
+      ? currentSessionRef.current.memberKey
+      : undefined;
     const sessFilters = {
       partySize: data.session.group_size,
-      dietary: data.session.filter_dietary || [],
+      dietary: normalizeDietaryPreferences(data.session.filter_dietary),
       budget: data.session.filter_budget,
       radius: data.session.filter_distance,
       distanceEnabled: data.session.distance_enabled !== 0,
@@ -1168,26 +1337,31 @@ export function AppProvider({
     // New sessions always use the server-persisted candidate order. Waiting
     // rooms deliberately have no cards: the slate is made only after every
     // participant has supplied a preference snapshot and marked ready.
+    const catalogue = catalogueOverride ?? restaurantsRef.current;
     const sharedRestaurants = sharedDeckIds
-      .map(id => restaurants.find(restaurant => restaurant.id === id))
+      .map(id => catalogue.find(restaurant => restaurant.id === id))
       .filter((restaurant): restaurant is Restaurant => Boolean(restaurant));
     const distanceAwareRestaurants = withSessionDistances(sharedRestaurants, sessFilters);
-    const deck = distanceAwareRestaurants.length === sharedDeckIds.length && distanceAwareRestaurants.length > 0
-      ? {
+    const deck = !isActiveQuickMatchStatus(status)
+      ? { restaurants: [], slateId: undefined, recMeta: undefined, modelVersion: 'session-ended-v1', dietaryBestEffort: false }
+      : distanceAwareRestaurants.length === sharedDeckIds.length && distanceAwareRestaurants.length > 0
+        ? {
           restaurants: distanceAwareRestaurants,
           slateId: typeof data.session.recommendation_slate_id === 'string' ? data.session.recommendation_slate_id : undefined,
           recMeta: Object.keys(sharedRecMeta).length ? sharedRecMeta : undefined,
           modelVersion: typeof data.slate?.policy_version === 'string' ? data.slate.policy_version : 'session-group-legacy-v1',
+          dietaryBestEffort: sharedRestaurants.some(restaurant => !matchesDiet(restaurant, sessFilters.dietary)),
         }
       : status === 'waiting'
-        ? { restaurants: [], slateId: undefined, recMeta: undefined, modelVersion: 'session-group-pending-v1' }
-        : await buildDeck(sessFilters, restaurants, profile.id);
+        ? { restaurants: [], slateId: undefined, recMeta: undefined, modelVersion: 'session-group-pending-v1', dietaryBestEffort: false }
+        : await buildDeck(sessFilters, catalogue, profile.id);
+    const members = Array.isArray(data.members) ? data.members : [];
     const session: GroupSession = {
       id: data.session.id,
       name: '점심 세션',
       inviteCode: token,
       hostId: data.session.host_user_id,
-      members: data.members.map((m: { user_id: string; user_name: string; emoji: string; is_ready: boolean }) => ({
+      members: members.map((m: { user_id: string; user_name: string; emoji: string; is_ready: boolean }) => ({
         id: m.user_id,
         name: m.user_name,
         emoji: m.emoji,
@@ -1195,6 +1369,8 @@ export function AppProvider({
         preferences: [],
         ready: m.is_ready,
       })),
+      membershipActive: members.some((member: { user_id?: string }) => member.user_id === profile.id),
+      memberKey: previousMemberKey,
       filters: sessFilters,
       // 대기 중에는 마감 미적용 — 투표 시작 시점에 서버가 deadline_at을 갱신한다
       deadline: status === 'waiting' ? null : data.session.deadline_at,
@@ -1203,6 +1379,7 @@ export function AppProvider({
       slateId: deck.slateId,
       recMeta: deck.recMeta,
       modelVersion: deck.modelVersion,
+      dietaryBestEffort: deck.dietaryBestEffort,
       results: [],
     };
     // 서버 응답에는 없는 로컬 정보(세션 이름, 마감 타이밍 설정)는 유지한다
@@ -1212,7 +1389,7 @@ export function AppProvider({
         : session,
     );
     return session;
-  }, [restaurants]);
+  }, [profile.id]);
 
   const joinSession = useCallback(async (token: string, name?: string, emoji?: string) => {
     const response = await fetch(`/api/sessions/${token}/join`, {
@@ -1223,20 +1400,35 @@ export function AppProvider({
         userName: name || profile.name,
         emoji: emoji || profile.emoji,
         preferences: profile.categoryPrefs,
-        dietary: profile.dietary,
+        dietary: normalizeDietaryPreferences(profile.dietary),
+        memberKey: currentSessionRef.current?.inviteCode === token
+          ? currentSessionRef.current.memberKey
+          : undefined,
       }),
     });
-    const payload = await response.json().catch(() => ({})) as { error?: string };
+    const payload = await response.json().catch(() => ({})) as { error?: string; memberKey?: string };
     if (!response.ok) throw new Error(payload.error ?? '세션에 참가하지 못했어요.');
-    return fetchSession(token);
+    if (!payload.memberKey) throw new Error('세션 자격 증명을 받지 못했어요.');
+    const fetched = await fetchSession(token);
+    const joined = { ...fetched, memberKey: payload.memberKey };
+    setCurrentSession(joined);
+    return joined;
   }, [profile, fetchSession]);
 
   const toggleReady = useCallback(async (token: string, isReady: boolean) => {
-    await fetch(`/api/sessions/${token}/ready`, {
+    const response = await fetch(`/api/sessions/${token}/ready`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ userId: profile.id, isReady }),
+      body: JSON.stringify({
+        userId: profile.id,
+        isReady,
+        memberKey: currentSessionRef.current?.inviteCode === token
+          ? currentSessionRef.current.memberKey
+          : undefined,
+      }),
     });
+    const payload = await response.json().catch(() => ({})) as { error?: string };
+    if (!response.ok) throw new Error(payload.error ?? '준비 상태를 바꾸지 못했어요.');
     return fetchSession(token);
   }, [profile, fetchSession]);
 
@@ -1248,51 +1440,95 @@ export function AppProvider({
     const res = await fetch(`/api/sessions/${token}/status`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ status: 'SWIPING_1', deadlineMinutes: minutes, userId: profile.id }),
+      body: JSON.stringify({
+        status: 'SWIPING_1',
+        deadlineMinutes: minutes,
+        userId: profile.id,
+        memberKey: currentSessionRef.current?.inviteCode === token
+          ? currentSessionRef.current.memberKey
+          : undefined,
+      }),
     });
     const payload = await res.json().catch(() => ({})) as { error?: string; code?: string };
     if (!res.ok) {
-      const error = new Error(payload.error ?? '세션을 시작하지 못했어요.') as Error & { code?: string };
+      const error = new Error(payload.error ?? '세션을 시작하지 못했어요.') as Error & { code?: string; status?: number };
       error.code = payload.code;
+      error.status = res.status;
       throw error;
     }
     return fetchSession(token);
-  }, [fetchSession]);
+  }, [currentSession?.deadlineMinutes, fetchSession, profile.id]);
 
-  const addSwipe = useCallback((restaurantId: string, action: SwipeRecord['action']) => {
+  const endSession = useCallback(async (token: string, action: 'cancel' | 'leave') => {
+    const memberKey = currentSessionRef.current?.inviteCode === token
+      ? currentSessionRef.current.memberKey
+      : undefined;
+
+    // Without a capability this device cannot cancel/leave on the server.
+    // Drop the local resume card so settings is not stuck forever.
+    if (!memberKey) {
+      if (currentSessionRef.current?.inviteCode === token) setCurrentSession(null);
+      return;
+    }
+
+    const response = await fetch(`/api/sessions/${token}/${action}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        userId: profile.id,
+        memberKey,
+      }),
+    });
+    const payload = await response.json().catch(() => ({})) as { error?: string; code?: string };
+    if (!response.ok) {
+      const isInvalidCredential = response.status === 403 && (
+        payload.code === 'INVALID_MEMBER_CREDENTIAL'
+        || payload.error === 'invalid_member_credential'
+        || (typeof payload.error === 'string' && payload.error.includes('자격 증명을 확인할 수 없습니다'))
+      );
+      if (isInvalidCredential) {
+        setCurrentSession(null);
+        return;
+      }
+      const error = new Error(payload.error ?? '세션 상태를 바꾸지 못했어요.') as Error & { code?: string; status?: number };
+      error.code = payload.code;
+      error.status = response.status;
+      throw error;
+    }
+    setCurrentSession(null);
+  }, [profile.id]);
+
+  const cancelSession = useCallback((token: string) => endSession(token, 'cancel'), [endSession]);
+  const leaveSession = useCallback((token: string) => endSession(token, 'leave'), [endSession]);
+
+  const addSwipe = useCallback(async (restaurantId: string, action: SwipeRecord['action']) => {
     const record: SwipeRecord = {
       restaurantId,
       action,
       timestamp: new Date().toISOString(),
       sessionId: currentSession?.id,
     };
+
+    // A shared session may only advance after D1 accepted the vote. Otherwise
+    // the last card can disappear locally while other members never receive
+    // this participant's completion state.
+    if (currentSession) {
+      await persistSessionSwipe({
+        sessionId: currentSession.id,
+        userId: profile.id,
+        restaurantId,
+        round: 2 * (currentSession.generation ?? 1) - 1,
+        action: action === 'like' || action === 'save' ? 'LIKE' : 'DISLIKE',
+        createdAt: record.timestamp,
+      });
+    }
+
     setSwipeRecords(prev => [...prev, record]);
     setProfile(prev => ({
       ...prev,
       totalSwipes: prev.totalSwipes + 1,
       totalLikes: action === 'like' ? prev.totalLikes + 1 : prev.totalLikes,
     }));
-
-    // Sessions are created server-first, so their swipes must also be sent
-    // server-first.  `apiAvailable` is only a catalogue boot hint; using it
-    // here used to silently turn a valid shared session into local-only votes.
-    if (currentSession) {
-      fetch('/api/swipes', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          id: `swipe_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
-          session_id: currentSession.id,
-          user_id: profile.id,
-          restaurant_id: restaurantId,
-          round: 2 * (currentSession.generation ?? 1) - 1, // 세대별 예선 라운드 (gen1=1, gen2=3, …)
-          swipe_action: action === 'like' || action === 'save' ? 'LIKE' : 'DISLIKE',
-          created_at: new Date(),
-        }),
-      }).then(response => {
-        if (!response.ok) console.error('Failed to persist session swipe');
-      }).catch(() => { });
-    }
   }, [currentSession, profile.id]);
 
   // "다시 고르기": 로컬 스와이프 기록을 지워야 카드가 처음부터 다시 나온다.
@@ -1313,6 +1549,7 @@ export function AppProvider({
       slateId: deck.slateId,
       recMeta: deck.recMeta,
       modelVersion: deck.modelVersion,
+      dietaryBestEffort: deck.dietaryBestEffort,
       generation: (prev.generation ?? 1) + 1,
     } : prev);
   }, [currentSession, restaurants, profile.id]);
@@ -1337,6 +1574,7 @@ export function AppProvider({
             ...post,
             authorName: updates.name ?? post.authorName,
             authorEmoji: updates.emoji ?? post.authorEmoji,
+            ...('avatarPhoto' in updates ? { authorImage: updates.avatarPhoto } : {}),
           }
         : post));
     }
@@ -1357,11 +1595,11 @@ export function AppProvider({
     <AppContext.Provider value={{
       courses, savedCourseIds, saveCourse, unsaveCourse, addCourse, updateCourse, deleteCourseWithFeed,
       hiddenTemplateCourseIds, deleteProfileTemplate,
-      currentSession, setCurrentSession, createSession, joinSession, fetchSession, toggleReady, startSession,
+      currentSession, setCurrentSession, createSession, joinSession, fetchSession, toggleReady, startSession, cancelSession, leaveSession,
       swipeRecords, addSwipe, clearSessionSwipes, rerollSession, likedRestaurantIds,
       savedRestaurantIds, saveRestaurant, unsaveRestaurant,
       profile, updateProfile,
-      feedPosts, refreshFeedPosts, addFeedPost, updateFeedPost, deleteFeedPost, incrementFeedShare,
+      feedPosts, refreshFeedPosts, loadMoreFeedPosts, hasMoreFeedPosts, isLoadingMoreFeedPosts, addFeedPost, updateFeedPost, deleteFeedPost, incrementFeedShare,
       likedFeedIds, dislikedFeedIds, toggleFeedLike, toggleFeedDislike, addFeedComment,
       reactToFeedComment, reportFeedComment, toggleCommentHidden, isMyPost,
       courseSkins, setCourseSkin,

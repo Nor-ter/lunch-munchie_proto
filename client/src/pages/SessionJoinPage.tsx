@@ -5,9 +5,11 @@ import { toast } from 'sonner';
 import { Loader2, ArrowLeft, Shield, LogIn } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { useAuthStatus } from '@/hooks/useAuthStatus';
+import { DIETARY_REQUIREMENTS, INGREDIENT_AVOIDANCES, normalizeDietaryPreferences } from '@/lib/quickMatch';
+import { startGoogleAuth } from '@/services/authApi';
 
 const EMOJIS = ['😊', '🍱', '🍜', '🍣', '🥩', '🍕', '🌮', '🍔', '🥗', '☕', '🎂', '🍰', '🦊', '🐱', '🐼', '🐨'];
-const DIETARY_OPTIONS = ['비건', '채식', '글루텐프리', '할랄', '유제품 제외', '견과류 알러지', '해산물 제외'];
+const DIETARY_OPTIONS = [...DIETARY_REQUIREMENTS, ...INGREDIENT_AVOIDANCES];
 
 export default function SessionJoinPage() {
   const [, navigate] = useLocation();
@@ -25,7 +27,7 @@ export default function SessionJoinPage() {
   // their account name as a convenient, editable starting point.
   const [name, setName] = useState('');
   const [selectedEmoji, setSelectedEmoji] = useState(profile.emoji || '🙂');
-  const [dietary, setDietary] = useState<string[]>(profile.dietary || []);
+  const [dietary, setDietary] = useState<string[]>(() => normalizeDietaryPreferences(profile.dietary));
   const isLoggedIn = Boolean(auth.data && !auth.data.isAnonymous);
 
   useEffect(() => {
@@ -56,7 +58,7 @@ export default function SessionJoinPage() {
   }, [token, fetchSession, navigate]);
 
   const handleLogin = () => {
-    window.location.assign(`/api/auth/google/start?next=${encodeURIComponent(`/join/${token ?? ''}`)}`);
+    startGoogleAuth(`/join/${token ?? ''}`);
   };
 
   const handleLogout = async () => {
@@ -226,23 +228,26 @@ export default function SessionJoinPage() {
             </div>
             <p className="text-[11px] text-[#9B9B9B]">해당하는 제한 사항이 있다면 선택해주세요 (중복 선택 가능)</p>
             <div className="flex flex-wrap gap-1.5">
-              {DIETARY_OPTIONS.map(d => {
-                const isSelected = dietary.includes(d);
+              {DIETARY_OPTIONS.map(option => {
+                const isSelected = dietary.includes(option.value);
                 return (
                   <button
-                    key={d}
+                    key={option.value}
                     type="button"
-                    onClick={() => toggleDietary(d)}
+                    onClick={() => toggleDietary(option.value)}
                     className={`px-3 py-1.5 rounded-full text-[11px] font-semibold transition-all active:scale-95 ${
                       isSelected ? 'text-white' : 'bg-[#F5F5F5] text-[#4A4A4A]'
                     }`}
                     style={isSelected ? { background: '#EB5053' } : {}}
                   >
-                    {d}
+                    {option.label}
                   </button>
                 );
               })}
             </div>
+            <p className="text-[10px] leading-relaxed text-[#9B9B9B]">
+              메뉴 정보를 기준으로 필터링합니다. 심한 알레르기는 매장에 재료와 교차오염 여부를 꼭 확인해주세요.
+            </p>
           </div>
         </motion.div>
       </div>

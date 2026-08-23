@@ -28,6 +28,10 @@ import {
   resolveLunchmateProfilePresentationAsset,
   scheduleLunchmateProfileInitialMeasurement,
   selectLunchmateProfileEmotion,
+  readLunchmateProfileVisualOffset,
+  parseLunchmateProfileTransform,
+  pickLunchmateProfileCarryOffset,
+  readLunchmateProfileTransformOffset,
   type LunchmateProfileMotionSnapshot,
   type LunchmateProfilePointerCaptureTarget,
 } from './useLunchmateProfileMotion';
@@ -228,7 +232,7 @@ describe('Lunchmate Profile sitting asset and bounds', () => {
   });
 });
 
-describe('Lunchmate Profile long-press grab controller', () => {
+describe('Lunchmate Profile pointer grab controller', () => {
   it('derives a full-stage safe area independent from the 44px patrol range', () => {
     const bounds = calculateLunchmateProfileGrabBounds(
       { left: 0, right: 390, top: 0, bottom: 150, width: 390, height: 150 },
@@ -250,7 +254,34 @@ describe('Lunchmate Profile long-press grab controller', () => {
     expect(bounds.maxX).toBeGreaterThan(LUNCHMATE_PROFILE_MAX_OFFSET_PX);
   });
 
-  it('waits 400ms, swaps to grabbed once, and captures only after success', () => {
+  it('reads the painted grab offset from the moving layer versus the drop anchor', () => {
+    expect(readLunchmateProfileVisualOffset(
+      { left: 140, width: 86, bottom: 410 },
+      { left: 152, width: 116, bottom: 418 },
+    )).toEqual({ x: -27, y: -8 });
+    expect(readLunchmateProfileVisualOffset(null, { left: 0, width: 1, bottom: 0 })).toBeNull();
+  });
+
+  it('reads the painted grab translate from the moving layer transform', () => {
+    expect(parseLunchmateProfileTransform('none')).toEqual({ x: 0, y: 0 });
+    expect(parseLunchmateProfileTransform('matrix(1, 0, 0, 1, 36, -8)')).toEqual({ x: 36, y: -8 });
+    expect(parseLunchmateProfileTransform('matrix3d(1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 22, -12, 0, 1)')).toEqual({
+      x: 22,
+      y: -12,
+    });
+    expect(readLunchmateProfileTransformOffset(null)).toBeNull();
+  });
+
+  it('keeps the least-landed candidate when spring, transform, and box disagree', () => {
+    expect(pickLunchmateProfileCarryOffset([
+      { x: 0, y: 0 },
+      { x: 28, y: -8 },
+      { x: 4, y: -1 },
+    ])).toEqual({ x: 28, y: -8 });
+    expect(pickLunchmateProfileCarryOffset([null, undefined])).toBeNull();
+  });
+
+  it('captures immediately, then swaps to grabbed after a 400ms stationary press', () => {
     vi.useFakeTimers();
     const {
       controller,
@@ -268,7 +299,7 @@ describe('Lunchmate Profile long-press grab controller', () => {
     });
     vi.advanceTimersByTime(LUNCHMATE_PROFILE_LONG_PRESS_MS - 1);
     expect(snapshots.at(-1)?.assetKeyOverride).toBeNull();
-    expect(target.setPointerCapture).not.toHaveBeenCalled();
+    expect(target.setPointerCapture).toHaveBeenCalledTimes(1);
 
     vi.advanceTimersByTime(1);
     expect(controller.getSnapshot()).toMatchObject({
@@ -303,7 +334,7 @@ describe('Lunchmate Profile long-press grab controller', () => {
     controller.stop();
   });
 
-  it('cancels before activation at the 8px movement threshold', () => {
+  it('starts an immediate surprised grab at the 4px movement threshold', () => {
     vi.useFakeTimers();
     const {
       controller,
@@ -315,17 +346,24 @@ describe('Lunchmate Profile long-press grab controller', () => {
     controller.pointerDown(pointer);
     expect(controller.pointerMove(
       pointer.pointerId,
-      pointer.clientX + LUNCHMATE_PROFILE_LONG_PRESS_MOVE_THRESHOLD_PX,
+      pointer.clientX + LUNCHMATE_PROFILE_LONG_PRESS_MOVE_THRESHOLD_PX - 1,
       pointer.clientY,
     )).toBe(false);
-    vi.advanceTimersByTime(LUNCHMATE_PROFILE_LONG_PRESS_MS);
+    expect(controller.getSnapshot()).toMatchObject({ phase: 'pressing' });
+    expect(controller.pointerMove(
+      pointer.pointerId,
+      pointer.clientX + LUNCHMATE_PROFILE_LONG_PRESS_MOVE_THRESHOLD_PX,
+      pointer.clientY,
+    )).toBe(true);
 
     expect(controller.getSnapshot()).toMatchObject({
-      phase: 'idle',
-      assetKeyOverride: null,
+      phase: 'grabbed',
+      assetKeyOverride: 'grabbed',
+      x: 22,
+      y: -12,
     });
-    expect(target.setPointerCapture).not.toHaveBeenCalled();
-    expect(vi.getTimerCount()).toBe(0);
+    expect(target.setPointerCapture).toHaveBeenCalledWith(pointer.pointerId);
+    expect(snapshots.some(snapshot => snapshot.phase === 'grabbed')).toBe(true);
     controller.stop();
   });
 
@@ -400,7 +438,7 @@ describe('Lunchmate Profile long-press grab controller', () => {
     controller.stop();
   });
 
-  it('lands with grabbed, swaps once at the midpoint, then returns to idle', () => {
+  it('lands with grabbed, swaps once at the midpoint, then returns directly to idle', () => {
     vi.useFakeTimers();
     const {
       controller,
@@ -430,16 +468,95 @@ describe('Lunchmate Profile long-press grab controller', () => {
     });
     vi.advanceTimersByTime(LUNCHMATE_PROFILE_GRAB_LANDING_MS / 2);
     expect(snapshots.at(-1)).toMatchObject({
-      phase: 'recovering',
-      assetKeyOverride: 'idle',
-    });
-    vi.advanceTimersByTime(1000);
-    expect(snapshots.at(-1)).toMatchObject({
       phase: 'idle',
       assetKeyOverride: null,
     });
     expect(target.releasePointerCapture).toHaveBeenCalledTimes(1);
     expect(restartAutomaticMotion).toHaveBeenCalledTimes(1);
+    controller.stop();
+  });
+
+  it('interrupts landing so the character can be grabbed again immediately', () => {
+    vi.useFakeTimers();
+    const {
+      controller,
+      pointer,
+      target,
+      rendered,
+      targetChanges,
+    } = createGrabHarness();
+
+    controller.pointerDown(pointer);
+    controller.pointerMove(
+      pointer.pointerId,
+      pointer.clientX + LUNCHMATE_PROFILE_LONG_PRESS_MOVE_THRESHOLD_PX,
+      pointer.clientY,
+    );
+    controller.pointerUp(pointer.pointerId);
+    expect(controller.getSnapshot().phase).toBe('landing');
+    // 실제 spring은 landing 도중 아직 화면 중앙에 도착하지 않았을 수 있다.
+    rendered.x = 14;
+    rendered.y = -7;
+    rendered.rotate = 2;
+
+    const nextPointer = {
+      ...pointer,
+      pointerId: pointer.pointerId + 1,
+      initialVisualX: rendered.x,
+      initialVisualY: rendered.y,
+    };
+    expect(controller.pointerDown(nextPointer)).toBe(true);
+    expect(controller.getSnapshot().phase).toBe('pressing');
+    expect(controller.getSnapshot()).toMatchObject({ x: 14, y: -7, rotate: 2 });
+    expect(targetChanges).toContainEqual({ x: 14, y: -7, rotate: 2, immediate: true });
+    expect(target.setPointerCapture).toHaveBeenLastCalledWith(nextPointer.pointerId);
+    expect(controller.pointerMove(
+      nextPointer.pointerId,
+      nextPointer.clientX + LUNCHMATE_PROFILE_LONG_PRESS_MOVE_THRESHOLD_PX,
+      nextPointer.clientY,
+    )).toBe(true);
+    expect(controller.getSnapshot().phase).toBe('grabbed');
+    controller.stop();
+  });
+
+  it('freezes the painted offset when the spring has already landed', () => {
+    vi.useFakeTimers();
+    const {
+      controller,
+      pointer,
+      rendered,
+      targetChanges,
+    } = createGrabHarness();
+
+    controller.pointerDown(pointer);
+    controller.pointerMove(
+      pointer.pointerId,
+      pointer.clientX + LUNCHMATE_PROFILE_LONG_PRESS_MOVE_THRESHOLD_PX,
+      pointer.clientY,
+    );
+    controller.pointerUp(pointer.pointerId);
+    expect(controller.getSnapshot().phase).toBe('landing');
+    rendered.x = 0;
+    rendered.y = 0;
+    rendered.rotate = 0;
+
+    expect(controller.pointerDown({
+      ...pointer,
+      pointerId: pointer.pointerId + 1,
+      initialVisualX: 36,
+      initialVisualY: -8,
+    })).toBe(true);
+    expect(controller.getSnapshot()).toMatchObject({
+      phase: 'pressing',
+      x: 36,
+      y: -8,
+    });
+    expect(targetChanges).toContainEqual({
+      x: 36,
+      y: -8,
+      rotate: 0,
+      immediate: true,
+    });
     controller.stop();
   });
 
@@ -454,7 +571,7 @@ describe('Lunchmate Profile long-press grab controller', () => {
     controller.pointerDown(pointer);
     vi.advanceTimersByTime(LUNCHMATE_PROFILE_LONG_PRESS_MS);
     expect(controller.lostPointerCapture(pointer.pointerId)).toBe(true);
-    vi.advanceTimersByTime(LUNCHMATE_PROFILE_GRAB_LANDING_MS + 1000);
+    vi.advanceTimersByTime(LUNCHMATE_PROFILE_GRAB_LANDING_MS);
     expect(controller.getSnapshot().phase).toBe('idle');
 
     controller.pointerDown(pointer);
@@ -813,6 +930,10 @@ describe('Profile motion integration contract', () => {
     expect(FOODIE_BUDDY_SOURCE).toContain(
       'data-lunchmate-profile-grab={profileMotion.grab.phase}',
     );
+    expect(FOODIE_BUDDY_SOURCE).toContain(
+      "data-lunchmate-profile-expression={profileMotion.grab.phase === 'grabbed' ? 'surprised' : 'default'}",
+    );
+    expect(FOODIE_BUDDY_SOURCE).toContain('놀란 런치메이트 캐릭터, 드래그 중');
     expect(FOODIE_BUDDY_SOURCE).not.toContain('onClick={profileMotion.grab');
   });
 
@@ -843,6 +964,12 @@ describe('Profile motion integration contract', () => {
     expect(HOOK_SOURCE).toContain('stiffness: 170');
     expect(HOOK_SOURCE).toContain('damping: 13');
     expect(HOOK_SOURCE).toContain('mass: 0.9');
+    expect(HOOK_SOURCE).toContain('pickLunchmateProfileCarryOffset([');
+    expect(HOOK_SOURCE).toContain('readLunchmateProfileTransformOffset(movingLayerEl)');
+    expect(HOOK_SOURCE).toContain('snapMotionValue(grabSpringX, x)');
+    expect(HOOK_SOURCE).toContain(
+      "grabSnapshot.phase === 'pressing'",
+    );
   });
 
   it('keeps the drop target fixed and moves only the inner 86px wrapper', () => {
@@ -862,6 +989,13 @@ describe('Profile motion integration contract', () => {
     expect(FOODIE_BUDDY_SOURCE).toContain(
       'data-lunchmate-profile-grab-position="true"',
     );
+    const movingLayer = FOODIE_BUDDY_SOURCE.indexOf(
+      'data-lunchmate-profile-grab-position="true"',
+    );
+    const movingLayerEnd = FOODIE_BUDDY_SOURCE.indexOf('</motion.div>',
+      FOODIE_BUDDY_SOURCE.indexOf('data-lunchmate-profile-moving-shadow="true"', movingLayer));
+    const movingLayerSource = FOODIE_BUDDY_SOURCE.slice(movingLayer, movingLayerEnd);
+    expect(movingLayerSource).toContain('data-lunchmate-profile-moving-shadow="true"');
     expect(FOODIE_BUDDY_SOURCE).toContain(
       'data-lunchmate-profile-pendulum="true"',
     );

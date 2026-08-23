@@ -40,7 +40,21 @@ function createEnv(db = createDb()): EnvBindings {
 }
 
 describe("Google OAuth callback", () => {
-  it("creates a login session when Google profile has no picture", async () => {
+  it("reports missing local OAuth configuration before redirecting to Google", async () => {
+    const env = createEnv();
+    delete (env as Partial<EnvBindings>).GOOGLE_CLIENT_ID;
+
+    const response = await app.request(
+      "http://localhost/api/auth/google/start?next=/coursemap/new",
+      undefined,
+      env,
+    );
+
+    expect(response.status).toBe(302);
+    expect(response.headers.get("location")).toBe("/auth/login?error=oauth_config");
+  });
+
+  it("creates a readable login session when Google profile has no name or picture", async () => {
     const fetchMock = vi.spyOn(globalThis, "fetch").mockImplementation(
       async (input) => {
         const url = String(input);
@@ -51,7 +65,6 @@ describe("Google OAuth callback", () => {
           return Response.json({
             sub: "google-user-without-picture",
             email: "no-picture@example.com",
-            name: "No Picture",
           });
         }
         return new Response("unexpected fetch", { status: 500 });
@@ -67,7 +80,24 @@ describe("Google OAuth callback", () => {
 
       expect(response.status).toBe(302);
       expect(response.headers.get("location")).toBe("/profile");
-      expect(response.headers.get("set-cookie")).toContain("lm_session=");
+      const sessionCookie = response.headers
+        .get("set-cookie")
+        ?.match(/lm_session=[^;]+/)?.[0];
+      expect(sessionCookie).toBeTruthy();
+
+      const sessionResponse = await app.request(
+        "http://localhost/api/auth/session",
+        { headers: { cookie: sessionCookie! } },
+        createEnv(),
+      );
+      const sessionBody = await sessionResponse.json<{
+        user?: { sub?: string; email?: string; name?: string; picture?: string } | null;
+      }>();
+
+      expect(sessionResponse.status).toBe(200);
+      expect(sessionBody.user?.sub).toBe("google-user-without-picture");
+      expect(sessionBody.user?.email).toBe("no-picture@example.com");
+      expect(sessionBody.user?.picture).toBeUndefined();
     } finally {
       fetchMock.mockRestore();
     }

@@ -7,19 +7,113 @@
 import { useState, useCallback, useEffect, useRef } from 'react';
 import { motion, useMotionValue, useTransform, useMotionTemplate, AnimatePresence, type MotionValue } from 'framer-motion';
 import { useLocation } from 'wouter';
-import { ArrowLeft, Heart, X, Star, MapPin, Clock, Phone, Navigation, Share2, Download, Link2, Home, Bookmark, RotateCcw } from 'lucide-react';
+import { ArrowLeft, Heart, X, Star, MapPin, Clock, Phone, Navigation, Share2, Download, Link2, Home, Bookmark, RotateCcw, Loader2, RefreshCw, SlidersHorizontal } from 'lucide-react';
 import { toast } from 'sonner';
 import { useApp, type Restaurant, type MenuItem } from '@/contexts/AppContext';
 import { useCourseShare } from '@/hooks/useCourseShare';
 import WinnerShareCard from '@/components/lunchie/WinnerShareCard';
+import LunchmateCharacterRenderer from '@/components/munchie/LunchmateCharacterRenderer';
+import { activateLunchieWaitingCompanion } from '@/components/lunchie/LunchieWaitingCompanion';
 import FoodImage from '@/components/FoodImage';
 import MenuItemDetail from '@/components/MenuItemDetail';
 import { logSwipe, logWinner, logNavigate, logEvent, flushEvents } from '@/lib/eventLogger';
+import { lunchmateLoadoutFromProfile } from '@/utils/lunchmateProfile';
 import { intentForCategory } from '@shared/intent';
+import { persistSessionSwipe } from '@/services/sessionApi';
+import { classifySwipeAvailability, type SwipeAvailability } from '@/lib/swipeAvailability';
+import { isActiveQuickMatchStatus } from '@/lib/quickMatch';
+import SessionManagementMenu from '@/components/lunchie/SessionManagementMenu';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 type SwipeAction = 'like' | 'dislike';
+
+function SwipeStateScreen({
+  state,
+  onRetry,
+}: {
+  state: Exclude<SwipeAvailability, 'ready'>;
+  onRetry?: () => void;
+}) {
+  const [, navigate] = useLocation();
+  const { currentSession } = useApp();
+  const content = {
+    loading: {
+      title: '결승 후보를 준비하고 있어요',
+      description: 'Preparing your Quick Match and restaurant options…',
+    },
+    'api-error': {
+      title: 'We couldn’t load Quick Match',
+      description: 'Check your connection and try again.',
+    },
+    'catalog-empty': {
+      title: 'Restaurants aren’t available yet',
+      description: 'We couldn’t load restaurant options for this Quick Match.',
+    },
+    'no-matches': {
+      title: 'No matches found',
+      description: 'Try increasing the distance or adjusting your preferences.',
+    },
+    'session-missing': {
+      title: 'Quick Match를 다시 준비할게요',
+      description: 'No Quick Match found. Start a new Quick Match from settings.',
+    },
+    'session-invalid': {
+      title: 'This Quick Match is no longer available',
+      description: 'It may have ended, expired, been cancelled, or you may have left the lobby.',
+    },
+    'session-not-started': {
+      title: 'This Quick Match hasn’t started yet',
+      description: 'Return to the lobby and wait for the host to begin.',
+    },
+  }[state];
+  const canRetry = state === 'api-error' || state === 'catalog-empty';
+  const primaryLabel = state === 'no-matches'
+    ? 'Edit preferences'
+    : state === 'session-not-started'
+      ? 'Return to lobby'
+      : 'Back to settings';
+  const primaryPath = state === 'session-not-started' ? '/session/lobby' : '/lunchie/settings';
+
+  return (
+    <div className="flex min-h-dvh items-center justify-center bg-[#FFF6F2] px-5 py-10">
+      <section role={state === 'loading' ? 'status' : 'alert'} aria-live="polite" className="w-full max-w-[390px] rounded-[26px] border border-[#F2DDD8] bg-white p-6 text-center shadow-[0_16px_44px_rgba(137,89,79,0.12)]">
+        <div className="mx-auto flex size-16 items-center justify-center rounded-full bg-[#FFF0EE] text-[#F4515E]">
+          {state === 'loading'
+            ? <Loader2 size={30} className="animate-spin motion-reduce:animate-none" aria-hidden="true" />
+            : state === 'no-matches'
+              ? <SlidersHorizontal size={28} aria-hidden="true" />
+              : <span className="text-3xl" aria-hidden="true">🍽️</span>}
+        </div>
+        <h1 className="mt-4 text-[20px] font-black tracking-[-0.3px] text-[#26232A]">{content.title}</h1>
+        <p className="mx-auto mt-2 max-w-[300px] text-[13px] leading-relaxed text-[#776E72]">{content.description}</p>
+        {state === 'loading' ? (
+          <div className="mt-6 space-y-2" aria-hidden="true">
+            <div className="h-3 animate-pulse rounded-full bg-[#F4ECE9] motion-reduce:animate-none" />
+            <div className="mx-auto h-3 w-3/4 animate-pulse rounded-full bg-[#F4ECE9] motion-reduce:animate-none" />
+          </div>
+        ) : (
+          <div className="mt-6 space-y-2">
+            <button type="button" onClick={() => navigate(primaryPath)} className="min-h-12 w-full rounded-2xl bg-[#F4515E] px-4 text-[14px] font-black text-white outline-none focus-visible:ring-2 focus-visible:ring-[#F4515E] focus-visible:ring-offset-2">
+              {primaryLabel}
+            </button>
+            {canRetry && onRetry && (
+              <button type="button" onClick={onRetry} className="flex min-h-11 w-full items-center justify-center gap-2 rounded-2xl border border-[#E9D8D3] bg-[#FFF9F6] px-4 text-[13px] font-bold text-[#5E5559] outline-none focus-visible:ring-2 focus-visible:ring-[#F4515E]">
+                <RefreshCw size={15} aria-hidden="true" /> Try again
+              </button>
+            )}
+            {currentSession && (state === 'catalog-empty' || state === 'no-matches' || state === 'session-not-started') && (
+              <div className="flex items-center justify-center gap-1 pt-2 text-[11px] font-semibold text-[#81767A]">
+                Manage this session
+                <SessionManagementMenu onEnded={() => navigate('/lunchie/settings')} className="text-[#81767A]" />
+              </div>
+            )}
+          </div>
+        )}
+      </section>
+    </div>
+  );
+}
 
 // 소스 메뉴판의 섹션 구조 그대로 유지 — 등장 순서대로 그룹핑(알파벳 재정렬 X).
 function groupByCategory(items: MenuItem[]): [string, MenuItem[]][] {
@@ -155,6 +249,7 @@ function SwipeCard({
   stackIndex,
   progress,
   total,
+  isLocked,
 }: {
   restaurant: any;
   onAction: (a: SwipeAction) => void;
@@ -162,6 +257,7 @@ function SwipeCard({
   stackIndex: number;
   progress: number;
   total: number;
+  isLocked: boolean;
 }) {
   const [isRevealed, setIsRevealed] = useState(false);
   // 큐브 회전 단계(단조). photoIndex는 foodPhotos 길이로 파생 — 도트/라벨 표시에 사용.
@@ -175,9 +271,13 @@ function SwipeCard({
   const shineX2 = useTransform(x, [0, 220], ['-80%', '220%']);
   const shineOp2 = useTransform(likeOp, value => value * 0.7);
   const flashOp = useTransform(x, [0, 40, 220], [0, 0.5, 0.18]);
-  const crackScale = useTransform(x, [-220, 0], [0.78, 1]);
-  const crackGray = useTransform(x, [-220, 0], [0.85, 0]);
-  const crackDark = useTransform(x, [-220, 0], [0.55, 1]);
+  const crackScale = useTransform(x, [-220, 0], [0.985, 1]);
+  const crackGray = useTransform(x, [-220, 0], [0.18, 0]);
+  const crackDark = useTransform(x, [-220, 0], [0.88, 1]);
+  const primaryCrackOp = useTransform(x, [-55, -18, 0], [1, 0.75, 0]);
+  const branchCrackOp = useTransform(x, [-115, -62, -26, 0], [1, 0.9, 0.18, 0]);
+  const microCrackOp = useTransform(x, [-220, -145, -80, 0], [1, 0.78, 0.08, 0]);
+  const glassSheen = useTransform(x, [-220, -120, -35, 0], [0.38, 0.26, 0.08, 0]);
   const crackFilter = useMotionTemplate`grayscale(${crackGray}) brightness(${crackDark})`;
   // 그 식당의 실제 사진만 쓴다. 없으면 빈 배열 → FoodImage가 이모지 플레이스홀더를 보여준다.
   // 카테고리 스톡 사진 폴백은 제거했다(버거집에 피자가 뜨는 등 실제와 다른 사진은 거짓 정보다).
@@ -185,9 +285,10 @@ function SwipeCard({
   const photoIndex = foodPhotos.length ? ((photoStep % foodPhotos.length) + foodPhotos.length) % foodPhotos.length : 0;
 
   const handleDragEnd = useCallback((_: unknown, info: { offset: { x: number } }) => {
+    if (isLocked) return;
     if (info.offset.x > 90) onAction('like');
     else if (info.offset.x < -90) onAction('dislike');
-  }, [onAction]);
+  }, [isLocked, onAction]);
 
   if (!isTop) {
     return (
@@ -207,7 +308,7 @@ function SwipeCard({
     <motion.div
       className="absolute inset-0 rounded-3xl overflow-hidden"
       style={{ x, rotate, zIndex: 20 }}
-      drag={isRevealed ? false : 'x'}
+      drag={isRevealed || isLocked ? false : 'x'}
       dragConstraints={{ left: 0, right: 0 }}
       dragElastic={0.6}
       onDragEnd={handleDragEnd}
@@ -238,7 +339,9 @@ function SwipeCard({
       {/* Restaurant photo */}
       <motion.div className="w-full h-full relative cursor-grab" style={{ scale: crackScale, filter: crackFilter }}>
         <FoodImage
-          src={restaurant.image || foodPhotos[0]}
+          // The server-backed photo list is canonical. `image` is a legacy
+          // browser snapshot and may point to a stale asset after deployment.
+          src={foodPhotos[0] || restaurant.image}
           name={restaurant.name}
           category={restaurant.category}
           className="w-full h-full object-cover"
@@ -349,66 +452,29 @@ function SwipeCard({
           { dx: 60, dy: 120, size: 18, rotateTo: -90, top: '40%', left: '50%' },
         ].map((s, i) => <LikeSparkle key={i} x={x} {...s} />)}
 
-        {/* 싫어요 바사삭 효과 — 파편이 떨어지는 게 아니라 카드 전체에 와장창 금이 가며 부서지는 디자인.
-            중심 충격점에서 사방 모서리로 뻗는 균열 + 그 사이를 잇는 두 겹의 동심원 균열로
-            유리/벽돌이 통째로 깨지는 거미줄 패턴을 만든다. */}
-        <motion.svg
-          className="absolute inset-0 pointer-events-none"
-          viewBox="0 0 300 400"
-          preserveAspectRatio="none"
-          style={{ opacity: nopeOp }}
-        >
-          {/* 중심에서 사방으로 뻗는 균열 */}
-          <path
-            d="M150 190 L140 90 L150 0
-               M150 190 L230 70 L300 0
-               M150 190 L250 160 L300 140
-               M150 190 L260 230 L300 260
-               M150 190 L240 330 L300 400
-               M150 190 L170 300 L150 400
-               M150 190 L60 330 L0 400
-               M150 190 L40 230 L0 260
-               M150 190 L50 160 L0 140
-               M150 190 L70 70 L0 0"
-            stroke="rgba(0,0,0,0.7)" strokeWidth="4" fill="none" strokeLinecap="round"
-          />
-          <path
-            d="M150 190 L140 90 L150 0
-               M150 190 L230 70 L300 0
-               M150 190 L250 160 L300 140
-               M150 190 L260 230 L300 260
-               M150 190 L240 330 L300 400
-               M150 190 L170 300 L150 400
-               M150 190 L60 330 L0 400
-               M150 190 L40 230 L0 260
-               M150 190 L50 160 L0 140
-               M150 190 L70 70 L0 0"
-            stroke="rgba(255,255,255,0.85)" strokeWidth="1.4" fill="none" strokeLinecap="round"
-          />
-          {/* 안쪽 동심 균열 */}
-          <path
-            d="M150 100 L195 115 L215 150 L220 190 L210 230 L180 260 L150 265 L110 255 L85 225 L75 190 L80 150 L110 115 Z"
-            stroke="rgba(0,0,0,0.55)" strokeWidth="2.4" fill="none"
-          />
-          <path
-            d="M150 100 L195 115 L215 150 L220 190 L210 230 L180 260 L150 265 L110 255 L85 225 L75 190 L80 150 L110 115 Z"
-            stroke="rgba(255,255,255,0.6)" strokeWidth="1" fill="none"
-          />
-          {/* 바깥쪽 동심 균열 */}
-          <path
-            d="M150 40 L230 55 L265 110 L270 190 L255 260 L210 320 L150 335 L90 320 L45 260 L30 190 L35 110 L70 55 Z"
-            stroke="rgba(0,0,0,0.45)" strokeWidth="2" fill="none"
-          />
-          <path
-            d="M150 40 L230 55 L265 110 L270 190 L255 260 L210 320 L150 335 L90 320 L45 260 L30 190 L35 110 L70 55 Z"
-            stroke="rgba(255,255,255,0.5)" strokeWidth="0.8" fill="none"
-          />
-        </motion.svg>
-        {/* 충격점에서 어두워지는 비네트 + 전체 어두워짐 */}
+        {/* The supplied photographic fracture is revealed in three stages. Screen blending removes its black plate while preserving the real glass highlights. */}
         <motion.div
           className="absolute inset-0 pointer-events-none"
-          style={{ opacity: nopeOp, background: 'radial-gradient(circle at 50% 47%, rgba(0,0,0,0.05) 0%, rgba(15,12,10,0.6) 75%)' }}
+          style={{ opacity: glassSheen, background: 'linear-gradient(104deg, rgba(186,224,244,0.18), transparent 38%, rgba(255,255,255,0.16) 49%, transparent 58%)', mixBlendMode: 'screen' }}
         />
+        {[{ opacity: primaryCrackOp, clipPath: 'circle(17% at 18% 48%)', blur: 0 }, { opacity: branchCrackOp, clipPath: 'circle(40% at 18% 48%)', blur: 0.15 }, { opacity: microCrackOp, clipPath: 'none', blur: 0.25 }].map((layer, index) => (
+          <motion.img
+            key={index}
+            src="/assets/effects/cracking-glass.png"
+            alt=""
+            aria-hidden="true"
+            className="absolute inset-0 h-full w-full pointer-events-none select-none object-cover"
+            draggable={false}
+            style={{
+              opacity: layer.opacity,
+              clipPath: layer.clipPath,
+              scaleX: -1,
+              mixBlendMode: 'screen',
+              filter: `contrast(1.32) brightness(1.28) blur(${layer.blur}px) drop-shadow(1px 1px 0 rgba(0,0,0,0.6))`,
+            }}
+          />
+        ))}
+        <motion.div className="absolute inset-0 pointer-events-none" style={{ opacity: nopeOp, background: 'radial-gradient(circle at 18% 48%, rgba(213,241,255,0.12) 0%, transparent 34%), linear-gradient(90deg, rgba(13,18,20,0.18) 0%, transparent 62%)' }} />
 
       </motion.div>
           </div>
@@ -530,7 +596,7 @@ function SwipeCard({
       <MenuItemDetail
         items={restaurant.menuItems || []}
         index={detailIndex}
-        fallbackImage={restaurant.image || foodPhotos[0]}
+        fallbackImage={foodPhotos[0] || restaurant.image}
         restaurantCategory={restaurant.category}
         onClose={() => setDetailIndex(null)}
         onIndexChange={setDetailIndex}
@@ -573,6 +639,7 @@ function WinnerScreen({ selectedWinner, onReset }: { selectedWinner?: Restaurant
   const [isCapturing, setIsCapturing] = useState(false);
   const [saved, setSaved] = useState(false);
   const [detailIndex, setDetailIndex] = useState<number | null>(null);
+  const lunchmateLoadout = lunchmateLoadoutFromProfile(profile.lunchmateLoadout);
   const winnerEventKeyRef = useRef<string | null>(null);
   const [liveResults, setLiveResults] = useState<{
     results: { restaurantId: string; score: number; likeCount: number; dislikeCount: number }[];
@@ -626,7 +693,7 @@ function WinnerScreen({ selectedWinner, onReset }: { selectedWinner?: Restaurant
     }
   }, [winner?.id]);
 
-  if (!winner) return null;
+  if (!winner) return <SwipeStateScreen state="loading" />;
 
   // 실제 사진만. 없으면 이모지 플레이스홀더.
   const foodPhotos = (winner.photos ?? []).slice(0, 4);
@@ -686,7 +753,19 @@ function WinnerScreen({ selectedWinner, onReset }: { selectedWinner?: Restaurant
         <FoodImage src={winner.image || winner.photos?.[0]} name={winner.name} category={winner.category} className="w-full h-full object-cover" emojiClass="text-[80px]" />
         <div className="absolute inset-0 bg-gradient-to-t from-black/75 via-black/15 to-transparent" />
         <div className="absolute inset-x-0 bottom-0 px-5 pb-5 text-center">
-          <div className="text-[40px] leading-none mb-1">🏆</div>
+          <div className="mx-auto mb-2 flex size-16 items-center justify-center rounded-full bg-white/95 shadow-lg">
+            <LunchmateCharacterRenderer
+              flowState="idle"
+              artwork="chicken"
+              chickenAssetKeyOverride="idle"
+              chickenFaceSystem
+              animated={false}
+              loadout={lunchmateLoadout}
+              size={58}
+              renderSize="compact"
+              alt="오늘의 선택을 축하하는 런치킨"
+            />
+          </div>
           <span className="inline-block text-[11px] font-black text-white bg-white/20 backdrop-blur-sm rounded-full px-3 py-1 mb-1.5">
             오늘의 점심 당첨!
           </span>
@@ -858,15 +937,15 @@ function WinnerScreen({ selectedWinner, onReset }: { selectedWinner?: Restaurant
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            className="fixed inset-0 z-50 bg-[#1A1A1A]/90 backdrop-blur-sm flex flex-col items-center justify-center px-6 py-10 overflow-y-auto"
+            className="fixed inset-0 z-50 bg-[#FFF8F2]/95 backdrop-blur-sm flex flex-col items-center justify-center px-6 py-10 overflow-y-auto"
           >
-            <WinnerShareCard ref={shareCardRef} restaurant={winner} />
+            <WinnerShareCard ref={shareCardRef} restaurant={winner} loadout={lunchmateLoadout} participants={currentSession?.members ?? []} />
 
             <div className="flex gap-3 mt-6 w-full max-w-[300px]">
               <button
                 onClick={handleSaveImage}
                 disabled={isCapturing}
-                className="flex-1 py-3.5 rounded-2xl font-bold text-[14px] flex items-center justify-center gap-1.5 bg-white/10 text-white active:scale-[0.98] transition-all disabled:opacity-50"
+                className="flex-1 py-3.5 rounded-2xl border border-[#EFD8CF] font-bold text-[14px] flex items-center justify-center gap-1.5 bg-white text-[#5B4942] active:scale-[0.98] transition-all disabled:opacity-50"
               >
                 <Download size={16} /> 저장
               </button>
@@ -882,7 +961,7 @@ function WinnerScreen({ selectedWinner, onReset }: { selectedWinner?: Restaurant
 
             <button
               onClick={() => setShowShare(false)}
-              className="mt-5 text-white/60 text-[13px] font-semibold active:scale-95"
+              className="mt-5 text-[#9A847B] text-[13px] font-semibold active:scale-95"
             >
               닫기
             </button>
@@ -909,11 +988,13 @@ function FinalBattleResultScreen({
   finalist2,
   onContinue,
   onRejectBoth,
+  logSelection = true,
 }: {
   finalist1: any;
   finalist2: any | null;
   onContinue: (winner?: any) => void;
   onRejectBoth?: () => void;
+  logSelection?: boolean;
 }) {
   const finalActionSizeClass = 'flex w-full items-center justify-center rounded-2xl py-4 text-[15px] font-bold';
   const [selected, setSelected] = useState<1 | 2 | null>(null);
@@ -935,11 +1016,11 @@ function FinalBattleResultScreen({
       <motion.div
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
-        className="min-h-dvh flex flex-col bg-[#1A1A1A]"
+        className="min-h-dvh flex flex-col bg-[#FFF8F2]"
       >
         <div className="px-5 pt-12 pb-4 text-center">
-          <p className="font-black text-white text-[22px]">여기 어때요? 🤔</p>
-          <p className="text-white/50 text-[13px] mt-1">좋아요 중 마지막 후보예요 · 별로면 새로 추천받아요</p>
+          <p className="font-black text-[#302927] text-[22px]">여기 어때요? 🤔</p>
+          <p className="mt-1 text-[13px] text-[#917F77]">좋아요 중 마지막 후보예요 · 별로면 새로 추천받아요</p>
         </div>
         <div className="flex-1 flex items-center justify-center px-5">
           <div className="w-full max-w-[360px] rounded-3xl overflow-hidden relative" style={{ aspectRatio: '4/5' }}>
@@ -959,18 +1040,18 @@ function FinalBattleResultScreen({
         <div className="px-5 py-5">
           <button
             onClick={() => {
-              logEvent({ event_type: 'SWIPE', action: 'CHOOSE', user_id: profile.id, slate_id: finalSlateId, slate_type: 'FINAL', restaurant_id: finalist1.id, round: duelRound, session_id: currentSession?.id ?? null, context: { decision_ms: Date.now() - mountAtRef.current } });
+              if (logSelection) logEvent({ event_type: 'SWIPE', action: 'CHOOSE', user_id: profile.id, slate_id: finalSlateId, slate_type: 'FINAL', restaurant_id: finalist1.id, round: duelRound, session_id: currentSession?.id ?? null, context: { decision_ms: Date.now() - mountAtRef.current } });
               onContinue(finalist1);
             }}
             className={`${finalActionSizeClass} text-white active:scale-[0.98] shadow-xl transition-opacity`}
-            style={{ background: '#F09D09' }}
+            style={{ background: '#EB5053' }}
           >
             이곳으로 결정!
           </button>
           {onRejectBoth && (
             <button
               onClick={onRejectBoth}
-              className={`${finalActionSizeClass} mt-2.5 bg-white/10 text-white/70 active:scale-[0.98] transition-all`}
+              className={`${finalActionSizeClass} mt-2.5 border border-[#EFD8CF] bg-white text-[#78665E] active:scale-[0.98] transition-all`}
             >
               별로예요 · 새로 추천받기
             </button>
@@ -984,12 +1065,12 @@ function FinalBattleResultScreen({
     <motion.div
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
-      className="min-h-dvh flex flex-col bg-[#1A1A1A]"
+      className="min-h-dvh flex flex-col bg-[#FFF8F2]"
     >
       {/* Header */}
       <div className="px-5 pt-12 pb-4 text-center">
-        <p className="font-black text-white text-[22px]">결승전 🏆</p>
-        <p className="text-white/50 text-[13px] mt-1">엔진 추천 top 2 · 마음에 드는 곳을, 둘 다 별로면 아래에서 다른 곳</p>
+        <p className="font-black text-[#302927] text-[22px]">결승전 🏆</p>
+        <p className="mt-1 text-[13px] text-[#917F77]">친구들과 함께 고른 TOP 2 · 마음에 드는 한 곳을 선택해요</p>
       </div>
 
       {/* Diagonal split layout */}
@@ -1028,13 +1109,13 @@ function FinalBattleResultScreen({
             <motion.div
               className="absolute inset-0 ring-4 ring-inset"
               initial={{ boxShadow: 'inset 0 0 0 4px rgba(240,157,9,0)' }}
-              animate={{ boxShadow: 'inset 0 0 0 4px #F09D09' }}
+              animate={{ boxShadow: 'inset 0 0 0 4px #EB5053' }}
               transition={{ delay: 0.3, duration: 0.25 }}
             />
           )}
           <div className="absolute top-6 left-5 right-20 text-left">
             {selected === 1 && (
-              <span className="inline-block bg-[#F09D09] text-white text-[11px] font-black px-3 py-1 rounded-full mb-2">
+              <span className="inline-block bg-[#EB5053] text-white text-[11px] font-black px-3 py-1 rounded-full mb-2">
                 ✓ 선택됨
               </span>
             )}
@@ -1088,13 +1169,13 @@ function FinalBattleResultScreen({
             <motion.div
               className="absolute inset-0"
               initial={{ boxShadow: 'inset 0 0 0 4px rgba(240,157,9,0)' }}
-              animate={{ boxShadow: 'inset 0 0 0 4px #F09D09' }}
+              animate={{ boxShadow: 'inset 0 0 0 4px #EB5053' }}
               transition={{ delay: 0.3, duration: 0.25 }}
             />
           )}
           <div className="absolute bottom-6 right-5 left-20 text-right">
             {selected === 2 && (
-              <span className="inline-block bg-[#F09D09] text-white text-[11px] font-black px-3 py-1 rounded-full mb-2">
+              <span className="inline-block bg-[#EB5053] text-white text-[11px] font-black px-3 py-1 rounded-full mb-2">
                 ✓ 선택됨
               </span>
             )}
@@ -1142,7 +1223,7 @@ function FinalBattleResultScreen({
             ? { duration: 1.4, repeat: Infinity, ease: 'easeInOut' }
             : { duration: 0.25 }}
         >
-          <div className="w-14 h-14 rounded-full bg-[#F09D09] border-[3px] border-white flex items-center justify-center shadow-2xl">
+          <div className="w-14 h-14 rounded-full bg-[#EB5053] border-[3px] border-white flex items-center justify-center shadow-2xl">
             <span className="font-black text-white text-[15px]">VS</span>
           </div>
         </motion.div>
@@ -1154,19 +1235,19 @@ function FinalBattleResultScreen({
           onClick={() => {
             const winner = selected === 1 ? finalist1 : selected === 2 ? finalist2 : undefined;
             const opponent = selected === 1 ? finalist2 : finalist1; // 패자 → pairwise(A>B) 파생용
-            if (winner) logEvent({ event_type: 'SWIPE', action: 'CHOOSE', user_id: profile.id, slate_id: finalSlateId, slate_type: 'FINAL', restaurant_id: winner.id, round: duelRound, session_id: currentSession?.id ?? null, context: { opponent_id: opponent?.id, decision_ms: Date.now() - mountAtRef.current } });
+            if (winner && logSelection) logEvent({ event_type: 'SWIPE', action: 'CHOOSE', user_id: profile.id, slate_id: finalSlateId, slate_type: 'FINAL', restaurant_id: winner.id, round: duelRound, session_id: currentSession?.id ?? null, context: { opponent_id: opponent?.id, decision_ms: Date.now() - mountAtRef.current } });
             onContinue(winner);
           }}
           disabled={selected === null}
           className={`${finalActionSizeClass} text-white active:scale-[0.98] shadow-xl transition-opacity disabled:opacity-40`}
-          style={{ background: '#F09D09' }}
+          style={{ background: '#EB5053' }}
         >
           {selected === null ? '음식점을 선택해주세요' : '이곳으로 결정!'}
         </button>
         {onRejectBoth && (
           <button
             onClick={onRejectBoth}
-            className={`${finalActionSizeClass} mt-2.5 bg-white/10 text-white/70 active:scale-[0.98] transition-all`}
+            className={`${finalActionSizeClass} mt-2.5 border border-[#EFD8CF] bg-white text-[#78665E] active:scale-[0.98] transition-all`}
           >
             둘 다 별로!
           </button>
@@ -1181,6 +1262,7 @@ function FinalBattleResultScreen({
 function WaitingOrDecidedScreen({ onContinue, onReroll }: { onContinue: (winner?: any) => void; onReroll: (excludeIds: string[]) => void }) {
   const [, navigate] = useLocation();
   const { currentSession, restaurants, profile } = useApp();
+  const lunchmateLoadout = lunchmateLoadoutFromProfile(profile.lunchmateLoadout);
   const REJECT = '__reject__';
   const [liveResults, setLiveResults] = useState<{
     completedCount: number;
@@ -1199,9 +1281,16 @@ function WaitingOrDecidedScreen({ onContinue, onReroll }: { onContinue: (winner?
     rejectVotes?: number;
     excludeIds?: string[];
   }>({
-    completedCount: 0,
+    completedCount: currentSession ? 1 : 0,
     totalMembers: currentSession?.members.length || 1,
-    memberCompletion: [],
+    memberCompletion: (currentSession?.members ?? []).map(member => ({
+      id: member.id,
+      name: member.name,
+      emoji: member.emoji,
+      completed: member.id === profile.id,
+      swipeCount: member.id === profile.id ? Math.min(currentSession?.restaurants.length ?? 0, 7) : 0,
+      targetCount: Math.min(currentSession?.restaurants.length ?? 0, 7),
+    })),
     results: [],
     isExpired: false,
     deadlineAt: currentSession?.deadline || null,
@@ -1212,21 +1301,32 @@ function WaitingOrDecidedScreen({ onContinue, onReroll }: { onContinue: (winner?
   });
   const [timeLeft, setTimeLeft] = useState('');
   const [voted, setVoted] = useState(false);
+  const [isVoting, setIsVoting] = useState(false);
+  const [resultsConnection, setResultsConnection] = useState<'loading' | 'live' | 'offline'>('loading');
 
   // 결승 한 표(round=2G). restaurantId가 REJECT면 "둘 다 별로". 멤버당 1표로 서버가 중복 제거.
   const castVote = async (restaurantId: string) => {
+    if (!currentSession || voted || isVoting) return;
     const round = 2 * (liveResults.generation ?? 1);
     const isReject = restaurantId === REJECT;
+    setIsVoting(true);
     try {
-      const response = await fetch('/api/swipes', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ id: `vote_${profile.id}_${restaurantId}_${Date.now()}`, session_id: currentSession?.id, user_id: profile.id, restaurant_id: restaurantId, round, swipe_action: 'LIKE' }),
+      await persistSessionSwipe({
+        id: `vote_${currentSession.id}_${profile.id}_${round}`,
+        sessionId: currentSession.id,
+        userId: profile.id,
+        restaurantId,
+        round,
+        action: 'LIKE',
       });
-      if (!response.ok) throw new Error('final_vote_failed');
       setVoted(true);
       // 신호: finalist 선택 = CHOOSE(pairwise), '둘 다 별로' = NOPE(명시 음성)
       logEvent({ event_type: 'SWIPE', action: isReject ? 'NOPE' : 'CHOOSE', slate_type: 'FINAL', restaurant_id: restaurantId, round, user_id: profile.id, session_id: currentSession?.id ?? null });
-    } catch { /* 표 전송 실패는 폴링으로 복구 */ }
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : '최종 선택을 저장하지 못했어요.');
+    } finally {
+      setIsVoting(false);
+    }
   };
 
   // Ticking effect for countdown
@@ -1246,22 +1346,45 @@ function WaitingOrDecidedScreen({ onContinue, onReroll }: { onContinue: (winner?
   useEffect(() => {
     if (!currentSession) return;
     
+    let cancelled = false;
     const fetchLiveResults = async () => {
       try {
         const res = await fetch(`/api/sessions/${currentSession.inviteCode}/results`);
-        if (res.ok) {
-          const data = await res.json();
-          setLiveResults(data);
+        if (!res.ok) throw new Error(`results_${res.status}`);
+        const data = await res.json();
+        if (cancelled) return;
+
+        // This view mounts only after this device finished its preliminary
+        // deck. Keep that known completion visible while its idempotent server
+        // signal retries, rather than briefly regressing the UI to 0/N.
+        if ((data.phase ?? 'PRELIM') === 'PRELIM') {
+          const memberCompletion = data.memberCompletion.map((member: typeof liveResults.memberCompletion[number]) =>
+            member.id === profile.id
+              ? { ...member, completed: true, swipeCount: Math.max(member.swipeCount, member.targetCount) }
+              : member
+          );
+          data.memberCompletion = memberCompletion;
+          data.completedCount = Math.max(
+            data.completedCount,
+            memberCompletion.filter((member: typeof memberCompletion[number]) => member.completed).length,
+          );
         }
+        setLiveResults(data);
+        setResultsConnection('live');
       } catch (e) {
+        if (cancelled) return;
+        setResultsConnection('offline');
         console.error('Failed to fetch live session results:', e);
       }
     };
 
-    fetchLiveResults();
-    const interval = setInterval(fetchLiveResults, 3000);
-    return () => clearInterval(interval);
-  }, [currentSession]);
+    void fetchLiveResults();
+    const interval = setInterval(() => void fetchLiveResults(), 1500);
+    return () => {
+      cancelled = true;
+      clearInterval(interval);
+    };
+  }, [currentSession?.inviteCode, profile.id]);
 
   // If this device refreshes after casting, derive the local view from the
   // server response instead of showing the final ballot again.
@@ -1289,6 +1412,11 @@ function WaitingOrDecidedScreen({ onContinue, onReroll }: { onContinue: (winner?
   const serverGen = liveResults.generation ?? 1;
   const myGen = currentSession?.generation ?? 1;
   const needReroll = phase === 'REROLL' || serverGen > myGen; // '둘 다 별로' 다수 → 새 세대 재스와이프
+  const displayedCompleted = phase === 'FINAL'
+    ? Math.max(liveResults.finalVotedCount ?? 0, voted ? 1 : 0)
+    : liveResults.completedCount;
+  const displayedTotal = Math.max(liveResults.totalMembers, 1);
+  const completionPercent = Math.min(100, (displayedCompleted / displayedTotal) * 100);
 
   // NO_CONSENSUS → 합의 실패 안내 (reroll 상한 초과)
   if (phase === 'NO_CONSENSUS') {
@@ -1346,37 +1474,17 @@ function WaitingOrDecidedScreen({ onContinue, onReroll }: { onContinue: (winner?
     );
   }
 
-  // 결승 투표 (3지선다: 후보 1~2곳 + '둘 다 별로'). 1인 1표; 전원/마감 시 다수결.
+  // Group finals reuse the same diagonal duel used in solo mode. The server
+  // still owns the tally; this component only provides the shared selection UI.
   if (phase === 'FINAL' && !voted && finalistRs.length >= 1) {
     return (
-      <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }}
-        className="min-h-dvh flex flex-col justify-between px-5 py-8"
-        style={{ background: 'linear-gradient(160deg, #2C3E50 0%, #1a252f 100%)' }}>
-        <div className="flex-1 flex flex-col justify-center">
-          <h2 className="text-white font-black text-[24px] text-center mb-1">{finalistRs.length === 1 ? '여기 어때요?' : '결승! 어디로 갈까요?'}</h2>
-          <p className="text-white/70 text-[12px] text-center mb-6">한 곳만 골라주세요 · 1인 1표</p>
-          <div className="space-y-3 max-w-[360px] mx-auto w-full">
-            {finalistRs.slice(0, 2).map(r => (
-              <button key={r.id} onClick={() => castVote(r.id)}
-                className="w-full flex items-center gap-3 bg-white/10 border border-white/15 rounded-2xl p-3 active:scale-[0.98] transition-all">
-                <img src={r.image} alt="" className="w-14 h-14 rounded-xl object-cover" />
-                <div className="text-left flex-1 min-w-0">
-                  <span className="text-[9px] bg-white/20 text-white font-bold px-1.5 py-0.5 rounded-full">{r.category}</span>
-                  <p className="text-white font-black text-[15px] mt-0.5 truncate">{r.name}</p>
-                  <p className="text-white/60 text-[11px]">⭐ {r.rating} · {r.distance || '500m'}</p>
-                </div>
-                <span className="text-white/90 text-[13px] font-bold whitespace-nowrap">투표 →</span>
-              </button>
-            ))}
-            <button onClick={() => castVote(REJECT)}
-              className="w-full rounded-2xl border border-dashed border-white/40 py-3 text-white/80 text-[13px] font-bold active:scale-[0.98] transition-all">
-              둘 다 별로!
-            </button>
-          </div>
-        </div>
-        <button onClick={() => navigate('/')}
-          className="mt-6 text-white/60 hover:text-white text-[12px] active:scale-95 text-center mx-auto block">처음으로</button>
-      </motion.div>
+      <FinalBattleResultScreen
+        finalist1={finalistRs[0]}
+        finalist2={finalistRs[1] ?? null}
+        onContinue={restaurant => { if (restaurant) void castVote(restaurant.id); }}
+        onRejectBoth={() => void castVote(REJECT)}
+        logSelection={false}
+      />
     );
   }
 
@@ -1385,11 +1493,7 @@ function WaitingOrDecidedScreen({ onContinue, onReroll }: { onContinue: (winner?
       initial={{ opacity: 0, scale: 0.95 }}
       animate={{ opacity: 1, scale: 1 }}
       className="min-h-dvh flex flex-col justify-between px-5 py-8"
-      style={{
-        background: isAllCompleted 
-          ? 'linear-gradient(160deg, #EB5053 0%, #8B4513 100%)'
-          : 'linear-gradient(160deg, #2C3E50 0%, #1a252f 100%)'
-      }}
+      style={{ background: 'linear-gradient(180deg, #FFF8F2 0%, #FCEDE6 100%)' }}
     >
       <div className="flex-1 flex flex-col justify-center text-center">
         {isAllCompleted ? (
@@ -1399,21 +1503,45 @@ function WaitingOrDecidedScreen({ onContinue, onReroll }: { onContinue: (winner?
             animate={{ y: 0, opacity: 1 }}
             className="space-y-6 animate-fade-in"
           >
-            <div className="text-7xl">🎉</div>
+            <motion.div
+              className="mx-auto flex size-28 items-center justify-center rounded-[34px] bg-white shadow-[0_18px_45px_rgba(218,82,78,0.16)]"
+              animate={{ y: [0, -6, 0], rotate: [-1.5, 1.5, -1.5] }}
+              transition={{ duration: 2, repeat: Infinity, ease: 'easeInOut' }}
+            >
+              <LunchmateCharacterRenderer
+                flowState="idle"
+                artwork="chicken"
+                chickenAssetKeyOverride="idle"
+                chickenFaceSystem
+                animated={false}
+                loadout={lunchmateLoadout}
+                size={104}
+                renderSize="compact"
+                alt="친구들과의 최종 선택을 축하하는 런치킨"
+              />
+            </motion.div>
             <div>
-              <h2 className="text-white font-black text-[28px] mb-1">결정됐어요!</h2>
-              <p className="text-white/80 text-[13px]">모든 친구들이 투표를 완료했습니다</p>
+              <h2 className="mb-1 text-[28px] font-black text-[#312A28]">결정됐어요!</h2>
+              <p className="text-[13px] font-semibold text-[#927F77]">모든 친구들이 투표를 완료했습니다</p>
             </div>
             
             {winner && (
-              <div className="bg-white/10 backdrop-blur-md rounded-3xl p-5 border border-white/10 text-center max-w-[340px] mx-auto space-y-3 shadow-xl">
-                <img src={winner.image} alt="" className="w-20 h-20 rounded-full object-cover mx-auto border-2 border-white/20" />
-                <div>
-                  <span className="text-[10px] bg-white/20 text-white font-bold px-2 py-0.5 rounded-full">{winner.category}</span>
-                  <p className="text-white font-black text-[18px] mt-1">{winner.name}</p>
-                  <p className="text-white/70 text-[11px] mt-0.5 truncate">{winner.address}</p>
+              <div className="mx-auto max-w-[340px] space-y-3 rounded-3xl border border-[#F0DDD5] bg-white p-5 text-center shadow-[0_14px_40px_rgba(102,68,54,0.1)]">
+                <div className="mx-auto size-20 overflow-hidden rounded-full border-2 border-[#F4E2DB] bg-[#FFF0EA]">
+                  <FoodImage
+                    src={winner.image || winner.photos?.[0]}
+                    name={winner.name}
+                    category={winner.category}
+                    className="h-full w-full object-cover"
+                    emojiClass="text-[34px]"
+                  />
                 </div>
-                <div className="flex items-center justify-center gap-3 text-white/80 text-[11px] pt-1">
+                <div>
+                  <span className="rounded-full bg-[#FFE7E1] px-2 py-0.5 text-[10px] font-bold text-[#D94B4E]">{winner.category}</span>
+                  <p className="mt-1 text-[18px] font-black text-[#332B28]">{winner.name}</p>
+                  <p className="mt-0.5 truncate text-[11px] text-[#94827A]">{winner.address}</p>
+                </div>
+                <div className="flex items-center justify-center gap-3 pt-1 text-[11px] text-[#766761]">
                   <span>⭐ {winner.rating}</span>
                   <span>📍 {winner.distance || '500m'}</span>
                   <span>💰 {'₩'.repeat(winner.priceRange)}</span>
@@ -1422,7 +1550,7 @@ function WaitingOrDecidedScreen({ onContinue, onReroll }: { onContinue: (winner?
             )}
             
             <button onClick={() => onContinue(winner)}
-              className="w-full max-w-[340px] py-4 rounded-2xl font-bold text-[#EB5053] text-[15px] bg-white active:scale-[0.98] transition-all shadow-md mx-auto block">
+              className="mx-auto block w-full max-w-[340px] rounded-2xl bg-[#EB5053] py-4 text-[15px] font-bold text-white shadow-md transition-all active:scale-[0.98]">
               결과 확인하기 🎉
             </button>
           </motion.div>
@@ -1431,57 +1559,103 @@ function WaitingOrDecidedScreen({ onContinue, onReroll }: { onContinue: (winner?
           <motion.div
             initial={{ y: 20, opacity: 0 }}
             animate={{ y: 0, opacity: 1 }}
-            className="space-y-6"
+            className="relative mx-auto w-full max-w-[360px]"
           >
-            <div className="text-5xl animate-bounce">⏳</div>
-            <div>
-              <h2 className="text-white font-black text-[24px] mb-1">다른 친구들을 기다리는 중...</h2>
-              <p className="text-white/70 text-[12px]">아직 투표를 진행 중인 친구들이 있습니다</p>
-            </div>
+            <motion.div
+              className="relative mx-auto mb-5 flex size-28 items-center justify-center rounded-[34px] bg-white shadow-[0_18px_44px_rgba(222,91,84,0.15)]"
+              animate={{ y: [0, -6, 0], rotate: [-1, 1, -1] }}
+              transition={{ duration: 2.2, repeat: Infinity, ease: 'easeInOut' }}
+            >
+              <LunchmateCharacterRenderer
+                flowState="idle"
+                artwork="chicken"
+                chickenAssetKeyOverride="idle"
+                chickenFaceSystem
+                animated={false}
+                loadout={lunchmateLoadout}
+                size={104}
+                renderSize="compact"
+                alt="친구들의 선택을 기다리는 런치킨"
+              />
+              <span className="absolute -right-2 -top-2 flex size-9 items-center justify-center rounded-full bg-[#EB5053] text-base text-white shadow-md">♥</span>
+            </motion.div>
 
-            {/* Countdown Timer */}
-            {timeLeft && (
-              <div className="bg-white/10 backdrop-blur-md rounded-2xl p-4 max-w-[340px] mx-auto border border-white/10">
-                <span className="text-[11px] text-white/60 block mb-1 font-semibold uppercase tracking-wider">남은 투표 시간</span>
-                <span className="text-[28px] font-black text-white tracking-widest tabular-nums font-mono">
-                  {timeLeft}
-                </span>
-              </div>
-            )}
+            <button
+              type="button"
+              onClick={() => {
+                if (!currentSession) return;
+                activateLunchieWaitingCompanion(currentSession.id);
+                navigate('/feed');
+              }}
+              className="relative mx-auto mb-4 block max-w-[285px] rounded-[20px] border border-[#EFD8CF] bg-white px-5 py-3 text-center shadow-[0_10px_28px_rgba(95,61,49,0.1)] transition-transform active:scale-[0.98]"
+            >
+              <span className="block text-[12px] font-black text-[#443833]">기다리는 동안 먼치피드 같이 둘러봐요</span>
+              <span className="mt-1 block text-[10px] font-bold text-[#E05255]">런치킨이 투표 시간을 계속 알려드려요 →</span>
+              <span className="absolute -top-2 left-1/2 size-4 -translate-x-1/2 rotate-45 border-l border-t border-[#EFD8CF] bg-white" aria-hidden="true" />
+            </button>
 
-            {/* Progress Bar */}
-            <div className="bg-white/10 backdrop-blur-md rounded-2xl p-4 max-w-[340px] mx-auto border border-white/10">
-              <div className="flex justify-between items-center mb-2 text-white/95">
-                <span className="text-[12px] font-bold">{phase === 'FINAL' ? '결승 투표' : '투표 현황'}</span>
-                <span className="text-[13px] font-black">{(phase === 'FINAL' ? (liveResults.finalVotedCount ?? 0) : liveResults.completedCount)} / {liveResults.totalMembers} 명 {phase === 'FINAL' ? '투표' : '완료'}</span>
+            <span className="inline-flex rounded-full bg-[#FFE0DC] px-3 py-1 text-[10px] font-black tracking-[0.7px] text-[#D94B4E]">
+              {phase === 'FINAL' ? 'FINAL CHOICE' : 'CHOICES IN'}
+            </span>
+            <h2 className="mt-3 text-[24px] font-black tracking-[-0.7px] text-[#312A28]">
+              친구들의 선택을 모으는 중
+            </h2>
+            <p className="mt-1 text-[12px] font-semibold text-[#9A8880]">
+              모두 끝나면 {phase === 'FINAL' ? '최종 결과가' : '결승 후보가'} 동시에 열려요.
+            </p>
+
+            <div className="mt-6 rounded-[26px] border border-[#F3E4DD] bg-white p-5 text-left shadow-[0_14px_40px_rgba(102,68,54,0.08)]">
+              <div className="flex items-start justify-between">
+                <div>
+                  <p className="text-[11px] font-black text-[#A08D84]">{phase === 'FINAL' ? '결승 투표 현황' : '예선 투표 현황'}</p>
+                  <p className="mt-1 text-[28px] font-black tracking-[-1px] text-[#302927]">
+                    {displayedCompleted}<span className="mx-1 text-[16px] text-[#C4B5AE]">/</span>{displayedTotal}
+                    <span className="ml-1.5 text-[12px] font-bold text-[#897A73]">명 {phase === 'FINAL' ? '투표' : '완료'}</span>
+                  </p>
+                </div>
+                {timeLeft && (
+                  <div className="rounded-xl bg-[#FFF1EC] px-3 py-2 text-right">
+                    <p className="text-[9px] font-bold text-[#B3988D]">남은 시간</p>
+                    <p className="font-mono text-[14px] font-black tabular-nums text-[#E15154]">{timeLeft}</p>
+                  </div>
+                )}
               </div>
-              <div className="w-full bg-white/20 h-2 rounded-full overflow-hidden">
+              <div className="mt-4 h-2.5 w-full overflow-hidden rounded-full bg-[#F4E8E2]">
                 <motion.div
                   className="h-full rounded-full bg-[#EB5053]"
                   initial={{ width: 0 }}
-                  animate={{ width: `${((phase === 'FINAL' ? (liveResults.finalVotedCount ?? 0) : liveResults.completedCount) / (liveResults.totalMembers || 1)) * 100}%` }}
+                  animate={{ width: `${completionPercent}%` }}
                   transition={{ duration: 0.4 }}
                 />
               </div>
+              {resultsConnection === 'offline' && (
+                <p className="mt-3 rounded-xl bg-[#FFF5DA] px-3 py-2 text-[10px] font-bold text-[#9A6C16]" role="status">
+                  연결을 다시 확인하고 있어요. 완료 신호는 자동으로 재전송됩니다.
+                </p>
+              )}
             </div>
 
-            {/* Member List */}
-            <div className="bg-white/5 backdrop-blur-sm rounded-2xl p-3 max-w-[340px] mx-auto border border-white/5 text-left max-h-[180px] overflow-y-auto space-y-1.5">
-              {liveResults.memberCompletion.map(member => (
-                <div key={member.id} className="flex items-center justify-between p-2 bg-white/5 rounded-xl text-white">
-                  <div className="flex items-center gap-2">
-                    <span className="text-lg">{member.emoji}</span>
-                    <span className="text-[13px] font-semibold">{member.name}</span>
+            <div className="mt-3 max-h-[190px] space-y-2 overflow-y-auto text-left">
+              {liveResults.memberCompletion.map(member => {
+                const memberDone = member.completed || (phase === 'FINAL' && voted && member.id === profile.id);
+                return (
+                <div key={member.id} className="flex items-center justify-between rounded-2xl border border-[#F1E4DE] bg-white/80 p-3 shadow-sm">
+                  <div className="flex min-w-0 items-center gap-3">
+                    <span className="flex size-10 shrink-0 items-center justify-center rounded-full bg-[#FFF0EA] text-xl">{member.emoji}</span>
+                    <div className="min-w-0">
+                      <p className="truncate text-[13px] font-black text-[#443A36]">{member.name}{member.id === profile.id ? ' · 나' : ''}</p>
+                      {!memberDone && phase !== 'FINAL' && (
+                        <p className="mt-0.5 text-[10px] font-semibold text-[#AA9890]">{member.swipeCount}/{member.targetCount} 카드 선택</p>
+                      )}
+                    </div>
                   </div>
-                  {member.completed ? (
-                    <span className="text-[11px] text-[#3CBA44] font-bold bg-[#3CBA44]/10 px-2 py-0.5 rounded-full">완료 ✅</span>
+                  {memberDone ? (
+                    <span className="shrink-0 rounded-full bg-[#EAF7EC] px-2.5 py-1 text-[10px] font-black text-[#278836]">선택 완료 ✓</span>
                   ) : (
-                    <span className="text-[11px] text-white/50 font-semibold bg-white/10 px-2 py-0.5 rounded-full">
-                      투표 중 ({member.swipeCount}/{member.targetCount})
-                    </span>
+                    <span className="shrink-0 rounded-full bg-[#FFF0EA] px-2.5 py-1 text-[10px] font-black text-[#DC6660]">고르는 중</span>
                   )}
                 </div>
-              ))}
+              ); })}
             </div>
           </motion.div>
         )}
@@ -1501,13 +1675,13 @@ function WaitingOrDecidedScreen({ onContinue, onReroll }: { onContinue: (winner?
               if (!response.ok) throw new Error('force_failed');
             } catch { /* 폴링으로 복구 */ }
           }}
-          className="mb-3 w-full max-w-[340px] py-3 rounded-2xl font-bold text-white text-[14px] bg-white/15 border border-white/25 active:scale-[0.98] transition-all mx-auto block">
-          ⏭ 기다리지 말고 지금 진행 (호스트)
+          className="mb-3 mx-auto block w-full max-w-[340px] rounded-2xl border border-[#F0D9D1] bg-white py-3 text-[13px] font-black text-[#D94B4E] shadow-sm transition-all active:scale-[0.98]">
+          기다리지 않고 지금 진행 · 호스트
         </button>
       )}
 
       <button onClick={() => navigate('/')}
-        className="mt-1 text-white/60 hover:text-white text-[12px] active:scale-95 text-center mx-auto block">
+        className="mx-auto mt-1 block text-center text-[12px] font-bold text-[#A38F86] active:scale-95">
         처음으로
       </button>
     </motion.div>
@@ -1518,10 +1692,11 @@ function WaitingOrDecidedScreen({ onContinue, onReroll }: { onContinue: (winner?
 
 type Phase = 'swipe' | 'decided' | 'results';
 
-export default function QuickMatchPage() {
+function QuickMatchExperience() {
   const [, navigate] = useLocation();
   const { currentSession, addSwipe, swipeRecords, profile, rerollSession } = useApp();
   const [phase, setPhase] = useState<Phase>('swipe');
+  const lunchmateLoadout = lunchmateLoadoutFromProfile(profile.lunchmateLoadout);
   const targetRestaurants = currentSession?.restaurants || [];
   const currentSessionSwipes = swipeRecords.filter(s => s.sessionId === currentSession?.id);
   const [currentIndex, setCurrentIndex] = useState(() => {
@@ -1540,6 +1715,8 @@ export default function QuickMatchPage() {
   const SOLO_REROLL_CAP = 3;
   const [rerollPrompt, setRerollPrompt] = useState<'none' | 'lastChance' | 'exhausted'>('none');
   const [showIntro, setShowIntro] = useState(true);
+  const [isSubmittingSwipe, setIsSubmittingSwipe] = useState(false);
+  const submittingSwipeRef = useRef(false);
   const [remainingMs, setRemainingMs] = useState(() => {
     if (!currentSession?.deadline) return 0;
     return Math.max(0, new Date(currentSession.deadline).getTime() - Date.now());
@@ -1554,13 +1731,6 @@ export default function QuickMatchPage() {
     }, 1000);
     return () => clearInterval(iv);
   }, [currentSession?.deadline]);
-
-  // If no session, go to create session page
-  useEffect(() => {
-    if (!currentSession) {
-      navigate('/lunchie/settings');
-    }
-  }, [currentSession, navigate]);
 
   // Expiry check — 예선(swipe) 중에만 만료로 강제 전환. 결정/결과 단계에선 되돌리지 않음.
   useEffect(() => {
@@ -1592,20 +1762,28 @@ export default function QuickMatchPage() {
     const round = generation * 2 - 1;
     const key = `${currentSession.id}:${profile.id}:${round}:deck`;
     if (progressSignalRef.current.has(key)) return;
-    progressSignalRef.current.add(key);
-    void fetch('/api/swipes', {
-      method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        id: `deck_${currentSession.id}_${profile.id}_${round}`,
-        session_id: currentSession.id,
-        user_id: profile.id,
-        restaurant_id: `__deck_size__:${total}`,
-        round,
-        swipe_action: 'SYSTEM',
-      }),
-    }).then(response => {
-      if (!response.ok) progressSignalRef.current.delete(key);
-    }).catch(() => progressSignalRef.current.delete(key));
+    let cancelled = false;
+    let retryTimer: ReturnType<typeof setTimeout> | undefined;
+    const sendDeckSignal = async () => {
+      try {
+        await persistSessionSwipe({
+          id: `deck_${currentSession.id}_${profile.id}_${round}`,
+          sessionId: currentSession.id,
+          userId: profile.id,
+          restaurantId: `__deck_size__:${total}`,
+          round,
+          action: 'SYSTEM',
+        });
+        if (!cancelled) progressSignalRef.current.add(key);
+      } catch {
+        if (!cancelled) retryTimer = setTimeout(() => void sendDeckSignal(), 1200);
+      }
+    };
+    void sendDeckSignal();
+    return () => {
+      cancelled = true;
+      if (retryTimer) clearTimeout(retryTimer);
+    };
   }, [currentSession?.id, currentSession?.generation, profile.id, total]);
 
   // Auto-transition to decided phase if all cards have been swiped — 예선(swipe) 중에만.
@@ -1627,49 +1805,71 @@ export default function QuickMatchPage() {
     const round = generation * 2 - 1;
     const key = `${currentSession.id}:${profile.id}:${round}:done`;
     if (progressSignalRef.current.has(key)) return;
-    progressSignalRef.current.add(key);
-    void fetch('/api/swipes', {
-      method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        id: `done_${currentSession.id}_${profile.id}_${round}`,
-        session_id: currentSession.id,
-        user_id: profile.id,
-        restaurant_id: '__prelim_done__',
-        round,
-        swipe_action: 'SYSTEM',
-      }),
-    }).then(response => {
-      if (!response.ok) progressSignalRef.current.delete(key);
-    }).catch(() => progressSignalRef.current.delete(key));
+    let cancelled = false;
+    let retryTimer: ReturnType<typeof setTimeout> | undefined;
+    const sendDoneSignal = async () => {
+      try {
+        await persistSessionSwipe({
+          id: `done_${currentSession.id}_${profile.id}_${round}`,
+          sessionId: currentSession.id,
+          userId: profile.id,
+          restaurantId: '__prelim_done__',
+          round,
+          action: 'SYSTEM',
+        });
+        if (!cancelled) progressSignalRef.current.add(key);
+      } catch {
+        if (!cancelled) retryTimer = setTimeout(() => void sendDoneSignal(), 1200);
+      }
+    };
+    void sendDoneSignal();
+    return () => {
+      cancelled = true;
+      if (retryTimer) clearTimeout(retryTimer);
+    };
   }, [phase, currentSession?.id, currentSession?.generation, profile.id]);
 
   useEffect(() => {
-    if (showIntro) {
-      const t = setTimeout(() => setShowIntro(false), 2800);
-      return () => clearTimeout(t);
-    }
+    if (!showIntro) return;
+    const timer = window.setTimeout(() => setShowIntro(false), 2800);
+    return () => window.clearTimeout(timer);
   }, [showIntro]);
-  useEffect(() => { if (!showIntro) cardShownAtRef.current = Date.now(); }, [showIntro]); // 인트로 끝 → 첫 카드 dwell 시작
 
-  const handleAction = useCallback((action: SwipeAction) => {
+  useEffect(() => {
+    if (!showIntro) cardShownAtRef.current = Date.now();
+  }, [showIntro]);
+
+  const handleAction = useCallback(async (action: SwipeAction) => {
+    if (submittingSwipeRef.current) return;
     const restaurant = targetRestaurants[currentIndex];
     if (!restaurant) return;
 
-    addSwipe(restaurant.id, action === 'like' ? 'like' : 'skip');
+    submittingSwipeRef.current = true;
+    setIsSubmittingSwipe(true);
+    try {
+      await addSwipe(restaurant.id, action === 'like' ? 'like' : 'skip');
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : '선택을 저장하지 못했어요. 다시 눌러주세요.');
+      submittingSwipeRef.current = false;
+      setIsSubmittingSwipe(false);
+      return;
+    }
     const meta = currentSession?.recMeta?.[restaurant.id];
     const dwell = Date.now() - cardShownAtRef.current; // 이 카드를 본 시간
     cardShownAtRef.current = Date.now(); // 다음 카드 노출 시점 리셋
-    logSwipe(restaurant.id, action === 'like' ? 'LIKE' : 'NOPE', {
-      user_id: profile.id,
-      session_id: currentSession?.id ?? null,
-      slate_id: currentSession?.slateId ?? null,
-      slate_type: 'PRELIM',
-      round: 1,
-      position: meta?.position ?? currentIndex,
-      propensity: meta?.propensity ?? null,
-      dwell_ms: dwell,
-      model_version: currentSession?.modelVersion ?? 'v0-heuristic',
-    });
+    // 서버 세션은 /api/swipes가 선택과 추천 근거를 원자적으로 기록한다.
+    // 세션이 없는 레거시 단독 흐름만 best-effort 브라우저 로그를 사용한다.
+    if (!currentSession) {
+      logSwipe(restaurant.id, action === 'like' ? 'LIKE' : 'NOPE', {
+        user_id: profile.id,
+        slate_type: 'PRELIM',
+        round: 1,
+        position: meta?.position ?? currentIndex,
+        propensity: meta?.propensity ?? null,
+        dwell_ms: dwell,
+        model_version: 'v0-heuristic',
+      });
+    }
     setSwipeData(prev => [...prev, { restaurant, action }]);
 
     if (currentIndex + 1 >= total) {
@@ -1677,7 +1877,9 @@ export default function QuickMatchPage() {
     } else {
       setCurrentIndex(i => i + 1);
     }
-  }, [currentIndex, targetRestaurants, addSwipe, total, currentSession]);
+    submittingSwipeRef.current = false;
+    setIsSubmittingSwipe(false);
+  }, [currentIndex, targetRestaurants, addSwipe, total, currentSession, profile.id]);
 
   // ── 중도 이탈(ABANDON): 예선 중 나가면 "어디서 몇 장 봤는지" 명시 로깅 ──
   const phaseRef = useRef(phase);
@@ -1721,7 +1923,7 @@ export default function QuickMatchPage() {
 
   const topPick = swipeData.find(s => s.action === 'like')?.restaurant || targetRestaurants[0];
 
-  if (!currentSession) return null;
+  if (!currentSession) return <SwipeStateScreen state="session-missing" />;
 
   // 새 추천으로 재시작. 같은 덱(targetRestaurants)은 이미 swipeRecords에 다 기록돼 있어서,
   // rerollSession으로 새 덱을 먼저 받아온 뒤에 phase를 'swipe'로 돌려야 한다 — 순서를 바꾸면
@@ -1797,7 +1999,7 @@ export default function QuickMatchPage() {
       }
       // 솔로: 좋아요 수로 구성된 듀얼(준결승→결승). 로컬 즉시 — /results 폴링/플래시 없음.
       if (duel) return <FinalBattleResultScreen key={(duel.a?.id ?? '') + (duel.b?.id ?? '')} finalist1={duel.a} finalist2={duel.b} onContinue={handleDuelChoice} onRejectBoth={handleRejectBoth} />;
-      return null; // 효과가 듀얼/우승 구성 중
+      return <SwipeStateScreen state="loading" />; // 효과가 듀얼/우승 구성 중
     }
     return <WaitingOrDecidedScreen
       onContinue={(w) => { if (w) setSelectedWinner(w); setPhase('results'); }}
@@ -1843,6 +2045,15 @@ export default function QuickMatchPage() {
         )}
       </div>
 
+      {currentSession.dietaryBestEffort && (
+        <div role="note" className="mx-5 mb-2 rounded-2xl border border-[#F3CFAE] bg-[#FFF7E8] px-4 py-3 text-center">
+          <p className="text-[12px] font-black text-[#7A4B20]">Closest available matches</p>
+          <p className="mt-1 text-[10px] font-semibold leading-relaxed text-[#8A6747]">
+            No venue verifies every selected diet style. Ingredient exclusions are still applied—please confirm dietary requirements with the venue.
+          </p>
+        </div>
+      )}
+
       {/* Intro overlay */}
       <AnimatePresence>
         {showIntro && (
@@ -1853,12 +2064,18 @@ export default function QuickMatchPage() {
           >
             <div className="flex flex-col items-center">
               <motion.div
-                className="mb-5 flex items-center gap-3"
+                className="mb-5 flex items-center justify-center"
                 animate={{ y: [0, -10, 0], rotate: [0, -1.2, 1.2, 0] }}
                 transition={{ duration: 2.2, repeat: Infinity, ease: 'easeInOut' }}
               >
-                <img src="/assets/lunchie-brand-mark.png" alt="" className="h-16 w-16 object-contain" draggable={false} />
-                <img src="/assets/lunchie-wordmark.png" alt="Lunchie Munchie" className="h-auto w-[168px] object-contain" draggable={false} />
+                <LunchmateCharacterRenderer
+                  flowState="idle"
+                  loadout={lunchmateLoadout}
+                  size={128}
+                  renderSize="compact"
+                  animated
+                  alt="Quick Match를 시작하는 나의 런치킨"
+                />
               </motion.div>
               <p className="font-black text-white text-[22px]">예선전 시작! 🍽️</p>
             </div>
@@ -1926,7 +2143,6 @@ export default function QuickMatchPage() {
           </motion.div>
         )}
       </AnimatePresence>
-
       {/* Card stack — 9:12 ratio */}
       <div className="px-5 py-2 relative flex items-center justify-center">
         <div className="relative w-full" style={{ aspectRatio: '9/12', maxHeight: '64dvh' }}>
@@ -1940,6 +2156,7 @@ export default function QuickMatchPage() {
                 stackIndex={i}
                 progress={progress}
                 total={total}
+                isLocked={isSubmittingSwipe}
               />
             ))}
           </AnimatePresence>
@@ -1950,16 +2167,18 @@ export default function QuickMatchPage() {
       <div className="px-8 pb-10 pt-4 flex items-center justify-center gap-8">
         <motion.button
           onClick={() => handleAction('dislike')}
+          disabled={isSubmittingSwipe}
           aria-label="싫어요"
-          className="flex h-[75px] w-[75px] items-center justify-center rounded-full bg-white shadow-xl active:scale-90"
+          className="flex h-[75px] w-[75px] items-center justify-center rounded-full bg-white shadow-xl active:scale-90 disabled:cursor-wait disabled:opacity-50"
           whileTap={{ scale: 0.85 }}
         >
           <X size={30} color="#EB5053" strokeWidth={2.5} />
         </motion.button>
         <motion.button
           onClick={() => handleAction('like')}
+          disabled={isSubmittingSwipe}
           aria-label="좋아요"
-          className="flex h-[75px] w-[75px] items-center justify-center rounded-full shadow-xl active:scale-90"
+          className="flex h-[75px] w-[75px] items-center justify-center rounded-full shadow-xl active:scale-90 disabled:cursor-wait disabled:opacity-50"
           style={{ background: '#EB5053' }}
           whileTap={{ scale: 0.85 }}
         >
@@ -1968,4 +2187,82 @@ export default function QuickMatchPage() {
       </div>
     </div>
   );
+}
+
+export default function QuickMatchPage() {
+  const { currentSession, fetchSession, registerRestaurants, profile } = useApp();
+  const [availability, setAvailability] = useState<SwipeAvailability>('loading');
+  const [retryAttempt, setRetryAttempt] = useState(0);
+
+  useEffect(() => {
+    let active = true;
+    const token = currentSession?.inviteCode;
+    if (!token) {
+      setAvailability('session-missing');
+      return () => { active = false; };
+    }
+
+    setAvailability('loading');
+    void (async () => {
+      try {
+        const serverSession = await fetchSession(token, []);
+        const baseState = classifySwipeAvailability({
+          loading: false,
+          hasSession: true,
+          isMember: serverSession.membershipActive !== false && serverSession.members.some(member => member.id === profile.id),
+          status: serverSession.status,
+          catalogLoaded: false,
+          catalogCount: 0,
+          candidateCount: serverSession.restaurants.length,
+        });
+        if (baseState === 'session-invalid' || baseState === 'session-not-started') {
+          if (active) setAvailability(baseState);
+          return;
+        }
+        if (!isActiveQuickMatchStatus(serverSession.status)) {
+          if (active) setAvailability('session-invalid');
+          return;
+        }
+
+        const response = await fetch('/api/restaurants');
+        if (!response.ok) throw Object.assign(new Error(`Restaurant request failed (${response.status})`), { status: response.status });
+        const payload = await response.json();
+        if (!Array.isArray(payload)) throw new Error('Restaurant response was not a list');
+        const catalogue = payload as Restaurant[];
+        if (catalogue.length > 0) registerRestaurants(catalogue);
+        const refreshedSession = await fetchSession(token, catalogue);
+        const nextState = classifySwipeAvailability({
+          loading: false,
+          hasSession: true,
+          isMember: refreshedSession.membershipActive !== false && refreshedSession.members.some(member => member.id === profile.id),
+          status: refreshedSession.status,
+          catalogLoaded: true,
+          catalogCount: catalogue.length,
+          candidateCount: refreshedSession.restaurants.length,
+        });
+        if (active) setAvailability(nextState);
+      } catch (error) {
+        if (!active) return;
+        const status = (error as { status?: number }).status;
+        const code = (error as { code?: string }).code;
+        if (status === 404 || status === 410 || code === 'SESSION_NOT_FOUND') {
+          setAvailability('session-invalid');
+          return;
+        }
+        console.error('Failed to prepare Quick Match', {
+          status,
+          code,
+          message: error instanceof Error ? error.message : 'Unknown error',
+        });
+        setAvailability('api-error');
+      }
+    })();
+
+    return () => { active = false; };
+  }, [currentSession?.inviteCode, fetchSession, profile.id, registerRestaurants, retryAttempt]);
+
+  if (availability !== 'ready') {
+    return <SwipeStateScreen state={availability} onRetry={() => setRetryAttempt(attempt => attempt + 1)} />;
+  }
+  return <QuickMatchExperience />;
 }

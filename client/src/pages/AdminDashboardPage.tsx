@@ -5,8 +5,8 @@ import { Activity, BarChart3, DatabaseZap, LayoutDashboard, LockKeyhole, Refresh
 type Trend = { day: string; activeActors: number; sessions: number; decisions: number };
 type Persona = { category: string; selectors: number; decisions: number };
 type Model = { version: string; impressions: number; swipes: number; likes: number; likeRate: number | null };
-type Instrumentation = { persistedSlates: number; servedImpressions: number; attributableSwipes: number; propensityCoverage: number | null; scoreCoverage: number | null; modelVersionCoverage: number | null; contextCoverage: number | null };
-type Learning = { level: 'blocked' | 'instrumenting' | 'measuring' | 'evaluation-ready'; label: string; detail: string; nextStep: string };
+type Instrumentation = { persistedSlates: number; servedImpressions: number; attributableSwipes: number; persistedSessionSwipes: number; attributableSessionSwipes: number; unattributedSessionSwipes: number; propensityCoverage: number | null; scoreCoverage: number | null; modelVersionCoverage: number | null; contextCoverage: number | null };
+type Learning = { level: 'blocked' | 'instrumenting' | 'measuring' | 'evaluation-ready'; label: string; detail: string; nextStep: string; targets: { swipes: number; decisions: number } };
 type CategoryPerformance = { category: string; impressions: number; likes: number; nopes: number; decisions: number; likeRate: number | null; responseLift: number | null };
 type PolicyContribution = { factor: string; contribution: number };
 type Catalogue = {
@@ -171,7 +171,7 @@ export default function AdminDashboardPage() {
           <MetricCard label="익명 체험 이용자" value={String(metrics.users.activeGuests)} detail="기기 쿠키 기준, 중복 제거" />
           <MetricCard label="결정 완료" value={String(metrics.funnel.decisions)} detail={`세션 결정률 ${percentage(metrics.quality.sessionDecisionRate)}`} />
           <MetricCard label="추천 수락률" value={percentage(metrics.quality.swipeLikeRate)} detail="좋아요 ÷ 선호/비선호 스와이프" />
-          <MetricCard label="학습 상태" value={metrics.learning.label} detail={`근거 스와이프 ${metrics.instrumentation.attributableSwipes}건`} />
+          <MetricCard label="학습 상태" value={metrics.learning.label} detail={`학습 연결 ${metrics.instrumentation.attributableSwipes}/${metrics.learning.targets.swipes}건 · 결정 ${metrics.funnel.decisions}/${metrics.learning.targets.decisions}건`} />
         </section>
 
         <section id="catalogue" className="mt-5">
@@ -225,7 +225,8 @@ export default function AdminDashboardPage() {
               <p className="mt-2 text-xs leading-5 opacity-90">{metrics.learning.detail}</p>
               <p className="mt-3 border-t border-current/20 pt-3 text-xs font-medium">다음: {metrics.learning.nextStep}</p>
             </div>
-            <div className="mt-3 grid grid-cols-3 gap-2 text-center text-xs"><Stat label="불변 슬레이트" value={`${metrics.instrumentation.persistedSlates}개`} /><Stat label="서버 노출" value={`${metrics.instrumentation.servedImpressions}건`} /><Stat label="행동 연결" value={`${metrics.instrumentation.attributableSwipes}건`} /></div>
+            <div className="mt-3 grid grid-cols-2 gap-2 text-center text-xs sm:grid-cols-4"><Stat label="불변 슬레이트" value={`${metrics.instrumentation.persistedSlates}개`} /><Stat label="서버 노출" value={`${metrics.instrumentation.servedImpressions}건`} /><Stat label="예선 세션 선택" value={`${metrics.instrumentation.persistedSessionSwipes}건`} /><Stat label="학습 연결" value={`${metrics.instrumentation.attributableSwipes}/${metrics.learning.targets.swipes}건`} /></div>
+            {metrics.instrumentation.unattributedSessionSwipes > 0 && <p className="mt-3 rounded-lg bg-[#FF7679]/10 px-3 py-2 text-xs leading-5 text-[#FFB9BA]">기존 세션 선택 중 {metrics.instrumentation.unattributedSessionSwipes}건은 추천 슬레이트와 연결되지 않아 학습 표본에서 제외됐습니다. 새 선택부터 서버가 자동 연결합니다.</p>}
           </Panel>
           <Panel id="funnel" className="xl:col-span-4" title="Lunchie 퍼널" detail="추천 노출부터 길찾기까지의 행동 전환">
             <div className="h-72"><ResponsiveContainer><BarChart data={funnel} layout="vertical" margin={{ left: 12 }}><XAxis type="number" allowDecimals={false} tick={{ fill: '#ffffff88', fontSize: 11 }} axisLine={false} tickLine={false} /><YAxis dataKey="label" type="category" width={54} tick={{ fill: '#ffffffcc', fontSize: 12 }} axisLine={false} tickLine={false} /><Tooltip contentStyle={{ background: '#171717', border: '1px solid #ffffff22', borderRadius: 10 }} /><Bar dataKey="value" name="건수" fill="#FF7376" radius={[0, 8, 8, 0]} /></BarChart></ResponsiveContainer></div>

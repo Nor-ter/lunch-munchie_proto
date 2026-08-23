@@ -1,63 +1,83 @@
 /**
- * Lunchie Munchie — Lunchie Mode / Quick Match (Invitation & Settings)
- * UI: sj_branch quick-match 설정 화면을 그대로 재현
- * Logic: merge1_v3 — createSession(...) 후 /session/lobby 로 이동
+ * Lunchie Quick Match — compact settings and session entry.
+ * Session persistence remains server-first through AppContext.
  */
 
-import { useState, type ReactNode, type CSSProperties } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
+import { useEffect, useMemo, useRef, useState, type Dispatch, type PointerEvent as ReactPointerEvent, type ReactNode, type SetStateAction } from 'react';
+import { motion } from 'framer-motion';
 import { useLocation, useSearch } from 'wouter';
-import { ArrowLeft, Clock, SlidersHorizontal, Users, Minus, Plus, Navigation, X } from 'lucide-react';
+import {
+  ArrowLeft,
+  Check,
+  ChevronDown,
+  CircleHelp,
+  Clock3,
+  Navigation,
+  Ruler,
+  Sparkles,
+  Users,
+  UtensilsCrossed,
+} from 'lucide-react';
 import { useApp } from '@/contexts/AppContext';
+import LunchmateCharacterRenderer from '@/components/munchie/LunchmateCharacterRenderer';
 import { FOOD_TAGS } from '@/constants/foodTags';
+import { lunchmateLoadoutFromProfile } from '@/utils/lunchmateProfile';
 import { toast } from 'sonner';
 import type { Intent } from '@shared/intent';
 import { localityForCoordinate } from '@shared/melbourneLocality';
+import type { LunchmateLoadout } from '@/types/lunchmateCustomization';
 import { logSessionCreated } from '@/lib/eventLogger';
+import SessionManagementMenu from '@/components/lunchie/SessionManagementMenu';
+import {
+  DEFAULT_QUICK_MATCH_SETTINGS,
+  DIETARY_REQUIREMENTS,
+  INGREDIENT_AVOIDANCES,
+  QUICK_MATCH_SETTINGS_STORAGE_KEY,
+  isActiveQuickMatchStatus,
+  normalizeDietaryPreferences,
+  normalizeQuickMatchSettings,
+} from '@/lib/quickMatch';
 
-const INTENT_OPTIONS: { value: Intent | null; label: string; icon: string }[] = [
-  { value: null, label: '자동', icon: '🕐' },
-  { value: 'meal', label: '밥', icon: '🍚' },
-  { value: 'cafe', label: '카페', icon: '☕' },
-  { value: 'dessert', label: '디저트', icon: '🍰' },
+const PREFERENCE_CARDS: { value: Intent | null; label: string; image?: string; color: string }[] = [
+  { value: 'cafe', label: 'COFFEE', image: '/assets/characters/quick-match/coffee.png', color: '#FFF0E7' },
+  { value: 'meal', label: 'FOODIE', image: '/assets/characters/quick-match/rice.png', color: '#FFE9E4' },
+  { value: 'dessert', label: 'DESSERT', image: '/assets/characters/quick-match/dessert.png', color: '#FFE7EC' },
+  { value: null, label: 'RANDOM', color: '#FFF4D9' },
 ];
 
-// ─── Filter constants (sj_branch parity) ──────────────────────────────────────
-
-const DEADLINE_OPTIONS = [
-  { label: '5분', min: 5 },
-  { label: '10분', min: 10 },
-  { label: '15분', min: 15 },
-];
-
-const FILTER_OPTIONS = ['식단', '반경', '예산', '카드수', '취향', '평점'];
-
-const DETAIL_OPTIONS: Record<string, string[]> = {
-  '식단': ['비건', '채식', '육식', '글루텐프리', '할랄', '해산물 제외'],
-  '반경': ['500m 이내', '1km 이내', '3km 이내', '5km 이내'],
-  '예산': ['₩', '₩₩', '₩₩₩', '₩₩₩₩'],
-  '카드수': ['5장', '7장', '10장', '15장'],
-  '취향': [...FOOD_TAGS],
-  '평점': ['4.0 이상', '4.5 이상', '4.8 이상'],
+const RADIUS_OPTIONS = [1000, 2000, 3000, 4000, 5000];
+const GROUP_SIZE_OPTIONS = Array.from({ length: 12 }, (_, index) => index + 1);
+const GROUP_SIZE_ITEM_HEIGHT = 48;
+const GROUP_SIZE_MAX_SCROLL = (GROUP_SIZE_OPTIONS.length - 1) * GROUP_SIZE_ITEM_HEIGHT;
+/** Strong Alarm-app-like coast: higher = longer carry after a flick. */
+const GROUP_SIZE_FLICK_FRICTION = 0.0032;
+const GROUP_SIZE_FLICK_MIN_VELOCITY = 0.04;
+const GROUP_SIZE_FLICK_MAX_VELOCITY = 3.2;
+const TAG_META: Record<string, { icon: string; hint: string }> = {
+  맛집: { icon: '🍽️', hint: '검증된 인기 메뉴' },
+  데이트코스: { icon: '💞', hint: '분위기 좋은 곳' },
+  혼밥: { icon: '🙋', hint: '혼자서도 편하게' },
+  카페: { icon: '☕', hint: '커피와 여유' },
+  펍나이트: { icon: '🍻', hint: '퇴근 후 한잔' },
+  브런치: { icon: '🥐', hint: '느긋한 한 끼' },
+  디저트: { icon: '🍰', hint: '달콤한 마무리' },
+  가성비: { icon: '✨', hint: '가격까지 만족' },
 };
 
-const RADIUS_OPTIONS = [500, 1000, 2000, 3000, 5000];
-
-function formatRadius(r: number): string {
-  return r >= 1000 ? `${r / 1000}km` : `${r}m`;
+function formatRadius(radius: number): string {
+  return radius >= 5000 ? '5km+' : `${radius / 1000}km`;
 }
-
-const tapSpring = { type: "spring" as const, stiffness: 500, damping: 30 };
 
 type LocationFix = { latitude: number; longitude: number; accuracy: number };
 
 function currentPosition(): Promise<LocationFix> {
-  if (!navigator.geolocation)
+  if (!navigator.geolocation) {
     return Promise.reject(new Error('이 브라우저에서는 위치 정보를 사용할 수 없습니다.'));
+  }
   return new Promise((resolve, reject) => {
     navigator.geolocation.getCurrentPosition(
       ({ coords }) => resolve({ latitude: coords.latitude, longitude: coords.longitude, accuracy: coords.accuracy }),
-      (error) => reject(new Error(
+      error => reject(new Error(
         error.code === error.PERMISSION_DENIED
           ? '위치 권한이 꺼져 있어요. 주소창의 사이트 설정에서 위치를 허용한 뒤 다시 시도해 주세요.'
           : '현재 위치를 확인하지 못했습니다. 잠시 후 다시 시도해 주세요.',
@@ -67,121 +87,700 @@ function currentPosition(): Promise<LocationFix> {
   });
 }
 
-function IconButton({
-  onClick,
-  disabled,
-  className,
-  children,
-}: {
-  onClick?: () => void;
-  disabled?: boolean;
-  className?: string;
-  children: ReactNode;
-}) {
+function Card({ children }: { children: ReactNode }) {
   return (
-    <motion.button
-      type="button"
-      onClick={onClick}
-      disabled={disabled}
-      className={className}
-      whileTap={disabled ? undefined : { scale: 0.88 }}
-      transition={tapSpring}
-    >
+    <section className="rounded-[22px] bg-white p-4 shadow-[0_2px_10px_rgba(180,140,130,0.10)]">
       {children}
-    </motion.button>
+    </section>
   );
 }
 
-function ChipButton({
-  selected,
-  onClick,
-  children,
-  className,
-  unselectedBg = "#F5F5F5",
-  unselectedColor = "#4A4A4A",
-}: {
+function CardTitle({ icon, children, badge }: { icon: ReactNode; children: ReactNode; badge?: ReactNode }) {
+  return (
+    <div className="mb-3 flex items-center gap-2 text-[14px] font-extrabold text-[#26232A]">
+      <span className="text-[#F4515E]">{icon}</span>
+      <span>{children}</span>
+      {badge && <span className="ml-auto rounded-full bg-[#FFE4E3] px-2.5 py-1 text-[11px] text-[#DB3C49]">{badge}</span>}
+    </div>
+  );
+}
+
+function DeadlineDial({ minutes, onChange }: { minutes: number; onChange: (minutes: number) => void }) {
+  const radius = 70;
+  const center = 88;
+  const circumference = 2 * Math.PI * radius;
+  const minProgress = 1 / 15;
+  const dragRef = useRef<{
+    pointerId: number;
+    lastAngle: number;
+    progress: number;
+  } | null>(null);
+  const [dragging, setDragging] = useState(false);
+  const [visualProgress, setVisualProgress] = useState(() => Math.max(minProgress, Math.min(1, minutes / 15)));
+
+  useEffect(() => {
+    if (dragRef.current) return;
+    setVisualProgress(Math.max(minProgress, Math.min(1, minutes / 15)));
+  }, [minutes]);
+
+  const pointerAngle = (event: ReactPointerEvent<HTMLDivElement>) => {
+    const rect = event.currentTarget.getBoundingClientRect();
+    const x = event.clientX - rect.left - rect.width / 2;
+    const y = event.clientY - rect.top - rect.height / 2;
+    return Math.atan2(y, x);
+  };
+
+  const shortestDelta = (from: number, to: number) => {
+    let delta = to - from;
+    while (delta > Math.PI) delta -= Math.PI * 2;
+    while (delta < -Math.PI) delta += Math.PI * 2;
+    return delta;
+  };
+
+  const commitProgress = (progress: number) => {
+    const clamped = Math.max(minProgress, Math.min(1, progress));
+    // Snap the ring to whole minutes so dragging ticks 1→2→3 instead of sliding.
+    const nextMinutes = Math.max(1, Math.min(15, Math.round(clamped * 15)));
+    setVisualProgress(nextMinutes / 15);
+    onChange(nextMinutes);
+  };
+
+  const endDrag = (pointerId: number, currentTarget: HTMLDivElement) => {
+    const drag = dragRef.current;
+    if (!drag || drag.pointerId !== pointerId) return;
+    dragRef.current = null;
+    setDragging(false);
+    if (currentTarget.hasPointerCapture(pointerId)) currentTarget.releasePointerCapture(pointerId);
+    commitProgress(drag.progress);
+  };
+
+  const handleAngle = visualProgress * Math.PI * 2 - Math.PI / 2;
+  const handleX = center + radius * Math.cos(handleAngle);
+  const handleY = center + radius * Math.sin(handleAngle);
+
+  return (
+    <div
+      className="relative size-44 shrink-0 cursor-grab touch-none select-none rounded-full outline-none active:cursor-grabbing focus-visible:ring-4 focus-visible:ring-[#F4515E]/25"
+      role="slider"
+      tabIndex={0}
+      aria-label="마감 시간"
+      aria-valuemin={1}
+      aria-valuemax={15}
+      aria-valuenow={minutes}
+      aria-valuetext={`${minutes}분`}
+      onPointerDown={event => {
+        if (event.pointerType === 'mouse' && event.button !== 0) return;
+        event.preventDefault();
+        const progress = Math.max(minProgress, Math.min(1, minutes / 15));
+        dragRef.current = {
+          pointerId: event.pointerId,
+          lastAngle: pointerAngle(event),
+          progress,
+        };
+        setDragging(true);
+        setVisualProgress(progress);
+        event.currentTarget.setPointerCapture(event.pointerId);
+      }}
+      onPointerMove={event => {
+        const drag = dragRef.current;
+        if (!drag || drag.pointerId !== event.pointerId) return;
+        const angle = pointerAngle(event);
+        const delta = shortestDelta(drag.lastAngle, angle);
+        drag.lastAngle = angle;
+        // Clamp progress — never wrap past 15 into 1 (or 1 into 15).
+        drag.progress = Math.max(minProgress, Math.min(1, drag.progress + delta / (Math.PI * 2)));
+        commitProgress(drag.progress);
+      }}
+      onPointerUp={event => endDrag(event.pointerId, event.currentTarget)}
+      onPointerCancel={event => endDrag(event.pointerId, event.currentTarget)}
+      onLostPointerCapture={event => endDrag(event.pointerId, event.currentTarget)}
+      onKeyDown={event => {
+        if (event.key === 'ArrowRight' || event.key === 'ArrowUp') {
+          event.preventDefault();
+          onChange(Math.min(15, minutes + 1));
+        }
+        if (event.key === 'ArrowLeft' || event.key === 'ArrowDown') {
+          event.preventDefault();
+          onChange(Math.max(1, minutes - 1));
+        }
+        if (event.key === 'Home') {
+          event.preventDefault();
+          onChange(1);
+        }
+        if (event.key === 'End') {
+          event.preventDefault();
+          onChange(15);
+        }
+      }}
+    >
+      <svg width="176" height="176" className="drop-shadow-[0_8px_18px_rgba(244,81,94,0.10)]" aria-hidden="true">
+        <circle cx={center} cy={center} r={radius} fill="#FFFBF8" stroke="#F0E9E6" strokeWidth="12" />
+        <circle
+          cx={center}
+          cy={center}
+          r={radius}
+          fill="none"
+          stroke="#F4515E"
+          strokeWidth="12"
+          strokeLinecap="round"
+          strokeDasharray={circumference}
+          strokeDashoffset={circumference * (1 - visualProgress)}
+          transform={`rotate(-90 ${center} ${center})`}
+          style={{ transition: dragging ? 'stroke-dashoffset 55ms cubic-bezier(0.2, 0.85, 0.25, 1)' : 'stroke-dashoffset 160ms ease-out' }}
+        />
+        <g
+          style={{
+            transform: `translate(${handleX}px, ${handleY}px)`,
+            transition: dragging ? 'transform 55ms cubic-bezier(0.2, 0.85, 0.25, 1)' : 'transform 160ms ease-out',
+          }}
+        >
+          <circle cx={0} cy={0} r="9" fill="white" stroke="#F4515E" strokeWidth="5" />
+        </g>
+      </svg>
+      <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center">
+        <strong className="text-[30px] leading-none text-[#26232A] tabular-nums">{minutes} <span className="text-[17px]">min</span></strong>
+      </div>
+    </div>
+  );
+}
+
+function GroupSizeRuler({ value, onChange }: { value: number; onChange: (value: number) => void }) {
+  const scrollerRef = useRef<HTMLDivElement>(null);
+  const initialIndexRef = useRef(Math.max(0, GROUP_SIZE_OPTIONS.indexOf(value)));
+  const dragRef = useRef<{
+    pointerId: number;
+    startY: number;
+    startScrollTop: number;
+    lastY: number;
+    lastTime: number;
+    velocity: number;
+    moved: boolean;
+  } | null>(null);
+  const suppressClickRef = useRef(false);
+  const inertiaFrameRef = useRef<number | null>(null);
+  const onChangeRef = useRef(onChange);
+  onChangeRef.current = onChange;
+
+  const valueFromScrollTop = (scrollTop: number) => {
+    const nextIndex = Math.max(0, Math.min(GROUP_SIZE_OPTIONS.length - 1, Math.round(scrollTop / GROUP_SIZE_ITEM_HEIGHT)));
+    return GROUP_SIZE_OPTIONS[nextIndex]!;
+  };
+
+  const stopInertia = () => {
+    if (inertiaFrameRef.current == null) return;
+    cancelAnimationFrame(inertiaFrameRef.current);
+    inertiaFrameRef.current = null;
+  };
+
+  const setScrollerTop = (scrollTop: number, publish: boolean) => {
+    const scroller = scrollerRef.current;
+    if (!scroller) return;
+    const clamped = Math.max(0, Math.min(GROUP_SIZE_MAX_SCROLL, scrollTop));
+    scroller.scrollTop = clamped;
+    if (!publish) return;
+    const nextValue = valueFromScrollTop(clamped);
+    onChangeRef.current(nextValue);
+  };
+
+  const selectValue = (next: number) => {
+    const normalized = Math.max(1, Math.min(12, Math.round(next)));
+    onChangeRef.current(normalized);
+    setScrollerTop((normalized - 1) * GROUP_SIZE_ITEM_HEIGHT, false);
+  };
+
+  const snapToNearest = (fromScrollTop: number) => {
+    const scroller = scrollerRef.current;
+    if (!scroller) return;
+    const target = Math.round(fromScrollTop / GROUP_SIZE_ITEM_HEIGHT) * GROUP_SIZE_ITEM_HEIGHT;
+    const clampedTarget = Math.max(0, Math.min(GROUP_SIZE_MAX_SCROLL, target));
+    const start = performance.now();
+    const duration = 160;
+    const from = fromScrollTop;
+
+    const tick = (now: number) => {
+      const t = Math.min(1, (now - start) / duration);
+      const eased = 1 - (1 - t) ** 3;
+      setScrollerTop(from + (clampedTarget - from) * eased, true);
+      if (t < 1) {
+        inertiaFrameRef.current = requestAnimationFrame(tick);
+        return;
+      }
+      inertiaFrameRef.current = null;
+      scroller.style.scrollSnapType = 'y mandatory';
+      selectValue(valueFromScrollTop(clampedTarget));
+    };
+    inertiaFrameRef.current = requestAnimationFrame(tick);
+  };
+
+  const startInertia = (velocityPxPerMs: number) => {
+    const scroller = scrollerRef.current;
+    if (!scroller) return;
+    let velocity = Math.max(
+      -GROUP_SIZE_FLICK_MAX_VELOCITY,
+      Math.min(GROUP_SIZE_FLICK_MAX_VELOCITY, velocityPxPerMs),
+    );
+    if (Math.abs(velocity) < GROUP_SIZE_FLICK_MIN_VELOCITY) {
+      snapToNearest(scroller.scrollTop);
+      return;
+    }
+
+    scroller.style.scrollSnapType = 'none';
+    let scrollTop = scroller.scrollTop;
+    let lastFrame = performance.now();
+    let lastPublishedIndex = Math.round(scrollTop / GROUP_SIZE_ITEM_HEIGHT);
+
+    const tick = (now: number) => {
+      const dt = Math.min(34, Math.max(8, now - lastFrame));
+      lastFrame = now;
+      velocity *= Math.exp(-GROUP_SIZE_FLICK_FRICTION * dt);
+      scrollTop += velocity * dt;
+
+      if (scrollTop <= 0) {
+        scrollTop = 0;
+        velocity = 0;
+      } else if (scrollTop >= GROUP_SIZE_MAX_SCROLL) {
+        scrollTop = GROUP_SIZE_MAX_SCROLL;
+        velocity = 0;
+      }
+
+      setScrollerTop(scrollTop, false);
+      const index = Math.round(scrollTop / GROUP_SIZE_ITEM_HEIGHT);
+      if (index !== lastPublishedIndex) {
+        lastPublishedIndex = index;
+        onChangeRef.current(GROUP_SIZE_OPTIONS[Math.max(0, Math.min(GROUP_SIZE_OPTIONS.length - 1, index))]!);
+      }
+
+      if (Math.abs(velocity) < GROUP_SIZE_FLICK_MIN_VELOCITY) {
+        snapToNearest(scrollTop);
+        return;
+      }
+      inertiaFrameRef.current = requestAnimationFrame(tick);
+    };
+    inertiaFrameRef.current = requestAnimationFrame(tick);
+  };
+
+  useEffect(() => {
+    const scroller = scrollerRef.current;
+    if (!scroller) return;
+    scroller.scrollTop = initialIndexRef.current * GROUP_SIZE_ITEM_HEIGHT;
+    return () => stopInertia();
+  }, []);
+
+  const endDrag = (pointerId: number) => {
+    const drag = dragRef.current;
+    if (!drag || drag.pointerId !== pointerId) return;
+    const { moved, velocity } = drag;
+    dragRef.current = null;
+    suppressClickRef.current = moved;
+    const scroller = scrollerRef.current;
+    if (!scroller) return;
+    scroller.classList.remove('cursor-grabbing');
+    scroller.classList.add('cursor-grab');
+    if (!moved) {
+      scroller.style.scrollSnapType = 'y mandatory';
+      selectValue(valueFromScrollTop(scroller.scrollTop));
+      return;
+    }
+    startInertia(velocity);
+  };
+
+  return (
+    <div className="w-full">
+      <div className="relative h-36 w-full overflow-hidden rounded-[20px] bg-[#FFF8F6]">
+        <div className="pointer-events-none absolute inset-x-3 top-1/2 z-10 h-12 -translate-y-1/2 rounded-[14px] border-y border-[#F7B9B4] bg-white/75 shadow-[0_4px_14px_rgba(244,81,94,0.08)]" aria-hidden="true" />
+        <div
+          ref={scrollerRef}
+          className="scrollbar-hide relative z-20 h-full cursor-grab touch-none snap-y snap-mandatory overflow-y-auto overscroll-y-contain outline-none focus:outline-none focus-visible:outline-none"
+          role="slider"
+          tabIndex={0}
+          aria-label="인원 수"
+          aria-valuemin={1}
+          aria-valuemax={12}
+          aria-valuenow={value}
+          aria-valuetext={value === 1 ? '혼자' : String(value)}
+          onScroll={event => {
+            if (dragRef.current || inertiaFrameRef.current != null) return;
+            const nextValue = valueFromScrollTop(event.currentTarget.scrollTop);
+            if (nextValue !== value) onChange(nextValue);
+          }}
+          onPointerDown={event => {
+            if (event.pointerType === 'mouse' && event.button !== 0) return;
+            event.preventDefault();
+            stopInertia();
+            const now = performance.now();
+            dragRef.current = {
+              pointerId: event.pointerId,
+              startY: event.clientY,
+              startScrollTop: event.currentTarget.scrollTop,
+              lastY: event.clientY,
+              lastTime: now,
+              velocity: 0,
+              moved: false,
+            };
+            event.currentTarget.style.scrollSnapType = 'none';
+            event.currentTarget.classList.remove('cursor-grab');
+            event.currentTarget.classList.add('cursor-grabbing');
+            event.currentTarget.setPointerCapture(event.pointerId);
+          }}
+          onPointerMove={event => {
+            const drag = dragRef.current;
+            if (!drag || drag.pointerId !== event.pointerId) return;
+            const now = performance.now();
+            const dt = Math.max(1, now - drag.lastTime);
+            const scrollDelta = drag.lastY - event.clientY;
+            const instantVelocity = scrollDelta / dt;
+            drag.velocity = drag.velocity * 0.65 + instantVelocity * 0.35;
+            drag.lastY = event.clientY;
+            drag.lastTime = now;
+            const delta = event.clientY - drag.startY;
+            if (Math.abs(delta) > 3) drag.moved = true;
+            setScrollerTop(drag.startScrollTop - delta, true);
+          }}
+          onPointerUp={event => endDrag(event.pointerId)}
+          onPointerCancel={event => endDrag(event.pointerId)}
+          onLostPointerCapture={event => endDrag(event.pointerId)}
+          onKeyDown={event => {
+            stopInertia();
+            if (event.key === 'ArrowUp') {
+              event.preventDefault();
+              selectValue(value - 1);
+            }
+            if (event.key === 'ArrowDown') {
+              event.preventDefault();
+              selectValue(value + 1);
+            }
+            if (event.key === 'Home') {
+              event.preventDefault();
+              selectValue(1);
+            }
+            if (event.key === 'End') {
+              event.preventDefault();
+              selectValue(12);
+            }
+          }}
+          style={{ WebkitOverflowScrolling: 'touch', scrollSnapType: 'y mandatory' }}
+        >
+          <div className="h-12 shrink-0" aria-hidden="true" />
+          {GROUP_SIZE_OPTIONS.map(option => (
+            <div
+              key={option}
+              role="option"
+              aria-selected={option === value}
+              onClick={() => {
+                if (suppressClickRef.current) {
+                  suppressClickRef.current = false;
+                  return;
+                }
+                stopInertia();
+                selectValue(option);
+                scrollerRef.current && (scrollerRef.current.style.scrollSnapType = 'y mandatory');
+              }}
+              className={`flex h-12 w-full shrink-0 snap-center items-center justify-center text-[18px] font-black transition-[color,transform,opacity] ${
+                option === value ? 'scale-110 text-[#F4515E]' : 'scale-95 text-[#9F9699] opacity-55'
+              }`}
+              aria-label={option === 1 ? '혼자' : String(option)}
+            >
+              {option === 1 ? '혼자' : option}
+            </div>
+          ))}
+          <div className="h-12 shrink-0" aria-hidden="true" />
+        </div>
+        <div className="pointer-events-none absolute inset-x-0 top-0 z-30 h-12 bg-gradient-to-b from-[#FFF8F6] via-[#FFF8F6]/90 to-transparent" />
+        <div className="pointer-events-none absolute inset-x-0 bottom-0 z-30 h-12 bg-gradient-to-t from-[#FFF8F6] via-[#FFF8F6]/90 to-transparent" />
+      </div>
+    </div>
+  );
+}
+
+function IngredientAvoidancePicker({ selected, onToggle }: { selected: string[]; onToggle: (value: string) => void }) {
+  const [open, setOpen] = useState(false);
+  const selectedLabels = INGREDIENT_AVOIDANCES.filter(option => selected.includes(option.value)).map(option => option.label);
+
+  return (
+    <div className="relative">
+      <button
+        type="button"
+        onClick={() => setOpen(current => !current)}
+        aria-expanded={open}
+        aria-controls="dietary-exclusion-menu"
+        className={`flex min-h-11 w-full items-center rounded-[12px] border px-3 text-left transition-colors ${selectedLabels.length ? 'border-[#55A964] bg-[#EDF8EE]' : 'border-transparent bg-[#F8F5F3]'}`}
+      >
+        <span className="mr-2 text-base">🚫</span>
+        <strong className="text-[11px] text-[#514A4D]">Ingredients to avoid</strong>
+        <span className="ml-2 min-w-0 flex-1 truncate text-[10px] font-semibold text-[#7B7276]">
+          {selectedLabels.length ? selectedLabels.join(', ') : 'No ingredients selected'}
+        </span>
+        {selectedLabels.length > 0 && <span className="mr-2 rounded-full bg-[#55A964] px-1.5 py-0.5 text-[9px] font-bold text-white">{selectedLabels.length}</span>}
+        <ChevronDown size={15} className={`shrink-0 text-[#8A8084] transition-transform ${open ? 'rotate-180' : ''}`} />
+      </button>
+      {open && (
+        <div id="dietary-exclusion-menu" className="mt-1 max-h-[156px] overflow-y-auto rounded-[14px] border border-[#E8DFDC] bg-white p-1.5 shadow-[0_10px_24px_rgba(92,69,62,0.14)]">
+          {INGREDIENT_AVOIDANCES.map(option => {
+            const isSelected = selected.includes(option.value);
+            return (
+              <button
+                key={option.label}
+                type="button"
+                onClick={() => onToggle(option.value)}
+                aria-pressed={isSelected}
+                className={`flex min-h-10 w-full items-center rounded-[10px] px-2.5 text-left ${isSelected ? 'bg-[#EDF8EE]' : 'hover:bg-[#F8F5F3]'}`}
+              >
+                <span className="mr-2 text-base">{option.icon}</span>
+                <span className="text-[11px] font-bold text-[#514A4D]">{option.label}</span>
+                <span className={`ml-auto flex size-4 items-center justify-center rounded border ${isSelected ? 'border-[#55A964] bg-[#55A964] text-white' : 'border-[#D8CFCC] text-transparent'}`}><Check size={10} strokeWidth={3} /></span>
+              </button>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function PreferenceCard({ option, selected, onClick }: {
+  option: (typeof PREFERENCE_CARDS)[number];
   selected: boolean;
   onClick: () => void;
-  children: ReactNode;
-  className?: string;
-  unselectedBg?: string;
-  unselectedColor?: string;
 }) {
   return (
     <motion.button
       type="button"
       onClick={onClick}
-      className={className}
-      animate={{
-        backgroundColor: selected ? "#EB5053" : unselectedBg,
-        color: selected ? "#FFFFFF" : unselectedColor,
-      }}
-      whileTap={{
-        scale: 0.92,
-        backgroundColor: selected ? "#D94447" : "#E0E0E0",
-      }}
-      transition={tapSpring}
+      whileTap={{ scale: 0.96 }}
+      className={`relative min-w-0 overflow-hidden rounded-[18px] border-2 px-2 pb-3 pt-2 transition-all ${
+        selected
+          ? 'border-[#F4515E] bg-white shadow-[0_8px_20px_rgba(244,81,94,0.18)]'
+          : 'border-transparent bg-[#FAF7F5]'
+      }`}
+      aria-pressed={selected}
     >
-      {children}
+      {selected && (
+        <span className="absolute right-2 top-2 z-10 flex size-5 items-center justify-center rounded-full bg-[#F4515E] text-white">
+          <Check size={13} strokeWidth={3} />
+        </span>
+      )}
+      <span className="relative mx-auto flex aspect-square w-full max-w-[76px] items-center justify-center rounded-[16px]" style={{ background: option.color }}>
+        {option.image ? (
+          <img src={option.image} alt="" className="h-[72px] w-[72px] object-contain" draggable={false} />
+        ) : (
+          <span className="flex size-14 items-center justify-center rounded-full border-2 border-dashed border-[#F2B944] bg-white/80 text-[#E7A71E]">
+            <CircleHelp size={34} strokeWidth={2.4} />
+          </span>
+        )}
+      </span>
+      <span className="relative z-10 mt-1.5 block text-[10px] font-black tracking-[0.8px] text-[#F4515E]">{option.label}</span>
+      {selected && <span className="absolute bottom-1.5 left-[18%] z-0 h-2 w-[64%] -rotate-2 rounded-full bg-[#FFD5D1] opacity-80" />}
     </motion.button>
   );
 }
 
-function ActionButton({
-  onClick,
-  disabled,
-  children,
-  className,
-  style,
-}: {
-  onClick?: () => void;
-  disabled?: boolean;
-  children: ReactNode;
-  className?: string;
-  style?: CSSProperties;
-}) {
+function DistanceRuler({ radius, onChange, loadout }: { radius: number; onChange: (value: number) => void; loadout: LunchmateLoadout }) {
+  const selectedIndex = RADIUS_OPTIONS.indexOf(radius);
+  const progress = selectedIndex / (RADIUS_OPTIONS.length - 1) * 100;
+  const previousIndexRef = useRef(selectedIndex);
+  const settleTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const walkTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const [walkDirection, setWalkDirection] = useState<'left' | 'right' | null>(null);
+  const [walkFrame, setWalkFrame] = useState<1 | 2>(1);
+
+  useEffect(() => {
+    const previousIndex = previousIndexRef.current;
+    previousIndexRef.current = selectedIndex;
+    if (previousIndex === selectedIndex) return;
+
+    setWalkDirection(selectedIndex > previousIndex ? 'right' : 'left');
+    setWalkFrame(frame => frame === 1 ? 2 : 1);
+    if (walkTimerRef.current) clearInterval(walkTimerRef.current);
+    walkTimerRef.current = setInterval(() => setWalkFrame(frame => frame === 1 ? 2 : 1), 140);
+    if (settleTimerRef.current) clearTimeout(settleTimerRef.current);
+    settleTimerRef.current = setTimeout(() => {
+      if (walkTimerRef.current) clearInterval(walkTimerRef.current);
+      walkTimerRef.current = null;
+      setWalkDirection(null);
+      setWalkFrame(1);
+    }, 520);
+  }, [selectedIndex]);
+
+  useEffect(() => () => {
+    if (settleTimerRef.current) clearTimeout(settleTimerRef.current);
+    if (walkTimerRef.current) clearInterval(walkTimerRef.current);
+  }, []);
+
+  const chickenAsset = walkDirection
+    ? `side-walk-${walkDirection}-${walkFrame}` as const
+    : 'idle' as const;
+
   return (
-    <motion.button
-      type="button"
-      onClick={onClick}
-      disabled={disabled}
-      className={className}
-      style={style}
-      whileTap={disabled ? undefined : { scale: 0.97, opacity: 0.88 }}
-      transition={tapSpring}
-    >
-      {children}
-    </motion.button>
+    <div>
+      <div className="mb-2 flex items-center gap-2 text-[13px] font-extrabold text-[#26232A]">
+        <Ruler size={17} className="text-[#F4515E]" />
+        거리
+        <strong className="ml-auto text-[15px] text-[#F4515E]">{formatRadius(radius)}</strong>
+      </div>
+      <div className="relative mx-1 h-[100px] rounded-[18px] bg-[#FFF8F6] px-6 pt-4">
+        <div className="absolute left-5 right-5 top-[54px] h-1 rounded-full bg-[#E9DEDA]" />
+        <div className="absolute left-5 top-[54px] h-1 rounded-full bg-[#F4515E] transition-[width]" style={{ width: `calc((100% - 40px) * ${progress / 100})` }} />
+        <div className="absolute left-5 right-5 top-[47px] flex justify-between" aria-hidden="true">
+          {Array.from({ length: 17 }, (_, index) => (
+            <span key={index} className={`w-[2px] rounded-full bg-[#CBBDB8] ${index % 4 === 0 ? 'h-4' : 'h-2.5 opacity-75'}`} />
+          ))}
+        </div>
+        <motion.span
+          className="pointer-events-none absolute top-[2px] z-10 flex -translate-x-1/2 flex-col items-center"
+          animate={{ left: `calc(20px + (100% - 40px) * ${progress / 100})` }}
+          transition={{ type: 'spring', stiffness: 340, damping: 28 }}
+          aria-hidden="true"
+        >
+          <span className="flex size-12 items-center justify-center overflow-hidden rounded-full border-2 border-[#F4515E] bg-white shadow-[0_4px_12px_rgba(244,81,94,0.22)]">
+            <LunchmateCharacterRenderer
+              flowState="idle"
+              loadout={loadout}
+              size={42}
+              renderSize="compact"
+              artwork="chicken"
+              chickenAssetKeyOverride={chickenAsset}
+              chickenFaceSystem={!walkDirection}
+              animated={false}
+              alt={`검색 거리 ${formatRadius(radius)}를 가리키는 런치킨`}
+            />
+          </span>
+          <span className="h-3 w-0.5 bg-[#F4515E]" />
+        </motion.span>
+        <input
+          type="range"
+          min={0}
+          max={RADIUS_OPTIONS.length - 1}
+          step={1}
+          value={selectedIndex}
+          onChange={event => onChange(RADIUS_OPTIONS[Number(event.target.value)]!)}
+          className="lunchie-distance-range absolute inset-x-5 top-[27px] z-20 h-14 opacity-[0.01]"
+          aria-label="검색 거리"
+          aria-valuetext={formatRadius(radius)}
+        />
+        <div className="absolute inset-x-5 bottom-5 text-[9px] font-bold text-[#A69B96]">
+          {RADIUS_OPTIONS.map((option, index) => (
+            <span
+              key={option}
+              className="absolute whitespace-nowrap"
+              style={{
+                left: `${index / (RADIUS_OPTIONS.length - 1) * 100}%`,
+                transform: index === 0 ? 'translateX(0)' : index === RADIUS_OPTIONS.length - 1 ? 'translateX(-100%)' : 'translateX(-50%)',
+              }}
+            >
+              {formatRadius(option)}
+            </span>
+          ))}
+        </div>
+      </div>
+    </div>
   );
 }
-
-// ─── Lunchie Settings Page ────────────────────────────────────────────────────
 
 export default function LunchieSettingsPage() {
   const [, navigate] = useLocation();
   const search = useSearch();
-  const { createSession, restaurants, profile } = useApp();
-
-  // "다음 여정" 카드 탭 시 ?intent=cafe 로 넘어옴 — 초기 선택값으로 반영.
+  const { createSession, startSession, fetchSession, currentSession, setCurrentSession, restaurants, profile } = useApp();
   const urlIntent = new URLSearchParams(search).get('intent');
   const initialIntent: Intent | null = urlIntent === 'meal' || urlIntent === 'cafe' || urlIntent === 'dessert' ? urlIntent : null;
-
-  const [deadlineMin, setDeadlineMin] = useState(10);
-  const [partySize, setPartySize] = useState(4);
-  const [radius, setRadius] = useState(1000);
-  // Location should enrich Lunchie, never prevent someone from using it.
-  const [distanceEnabled, setDistanceEnabled] = useState(false);
-  const [intent, setIntent] = useState<Intent | null>(initialIntent);
-  const [activeFilters, setActiveFilters] = useState<string[]>(['취향', '평점']);
-  const [details, setDetails] = useState<Record<string, string[]>>({
-    '취향': ['맛집'],
-    '평점': ['4.0 이상'],
+  const [storedSettings] = useState(() => {
+    try {
+      return normalizeQuickMatchSettings(JSON.parse(localStorage.getItem(QUICK_MATCH_SETTINGS_STORAGE_KEY) ?? 'null'));
+    } catch {
+      return DEFAULT_QUICK_MATCH_SETTINGS;
+    }
   });
-  const [showDetailModal, setShowDetailModal] = useState(false);
+
+  const [deadlineMin, setDeadlineMin] = useState(storedSettings.deadlineMinutes);
+  const [partySize, setPartySize] = useState(storedSettings.partySize);
+  const [radius, setRadius] = useState(storedSettings.radius);
+  const [distanceEnabled, setDistanceEnabled] = useState(storedSettings.distanceEnabled);
+  const [intent, setIntent] = useState<Intent | null>(initialIntent ?? storedSettings.intent);
+  const [tags, setTags] = useState<string[]>(storedSettings.tags);
+  const [dietary, setDietary] = useState<string[]>(storedSettings.dietary);
   const [isCreating, setIsCreating] = useState(false);
   const [origin, setOrigin] = useState<LocationFix | null>(null);
   const [originLabel, setOriginLabel] = useState<string | null>(null);
   const [isLocating, setIsLocating] = useState(false);
+  const creationLockRef = useRef(false);
+  const [activeSessionVerified, setActiveSessionVerified] = useState(false);
+  const [isCheckingSession, setIsCheckingSession] = useState(Boolean(currentSession?.inviteCode));
+  const [sessionCheckFailed, setSessionCheckFailed] = useState(false);
+  const [sessionCheckAttempt, setSessionCheckAttempt] = useState(0);
+  const lunchmateLoadout = useMemo(
+    () => lunchmateLoadoutFromProfile(profile.lunchmateLoadout),
+    [profile.lunchmateLoadout],
+  );
+
+  const isSolo = partySize === 1;
+  const budget = 2 as const;
+  const chosenCount = tags.length + dietary.length + 1;
+  const hasActiveSession = Boolean(
+    activeSessionVerified
+    && currentSession
+    && currentSession.membershipActive !== false
+    && isActiveQuickMatchStatus(currentSession.status),
+  );
+  const realCategories = useMemo(() => new Set(restaurants.map(restaurant => restaurant.category)), [restaurants]);
+
+  useEffect(() => {
+    localStorage.setItem(QUICK_MATCH_SETTINGS_STORAGE_KEY, JSON.stringify({
+      deadlineMinutes: deadlineMin,
+      partySize,
+      radius,
+      distanceEnabled,
+      intent,
+      tags,
+      dietary: normalizeDietaryPreferences(dietary),
+    }));
+  }, [deadlineMin, partySize, radius, distanceEnabled, intent, tags, dietary]);
+
+  useEffect(() => {
+    const token = currentSession?.inviteCode;
+    if (!token) {
+      setActiveSessionVerified(false);
+      setIsCheckingSession(false);
+      setSessionCheckFailed(false);
+      return;
+    }
+    // Resume/cancel need a private memberKey. Old local caches without one
+    // only block Start — clear them instead of showing a stuck progress card.
+    if (!currentSession.memberKey) {
+      setActiveSessionVerified(false);
+      setIsCheckingSession(false);
+      setSessionCheckFailed(false);
+      setCurrentSession(null);
+      return;
+    }
+    let active = true;
+    setIsCheckingSession(true);
+    setSessionCheckFailed(false);
+    void fetchSession(token)
+      .then(session => {
+        if (!active) return;
+        const valid = session.membershipActive !== false && isActiveQuickMatchStatus(session.status);
+        setActiveSessionVerified(valid);
+        if (!valid) setCurrentSession(null);
+      })
+      .catch(error => {
+        if (!active) return;
+        const status = (error as { status?: number }).status;
+        if (status === 404 || status === 410) setCurrentSession(null);
+        else setSessionCheckFailed(true);
+        setActiveSessionVerified(false);
+      })
+      .finally(() => {
+        if (active) setIsCheckingSession(false);
+      });
+    return () => { active = false; };
+  }, [currentSession?.inviteCode, currentSession?.memberKey, fetchSession, sessionCheckAttempt, setCurrentSession]);
+
+  const toggleMany = (value: string, setter: Dispatch<SetStateAction<string[]>>) => {
+    setter(current => current.includes(value) ? current.filter(item => item !== value) : [...current, value]);
+  };
+
+  const setGroupSize = (next: number) => {
+    setPartySize(Math.max(1, Math.min(12, Math.round(next))));
+  };
 
   const confirmCurrentLocation = async () => {
     setIsLocating(true);
@@ -191,8 +790,10 @@ export default function LunchieSettingsPage() {
       setOrigin(fix);
       setOriginLabel(label);
       toast.success(`현재 위치를 ${label}(으)로 확인했어요.`);
+      return fix;
     } catch (error) {
       toast.error(error instanceof Error ? error.message : '현재 위치를 확인하지 못했습니다.');
+      throw error;
     } finally {
       setIsLocating(false);
     }
@@ -201,62 +802,63 @@ export default function LunchieSettingsPage() {
   const selectRadius = (nextRadius: number) => {
     setRadius(nextRadius);
     setDistanceEnabled(true);
-    // Selecting a radius is an explicit user gesture, so browsers can show
-    // the native permission prompt immediately instead of failing later at
-    // the "start" button.
-    if (!origin && !isLocating) void confirmCurrentLocation();
+    if (!origin && !isLocating) void confirmCurrentLocation().catch(() => undefined);
   };
 
-  const toggleFilter = (f: string) => {
-    setActiveFilters(prev => (prev.includes(f) ? prev.filter(x => x !== f) : [...prev, f]));
-  };
-
-  const toggleDetail = (filter: string, value: string) => {
-    setDetails(prev => {
-      const cur = prev[filter] || [];
-      const next = cur.includes(value) ? cur.filter(v => v !== value) : [...cur, value];
-      return { ...prev, [filter]: next };
-    });
-  };
-
-  // sj 설정값 → merge1_v3 createSession 파라미터로 매핑
   const handleStart = async () => {
+    if (creationLockRef.current || isCheckingSession || sessionCheckFailed) return;
+    creationLockRef.current = true;
+    if (hasActiveSession && currentSession) {
+      setIsCreating(true);
+      try {
+        const activeSession = await fetchSession(currentSession.inviteCode);
+        if (activeSession.membershipActive !== false && isActiveQuickMatchStatus(activeSession.status)) {
+          const isWaiting = activeSession.status === 'waiting';
+          toast.info(isWaiting ? '진행 중인 대기방으로 이동합니다.' : '진행 중인 투표로 이동합니다.');
+          navigate(isWaiting ? '/session/lobby' : '/lunchie/swipe');
+          creationLockRef.current = false;
+          return;
+        }
+        // A locally cached session can outlive its server record. Clear only
+        // that stale cache before creating a replacement session.
+        setCurrentSession(null);
+      } catch (error) {
+        const status = (error as { status?: number }).status;
+        if (status !== 404 && status !== 410) {
+          toast.error('We could not verify the current Quick Match. Please try again.');
+          setIsCreating(false);
+          creationLockRef.current = false;
+          return;
+        }
+        setCurrentSession(null);
+      }
+    }
+
     setIsCreating(true);
     try {
-      const sel = (f: string) => (activeFilters.includes(f) ? details[f] || [] : []);
-
-      const dietary = sel('식단');
-      const budgetSel = sel('예산');
-      const budget = (budgetSel[0]?.length || 2) as 1 | 2 | 3 | 4;
-      // '취향' 값 중 실제 식당 카테고리와 일치하는 것만 필터로 사용 (빈 세션 방지)
-      const realCats = new Set(restaurants.map(r => r.category));
-      const categories = sel('취향').filter(t => realCats.has(t));
-
+      const categories = tags.filter(tag => realCategories.has(tag));
       const hostName = profile.name && profile.name !== '사용자' ? profile.name : '호스트';
-      const sessionName = `${hostName}의 점심 세션`;
-      // Only a room using a radius needs the host location. It becomes the
-      // shared reference point, rather than tracking every participant.
       const currentOrigin = distanceEnabled
         ? origin ?? await currentPosition()
         : null;
-
       const session = await createSession(
-        sessionName,
+        `${hostName}의 점심 세션`,
         {
           partySize,
           dietary,
           budget,
           radius,
           distanceEnabled,
-          categories,
-          intent: intent ?? undefined,
           originLatitude: currentOrigin?.latitude,
           originLongitude: currentOrigin?.longitude,
+          categories,
+          intent: intent ?? undefined,
         },
         hostName,
         profile.emoji,
         deadlineMin,
       );
+
       logSessionCreated(session.id, {
         intent: intent ?? 'auto',
         party_size: partySize,
@@ -266,311 +868,215 @@ export default function LunchieSettingsPage() {
         category_count: categories.length,
         deadline_minutes: deadlineMin,
       });
-      toast.success('점심 세션이 생성되었습니다', {
-        position: 'top-center',
-        style: { marginTop: 'calc(env(safe-area-inset-top, 0px) + 64px)' },
-      });
-      navigate('/session/lobby');
+
+      if (isSolo) {
+        await startSession(session.inviteCode, deadlineMin);
+        toast.success('Quick Match를 시작합니다.');
+        navigate('/lunchie/swipe');
+      } else {
+        toast.success('세션이 만들어졌어요. 친구를 초대해 보세요.');
+        navigate('/session/lobby');
+      }
     } catch (error) {
       toast.error(error instanceof Error ? error.message : '세션 생성에 실패했습니다.');
     } finally {
       setIsCreating(false);
+      creationLockRef.current = false;
     }
   };
 
-  const totalDetailCount = activeFilters.reduce((sum, f) => sum + (details[f]?.length || 0), 0);
-
   return (
-    <div className="min-h-dvh bg-[#FCF4EE]">
-      {/* Header */}
-      <div className="flex items-center justify-between px-5 pt-12 pb-5">
-        <IconButton
+    <div className="min-h-dvh bg-[#FFF6F2] pb-6">
+      <header className="sticky top-0 z-20 flex items-center gap-3 bg-[#FFF6F2]/95 px-5 pb-3 pt-[max(12px,env(safe-area-inset-top))] backdrop-blur">
+        <motion.button
+          type="button"
           onClick={() => navigate('/')}
-          className="w-10 h-10 rounded-full bg-white flex items-center justify-center shadow-sm"
+          whileTap={{ scale: 0.9 }}
+          className="flex size-9 items-center justify-center rounded-full bg-white shadow-sm"
+          aria-label="홈으로 돌아가기"
         >
-          <ArrowLeft size={18} color="#1A1A1A" />
-        </IconButton>
-        <div className="text-center">
-          <p className="font-black text-[17px] text-[#1A1A1A]">Lunchie Mode</p>
-          <p className="text-[11px] text-[#9B9B9B]">Quick Match</p>
+          <ArrowLeft size={17} />
+        </motion.button>
+        <div>
+          <h1 className="text-[19px] font-extrabold leading-none tracking-[-0.4px] text-[#F4515E]">Lunchie</h1>
+          <p className="mt-1 text-[10px] font-bold tracking-[0.7px] text-[#9B959A]">QUICK MATCH</p>
         </div>
-        <div className="w-10" />
-      </div>
+      </header>
 
-      <div className="px-5 space-y-4 pb-8">
-        {/* Deadline */}
-        <div className="rounded-2xl p-4 bg-white">
-          <div className="flex items-center gap-2 mb-1">
-            <Clock size={15} color="#EB5053" />
-            <p className="text-[13px] font-bold text-[#1A1A1A]">마감 타이밍</p>
-          </div>
-          <p className="text-[11px] text-[#9B9B9B] mb-3">투표 시작 후 제한 시간 · 마감 후엔 참여 불가</p>
-          <div className="flex gap-2">
-            {DEADLINE_OPTIONS.map(d => (
-              <ChipButton
-                key={d.min}
-                selected={deadlineMin === d.min}
-                onClick={() => setDeadlineMin(d.min)}
-                className="flex-1 py-2.5 rounded-xl text-[12px] font-bold"
-              >
-                {d.label}
-              </ChipButton>
-            ))}
-          </div>
-        </div>
-
-        {/* Session Settings */}
-        <div className="rounded-2xl p-4 bg-white">
-          <div className="flex items-center gap-2 mb-3">
-            <Users size={15} color="#EB5053" />
-            <p className="text-[13px] font-bold text-[#1A1A1A]">세션 설정</p>
-          </div>
-
-          {/* 누구랑 — 혼자 vs 같이(+정원) */}
-          <div className="bg-[#F5F5F5] rounded-xl p-3 mb-2">
-            <p className="text-[11px] text-[#9B9B9B] mb-2">누구랑 먹어요?</p>
-            <div className="flex gap-2">
-              {([['혼자', 1, '🧍'], ['같이', 4, '👥']] as const).map(([label, size, icon]) => (
-                <ChipButton
-                  key={label}
-                  selected={size === 1 ? partySize === 1 : partySize > 1}
-                  onClick={() => setPartySize(previous => (size === 1 ? 1 : (previous > 1 ? previous : 4)))}
-                  unselectedBg="#FFFFFF"
-                  className="flex-1 py-2.5 rounded-xl font-bold text-[14px]"
-                >
-                  {icon} {label}
-                </ChipButton>
-              ))}
+      <main className="mx-auto max-w-[480px] space-y-3 px-4 pb-32">
+        {sessionCheckFailed && currentSession && (
+          <section role="alert" className="rounded-[20px] border border-[#F2C6C1] bg-white p-4 shadow-sm">
+            <h2 className="text-[14px] font-black text-[#302B2E]">We couldn’t check your Quick Match</h2>
+            <p className="mt-1 text-[11px] leading-relaxed text-[#7C7276]">Your saved session is still here. Retry before creating another one.</p>
+            <div className="mt-3 flex flex-wrap gap-2">
+              <button type="button" onClick={() => setSessionCheckAttempt(attempt => attempt + 1)} className="min-h-10 rounded-xl bg-[#F4515E] px-4 text-[12px] font-bold text-white">Try again</button>
+              <button type="button" onClick={() => setCurrentSession(null)} className="min-h-10 rounded-xl bg-[#FFF0EE] px-4 text-[12px] font-bold text-[#C43B47]">Clear saved session</button>
             </div>
-            {partySize > 1 && (
-              <div className="flex items-center justify-center gap-4 mt-3">
-                <IconButton
-                  onClick={() => setPartySize(previous => Math.max(2, previous - 1))}
-                  className="w-8 h-8 rounded-full bg-white shadow-sm flex items-center justify-center disabled:opacity-40"
-                  disabled={partySize <= 2}
-                >
-                  <Minus size={14} color="#1A1A1A" />
-                </IconButton>
-                <p className="font-black text-[17px] text-[#EB5053] w-16 text-center">{partySize}명 정원</p>
-                <IconButton
-                  onClick={() => setPartySize(previous => Math.min(12, previous + 1))}
-                  className="w-8 h-8 rounded-full bg-white shadow-sm flex items-center justify-center disabled:opacity-40"
-                  disabled={partySize >= 12}
-                >
-                  <Plus size={14} color="#1A1A1A" />
-                </IconButton>
-              </div>
-            )}
-            <p className="text-[10px] text-[#B0B0B0] mt-1.5">
-              {partySize > 1 ? '나눠먹기 좋은 곳 위주 · 정원만큼 모이면 마감' : '혼밥하기 편한 곳 위주로 추천해요'}
-            </p>
-          </div>
-
-          {/* 무엇을 먹을까요 — 명시적 밥/카페/디저트 선택. 안 고르면 시간대로 자동 판정. */}
-          <div className="bg-[#F5F5F5] rounded-xl p-3 mb-2">
-            <p className="text-[11px] text-[#9B9B9B] mb-2">무엇을 먹을까요?</p>
-            <div className="flex gap-1.5">
-              {INTENT_OPTIONS.map(({ value, label, icon }) => (
-                <button
-                  key={label}
-                  onClick={() => setIntent(value)}
-                  className="flex-1 py-2.5 rounded-xl font-bold text-[13px] active:scale-[0.98] transition-all"
-                  style={{ background: intent === value ? '#EB5053' : 'white', color: intent === value ? 'white' : '#4A4A4A' }}
-                >
-                  {icon} {label}
-                </button>
-              ))}
-            </div>
-            {intent === null && (
-              <p className="text-[10px] text-[#B0B0B0] mt-1.5">지금 시간대({new Date().getHours()}시)에 맞춰 자동으로 골라요</p>
-            )}
-          </div>
-
-          {/* 반경 — 반경을 선택할 때만 위치 권한을 요청한다. */}
-          <div className="bg-[#F5F5F5] rounded-xl p-3">
-            <p className="text-[11px] text-[#9B9B9B] mb-2">반경</p>
-            <div className="flex flex-wrap gap-1.5">
-              <ChipButton
-                selected={!distanceEnabled}
-                onClick={() => setDistanceEnabled(false)}
-                unselectedBg="#FFFFFF"
-                className="px-3 py-2 rounded-lg text-[12px] font-bold"
-              >
-                반경 제한 없음
-              </ChipButton>
-              {RADIUS_OPTIONS.map(r => (
-                <ChipButton
-                  key={r}
-                  selected={distanceEnabled && radius === r}
-                  onClick={() => selectRadius(r)}
-                  unselectedBg="#FFFFFF"
-                  className="px-3 py-2 rounded-lg text-[12px] font-bold"
-                >
-                  {formatRadius(r)}
-                </ChipButton>
-              ))}
-            </div>
-            <div className="mt-2 flex items-center justify-between gap-2">
-              {origin ? (
-                <div>
-                  <p className="text-[10px] text-[#6B7A72] leading-relaxed">
-                    <Navigation size={11} className="inline mr-1" />현재 위치 · {originLabel ?? '현재 위치 주변'}
-                  </p>
-                  <p className="text-[9px] text-[#B0B0B0] mt-0.5">지역 기준: © OpenStreetMap contributors · 좌표는 표시하지 않아요.</p>
-                </div>
-              ) : (
-                <p className="text-[10px] text-[#B0B0B0]">현재 위치를 확인하면 지명과 반경 기준점을 보여드려요.</p>
-              )}
-              <button
-                type="button"
-                onClick={() => void confirmCurrentLocation()}
-                disabled={isLocating}
-                className="shrink-0 text-[10px] font-bold text-[#EB5053] disabled:opacity-50"
-              >
-                {isLocating ? '확인 중…' : origin ? '다시 확인' : '현재 위치 확인'}
-              </button>
-            </div>
-            {!distanceEnabled && (
-              <p className="text-[10px] text-[#6B7A72] mt-2">반경 제한 없이 현재 조건에 맞는 전체 후보에서 추천해요.</p>
-            )}
-            <p className="text-[10px] text-[#B0B0B0] mt-1.5">반경은 현재 위치부터 식당까지의 직선거리로 적용됩니다. 반경을 선택하면 권한 요청이 열립니다.</p>
-          </div>
-        </div>
-
-        {/* Filter Options */}
-        <div className="rounded-2xl p-4 bg-white">
-          <div className="flex items-center justify-between mb-3">
-            <div className="flex items-center gap-2">
-              <SlidersHorizontal size={15} color="#EB5053" />
-              <p className="text-[13px] font-bold text-[#1A1A1A]">옵션</p>
-            </div>
-            <motion.button
-              type="button"
-              onClick={() => setShowDetailModal(true)}
-              className="flex items-center gap-1 text-[11px] font-bold px-2.5 py-1 rounded-full"
-              animate={{ backgroundColor: "#FFF5F5", color: "#EB5053" }}
-              whileTap={{ scale: 0.94, backgroundColor: "#FFD6D6" }}
-              transition={tapSpring}
-            >
-              상세 설정 {totalDetailCount > 0 && `· ${totalDetailCount}`}
-            </motion.button>
-          </div>
-          <div className="flex flex-wrap gap-2">
-            {FILTER_OPTIONS.map(f => (
-              <ChipButton
-                key={f}
-                selected={activeFilters.includes(f)}
-                onClick={() => toggleFilter(f)}
-                className="px-3 py-1.5 rounded-full text-[12px] font-semibold"
-              >
-                {f}
-              </ChipButton>
-            ))}
-          </div>
-
-          {/* Selected detail chips preview */}
-          {totalDetailCount > 0 && (
-            <div className="mt-3 pt-3 border-t border-[#F0F0F0] flex flex-wrap gap-1.5">
-              {activeFilters.flatMap(f =>
-                (details[f] || []).map(v => (
-                  <span
-                    key={`${f}-${v}`}
-                    className="text-[10px] font-semibold bg-[#F5F5F5] text-[#4A4A4A] px-2 py-0.5 rounded-full"
-                  >
-                    {v}
+          </section>
+        )}
+        {hasActiveSession && currentSession && (
+          <section className="rounded-[22px] border border-[#F5B8B4] bg-[#FFFCFA] p-4 shadow-[0_8px_24px_rgba(180,100,90,0.10)]" aria-label="Quick Match in progress">
+            <div className="flex items-start gap-3">
+              <div className="min-w-0 flex-1">
+                <div className="flex flex-wrap items-center gap-2">
+                  <h2 className="text-[15px] font-black text-[#26232A]">Quick Match in progress</h2>
+                  <span className="rounded-full bg-[#FFF0EE] px-2.5 py-1 text-[10px] font-black uppercase tracking-wide text-[#D83D49]">
+                    {currentSession.status === 'waiting' ? 'Waiting' : currentSession.status === 'choosing' ? 'Choosing' : 'Voting'}
                   </span>
-                )),
-              )}
+                </div>
+                <p className="mt-1 text-[11px] font-semibold text-[#8A8084]">Server-verified and ready to resume.</p>
+              </div>
+              <SessionManagementMenu onEnded={() => navigate('/lunchie/settings')} className="text-[#6F6468]" />
             </div>
-          )}
-        </div>
-
-        {/* Detail Settings Modal */}
-        <AnimatePresence>
-          {showDetailModal && (
-            <motion.div
-              className="fixed inset-0 z-[90] flex items-end justify-center"
-              style={{ background: 'rgba(0,0,0,0.5)' }}
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              onClick={() => setShowDetailModal(false)}
+            <div className="mt-3 grid grid-cols-2 gap-2 text-[11px]">
+              <span className="rounded-xl bg-[#FFF6F2] px-3 py-2 font-bold text-[#645A5E]">👥 {currentSession.members.length}/{currentSession.filters.partySize} people</span>
+              <span className="rounded-xl bg-[#FFF6F2] px-3 py-2 font-bold text-[#645A5E]">⏱ {currentSession.deadlineMinutes ?? deadlineMin} min</span>
+              <span className="rounded-xl bg-[#FFF6F2] px-3 py-2 font-bold text-[#645A5E]">📍 {formatRadius(currentSession.filters.radius)}</span>
+              <span className="rounded-xl bg-[#FFF6F2] px-3 py-2 font-bold text-[#645A5E]">{currentSession.filters.partySize === 1 ? '🙋 Solo' : '🤝 Group'}</span>
+            </div>
+            <button
+              type="button"
+              onClick={() => navigate(currentSession.status === 'waiting' ? '/session/lobby' : '/lunchie/swipe')}
+              className="mt-3 min-h-11 w-full rounded-[14px] bg-[#F4515E] px-4 text-[13px] font-black text-white outline-none transition-transform active:scale-[0.98] focus-visible:ring-2 focus-visible:ring-[#F4515E] focus-visible:ring-offset-2"
             >
-              <motion.div
-                className="w-full max-w-[480px] bg-white rounded-t-3xl max-h-[80vh] overflow-y-auto scrollbar-hide"
-                initial={{ y: '100%' }}
-                animate={{ y: 0 }}
-                exit={{ y: '100%' }}
-                transition={{ type: 'spring', stiffness: 350, damping: 34 }}
-                onClick={e => e.stopPropagation()}
-              >
-                <div className="sticky top-0 bg-white px-5 pt-5 pb-3 flex items-center justify-between border-b border-[#F0F0F0]">
-                  <div>
-                    <p className="font-black text-[17px] text-[#1A1A1A]">상세 설정</p>
-                    <p className="text-[11px] text-[#9B9B9B]">활성화된 옵션의 세부 태그를 골라주세요</p>
-                  </div>
-                  <IconButton
-                    onClick={() => setShowDetailModal(false)}
-                    className="w-9 h-9 rounded-full bg-[#F5F5F5] flex items-center justify-center"
-                  >
-                    <X size={16} color="#4A4A4A" />
-                  </IconButton>
-                </div>
+              {currentSession.status === 'waiting' ? 'Return to lobby' : 'Continue Quick Match'}
+            </button>
+          </section>
+        )}
 
-                <div className="px-5 py-4 space-y-5">
-                  {activeFilters.length === 0 && (
-                    <p className="text-[13px] text-[#9B9B9B] text-center py-8">먼저 옵션에서 항목을 켜주세요</p>
-                  )}
-                  {activeFilters.map(filter => (
-                    <div key={filter}>
-                      <p className="text-[13px] font-bold text-[#1A1A1A] mb-2">{filter}</p>
-                      <div className="flex flex-wrap gap-2">
-                        {(DETAIL_OPTIONS[filter] || []).map(value => {
-                          const on = (details[filter] || []).includes(value);
-                          return (
-                            <ChipButton
-                              key={value}
-                              selected={on}
-                              onClick={() => toggleDetail(filter, value)}
-                              className="px-3 py-1.5 rounded-full text-[12px] font-semibold"
-                            >
-                              {value}
-                            </ChipButton>
-                          );
-                        })}
-                      </div>
-                      {filter === '예산' && (
-                        <p className="mt-2 text-[10px] leading-relaxed text-[#9B9B9B]">
-                          메뉴 가격이 확인된 식당에만 예산 상한을 적용해요. 가격 정보가 없는 식당은 임의 가격으로 제외하지 않습니다.
-                        </p>
-                      )}
-                    </div>
-                  ))}
-                </div>
+        <Card>
+          <CardTitle icon={<Clock3 size={16} />}>마감</CardTitle>
+          <div className="flex flex-col items-center">
+            <DeadlineDial minutes={deadlineMin} onChange={setDeadlineMin} />
+          </div>
+        </Card>
 
-                <div className="sticky bottom-0 bg-white px-5 py-4 border-t border-[#F0F0F0]">
-                  <ActionButton
-                    onClick={() => setShowDetailModal(false)}
-                    className="w-full py-3.5 rounded-2xl font-bold text-white text-[14px]"
-                    style={{ background: '#EB5053' }}
-                  >
-                    적용하기 {totalDetailCount > 0 && `(${totalDetailCount})`}
-                  </ActionButton>
-                </div>
-              </motion.div>
-            </motion.div>
-          )}
-        </AnimatePresence>
+        <Card>
+          <div className="mb-3 flex items-center gap-2 text-[14px] font-extrabold text-[#26232A]">
+            <Users size={17} className="text-[#F4515E]" />
+            <span>인원</span>
+          </div>
+          <GroupSizeRuler value={partySize} onChange={setGroupSize} />
+        </Card>
 
-        {/* Start */}
-        <ActionButton
-          onClick={handleStart}
-          disabled={isCreating}
-          className="lunchie-session-primary-action"
-        >
-          {isCreating ? '세션 만드는 중...' : 'Swipe 시작하기'}
-        </ActionButton>
-      </div>
+        <Card>
+          <div className="mb-3 flex items-center justify-between gap-2">
+            <button
+              type="button"
+              onClick={() => setDistanceEnabled(false)}
+              aria-pressed={!distanceEnabled}
+              className={`min-h-9 rounded-full px-3 text-[10px] font-bold ${!distanceEnabled ? 'bg-[#F4515E] text-white' : 'bg-[#FFF0EE] text-[#C43B47]'}`}
+            >
+              반경 제한 없음
+            </button>
+            <button
+              type="button"
+              onClick={() => void confirmCurrentLocation().catch(() => undefined)}
+              disabled={isLocating}
+              className="flex min-h-9 items-center gap-1 rounded-full px-2 text-[10px] font-bold text-[#F4515E] disabled:opacity-50"
+            >
+              <Navigation size={12} /> {isLocating ? '확인 중…' : origin ? '위치 다시 확인' : '현재 위치 확인'}
+            </button>
+          </div>
+          <DistanceRuler radius={radius} onChange={selectRadius} loadout={lunchmateLoadout} />
+          <div className="mt-3 rounded-[13px] bg-[#FFF8F6] px-3 py-2 text-[10px] font-semibold leading-relaxed text-[#857B80]">
+            {origin
+              ? `현재 위치 · ${originLabel ?? '현재 위치 주변'}${distanceEnabled ? ` · ${formatRadius(radius)} 이내` : ' · 반경 제한 없음'}`
+              : distanceEnabled
+                ? '선택한 반경을 적용하려면 현재 위치 권한이 필요해요.'
+                : '위치 권한 없이 전체 후보에서 추천받을 수 있어요.'}
+          </div>
+        </Card>
+
+        <Card>
+          <CardTitle icon={<UtensilsCrossed size={16} />} badge={`${chosenCount} 선택`}>오늘의 Quick Match</CardTitle>
+          <div className="grid grid-cols-4 gap-2">
+            {PREFERENCE_CARDS.map(option => (
+              <PreferenceCard key={option.label} option={option} selected={intent === option.value} onClick={() => setIntent(option.value)} />
+            ))}
+          </div>
+
+          <div className="my-4 h-px bg-[#F0EAE8]" />
+          <div className="mb-2 flex items-center gap-2">
+            <Sparkles size={15} className="text-[#F4515E]" />
+            <p className="text-[12px] font-extrabold text-[#524B4F]">어떤 분위기인가요?</p>
+          </div>
+          <div className="grid grid-cols-2 gap-2">
+            {FOOD_TAGS.map(tag => {
+              const selected = tags.includes(tag);
+              const meta = TAG_META[tag];
+              return (
+                <motion.button
+                  key={tag}
+                  type="button"
+                  onClick={() => toggleMany(tag, setTags)}
+                  whileTap={{ scale: 0.97 }}
+                  aria-pressed={selected}
+                  className={`flex min-h-[58px] items-center gap-2 rounded-[15px] border px-3 text-left transition-all ${selected ? 'border-[#F4515E] bg-[#FFF0EE]' : 'border-[#EEE7E4] bg-white'}`}
+                >
+                  <span className="text-xl">{meta?.icon}</span>
+                  <span className="min-w-0">
+                    <strong className="block text-[12px] text-[#3E373B]">{tag}</strong>
+                    <span className="block truncate text-[9px] font-semibold text-[#A39A9E]">{meta?.hint}</span>
+                  </span>
+                  <span className={`ml-auto flex size-4 shrink-0 items-center justify-center rounded-full border ${selected ? 'border-[#F4515E] bg-[#F4515E] text-white' : 'border-[#D9D0CD] text-transparent'}`}><Check size={10} strokeWidth={3} /></span>
+                </motion.button>
+              );
+            })}
+          </div>
+
+          <div className="my-3 h-px bg-[#F0EAE8]" />
+          <div className="mb-2 flex items-center justify-between gap-3">
+            <p className="text-[12px] font-extrabold text-[#524B4F]">Dietary requirements</p>
+            <button
+              type="button"
+              onClick={() => setDietary(current => current.filter(value => !DIETARY_REQUIREMENTS.some(option => option.value === value)))}
+              className="min-h-9 rounded-lg px-2 text-[10px] font-bold text-[#C43B47] outline-none focus-visible:ring-2 focus-visible:ring-[#F4515E]"
+            >
+              Clear requirements
+            </button>
+          </div>
+          <div className="grid grid-cols-2 gap-1.5">
+            {DIETARY_REQUIREMENTS.map(option => {
+              const selected = dietary.includes(option.value);
+              return (
+                <button
+                  key={option.label}
+                  type="button"
+                  onClick={() => toggleMany(option.value, setDietary)}
+                  aria-pressed={selected}
+                  className={`flex min-h-11 w-full items-center rounded-[12px] px-2.5 text-left transition-colors ${selected ? 'bg-[#EDF8EE]' : 'bg-[#F8F5F3] hover:bg-[#F1ECE9]'}`}
+                >
+                  <span className="mr-2 text-base">{option.icon}</span>
+                  <span className="truncate text-[11px] font-bold text-[#514A4D]">{option.label}</span>
+                  <span className={`ml-auto flex size-4 shrink-0 items-center justify-center rounded border ${selected ? 'border-[#55A964] bg-[#55A964] text-white' : 'border-[#D8CFCC] bg-white text-transparent'}`}><Check size={10} strokeWidth={3} /></span>
+                </button>
+              );
+            })}
+          </div>
+          <div className="mt-3 border-t border-[#F0EAE8] pt-3">
+            <IngredientAvoidancePicker selected={dietary} onToggle={value => toggleMany(value, setDietary)} />
+          </div>
+        </Card>
+
+        <div className="pb-3 pt-1">
+          <motion.button
+            type="button"
+            onClick={() => void handleStart()}
+            disabled={isCreating || isCheckingSession || sessionCheckFailed}
+            whileTap={{ scale: 0.98 }}
+            className="lunchie-session-primary-action w-full disabled:cursor-not-allowed disabled:opacity-60"
+          >
+            {isCheckingSession
+              ? 'Checking current session…'
+              : isCreating
+              ? '준비하는 중…'
+              : hasActiveSession && currentSession
+                ? currentSession.status === 'waiting' ? '대기방으로 돌아가기' : '투표 계속하기'
+                : isSolo ? 'Swipe 시작하기' : '세션 만들고 초대하기'}
+          </motion.button>
+        </div>
+      </main>
     </div>
   );
 }

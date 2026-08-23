@@ -10,6 +10,7 @@ import {
 import { getSavedFeedDetailPath } from '@/lib/savedNavigation';
 import { getCourseSequenceColor } from '@/constants/courseTheme';
 import { useDirections } from '@/hooks/useDirections';
+import { toSavedCourseRoutePath } from '@/lib/savedCourseRoute';
 import RestaurantDetailSheet from '@/components/munchie/RestaurantDetailSheet';
 import type { CoursePlace } from '@/types/course';
 
@@ -76,13 +77,14 @@ export function SavedMunchieMap({
     })) ?? [],
     [selectedCourse],
   );
-  const { coordinates: routeCoordinates } = useDirections(directionStops, 'walking');
+  const {
+    coordinates: routeCoordinates,
+    isLoading: isDirectionsLoading,
+    isError: isDirectionsError,
+  } = useDirections(directionStops, 'walking');
   const routePath = useMemo(
-    () => (routeCoordinates.length >= 2 ? routeCoordinates : directionStops).map((point) => ({
-      lat: point.latitude,
-      lng: point.longitude,
-    })),
-    [directionStops, routeCoordinates],
+    () => toSavedCourseRoutePath(routeCoordinates),
+    [routeCoordinates],
   );
   const selectedPlace = useMemo(
     () => selectedCourse?.points.find((point) => point.id === selectedPlaceId) ?? null,
@@ -147,6 +149,15 @@ export function SavedMunchieMap({
     <div
       data-ui="saved-course-map"
       data-mode={selectedCourse ? 'course-detail' : 'course-overview'}
+      data-route-state={selectedCourse
+        ? isDirectionsError
+          ? 'error'
+          : isDirectionsLoading
+            ? 'loading'
+            : routePath.length >= 2
+              ? 'ready'
+              : 'idle'
+        : 'idle'}
       className="relative h-full min-h-[430px] overflow-hidden rounded-[26px] border border-[#E5D5CC] bg-[#EEE7E1] shadow-[0_12px_30px_rgba(91,57,42,0.12)]"
     >
       <Map
@@ -218,6 +229,24 @@ export function SavedMunchieMap({
           </>
         )}
       </Map>
+
+      {selectedCourse && isDirectionsLoading && (
+        <div
+          role="status"
+          className="absolute right-3 top-3 rounded-full border border-[#E7D5CB] bg-[#FFFDFC]/95 px-3 py-2 text-[11px] font-bold text-[#80695E] shadow-md backdrop-blur"
+        >
+          도보 경로 불러오는 중…
+        </div>
+      )}
+
+      {selectedCourse && isDirectionsError && (
+        <div
+          role="alert"
+          className="absolute right-3 top-3 max-w-[240px] rounded-[14px] border border-[#F2C7C3] bg-[#FFF7F5]/95 px-3 py-2 text-[11px] font-bold leading-4 text-[#B84D4D] shadow-md backdrop-blur"
+        >
+          도보 경로를 불러오지 못했어요. 잠시 후 다시 확인해 주세요.
+        </div>
+      )}
 
       <AnimatePresence>
         {selectedCourse && (

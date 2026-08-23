@@ -50,6 +50,8 @@ export interface Candidate {
   dietary_options?: string[];
   /** Structured menu-section evidence, never inferred from a venue name. */
   menu_intents?: Intent[];
+  /** Raw structured menu entries used for ingredient-level dietary evidence. */
+  menu_items?: unknown;
 }
 
 // 스코어러 출력 — 실제로 보여줄 슬레이트 한 칸

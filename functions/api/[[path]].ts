@@ -2,7 +2,11 @@ import { Hono } from "hono";
 import { handle } from "hono/cloudflare-pages";
 import { decideGroup } from "../../server/engine/group";
 import {
-  matchesDietaryRestrictions,
+  isHardRestriction,
+  isIngredientAvoidance,
+  normalizeDiet,
+  restaurantSatisfiesDietRestriction,
+  type DietRestriction,
 } from "../../shared/const";
 import { categoryMatchesIntent, type Intent } from "../../shared/intent";
 import { intentForMenuSection, menuSectionIntents } from "../../shared/menuTaxonomy";
@@ -11,6 +15,15 @@ import { buildSlate, scoreCandidateBreakdown } from "../../server/engine/scorer"
 import type { Candidate, RecContext, SlateType } from "../../shared/engine";
 import { isAdminEmail } from "./adminAccess";
 import { assessLearningReadiness, coverage } from "./algorithmInsights";
+import {
+  autocompleteGooglePlaces,
+  autocompleteGoogleLocations,
+  getGoogleDirections,
+  getGoogleLocationDetails,
+  getGooglePlaceDetails,
+  googlePlacesErrorResponse,
+} from "./googlePlaces";
+import { feedItemMatchesLocation, parseFeedLocationFilter } from "./feedLocation";
 
 export interface EnvBindings {
   DB: any;
@@ -22,6 +35,7 @@ export interface EnvBindings {
   GOOGLE_CLIENT_ID: string;
   GOOGLE_CLIENT_SECRET: string;
   AUTH_SESSION_SECRET: string;
+  GOOGLE_MAPS_SERVER_API_KEY?: string;
   /** Comma-separated Google account emails allowed to access /admin. */
   ADMIN_EMAILS?: string;
 }
@@ -40,6 +54,36 @@ async function fetchConfiguredMedia(origin: string | undefined, key: string) {
   return response.ok ? response : null;
 }
 
+const mediaAvailability = new Map<string, Promise<boolean>>();
+function photoPathToKey(path: unknown) {
+  return typeof path === "string" && path.startsWith("/photos/")
+    ? path.slice("/photos/".length)
+    : null;
+}
+async function photoExists(env: Pick<EnvBindings, "MEDIA_ORIGIN" | "PHOTOS_R2">, path: unknown) {
+  const key = photoPathToKey(path);
+  if (!key || key.includes("..")) return false;
+  const cacheKey = `${env.MEDIA_ORIGIN ?? "local-r2"}:${key}`;
+  const cached = mediaAvailability.get(cacheKey);
+  if (cached) return cached;
+  const check = (async () => {
+    const remoteObject = await fetchConfiguredMedia(env.MEDIA_ORIGIN, key);
+    if (remoteObject) {
+      await remoteObject.body?.cancel().catch(() => undefined);
+      return true;
+    }
+    return Boolean(await env.PHOTOS_R2.get(`photos/${key}`));
+  })();
+  mediaAvailability.set(cacheKey, check);
+  return check;
+}
+async function filterExistingPhotos(
+  env: Pick<EnvBindings, "MEDIA_ORIGIN" | "PHOTOS_R2">,
+  paths: string[],
+) {
+  const checks = await Promise.all(paths.map(async (path) => [path, await photoExists(env, path)] as const));
+  return checks.filter(([, exists]) => exists).map(([path]) => path);
+}
 export const app = new Hono<{ Bindings: EnvBindings }>();
 
 type GoogleSession = {
@@ -108,6 +152,17 @@ async function userColumnNames(db: any) {
     .all<{ name: string }>();
   return new Set(results.map((column) => column.name));
 }
+
+export function normalizePublicHandle(value: unknown): string | null {
+  if (typeof value !== "string") return null;
+  const normalized = value.trim().replace(/^@/, "").toLowerCase();
+  return /^[a-z0-9_]{3,20}$/.test(normalized) ? normalized : null;
+}
+
+export function escapeUserSearchTerm(value: string): string {
+  return value.replace(/[\\%_]/g, (character) => `\\${character}`);
+}
+
 async function ensurePublicUser(db: any, session: GoogleSession) {
   const columns = await userColumnNames(db);
   if (columns.has("username") && columns.has("profile_image_url")) {
@@ -122,6 +177,14 @@ async function ensurePublicUser(db: any, session: GoogleSession) {
         Date.now(),
       )
       .run();
+    if (columns.has("handle")) {
+      await db
+        .prepare(
+          "UPDATE users SET handle = 'user_' || printf('%08x', rowid) WHERE id = ? AND handle IS NULL",
+        )
+        .bind(session.sub)
+        .run();
+    }
     return true;
   }
   // A developer can still authenticate against a pre-D1 local database. The
@@ -154,7 +217,22 @@ const cookieValue = (request: Request, name: string) =>
     .get("cookie")
     ?.match(new RegExp(`(?:^|; )${name}=([^;]+)`))?.[1] ?? null;
 
+const hasGoogleOAuthConfig = (
+  env: Partial<Pick<EnvBindings, "GOOGLE_CLIENT_ID" | "GOOGLE_CLIENT_SECRET" | "AUTH_SESSION_SECRET">>,
+): env is EnvBindings & {
+  GOOGLE_CLIENT_ID: string;
+  GOOGLE_CLIENT_SECRET: string;
+  AUTH_SESSION_SECRET: string;
+} =>
+  Boolean(
+    env.GOOGLE_CLIENT_ID?.trim()
+      && env.GOOGLE_CLIENT_SECRET?.trim()
+      && env.AUTH_SESSION_SECRET?.trim(),
+  );
+
 app.get("/api/auth/google/start", (c) => {
+  if (!hasGoogleOAuthConfig(c.env))
+    return c.redirect("/auth/login?error=oauth_config");
   const next = c.req.query("next")?.startsWith("/")
     ? c.req.query("next")!
     : "/";
@@ -177,6 +255,8 @@ app.get("/api/auth/google/start", (c) => {
 });
 
 app.get("/api/auth/google/callback", async (c) => {
+  if (!hasGoogleOAuthConfig(c.env))
+    return c.redirect("/auth/login?error=oauth_config");
   const [state, encodedNext] = (c.req.query("state") ?? "").split(".");
   const expected = c.req
     .header("cookie")
@@ -252,7 +332,7 @@ app.get("/api/auth/session", async (c) => {
   const profile =
     session && hasPublicProfile
       ? await c.env.DB.prepare(
-          "SELECT id, username, profile_image_url, bio, location FROM users WHERE id = ?",
+          "SELECT id, username, handle, profile_image_url, bio, location FROM users WHERE id = ?",
         )
           .bind(session.sub)
           .first<any>()
@@ -269,6 +349,51 @@ app.post("/api/auth/logout", (c) => {
     cookie("lm_guest_id", "", 0, requestIsSecure(c.req.raw)),
   );
   return c.json({ ok: true });
+});
+
+app.post("/api/places-autocomplete", async (c) => {
+  try {
+    const body = await c.req.json<Record<string, unknown>>();
+    return c.json(await autocompleteGooglePlaces(c.env, body));
+  } catch (error) {
+    return googlePlacesErrorResponse(error);
+  }
+});
+
+app.post("/api/location-autocomplete", async (c) => {
+  try {
+    const body = await c.req.json<Record<string, unknown>>();
+    return c.json(await autocompleteGoogleLocations(c.env, body));
+  } catch (error) {
+    return googlePlacesErrorResponse(error);
+  }
+});
+
+app.post("/api/location-details", async (c) => {
+  try {
+    const body = await c.req.json<Record<string, unknown>>();
+    return c.json(await getGoogleLocationDetails(c.env, body));
+  } catch (error) {
+    return googlePlacesErrorResponse(error);
+  }
+});
+
+app.post("/api/place-details", async (c) => {
+  try {
+    const body = await c.req.json<Record<string, unknown>>();
+    return c.json(await getGooglePlaceDetails(c.env, body));
+  } catch (error) {
+    return googlePlacesErrorResponse(error);
+  }
+});
+
+app.post("/api/directions", async (c) => {
+  try {
+    const body = await c.req.json<Record<string, unknown>>();
+    return c.json(await getGoogleDirections(c.env, body));
+  } catch (error) {
+    return googlePlacesErrorResponse(error);
+  }
 });
 
 const json = <T>(value: string | null | undefined, fallback: T): T => {
@@ -334,6 +459,62 @@ const isoDate = (value: unknown) => {
     : new Date(0).toISOString();
 };
 
+type PresentationPhotoRow = {
+  r2_key: string;
+  kind: string;
+  dishes: string;
+  perceptual_hash: string | null;
+};
+
+function hashDistance(left: string, right: string) {
+  if (!/^[0-9a-f]+$/i.test(left) || left.length !== right.length) return Infinity;
+  let distance = 0;
+  for (let index = 0; index < left.length; index += 1) {
+    let bits = Number.parseInt(left[index], 16) ^ Number.parseInt(right[index], 16);
+    while (bits) {
+      distance += bits & 1;
+      bits >>>= 1;
+    }
+  }
+  return distance;
+}
+
+export function selectLunchiePresentationPhotoKeys(
+  rows: PresentationPhotoRow[],
+  limit = 4,
+) {
+  const hashes: string[] = [];
+  const semanticFingerprints = new Set<string>();
+  const safe: string[] = [];
+  for (const row of rows) {
+    const hash = row.perceptual_hash?.trim().toLowerCase() || null;
+    if (hash && hashes.some((known) => hashDistance(hash, known) <= 8)) continue;
+    const dishes = json<string[]>(row.dishes, [])
+      .map((dish) => dish.trim().toLowerCase())
+      .filter(Boolean)
+      .sort()
+      .join("|");
+    // Until the ingestion pipeline supplies a perceptual hash, repeated dish
+    // labels provide a conservative diversity guard. An unlabelled photo is
+    // unique only by its own R2 key; no other restaurant is ever substituted.
+    const semanticFingerprint = `${row.kind}:${dishes || row.r2_key}`;
+    if (!hash && semanticFingerprints.has(semanticFingerprint)) continue;
+    if (hash) hashes.push(hash);
+    semanticFingerprints.add(semanticFingerprint);
+    safe.push(`/photos/${row.r2_key}`);
+    if (safe.length === limit) break;
+  }
+  return safe;
+}
+
+/** Lunchie cards only present evidence-backed food/table media. */
+async function lunchiePresentationPhotos(db: any, restaurantId: string) {
+  const { results } = await db.prepare(
+    "SELECT r2_key, kind, dishes, perceptual_hash FROM restaurant_photos WHERE restaurant_id = ? AND kind IN ('dish', 'table') AND has_person = 0 ORDER BY CASE kind WHEN 'dish' THEN 0 ELSE 1 END, COALESCE(quality, 0) DESC, id ASC LIMIT 24",
+  ).bind(restaurantId).all<PresentationPhotoRow>();
+  return selectLunchiePresentationPhotoKeys(results);
+}
+
 const EVENT_TYPES = new Set([
   "ONBOARDING_COMPLETED",
   "SESSION_CREATED",
@@ -353,6 +534,57 @@ const EVENT_TYPES = new Set([
   "ABANDON",
   "NO_CONSENSUS",
 ]);
+
+type MunchieRankSignals = {
+  viewerId: string | null;
+  categoryAffinity: Map<string, number>;
+  following: Set<string>;
+  now?: number;
+};
+
+function stableFeedNoise(value: string) {
+  let hash = 2166136261;
+  for (let index = 0; index < value.length; index += 1)
+    hash = Math.imul(hash ^ value.charCodeAt(index), 16777619);
+  return (hash >>> 0) / 0xffffffff;
+}
+
+/** Stable per-viewer ordering: relevance dominates bounded daily exploration. */
+export function rankMunchieFeedItems<T extends {
+  id: string;
+  creatorId: string;
+  tags?: string[];
+  stops?: Array<{ restaurant?: { category?: string } }>;
+  createdAt: unknown;
+  likesCount?: number;
+  commentsCount?: number;
+}>(feedItems: T[], signals: MunchieRankSignals) {
+  const now = signals.now ?? Date.now();
+  const day = Math.floor(now / 86_400_000);
+  return feedItems
+    .map((item) => {
+      const tags = Array.isArray(item.tags) ? item.tags : [];
+      const stopCategories = (item.stops ?? [])
+        .map(stop => stop.restaurant?.category)
+        .filter((category): category is string => typeof category === "string");
+      const affinity = [...tags, ...stopCategories]
+        .reduce((sum, key) => sum + (signals.categoryAffinity.get(key) ?? 0), 0);
+      const createdAtMs = new Date(isoDate(item.createdAt)).getTime();
+      const ageDays = Math.max(0, (now - createdAtMs) / 86_400_000);
+      const recency = Math.max(0, 1 - ageDays / 21);
+      const followBoost = signals.viewerId && signals.following.has(item.creatorId) ? 1.2 : 0;
+      const ownPenalty = signals.viewerId === item.creatorId ? 0.25 : 0;
+      const engagement = Math.log1p(Number(item.likesCount ?? 0) + Number(item.commentsCount ?? 0)) * 0.08;
+      const exploration = stableFeedNoise(`${signals.viewerId ?? "guest"}:${day}:${item.id}`) * 0.14;
+      return { item, score: affinity + followBoost + recency * 0.35 + engagement + exploration - ownPenalty, createdAtMs };
+    })
+    .sort((left, right) =>
+      right.score - left.score ||
+      right.createdAtMs - left.createdAtMs ||
+      left.item.id.localeCompare(right.item.id)
+    )
+    .map(({ item }) => item);
+}
 const MAX_MUNCHIE_FEED_PHOTOS = 6;
 const nullableText = (value: unknown, max = 200) =>
   typeof value === "string" ? value.trim().slice(0, max) || null : null;
@@ -445,7 +677,7 @@ app.get("/api/admin/metrics", async (c) => {
     : 30;
   const start = Date.now() - (days - 1) * 86_400_000;
   const count = (row: { count?: number | string } | null | undefined) => Number(row?.count ?? 0);
-  const [registered, newRegistered, activeActors, activeSignedIn, activeGuests, eventResult, trendResult, personaResult, modelResult, impressionCoverage, persistedSlates, servedImpressions, attributableSwipes, categoryResult, contributionResult, catalogueSummary, photoAssetSummary, coursePhotoSummary, menuSummary, menuSectionRows, catalogueCategories, dietarySupport, sourceDistribution, restaurantSamples] = await Promise.all([
+  const [registered, newRegistered, activeActors, activeSignedIn, activeGuests, eventResult, trendResult, personaResult, modelResult, impressionCoverage, persistedSlates, servedImpressions, attributableSwipes, persistedSessionSwipes, attributableSessionSwipes, categoryResult, contributionResult, catalogueSummary, photoAssetSummary, coursePhotoSummary, menuSummary, menuSectionRows, catalogueCategories, dietarySupport, sourceDistribution, restaurantSamples] = await Promise.all([
     c.env.DB.prepare("SELECT COUNT(*) AS count FROM users").first<{ count: number }>(),
     c.env.DB.prepare("SELECT COUNT(*) AS count FROM users WHERE created_at >= ?").bind(start).first<{ count: number }>(),
     c.env.DB.prepare("SELECT COUNT(DISTINCT user_id) AS count FROM rec_events WHERE created_at >= ? AND user_id IS NOT NULL").bind(start).first<{ count: number }>(),
@@ -458,7 +690,9 @@ app.get("/api/admin/metrics", async (c) => {
     c.env.DB.prepare("SELECT COUNT(*) AS impressions, SUM(CASE WHEN propensity IS NOT NULL AND propensity > 0 AND propensity <= 1 THEN 1 ELSE 0 END) AS propensity_logged, SUM(CASE WHEN score IS NOT NULL THEN 1 ELSE 0 END) AS score_logged, SUM(CASE WHEN model_version IS NOT NULL AND model_version != '' THEN 1 ELSE 0 END) AS model_logged, SUM(CASE WHEN context_json IS NOT NULL AND context_json != '' THEN 1 ELSE 0 END) AS context_logged FROM rec_events WHERE created_at >= ? AND event_type = 'IMPRESSION' AND COALESCE(slate_type, '') != 'COURSE_FEED'").bind(start).first<{ impressions: number; propensity_logged: number; score_logged: number; model_logged: number; context_logged: number }>(),
     c.env.DB.prepare("SELECT COUNT(*) AS count FROM recommendation_slates WHERE created_at >= ?").bind(start).first<{ count: number }>(),
     c.env.DB.prepare("SELECT COUNT(*) AS count FROM rec_events e INNER JOIN recommendation_slates s ON s.id = e.slate_id WHERE e.created_at >= ? AND e.event_type = 'IMPRESSION'").bind(start).first<{ count: number }>(),
-    c.env.DB.prepare("SELECT COUNT(*) AS count FROM rec_events e INNER JOIN recommendation_slates s ON s.id = e.slate_id WHERE e.created_at >= ? AND e.event_type = 'SWIPE'").bind(start).first<{ count: number }>(),
+    c.env.DB.prepare("SELECT COUNT(DISTINCT CASE WHEN e.session_id IS NOT NULL THEN e.session_id || ':' || e.user_id || ':' || e.restaurant_id || ':' || COALESCE(e.round, 1) ELSE e.id END) AS count FROM rec_events e INNER JOIN recommendation_slates s ON s.id = e.slate_id WHERE e.created_at >= ? AND e.event_type = 'SWIPE'").bind(start).first<{ count: number }>(),
+    c.env.DB.prepare("SELECT COUNT(*) AS count FROM swipes WHERE created_at >= ? AND round % 2 = 1 AND swipe_action IN ('LIKE', 'DISLIKE') AND restaurant_id NOT LIKE '__%'").bind(start).first<{ count: number }>(),
+    c.env.DB.prepare("SELECT COUNT(DISTINCT e.session_id || ':' || e.user_id || ':' || e.restaurant_id || ':' || e.round) AS count FROM rec_events e INNER JOIN recommendation_slates s ON s.id = e.slate_id WHERE e.created_at >= ? AND e.event_type = 'SWIPE' AND e.session_id IS NOT NULL AND e.round % 2 = 1").bind(start).first<{ count: number }>(),
     c.env.DB.prepare("SELECT r.category AS category, SUM(CASE WHEN e.event_type = 'IMPRESSION' THEN 1 ELSE 0 END) AS impressions, SUM(CASE WHEN e.event_type = 'SWIPE' AND e.action = 'LIKE' THEN 1 ELSE 0 END) AS likes, SUM(CASE WHEN e.event_type = 'SWIPE' AND e.action = 'NOPE' THEN 1 ELSE 0 END) AS nopes, SUM(CASE WHEN e.event_type = 'WINNER' THEN 1 ELSE 0 END) AS decisions FROM rec_events e JOIN restaurants r ON r.id = e.restaurant_id WHERE e.created_at >= ? AND e.event_type IN ('IMPRESSION', 'SWIPE', 'WINNER') GROUP BY r.category ORDER BY impressions DESC, decisions DESC LIMIT 8").bind(start).all<{ category: string; impressions: number; likes: number; nopes: number; decisions: number }>(),
     c.env.DB.prepare("SELECT AVG(CAST(json_extract(item.value, '$.components.reputation') AS REAL)) AS reputation, AVG(CAST(json_extract(item.value, '$.components.context') AS REAL)) AS context, AVG(CAST(json_extract(item.value, '$.components.taste') AS REAL)) AS taste, AVG(CAST(json_extract(item.value, '$.components.exposureFatigue') AS REAL)) AS exposure_fatigue, AVG(CAST(json_extract(item.value, '$.components.satiation') AS REAL)) AS satiation, AVG(CAST(json_extract(item.value, '$.components.journeyChain') AS REAL)) AS journey_chain, COUNT(*) AS count FROM recommendation_slates s, json_each(s.items_json) AS item WHERE s.created_at >= ? AND json_type(item.value, '$.components') = 'object'").bind(start).first<{ reputation: number | null; context: number | null; taste: number | null; exposure_fatigue: number | null; satiation: number | null; journey_chain: number | null; count: number }>(),
     c.env.DB.prepare("SELECT COUNT(*) AS restaurants, SUM(CASE WHEN address IS NOT NULL AND trim(address) != '' THEN 1 ELSE 0 END) AS with_address, SUM(CASE WHEN latitude != 0 OR longitude != 0 THEN 1 ELSE 0 END) AS with_coordinates, SUM(CASE WHEN short_description IS NOT NULL AND trim(short_description) != '' THEN 1 ELSE 0 END) AS with_description, SUM(CASE WHEN json_valid(photos) AND json_array_length(photos) > 0 THEN 1 ELSE 0 END) AS with_photo_reference, SUM(CASE WHEN json_valid(photos) THEN json_array_length(photos) ELSE 0 END) AS photo_references, SUM(CASE WHEN json_valid(menus) AND json_array_length(menus) > 0 THEN 1 ELSE 0 END) AS with_menu_reference, SUM(CASE WHEN json_valid(menus) THEN json_array_length(menus) ELSE 0 END) AS menu_references FROM restaurants").first<{ restaurants: number; with_address: number; with_coordinates: number; with_description: number; with_photo_reference: number; photo_references: number; with_menu_reference: number; menu_references: number }>(),
@@ -494,6 +728,9 @@ app.get("/api/admin/metrics", async (c) => {
     persistedSlates: count(persistedSlates),
     servedImpressions: count(servedImpressions),
     attributableSwipes: count(attributableSwipes),
+    persistedSessionSwipes: count(persistedSessionSwipes),
+    attributableSessionSwipes: count(attributableSessionSwipes),
+    unattributedSessionSwipes: Math.max(0, count(persistedSessionSwipes) - count(attributableSessionSwipes)),
     propensityCoverage: coverage(Number(impressionCoverage?.propensity_logged ?? 0), impressionTotal),
     scoreCoverage: coverage(Number(impressionCoverage?.score_logged ?? 0), impressionTotal),
     modelVersionCoverage: coverage(Number(impressionCoverage?.model_logged ?? 0), impressionTotal),
@@ -651,12 +888,14 @@ app.patch("/api/profile", async (c) => {
       { error: "로컬 사용자 스키마를 갱신한 뒤 프로필을 수정할 수 있습니다." },
       409,
     );
-  const body = await c.req.json<{ avatarUrl?: unknown; username?: unknown }>().catch(() => ({}));
+  const body = await c.req.json<{ avatarUrl?: unknown; username?: unknown; handle?: unknown }>().catch(() => ({}));
   const hasAvatarUrl = "avatarUrl" in body;
   const hasUsername = "username" in body;
-  if (!hasAvatarUrl && !hasUsername)
+  const hasHandle = "handle" in body;
+  if (!hasAvatarUrl && !hasUsername && !hasHandle)
     return c.json({ error: "변경할 프로필 정보가 없습니다." }, 400);
 
+  const statements: any[] = [];
   if (hasAvatarUrl) {
     const avatarUrl = body.avatarUrl;
     if (
@@ -670,9 +909,10 @@ app.patch("/api/profile", async (c) => {
         400,
       );
     }
-    await c.env.DB.prepare("UPDATE users SET profile_image_url = ? WHERE id = ?")
-      .bind(avatarUrl, session.sub)
-      .run();
+    statements.push(
+      c.env.DB.prepare("UPDATE users SET profile_image_url = ? WHERE id = ?")
+        .bind(avatarUrl, session.sub),
+    );
   }
 
   if (hasUsername) {
@@ -681,12 +921,35 @@ app.patch("/api/profile", async (c) => {
     const username = body.username.trim();
     if (!username || username.length > 80)
       return c.json({ error: "이름은 1~80자로 입력해 주세요." }, 400);
-    await c.env.DB.prepare("UPDATE users SET username = ? WHERE id = ?")
-      .bind(username, session.sub)
-      .run();
+    statements.push(
+      c.env.DB.prepare("UPDATE users SET username = ? WHERE id = ?")
+        .bind(username, session.sub),
+    );
+  }
+
+  if (hasHandle) {
+    const handle = normalizePublicHandle(body.handle);
+    if (!handle)
+      return c.json({ error: "아이디는 영문 소문자, 숫자, 밑줄로 3~20자까지 입력해 주세요." }, 400);
+    const owner = await c.env.DB.prepare(
+      "SELECT id FROM users WHERE handle = ? COLLATE NOCASE AND id <> ?",
+    ).bind(handle, session.sub).first<{ id: string }>();
+    if (owner)
+      return c.json({ error: "이미 사용 중인 아이디입니다.", code: "HANDLE_TAKEN" }, 409);
+    statements.push(
+      c.env.DB.prepare("UPDATE users SET handle = ? WHERE id = ?")
+        .bind(handle, session.sub),
+    );
+  }
+  try {
+    await c.env.DB.batch(statements);
+  } catch (error) {
+    if (hasHandle)
+      return c.json({ error: "이미 사용 중인 아이디입니다.", code: "HANDLE_TAKEN" }, 409);
+    throw error;
   }
   const profile = await c.env.DB.prepare(
-    "SELECT id, username, profile_image_url, bio, location FROM users WHERE id = ?",
+    "SELECT id, username, handle, profile_image_url, bio, location FROM users WHERE id = ?",
   )
     .bind(session.sub)
     .first<any>();
@@ -711,6 +974,66 @@ app.get("/api/health", async (c) => {
   }
 });
 
+async function requireGoogleSession(c: { req: { raw: Request }; env: EnvBindings }) {
+  const session = await readSession(c.req.raw, c.env.AUTH_SESSION_SECRET);
+  if (!session) return null;
+  await ensurePublicUser(c.env.DB, session);
+  return session;
+}
+
+// User search is limited to authenticated Lunchie accounts. Only public
+// profile fields are returned; OAuth subject IDs are used solely as route keys.
+app.get("/api/users/search", async (c) => {
+  const session = await requireGoogleSession(c);
+  if (!session) return c.json({ error: "로그인이 필요합니다." }, 401);
+  const rawQuery = (c.req.query("q") ?? "").trim();
+  const query = rawQuery.replace(/^@/, "");
+  if (!query || query.length > 40)
+    return c.json({ error: "검색어는 1~40자로 입력해 주세요." }, 400);
+  const escaped = escapeUserSearchTerm(query.toLowerCase());
+  const namePattern = `%${escaped}%`;
+  const handlePattern = `${escaped}%`;
+  const { results } = await c.env.DB.prepare(
+    `SELECT
+      u.id,
+      u.username,
+      COALESCE(u.handle, '') AS handle,
+      u.profile_image_url,
+      u.bio,
+      u.location,
+      u.created_at,
+      CASE WHEN u.id = ? THEN 1 ELSE 0 END AS is_self,
+      CASE WHEN EXISTS (
+        SELECT 1 FROM user_follows f
+        WHERE f.follower_id = ? AND f.following_id = u.id
+      ) THEN 1 ELSE 0 END AS is_following
+    FROM users u
+    WHERE lower(u.username) LIKE ? ESCAPE '\\'
+       OR lower(COALESCE(u.handle, '')) LIKE ? ESCAPE '\\'
+    ORDER BY
+      CASE
+        WHEN lower(COALESCE(u.handle, '')) = ? THEN 0
+        WHEN lower(u.username) = ? THEN 1
+        ELSE 2
+      END,
+      u.username COLLATE NOCASE ASC,
+      u.id ASC
+    LIMIT 20`,
+  ).bind(
+    session.sub,
+    session.sub,
+    namePattern,
+    handlePattern,
+    query.toLowerCase(),
+    query.toLowerCase(),
+  ).all<any>();
+  return c.json((results ?? []).map((user: any) => ({
+    ...user,
+    is_self: Boolean(user.is_self),
+    is_following: Boolean(user.is_following),
+  })));
+});
+
 // Public profile data comes from the same D1 identity store that owns a post.
 // D1 is the only public-profile source of truth.
 app.get("/api/users/:id", async (c) => {
@@ -718,7 +1041,7 @@ app.get("/api/users/:id", async (c) => {
   if (!id || id.length > 256)
     return c.json({ error: "사용자 정보가 올바르지 않습니다." }, 400);
   const user = await c.env.DB.prepare(
-    "SELECT id, username, profile_image_url, bio, location, created_at FROM users WHERE id = ?",
+    "SELECT id, username, handle, profile_image_url, bio, location, created_at FROM users WHERE id = ?",
   )
     .bind(id)
     .first<any>();
@@ -731,6 +1054,7 @@ app.get("/api/users/:id", async (c) => {
   return c.json({
     id: user.id,
     username: user.username,
+    handle: user.handle,
     profile_image_url: user.profile_image_url,
     bio: user.bio,
     location: user.location,
@@ -738,13 +1062,6 @@ app.get("/api/users/:id", async (c) => {
     public_post_count: Number(count?.count ?? 0),
   });
 });
-
-async function requireGoogleSession(c: { req: { raw: Request }; env: EnvBindings }) {
-  const session = await readSession(c.req.raw, c.env.AUTH_SESSION_SECRET);
-  if (!session) return null;
-  await ensurePublicUser(c.env.DB, session);
-  return session;
-}
 
 async function requireAdminSession(c: { req: { raw: Request }; env: EnvBindings; json: (value: unknown, status?: number) => Response }) {
   const session = await readSession(c.req.raw, c.env.AUTH_SESSION_SECRET);
@@ -796,8 +1113,8 @@ app.delete("/api/users/:id/follow", async (c) => {
 async function listFollows(c: any, list: "followers" | "following") {
   const id = c.req.param("id");
   const query = list === "followers"
-    ? "SELECT u.id, u.username, u.profile_image_url, u.bio, u.location, u.created_at FROM user_follows f JOIN users u ON u.id = f.follower_id WHERE f.following_id = ? ORDER BY f.created_at DESC"
-    : "SELECT u.id, u.username, u.profile_image_url, u.bio, u.location, u.created_at FROM user_follows f JOIN users u ON u.id = f.following_id WHERE f.follower_id = ? ORDER BY f.created_at DESC";
+    ? "SELECT u.id, u.username, u.handle, u.profile_image_url, u.bio, u.location, u.created_at FROM user_follows f JOIN users u ON u.id = f.follower_id WHERE f.following_id = ? ORDER BY f.created_at DESC"
+    : "SELECT u.id, u.username, u.handle, u.profile_image_url, u.bio, u.location, u.created_at FROM user_follows f JOIN users u ON u.id = f.following_id WHERE f.follower_id = ? ORDER BY f.created_at DESC";
   const { results } = await c.env.DB.prepare(query).bind(id).all();
   return c.json(results);
 }
@@ -845,6 +1162,13 @@ app.post("/api/recommend", async (c) => {
       : Array.isArray(ctx.diet)
         ? ctx.diet
         : [];
+    const requiredDiets = diets
+      .map((diet: unknown) => typeof diet === "string" ? normalizeDiet(diet) : null)
+      .filter(
+        (diet: ReturnType<typeof normalizeDiet>): diet is DietRestriction =>
+          Boolean(diet) && isHardRestriction(diet),
+      );
+
     // 2. Taste (Categories) mapping
     if (ctx.categories && ctx.categories.length > 0) {
       query += ` AND category IN (${ctx.categories.map(() => "?").join(",")})`;
@@ -874,16 +1198,39 @@ app.post("/api/recommend", async (c) => {
     const requestedBudget = Number.isInteger(ctx.budget) && ctx.budget >= 1 && ctx.budget <= 4
       ? Number(ctx.budget)
       : null;
-    const results = rawRestaurants
-      .filter((restaurant) =>
-        categoryMatchesIntent(restaurant.category, selectedIntent) &&
-        matchesDietaryRestrictions(
-          restaurant.category,
-          menuEvidence.get(restaurant.id)?.dietary ?? json<string[]>(restaurant.dietary_options, []),
-          diets,
-        ) &&
-        matchesMenuBudget(menuEvidence.get(restaurant.id), requestedBudget),
-      )
+    const intentResults = rawRestaurants.filter((restaurant) =>
+      categoryMatchesIntent(restaurant.category, selectedIntent) &&
+      matchesMenuBudget(menuEvidence.get(restaurant.id), requestedBudget),
+    );
+    const exactResults = intentResults.filter((restaurant) =>
+      requiredDiets.every((restriction) =>
+        restaurantSatisfiesDietRestriction(
+          {
+            category: restaurant.category,
+            dietaryOptions: menuEvidence.get(restaurant.id)?.dietary ?? json<string[]>(restaurant.dietary_options, []),
+            menuItems: json(restaurant.menus, []),
+          },
+          restriction,
+        ),
+      ),
+    );
+    const ingredientAvoidances = requiredDiets.filter(isIngredientAvoidance);
+    const dietRelaxed = exactResults.length === 0 && requiredDiets.some(restriction => !isIngredientAvoidance(restriction));
+    const filteredResults = dietRelaxed
+      ? intentResults.filter((restaurant) =>
+          ingredientAvoidances.every((restriction) =>
+            restaurantSatisfiesDietRestriction(
+              {
+                category: restaurant.category,
+                dietaryOptions: menuEvidence.get(restaurant.id)?.dietary ?? json<string[]>(restaurant.dietary_options, []),
+                menuItems: json(restaurant.menus, []),
+              },
+              restriction,
+            ),
+          ),
+        )
+      : exactResults;
+    const results = filteredResults
       // Menu taxonomy never widens the hard intent filter above. It simply
       // gives the contextual ranker a verified cafe/dessert signal when an
       // otherwise broad restaurant category has a structured menu section.
@@ -990,22 +1337,24 @@ app.post("/api/recommend", async (c) => {
         ),
       ),
     ]);
-    const response = c.json({
-      slate: finalResults.map((item) => ({
+    const safeSlate = await Promise.all(finalResults.map(async (item) => ({
         ...item.restaurant,
-        photos: json<string[]>(item.restaurant.photos, []),
+        photos: await lunchiePresentationPhotos(c.env.DB, item.restaurant.id),
         menu_items: json(item.restaurant.menus, []),
         tags: json<string[]>(item.restaurant.tags, []),
         rank: item.rank,
         score: item.score,
         propensity: item.propensity,
-      })),
+      })));
+    const response = c.json({
+      slate: safeSlate,
       user_id: userId,
       k,
       slate_id: slateId,
       slate_type: slateType,
       model_version: policyVersion,
       engine: "cloudflare-hono-d1",
+      diet_relaxed: dietRelaxed && results.length > 0,
     });
     if (!session && !existingGuestId)
       response.headers.append("Set-Cookie", cookie("lm_guest_id", guestId, 30 * 24 * 60 * 60, requestIsSecure(c.req.raw)));
@@ -1029,12 +1378,12 @@ app.get("/api/restaurants", async (c) => {
     .bind(limit)
     .all();
   return c.json(
-    results.map((r: any) => ({
+    await Promise.all(results.map(async (r: any) => ({
       ...r,
-      photos: json<string[]>(r.photos, []),
+      photos: await lunchiePresentationPhotos(c.env.DB, r.id),
       menu_items: json(r.menus, []),
       tags: json<string[]>(r.tags, []),
-    })),
+    }))),
   );
 });
 
@@ -1055,6 +1404,23 @@ app.get("/api/courses", async (c) => {
 
       // 브라우저가 사용하는 Course 계약으로 정규화한다. DB의 JSON TEXT/스네이크 케이스를
       // 그대로 내보내면 tags.map에서 초기 동기화가 멈춰, 뒤의 피드 갱신도 실행되지 않는다.
+      const courseStops = await Promise.all(stops.map(async (s: any) => ({
+        placeId: s.restaurant_id,
+        order: s.order_index,
+        startTime: s.start_time || "",
+        endTime: s.end_time || "",
+        isBookmarked: Boolean(s.is_bookmarked),
+        restaurant: {
+          id: s.restaurant_id,
+          name: s.name,
+          category: s.category,
+          photos: await filterExistingPhotos(c.env, json<string[]>(s.photos, [])),
+          rating: s.rating,
+          latitude: s.latitude,
+          longitude: s.longitude,
+        },
+      })));
+
       populatedCourses.push({
         id: course.id,
         title: course.title,
@@ -1072,22 +1438,7 @@ app.get("/api/courses", async (c) => {
         savedCount: Number(course.saves_count ?? 0),
         isPublic: Boolean(course.is_public),
         createdAt: isoDate(course.created_at),
-        stops: stops.map((s: any) => ({
-          placeId: s.restaurant_id,
-          order: s.order_index,
-          startTime: s.start_time || "",
-          endTime: s.end_time || "",
-          isBookmarked: Boolean(s.is_bookmarked),
-          restaurant: {
-            id: s.restaurant_id,
-            name: s.name,
-            category: s.category,
-            photos: json<string[]>(s.photos, []),
-            rating: s.rating,
-            latitude: s.latitude,
-            longitude: s.longitude,
-          },
-        })),
+        stops: courseStops,
       });
     }
 
@@ -1439,6 +1790,9 @@ type SessionRow = {
   deadline_at: number | null;
   created_at: number;
 };
+const TERMINAL_SESSION_STATUSES = new Set(["CANCELLED", "COMPLETED", "EXPIRED"]);
+const sessionStatus = (value: unknown) =>
+  typeof value === "string" ? value.trim().toUpperCase() : "";
 const sessionPayload = (session: SessionRow) => ({
   ...session,
   // The existing app named this field filter_vibe. Keep that client contract
@@ -1450,6 +1804,31 @@ const sessionPayload = (session: SessionRow) => ({
 });
 const sessionToken = () =>
   crypto.randomUUID().replaceAll("-", "").slice(0, 6).toUpperCase();
+const sessionMemberKey = () =>
+  `${crypto.randomUUID().replaceAll("-", "")}${crypto.randomUUID().replaceAll("-", "")}`;
+const sessionMemberKeyHash = async (value: string) => {
+  const digest = await crypto.subtle.digest("SHA-256", encoder.encode(value));
+  return Array.from(new Uint8Array(digest), (byte) =>
+    byte.toString(16).padStart(2, "0"),
+  ).join("");
+};
+const authorizedSessionMember = async (
+  db: EnvBindings["DB"],
+  sessionId: string,
+  userId: string | null,
+  memberKey: string | null,
+) => {
+  if (!userId || !memberKey) return null;
+  const member = await db
+    .prepare(
+      "SELECT user_id, member_secret_hash FROM session_members WHERE session_id = ? AND user_id = ?",
+    )
+    .bind(sessionId, userId)
+    .first<{ user_id: string; member_secret_hash: string | null }>();
+  if (!member?.member_secret_hash) return null;
+  const suppliedHash = await sessionMemberKeyHash(memberKey);
+  return suppliedHash === member.member_secret_hash ? member : null;
+};
 const PRELIM_DONE_ID = "__prelim_done__";
 const DECK_SIZE_PREFIX = "__deck_size__:";
 const FORCE_PREFIX = "__force__:";
@@ -1497,33 +1876,50 @@ const sessionPreferences = (value: unknown): SessionPreference[] =>
     }))
     .filter((item) => item.category);
 const sessionDietary = (value: unknown) => preferenceSnapshot(value).dietary;
+function matchesGroupDiet(
+  category: string,
+  optionText: unknown,
+  menuItems: unknown,
+  rawRestrictions: string[],
+) {
+  const required = rawRestrictions
+    .map(normalizeDiet)
+    .filter(
+      (diet): diet is DietRestriction => Boolean(diet) && isHardRestriction(diet),
+    );
+  if (!required.length) return true;
+  return required.every((restriction) =>
+    restaurantSatisfiesDietRestriction(
+      { category, dietaryOptions: optionText, menuItems },
+      restriction,
+    ),
+  );
+}
 // A group slate is intentionally computed once on the server. Ranking averages
 // member preference signals, then applies a category-coverage penalty so the
 // first seven cards do not collapse into one cuisine. The stable tie-break is
 // session-based: identical room state always produces the identical deck.
-function buildSharedSessionDeck(
+export function buildSharedSessionDeck(
   sessionId: string,
   restaurants: any[],
   memberRows: any[],
   size = 7,
 ): Array<{ id: string; score: number; position: number }> {
-  const members = memberRows.map((member) =>
-    sessionPreferences(member.preferences_json),
-  );
-  const categoryScores = new Map<string, number>();
-  for (const preferences of members) {
-    const perMember = new Map(
-      preferences.map((preference) => [preference.category, preference.score]),
-    );
-    for (const restaurant of restaurants) {
-      const previous = categoryScores.get(restaurant.category) ?? 0;
-      categoryScores.set(
-        restaurant.category,
-        previous + (perMember.get(restaurant.category) ?? 0.35),
-      );
-    }
-  }
-  const divisor = Math.max(1, members.length);
+  const memberPreferences = memberRows.map((member) => new Map(
+    sessionPreferences(member.preferences_json)
+      .map((preference) => [preference.category, preference.score]),
+  ));
+  const averagePreferenceFor = (category: string) => {
+    if (!memberPreferences.length) return 0.35;
+    // A neutral fallback means a member without an explicit category signal
+    // neither vetoes nor silently boosts a cuisine. Crucially, calculate this
+    // per restaurant: summing category scores while iterating candidates made
+    // categories with more catalogue entries unfairly dominate the group deck.
+    return memberPreferences.reduce(
+      (total, preferences) => total + (preferences.get(category) ?? 0.35),
+      0,
+    ) / memberPreferences.length;
+  };
   const hash = (value: string) => {
     let result = 2166136261;
     for (let index = 0; index < value.length; index++)
@@ -1533,7 +1929,7 @@ function buildSharedSessionDeck(
   const remaining = restaurants.map((restaurant) => ({
     restaurant,
     score:
-      (categoryScores.get(restaurant.category) ?? 0) / divisor +
+      averagePreferenceFor(restaurant.category) +
       Math.min(1, Number(restaurant.rating ?? 0) / 5) * 0.15 +
       hash(`${sessionId}:${restaurant.id}`) * 0.03,
   }));
@@ -1764,6 +2160,8 @@ app.post("/api/sessions/create", async (c) => {
   for (let attempt = 0; attempt < 3; attempt += 1) {
     const id = crypto.randomUUID();
     const token = sessionToken();
+    const memberKey = sessionMemberKey();
+    const memberSecretHash = await sessionMemberKeyHash(memberKey);
     try {
       await c.env.DB.batch([
         c.env.DB.prepare(
@@ -1785,7 +2183,7 @@ app.post("/api/sessions/create", async (c) => {
           createdAt,
         ),
         c.env.DB.prepare(
-          "INSERT INTO session_members (id, session_id, user_id, user_name, emoji, is_ready, preferences_json, joined_at) VALUES (?, ?, ?, ?, ?, 0, ?, ?)",
+          "INSERT INTO session_members (id, session_id, user_id, user_name, emoji, is_ready, preferences_json, member_secret_hash, joined_at) VALUES (?, ?, ?, ?, ?, 0, ?, ?, ?)",
         ).bind(
           crypto.randomUUID(),
           id,
@@ -1793,6 +2191,7 @@ app.post("/api/sessions/create", async (c) => {
           hostName,
           emoji,
           JSON.stringify({ categories: hostPreferences, dietary: hostDietary }),
+          memberSecretHash,
           createdAt,
         ),
       ]);
@@ -1815,7 +2214,7 @@ app.post("/api/sessions/create", async (c) => {
         deadline_at: null,
         created_at: createdAt,
       };
-      return c.json({ session: sessionPayload(session), token }, 201);
+      return c.json({ session: sessionPayload(session), token, memberKey }, 201);
     } catch (error: any) {
       // A random invite-code collision is safe to retry; any other D1 error
       // is surfaced so the client never gives out a non-existent invitation.
@@ -1870,41 +2269,59 @@ app.post("/api/sessions/:token/join", async (c) => {
         .filter((item): item is string => typeof item === "string")
         .slice(0, 12)
     : [];
+  const suppliedMemberKey = nullableText(body.memberKey, 256);
   if (!userId || !userName)
     return c.json({ error: "참여자 정보가 필요합니다." }, 400);
   const session = await c.env.DB.prepare(
-    "SELECT id, group_size FROM sessions WHERE share_token = ?",
+    "SELECT id, group_size, status FROM sessions WHERE share_token = ?",
   )
     .bind(token)
-    .first<{ id: string; group_size: number }>();
+    .first<{ id: string; group_size: number; status: string }>();
   if (!session)
     return c.json({ error: "세션을 찾을 수 없거나 만료되었습니다." }, 404);
   const existing = await c.env.DB.prepare(
-    "SELECT id FROM session_members WHERE session_id = ? AND user_id = ?",
+    "SELECT id, member_secret_hash FROM session_members WHERE session_id = ? AND user_id = ?",
   )
     .bind(session.id, userId)
-    .first();
-  if (!existing) {
-    const count = await c.env.DB.prepare(
-      "SELECT COUNT(*) AS count FROM session_members WHERE session_id = ?",
-    )
-      .bind(session.id)
-      .first<{ count: number }>();
-    if (Number(count?.count ?? 0) >= Number(session.group_size)) {
-      const solo = Number(session.group_size) === 1;
+    .first<{ id: string; member_secret_hash: string | null }>();
+  const currentStatus = sessionStatus(session.status);
+  if (TERMINAL_SESSION_STATUSES.has(currentStatus))
+    return c.json({ error: "이미 종료된 세션입니다.", code: `SESSION_${currentStatus}` }, 410);
+  if (currentStatus !== "WAITING" && !existing)
+    return c.json({ error: "이미 투표가 시작된 세션입니다.", code: "SESSION_STARTED" }, 409);
+  if (existing) {
+    if (
+      !suppliedMemberKey ||
+      !existing.member_secret_hash ||
+      (await sessionMemberKeyHash(suppliedMemberKey)) !== existing.member_secret_hash
+    ) {
       return c.json(
-        {
-          error: solo
-            ? "호스트가 혼자 세션으로 만들었어요. 호스트가 '같이' 세션을 새로 만들어야 합니다."
-            : "정원이 찼어요.",
-          code: solo ? "SOLO_SESSION" : "SESSION_FULL",
-        },
-        409,
+        { error: "이 기기의 세션 자격 증명을 확인할 수 없습니다.", code: "MEMBER_CREDENTIAL_REQUIRED" },
+        403,
       );
     }
+    await c.env.DB.prepare(
+      "UPDATE session_members SET user_name = ?, emoji = ?, preferences_json = ? WHERE session_id = ? AND user_id = ?",
+    )
+      .bind(
+        userName,
+        emoji,
+        JSON.stringify({ categories: preferences, dietary }),
+        session.id,
+        userId,
+      )
+      .run();
+    return c.json({ ok: true, memberKey: suppliedMemberKey });
   }
-  await c.env.DB.prepare(
-    "INSERT INTO session_members (id, session_id, user_id, user_name, emoji, is_ready, preferences_json, joined_at) VALUES (?, ?, ?, ?, ?, 0, ?, ?) ON CONFLICT(session_id, user_id) DO UPDATE SET user_name = excluded.user_name, emoji = excluded.emoji, preferences_json = excluded.preferences_json",
+
+  // Capacity is checked inside the INSERT statement. A separate COUNT then
+  // INSERT lets two simultaneous invitees both observe the final free seat.
+  // D1/SQLite serializes this statement, so only one insertion can win it.
+  const preferencesJson = JSON.stringify({ categories: preferences, dietary });
+  const memberKey = sessionMemberKey();
+  const memberSecretHash = await sessionMemberKeyHash(memberKey);
+  const inserted = await c.env.DB.prepare(
+    "INSERT INTO session_members (id, session_id, user_id, user_name, emoji, is_ready, preferences_json, member_secret_hash, joined_at) SELECT ?, ?, ?, ?, ?, 0, ?, ?, ? WHERE (SELECT COUNT(*) FROM session_members WHERE session_id = ?) < ?",
   )
     .bind(
       crypto.randomUUID(),
@@ -1912,25 +2329,107 @@ app.post("/api/sessions/:token/join", async (c) => {
       userId,
       userName,
       emoji,
-      JSON.stringify({ categories: preferences, dietary }),
+      preferencesJson,
+      memberSecretHash,
       Date.now(),
+      session.id,
+      session.group_size,
     )
     .run();
+  if ((inserted.meta?.changes ?? 0) === 0) {
+    const solo = Number(session.group_size) === 1;
+    return c.json(
+      {
+        error: solo
+          ? "호스트가 혼자 세션으로 만들었어요. 호스트가 '같이' 세션을 새로 만들어야 합니다."
+          : "정원이 찼어요.",
+        code: solo ? "SOLO_SESSION" : "SESSION_FULL",
+      },
+      409,
+    );
+  }
+  return c.json({ ok: true, memberKey });
+});
+
+app.post("/api/sessions/:token/cancel", async (c) => {
+  const token = c.req.param("token").trim().toUpperCase();
+  const body = await c.req.json<Record<string, unknown>>().catch(() => ({}));
+  const userId = nullableText(body.userId, 256);
+  const memberKey = nullableText(body.memberKey, 256);
+  if (!userId) return c.json({ error: "사용자 정보가 필요합니다." }, 400);
+  const session = await c.env.DB.prepare(
+    "SELECT id, host_user_id, status FROM sessions WHERE share_token = ?",
+  )
+    .bind(token)
+    .first<Pick<SessionRow, "id" | "host_user_id" | "status">>();
+  if (!session) return c.json({ error: "세션을 찾을 수 없습니다." }, 404);
+  if (session.host_user_id !== userId)
+    return c.json({ error: "세션 취소는 호스트만 할 수 있습니다.", code: "HOST_ONLY" }, 403);
+  if (!(await authorizedSessionMember(c.env.DB, session.id, userId, memberKey)))
+    return c.json({ error: "호스트 자격 증명을 확인할 수 없습니다.", code: "INVALID_MEMBER_CREDENTIAL" }, 403);
+  const currentStatus = sessionStatus(session.status);
+  if (currentStatus === "CANCELLED") return c.json({ ok: true, alreadyCancelled: true });
+  if (currentStatus === "COMPLETED" || currentStatus === "EXPIRED")
+    return c.json({ error: "이미 종료된 세션입니다.", code: `SESSION_${currentStatus}` }, 409);
+  await c.env.DB.prepare("UPDATE sessions SET status = 'CANCELLED' WHERE id = ?")
+    .bind(session.id)
+    .run();
   return c.json({ ok: true });
+});
+
+app.post("/api/sessions/:token/leave", async (c) => {
+  const token = c.req.param("token").trim().toUpperCase();
+  const body = await c.req.json<Record<string, unknown>>().catch(() => ({}));
+  const userId = nullableText(body.userId, 256);
+  const memberKey = nullableText(body.memberKey, 256);
+  if (!userId) return c.json({ error: "사용자 정보가 필요합니다." }, 400);
+  const session = await c.env.DB.prepare(
+    "SELECT id, host_user_id, status FROM sessions WHERE share_token = ?",
+  )
+    .bind(token)
+    .first<Pick<SessionRow, "id" | "host_user_id" | "status">>();
+  if (!session) return c.json({ error: "세션을 찾을 수 없습니다." }, 404);
+  if (session.host_user_id === userId)
+    return c.json({ error: "호스트는 세션을 취소해야 합니다.", code: "HOST_MUST_CANCEL" }, 409);
+  if (TERMINAL_SESSION_STATUSES.has(sessionStatus(session.status)))
+    return c.json({ ok: true, alreadyEnded: true });
+  const existingMember = await c.env.DB.prepare(
+    "SELECT user_id, member_secret_hash FROM session_members WHERE session_id = ? AND user_id = ?",
+  )
+    .bind(session.id, userId)
+    .first<{ user_id: string; member_secret_hash: string | null }>();
+  if (!existingMember) return c.json({ ok: true, alreadyLeft: true });
+  if (
+    !memberKey ||
+    !existingMember.member_secret_hash ||
+    (await sessionMemberKeyHash(memberKey)) !== existingMember.member_secret_hash
+  )
+    return c.json({ error: "참여자 자격 증명을 확인할 수 없습니다.", code: "INVALID_MEMBER_CREDENTIAL" }, 403);
+  const result = await c.env.DB.prepare(
+    "DELETE FROM session_members WHERE session_id = ? AND user_id = ?",
+  )
+    .bind(session.id, userId)
+    .run();
+  return c.json({ ok: true, alreadyLeft: (result.meta?.changes ?? 0) === 0 });
 });
 
 app.post("/api/sessions/:token/ready", async (c) => {
   const token = c.req.param("token").trim().toUpperCase();
   const body = await c.req.json<Record<string, unknown>>().catch(() => ({}));
   const userId = nullableText(body.userId, 256);
+  const memberKey = nullableText(body.memberKey, 256);
   if (!userId || typeof body.isReady !== "boolean")
     return c.json({ error: "준비 상태 정보가 필요합니다." }, 400);
   const session = await c.env.DB.prepare(
-    "SELECT id FROM sessions WHERE share_token = ?",
+    "SELECT id, status FROM sessions WHERE share_token = ?",
   )
     .bind(token)
-    .first<{ id: string }>();
+    .first<{ id: string; status: string }>();
   if (!session) return c.json({ error: "세션을 찾을 수 없습니다." }, 404);
+  if (sessionStatus(session.status) !== "WAITING")
+    return c.json({ error: "대기 중인 세션에서만 준비 상태를 바꿀 수 있습니다." }, 409);
+  if (!(await authorizedSessionMember(c.env.DB, session.id, userId, memberKey)))
+    return c.json({ error: "참여자 자격 증명을 확인할 수 없습니다.", code: "INVALID_MEMBER_CREDENTIAL" }, 403);
   const result = await c.env.DB.prepare(
     "UPDATE session_members SET is_ready = ? WHERE session_id = ? AND user_id = ?",
   )
@@ -1946,7 +2445,10 @@ app.post("/api/sessions/:token/status", async (c) => {
   const body = await c.req.json<Record<string, unknown>>().catch(() => ({}));
   const status = nullableText(body.status, 40)?.toUpperCase();
   if (!status) return c.json({ error: "세션 상태가 필요합니다." }, 400);
+  if (status !== "SWIPING_1")
+    return c.json({ error: "지원하지 않는 세션 상태입니다." }, 400);
   const userId = nullableText(body.userId, 256);
+  const memberKey = nullableText(body.memberKey, 256);
   const session = await c.env.DB.prepare(
     "SELECT * FROM sessions WHERE share_token = ?",
   )
@@ -1956,10 +2458,15 @@ app.post("/api/sessions/:token/status", async (c) => {
   if (status === "SWIPING_1") {
     if (!userId || userId !== session.host_user_id)
       return c.json({ error: "세션 시작은 호스트만 할 수 있습니다." }, 403);
+    if (!(await authorizedSessionMember(c.env.DB, session.id, userId, memberKey)))
+      return c.json({ error: "호스트 자격 증명을 확인할 수 없습니다.", code: "INVALID_MEMBER_CREDENTIAL" }, 403);
+    const currentStatus = sessionStatus(session.status);
     // Starting twice must preserve both the shared deck and its attribution
     // identity. Replacing it after people began swiping would corrupt the
     // evidence chain.
-    if (session.status === "SWIPING_1") return c.json({ ok: true, already_started: true });
+    if (currentStatus === "SWIPING_1") return c.json({ ok: true, alreadyStarted: true, already_started: true });
+    if (currentStatus !== "WAITING")
+      return c.json({ error: "종료되거나 취소된 세션은 시작할 수 없습니다.", code: `SESSION_${currentStatus}` }, 409);
     const { results: members } = await c.env.DB.prepare(
       "SELECT user_id, preferences_json FROM session_members WHERE session_id = ? ORDER BY joined_at",
     )
@@ -1972,7 +2479,7 @@ app.post("/api/sessions/:token/status", async (c) => {
         409,
       );
     const { results: catalogue } = await c.env.DB.prepare(
-      "SELECT id, category, rating, price_level, dietary_options, latitude, longitude FROM restaurants",
+      "SELECT id, category, rating, price_level, dietary_options, menus, latitude, longitude FROM restaurants",
     ).all();
     const menuEvidence = await indexedMenuEvidenceByRestaurant(
       c.env.DB,
@@ -1993,7 +2500,7 @@ app.post("/api/sessions/:token/status", async (c) => {
       session.origin_latitude,
       session.origin_longitude,
     );
-    const pool = (catalogue as any[]).filter(
+    const eligibleCatalogue = (catalogue as any[]).filter(
       (restaurant) =>
         (categories.length === 0 || categories.includes(restaurant.category)) &&
         categoryMatchesIntent(restaurant.category, session.intent) &&
@@ -2005,15 +2512,39 @@ app.post("/api/sessions/:token/status", async (c) => {
             restaurant.longitude,
             Number(session.filter_distance),
           )) &&
-        matchesMenuBudget(menuEvidence.get(restaurant.id), Number(session.filter_budget)) &&
-        matchesDietaryRestrictions(
+        matchesMenuBudget(menuEvidence.get(restaurant.id), Number(session.filter_budget)),
+    );
+    let pool = eligibleCatalogue.filter(
+      (restaurant) =>
+        matchesGroupDiet(
           restaurant.category,
           menuEvidence.get(restaurant.id)?.dietary ?? json<string[]>(restaurant.dietary_options, []),
+          restaurant.menus,
           requiredDietary,
         ),
     );
     // Never fall back to the full catalogue: that would silently violate a
     // user's explicit meal/cafe/dessert, category, budget, or dietary choice.
+    const normalizedDietary = requiredDietary
+      .map(normalizeDiet)
+      .filter((restriction): restriction is DietRestriction => restriction !== null && isHardRestriction(restriction));
+    if (!pool.length && normalizedDietary.some(restriction => !isIngredientAvoidance(restriction))) {
+      const ingredientAvoidances = normalizedDietary.filter(isIngredientAvoidance);
+      pool = eligibleCatalogue.filter((restaurant) =>
+        ingredientAvoidances.every((restriction) =>
+            restaurantSatisfiesDietRestriction(
+              {
+                category: restaurant.category,
+                dietaryOptions: menuEvidence.get(restaurant.id)?.dietary ?? json<string[]>(restaurant.dietary_options, []),
+                menuItems: restaurant.menus,
+            },
+            restriction,
+          ),
+        ),
+      );
+    }
+    if (!(catalogue as any[]).length)
+      return c.json({ error: "식당 후보를 준비하지 못했습니다.", code: "CATALOG_EMPTY" }, 409);
     const deck = buildSharedSessionDeck(session.id, pool, members as any[]);
     if (!deck.length)
       return c.json(
@@ -2117,6 +2648,8 @@ app.post("/api/swipes", async (c) => {
     (isSignal && action === "SYSTEM");
   if (!allowedAction || restaurantId.startsWith(FORCE_PREFIX))
     return c.json({ error: "유효하지 않은 투표입니다." }, 400);
+  const now = Date.now();
+  const requestId = nullableText(body.id, 128) ?? crypto.randomUUID();
   // A final vote is replaceable before the group is completed, but there is
   // only one effective vote per person. This makes retries idempotent.
   const statements =
@@ -2128,28 +2661,66 @@ app.post("/api/swipes", async (c) => {
           c.env.DB.prepare(
             "INSERT OR IGNORE INTO swipes (id, session_id, user_id, restaurant_id, round, swipe_action, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
           ).bind(
-            nullableText(body.id, 128) ?? crypto.randomUUID(),
+            requestId,
             sessionId,
             userId,
             restaurantId,
             round,
             action,
-            Date.now(),
+            now,
           ),
         ]
       : [
           c.env.DB.prepare(
             "INSERT OR IGNORE INTO swipes (id, session_id, user_id, restaurant_id, round, swipe_action, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
           ).bind(
-            nullableText(body.id, 128) ?? crypto.randomUUID(),
+            requestId,
             sessionId,
             userId,
             restaurantId,
             round,
             action,
-            Date.now(),
+            now,
           ),
         ];
+  // 예선 선택은 UX용 swipes와 평가용 rec_events에 같은 요청으로 기록한다.
+  // 클라이언트의 pagehide/beacon 성공 여부가 학습 근거 수를 바꾸면 안 된다.
+  if (!isSignal && round % 2 === 1) {
+    const evidence = await c.env.DB.prepare(
+      "SELECT sess.recommendation_slate_id AS slate_id, s.policy_version, s.variant, s.context_json, json_extract(item.value, '$.position') AS position, json_extract(item.value, '$.propensity') AS propensity, json_extract(item.value, '$.score') AS score FROM sessions sess JOIN recommendation_slates s ON s.id = sess.recommendation_slate_id, json_each(s.items_json) AS item WHERE sess.id = ? AND json_extract(item.value, '$.restaurant_id') = ? LIMIT 1",
+    ).bind(sessionId, restaurantId).first<{
+      slate_id: string;
+      policy_version: string | null;
+      variant: string | null;
+      context_json: string | null;
+      position: number | null;
+      propensity: number | null;
+      score: number | null;
+    }>();
+    if (evidence) {
+      statements.push(
+        c.env.DB.prepare(
+          "INSERT OR IGNORE INTO rec_events (id, event_type, slate_id, slate_type, user_id, session_id, restaurant_id, round, position, action, propensity, score, model_version, variant, context_json, idempotency_key, created_at) VALUES (?, 'SWIPE', ?, 'PRELIM', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        ).bind(
+          crypto.randomUUID(),
+          evidence.slate_id,
+          userId,
+          sessionId,
+          restaurantId,
+          round,
+          evidence.position,
+          action === "DISLIKE" ? "NOPE" : action,
+          evidence.propensity,
+          evidence.score,
+          evidence.policy_version,
+          evidence.variant,
+          evidence.context_json,
+          `session-swipe:${sessionId}:${userId}:${restaurantId}:${round}`,
+          now,
+        ),
+      );
+    }
+  }
   await c.env.DB.batch(statements);
   return c.json({ ok: true });
 });
@@ -2569,6 +3140,14 @@ app.post("/api/reports", async (c) => {
 // REST API — /api/feed (Munchie 피드 개인화 랭킹)
 app.get("/api/feed", async (c) => {
   try {
+    const requestedLimit = Number(c.req.query("limit"));
+    const paged = c.req.query("limit") !== undefined || c.req.query("cursor") !== undefined;
+    const pageSize = Number.isFinite(requestedLimit)
+      ? Math.max(1, Math.min(Math.floor(requestedLimit), 20))
+      : 8;
+    const cursor = Math.max(0, Math.floor(Number(c.req.query("cursor")) || 0));
+    const locationFilter = parseFeedLocationFilter((name) => c.req.query(name));
+    const viewer = await readSession(c.req.raw, c.env.AUTH_SESSION_SECRET);
     // Older local databases may predate the public-profile columns. Keep the
     // feed readable while still joining author data whenever the canonical
     // schema is present.
@@ -2581,15 +3160,15 @@ app.get("/api/feed", async (c) => {
       userColumnNames.has("profile_image_url");
     const { results: courses } = await c.env.DB.prepare(
       hasPublicProfiles
-        ? "SELECT c.*, u.username AS author_name, u.profile_image_url AS author_image FROM courses c LEFT JOIN users u ON u.id = c.author_id WHERE c.is_public = 1 ORDER BY c.created_at DESC LIMIT 20"
-        : "SELECT c.* FROM courses c WHERE c.is_public = 1 ORDER BY c.created_at DESC LIMIT 20",
+        ? "SELECT c.*, u.username AS author_name, u.profile_image_url AS author_image FROM courses c LEFT JOIN users u ON u.id = c.author_id WHERE c.is_public = 1 ORDER BY c.created_at DESC LIMIT 80"
+        : "SELECT c.* FROM courses c WHERE c.is_public = 1 ORDER BY c.created_at DESC LIMIT 80",
     ).all();
 
     const feedItems = [];
     for (const course of courses as any[]) {
       // Fetch course items for this course
       const { results: stops } = await c.env.DB.prepare(
-        "SELECT ci.*, r.name, r.category, r.photos, r.rating FROM course_items ci JOIN restaurants r ON ci.restaurant_id = r.id WHERE ci.course_id = ? ORDER BY ci.order_index",
+        "SELECT ci.*, r.name, r.category, r.photos, r.rating, r.latitude, r.longitude FROM course_items ci JOIN restaurants r ON ci.restaurant_id = r.id WHERE ci.course_id = ? ORDER BY ci.order_index",
       )
         .bind(course.id)
         .all();
@@ -2615,6 +3194,28 @@ app.get("/api/feed", async (c) => {
       const photos = canonicalMedia.length
         ? Array.from(new Set(canonicalMedia.map((media) => media.src)))
         : json<string[]>(course.feed_photos, []);
+      const availablePhotos = await filterExistingPhotos(c.env, photos);
+      const availablePhotoSet = new Set(availablePhotos);
+      const availableDecor = decor.filter((item) => {
+        const src = typeof item?.src === "string" ? item.src : null;
+        return !src?.startsWith("/photos/") || availablePhotoSet.has(src);
+      });
+      const heroImage =
+        typeof course.hero_image === "string" && course.hero_image.startsWith("/photos/")
+          ? (await photoExists(c.env, course.hero_image) ? course.hero_image : availablePhotos[0] ?? "")
+          : course.hero_image;
+      const feedStops = await Promise.all(stops.map(async (s: any) => ({
+        placeId: s.restaurant_id,
+        restaurant: {
+          id: s.restaurant_id,
+          name: s.name,
+          category: s.category,
+          photos: await filterExistingPhotos(c.env, json<string[]>(s.photos, [])),
+          rating: s.rating,
+          latitude: Number(s.latitude),
+          longitude: Number(s.longitude),
+        },
+      })));
 
       feedItems.push({
         id: `post_${course.id}`,
@@ -2624,21 +3225,12 @@ app.get("/api/feed", async (c) => {
         authorImage: hasPublicProfiles ? course.author_image || null : null,
         title: course.title,
         description: course.description,
-        heroImage: course.hero_image,
-        photos,
-        decor,
+        heroImage,
+        photos: availablePhotos,
+        decor: availableDecor,
         templateId: course.template_id || null,
         tags: json<string[]>(course.tags, []),
-        stops: stops.map((s: any) => ({
-          placeId: s.restaurant_id,
-          restaurant: {
-            id: s.restaurant_id,
-            name: s.name,
-            category: s.category,
-            photos: json<string[]>(s.photos, []),
-            rating: s.rating,
-          },
-        })),
+        stops: feedStops,
         likesCount: course.likes_count ?? 0,
         savesCount: course.saves_count ?? 0,
         commentsCount: course.comments_count ?? 0,
@@ -2661,7 +3253,48 @@ app.get("/api/feed", async (c) => {
       });
     }
 
-    return c.json(feedItems);
+    // Preserve the legacy array response for initial/home hydration. The
+    // Munchie page opts into a stable, personalised page contract with
+    // `limit`/`cursor`; this avoids rendering every post at once.
+    const locationItems = locationFilter
+      ? feedItems.filter((item) => feedItemMatchesLocation(item, locationFilter))
+      : feedItems;
+    if (!paged) return c.json(locationItems);
+
+    const categoryAffinity = new Map<string, number>();
+    const following = new Set<string>();
+    if (viewer) {
+      const [winnerRows, likedRows, followRows] = await Promise.all([
+        c.env.DB.prepare(
+          "SELECT r.category, COUNT(*) AS count FROM rec_events e JOIN restaurants r ON r.id = e.restaurant_id WHERE e.user_id = ? AND e.event_type IN ('WINNER', 'SWIPE') AND (e.event_type != 'SWIPE' OR e.action = 'LIKE') GROUP BY r.category",
+        ).bind(viewer.sub).all<{ category: string; count: number }>(),
+        c.env.DB.prepare(
+          "SELECT c.tags FROM feed_likes l JOIN courses c ON c.id = l.course_id WHERE l.user_id = ?",
+        ).bind(viewer.sub).all<{ tags: string }>(),
+        c.env.DB.prepare(
+          "SELECT following_id FROM user_follows WHERE follower_id = ?",
+        ).bind(viewer.sub).all<{ following_id: string }>(),
+      ]);
+      for (const row of winnerRows.results)
+        categoryAffinity.set(row.category, (categoryAffinity.get(row.category) ?? 0) + Math.min(1, Number(row.count) * 0.2));
+      for (const row of likedRows.results)
+        for (const tag of json<string[]>(row.tags, []))
+          categoryAffinity.set(tag, (categoryAffinity.get(tag) ?? 0) + 0.45);
+      for (const row of followRows.results) following.add(row.following_id);
+    }
+    const ranked = rankMunchieFeedItems(locationItems, {
+      viewerId: viewer?.sub ?? null,
+      categoryAffinity,
+      following,
+    });
+    const items = ranked.slice(cursor, cursor + pageSize);
+    const nextCursor = cursor + items.length;
+    return c.json({
+      items,
+      nextCursor: nextCursor < ranked.length ? String(nextCursor) : null,
+      hasMore: nextCursor < ranked.length,
+      policyVersion: locationFilter ? "feed-personal-location-v1" : "feed-personal-v1",
+    });
   } catch (err: any) {
     return c.json({ error: err.message }, 400);
   }

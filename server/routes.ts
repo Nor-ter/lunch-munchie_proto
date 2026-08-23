@@ -19,8 +19,8 @@ import { recordStop, prevStop, chainFit as chainFitFn } from "./engine/chain.js"
 import { decideGroup } from "./engine/group.js";
 import { ENGINE_MODEL_VERSION } from "../shared/engine.js";
 import type { Candidate, RecContext, RecEventInput } from "../shared/engine.js";
-import { normalizeDiet, isHardRestriction } from "../shared/const.js";
-import type { DietTag } from "../shared/const.js";
+import { normalizeDiet, isHardRestriction, isIngredientAvoidance, restaurantSatisfiesDietRestriction } from "../shared/const.js";
+import type { DietRestriction } from "../shared/const.js";
 import { intentForCategory, intentForHour } from "../shared/intent.js";
 
 const router = Router();
@@ -100,6 +100,17 @@ interface MemStore {
   swipes: Record<string, any>[];
 }
 const memSessions = new Map<string, MemStore>(); // key: share_token
+// Local-development capabilities stay outside response objects, so session
+// GET responses cannot leak a host or participant mutation credential.
+const localSessionMemberKeys = new Map<string, string>();
+const localMemberKeySlot = (token: string, userId: string) => `${token}:${userId}`;
+const newLocalMemberKey = () =>
+  `${crypto.randomUUID().replaceAll("-", "")}${crypto.randomUUID().replaceAll("-", "")}`;
+const hasLocalMemberKey = (token: string, userId: string, supplied: unknown) =>
+  typeof supplied === "string" &&
+  localSessionMemberKeys.get(localMemberKeySlot(token, userId)) === supplied;
+const TERMINAL_SESSION_STATUSES = new Set(["CANCELLED", "COMPLETED", "EXPIRED"]);
+const normalizedSessionStatus = (value: unknown) => String(value ?? "").trim().toUpperCase();
 // 호스트 '지금 진행'(D): 강제 완료된 단계 `${session.id}:${round}` 집합 (서버 메모리).
 const forcedSteps = new Set<string>();
 
@@ -327,6 +338,8 @@ router.post("/sessions/create", async (req: any, res: any) => {
     const { hostId, hostName, emoji, name, groupSize, filterDistance, filterBudget, filterCategories, filterDietary, deadlineMinutes } = req.body;
     const token = Math.random().toString(36).substring(2, 8).toUpperCase();
     const sessionId = `session_${Date.now()}`;
+    const memberKey = newLocalMemberKey();
+    localSessionMemberKeys.set(localMemberKeySlot(token, hostId || "unknown"), memberKey);
     
     const minutes = Number(deadlineMinutes) || 10;
     const deadlineAt = new Date(Date.now() + 1000 * 60 * minutes);
@@ -369,7 +382,7 @@ router.post("/sessions/create", async (req: any, res: any) => {
       },
     );
 
-    res.status(201).json({ session: newSession, token });
+    res.status(201).json({ session: newSession, token, memberKey });
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: "Failed to create session" });
@@ -393,12 +406,19 @@ router.get("/sessions/:token", async (req: any, res: any) => {
 
 router.post("/sessions/:token/join", async (req: any, res: any) => {
   const token = req.params.token;
-  const { userId, userName, emoji } = req.body;
+  const { userId, userName, emoji, memberKey: suppliedMemberKey } = req.body;
+  let memberKey = localSessionMemberKeys.get(localMemberKeySlot(token, userId));
   const r = await tryDb(async () => {
     const [session] = await db.select().from(sessions).where(eq(sessions.share_token, token));
     if (!session) return { found: false as const };
     const existing = await db.select().from(sessionMembers).where(eq(sessionMembers.session_id, session.id));
     const isAlreadyJoined = existing.find(m => m.user_id === userId);
+    const status = normalizedSessionStatus(session.status);
+    if (TERMINAL_SESSION_STATUSES.has(status)) return { found: true as const, ended: true as const };
+    if (status !== "WAITING" && !isAlreadyJoined) return { found: true as const, started: true as const };
+    if (isAlreadyJoined && !hasLocalMemberKey(token, userId, suppliedMemberKey)) {
+      return { found: true as const, credential: false as const };
+    }
 
     // 정원 제한: 새 참여자가 group_size를 넘기면 거부 (이미 들어온 사람은 갱신 허용)
     const cap = (session as { group_size?: number }).group_size ?? 99;
@@ -407,6 +427,8 @@ router.post("/sessions/:token/join", async (req: any, res: any) => {
     }
 
     if (!isAlreadyJoined) {
+      memberKey = newLocalMemberKey();
+      localSessionMemberKeys.set(localMemberKeySlot(token, userId), memberKey);
       await db.insert(sessionMembers).values({
         id: nanoid(),
         session_id: session.id,
@@ -424,15 +446,24 @@ router.post("/sessions/:token/join", async (req: any, res: any) => {
     return { found: true as const, full: false as const };
   });
   if (r.ok && r.value.found) {
+    if ('ended' in r.value && r.value.ended) return res.status(410).json({ error: "session_ended" });
+    if ('started' in r.value && r.value.started) return res.status(409).json({ error: "session_started" });
+    if ('credential' in r.value && !r.value.credential) return res.status(403).json({ error: "member_credential_required" });
     if (r.value.full) {
       return res.status(409).json({ error: "session_full", message: "정원이 찼어요", cap: r.value.cap });
     }
-    return res.status(200).json({ success: true });
+    return res.status(200).json({ success: true, memberKey });
   }
   const mem = memByToken(token);
   if (mem) {
     const existing = mem.members.find(m => m.user_id === userId);
+    const status = normalizedSessionStatus(mem.session.status);
+    if (TERMINAL_SESSION_STATUSES.has(status)) return res.status(410).json({ error: "session_ended" });
+    if (status !== "WAITING" && !existing) return res.status(409).json({ error: "session_started" });
     if (existing) {
+      if (!hasLocalMemberKey(token, userId, suppliedMemberKey)) {
+        return res.status(403).json({ error: "member_credential_required" });
+      }
       existing.user_name = userName;
       existing.emoji = emoji;
     } else {
@@ -449,15 +480,70 @@ router.post("/sessions/:token/join", async (req: any, res: any) => {
         is_ready: false,
         created_at: new Date()
       });
+      memberKey = newLocalMemberKey();
+      localSessionMemberKeys.set(localMemberKeySlot(token, userId), memberKey);
     }
-    return res.status(200).json({ success: true });
+    return res.status(200).json({ success: true, memberKey });
   }
   res.status(404).json({ error: "Session not found" });
 });
 
+router.post("/sessions/:token/cancel", async (req: any, res: any) => {
+  const { userId, memberKey } = req.body;
+  if (!userId) return res.status(400).json({ error: "user_required" });
+  if (!hasLocalMemberKey(req.params.token, userId, memberKey)) return res.status(403).json({ error: "invalid_member_credential" });
+  const result = await tryDb(async () => {
+    const [session] = await db.select().from(sessions).where(eq(sessions.share_token, req.params.token));
+    if (!session) return { found: false as const };
+    if (session.host_user_id !== userId) return { found: true as const, forbidden: true as const };
+    const status = normalizedSessionStatus(session.status);
+    if (status === "CANCELLED") return { found: true as const, alreadyCancelled: true as const };
+    if (status === "COMPLETED" || status === "EXPIRED") return { found: true as const, ended: true as const };
+    await db.update(sessions).set({ status: "CANCELLED" }).where(eq(sessions.id, session.id));
+    return { found: true as const };
+  });
+  if (result.ok && result.value.found) {
+    if ('forbidden' in result.value && result.value.forbidden) return res.status(403).json({ error: "host_only" });
+    if ('ended' in result.value && result.value.ended) return res.status(409).json({ error: "session_ended" });
+    return res.json({ success: true });
+  }
+  const mem = memByToken(req.params.token);
+  if (!mem) return res.status(404).json({ error: "Session not found" });
+  if (mem.session.host_user_id !== userId) return res.status(403).json({ error: "host_only" });
+  const status = normalizedSessionStatus(mem.session.status);
+  if (status === "COMPLETED" || status === "EXPIRED") return res.status(409).json({ error: "session_ended" });
+  mem.session.status = "CANCELLED";
+  return res.json({ success: true });
+});
+
+router.post("/sessions/:token/leave", async (req: any, res: any) => {
+  const { userId, memberKey } = req.body;
+  if (!userId) return res.status(400).json({ error: "user_required" });
+  if (!hasLocalMemberKey(req.params.token, userId, memberKey)) return res.status(403).json({ error: "invalid_member_credential" });
+  const result = await tryDb(async () => {
+    const [session] = await db.select().from(sessions).where(eq(sessions.share_token, req.params.token));
+    if (!session) return { found: false as const };
+    if (session.host_user_id === userId) return { found: true as const, host: true as const };
+    if (!TERMINAL_SESSION_STATUSES.has(normalizedSessionStatus(session.status))) {
+      await db.delete(sessionMembers).where(and(eq(sessionMembers.session_id, session.id), eq(sessionMembers.user_id, userId)));
+    }
+    return { found: true as const };
+  });
+  if (result.ok && result.value.found) {
+    if ('host' in result.value && result.value.host) return res.status(409).json({ error: "host_must_cancel" });
+    return res.json({ success: true });
+  }
+  const mem = memByToken(req.params.token);
+  if (!mem) return res.status(404).json({ error: "Session not found" });
+  if (mem.session.host_user_id === userId) return res.status(409).json({ error: "host_must_cancel" });
+  mem.members = mem.members.filter(member => member.user_id !== userId);
+  return res.json({ success: true });
+});
+
 router.post("/sessions/:token/ready", async (req: any, res: any) => {
   const token = req.params.token;
-  const { userId, isReady } = req.body;
+  const { userId, isReady, memberKey } = req.body;
+  if (!hasLocalMemberKey(token, userId, memberKey)) return res.status(403).json({ error: "invalid_member_credential" });
   const r = await tryDb(async () => {
     const [session] = await db.select().from(sessions).where(eq(sessions.share_token, token));
     if (!session) return false;
@@ -478,7 +564,9 @@ router.post("/sessions/:token/ready", async (req: any, res: any) => {
 
 router.post("/sessions/:token/status", async (req: any, res: any) => {
   const token = req.params.token;
-  const { status, deadlineMinutes } = req.body;
+  const { status, deadlineMinutes, userId, memberKey } = req.body;
+  if (normalizedSessionStatus(status) !== "SWIPING_1") return res.status(400).json({ error: "unsupported_status" });
+  if (!hasLocalMemberKey(token, userId, memberKey)) return res.status(403).json({ error: "invalid_member_credential" });
   // 마감 타이머는 투표 시작(상태 변경) 시점부터 적용
   const patch: Record<string, any> = { status: status.toUpperCase() };
   if (deadlineMinutes) {
@@ -486,15 +574,24 @@ router.post("/sessions/:token/status", async (req: any, res: any) => {
   }
   const r = await tryDb(async () => {
     const [session] = await db.select().from(sessions).where(eq(sessions.share_token, token));
-    if (!session) return false;
+    if (!session) return { found: false as const };
+    if (session.host_user_id !== userId) return { found: true as const, forbidden: true as const };
+    if (normalizedSessionStatus(session.status) === "SWIPING_1") return { found: true as const };
+    if (normalizedSessionStatus(session.status) !== "WAITING") return { found: true as const, ended: true as const };
     await db.update(sessions)
       .set(patch)
       .where(eq(sessions.share_token, token));
-    return true;
+    return { found: true as const };
   });
-  if (r.ok && r.value) return res.status(200).json({ success: true });
+  if (r.ok && r.value.found) {
+    if ('forbidden' in r.value && r.value.forbidden) return res.status(403).json({ error: "host_only" });
+    if ('ended' in r.value && r.value.ended) return res.status(409).json({ error: "session_ended" });
+    return res.status(200).json({ success: true, memberKey });
+  }
   const mem = memByToken(token);
   if (mem) {
+    if (mem.session.host_user_id !== userId) return res.status(403).json({ error: "host_only" });
+    if (normalizedSessionStatus(mem.session.status) !== "WAITING" && normalizedSessionStatus(mem.session.status) !== "SWIPING_1") return res.status(409).json({ error: "session_ended" });
     Object.assign(mem.session, patch);
     return res.status(200).json({ success: true });
   }
@@ -757,6 +854,7 @@ async function candidatePool(): Promise<Candidate[]> {
         price_level: restaurants.price_level,
         category: restaurants.category,
         dietary_options: restaurants.dietary_options,
+        menu_items: restaurants.menu_items,
       })
       .from(restaurants),
   );
@@ -780,20 +878,21 @@ async function candidatePool(): Promise<Candidate[]> {
   }));
 }
 
-// 하드 diet 제약 충족 여부. 식당 태그('비건 옵션')와 필터('비건')를 enum으로 정규화해 비교.
-const SEAFOOD_RE = /해산물|seafood|스시|sushi|초밥|회|sashimi|오마카세|omakase/i;
-function satisfiesDiet(c: Candidate, tag: DietTag): boolean {
-  if (tag === "NO_SEAFOOD") return !SEAFOOD_RE.test(c.category ?? "");
-  const offered = (c.dietary_options ?? []).map(normalizeDiet);
-  return offered.includes(tag);
+// 하드 diet 제약 충족 여부. D1 경로와 같은 공용 evidence 판정기를 사용한다.
+function satisfiesDiet(c: Candidate, tag: DietRestriction): boolean {
+  return restaurantSatisfiesDietRestriction({
+    category: c.category,
+    dietaryOptions: c.dietary_options,
+    menuItems: c.menu_items,
+  }, tag);
 }
 
 // 유저 diet 입력(라벨/태그)에서 하드 제약만 추출 + 정규화.
-function requiredHardDiets(diet?: string[]): DietTag[] {
-  const out: DietTag[] = [];
+function requiredHardDiets(diet?: string[]): DietRestriction[] {
+  const out: DietRestriction[] = [];
   for (const raw of diet ?? []) {
     const norm = normalizeDiet(raw);
-    if (norm && isHardRestriction(norm)) out.push(norm);
+    if (norm && isHardRestriction(norm)) out.push(norm as DietRestriction);
   }
   return out;
 }
@@ -937,9 +1036,10 @@ export function createRecommendHandler(
   let diet_relaxed = false;
   if (reqDiet.length) {
     filtered = scoped.filter((c) => reqDiet.every((tag) => satisfiesDiet(c, tag)));
-    if (filtered.length === 0) {
-      filtered = scoped;
-      diet_relaxed = true;
+    if (!filtered.length && reqDiet.some(tag => !isIngredientAvoidance(tag))) {
+      const ingredientAvoidances = reqDiet.filter(isIngredientAvoidance);
+      filtered = scoped.filter((c) => ingredientAvoidances.every((tag) => satisfiesDiet(c, tag)));
+      diet_relaxed = filtered.length > 0;
     }
   }
   let intent_relaxed = false;

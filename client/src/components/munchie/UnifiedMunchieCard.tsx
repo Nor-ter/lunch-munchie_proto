@@ -25,6 +25,7 @@ import { acquireDocumentScrollLock } from '@/lib/documentScrollLock';
 import { resolveFeedAuthorId } from '@/lib/profileFeed';
 import { logCourseFeedImpression } from '@/lib/eventLogger';
 import { useAuthStatus } from '@/hooks/useAuthStatus';
+import { startGoogleAuth } from '@/services/authApi';
 import {
   getSavedCourseDetailPath,
   type SavedViewMode,
@@ -39,6 +40,14 @@ function timeAgo(iso: string | number) {
   if (days === 1) return '1일 전';
   if (days < 7) return `${days}일 전`;
   return `${Math.floor(days / 7)}주 전`;
+}
+
+function FeedAuthorAvatar({ post, className }: { post: FeedPost; className: string }) {
+  return post.authorImage ? (
+    <img src={post.authorImage} alt="" className={`${className} object-cover`} referrerPolicy="no-referrer" />
+  ) : (
+    <span className={className}>{post.authorEmoji}</span>
+  );
 }
 
 export const SAVED_BOOKMARK_BUTTON_CLASS =
@@ -82,6 +91,7 @@ export default function UnifiedMunchieCard({
     saveCourse,
     unsaveCourse,
     deleteFeedPost,
+    incrementFeedShare,
     isMyPost,
   } = useApp();
   const [comment, setComment] = useState('');
@@ -138,6 +148,7 @@ export default function UnifiedMunchieCard({
   const courseMapPath = detailOrigin === 'saved' && savedView
     ? getSavedCourseDetailPath(course.id, post.id, savedView)
     : `/course/${course.id}?from=${detailOrigin}&post=${post.id}`;
+  const feedSharePath = `/feed/${post.id}`;
   const cardRef = useRef<HTMLElement | null>(null);
   const impressionLoggedRef = useRef(false);
 
@@ -169,7 +180,7 @@ export default function UnifiedMunchieCard({
     }
     if (!auth.isAnonymous) return true;
     toast.error('이 기능은 로그인 후 사용할 수 있어요.');
-    window.location.assign(`/api/auth/google/start?next=${encodeURIComponent(window.location.pathname + window.location.search)}`);
+    startGoogleAuth(window.location.pathname + window.location.search);
     return false;
   };
   const submitComment = async () => {
@@ -209,6 +220,37 @@ export default function UnifiedMunchieCard({
     const response = await fetch('/api/feed-like', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ courseId: course.id }) });
     if (!response.ok) { toast.error('좋아요를 저장하지 못했어요.'); return; }
     toggleFeedLike(post.id);
+  };
+  const shareFeedPost = async () => {
+    if (!interactive) return;
+    const shareUrl = typeof window === 'undefined'
+      ? feedSharePath
+      : `${window.location.origin}${feedSharePath}`;
+    const title = `${post.authorName}님의 Munchie 피드`;
+    const text = post.caption ? `${post.caption}` : 'Munchie 피드를 함께 봐요.';
+    const recordShare = () => incrementFeedShare(post.id);
+    const copyShareLink = async () => {
+      try {
+        await navigator.clipboard.writeText(shareUrl);
+        recordShare();
+        toast.success('피드 링크를 복사했어요.');
+      } catch {
+        toast.error('공유 링크를 복사하지 못했어요.');
+      }
+    };
+
+    if (typeof navigator === 'undefined' || !navigator.share) {
+      await copyShareLink();
+      return;
+    }
+
+    try {
+      await navigator.share({ title, text, url: shareUrl });
+      recordShare();
+    } catch (error) {
+      if (error instanceof DOMException && error.name === 'AbortError') return;
+      await copyShareLink();
+    }
   };
   const handleArtworkPointerUp = (event: ReactPointerEvent<HTMLDivElement>) => {
     if (!interactive || event.button !== 0) return;
@@ -279,7 +321,7 @@ export default function UnifiedMunchieCard({
       <article ref={cardRef} className={`relative overflow-hidden bg-[#FFFDFC] ${homeSummary ? 'rounded-[12px] border border-[#EFD0D4] shadow-[0_5px_14px_rgba(235,80,83,0.07)]' : 'rounded-[18px] border-2 border-[#EAD7CD] shadow-[0_7px_18px_rgba(123,76,53,0.1)]'}`} data-testid={`unified-munchie-card-${post.id}`}>
         <header className={`flex shrink-0 items-center gap-1 px-2 ${homeSummary ? 'h-9' : 'h-8'}`}>
           <button type="button" onClick={() => go(authorProfilePath)} className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-white text-[9px] ${homeSummary ? 'border border-[#EB5053]' : 'border border-[#2F2926]'}`}>{post.authorEmoji}</button>
-          <button type="button" onClick={() => go(authorProfilePath)} className={`min-w-0 truncate text-left text-[10px] font-black ${homeSummary ? 'text-[#3E2922]' : 'text-[#342925]'}`}>{post.authorName}</button>
+          <button type="button" onClick={() => go(authorProfilePath)} className={`min-w-0 truncate text-left text-[10px] font-semibold ${homeSummary ? 'text-[#3E2922]' : 'text-[#342925]'}`}>{post.authorName}</button>
           <span className={`shrink-0 text-[8px] font-medium ${homeSummary ? 'text-[#A36D6C]' : 'text-[#8B817B]'}`}>{timeAgo(post.createdAt)}</span>
           <span className="flex-1" />
           <button type="button" onClick={() => setShowPostMenu(value => !value)} aria-label="게시물 메뉴" className={`flex h-6 w-6 items-center justify-center ${homeSummary ? 'text-[#D94447]' : 'text-[#413733]'}`}><MoreHorizontal size={15} strokeWidth={3} /></button>
@@ -315,9 +357,9 @@ export default function UnifiedMunchieCard({
               <span
                 role="button"
                 tabIndex={0}
-                aria-label="스토리로 공유"
-                onClick={event => { event.stopPropagation(); interactive && go(`/course/${course.id}/share`); }}
-                onKeyDown={event => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); event.stopPropagation(); interactive && go(`/course/${course.id}/share`); } }}
+                aria-label="피드 공유하기"
+                onClick={event => { event.stopPropagation(); void shareFeedPost(); }}
+                onKeyDown={event => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); event.stopPropagation(); void shareFeedPost(); } }}
                 className="flex h-6 items-center rounded-lg border border-[#CDDED3] bg-[#F7FCF8] px-1.5 text-[#668574]"
               ><Share2 size={10} /></span>
             </div>}
@@ -350,11 +392,11 @@ export default function UnifiedMunchieCard({
     <>
       <article ref={cardRef} className="relative overflow-hidden rounded-[20px] border border-[#E9D6CC] bg-[#FFFDFC] shadow-[0_10px_26px_rgba(117,73,51,0.09)]" data-testid={`unified-munchie-card-${post.id}`}>
         <header className="flex items-center gap-2.5 px-3 pb-2.5 pt-3">
-          <button type="button" onClick={() => go(authorProfilePath)} className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-[#F0BCAE] bg-[#FFF1EB] text-base">
-            {post.authorEmoji}
+          <button type="button" onClick={() => go(authorProfilePath)} className="flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-full border border-[#F0BCAE] bg-[#FFF1EB] text-base">
+            <FeedAuthorAvatar post={post} className="h-full w-full" />
           </button>
           <button type="button" onClick={() => go(authorProfilePath)} className="min-w-0 text-left">
-            <strong className="truncate text-[15px] font-black text-[#3E2922]">{post.authorName}</strong>
+            <strong className="truncate text-[15px] font-semibold text-[#3E2922]">{post.authorName}</strong>
           </button>
           <span className="min-w-0 flex-1 truncate text-[11px] font-medium text-[#8C7B72]">{timeAgo(post.createdAt)}</span>
           <button type="button" onClick={() => setShowPostMenu(value => !value)} aria-label="게시물 메뉴" className="flex h-9 w-9 items-center justify-center text-[#A66C60]"><MoreHorizontal size={21} strokeWidth={3} /></button>
@@ -441,7 +483,7 @@ export default function UnifiedMunchieCard({
             </button>
           </div>
           <div className="flex items-center gap-2">
-            <button type="button" onClick={() => interactive && go(`/course/${course.id}/share`)} className="flex h-10 w-10 items-center justify-center rounded-xl text-current" aria-label="공유하기"><Share2 size={20} strokeWidth={2} /></button>
+            <button type="button" onClick={() => void shareFeedPost()} className="flex h-10 w-10 items-center justify-center rounded-xl text-current" aria-label="공유하기"><Share2 size={20} strokeWidth={2} /></button>
             <button
               type="button"
               onClick={() => {
@@ -496,7 +538,7 @@ export default function UnifiedMunchieCard({
                       <div key={entry.id} className={`relative flex items-start gap-2.5 ${nested ? 'ml-10 mt-3' : ''}`}>
                         <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-[#F0C3B7] bg-[#FFF4EF] text-sm">{entry.authorEmoji}</span>
                         <div className="min-w-0 flex-1">
-                          <p className="text-[13px] leading-relaxed text-[#3E302A]"><strong className="mr-1.5">{entry.authorName}</strong>{entry.text}</p>
+                          <p className="text-[13px] leading-relaxed text-[#3E302A]"><strong className="mr-1.5 font-medium">{entry.authorName}</strong>{entry.text}</p>
                           <div className="mt-1.5 flex items-center gap-3 text-[10px] font-bold text-[#81716A]">
                             <span>{timeAgo(entry.createdAt)}</span>
                             {!nested && <button type="button" onClick={() => setReplyingTo({ id: entry.id, authorName: entry.authorName })}>답글 달기</button>}

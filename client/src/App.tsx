@@ -43,8 +43,11 @@ import TemplatesBrowsePage from "./pages/TemplatesBrowsePage";
 import CourseFeedsPage from "./pages/course/CourseFeedsPage";
 import PlaceExplorePage from "./pages/PlaceExplorePage";
 import StorySharePage from "./pages/StorySharePage";
+import LunchieWaitingCompanion from "./components/lunchie/LunchieWaitingCompanion";
+import { startGoogleAuth } from "./services/authApi";
 
 const NO_TABBAR = ['/onboarding', '/tour-mode', '/course/', '/coursemap', '/template/', '/templates', '/lunchie', '/session', '/join', '/feed/', '/explore/places', '/auth', '/admin'];
+const LUNCHIE_TABBAR_ROUTES = new Set(['/lunchie/settings', '/session/lobby']);
 
 function CoursesRedirect() {
   const params = useParams<{ id: string }>();
@@ -65,14 +68,14 @@ function IntegratedCourseEditorRedirect() {
 function RequireGoogleAuth({ userId, children }: { userId: string | null; children: ReactNode }) {
   const [location] = useLocation();
   useEffect(() => {
-    if (!userId) window.location.assign(`/api/auth/google/start?next=${encodeURIComponent(location)}`);
+    if (!userId) startGoogleAuth(location);
   }, [location, userId]);
   return userId ? <>{children}</> : null;
 }
 
 function AppShell({ userId }: { userId: string | null }) {
   const [location] = useLocation();
-  const showTabBar = !NO_TABBAR.some(p => location.startsWith(p));
+  const showTabBar = LUNCHIE_TABBAR_ROUTES.has(location) || !NO_TABBAR.some(p => location.startsWith(p));
   const isAdminDashboard = location.startsWith('/admin');
   return (
     <div className={isAdminDashboard ? "app-shell app-shell--admin" : "app-shell"}>
@@ -122,6 +125,7 @@ function AppShell({ userId }: { userId: string | null }) {
         </SlideTransitionRoutes>
       </div>
       {showTabBar && <TabBar />}
+      <LunchieWaitingCompanion />
     </div>
   );
 }

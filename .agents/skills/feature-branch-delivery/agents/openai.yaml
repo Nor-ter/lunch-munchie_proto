@@ -1,0 +1,4 @@
+interface:
+  display_name: "Feature Branch Delivery"
+  short_description: "Deliver features through safe branch-to-main merges"
+  default_prompt: "Use $feature-branch-delivery to plan, implement, validate, and safely merge one feature into main."

@@ -79,13 +79,12 @@ export const LUNCHMATE_PROFILE_POST_SITTING_RANGE_MS = [2000, 3000] as const;
 export const LUNCHMATE_PROFILE_POSE_TRANSITION_RANGE_MS = [160, 220] as const;
 export const LUNCHMATE_PROFILE_LONG_PRESS_MS = 400;
 export const LUNCHMATE_PROFILE_LONG_PRESS_PREPARE_MS = 80;
-export const LUNCHMATE_PROFILE_LONG_PRESS_MOVE_THRESHOLD_PX = 8;
+export const LUNCHMATE_PROFILE_LONG_PRESS_MOVE_THRESHOLD_PX = 4;
 export const LUNCHMATE_PROFILE_GRAB_LIFT_PX = 12;
 export const LUNCHMATE_PROFILE_GRAB_MAX_ROTATE_DEG = 11;
 export const LUNCHMATE_PROFILE_GRAB_HARD_ROTATE_LIMIT_DEG = 12;
 export const LUNCHMATE_PROFILE_GRAB_MAX_SCALE = 1.03;
 export const LUNCHMATE_PROFILE_GRAB_LANDING_MS = 320;
-export const LUNCHMATE_PROFILE_GRAB_RECOVERY_RANGE_MS = [1000, 1500] as const;
 export const LUNCHMATE_PROFILE_GRAB_HORIZONTAL_PADDING_PX = 9;
 export const LUNCHMATE_PROFILE_GRAB_VERTICAL_PADDING_PX = 7;
 export const LUNCHMATE_PROFILE_GRAB_ROTATION_ALLOWANCE_PX = 6;
@@ -923,7 +922,77 @@ export interface LunchmateProfileGrabPointer {
   clientX: number;
   clientY: number;
   initialVisualX: number;
+  initialVisualY?: number;
   target: LunchmateProfilePointerCaptureTarget;
+}
+
+export function readLunchmateProfileVisualOffset(
+  moving: Pick<LunchmateProfileRect, 'left' | 'width' | 'bottom'> | null | undefined,
+  anchor: Pick<LunchmateProfileRect, 'left' | 'width' | 'bottom'> | null | undefined,
+) {
+  if (!moving || !anchor) return null;
+  return {
+    x: (moving.left + (moving.width / 2)) - (anchor.left + (anchor.width / 2)),
+    y: moving.bottom - anchor.bottom,
+  };
+}
+
+export function parseLunchmateProfileTransform(transform: string | null | undefined) {
+  if (!transform || transform === 'none') return { x: 0, y: 0 };
+  if (typeof DOMMatrixReadOnly === 'function') {
+    try {
+      const matrix = new DOMMatrixReadOnly(transform);
+      return { x: matrix.m41, y: matrix.m42 };
+    } catch {
+      // Fall through to the regex parser for Node test environments.
+    }
+  }
+  const matrix3d = transform.match(/^matrix3d\((.+)\)$/);
+  if (matrix3d) {
+    const values = matrix3d[1].split(',').map(value => Number(value.trim()));
+    if (values.length === 16 && values.every(Number.isFinite)) {
+      return { x: values[12], y: values[13] };
+    }
+  }
+  const matrix = transform.match(/^matrix\((.+)\)$/);
+  if (matrix) {
+    const values = matrix[1].split(',').map(value => Number(value.trim()));
+    if (values.length === 6 && values.every(Number.isFinite)) {
+      return { x: values[4], y: values[5] };
+    }
+  }
+  return null;
+}
+
+export function readLunchmateProfileTransformOffset(element: HTMLElement | null | undefined) {
+  if (!element || typeof getComputedStyle !== 'function') return null;
+  return parseLunchmateProfileTransform(getComputedStyle(element).transform);
+}
+
+export function pickLunchmateProfileCarryOffset(
+  candidates: Array<{ x: number; y: number } | null | undefined>,
+) {
+  const valid = candidates.filter((candidate): candidate is { x: number; y: number } => (
+    Boolean(candidate)
+    && Number.isFinite(candidate!.x)
+    && Number.isFinite(candidate!.y)
+  ));
+  if (valid.length === 0) return null;
+  return valid.reduce((best, next) => (
+    Math.abs(next.x) + Math.abs(next.y) > Math.abs(best.x) + Math.abs(best.y)
+      ? next
+      : best
+  ));
+}
+
+function snapMotionValue(value: MotionValue<number>, next: number) {
+  const motion = value as MotionValue<number> & {
+    jump?: (nextValue: number) => void;
+    stop?: () => void;
+  };
+  motion.stop?.();
+  if (typeof motion.jump === 'function') motion.jump(next);
+  else motion.set(next);
 }
 
 export interface LunchmateProfileGrabTarget {
@@ -1050,7 +1119,6 @@ export function createLunchmateProfileGrabController({
   let prepareTimer: ReturnType<typeof setTimeout> | null = null;
   let activationTimer: ReturnType<typeof setTimeout> | null = null;
   let landingTimer: ReturnType<typeof setTimeout> | null = null;
-  let recoveryTimer: ReturnType<typeof setTimeout> | null = null;
   let pickupSwayTimer: ReturnType<typeof setTimeout> | null = null;
   let pickupSettleTimer: ReturnType<typeof setTimeout> | null = null;
   let velocitySettleTimer: ReturnType<typeof setTimeout> | null = null;
@@ -1069,9 +1137,7 @@ export function createLunchmateProfileGrabController({
 
   const clearLandingTimers = () => {
     if (landingTimer !== null) clearTimeout(landingTimer);
-    if (recoveryTimer !== null) clearTimeout(recoveryTimer);
     landingTimer = null;
-    recoveryTimer = null;
   };
 
   const clearPendulumTimers = () => {
@@ -1118,27 +1184,9 @@ export function createLunchmateProfileGrabController({
 
   const finishLanding = () => {
     if (stopped) return;
-    emit({
-      ...snapshot,
-      phase: 'recovering',
-      assetKeyOverride: 'idle',
-      x: 0,
-      y: 0,
-      rotate: 0,
-      scaleX: 1,
-      scaleY: 1,
-      transitionMs: 0,
-    });
-    const recoveryMs = durationFromRandom(
-      LUNCHMATE_PROFILE_GRAB_RECOVERY_RANGE_MS,
-      random,
-    );
-    recoveryTimer = setTimeout(() => {
-      recoveryTimer = null;
-      onTargetChange({ x: 0, y: 0, rotate: 0, immediate: true });
-      emit({ ...INITIAL_PROFILE_GRAB });
-      onRestartAutomaticMotion();
-    }, recoveryMs);
+    onTargetChange({ x: 0, y: 0, rotate: 0, immediate: true });
+    emit({ ...INITIAL_PROFILE_GRAB });
+    onRestartAutomaticMotion();
   };
 
   const beginLanding = () => {
@@ -1200,7 +1248,7 @@ export function createLunchmateProfileGrabController({
   };
 
   const activateGrab = () => {
-    activationTimer = null;
+    clearPressTimers();
     if (
       stopped
       || blocked
@@ -1210,13 +1258,18 @@ export function createLunchmateProfileGrabController({
       || snapshot.phase !== 'pressing'
     ) {
       resetImmediately();
-      return;
+      return false;
     }
     try {
-      captureTarget.setPointerCapture(activePointerId);
+      if (
+        captureTarget.hasPointerCapture === undefined
+        || !captureTarget.hasPointerCapture(activePointerId)
+      ) {
+        captureTarget.setPointerCapture(activePointerId);
+      }
     } catch {
       resetImmediately();
-      return;
+      return false;
     }
     const bounds = getBounds();
     activeBounds = bounds;
@@ -1259,6 +1312,7 @@ export function createLunchmateProfileGrabController({
         onTargetChange({ rotate: 0 });
       }, 360);
     }
+    return true;
   };
 
   return {
@@ -1268,8 +1322,32 @@ export function createLunchmateProfileGrabController({
         || blocked
         || !visible
         || !pointer.isPrimary
-        || snapshot.phase !== 'idle'
+        || snapshot.phase === 'pressing'
+        || snapshot.phase === 'grabbed'
       ) return false;
+
+      // 놓기/복귀 애니메이션은 새 입력보다 우선하지 않는다. 사용자가 다시 잡으면
+      // 남은 landing/recovering timer를 즉시 끊고 현재 제스처를 시작한다.
+      const interruptVisual = snapshot.phase === 'landing' || snapshot.phase === 'recovering'
+        ? {
+            x: pointer.initialVisualX,
+            y: pointer.initialVisualY ?? getRendered().y,
+            rotate: getRendered().rotate,
+          }
+        : null;
+      if (interruptVisual) {
+        clearPressTimers();
+        clearLandingTimers();
+        clearPendulumTimers();
+        releaseCapture();
+        activePointerId = null;
+        captureTarget = null;
+        activeBounds = null;
+        filteredVelocityX = 0;
+        // 화면에서 보이는 위치를 그대로 고정한 뒤 다시 잡아 snap-back을 막는다.
+        // spring.get()이 페인트보다 먼저 착지점(0)에 도달해도 DOM offset을 쓴다.
+        onTargetChange({ ...interruptVisual, immediate: true });
+      }
 
       activePointerId = pointer.pointerId;
       const localPointer = toStageLocal(pointer.clientX, pointer.clientY);
@@ -1278,8 +1356,25 @@ export function createLunchmateProfileGrabController({
       initialVisualX = pointer.initialVisualX;
       captureTarget = pointer.target;
       suppressNextClick = false;
+      try {
+        // pointerdown 시점부터 소유권을 확보해 빠른 이동이나 캐릭터 경계 이탈에도
+        // pointermove/up을 놓치지 않는다.
+        captureTarget.setPointerCapture(activePointerId);
+      } catch {
+        resetImmediately();
+        return false;
+      }
       onPauseAutomaticMotion();
-      emit({ ...INITIAL_PROFILE_GRAB, phase: 'pressing' });
+      emit({
+        ...INITIAL_PROFILE_GRAB,
+        phase: 'pressing',
+        x: interruptVisual?.x ?? 0,
+        y: interruptVisual?.y ?? 0,
+        rotate: interruptVisual?.rotate ?? 0,
+        scaleX: reducedMotion ? 1 : 1.015,
+        scaleY: reducedMotion ? 1 : 0.985,
+        transitionMs: reducedMotion ? 0 : LUNCHMATE_PROFILE_LONG_PRESS_PREPARE_MS,
+      });
 
       if (!reducedMotion) {
         prepareTimer = setTimeout(() => {
@@ -1301,13 +1396,12 @@ export function createLunchmateProfileGrabController({
       const deltaX = localPointer.x - pointerStartLocalX;
       const deltaY = localPointer.y - pointerStartLocalY;
       if (snapshot.phase === 'pressing') {
-        if (
-          Math.hypot(deltaX, deltaY)
-          >= LUNCHMATE_PROFILE_LONG_PRESS_MOVE_THRESHOLD_PX
-        ) {
-          resetImmediately();
+        if (Math.hypot(deltaX, deltaY) < LUNCHMATE_PROFILE_LONG_PRESS_MOVE_THRESHOLD_PX) {
+          return false;
         }
-        return false;
+        // 빠르게 끌기 시작한 포인터도 즉시 잡기로 전환한다. 정지한 포인터의
+        // 400ms long-press 진입은 그대로 유지해 touch 사용성도 보존한다.
+        if (!activateGrab()) return false;
       }
       if (snapshot.phase !== 'grabbed') return false;
 
@@ -1442,6 +1536,8 @@ function preloadLunchmateProfileMotionAssets() {
 
 interface UseLunchmateProfileMotionOptions {
   suspended: boolean;
+  /** 자동 모션 정지와 별개로 실제 pointer grab을 막아야 하는 상태. */
+  grabBlocked?: boolean;
 }
 
 type LunchmateProfileMotionValue = Omit<
@@ -1461,7 +1557,7 @@ type LunchmateProfileMotionValue = Omit<
     positionY: MotionValue<number>;
     pendulumRotate: MotionValue<number>;
     handlePointerDown: (
-      pointer: Omit<LunchmateProfileGrabPointer, 'initialVisualX'>,
+      pointer: Omit<LunchmateProfileGrabPointer, 'initialVisualX' | 'initialVisualY'>,
     ) => boolean;
     handlePointerMove: (
       pointerId: number,
@@ -1478,6 +1574,7 @@ type LunchmateProfileMotionValue = Omit<
 
 export function useLunchmateProfileMotion({
   suspended,
+  grabBlocked = suspended,
 }: UseLunchmateProfileMotionOptions): LunchmateProfileMotionValue {
   const stageRef = useRef<HTMLDivElement>(null);
   const characterRef = useRef<HTMLDivElement>(null);
@@ -1593,23 +1690,23 @@ export function useLunchmateProfileMotion({
       onChange: setGrabSnapshot,
       onTargetChange: ({ x, y, rotate, immediate }) => {
         if (x !== undefined) {
-          if (immediate) grabSpringX.set(x);
           grabTargetX.set(x);
+          if (immediate) snapMotionValue(grabSpringX, x);
         }
         if (y !== undefined) {
-          if (immediate) grabSpringY.set(y);
           grabTargetY.set(y);
+          if (immediate) snapMotionValue(grabSpringY, y);
         }
         if (rotate !== undefined) {
-          if (immediate) grabSpringRotate.set(rotate);
           grabTargetRotate.set(rotate);
+          if (immediate) snapMotionValue(grabSpringRotate, rotate);
         }
       },
       onPauseAutomaticMotion: () => controllerRef.current?.setGrabPaused(true),
       onResumeAutomaticMotion: () => controllerRef.current?.setGrabPaused(false),
       onRestartAutomaticMotion: () => controllerRef.current?.restart(),
       reducedMotion,
-      initiallyBlocked: suspended,
+      initiallyBlocked: grabBlocked,
       initiallyVisible: typeof document === 'undefined'
         || document.visibilityState !== 'hidden',
     });
@@ -1639,8 +1736,8 @@ export function useLunchmateProfileMotion({
   ]);
 
   useEffect(() => {
-    grabControllerRef.current?.setBlocked(suspended);
-  }, [suspended]);
+    grabControllerRef.current?.setBlocked(grabBlocked);
+  }, [grabBlocked]);
 
   useLayoutEffect(() => {
     const measure = () => {
@@ -1733,21 +1830,28 @@ export function useLunchmateProfileMotion({
   );
 
   const handleGrabPointerDown = useCallback(
-    (pointer: Omit<LunchmateProfileGrabPointer, 'initialVisualX'>) => {
-      const renderedCharacter = characterRef.current?.getBoundingClientRect();
-      const fixedAnchor = stageRef.current?.querySelector<HTMLElement>(
-        '[data-lunchmate-profile-grab-anchor="true"]',
-      )?.getBoundingClientRect();
-      const initialVisualX = renderedCharacter && fixedAnchor
-        ? (renderedCharacter.left + (renderedCharacter.width / 2))
-          - (fixedAnchor.left + (fixedAnchor.width / 2))
-        : snapshot.x;
+    (pointer: Omit<LunchmateProfileGrabPointer, 'initialVisualX' | 'initialVisualY'>) => {
+      const movingLayerEl = stageRef.current?.querySelector<HTMLElement>(
+        '[data-lunchmate-profile-grab-position="true"]',
+      );
+      const visualOffset = pickLunchmateProfileCarryOffset([
+        {
+          x: clampedGrabSpringX.get(),
+          y: clampedGrabSpringY.get(),
+        },
+        readLunchmateProfileTransformOffset(movingLayerEl),
+        readLunchmateProfileVisualOffset(
+          movingLayerEl?.getBoundingClientRect(),
+          characterRef.current?.getBoundingClientRect(),
+        ),
+      ]) ?? { x: snapshot.x, y: 0 };
       return grabControllerRef.current?.pointerDown({
         ...pointer,
-        initialVisualX,
+        initialVisualX: visualOffset.x,
+        initialVisualY: visualOffset.y,
       }) ?? false;
     },
-    [snapshot.x],
+    [clampedGrabSpringX, clampedGrabSpringY, snapshot.x],
   );
   const handleGrabPointerMove = useCallback(
     (pointerId: number, clientX: number, clientY: number) => (
@@ -1791,7 +1895,11 @@ export function useLunchmateProfileMotion({
       isActive: grabSnapshot.phase !== 'idle',
       hasVisualControl: grabSnapshot.phase === 'grabbed'
         || grabSnapshot.phase === 'landing'
-        || grabSnapshot.phase === 'recovering',
+        || grabSnapshot.phase === 'recovering'
+        || (
+          grabSnapshot.phase === 'pressing'
+          && (grabSnapshot.x !== 0 || grabSnapshot.y !== 0)
+        ),
       positionX: reducedMotion ? grabTargetX : clampedGrabSpringX,
       positionY: reducedMotion ? grabTargetY : clampedGrabSpringY,
       pendulumRotate: reducedMotion

@@ -1,10 +1,17 @@
 export interface User {
   id: string;
   username: string;
+  handle?: string | null;
   profile_image_url: string | null;
   bio: string | null;
   location: string | null;
   created_at: string;
+}
+
+export interface UserSearchResult extends User {
+  handle: string;
+  is_self: boolean;
+  is_following: boolean;
 }
 
 export interface UserFollow {
@@ -44,4 +51,6 @@ export interface GoogleRestaurantRow {
   google_place_id: string | null;
   synced_at: string | null;
   source: 'seed' | 'google';
+  /** Google Places 원본 type 목록. 음식 장소 검증 캐시에 사용한다. */
+  place_types?: string[];
 }
