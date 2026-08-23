@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useLocation, useSearch } from 'wouter';
 import { ArrowLeft, MapPin, Clock, Star } from 'lucide-react';
-import { MapContainer, TileLayer, Marker, Popup } from 'react-leaflet';
+import { MapContainer, TileLayer, Marker, Popup, useMap } from 'react-leaflet';
 import L from 'leaflet';
 import { useApp, type Restaurant } from '@/contexts/AppContext';
 import { getRestaurantById as fetchRestaurantById } from '@/services/restaurantsApi';
@@ -28,6 +28,24 @@ function createCoralIcon() {
     iconSize: [34, 34],
     iconAnchor: [17, 17],
   });
+}
+
+function MapResizeSync() {
+  const map = useMap();
+
+  useEffect(() => {
+    const container = map.getContainer();
+    const refreshSize = () => map.invalidateSize({ animate: false });
+    const frame = window.requestAnimationFrame(refreshSize);
+    const observer = new ResizeObserver(refreshSize);
+    observer.observe(container.parentElement ?? container);
+    return () => {
+      window.cancelAnimationFrame(frame);
+      observer.disconnect();
+    };
+  }, [map]);
+
+  return null;
 }
 
 export default function LunchieMapPage() {
@@ -101,14 +119,15 @@ export default function LunchieMapPage() {
       </div>
 
       {/* Map */}
-      <div className="flex-1 relative" style={{ minHeight: '50vh' }}>
+      <div data-ui="lunchie-restaurant-map" className="relative min-h-[50vh] flex-1 overflow-hidden">
         <MapContainer
           center={position}
           zoom={16}
-          style={{ height: '100%', width: '100%' }}
+          className="absolute inset-0 !h-full !w-full !rounded-none"
           scrollWheelZoom={true}
           zoomControl={false}
         >
+          <MapResizeSync />
           <TileLayer
             url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
             attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'

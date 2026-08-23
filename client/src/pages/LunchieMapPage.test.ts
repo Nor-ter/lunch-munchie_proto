@@ -11,6 +11,14 @@ describe('LunchieMapPage persisted restaurant recovery', () => {
     expect(source).toContain('식당 위치를 불러오는 중…');
   });
 
+  it('fills the visible map region and refreshes Leaflet after flex layout', () => {
+    expect(source).toContain('data-ui="lunchie-restaurant-map"');
+    expect(source).toContain('className="absolute inset-0 !h-full !w-full !rounded-none"');
+    expect(source).toContain('<MapResizeSync />');
+    expect(source).toContain('map.invalidateSize({ animate: false })');
+    expect(source).not.toContain("style={{ height: '100%', width: '100%' }}");
+  });
+
   it('returns an unresolved saved pick to the saved list', () => {
     expect(source).toContain("navigate('/saved')");
   });
