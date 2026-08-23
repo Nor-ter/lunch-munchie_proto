@@ -135,7 +135,11 @@ const CUBE_DURATION = 0.7;
 // 다음/이전 사진을 보여주는 진짜 3D 큐브 슬라이더(tl_revise 애니메이션 UI). step: 단조 증가/감소
 // 정수(다음 +1, 이전 -1). 90도 도는 동안 실제 보이는 면은 나가는 면+들어오는 면 둘뿐이라 네 면만으로
 // 임의 개수 사진을 끊김 없이 굴린다.
-function MenuCube({ photos, step }: { photos: string[]; step: number }) {
+function MenuCube({ photos, step, onPhotoError }: {
+  photos: string[];
+  step: number;
+  onPhotoError?: (src: string) => void;
+}) {
   const ref = useRef<HTMLDivElement>(null);
   const [depth, setDepth] = useState(160);
 
@@ -186,7 +190,13 @@ function MenuCube({ photos, step }: { photos: string[]; step: number }) {
                 WebkitBackfaceVisibility: 'hidden',
               }}
             >
-              <img src={photos[faces[f]]} alt="" className="w-full h-full object-cover" draggable={false} />
+              <img
+                src={photos[faces[f]]}
+                alt=""
+                className="w-full h-full object-cover"
+                draggable={false}
+                onError={() => onPhotoError?.(photos[faces[f]])}
+              />
               <motion.div
                 className="absolute inset-0 bg-black"
                 animate={{ opacity: f === front ? 0 : 0.45 }}
@@ -282,12 +292,27 @@ function SwipeCard({
   // 그 식당의 실제 사진만 쓴다. 없으면 빈 배열 → FoodImage가 이모지 플레이스홀더를 보여준다.
   // 카테고리 스톡 사진 폴백은 제거했다(버거집에 피자가 뜨는 등 실제와 다른 사진은 거짓 정보다).
   const hasCanonicalPhotoList = Array.isArray(restaurant.photos);
-  const foodPhotos: string[] = Array.from(new Set<string>(
+  const candidatePhotoSources: string[] = Array.from(new Set<string>(
     (Array.isArray(restaurant.photos) ? restaurant.photos : [])
       .filter((photo: unknown): photo is string => typeof photo === 'string')
       .map((photo: string) => photo.trim())
       .filter(Boolean),
   ));
+  const candidatePhotoKey = candidatePhotoSources.join("\u0000");
+  const [failedPhotoSources, setFailedPhotoSources] = useState<Set<string>>(() => new Set());
+  useEffect(() => {
+    setFailedPhotoSources(new Set());
+  }, [restaurant.id, candidatePhotoKey]);
+  const markPhotoFailed = useCallback((src: string) => {
+    if (!src) return;
+    setFailedPhotoSources((current) => {
+      if (current.has(src)) return current;
+      const next = new Set(current);
+      next.add(src);
+      return next;
+    });
+  }, []);
+  const foodPhotos = candidatePhotoSources.filter((photo) => !failedPhotoSources.has(photo));
   const primaryPhoto = hasCanonicalPhotoList ? foodPhotos[0] : restaurant.image;
   const photoIndex = foodPhotos.length ? ((photoStep % foodPhotos.length) + foodPhotos.length) % foodPhotos.length : 0;
 
@@ -353,6 +378,7 @@ function SwipeCard({
           category={restaurant.category}
           className="w-full h-full object-cover"
           emojiClass="text-[96px]"
+          onLoadError={markPhotoFailed}
         />
         <div className="absolute inset-0 bg-gradient-to-t from-black/75 via-black/10 to-transparent" />
 
@@ -561,7 +587,7 @@ function SwipeCard({
                   {foodPhotos.length > 0 ? (
                     <>
                       {/* 좌/우 탭 시 큐브가 Y축으로 90도씩 굴러간다 */}
-                      <MenuCube photos={foodPhotos} step={photoStep} />
+                      <MenuCube photos={foodPhotos} step={photoStep} onPhotoError={markPhotoFailed} />
                       {foodPhotos.length > 1 && (
                         <>
                           <button

@@ -14,6 +14,10 @@ describe('Lunchie swipe photo recovery', () => {
 
   it('recovers when a hydrated image source replaces a failed legacy URL', () => {
     expect(imageSource).toContain('useEffect(() => { setFailed(false); }, [src])');
+    expect(imageSource).toContain('onLoadError?.(src)');
+    expect(source).toContain('onLoadError={markPhotoFailed}');
+    expect(source).toContain('onPhotoError={markPhotoFailed}');
+    expect(source).toContain('failedPhotoSources.has(photo)');
     expect(contextSource).toContain('catalogueById');
     expect(contextSource).toContain("const image = photos[0] ?? ''");
   });

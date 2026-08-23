@@ -36,9 +36,10 @@ function gradientFor(category?: string): string {
 }
 
 export default function FoodImage({
-  src, name, category, className, emojiClass = "text-[64px]",
+  src, name, category, className, emojiClass = "text-[64px]", onLoadError,
 }: {
   src?: string; name?: string; category?: string; className?: string; emojiClass?: string;
+  onLoadError?: (src: string) => void;
 }) {
   const [failed, setFailed] = useState(false);
   // A session card can receive a fresh R2 URL after the app hydrates its
@@ -52,5 +53,8 @@ export default function FoodImage({
       </div>
     );
   }
-  return <img src={src} alt={name ?? ""} className={className} draggable={false} onError={() => setFailed(true)} />;
+  return <img src={src} alt={name ?? ""} className={className} draggable={false} onError={() => {
+    setFailed(true);
+    onLoadError?.(src);
+  }} />;
 }

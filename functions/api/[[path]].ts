@@ -509,14 +509,16 @@ export function selectLunchiePresentationPhotoKeys(
 
 /** Lunchie cards only present evidence-backed food/table media. */
 export async function lunchiePresentationPhotos(
-  env: Pick<EnvBindings, "MEDIA_ORIGIN" | "PHOTOS_R2">,
   db: any,
   restaurantId: string,
 ) {
   const { results } = await db.prepare(
     "SELECT r2_key, kind, dishes, perceptual_hash FROM restaurant_photos WHERE restaurant_id = ? AND kind IN ('dish', 'table') AND has_person = 0 ORDER BY CASE kind WHEN 'dish' THEN 0 ELSE 1 END, COALESCE(quality, 0) DESC, id ASC LIMIT 24",
   ).bind(restaurantId).all<PresentationPhotoRow>();
-  return filterExistingPhotos(env, selectLunchiePresentationPhotoKeys(results));
+  // Object availability is handled by the browser at render time. Probing R2
+  // for every catalogue photo made one request fan out into 100+ storage
+  // reads and added several seconds to Lunchie startup.
+  return selectLunchiePresentationPhotoKeys(results);
 }
 
 const EVENT_TYPES = new Set([
@@ -1343,7 +1345,7 @@ app.post("/api/recommend", async (c) => {
     ]);
     const safeSlate = await Promise.all(finalResults.map(async (item) => ({
         ...item.restaurant,
-        photos: await lunchiePresentationPhotos(c.env, c.env.DB, item.restaurant.id),
+        photos: await lunchiePresentationPhotos(c.env.DB, item.restaurant.id),
         menu_items: json(item.restaurant.menus, []),
         tags: json<string[]>(item.restaurant.tags, []),
         rank: item.rank,
@@ -1384,7 +1386,7 @@ app.get("/api/restaurants", async (c) => {
   return c.json(
     await Promise.all(results.map(async (r: any) => ({
       ...r,
-      photos: await lunchiePresentationPhotos(c.env, c.env.DB, r.id),
+      photos: await lunchiePresentationPhotos(c.env.DB, r.id),
       menu_items: json(r.menus, []),
       tags: json<string[]>(r.tags, []),
     }))),
