@@ -236,6 +236,98 @@ test('solo start sends the new member credential and opens the restaurant deck',
   expect(browserErrors).toEqual([]);
 });
 
+test('restaurant progress stays separate from menu photo progress', async ({ page }) => {
+  const restaurants = [
+    {
+      id: 'restaurant-progress-1',
+      name: 'Progress Kitchen',
+      category: 'Korean',
+      tags: ['Lunch'],
+      rating: 4.8,
+      reviewCount: 120,
+      distance: '350m',
+      address: 'Sydney',
+      image: '/assets/lunchmate/1x/lunchmate_default.png',
+      photos: [
+        '/assets/lunchmate/1x/lunchmate_default.png',
+        '/assets/lunchmate/1x/lunchmate_happy.png',
+        '/assets/lunchmate/1x/lunchmate_eating.png',
+      ],
+      lat: -33.86,
+      lng: 151.21,
+      priceRange: 2,
+      openHours: '11:00 - 21:00',
+      dietary: [],
+      description: 'A restaurant with multiple menu photos.',
+    },
+    {
+      id: 'restaurant-progress-2',
+      name: 'Second Kitchen',
+      category: 'Japanese',
+      tags: ['Dinner'],
+      rating: 4.7,
+      reviewCount: 85,
+      distance: '600m',
+      address: 'Sydney',
+      image: '/assets/lunchmate/1x/lunchmate_excited.png',
+      photos: ['/assets/lunchmate/1x/lunchmate_excited.png'],
+      lat: -33.87,
+      lng: 151.2,
+      priceRange: 2,
+      openHours: '11:30 - 22:00',
+      dietary: [],
+      description: 'The second restaurant card.',
+    },
+  ];
+
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.route('https://fonts.googleapis.com/**', route => route.fulfill({ status: 200, contentType: 'text/css', body: '' }));
+  await page.route('https://cdn.jsdelivr.net/**', route => route.fulfill({ status: 200, contentType: 'text/css', body: '' }));
+  await page.route('**/api/**', async route => {
+    const request = route.request();
+    const url = new URL(request.url());
+    if (url.pathname === '/api/auth/session') {
+      await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ user: { sub: userId, name: 'Tester' }, profile: null }) });
+      return;
+    }
+    if (url.pathname === '/api/restaurants') {
+      await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(restaurants) });
+      return;
+    }
+    if (url.pathname === '/api/courses' || url.pathname === '/api/feed') {
+      await route.fulfill({ status: 200, contentType: 'application/json', body: '[]' });
+      return;
+    }
+    if (url.pathname === '/api/sessions/ABC123' && request.method() === 'GET') {
+      const response = serverSession('SWIPING_1');
+      response.session.deck_ids = restaurants.map(restaurant => restaurant.id);
+      await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(response) });
+      return;
+    }
+    await route.fulfill({ status: 200, contentType: 'application/json', body: '{"ok":true}' });
+  });
+  await seedIdentity(page, cachedSession({ status: 'voting', restaurants }));
+  await page.goto('/lunchie/swipe');
+
+  const firstRestaurantProgress = page.getByRole('status', { name: '전체 2개 중 1번째 음식점' });
+  await expect(firstRestaurantProgress).toHaveText('1 / 2');
+  await expect(page.getByText('마음에 드는 음식을 골라보세요', { exact: true })).toBeVisible();
+  await expect(page.getByText('마음에 드는 음식을 골라보세요 · 1/2', { exact: true })).toHaveCount(0);
+
+  await expect(page.getByText('예선전 시작! 🍽️', { exact: true })).toHaveCount(0, { timeout: 4_000 });
+  await page.getByRole('heading', { name: restaurants[0].name }).click();
+  await expect(page.getByRole('status', { name: '메뉴 사진 전체 3장 중 1번째' })).toHaveText('메뉴 사진 1 / 3');
+
+  await page.getByRole('button', { name: '다음 사진' }).click();
+  await expect(page.getByRole('status', { name: '메뉴 사진 전체 3장 중 2번째' })).toHaveText('메뉴 사진 2 / 3');
+
+  await page.getByRole('button', { name: '메뉴 닫기' }).click();
+  await expect(firstRestaurantProgress).toHaveText('1 / 2');
+
+  await page.getByRole('button', { name: '싫어요' }).click();
+  await expect(page.getByRole('status', { name: '전체 2개 중 2번째 음식점' })).toHaveText('2 / 2');
+});
+
 test('desktop settings verifies the active session and cancels it through the shared menu', async ({ page }) => {
   const browserErrors = captureUnexpectedBrowserErrors(page);
   await page.setViewportSize({ width: 1280, height: 900 });

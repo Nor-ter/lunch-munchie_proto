@@ -22,10 +22,10 @@ describe('Lunchie swipe photo recovery', () => {
     expect(contextSource).toContain("const image = photos[0] ?? ''");
   });
 
-  it('labels unlinked restaurant photos truthfully instead of inventing menu names', () => {
+  it('keeps menu photo progress explicit and separate from restaurant-card progress', () => {
     expect(source).toContain("? '등록된 음식 사진이 없어요'");
-    expect(source).toContain("? '대표 음식 사진'");
-    expect(source).toContain('`음식 사진 · ${photoIndex + 1}/${foodPhotos.length}`');
+    expect(source).toContain('`메뉴 사진 ${photoIndex + 1} / ${foodPhotos.length}`');
+    expect(source).toContain('`메뉴 사진 전체 ${foodPhotos.length}장 중 ${photoIndex + 1}번째`');
     expect(source).not.toContain('`메뉴 ${photoIndex + 1}`');
     expect(source).toContain('aria-label="이전 사진"');
     expect(source).toContain('aria-label="다음 사진"');
