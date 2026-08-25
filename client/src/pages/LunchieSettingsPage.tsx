@@ -3,7 +3,7 @@
  * Session persistence remains server-first through AppContext.
  */
 
-import { useEffect, useMemo, useRef, useState, type Dispatch, type PointerEvent as ReactPointerEvent, type ReactNode, type SetStateAction } from 'react';
+import { useEffect, useMemo, useRef, useState, type Dispatch, type MouseEvent as ReactMouseEvent, type PointerEvent as ReactPointerEvent, type ReactNode, type SetStateAction } from 'react';
 import { motion } from 'framer-motion';
 import { useLocation, useSearch } from 'wouter';
 import {
@@ -32,6 +32,16 @@ import {
 import type { LunchmateLoadout } from '@/types/lunchmateCustomization';
 import { logSessionCreated } from '@/lib/eventLogger';
 import SessionManagementMenu from '@/components/lunchie/SessionManagementMenu';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 import {
   DEFAULT_QUICK_MATCH_SETTINGS,
   DIETARY_REQUIREMENTS,
@@ -700,7 +710,17 @@ function DistanceRuler({ radius, onChange, loadout }: { radius: number; onChange
 export default function LunchieSettingsPage() {
   const [, navigate] = useLocation();
   const search = useSearch();
-  const { createSession, startSession, fetchSession, currentSession, setCurrentSession, restaurants, profile } = useApp();
+  const {
+    createSession,
+    startSession,
+    fetchSession,
+    cancelSession,
+    leaveSession,
+    currentSession,
+    setCurrentSession,
+    restaurants,
+    profile,
+  } = useApp();
   const urlIntent = new URLSearchParams(search).get('intent');
   const initialIntent: Intent | null = urlIntent === 'meal' || urlIntent === 'cafe' || urlIntent === 'dessert' ? urlIntent : null;
   const [storedSettings] = useState(() => {
@@ -727,6 +747,9 @@ export default function LunchieSettingsPage() {
   const [isCheckingSession, setIsCheckingSession] = useState(Boolean(currentSession?.inviteCode));
   const [sessionCheckFailed, setSessionCheckFailed] = useState(false);
   const [sessionCheckAttempt, setSessionCheckAttempt] = useState(0);
+  const [replacementOpen, setReplacementOpen] = useState(false);
+  const [replacementBusy, setReplacementBusy] = useState(false);
+  const [replacementError, setReplacementError] = useState<string | null>(null);
   const lunchmateLoadout = useMemo(
     () => lunchmateLoadoutFromProfile(profile.lunchmateLoadout),
     [profile.lunchmateLoadout],
@@ -740,6 +763,11 @@ export default function LunchieSettingsPage() {
     && currentSession
     && currentSession.membershipActive !== false
     && isActiveQuickMatchStatus(currentSession.status),
+  );
+  const hasPartySizeConflict = Boolean(
+    hasActiveSession
+    && currentSession
+    && partySize !== currentSession.filters.partySize,
   );
   const realCategories = useMemo(() => new Set(restaurants.map(restaurant => restaurant.category)), [restaurants]);
 
@@ -826,82 +854,116 @@ export default function LunchieSettingsPage() {
     if (!origin && !isLocating) void confirmCurrentLocation().catch(() => undefined);
   };
 
+  const createAndEnterSession = async () => {
+    const categories = tags.filter(tag => realCategories.has(tag));
+    const hostName = profile.name && profile.name !== '사용자' ? profile.name : '호스트';
+    const currentOrigin = distanceEnabled
+      ? origin ?? await currentPosition()
+      : null;
+    const session = await createSession(
+      `${hostName}의 점심 세션`,
+      {
+        partySize,
+        dietary,
+        budget,
+        radius,
+        distanceEnabled,
+        originLatitude: currentOrigin?.latitude,
+        originLongitude: currentOrigin?.longitude,
+        categories,
+        intent: intent ?? undefined,
+      },
+      hostName,
+      profile.emoji,
+      deadlineMin,
+    );
+
+    logSessionCreated(session.id, {
+      intent: intent ?? 'auto',
+      party_size: partySize,
+      radius_m: distanceEnabled ? radius : null,
+      budget,
+      dietary_count: dietary.length,
+      category_count: categories.length,
+      deadline_minutes: deadlineMin,
+    });
+
+    if (isSolo) {
+      await startSession(session.inviteCode, deadlineMin);
+      toast.success('Quick Match를 시작합니다.');
+      navigate('/lunchie/swipe');
+    } else {
+      toast.success('세션이 만들어졌어요. 친구를 초대해 보세요.');
+      navigate('/session/lobby');
+    }
+  };
+
   const handleStart = async () => {
     if (creationLockRef.current || isCheckingSession || sessionCheckFailed) return;
-    creationLockRef.current = true;
-    if (hasActiveSession && currentSession) {
-      setIsCreating(true);
-      try {
-        const activeSession = await fetchSession(currentSession.inviteCode);
-        if (activeSession.membershipActive !== false && isActiveQuickMatchStatus(activeSession.status)) {
-          const isWaiting = activeSession.status === 'waiting';
-          toast.info(isWaiting ? '진행 중인 대기방으로 이동합니다.' : '진행 중인 투표로 이동합니다.');
-          navigate(isWaiting ? '/session/lobby' : '/lunchie/swipe');
-          creationLockRef.current = false;
-          return;
-        }
-        // A locally cached session can outlive its server record. Clear only
-        // that stale cache before creating a replacement session.
-        setCurrentSession(null);
-      } catch (error) {
-        const status = (error as { status?: number }).status;
-        if (status !== 404 && status !== 410) {
-          toast.error('We could not verify the current Quick Match. Please try again.');
-          setIsCreating(false);
-          creationLockRef.current = false;
-          return;
-        }
-        setCurrentSession(null);
-      }
+    if (hasPartySizeConflict) {
+      setReplacementError(null);
+      setReplacementOpen(true);
+      return;
     }
 
+    creationLockRef.current = true;
     setIsCreating(true);
     try {
-      const categories = tags.filter(tag => realCategories.has(tag));
-      const hostName = profile.name && profile.name !== '사용자' ? profile.name : '호스트';
-      const currentOrigin = distanceEnabled
-        ? origin ?? await currentPosition()
-        : null;
-      const session = await createSession(
-        `${hostName}의 점심 세션`,
-        {
-          partySize,
-          dietary,
-          budget,
-          radius,
-          distanceEnabled,
-          originLatitude: currentOrigin?.latitude,
-          originLongitude: currentOrigin?.longitude,
-          categories,
-          intent: intent ?? undefined,
-        },
-        hostName,
-        profile.emoji,
-        deadlineMin,
-      );
-
-      logSessionCreated(session.id, {
-        intent: intent ?? 'auto',
-        party_size: partySize,
-        radius_m: distanceEnabled ? radius : null,
-        budget,
-        dietary_count: dietary.length,
-        category_count: categories.length,
-        deadline_minutes: deadlineMin,
-      });
-
-      if (isSolo) {
-        await startSession(session.inviteCode, deadlineMin);
-        toast.success('Quick Match를 시작합니다.');
-        navigate('/lunchie/swipe');
-      } else {
-        toast.success('세션이 만들어졌어요. 친구를 초대해 보세요.');
-        navigate('/session/lobby');
+      if (hasActiveSession && currentSession) {
+        try {
+          const activeSession = await fetchSession(currentSession.inviteCode);
+          if (activeSession.membershipActive !== false && isActiveQuickMatchStatus(activeSession.status)) {
+            const isWaiting = activeSession.status === 'waiting';
+            toast.info(isWaiting ? '진행 중인 대기방으로 이동합니다.' : '진행 중인 투표로 이동합니다.');
+            navigate(isWaiting ? '/session/lobby' : '/lunchie/swipe');
+            return;
+          }
+          // A locally cached session can outlive its server record. Clear only
+          // that stale cache before creating a replacement session.
+          setCurrentSession(null);
+        } catch (error) {
+          const status = (error as { status?: number }).status;
+          if (status !== 404 && status !== 410) {
+            toast.error('We could not verify the current Quick Match. Please try again.');
+            return;
+          }
+          setCurrentSession(null);
+        }
       }
+
+      await createAndEnterSession();
     } catch (error) {
       toast.error(error instanceof Error ? error.message : '세션 생성에 실패했습니다.');
     } finally {
       setIsCreating(false);
+      creationLockRef.current = false;
+    }
+  };
+
+  const handleReplaceSession = async (event: ReactMouseEvent<HTMLButtonElement>) => {
+    event.preventDefault();
+    if (!currentSession || replacementBusy || creationLockRef.current) return;
+    let endedExistingSession = false;
+    creationLockRef.current = true;
+    setReplacementBusy(true);
+    setReplacementError(null);
+    try {
+      const isHost = currentSession.hostId === profile.id;
+      if (isHost) await cancelSession(currentSession.inviteCode);
+      else await leaveSession(currentSession.inviteCode);
+      endedExistingSession = true;
+      await createAndEnterSession();
+      setReplacementOpen(false);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : '새 Quick Match를 시작하지 못했어요.';
+      if (endedExistingSession) {
+        setReplacementOpen(false);
+        toast.error(`기존 세션은 종료됐지만 새 세션을 만들지 못했어요. 다시 시도해 주세요. ${message}`);
+      } else {
+        setReplacementError(message);
+      }
+    } finally {
+      setReplacementBusy(false);
       creationLockRef.current = false;
     }
   };
@@ -1098,12 +1160,43 @@ export default function LunchieSettingsPage() {
               ? 'Checking current session…'
               : isCreating
               ? '준비하는 중…'
+              : hasPartySizeConflict
+                ? `기존 세션 종료 후 ${isSolo ? '혼자로' : `${partySize}명으로`} 시작하기`
               : hasActiveSession && currentSession
                 ? currentSession.status === 'waiting' ? '대기방으로 돌아가기' : '투표 계속하기'
                 : isSolo ? 'Swipe 시작하기' : '세션 만들고 초대하기'}
           </motion.button>
         </div>
       </main>
+
+      <AlertDialog open={replacementOpen} onOpenChange={open => !replacementBusy && setReplacementOpen(open)}>
+        <AlertDialogContent className="max-w-[390px] rounded-[22px] border-[#F0D9D3] bg-[#FFFBF8] p-5">
+          <AlertDialogHeader className="text-left">
+            <AlertDialogTitle className="text-[19px] font-black text-[#26232A]">
+              새 인원 설정으로 시작할까요?
+            </AlertDialogTitle>
+            <AlertDialogDescription className="text-[13px] leading-relaxed text-[#746A6E]">
+              현재 {currentSession?.filters.partySize ?? 1}명 세션이 진행 중이에요. {isSolo ? '혼자' : `${partySize}명`} 설정을 적용하려면
+              {currentSession?.hostId === profile.id ? ' 기존 세션을 종료하고' : ' 기존 세션에서 나간 뒤'} 새 Quick Match를 만들어야 해요.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          {replacementError && (
+            <p role="alert" className="rounded-xl bg-[#FFF0EE] px-3 py-2 text-[12px] font-semibold text-[#C93742]">
+              {replacementError}
+            </p>
+          )}
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={replacementBusy} className="min-h-11 rounded-xl">기존 세션 계속하기</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={event => void handleReplaceSession(event)}
+              disabled={replacementBusy}
+              className="min-h-11 rounded-xl bg-[#C93742] font-bold text-white hover:bg-[#AE2D37]"
+            >
+              {replacementBusy ? '새 세션 준비 중…' : `${currentSession?.hostId === profile.id ? '종료' : '나가기'} 후 새로 시작`}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
