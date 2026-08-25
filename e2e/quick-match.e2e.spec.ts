@@ -147,6 +147,7 @@ test('mobile settings keeps the timer and vertical people wheel synchronized wit
 test('solo start sends the new member credential and opens the restaurant deck', async ({ page }) => {
   const browserErrors = captureUnexpectedBrowserErrors(page);
   const memberKey = 'solo-member-key';
+  let restaurantChoiceSwipeCount = 0;
   const restaurant = {
     id: 'restaurant-e2e',
     name: 'Solo Lunch Kitchen',
@@ -216,6 +217,14 @@ test('solo start sends the new member credential and opens the restaurant deck',
       await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(response) });
       return;
     }
+    if (url.pathname === '/api/swipes') {
+      const body = request.postDataJSON();
+      if (body.restaurantId === restaurant.id && ['like', 'skip', 'LIKE', 'NOPE'].includes(body.action)) {
+        restaurantChoiceSwipeCount += 1;
+      }
+      await route.fulfill({ status: 200, contentType: 'application/json', body: '{"ok":true}' });
+      return;
+    }
     await route.fulfill({ status: 200, contentType: 'application/json', body: '{}' });
   });
   await seedIdentity(page);
@@ -233,6 +242,26 @@ test('solo start sends the new member credential and opens the restaurant deck',
   await expect(page).toHaveURL(/\/lunchie\/swipe$/);
   await expect(page.getByRole('heading', { name: restaurant.name })).toBeVisible();
   await expect(page.getByRole('note')).toContainText('Closest available matches');
+
+  await expect(page.getByText('예선전 시작! 🍽️')).toHaveCount(0, { timeout: 5_000 });
+  await page.getByRole('heading', { name: restaurant.name }).click();
+  const detailsButton = page.getByRole('button', { name: `${restaurant.name} 식당 상세보기` });
+  await expect(detailsButton).toBeVisible();
+
+  await detailsButton.click();
+  await expect(page.getByText(restaurant.address, { exact: true })).toBeVisible();
+  await expect(page.getByText(restaurant.openHours, { exact: true })).toBeVisible();
+  await page.getByRole('button', { name: '뒤로가기' }).click();
+  await expect(page.getByText(restaurant.address, { exact: true })).toHaveCount(0);
+  await expect(detailsButton).toBeVisible();
+
+  await detailsButton.click();
+  await expect(page.getByText(restaurant.address, { exact: true })).toBeVisible();
+  await page.evaluate(() => window.history.back());
+  await expect(page.getByText(restaurant.address, { exact: true })).toHaveCount(0);
+  await expect(detailsButton).toBeVisible();
+  await expect(page.getByRole('heading', { name: restaurant.name })).toBeVisible();
+  expect(restaurantChoiceSwipeCount).toBe(0);
   expect(browserErrors).toEqual([]);
 });
 
