@@ -9,6 +9,7 @@ import { normalizeDiet, isHardRestriction, isIngredientAvoidance, restaurantSati
 import { categoryMatchesIntent, intentForHour, type Intent } from '@shared/intent';
 import { distanceMetres, isWithinRadius } from '@shared/geo';
 import { normalizeQuickMatchPartySize } from '@shared/quickMatchParty';
+import { normalizeRestaurantPayload } from '@shared/restaurantContract';
 import { normalizeFoodTag, type TagType } from '@/constants/foodTags';
 import { DRIVE_COURSES, DRIVE_FEED_POSTS } from '@/data/driveFeed';
 import { demoAuthorIdFor } from '@/data/demoAuthors';
@@ -829,17 +830,14 @@ export function AppProvider({
             const merged = new Map(
               previous.filter(r => !mockIds.has(r.id)).map(restaurant => [restaurant.id, restaurant]),
             );
-            resData.forEach((rawRestaurant: Restaurant & { latitude?: number; longitude?: number }) => merged.set(rawRestaurant.id, {
-              ...rawRestaurant,
-              // D1 uses latitude/longitude; the established browser contract
-              // uses lat/lng. Normalise at this boundary so map and distance
-              // UI never accidentally render a stale mock value.
-              lat: Number(rawRestaurant.latitude ?? rawRestaurant.lat),
-              lng: Number(rawRestaurant.longitude ?? rawRestaurant.lng),
-              distance: typeof rawRestaurant.distance === 'string' ? rawRestaurant.distance : '',
-              tags: Array.isArray(rawRestaurant.tags) ? rawRestaurant.tags.map(tag => normalizeFoodTag(tag)) : [],
-              photos: Array.isArray(rawRestaurant.photos) ? rawRestaurant.photos.map(p => p.startsWith('http') || p.startsWith('/') ? p : `/photos/${p}`) : [],
-            }));
+            resData.forEach((rawRestaurant: Record<string, unknown>) => {
+              const normalized = normalizeRestaurantPayload(rawRestaurant);
+              merged.set(normalized.id, {
+                ...normalized,
+                tags: normalized.tags.map(normalizeFoodTag),
+                photos: normalized.photos.map(p => p.startsWith('http') || p.startsWith('/') ? p : `/photos/${p}`),
+              });
+            });
             return Array.from(merged.values());
           });
         }
