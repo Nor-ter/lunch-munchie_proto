@@ -2116,87 +2116,47 @@ function QuickMatchExperience() {
       <AnimatePresence>
         {showIntro && (
           <motion.div
-            className="absolute inset-0 bg-[#1A1A1A] z-50 flex flex-col items-center justify-center"
+            role="status"
+            aria-live="polite"
+            aria-label="Quick Match 음식점 후보를 준비하고 있어요"
+            className="absolute inset-0 z-50 flex flex-col items-center justify-center bg-[#1A1A1A] px-6 text-center"
             exit={{ opacity: 0, scale: 1.05 }}
             transition={{ duration: 0.3 }}
           >
-            <div className="flex flex-col items-center">
-              <motion.div
-                className="mb-5 flex items-center justify-center"
-                animate={{ y: [0, -10, 0], rotate: [0, -1.2, 1.2, 0] }}
-                transition={{ duration: 2.2, repeat: Infinity, ease: 'easeInOut' }}
-              >
-                <LunchmateCharacterRenderer
-                  flowState="idle"
-                  loadout={lunchmateLoadout}
-                  size={128}
-                  renderSize="compact"
-                  animated
-                  alt="Quick Match를 시작하는 나의 런치킨"
-                />
-              </motion.div>
-              <p className="font-black text-white text-[22px]">예선전 시작! 🍽️</p>
-            </div>
-            <p className="text-white/60 text-[14px] mt-2">카드를 좌우로 스와이프 해보세요</p>
-            <div className="mt-5 w-56">
-              <div className="mb-2 flex items-center justify-between text-[11px] text-white/55">
-                <span>추천 카드를 준비하고 있어요</span>
-                <span>약 3초</span>
-              </div>
-              <div className="h-2 overflow-hidden rounded-full bg-white/15">
-                <motion.div
-                  className="h-full origin-left rounded-full bg-[#EB5053]"
-                  initial={{ scaleX: 0 }}
-                  animate={{ scaleX: 1 }}
-                  transition={{ duration: 2.8, ease: 'linear' }}
-                />
-              </div>
+            <motion.div
+              className="flex items-center justify-center"
+              animate={{ y: [0, -8, 0] }}
+              transition={{ duration: 2.2, repeat: Infinity, ease: 'easeInOut' }}
+            >
+              <LunchmateCharacterRenderer
+                flowState="idle"
+                artwork="chicken"
+                chickenAssetKeyOverride="idle"
+                chickenFaceSystem
+                loadout={lunchmateLoadout}
+                size={148}
+                renderSize="compact"
+                animated={false}
+                alt="Quick Match를 준비하는 나의 런치킨"
+              />
+            </motion.div>
+
+            <div className="mt-6 max-w-[280px]">
+              <p className="text-[22px] font-black text-white">음식점 카드를 준비하고 있어요</p>
+              <p className="mt-2 text-[14px] font-semibold leading-relaxed text-white/60">
+                내 취향에 맞는 후보를 고르고 있어요
+              </p>
             </div>
 
-            {/* Swipe gesture demo card */}
-            <div className="relative w-36 h-48 mt-6 flex items-center justify-center">
-              <motion.div
-                className="absolute w-32 h-44 rounded-2xl shadow-2xl flex items-center justify-center text-6xl overflow-hidden"
-                style={{ background: '#FFF1E0' }}
-                animate={{
-                  x: [0, -90, -90, 0, 90, 90, 0],
-                  rotate: [0, -16, -16, 0, 16, 16, 0],
-                }}
-                transition={{ duration: 2.6, times: [0, 0.2, 0.32, 0.5, 0.7, 0.82, 1], repeat: Infinity, ease: 'easeInOut' }}
-              >
-                🍱
-                <motion.div
-                  className="absolute top-4 right-4 border-[3px] rounded-lg px-2 py-0.5 font-black text-[13px]"
-                  style={{ borderColor: '#EB5053', color: '#EB5053', transform: 'rotate(15deg)' }}
-                  animate={{ opacity: [0, 0, 1, 1, 0, 0] }}
-                  transition={{ duration: 2.6, times: [0, 0.15, 0.18, 0.34, 0.37, 1], repeat: Infinity, ease: 'easeInOut' }}
-                >
-                  NOPE
-                </motion.div>
-                <motion.div
-                  className="absolute top-4 left-4 border-[3px] rounded-lg px-2 py-0.5 font-black text-[13px]"
-                  style={{ borderColor: '#3CBA44', color: '#3CBA44', transform: 'rotate(-15deg)' }}
-                  animate={{ opacity: [0, 0, 1, 1, 0, 0] }}
-                  transition={{ duration: 2.6, times: [0, 0.65, 0.68, 0.84, 0.87, 1], repeat: Infinity, ease: 'easeInOut' }}
-                >
-                  LIKE
-                </motion.div>
-              </motion.div>
-            </div>
-
-            <div className="flex gap-8 mt-8">
-              <div className="flex flex-col items-center gap-2">
-                <div className="w-14 h-14 rounded-full bg-white flex items-center justify-center">
-                  <X size={24} color="#EB5053" strokeWidth={2.5} />
-                </div>
-                <span className="text-white/70 text-[12px]">← 싫어요</span>
-              </div>
-              <div className="flex flex-col items-center gap-2">
-                <div className="w-14 h-14 rounded-full flex items-center justify-center" style={{ background: '#EB5053' }}>
-                  <Heart size={24} color="white" fill="white" />
-                </div>
-                <span className="text-white/70 text-[12px]">좋아요 →</span>
-              </div>
+            <div aria-hidden="true" className="mt-6 flex h-3 items-center justify-center gap-2">
+              {[0, 1, 2].map((dot) => (
+                <motion.span
+                  key={dot}
+                  className="size-2 rounded-full bg-[#EB5053]"
+                  animate={{ opacity: [0.35, 1, 0.35], scale: [0.85, 1, 0.85] }}
+                  transition={{ duration: 1.2, repeat: Infinity, delay: dot * 0.18, ease: 'easeInOut' }}
+                />
+              ))}
             </div>
           </motion.div>
         )}

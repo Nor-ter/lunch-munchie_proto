@@ -3,6 +3,10 @@ import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 
 const swipeSource = readFileSync(join(import.meta.dirname, 'LunchieSwipePage.tsx'), 'utf8');
+const introSource = swipeSource.slice(
+  swipeSource.indexOf('{/* Intro overlay */}'),
+  swipeSource.indexOf('{/* Card stack'),
+);
 const shareCardSource = readFileSync(join(import.meta.dirname, '..', 'components', 'lunchie', 'WinnerShareCard.tsx'), 'utf8');
 const themeSource = readFileSync(join(import.meta.dirname, '..', 'contexts', 'ThemeContext.tsx'), 'utf8');
 
@@ -18,6 +22,19 @@ describe('unified Lunchie group flow', () => {
     expect(swipeSource).not.toContain('/assets/lunchie-wordmark.png');
     expect(shareCardSource).toContain('<LunchmateCharacterRenderer');
     expect(shareCardSource).not.toContain('src="/assets/lunchie-wordmark.png"');
+  });
+
+  it('keeps the Quick Match intro focused on the personalized Lunchmate and loading status', () => {
+    expect(introSource).toContain('role="status"');
+    expect(introSource).toContain('aria-live="polite"');
+    expect(introSource).toContain('artwork="chicken"');
+    expect(introSource).toContain('chickenFaceSystem');
+    expect(introSource).toContain('loadout={lunchmateLoadout}');
+    expect(introSource).toContain('음식점 카드를 준비하고 있어요');
+    expect(introSource).not.toContain('Swipe gesture demo card');
+    expect(introSource).not.toContain('NOPE');
+    expect(introSource).not.toContain('LIKE');
+    expect(introSource).not.toContain('<button');
   });
 
   it('builds the reject effect from staged glass fracture layers', () => {

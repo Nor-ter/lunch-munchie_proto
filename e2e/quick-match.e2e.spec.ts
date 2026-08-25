@@ -231,6 +231,12 @@ test('solo start sends the new member credential and opens the restaurant deck',
   await page.getByRole('button', { name: 'Swipe 시작하기' }).click();
 
   await expect(page).toHaveURL(/\/lunchie\/swipe$/);
+  const loadingIntro = page.getByRole('status', { name: 'Quick Match 음식점 후보를 준비하고 있어요' });
+  await expect(loadingIntro).toBeVisible();
+  await expect(loadingIntro.getByRole('img', { name: 'Quick Match를 준비하는 나의 런치킨' })).toBeVisible();
+  await expect(loadingIntro.getByText('음식점 카드를 준비하고 있어요', { exact: true })).toBeVisible();
+  await expect(loadingIntro.getByRole('button')).toHaveCount(0);
+  await expect(loadingIntro.getByText(/NOPE|LIKE|싫어요|좋아요/)).toHaveCount(0);
   await expect(page.getByRole('heading', { name: restaurant.name })).toBeVisible();
   await expect(page.getByRole('note')).toContainText('Closest available matches');
   expect(browserErrors).toEqual([]);
