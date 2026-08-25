@@ -39,6 +39,41 @@ describe("Lunchie presentation-photo safety", () => {
     ]);
   });
 
+  it("groups the same food across angles, variants, and card photo kinds", () => {
+    const rows = [
+      { r2_key: "pizza.jpg", kind: "dish", dishes: '["pizza"]', perceptual_hash: "0000000000000000" },
+      { r2_key: "pepperoni-angle.jpg", kind: "table", dishes: '["pepperoni pizza"]', perceptual_hash: "ffffffffffffffff" },
+      { r2_key: "crepe.jpg", kind: "dish", dishes: '["crepe"]', perceptual_hash: null },
+      { r2_key: "cheese-crepe.jpg", kind: "table", dishes: '["cheese_crepe"]', perceptual_hash: null },
+      { r2_key: "chicken.jpg", kind: "dish", dishes: '["fried_chicken"]', perceptual_hash: null },
+      { r2_key: "chicken-angle.jpg", kind: "table", dishes: '["fried chicken"]', perceptual_hash: null },
+    ];
+
+    expect(selectLunchiePresentationPhotoKeys(rows, 10)).toEqual([
+      "/photos/pizza.jpg",
+      "/photos/crepe.jpg",
+      "/photos/chicken.jpg",
+    ]);
+  });
+
+  it("groups highly overlapping table compositions but keeps distinct dishes", () => {
+    const rows = [
+      { r2_key: "spread.jpg", kind: "table", dishes: '["grilled meat","bread","butter","coffee"]', perceptual_hash: null },
+      { r2_key: "spread-angle.jpg", kind: "table", dishes: '["grilled meat","bread","butter"]', perceptual_hash: null },
+      { r2_key: "beef-noodles.jpg", kind: "dish", dishes: '["beef noodles"]', perceptual_hash: null },
+      { r2_key: "beef-skewer.jpg", kind: "dish", dishes: '["beef skewer"]', perceptual_hash: null },
+      { r2_key: "skewer-closeup.jpg", kind: "dish", dishes: '["beef skewer"]', perceptual_hash: null },
+      { r2_key: "tonkatsu-table.jpg", kind: "table", dishes: '["tonkatsu","beef skewer"]', perceptual_hash: null },
+    ];
+
+    expect(selectLunchiePresentationPhotoKeys(rows, 10)).toEqual([
+      "/photos/spread.jpg",
+      "/photos/beef-noodles.jpg",
+      "/photos/beef-skewer.jpg",
+      "/photos/tonkatsu-table.jpg",
+    ]);
+  });
+
   it("removes duplicate object keys before presenting a card", () => {
     const rows = [
       { r2_key: "same.jpg", kind: "dish", dishes: '["pizza"]', perceptual_hash: null },

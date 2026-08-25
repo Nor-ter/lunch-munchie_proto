@@ -490,6 +490,73 @@ function hashDistance(left: string, right: string) {
   return distance;
 }
 
+function singularDishToken(token: string) {
+  if (token.length > 4 && token.endsWith("ies")) return `${token.slice(0, -3)}y`;
+  if (token.length > 4 && token.endsWith("ses")) return token.slice(0, -2);
+  if (token.length > 3 && token.endsWith("s") && !token.endsWith("ss")) return token.slice(0, -1);
+  return token;
+}
+
+function dishLabelTokens(label: string) {
+  return label
+    .normalize("NFKC")
+    .toLowerCase()
+    .replaceAll(/[_-]+/g, " ")
+    .replaceAll(/[^\p{L}\p{N}\s]/gu, " ")
+    .split(/\s+/)
+    .map(singularDishToken)
+    .filter(Boolean);
+}
+
+function dishLabelSimilarity(left: string[], right: string[]) {
+  if (!left.length || !right.length) return 0;
+  const leftSet = new Set(left);
+  const rightSet = new Set(right);
+  const intersection = [...leftSet].filter(token => rightSet.has(token)).length;
+  if (!intersection) return 0;
+  const union = new Set([...leftSet, ...rightSet]).size;
+  const jaccard = intersection / union;
+  // A specific variant still represents the same food family as its base
+  // label: "pepperoni pizza" and "pizza", or "iced coffee" and "coffee".
+  const containment = intersection / Math.min(leftSet.size, rightSet.size);
+  return Math.max(jaccard, containment * 0.9);
+}
+
+function dishCollectionsSimilar(left: string[][], right: string[][]) {
+  if (!left.length || !right.length) return false;
+  const [smaller, larger] = left.length <= right.length ? [left, right] : [right, left];
+  const unused = new Set(larger.map((_, index) => index));
+  const matches: number[] = [];
+  for (const label of smaller) {
+    let bestIndex = -1;
+    let bestScore = 0;
+    for (const index of unused) {
+      const score = dishLabelSimilarity(label, larger[index]);
+      if (score > bestScore) {
+        bestIndex = index;
+        bestScore = score;
+      }
+    }
+    if (bestIndex >= 0 && bestScore >= 0.72) {
+      unused.delete(bestIndex);
+      matches.push(bestScore);
+    }
+  }
+  // Compare against the larger composition as well. A close-up of one item
+  // must not erase a table photo that contains several additional dishes.
+  const coverage = matches.length / Math.max(left.length, right.length);
+  const averageSimilarity = matches.length
+    ? matches.reduce((sum, score) => sum + score, 0) / matches.length
+    : 0;
+  return coverage >= 2 / 3 && averageSimilarity >= 0.8;
+}
+
+function rowDishSemantics(row: PresentationPhotoRow) {
+  return json<string[]>(row.dishes, [])
+    .map(dishLabelTokens)
+    .filter(tokens => tokens.length > 0);
+}
+
 export function selectLunchiePresentationPhotoKeys(
   rows: PresentationPhotoRow[],
   limit = 4,
@@ -497,7 +564,7 @@ export function selectLunchiePresentationPhotoKeys(
   const hashes: string[] = [];
   const keys = new Set<string>();
   const sourceIds = new Set<string>();
-  const semanticFingerprints = new Set<string>();
+  const acceptedDishSemantics: string[][][] = [];
   const safe: string[] = [];
   for (const row of rows) {
     if (keys.has(row.r2_key)) continue;
@@ -505,20 +572,15 @@ export function selectLunchiePresentationPhotoKeys(
     if (sourceId && sourceIds.has(sourceId)) continue;
     const hash = row.perceptual_hash?.trim().toLowerCase() || null;
     if (hash && hashes.some((known) => hashDistance(hash, known) <= 8)) continue;
-    const dishes = json<string[]>(row.dishes, [])
-      .map((dish) => dish.trim().toLowerCase())
-      .filter(Boolean)
-      .sort()
-      .join("|");
-    // Until the ingestion pipeline supplies a perceptual hash, repeated dish
-    // labels provide a conservative diversity guard. An unlabelled photo is
-    // unique only by its own R2 key; no other restaurant is ever substituted.
-    const semanticFingerprint = `${row.kind}:${dishes || row.r2_key}`;
-    if (!hash && semanticFingerprints.has(semanticFingerprint)) continue;
+    const dishSemantics = rowDishSemantics(row);
+    // Food meaning is evaluated independently of the image hash and framing.
+    // A close-up and a table shot of the same dish therefore share one slot.
+    // Unlabelled photos remain distinct because there is no semantic evidence.
+    if (dishSemantics.length && acceptedDishSemantics.some(known => dishCollectionsSimilar(dishSemantics, known))) continue;
     if (hash) hashes.push(hash);
     keys.add(row.r2_key);
     if (sourceId) sourceIds.add(sourceId);
-    semanticFingerprints.add(semanticFingerprint);
+    if (dishSemantics.length) acceptedDishSemantics.push(dishSemantics);
     safe.push(`/photos/${row.r2_key}`);
     if (safe.length === limit) break;
   }
