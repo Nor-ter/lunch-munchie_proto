@@ -9,7 +9,7 @@ export default function FeedDetailPage() {
   const { id } = useParams<{ id: string }>();
   const search = useSearch();
   const [, navigate] = useLocation();
-  const { feedPosts, isMyPost, deleteFeedPost, isLoading } = useApp();
+  const { feedPosts, isMyPost, deleteCourseWithFeed, isLoading } = useApp();
   const post = feedPosts.find(item => item.id === id);
   const origin = new URLSearchParams(search).get('from');
   const fromProfile = origin === 'profile';
@@ -38,7 +38,7 @@ export default function FeedDetailPage() {
       toast.error(payload.error || '게시물을 삭제하지 못했어요.');
       return;
     }
-    deleteFeedPost(post.id);
+    deleteCourseWithFeed(post.courseId);
     toast.success('게시물과 원본 코스를 삭제했어요.');
     navigate(backPath, { replace: true });
   };

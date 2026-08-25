@@ -734,6 +734,10 @@ export function AppProvider({
   const [hasMoreFeedPosts, setHasMoreFeedPosts] = useState(true);
   const [isLoadingMoreFeedPosts, setIsLoadingMoreFeedPosts] = useState(false);
   const feedLocationFilterRef = useRef<FeedLocationFilter | null>(null);
+  // A delete can race with an older feed request that was already in flight.
+  // Keep confirmed deletions out of every later state merge in this browser
+  // session, even when that response was produced before the DELETE finished.
+  const deletedCourseIdsRef = useRef(new Set<string>());
 
   const readFeedBatch = useCallback(async (
     cursor: string,
@@ -782,7 +786,7 @@ export function AppProvider({
           : [];
       }) : [],
       createdAt: feed.createdAt || new Date().toISOString(),
-    }));
+    })).filter(post => !deletedCourseIdsRef.current.has(post.courseId));
     setFeedPosts(previous => {
       const merged = new Map((replace ? [] : previous).map(post => [post.id, post]));
       remoteFeeds.forEach(post => merged.set(post.id, post));
@@ -857,7 +861,7 @@ export function AppProvider({
           });
         }
         const initialFeedItems = Array.isArray(feedData) ? feedData : feedData?.items;
-        if (Array.isArray(initialFeedItems) && initialFeedItems.length > 0) {
+        if (Array.isArray(initialFeedItems)) {
           const remoteFeeds = initialFeedItems.map((feed: any): FeedPost => ({
             id: feed.id,
             authorId: feed.creatorId,
@@ -889,12 +893,11 @@ export function AppProvider({
                 : [];
             }) : [],
             createdAt: feed.createdAt || new Date().toISOString(),
-          }));
-          setFeedPosts(previous => {
-            const merged = new Map(previous.map(post => [post.id, post]));
-            remoteFeeds.forEach(post => merged.set(post.id, post));
-            return Array.from(merged.values());
-          });
+          })).filter(post => !deletedCourseIdsRef.current.has(post.courseId));
+          // D1 is the source of truth. Merging the first server page into the
+          // persisted lm_feed_v3 cache resurrected posts that no longer existed
+          // on the server. Replace the cache, including when the page is empty.
+          setFeedPosts(remoteFeeds);
         }
         const initialNextCursor = typeof feedData?.nextCursor === 'string' ? feedData.nextCursor : null;
         setFeedCursor(initialNextCursor);
@@ -1076,6 +1079,7 @@ export function AppProvider({
   // The API remains authoritative for permanent deletion; this only prevents a
   // deleted course from surviving in the current client render.
   const deleteCourseWithFeed = useCallback((courseId: string) => {
+    deletedCourseIdsRef.current.add(courseId);
     const removedPostIds = new Set(feedPosts.filter(post => post.courseId === courseId).map(post => post.id));
     setCourses(previous => previous.filter(course => course.id !== courseId));
     setSavedCourseIds(previous => previous.filter(id => id !== courseId));
