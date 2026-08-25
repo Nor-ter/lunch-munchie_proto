@@ -20,6 +20,7 @@ describe('admin metrics boundary', () => {
 
   it('does not expose operational aggregates to an anonymous request', async () => {
     expect((await request('/api/admin/metrics')).status).toBe(401);
+    expect((await request('/api/admin/photos')).status).toBe(401);
     expect((await request('/api/metrics')).status).toBe(410);
   });
 });

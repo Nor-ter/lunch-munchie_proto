@@ -60,6 +60,18 @@ class FakeD1 {
       },
       async all() {
         if (sql.includes('FROM session_members')) return { results: database.members };
+        if (sql.includes('FROM restaurant_photos')) {
+          return {
+            results: Array.from({ length: database.restaurantCount }, (_, index) => [1, 2].map(photoIndex => ({
+              restaurant_id: `restaurant-${index}`,
+              r2_key: `restaurant-${index}-${photoIndex}.jpg`,
+              drive_file_id: `restaurant-${index}-source-${photoIndex}`,
+              kind: 'dish',
+              dishes: JSON.stringify([`dish-${photoIndex}`]),
+              perceptual_hash: null,
+            }))).flat(),
+          };
+        }
         if (sql.includes('FROM restaurants')) {
           return {
             results: Array.from({ length: database.restaurantCount }, (_, index) => ({

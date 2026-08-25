@@ -18,6 +18,15 @@ import type { Candidate, RecContext, SlateType } from "../../shared/engine";
 import { isAdminEmail } from "./adminAccess";
 import { assessLearningReadiness, coverage } from "./algorithmInsights";
 import {
+  PHOTO_KINDS,
+  PHOTO_REVIEW_STATUSES,
+  escapePhotoSearchTerm,
+  parsePhotoReviewUpdate,
+  type PhotoKind,
+  type PhotoReviewRecord,
+  type PhotoReviewStatus,
+} from "./photoReview";
+import {
   autocompleteGooglePlaces,
   autocompleteGoogleLocations,
   getGoogleDirections,
@@ -459,11 +468,15 @@ const isoDate = (value: unknown) => {
 };
 
 type PresentationPhotoRow = {
+  restaurant_id?: string;
   r2_key: string;
+  drive_file_id?: string | null;
   kind: string;
   dishes: string;
   perceptual_hash: string | null;
 };
+
+export const MIN_LUNCHIE_PRESENTATION_PHOTOS = 2;
 
 function hashDistance(left: string, right: string) {
   if (!/^[0-9a-f]+$/i.test(left) || left.length !== right.length) return Infinity;
@@ -484,25 +497,21 @@ export function selectLunchiePresentationPhotoKeys(
 ) {
   const hashes: string[] = [];
   const keys = new Set<string>();
-  const semanticFingerprints = new Set<string>();
+  const sourceIds = new Set<string>();
   const safe: string[] = [];
   for (const row of rows) {
     if (keys.has(row.r2_key)) continue;
+    const sourceId = row.drive_file_id?.trim() || null;
+    if (sourceId && sourceIds.has(sourceId)) continue;
     const hash = row.perceptual_hash?.trim().toLowerCase() || null;
     if (hash && hashes.some((known) => hashDistance(hash, known) <= 8)) continue;
-    const dishes = json<string[]>(row.dishes, [])
-      .map((dish) => dish.trim().toLowerCase())
-      .filter(Boolean)
-      .sort()
-      .join("|");
-    // Until the ingestion pipeline supplies a perceptual hash, repeated dish
-    // labels provide a conservative diversity guard. An unlabelled photo is
-    // unique only by its own R2 key; no other restaurant is ever substituted.
-    const semanticFingerprint = `${row.kind}:${dishes || row.r2_key}`;
-    if (!hash && semanticFingerprints.has(semanticFingerprint)) continue;
+    // Generated dish labels are discovery metadata, not verified identity.
+    // Never hide a user's photo from a recommendation solely because two
+    // unreviewed labels look similar. Automatic removal requires objective
+    // evidence: the same object/source ID, or a near-identical image hash.
     if (hash) hashes.push(hash);
     keys.add(row.r2_key);
-    semanticFingerprints.add(semanticFingerprint);
+    if (sourceId) sourceIds.add(sourceId);
     safe.push(`/photos/${row.r2_key}`);
     if (safe.length === limit) break;
   }
@@ -515,12 +524,50 @@ export async function lunchiePresentationPhotos(
   restaurantId: string,
 ) {
   const { results } = await db.prepare(
-    "SELECT r2_key, kind, dishes, perceptual_hash FROM restaurant_photos WHERE restaurant_id = ? AND kind IN ('dish', 'table') AND has_person = 0 ORDER BY CASE kind WHEN 'dish' THEN 0 ELSE 1 END, COALESCE(quality, 0) DESC, id ASC LIMIT 24",
+    "SELECT r2_key, drive_file_id, kind, dishes, perceptual_hash FROM restaurant_photos WHERE restaurant_id = ? AND kind IN ('dish', 'table') AND has_person = 0 AND review_status != 'rejected' ORDER BY CASE kind WHEN 'dish' THEN 0 ELSE 1 END, COALESCE(quality, 0) DESC, id ASC LIMIT 24",
   ).bind(restaurantId).all<PresentationPhotoRow>();
   // Object availability is handled by the browser at render time. Probing R2
   // for every catalogue photo made one request fan out into 100+ storage
   // reads and added several seconds to Lunchie startup.
   return selectLunchiePresentationPhotoKeys(results);
+}
+
+/** Resolve recommendation media in bounded D1 batches, then apply exactly the
+ * same within-restaurant de-duplication contract used by the rendered card. */
+export async function lunchiePresentationPhotosByRestaurant(
+  db: any,
+  restaurantIds: string[],
+  limit = 4,
+) {
+  const uniqueIds = [...new Set(restaurantIds.map(String).filter(Boolean))];
+  const rowsByRestaurant = new Map<string, PresentationPhotoRow[]>();
+  const batchSize = 80;
+  for (let offset = 0; offset < uniqueIds.length; offset += batchSize) {
+    const ids = uniqueIds.slice(offset, offset + batchSize);
+    if (!ids.length) continue;
+    const { results } = await db.prepare(
+      `SELECT restaurant_id, r2_key, drive_file_id, kind, dishes, perceptual_hash
+       FROM restaurant_photos
+       WHERE restaurant_id IN (${ids.map(() => "?").join(",")})
+         AND kind IN ('dish', 'table')
+         AND has_person = 0
+         AND review_status != 'rejected'
+       ORDER BY restaurant_id, CASE kind WHEN 'dish' THEN 0 ELSE 1 END,
+                COALESCE(quality, 0) DESC, id ASC`,
+    ).bind(...ids).all<PresentationPhotoRow>();
+    for (const row of results) {
+      if (!row.restaurant_id) continue;
+      const current = rowsByRestaurant.get(row.restaurant_id) ?? [];
+      if (current.length < 24) current.push(row);
+      rowsByRestaurant.set(row.restaurant_id, current);
+    }
+  }
+  return new Map(
+    uniqueIds.map((restaurantId) => [
+      restaurantId,
+      selectLunchiePresentationPhotoKeys(rowsByRestaurant.get(restaurantId) ?? [], limit),
+    ]),
+  );
 }
 
 const EVENT_TYPES = new Set([
@@ -1079,6 +1126,200 @@ async function requireAdminSession(c: { req: { raw: Request }; env: EnvBindings;
   return session;
 }
 
+type AdminPhotoRow = PhotoReviewRecord & {
+  id: string;
+  restaurant_id: string;
+  restaurant_name: string;
+  restaurant_category: string;
+  restaurant_address: string;
+  r2_key: string;
+  dishes: string;
+  vibe_tags: string;
+  source: string;
+  created_at: number;
+  reviewed_at: number | null;
+};
+
+type AdminPhotoInventoryRow = {
+  restaurant_id: string;
+  r2_key: string | null;
+  drive_file_id: string | null;
+  kind: string | null;
+  dishes: string | null;
+  perceptual_hash: string | null;
+  has_person: number | null;
+  review_status: PhotoReviewStatus | null;
+};
+
+type AdminRestaurantMedia = {
+  totalPhotos: number;
+  distinctSafePhotos: number;
+  eligible: boolean;
+};
+
+app.get("/api/admin/photos", async (c) => {
+  const admin = await requireAdminSession(c);
+  if (admin instanceof Response) return admin;
+
+  const requestedLimit = Number(c.req.query("limit") ?? 48);
+  const requestedOffset = Number(c.req.query("offset") ?? 0);
+  const limit = Number.isFinite(requestedLimit) ? Math.max(1, Math.min(60, Math.floor(requestedLimit))) : 48;
+  const offset = Number.isFinite(requestedOffset) ? Math.max(0, Math.floor(requestedOffset)) : 0;
+  const query = (c.req.query("q") ?? "").trim().slice(0, 80);
+  const requestedStatus = c.req.query("status") ?? "all";
+  const requestedKind = c.req.query("kind") ?? "all";
+  const requestedReadiness = c.req.query("readiness") ?? "all";
+  const status: PhotoReviewStatus | "all" = PHOTO_REVIEW_STATUSES.includes(requestedStatus as PhotoReviewStatus)
+    ? requestedStatus as PhotoReviewStatus
+    : "all";
+  const kind: PhotoKind | "all" = PHOTO_KINDS.includes(requestedKind as PhotoKind)
+    ? requestedKind as PhotoKind
+    : "all";
+  const readiness = requestedReadiness === "eligible" || requestedReadiness === "insufficient"
+    ? requestedReadiness
+    : "all";
+  const search = query ? `%${escapePhotoSearchTerm(query.toLowerCase())}%` : "";
+  const inventory = await c.env.DB.prepare(`
+    SELECT r.id AS restaurant_id, rp.r2_key, rp.drive_file_id, rp.kind,
+           rp.dishes, rp.perceptual_hash, rp.has_person, rp.review_status
+    FROM restaurants r
+    LEFT JOIN restaurant_photos rp ON rp.restaurant_id = r.id
+    ORDER BY r.id, CASE rp.kind WHEN 'dish' THEN 0 WHEN 'table' THEN 1 ELSE 2 END,
+             COALESCE(rp.quality, 0) DESC, rp.id
+  `).all<AdminPhotoInventoryRow>();
+  const inventoryByRestaurant = new Map<string, AdminPhotoInventoryRow[]>();
+  for (const row of inventory.results) {
+    const current = inventoryByRestaurant.get(row.restaurant_id ?? "") ?? [];
+    if (row.r2_key) current.push(row);
+    inventoryByRestaurant.set(row.restaurant_id ?? "", current);
+  }
+  const restaurantMedia = Object.fromEntries(
+    [...inventoryByRestaurant.entries()].map(([restaurantId, photoRows]) => {
+      const safeRows: PresentationPhotoRow[] = photoRows
+        .filter(row => Boolean(row.r2_key) && (row.kind === "dish" || row.kind === "table") && row.has_person === 0 && row.review_status !== "rejected")
+        .map(row => ({
+          restaurant_id: row.restaurant_id,
+          r2_key: row.r2_key as string,
+          drive_file_id: row.drive_file_id,
+          kind: row.kind as string,
+          dishes: row.dishes ?? "[]",
+          perceptual_hash: row.perceptual_hash,
+        }));
+      const distinctSafePhotos = selectLunchiePresentationPhotoKeys(safeRows, safeRows.length).length;
+      return [restaurantId, {
+        totalPhotos: photoRows.length,
+        distinctSafePhotos,
+        eligible: distinctSafePhotos >= MIN_LUNCHIE_PRESENTATION_PHOTOS,
+      } satisfies AdminRestaurantMedia];
+    }),
+  ) as Record<string, AdminRestaurantMedia>;
+  const selectedRestaurantIds = Object.entries(restaurantMedia)
+    .filter(([, media]) => readiness === "all" || (readiness === "eligible" ? media.eligible : !media.eligible))
+    .map(([restaurantId]) => restaurantId);
+  const selectedRestaurantIdsJson = JSON.stringify(selectedRestaurantIds);
+  const where = `
+    WHERE (?1 = '' OR lower(r.name) LIKE ?2 ESCAPE '\\' OR lower(r.address) LIKE ?2 ESCAPE '\\')
+      AND (?3 = 'all' OR rp.review_status = ?3)
+      AND (?4 = 'all' OR rp.kind = ?4)
+      AND (?5 = 'all' OR r.id IN (SELECT value FROM json_each(?6)))`;
+
+  const [rows, total, statusRows, overall] = await Promise.all([
+    c.env.DB.prepare(`
+      SELECT rp.id, rp.restaurant_id, r.name AS restaurant_name,
+             r.category AS restaurant_category, r.address AS restaurant_address,
+             rp.r2_key, rp.kind, rp.dishes, rp.vibe_tags, rp.quality,
+             rp.has_person, rp.source, rp.review_status, rp.review_notes,
+             rp.created_at, rp.reviewed_at
+      FROM restaurant_photos rp
+      JOIN restaurants r ON r.id = rp.restaurant_id
+      ${where}
+      ORDER BY CASE rp.review_status WHEN 'pending' THEN 0 WHEN 'rejected' THEN 1 ELSE 2 END,
+               lower(r.name), rp.created_at, rp.id
+      LIMIT ?7 OFFSET ?8
+    `).bind(query, search, status, kind, readiness, selectedRestaurantIdsJson, limit, offset).all<AdminPhotoRow>(),
+    c.env.DB.prepare(`
+      SELECT COUNT(*) AS count
+      FROM restaurant_photos rp
+      JOIN restaurants r ON r.id = rp.restaurant_id
+      ${where}
+    `).bind(query, search, status, kind, readiness, selectedRestaurantIdsJson).first<{ count: number }>(),
+    c.env.DB.prepare("SELECT review_status AS status, COUNT(*) AS count, COUNT(DISTINCT restaurant_id) AS restaurants FROM restaurant_photos GROUP BY review_status").all<{ status: PhotoReviewStatus; count: number; restaurants: number }>(),
+    c.env.DB.prepare("SELECT COUNT(*) AS photos, COUNT(DISTINCT restaurant_id) AS restaurants FROM restaurant_photos").first<{ photos: number; restaurants: number }>(),
+  ]);
+
+  const summary = Object.fromEntries(PHOTO_REVIEW_STATUSES.map(value => [value, { photos: 0, restaurants: 0 }]));
+  for (const row of statusRows.results) {
+    if (PHOTO_REVIEW_STATUSES.includes(row.status)) {
+      summary[row.status] = { photos: Number(row.count), restaurants: Number(row.restaurants) };
+    }
+  }
+  const mediaValues = Object.values(restaurantMedia);
+  const eligibleRestaurants = mediaValues.filter(value => value.eligible).length;
+  const noSafePhotos = mediaValues.filter(value => value.distinctSafePhotos === 0).length;
+  const oneSafePhoto = mediaValues.filter(value => value.distinctSafePhotos === 1).length;
+  return c.json({
+    photos: rows.results.map(row => ({
+      id: row.id,
+      restaurantId: row.restaurant_id,
+      restaurantName: row.restaurant_name,
+      restaurantCategory: row.restaurant_category,
+      restaurantAddress: row.restaurant_address,
+      url: `/photos/${row.r2_key}`,
+      r2Key: row.r2_key,
+      kind: row.kind,
+      dishes: json<string[]>(row.dishes, []),
+      vibeTags: json<string[]>(row.vibe_tags, []),
+      quality: row.quality === null ? null : Number(row.quality),
+      hasPerson: Boolean(row.has_person),
+      source: row.source,
+      reviewStatus: row.review_status,
+      reviewNotes: row.review_notes,
+      createdAt: isoDate(row.created_at),
+      reviewedAt: row.reviewed_at ? isoDate(row.reviewed_at) : null,
+    })),
+    summary: {
+      ...summary,
+      all: { photos: Number(overall?.photos ?? 0), restaurants: Number(overall?.restaurants ?? 0) },
+    },
+    readinessSummary: {
+      restaurants: mediaValues.length,
+      eligibleRestaurants,
+      insufficientRestaurants: mediaValues.length - eligibleRestaurants,
+      noSafePhotos,
+      oneSafePhoto,
+      minimumDistinctPhotos: MIN_LUNCHIE_PRESENTATION_PHOTOS,
+    },
+    restaurantMedia,
+    pagination: { total: Number(total?.count ?? 0), limit, offset, hasMore: offset + rows.results.length < Number(total?.count ?? 0) },
+  });
+});
+
+app.patch("/api/admin/photos/:id", async (c) => {
+  const admin = await requireAdminSession(c);
+  if (admin instanceof Response) return admin;
+  const id = c.req.param("id");
+  if (!id || id.length > 200) return c.json({ error: "사진 식별자가 올바르지 않습니다." }, 400);
+  const current = await c.env.DB.prepare(
+    "SELECT review_status, kind, has_person, quality, review_notes FROM restaurant_photos WHERE id = ?",
+  ).bind(id).first<PhotoReviewRecord>();
+  if (!current) return c.json({ error: "사진을 찾을 수 없습니다." }, 404);
+
+  let body: unknown;
+  try {
+    body = await c.req.json();
+  } catch {
+    return c.json({ error: "검수 내용이 올바르지 않습니다." }, 400);
+  }
+  const parsed = parsePhotoReviewUpdate(body, current);
+  if (!parsed.ok) return c.json({ error: parsed.error }, 400);
+  const value = parsed.value;
+  const reviewedAt = Date.now();
+  await c.env.DB.prepare(
+    "UPDATE restaurant_photos SET review_status = ?, kind = ?, has_person = ?, quality = ?, review_notes = ?, reviewed_at = ?, reviewed_by = ? WHERE id = ?",
+  ).bind(value.reviewStatus, value.kind, value.hasPerson, value.quality, value.reviewNotes, reviewedAt, admin.email ?? admin.sub, id).run();
+  return c.json({ ok: true, id, ...value, reviewedAt: new Date(reviewedAt).toISOString() });
+});
+
 app.get("/api/users/:id/follows", async (c) => {
   const id = c.req.param("id");
   const [followers, following] = await Promise.all([
@@ -1238,11 +1479,23 @@ app.post("/api/recommend", async (c) => {
           ),
         )
       : exactResults;
-    const results = filteredResults
+    const contextualResults = filteredResults
       // Menu taxonomy never widens the hard intent filter above. It simply
       // gives the contextual ranker a verified cafe/dessert signal when an
       // otherwise broad restaurant category has a structured menu section.
       .map((restaurant) => withMenuIntentEvidence(restaurant, menuEvidence.get(restaurant.id)));
+    const presentationPhotos = await lunchiePresentationPhotosByRestaurant(
+      c.env.DB,
+      contextualResults.map((restaurant) => String(restaurant.id)),
+    );
+    // A restaurant is recommendable only when the final card can show at
+    // least two distinct, classified, person-free photos. Raw row counts are
+    // insufficient because near-duplicates collapse in the card resolver.
+    const results = contextualResults.filter(
+      (restaurant) =>
+        (presentationPhotos.get(String(restaurant.id))?.length ?? 0) >=
+        MIN_LUNCHIE_PRESENTATION_PHOTOS,
+    );
 
     let exposureMap: Record<string, { count?: number; updatedAt?: number }> =
       {};
@@ -1345,15 +1598,15 @@ app.post("/api/recommend", async (c) => {
         ),
       ),
     ]);
-    const safeSlate = await Promise.all(finalResults.map(async (item) => ({
+    const safeSlate = finalResults.map((item) => ({
         ...item.restaurant,
-        photos: await lunchiePresentationPhotos(c.env.DB, item.restaurant.id),
+        photos: presentationPhotos.get(String(item.restaurant.id)) ?? [],
         menu_items: json(item.restaurant.menus, []),
         tags: json<string[]>(item.restaurant.tags, []),
         rank: item.rank,
         score: item.score,
         propensity: item.propensity,
-      })));
+      }));
     const response = c.json({
       slate: safeSlate,
       user_id: userId,
@@ -2502,6 +2755,10 @@ app.post("/api/sessions/:token/status", async (c) => {
     const { results: catalogue } = await c.env.DB.prepare(
       "SELECT id, category, rating, price_level, dietary_options, menus, latitude, longitude FROM restaurants",
     ).all();
+    const presentationPhotos = await lunchiePresentationPhotosByRestaurant(
+      c.env.DB,
+      (catalogue as any[]).map((restaurant) => String(restaurant.id)),
+    );
     const menuEvidence = await indexedMenuEvidenceByRestaurant(
       c.env.DB,
       (catalogue as any[]).map((restaurant) => String(restaurant.id)),
@@ -2523,6 +2780,8 @@ app.post("/api/sessions/:token/status", async (c) => {
     );
     const eligibleCatalogue = (catalogue as any[]).filter(
       (restaurant) =>
+        (presentationPhotos.get(String(restaurant.id))?.length ?? 0) >=
+          MIN_LUNCHIE_PRESENTATION_PHOTOS &&
         (categories.length === 0 || categories.includes(restaurant.category)) &&
         categoryMatchesIntent(restaurant.category, session.intent) &&
         (!hasOrigin ||
