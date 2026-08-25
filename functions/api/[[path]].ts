@@ -17,6 +17,15 @@ import type { Candidate, RecContext, SlateType } from "../../shared/engine";
 import { isAdminEmail } from "./adminAccess";
 import { assessLearningReadiness, coverage } from "./algorithmInsights";
 import {
+  PHOTO_KINDS,
+  PHOTO_REVIEW_STATUSES,
+  escapePhotoSearchTerm,
+  parsePhotoReviewUpdate,
+  type PhotoKind,
+  type PhotoReviewRecord,
+  type PhotoReviewStatus,
+} from "./photoReview";
+import {
   autocompleteGooglePlaces,
   autocompleteGoogleLocations,
   getGoogleDirections,
@@ -514,7 +523,7 @@ export async function lunchiePresentationPhotos(
   restaurantId: string,
 ) {
   const { results } = await db.prepare(
-    "SELECT r2_key, kind, dishes, perceptual_hash FROM restaurant_photos WHERE restaurant_id = ? AND kind IN ('dish', 'table') AND has_person = 0 ORDER BY CASE kind WHEN 'dish' THEN 0 ELSE 1 END, COALESCE(quality, 0) DESC, id ASC LIMIT 24",
+    "SELECT r2_key, kind, dishes, perceptual_hash FROM restaurant_photos WHERE restaurant_id = ? AND kind IN ('dish', 'table') AND has_person = 0 AND review_status != 'rejected' ORDER BY CASE kind WHEN 'dish' THEN 0 ELSE 1 END, COALESCE(quality, 0) DESC, id ASC LIMIT 24",
   ).bind(restaurantId).all<PresentationPhotoRow>();
   // Object availability is handled by the browser at render time. Probing R2
   // for every catalogue photo made one request fan out into 100+ storage
@@ -1077,6 +1086,127 @@ async function requireAdminSession(c: { req: { raw: Request }; env: EnvBindings;
     return c.json({ error: "관리자 권한이 없습니다." }, 403);
   return session;
 }
+
+type AdminPhotoRow = PhotoReviewRecord & {
+  id: string;
+  restaurant_id: string;
+  restaurant_name: string;
+  restaurant_category: string;
+  restaurant_address: string;
+  r2_key: string;
+  dishes: string;
+  vibe_tags: string;
+  source: string;
+  created_at: number;
+  reviewed_at: number | null;
+};
+
+app.get("/api/admin/photos", async (c) => {
+  const admin = await requireAdminSession(c);
+  if (admin instanceof Response) return admin;
+
+  const requestedLimit = Number(c.req.query("limit") ?? 48);
+  const requestedOffset = Number(c.req.query("offset") ?? 0);
+  const limit = Number.isFinite(requestedLimit) ? Math.max(1, Math.min(60, Math.floor(requestedLimit))) : 48;
+  const offset = Number.isFinite(requestedOffset) ? Math.max(0, Math.floor(requestedOffset)) : 0;
+  const query = (c.req.query("q") ?? "").trim().slice(0, 80);
+  const requestedStatus = c.req.query("status") ?? "all";
+  const requestedKind = c.req.query("kind") ?? "all";
+  const status: PhotoReviewStatus | "all" = PHOTO_REVIEW_STATUSES.includes(requestedStatus as PhotoReviewStatus)
+    ? requestedStatus as PhotoReviewStatus
+    : "all";
+  const kind: PhotoKind | "all" = PHOTO_KINDS.includes(requestedKind as PhotoKind)
+    ? requestedKind as PhotoKind
+    : "all";
+  const search = query ? `%${escapePhotoSearchTerm(query.toLowerCase())}%` : "";
+  const where = `
+    WHERE (?1 = '' OR lower(r.name) LIKE ?2 ESCAPE '\\' OR lower(r.address) LIKE ?2 ESCAPE '\\')
+      AND (?3 = 'all' OR rp.review_status = ?3)
+      AND (?4 = 'all' OR rp.kind = ?4)`;
+
+  const [rows, total, statusRows, overall] = await Promise.all([
+    c.env.DB.prepare(`
+      SELECT rp.id, rp.restaurant_id, r.name AS restaurant_name,
+             r.category AS restaurant_category, r.address AS restaurant_address,
+             rp.r2_key, rp.kind, rp.dishes, rp.vibe_tags, rp.quality,
+             rp.has_person, rp.source, rp.review_status, rp.review_notes,
+             rp.created_at, rp.reviewed_at
+      FROM restaurant_photos rp
+      JOIN restaurants r ON r.id = rp.restaurant_id
+      ${where}
+      ORDER BY CASE rp.review_status WHEN 'pending' THEN 0 WHEN 'rejected' THEN 1 ELSE 2 END,
+               lower(r.name), rp.created_at, rp.id
+      LIMIT ?5 OFFSET ?6
+    `).bind(query, search, status, kind, limit, offset).all<AdminPhotoRow>(),
+    c.env.DB.prepare(`
+      SELECT COUNT(*) AS count
+      FROM restaurant_photos rp
+      JOIN restaurants r ON r.id = rp.restaurant_id
+      ${where}
+    `).bind(query, search, status, kind).first<{ count: number }>(),
+    c.env.DB.prepare("SELECT review_status AS status, COUNT(*) AS count, COUNT(DISTINCT restaurant_id) AS restaurants FROM restaurant_photos GROUP BY review_status").all<{ status: PhotoReviewStatus; count: number; restaurants: number }>(),
+    c.env.DB.prepare("SELECT COUNT(*) AS photos, COUNT(DISTINCT restaurant_id) AS restaurants FROM restaurant_photos").first<{ photos: number; restaurants: number }>(),
+  ]);
+
+  const summary = Object.fromEntries(PHOTO_REVIEW_STATUSES.map(value => [value, { photos: 0, restaurants: 0 }]));
+  for (const row of statusRows.results) {
+    if (PHOTO_REVIEW_STATUSES.includes(row.status)) {
+      summary[row.status] = { photos: Number(row.count), restaurants: Number(row.restaurants) };
+    }
+  }
+  return c.json({
+    photos: rows.results.map(row => ({
+      id: row.id,
+      restaurantId: row.restaurant_id,
+      restaurantName: row.restaurant_name,
+      restaurantCategory: row.restaurant_category,
+      restaurantAddress: row.restaurant_address,
+      url: `/photos/${row.r2_key}`,
+      r2Key: row.r2_key,
+      kind: row.kind,
+      dishes: json<string[]>(row.dishes, []),
+      vibeTags: json<string[]>(row.vibe_tags, []),
+      quality: row.quality === null ? null : Number(row.quality),
+      hasPerson: Boolean(row.has_person),
+      source: row.source,
+      reviewStatus: row.review_status,
+      reviewNotes: row.review_notes,
+      createdAt: isoDate(row.created_at),
+      reviewedAt: row.reviewed_at ? isoDate(row.reviewed_at) : null,
+    })),
+    summary: {
+      ...summary,
+      all: { photos: Number(overall?.photos ?? 0), restaurants: Number(overall?.restaurants ?? 0) },
+    },
+    pagination: { total: Number(total?.count ?? 0), limit, offset, hasMore: offset + rows.results.length < Number(total?.count ?? 0) },
+  });
+});
+
+app.patch("/api/admin/photos/:id", async (c) => {
+  const admin = await requireAdminSession(c);
+  if (admin instanceof Response) return admin;
+  const id = c.req.param("id");
+  if (!id || id.length > 200) return c.json({ error: "사진 식별자가 올바르지 않습니다." }, 400);
+  const current = await c.env.DB.prepare(
+    "SELECT review_status, kind, has_person, quality, review_notes FROM restaurant_photos WHERE id = ?",
+  ).bind(id).first<PhotoReviewRecord>();
+  if (!current) return c.json({ error: "사진을 찾을 수 없습니다." }, 404);
+
+  let body: unknown;
+  try {
+    body = await c.req.json();
+  } catch {
+    return c.json({ error: "검수 내용이 올바르지 않습니다." }, 400);
+  }
+  const parsed = parsePhotoReviewUpdate(body, current);
+  if (!parsed.ok) return c.json({ error: parsed.error }, 400);
+  const value = parsed.value;
+  const reviewedAt = Date.now();
+  await c.env.DB.prepare(
+    "UPDATE restaurant_photos SET review_status = ?, kind = ?, has_person = ?, quality = ?, review_notes = ?, reviewed_at = ?, reviewed_by = ? WHERE id = ?",
+  ).bind(value.reviewStatus, value.kind, value.hasPerson, value.quality, value.reviewNotes, reviewedAt, admin.email ?? admin.sub, id).run();
+  return c.json({ ok: true, id, ...value, reviewedAt: new Date(reviewedAt).toISOString() });
+});
 
 app.get("/api/users/:id/follows", async (c) => {
   const id = c.req.param("id");
