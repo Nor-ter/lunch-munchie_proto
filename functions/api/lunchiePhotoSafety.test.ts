@@ -23,7 +23,7 @@ describe("Lunchie presentation-photo safety", () => {
     expect(source).toContain("photos: await lunchiePresentationPhotos(c.env.DB, r.id)");
   });
 
-  it("removes near-identical perceptual hashes and repeated dish labels", () => {
+  it("removes near-identical hashes but keeps photos that only share an unverified label", () => {
     const rows = [
       { r2_key: "pizza-a.jpg", kind: "dish", dishes: '["pizza"]', perceptual_hash: "0000000000000000" },
       { r2_key: "pizza-near.jpg", kind: "dish", dishes: '["pizza"]', perceptual_hash: "0000000000000001" },
@@ -35,11 +35,12 @@ describe("Lunchie presentation-photo safety", () => {
     expect(selectLunchiePresentationPhotoKeys(rows)).toEqual([
       "/photos/pizza-a.jpg",
       "/photos/pasta-a.jpg",
+      "/photos/pasta-b.jpg",
       "/photos/table.jpg",
     ]);
   });
 
-  it("groups the same food across angles, variants, and card photo kinds", () => {
+  it("does not auto-reject different photos from generated dish semantics alone", () => {
     const rows = [
       { r2_key: "pizza.jpg", kind: "dish", dishes: '["pizza"]', perceptual_hash: "0000000000000000" },
       { r2_key: "pepperoni-angle.jpg", kind: "table", dishes: '["pepperoni pizza"]', perceptual_hash: "ffffffffffffffff" },
@@ -51,26 +52,11 @@ describe("Lunchie presentation-photo safety", () => {
 
     expect(selectLunchiePresentationPhotoKeys(rows, 10)).toEqual([
       "/photos/pizza.jpg",
+      "/photos/pepperoni-angle.jpg",
       "/photos/crepe.jpg",
+      "/photos/cheese-crepe.jpg",
       "/photos/chicken.jpg",
-    ]);
-  });
-
-  it("groups highly overlapping table compositions but keeps distinct dishes", () => {
-    const rows = [
-      { r2_key: "spread.jpg", kind: "table", dishes: '["grilled meat","bread","butter","coffee"]', perceptual_hash: null },
-      { r2_key: "spread-angle.jpg", kind: "table", dishes: '["grilled meat","bread","butter"]', perceptual_hash: null },
-      { r2_key: "beef-noodles.jpg", kind: "dish", dishes: '["beef noodles"]', perceptual_hash: null },
-      { r2_key: "beef-skewer.jpg", kind: "dish", dishes: '["beef skewer"]', perceptual_hash: null },
-      { r2_key: "skewer-closeup.jpg", kind: "dish", dishes: '["beef skewer"]', perceptual_hash: null },
-      { r2_key: "tonkatsu-table.jpg", kind: "table", dishes: '["tonkatsu","beef skewer"]', perceptual_hash: null },
-    ];
-
-    expect(selectLunchiePresentationPhotoKeys(rows, 10)).toEqual([
-      "/photos/spread.jpg",
-      "/photos/beef-noodles.jpg",
-      "/photos/beef-skewer.jpg",
-      "/photos/tonkatsu-table.jpg",
+      "/photos/chicken-angle.jpg",
     ]);
   });
 
