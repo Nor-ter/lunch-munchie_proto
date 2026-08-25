@@ -13,6 +13,7 @@ import {
 import { toast } from 'sonner';
 import { useApp, type FeedPost } from '@/contexts/AppContext';
 import { useAuthStatus } from '@/hooks/useAuthStatus';
+import { useProfileFeed } from '@/hooks/useProfileFeed';
 import { fileToResizedDataUrl } from '@/lib/imageUtils';
 import UnifiedMunchieCard from '@/components/munchie/UnifiedMunchieCard';
 import FoodieBuddy, { type FoodieBuddyUiState } from '@/components/munchie/FoodieBuddy';
@@ -123,7 +124,8 @@ function MyFeedItem({ post }: { post: FeedPost }) {
 
 function ProfilePageContent() {
   const [, navigate] = useLocation();
-  const { profile, updateProfile, courses, feedPosts, isMyPost } = useApp();
+  const { profile, updateProfile, courses } = useApp();
+  const { posts: myPosts, isLoading: isProfileFeedLoading } = useProfileFeed(profile.id);
   const lunchmateLoadout = useMemo(
     () => lunchmateLoadoutFromProfile(profile.lunchmateLoadout),
     [profile.lunchmateLoadout],
@@ -324,13 +326,6 @@ function ProfilePageContent() {
     updateProfile,
   ]);
 
-  const myPosts = useMemo(() => {
-    const uniqueByCourse = new Map<string, FeedPost>();
-    feedPosts.filter(isMyPost).forEach(post => {
-      if (!uniqueByCourse.has(post.courseId)) uniqueByCourse.set(post.courseId, post);
-    });
-    return Array.from(uniqueByCourse.values());
-  }, [feedPosts, isMyPost]);
   const totalLikes = myPosts.reduce((sum, p) => sum + p.likes, 0);
   // 성장점수: 코스맵 + 피드가 쌓일수록 푸디 캐릭터가 진화한다
   const foodieScore = courses.length + myPosts.length;
@@ -504,7 +499,11 @@ function ProfilePageContent() {
       {/* 나의 피드 */}
       <div className="px-4 mt-8">
         <h2 className="font-black text-[18px] text-[#1A1A1A] mb-3">나의 피드 {myPosts.length}</h2>
-        {myPosts.length === 0 ? (
+        {isProfileFeedLoading && myPosts.length === 0 ? (
+          <div className="w-full rounded-2xl border-2 border-dashed border-[#E5CFC5] py-8 text-center">
+            <p className="text-[13px] font-bold text-[#8A7A6C]">피드를 동기화하는 중…</p>
+          </div>
+        ) : myPosts.length === 0 ? (
           <button
             onClick={() => navigate('/coursemap/new')}
             className="w-full rounded-2xl border-2 border-dashed border-[#E5CFC5] py-8 text-center"

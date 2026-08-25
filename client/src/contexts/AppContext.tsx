@@ -23,6 +23,7 @@ import {
   type LunchmateRewardClaim,
 } from '@/utils/lunchmateProfile';
 import { logCourseSave, logFeedLike } from '@/lib/eventLogger';
+import { feedPostFromApi, normalizeFeedApiPage } from '@/lib/feedApi';
 import { persistSessionSwipe } from '@/services/sessionApi';
 import {
   isActiveQuickMatchStatus,
@@ -398,6 +399,8 @@ interface AppContextValue {
 
   /** Munchie Feed */
   feedPosts: FeedPost[];
+  /** 생성·삭제·서버 재조회 후 작성자별 피드를 다시 읽게 하는 버전. */
+  feedSyncVersion: number;
   /** 서버 원본을 다시 읽어 현재 세션의 피드 캐시를 동기화한다. */
   refreshFeedPosts: (locationFilter?: FeedLocationFilter | null) => Promise<void>;
   /** Munchie 피드의 다음 개인화 배치를 서버에서 이어받는다. */
@@ -734,6 +737,7 @@ export function AppProvider({
   const [feedCursor, setFeedCursor] = useState<string | null>('0');
   const [hasMoreFeedPosts, setHasMoreFeedPosts] = useState(true);
   const [isLoadingMoreFeedPosts, setIsLoadingMoreFeedPosts] = useState(false);
+  const [feedSyncVersion, setFeedSyncVersion] = useState(0);
   const feedLocationFilterRef = useRef<FeedLocationFilter | null>(null);
   // A delete can race with an older feed request that was already in flight.
   // Keep confirmed deletions out of every later state merge in this browser
@@ -753,41 +757,10 @@ export function AppProvider({
     }
     const response = await fetch(`/api/feed?${params.toString()}`);
     if (!response.ok) throw new Error('피드를 불러오지 못했어요.');
-    const page = await response.json();
-    const feedData = Array.isArray(page) ? page : page.items;
-    if (!Array.isArray(feedData)) throw new Error('피드 형식이 올바르지 않아요.');
-    const remoteFeeds = feedData.map((feed: any): FeedPost => ({
-      id: feed.id,
-      authorId: feed.creatorId,
-      authorName: feed.authorName || (feed.creatorId === profile.id ? profile.name : feed.creatorId === 'user_minji' ? '김민지' : feed.creatorId === 'user_jenny' ? '제니' : feed.creatorId === 'user_minsu' ? '민수' : 'Lunchie 사용자'),
-      authorEmoji: feed.creatorId === profile.id ? profile.emoji : feed.creatorId === 'user_minji' ? '🐰' : feed.creatorId === 'user_jenny' ? '🍓' : feed.creatorId === 'user_minsu' ? '🐻' : '🐳',
-      authorImage: typeof feed.authorImage === 'string' ? feed.authorImage : undefined,
-      courseId: feed.courseId,
-      photos: (Array.isArray(feed.photos) ? feed.photos : []).filter((photo: unknown): photo is string => typeof photo === 'string').map((photo: string) => photo.startsWith('http') || photo.startsWith('/') ? photo : `/photos/${photo}`),
-      templateId: typeof feed.templateId === 'string' ? feed.templateId : undefined,
-      decor: Array.isArray(feed.decor) ? feed.decor : undefined,
-      missingOriginalMedia: (!Array.isArray(feed.photos) || feed.photos.length === 0) && (!Array.isArray(feed.decor) || feed.decor.length === 0),
-      caption: feed.description,
-      skinId: 'default',
-      likes: feed.likesCount || 0,
-      saves: feed.savesCount || 0,
-      dislikes: 0,
-      comments: Array.isArray(feed.comments) ? feed.comments.map((comment: any) => ({
-        id: comment.id, authorId: comment.authorId, authorName: comment.authorName,
-        authorEmoji: comment.authorEmoji || '🐳', parentId: comment.parentId || undefined,
-        text: comment.text, createdAt: typeof comment.createdAt === 'number' ? new Date(comment.createdAt).toISOString() : comment.createdAt,
-        likes: 0, dislikes: 0,
-      })) : [],
-      tags: Array.isArray(feed.tags) ? feed.tags.map((tag: string) => normalizeFoodTag(tag)) : [],
-      stops: Array.isArray(feed.stops) ? feed.stops.flatMap((stop: any) => {
-        const latitude = Number(stop?.restaurant?.latitude);
-        const longitude = Number(stop?.restaurant?.longitude);
-        return typeof stop?.placeId === 'string' && Number.isFinite(latitude) && Number.isFinite(longitude)
-          ? [{ placeId: stop.placeId, latitude, longitude }]
-          : [];
-      }) : [],
-      createdAt: feed.createdAt || new Date().toISOString(),
-    })).filter(post => !deletedCourseIdsRef.current.has(post.courseId));
+    const page = normalizeFeedApiPage(await response.json());
+    const remoteFeeds = page.items
+      .map(feed => feedPostFromApi(feed, profile))
+      .filter(post => !deletedCourseIdsRef.current.has(post.courseId));
     setFeedPosts(previous => {
       const merged = new Map((replace ? [] : previous).map(post => [post.id, post]));
       remoteFeeds.forEach(post => merged.set(post.id, post));
@@ -796,15 +769,18 @@ export function AppProvider({
       const order = [...(replace ? [] : previous.map(post => post.id)), ...remoteFeeds.map(post => post.id)];
       return Array.from(new Set(order)).map(id => merged.get(id)!).filter(Boolean);
     });
-    const nextCursor = typeof page?.nextCursor === 'string' ? page.nextCursor : null;
+    const nextCursor = page.nextCursor;
     setFeedCursor(nextCursor);
-    setHasMoreFeedPosts(Boolean(page?.hasMore && nextCursor));
+    setHasMoreFeedPosts(Boolean(page.hasMore && nextCursor));
   }, [profile.id, profile.name, profile.emoji]);
 
   const refreshFeedPosts = useCallback(async (locationFilter?: FeedLocationFilter | null) => {
     if (locationFilter !== undefined) feedLocationFilterRef.current = locationFilter;
     setIsLoadingMoreFeedPosts(true);
-    try { await readFeedBatch('0', true, feedLocationFilterRef.current); }
+    try {
+      await readFeedBatch('0', true, feedLocationFilterRef.current);
+      setFeedSyncVersion(version => version + 1);
+    }
     finally { setIsLoadingMoreFeedPosts(false); }
   }, [readFeedBatch]);
 
@@ -860,38 +836,9 @@ export function AppProvider({
         }
         const initialFeedItems = Array.isArray(feedData) ? feedData : feedData?.items;
         if (Array.isArray(initialFeedItems)) {
-          const remoteFeeds = initialFeedItems.map((feed: any): FeedPost => ({
-            id: feed.id,
-            authorId: feed.creatorId,
-            authorName: feed.authorName || (feed.creatorId === profile.id ? profile.name : feed.creatorId === 'user_minji' ? '김민지' : feed.creatorId === 'user_jenny' ? '제니' : feed.creatorId === 'user_minsu' ? '민수' : 'Lunchie 사용자'),
-            authorEmoji: feed.creatorId === 'user_minji' ? '🐰' : feed.creatorId === 'user_jenny' ? '🍓' : feed.creatorId === 'user_minsu' ? '🐻' : '🐳',
-            authorImage: typeof feed.authorImage === 'string' ? feed.authorImage : undefined,
-            courseId: feed.courseId,
-            photos: (Array.isArray(feed.photos) ? feed.photos : []).filter((photo: unknown): photo is string => typeof photo === 'string').map((photo: string) => photo.startsWith('http') || photo.startsWith('/') ? photo : `/photos/${photo}`),
-            templateId: typeof feed.templateId === 'string' ? feed.templateId : undefined,
-            decor: Array.isArray(feed.decor) ? feed.decor : undefined,
-            missingOriginalMedia: (!Array.isArray(feed.photos) || feed.photos.length === 0) && (!Array.isArray(feed.decor) || feed.decor.length === 0),
-            caption: feed.description,
-            skinId: 'default',
-            likes: feed.likesCount || 0,
-            saves: feed.savesCount || 0,
-            dislikes: 0,
-            comments: Array.isArray(feed.comments) ? feed.comments.map((comment: any) => ({
-              id: comment.id, authorId: comment.authorId, authorName: comment.authorName,
-              authorEmoji: comment.authorEmoji || '🐳', parentId: comment.parentId || undefined,
-              text: comment.text, createdAt: typeof comment.createdAt === 'number' ? new Date(comment.createdAt).toISOString() : comment.createdAt,
-              likes: 0, dislikes: 0,
-            })) : [],
-            tags: Array.isArray(feed.tags) ? feed.tags.map((tag: string) => normalizeFoodTag(tag)) : [],
-            stops: Array.isArray(feed.stops) ? feed.stops.flatMap((stop: any) => {
-              const latitude = Number(stop?.restaurant?.latitude);
-              const longitude = Number(stop?.restaurant?.longitude);
-              return typeof stop?.placeId === 'string' && Number.isFinite(latitude) && Number.isFinite(longitude)
-                ? [{ placeId: stop.placeId, latitude, longitude }]
-                : [];
-            }) : [],
-            createdAt: feed.createdAt || new Date().toISOString(),
-          })).filter(post => !deletedCourseIdsRef.current.has(post.courseId));
+          const remoteFeeds = initialFeedItems
+            .map(feed => feedPostFromApi(feed, profile))
+            .filter(post => !deletedCourseIdsRef.current.has(post.courseId));
           // D1 is the source of truth. Merging the first server page into the
           // persisted lm_feed_v3 cache resurrected posts that no longer existed
           // on the server. Replace the cache, including when the page is empty.
@@ -1091,6 +1038,7 @@ export function AppProvider({
     setFeedPosts(previous => previous.filter(post => post.courseId !== courseId));
     setLikedFeedIds(ids => ids.filter(id => !removedPostIds.has(id)));
     setDislikedFeedIds(ids => ids.filter(id => !removedPostIds.has(id)));
+    setFeedSyncVersion(version => version + 1);
   }, [feedPosts]);
 
   const deleteProfileTemplate = useCallback((courseId: string) => {
@@ -1110,6 +1058,7 @@ export function AppProvider({
       createdAt: new Date().toISOString(),
     };
     setFeedPosts(prev => [full, ...prev]);
+    setFeedSyncVersion(version => version + 1);
     return full;
   }, []);
 
@@ -1117,10 +1066,12 @@ export function AppProvider({
     setFeedPosts(posts => posts.map(p => p.id === postId
       ? { ...p, ...updates, photos: (updates.photos ?? p.photos).slice(0, MAX_MUNCHIE_FEED_PHOTOS) }
       : p));
+    setFeedSyncVersion(version => version + 1);
   }, []);
 
   const deleteFeedPost = useCallback((postId: string) => {
     setFeedPosts(posts => posts.filter(p => p.id !== postId));
+    setFeedSyncVersion(version => version + 1);
   }, []);
 
   const incrementFeedShare = useCallback((postId: string) => {
@@ -1607,7 +1558,7 @@ export function AppProvider({
       swipeRecords, addSwipe, clearSessionSwipes, rerollSession, likedRestaurantIds,
       savedRestaurantIds, saveRestaurant, unsaveRestaurant,
       profile, updateProfile,
-      feedPosts, refreshFeedPosts, loadMoreFeedPosts, hasMoreFeedPosts, isLoadingMoreFeedPosts, addFeedPost, updateFeedPost, deleteFeedPost, incrementFeedShare,
+      feedPosts, feedSyncVersion, refreshFeedPosts, loadMoreFeedPosts, hasMoreFeedPosts, isLoadingMoreFeedPosts, addFeedPost, updateFeedPost, deleteFeedPost, incrementFeedShare,
       likedFeedIds, dislikedFeedIds, toggleFeedLike, toggleFeedDislike, addFeedComment,
       reactToFeedComment, reportFeedComment, toggleCommentHidden, isMyPost,
       courseSkins, setCourseSkin,

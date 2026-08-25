@@ -3450,6 +3450,9 @@ app.get("/api/feed", async (c) => {
       ? Math.max(1, Math.min(Math.floor(requestedLimit), 20))
       : 8;
     const cursor = Math.max(0, Math.floor(Number(c.req.query("cursor")) || 0));
+    const requestedAuthorId = c.req.query("authorId")?.trim() || null;
+    if (requestedAuthorId && requestedAuthorId.length > 256)
+      return c.json({ error: "작성자 정보가 올바르지 않습니다." }, 400);
     const locationFilter = parseFeedLocationFilter((name) => c.req.query(name));
     const viewer = await readSession(c.req.raw, c.env.AUTH_SESSION_SECRET);
     // Older local databases may predate the public-profile columns. Keep the
@@ -3462,11 +3465,19 @@ app.get("/api/feed", async (c) => {
     const hasPublicProfiles =
       userColumnNames.has("username") &&
       userColumnNames.has("profile_image_url");
-    const { results: courses } = await c.env.DB.prepare(
-      hasPublicProfiles
-        ? "SELECT c.*, u.username AS author_name, u.profile_image_url AS author_image FROM courses c LEFT JOIN users u ON u.id = c.author_id WHERE c.is_public = 1 ORDER BY c.created_at DESC LIMIT 80"
-        : "SELECT c.* FROM courses c WHERE c.is_public = 1 ORDER BY c.created_at DESC LIMIT 80",
-    ).all();
+    const authorClause = requestedAuthorId ? " AND c.author_id = ?" : "";
+    const courseQuery = hasPublicProfiles
+      ? `SELECT c.*, u.username AS author_name, u.profile_image_url AS author_image
+         FROM courses c LEFT JOIN users u ON u.id = c.author_id
+         WHERE c.is_public = 1${authorClause}
+         ORDER BY c.created_at DESC, c.id ASC LIMIT 80`
+      : `SELECT c.* FROM courses c
+         WHERE c.is_public = 1${authorClause}
+         ORDER BY c.created_at DESC, c.id ASC LIMIT 80`;
+    const courseStatement = c.env.DB.prepare(courseQuery);
+    const { results: courses } = requestedAuthorId
+      ? await courseStatement.bind(requestedAuthorId).all()
+      : await courseStatement.all();
 
     const feedItems = [];
     for (const course of courses as any[]) {
@@ -3567,7 +3578,7 @@ app.get("/api/feed", async (c) => {
 
     const categoryAffinity = new Map<string, number>();
     const following = new Set<string>();
-    if (viewer) {
+    if (viewer && !requestedAuthorId) {
       const [winnerRows, likedRows, followRows] = await Promise.all([
         c.env.DB.prepare(
           "SELECT r.category, COUNT(*) AS count FROM rec_events e JOIN restaurants r ON r.id = e.restaurant_id WHERE e.user_id = ? AND e.event_type IN ('WINNER', 'SWIPE') AND (e.event_type != 'SWIPE' OR e.action = 'LIKE') GROUP BY r.category",
@@ -3586,18 +3597,27 @@ app.get("/api/feed", async (c) => {
           categoryAffinity.set(tag, (categoryAffinity.get(tag) ?? 0) + 0.45);
       for (const row of followRows.results) following.add(row.following_id);
     }
-    const ranked = rankMunchieFeedItems(locationItems, {
-      viewerId: viewer?.sub ?? null,
-      categoryAffinity,
-      following,
-    });
+    // A public profile is a canonical author timeline. It must not change
+    // because a different viewer has different recommendation preferences.
+    const ranked = requestedAuthorId
+      ? locationItems
+      : rankMunchieFeedItems(locationItems, {
+          viewerId: viewer?.sub ?? null,
+          categoryAffinity,
+          following,
+        });
     const items = ranked.slice(cursor, cursor + pageSize);
     const nextCursor = cursor + items.length;
+    if (requestedAuthorId) c.header("Cache-Control", "private, no-store");
     return c.json({
       items,
       nextCursor: nextCursor < ranked.length ? String(nextCursor) : null,
       hasMore: nextCursor < ranked.length,
-      policyVersion: locationFilter ? "feed-personal-location-v1" : "feed-personal-v1",
+      policyVersion: requestedAuthorId
+        ? "feed-author-chronological-v1"
+        : locationFilter
+          ? "feed-personal-location-v1"
+          : "feed-personal-v1",
     });
   } catch (err: any) {
     return c.json({ error: err.message }, 400);

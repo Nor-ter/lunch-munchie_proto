@@ -9,7 +9,8 @@ describe("Munchie feed delivery policy", () => {
     expect(source).toContain('const paged = c.req.query("limit") !== undefined || c.req.query("cursor") !== undefined');
     expect(source).toContain("if (!paged) return c.json(locationItems)");
     expect(source).toContain(": feedItems;");
-    expect(source).toContain('"feed-personal-location-v1" : "feed-personal-v1"');
+    expect(source).toContain('"feed-personal-location-v1"');
+    expect(source).toContain('"feed-personal-v1"');
     expect(source).toContain("nextCursor");
     expect(source).toContain("hasMore");
   });
@@ -49,7 +50,16 @@ describe("Munchie feed delivery policy", () => {
   });
 
   it("uses a bounded 80-post candidate window instead of truncating the feed at 20", () => {
-    expect(source).toContain("ORDER BY c.created_at DESC LIMIT 80");
+    expect(source).toContain("ORDER BY c.created_at DESC, c.id ASC LIMIT 80");
     expect(source).not.toContain("ORDER BY c.created_at DESC LIMIT 20");
+  });
+
+  it("serves profiles from a canonical author timeline instead of viewer ranking", () => {
+    expect(source).toContain('const requestedAuthorId = c.req.query("authorId")');
+    expect(source).toContain('const authorClause = requestedAuthorId ? " AND c.author_id = ?" : ""');
+    expect(source).toContain("await courseStatement.bind(requestedAuthorId).all()");
+    expect(source).toContain("viewer && !requestedAuthorId");
+    expect(source).toContain('"feed-author-chronological-v1"');
+    expect(source).toContain('c.header("Cache-Control", "private, no-store")');
   });
 });
