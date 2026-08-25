@@ -243,7 +243,8 @@ test('solo start sends the new member credential and opens the restaurant deck',
   await expect(page.getByRole('heading', { name: restaurant.name })).toBeVisible();
   await expect(page.getByRole('note')).toContainText('Closest available matches');
 
-  await expect(page.getByText('예선전 시작! 🍽️')).toHaveCount(0, { timeout: 5_000 });
+  // 시작 오버레이 문구에 의존하지 않는다. 문구가 바뀌면 대기가 조용히 무력화되므로,
+  // 오버레이가 걷힐 때까지는 Playwright의 actionability 재시도에 맡긴다.
   await page.getByRole('heading', { name: restaurant.name }).click();
   const detailsButton = page.getByRole('button', { name: `${restaurant.name} 식당 상세보기` });
   await expect(detailsButton).toBeVisible();
