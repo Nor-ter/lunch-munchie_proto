@@ -24,8 +24,18 @@ type PhotoAsset = {
 type PhotoResponse = {
   photos: PhotoAsset[];
   summary: Record<ReviewStatus | 'all', { photos: number; restaurants: number }>;
+  readinessSummary: {
+    restaurants: number;
+    eligibleRestaurants: number;
+    insufficientRestaurants: number;
+    noSafePhotos: number;
+    oneSafePhoto: number;
+    minimumDistinctPhotos: number;
+  };
+  restaurantMedia: Record<string, { totalPhotos: number; distinctSafePhotos: number; eligible: boolean }>;
   pagination: { total: number; limit: number; offset: number; hasMore: boolean };
 };
+type Readiness = 'all' | 'eligible' | 'insufficient';
 
 const REVIEW_LABELS: Record<ReviewStatus, string> = { pending: '검수 대기', approved: '승인', rejected: '제외' };
 const KIND_LABELS: Record<PhotoKind, string> = {
@@ -112,8 +122,9 @@ export default function AdminPhotoReviewPanel() {
   const [data, setData] = useState<PhotoResponse | null>(null);
   const [query, setQuery] = useState('');
   const [search, setSearch] = useState('');
-  const [status, setStatus] = useState<ReviewStatus | 'all'>('pending');
+  const [status, setStatus] = useState<ReviewStatus | 'all'>('all');
   const [kind, setKind] = useState<PhotoKind | 'all'>('all');
+  const [readiness, setReadiness] = useState<Readiness>('insufficient');
   const [offset, setOffset] = useState(0);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -121,7 +132,7 @@ export default function AdminPhotoReviewPanel() {
   const load = async () => {
     setLoading(true);
     setError('');
-    const params = new URLSearchParams({ limit: String(PAGE_SIZE), offset: String(offset), status, kind });
+    const params = new URLSearchParams({ limit: String(PAGE_SIZE), offset: String(offset), status, kind, readiness });
     if (search) params.set('q', search);
     try {
       const response = await fetch(`/api/admin/photos?${params}`);
@@ -134,7 +145,7 @@ export default function AdminPhotoReviewPanel() {
     }
   };
 
-  useEffect(() => { void load(); }, [status, kind, offset, search]);
+  useEffect(() => { void load(); }, [status, kind, readiness, offset, search]);
 
   const groups = useMemo(() => {
     const grouped = new Map<string, { name: string; category: string; address: string; photos: PhotoAsset[] }>();
@@ -143,17 +154,33 @@ export default function AdminPhotoReviewPanel() {
       group.photos.push(photo);
       grouped.set(photo.restaurantId, group);
     }
-    return Array.from(grouped.entries());
+    return Array.from(grouped.entries()).sort(([leftId, left], [rightId, right]) => {
+      const safeDifference = (data?.restaurantMedia[leftId]?.distinctSafePhotos ?? 0) - (data?.restaurantMedia[rightId]?.distinctSafePhotos ?? 0);
+      return safeDifference || left.name.localeCompare(right.name, 'ko');
+    });
   }, [data]);
 
   const selectStatus = (value: ReviewStatus | 'all') => { setStatus(value); setOffset(0); };
   return <section id="photo-review" className="mt-7 scroll-mt-6">
     <div className="flex flex-col gap-4 xl:flex-row xl:items-end xl:justify-between">
-      <div><p className="text-xs font-bold tracking-[0.14em] text-[#FF9092]">MEDIA OPERATIONS</p><h2 className="mt-1 text-xl font-bold">식당 이미지 검수</h2><p className="mt-1 text-xs leading-5 text-white/50">식당별 사진을 한 화면에서 확인하고, 후보 카드 노출 여부와 사진 메타데이터를 관리합니다.</p></div>
+      <div><p className="text-xs font-bold tracking-[0.14em] text-[#FF9092]">MEDIA OPERATIONS</p><h2 className="mt-1 text-xl font-bold">식당 이미지 검수</h2><p className="mt-1 text-xs leading-5 text-white/50">원본 보유 여부와 별개로, 런치 카드에 안전하게 쓸 수 있는 서로 다른 음식 사진을 식당별로 관리합니다.</p></div>
       <form onSubmit={event => { event.preventDefault(); setOffset(0); setSearch(query.trim()); }} className="flex w-full gap-2 xl:max-w-lg">
         <label className="flex min-w-0 flex-1 items-center gap-2 rounded-xl border border-white/10 bg-white/[0.05] px-3"><Search size={15} className="text-white/40" /><input value={query} onChange={event => setQuery(event.target.value)} placeholder="식당명 또는 주소 검색" className="min-w-0 flex-1 bg-transparent py-2.5 text-sm text-white outline-none placeholder:text-white/30" /></label>
         <button className="rounded-xl bg-[#EB5053] px-4 text-xs font-bold">검색</button>
       </form>
+    </div>
+
+    <div className="mt-4 grid grid-cols-2 gap-3 lg:grid-cols-4">
+      {[
+        ['추천 가능', data?.readinessSummary.eligibleRestaurants ?? 0, '서로 다른 안전 사진 2장 이상'],
+        ['보강 필요', data?.readinessSummary.insufficientRestaurants ?? 0, '추천 기준 미달'],
+        ['추천용 음식 사진 없음', data?.readinessSummary.noSafePhotos ?? 0, '원본이 없어졌다는 뜻이 아님'],
+        ['추천용 1장뿐', data?.readinessSummary.oneSafePhoto ?? 0, '다른 음식 사진 1장 필요'],
+      ].map(([label, count, detail]) => <div key={String(label)} className="rounded-2xl border border-white/10 bg-white/[0.05] p-4"><p className="text-xs text-white/55">{label}</p><p className="mt-1 text-2xl font-bold tabular-nums">{count}곳</p><p className="mt-1 text-[10px] text-white/40">{detail}</p></div>)}
+    </div>
+
+    <div className="mt-3 flex flex-wrap gap-2" aria-label="추천 준비도 필터">
+      {([['insufficient', '보강 필요'], ['eligible', '추천 가능'], ['all', '전체 식당']] as const).map(([value, label]) => <button key={value} onClick={() => { setReadiness(value); setOffset(0); }} className={`rounded-full px-3 py-2 text-xs font-bold ${readiness === value ? 'bg-[#EB5053] text-white' : 'bg-white/[0.07] text-white/55'}`}>{label}</button>)}
     </div>
 
     <div className="mt-4 grid grid-cols-2 gap-3 md:grid-cols-4">
@@ -171,7 +198,10 @@ export default function AdminPhotoReviewPanel() {
 
     {error ? <div className="mt-4 rounded-2xl bg-[#52282A] p-5 text-sm text-[#FFB9BA]">{error}</div>
       : loading && !data ? <div className="grid h-64 place-items-center text-sm text-white/50"><LoaderCircle className="mr-2 inline animate-spin" />이미지 목록을 불러오는 중…</div>
-        : groups.length ? <div className={`mt-4 space-y-5 ${loading ? 'opacity-60' : ''}`}>{groups.map(([restaurantId, group]) => <section key={restaurantId} className="rounded-2xl border border-white/10 bg-[#222] p-4"><div className="mb-3 flex flex-wrap items-start justify-between gap-2"><div><h3 className="font-bold">{group.name}</h3><p className="mt-1 text-[11px] text-white/45">{group.category}{group.address ? ` · ${group.address}` : ''}</p></div><span className="rounded-full bg-white/[0.07] px-2.5 py-1 text-xs text-white/55">현재 페이지 {group.photos.length}장</span></div><div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4">{group.photos.map(photo => <PhotoEditor key={photo.id} photo={photo} onSaved={load} />)}</div></section>)}</div>
+        : groups.length ? <div className={`mt-4 space-y-5 ${loading ? 'opacity-60' : ''}`}>{groups.map(([restaurantId, group]) => {
+          const media = data?.restaurantMedia[restaurantId] ?? { totalPhotos: group.photos.length, distinctSafePhotos: 0, eligible: false };
+          return <section key={restaurantId} className="rounded-2xl border border-white/10 bg-[#222] p-4"><div className="mb-3 flex flex-wrap items-start justify-between gap-3"><div><div className="flex flex-wrap items-center gap-2"><h3 className="font-bold">{group.name}</h3><span className={`rounded-full px-2 py-1 text-[10px] font-bold ${media.eligible ? 'bg-[#25423A] text-[#B8E5D5]' : 'bg-[#52282A] text-[#FFB9BA]'}`}>{media.eligible ? '추천 가능' : '추천용 사진 보강 필요'}</span></div><p className="mt-1 text-[11px] text-white/45">{group.category}{group.address ? ` · ${group.address}` : ''}</p></div><div className="flex flex-wrap justify-end gap-2 text-xs"><span className="rounded-full bg-white/[0.07] px-2.5 py-1 text-white/55">원본 {media.totalPhotos}장</span><span className="rounded-full bg-white/[0.07] px-2.5 py-1 text-white/55">추천용 서로 다른 사진 {media.distinctSafePhotos}장 · 최소 {data?.readinessSummary.minimumDistinctPhotos ?? 2}장</span><span className="rounded-full bg-white/[0.07] px-2.5 py-1 text-white/55">현재 페이지 {group.photos.length}장</span></div></div><div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4">{group.photos.map(photo => <PhotoEditor key={photo.id} photo={photo} onSaved={load} />)}</div></section>;
+        })}</div>
           : <div className="mt-4 grid h-64 place-items-center rounded-2xl border border-dashed border-white/15 text-sm text-white/45">조건에 맞는 식당 이미지가 없습니다.</div>}
   </section>;
 }

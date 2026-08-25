@@ -29,6 +29,11 @@ const photos = {
     all: { photos: 1, restaurants: 1 }, pending: { photos: 1, restaurants: 1 },
     approved: { photos: 0, restaurants: 0 }, rejected: { photos: 0, restaurants: 0 },
   },
+  readinessSummary: {
+    restaurants: 1, eligibleRestaurants: 0, insufficientRestaurants: 1, noSafePhotos: 0,
+    oneSafePhoto: 1, minimumDistinctPhotos: 2,
+  },
+  restaurantMedia: { 'restaurant-1': { totalPhotos: 1, distinctSafePhotos: 1, eligible: false } },
   pagination: { total: 1, limit: 24, offset: 0, hasMore: false },
 };
 
@@ -50,6 +55,9 @@ test('admin can review restaurant images from a grouped, paginated gallery', asy
   await page.goto('/admin');
   await expect(page.getByRole('heading', { name: '식당 이미지 검수' })).toBeVisible();
   await expect(page.getByRole('heading', { name: 'Test Kitchen' })).toBeVisible();
+  await expect(page.getByText('추천용 사진 보강 필요')).toBeVisible();
+  await expect(page.getByText('원본 1장')).toBeVisible();
+  await expect(page.getByText('추천용 서로 다른 사진 1장 · 최소 2장')).toBeVisible();
   await expect(page.getByText('검수 대기').first()).toBeVisible();
 
   await page.getByRole('article').getByRole('button', { name: '승인' }).click();

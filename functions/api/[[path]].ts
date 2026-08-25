@@ -1147,6 +1147,23 @@ type AdminPhotoRow = PhotoReviewRecord & {
   reviewed_at: number | null;
 };
 
+type AdminPhotoInventoryRow = {
+  restaurant_id: string;
+  r2_key: string | null;
+  drive_file_id: string | null;
+  kind: string | null;
+  dishes: string | null;
+  perceptual_hash: string | null;
+  has_person: number | null;
+  review_status: PhotoReviewStatus | null;
+};
+
+type AdminRestaurantMedia = {
+  totalPhotos: number;
+  distinctSafePhotos: number;
+  eligible: boolean;
+};
+
 app.get("/api/admin/photos", async (c) => {
   const admin = await requireAdminSession(c);
   if (admin instanceof Response) return admin;
@@ -1158,17 +1175,60 @@ app.get("/api/admin/photos", async (c) => {
   const query = (c.req.query("q") ?? "").trim().slice(0, 80);
   const requestedStatus = c.req.query("status") ?? "all";
   const requestedKind = c.req.query("kind") ?? "all";
+  const requestedReadiness = c.req.query("readiness") ?? "all";
   const status: PhotoReviewStatus | "all" = PHOTO_REVIEW_STATUSES.includes(requestedStatus as PhotoReviewStatus)
     ? requestedStatus as PhotoReviewStatus
     : "all";
   const kind: PhotoKind | "all" = PHOTO_KINDS.includes(requestedKind as PhotoKind)
     ? requestedKind as PhotoKind
     : "all";
+  const readiness = requestedReadiness === "eligible" || requestedReadiness === "insufficient"
+    ? requestedReadiness
+    : "all";
   const search = query ? `%${escapePhotoSearchTerm(query.toLowerCase())}%` : "";
+  const inventory = await c.env.DB.prepare(`
+    SELECT r.id AS restaurant_id, rp.r2_key, rp.drive_file_id, rp.kind,
+           rp.dishes, rp.perceptual_hash, rp.has_person, rp.review_status
+    FROM restaurants r
+    LEFT JOIN restaurant_photos rp ON rp.restaurant_id = r.id
+    ORDER BY r.id, CASE rp.kind WHEN 'dish' THEN 0 WHEN 'table' THEN 1 ELSE 2 END,
+             COALESCE(rp.quality, 0) DESC, rp.id
+  `).all<AdminPhotoInventoryRow>();
+  const inventoryByRestaurant = new Map<string, AdminPhotoInventoryRow[]>();
+  for (const row of inventory.results) {
+    const current = inventoryByRestaurant.get(row.restaurant_id ?? "") ?? [];
+    if (row.r2_key) current.push(row);
+    inventoryByRestaurant.set(row.restaurant_id ?? "", current);
+  }
+  const restaurantMedia = Object.fromEntries(
+    [...inventoryByRestaurant.entries()].map(([restaurantId, photoRows]) => {
+      const safeRows: PresentationPhotoRow[] = photoRows
+        .filter(row => Boolean(row.r2_key) && (row.kind === "dish" || row.kind === "table") && row.has_person === 0 && row.review_status !== "rejected")
+        .map(row => ({
+          restaurant_id: row.restaurant_id,
+          r2_key: row.r2_key as string,
+          drive_file_id: row.drive_file_id,
+          kind: row.kind as string,
+          dishes: row.dishes ?? "[]",
+          perceptual_hash: row.perceptual_hash,
+        }));
+      const distinctSafePhotos = selectLunchiePresentationPhotoKeys(safeRows, safeRows.length).length;
+      return [restaurantId, {
+        totalPhotos: photoRows.length,
+        distinctSafePhotos,
+        eligible: distinctSafePhotos >= MIN_LUNCHIE_PRESENTATION_PHOTOS,
+      } satisfies AdminRestaurantMedia];
+    }),
+  ) as Record<string, AdminRestaurantMedia>;
+  const selectedRestaurantIds = Object.entries(restaurantMedia)
+    .filter(([, media]) => readiness === "all" || (readiness === "eligible" ? media.eligible : !media.eligible))
+    .map(([restaurantId]) => restaurantId);
+  const selectedRestaurantIdsJson = JSON.stringify(selectedRestaurantIds);
   const where = `
     WHERE (?1 = '' OR lower(r.name) LIKE ?2 ESCAPE '\\' OR lower(r.address) LIKE ?2 ESCAPE '\\')
       AND (?3 = 'all' OR rp.review_status = ?3)
-      AND (?4 = 'all' OR rp.kind = ?4)`;
+      AND (?4 = 'all' OR rp.kind = ?4)
+      AND (?5 = 'all' OR r.id IN (SELECT value FROM json_each(?6)))`;
 
   const [rows, total, statusRows, overall] = await Promise.all([
     c.env.DB.prepare(`
@@ -1182,14 +1242,14 @@ app.get("/api/admin/photos", async (c) => {
       ${where}
       ORDER BY CASE rp.review_status WHEN 'pending' THEN 0 WHEN 'rejected' THEN 1 ELSE 2 END,
                lower(r.name), rp.created_at, rp.id
-      LIMIT ?5 OFFSET ?6
-    `).bind(query, search, status, kind, limit, offset).all<AdminPhotoRow>(),
+      LIMIT ?7 OFFSET ?8
+    `).bind(query, search, status, kind, readiness, selectedRestaurantIdsJson, limit, offset).all<AdminPhotoRow>(),
     c.env.DB.prepare(`
       SELECT COUNT(*) AS count
       FROM restaurant_photos rp
       JOIN restaurants r ON r.id = rp.restaurant_id
       ${where}
-    `).bind(query, search, status, kind).first<{ count: number }>(),
+    `).bind(query, search, status, kind, readiness, selectedRestaurantIdsJson).first<{ count: number }>(),
     c.env.DB.prepare("SELECT review_status AS status, COUNT(*) AS count, COUNT(DISTINCT restaurant_id) AS restaurants FROM restaurant_photos GROUP BY review_status").all<{ status: PhotoReviewStatus; count: number; restaurants: number }>(),
     c.env.DB.prepare("SELECT COUNT(*) AS photos, COUNT(DISTINCT restaurant_id) AS restaurants FROM restaurant_photos").first<{ photos: number; restaurants: number }>(),
   ]);
@@ -1200,6 +1260,10 @@ app.get("/api/admin/photos", async (c) => {
       summary[row.status] = { photos: Number(row.count), restaurants: Number(row.restaurants) };
     }
   }
+  const mediaValues = Object.values(restaurantMedia);
+  const eligibleRestaurants = mediaValues.filter(value => value.eligible).length;
+  const noSafePhotos = mediaValues.filter(value => value.distinctSafePhotos === 0).length;
+  const oneSafePhoto = mediaValues.filter(value => value.distinctSafePhotos === 1).length;
   return c.json({
     photos: rows.results.map(row => ({
       id: row.id,
@@ -1224,6 +1288,15 @@ app.get("/api/admin/photos", async (c) => {
       ...summary,
       all: { photos: Number(overall?.photos ?? 0), restaurants: Number(overall?.restaurants ?? 0) },
     },
+    readinessSummary: {
+      restaurants: mediaValues.length,
+      eligibleRestaurants,
+      insufficientRestaurants: mediaValues.length - eligibleRestaurants,
+      noSafePhotos,
+      oneSafePhoto,
+      minimumDistinctPhotos: MIN_LUNCHIE_PRESENTATION_PHOTOS,
+    },
+    restaurantMedia,
     pagination: { total: Number(total?.count ?? 0), limit, offset, hasMore: offset + rows.results.length < Number(total?.count ?? 0) },
   });
 });

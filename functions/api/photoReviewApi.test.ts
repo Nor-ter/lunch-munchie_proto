@@ -23,6 +23,10 @@ function database() {
       const statement = {
         bind(...values: unknown[]) { bindings = values; return statement; },
         async all() {
+          if (sql.includes('LEFT JOIN restaurant_photos')) return { results: [{
+            restaurant_id: 'restaurant-1', r2_key: 'test/food.jpg', drive_file_id: 'drive-1',
+            kind: 'dish', dishes: '["비빔밥"]', perceptual_hash: null, has_person: 0, review_status: 'pending',
+          }] };
           if (sql.includes('SELECT rp.id, rp.restaurant_id')) return { results: [{
             id: 'photo-1', restaurant_id: 'restaurant-1', restaurant_name: 'Test Kitchen',
             restaurant_category: '한식', restaurant_address: 'Melbourne', r2_key: 'test/food.jpg',
@@ -59,6 +63,8 @@ describe('administrator restaurant photo API', () => {
     const payload = await response.json() as any;
     expect(payload.photos[0]).toMatchObject({ restaurantName: 'Test Kitchen', reviewStatus: 'pending', url: '/photos/test/food.jpg' });
     expect(payload.summary).toMatchObject({ all: { photos: 1, restaurants: 1 }, pending: { photos: 1, restaurants: 1 } });
+    expect(payload.readinessSummary).toMatchObject({ restaurants: 1, eligibleRestaurants: 0, insufficientRestaurants: 1, oneSafePhoto: 1 });
+    expect(payload.restaurantMedia['restaurant-1']).toEqual({ totalPhotos: 1, distinctSafePhotos: 1, eligible: false });
   });
 
   it('records an authenticated exclusion without deleting the R2 object', async () => {
