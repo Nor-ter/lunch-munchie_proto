@@ -101,13 +101,17 @@ describe('Lunchie Quick Match presentation', () => {
     expect(tabBarSource).toContain('location === "/lunchie/settings"');
     expect(tabBarSource).toContain('location === "/session/lobby"');
     expect(settingsSource).not.toContain('fixed inset-x-0 bottom-[var(--lm-tab-bar-height)]');
+    expect(tabBarSource).toContain('src="/assets/Logo%20003%203.png"');
+    expect(tabBarSource).toContain('className="tab-profile-icon object-contain"');
   });
 
   it('returns from the lobby to settings and renders the personalized lunchmate instead of the legacy gif', () => {
     expect(lobbySource).toContain("navigate('/lunchie/settings')");
     expect(lobbySource).toContain('alt="참여자를 기다리는 나의 런치킨"');
+    expect(lobbySource).toContain('alt="예선전 출발을 기다리는 런치킨"');
     expect(lobbySource).toContain('lunchmateLoadoutFromProfile(profile.lunchmateLoadout)');
     expect(lobbySource).not.toContain('lunchie-quick-match-jump.gif');
+    expect(lobbySource).not.toContain('<LunchieLogo size={54} />');
   });
 
   it('allows QR invitations to use a LAN or tunnel origin without changing session data', () => {

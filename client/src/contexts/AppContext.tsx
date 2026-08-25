@@ -10,6 +10,10 @@ import { categoryMatchesIntent, intentForHour, type Intent } from '@shared/inten
 import { distanceMetres, isWithinRadius } from '@shared/geo';
 import { normalizeQuickMatchPartySize } from '@shared/quickMatchParty';
 import { normalizeRestaurantPayload } from '@shared/restaurantContract';
+import {
+  normalizeLunchieProfileImage,
+  normalizeLunchieSessionAvatar,
+} from '@shared/lunchieAvatar';
 import { normalizeFoodTag, type TagType } from '@/constants/foodTags';
 import { DRIVE_COURSES, DRIVE_FEED_POSTS } from '@/data/driveFeed';
 import { demoAuthorIdFor } from '@/data/demoAuthors';
@@ -545,7 +549,7 @@ function buildLocalSession(
     members: [{
       id: profile.id,
       name: profile.name,
-      emoji: profile.emoji,
+      emoji: normalizeLunchieSessionAvatar(profile.emoji),
       hasVoted: false,
       preferences: profile.categoryPrefs.map(p => ({ categoryId: p.category, score: p.score })),
     }],
@@ -636,6 +640,9 @@ export function AppProvider({
       if (!parsed?.id || !parsed?.inviteCode || !parsed?.filters) return null;
       return {
         ...parsed,
+        members: Array.isArray(parsed.members)
+          ? parsed.members.map(member => ({ ...member, emoji: normalizeLunchieSessionAvatar(member.emoji) }))
+          : [],
         status: normalizeQuickMatchStatus(parsed.status),
         membershipActive: parsed.membershipActive !== false,
         filters: {
@@ -717,6 +724,8 @@ export function AppProvider({
         }
         const normalizedProfile = {
           ...parsed,
+          emoji: normalizeLunchieSessionAvatar(parsed.emoji),
+          avatarPhoto: normalizeLunchieProfileImage(parsed.avatarPhoto),
           lunchmateLoadout: normalizeLunchmateProfileLoadout(parsed.lunchmateLoadout),
           lunchmateOwnedItemIds: normalizeLunchmateOwnedItemIds(parsed.lunchmateOwnedItemIds),
           lunchmateRewardClaims: normalizeLunchmateRewardClaims(parsed.lunchmateRewardClaims),
@@ -1016,7 +1025,11 @@ export function AppProvider({
           // A null server value is meaningful: the user deliberately removed
           // their photo and chose the emoji avatar. Never fall back to Google
           // in that case.
-          ...(serverProfile ? { avatarPhoto: serverProfile.profile_image_url ?? undefined } : googleUser.picture ? { avatarPhoto: googleUser.picture } : {}),
+          ...(serverProfile
+            ? { avatarPhoto: normalizeLunchieProfileImage(serverProfile.profile_image_url) }
+            : googleUser.picture
+              ? { avatarPhoto: normalizeLunchieProfileImage(googleUser.picture) }
+              : {}),
         }));
       })
       .catch(() => { /* profile fallback remains usable */ });
@@ -1232,7 +1245,7 @@ export function AppProvider({
     deadlineMinutes?: number,
   ): Promise<GroupSession> => {
     const actualHostName = hostName || profile.name;
-    const actualEmoji = emoji || profile.emoji;
+    const actualEmoji = normalizeLunchieSessionAvatar(emoji || profile.emoji);
     const normalizedFilters = { ...filters, dietary: normalizeDietaryPreferences(filters.dietary) };
 
     // 항상 서버 등록을 먼저 시도한다. apiAvailable로 게이트하면 안 되는 이유:
@@ -1372,7 +1385,7 @@ export function AppProvider({
       members: members.map((m: { user_id: string; user_name: string; emoji: string; is_ready: boolean }) => ({
         id: m.user_id,
         name: m.user_name,
-        emoji: m.emoji,
+        emoji: normalizeLunchieSessionAvatar(m.emoji),
         hasVoted: false,
         preferences: [],
         ready: m.is_ready,
@@ -1406,7 +1419,7 @@ export function AppProvider({
       body: JSON.stringify({
         userId: profile.id,
         userName: name || profile.name,
-        emoji: emoji || profile.emoji,
+        emoji: normalizeLunchieSessionAvatar(emoji || profile.emoji),
         preferences: profile.categoryPrefs,
         dietary: normalizeDietaryPreferences(profile.dietary),
         memberKey: currentSessionRef.current?.inviteCode === token
