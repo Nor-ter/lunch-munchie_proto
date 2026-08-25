@@ -467,11 +467,15 @@ const isoDate = (value: unknown) => {
 };
 
 type PresentationPhotoRow = {
+  restaurant_id?: string;
   r2_key: string;
+  drive_file_id?: string | null;
   kind: string;
   dishes: string;
   perceptual_hash: string | null;
 };
+
+export const MIN_LUNCHIE_PRESENTATION_PHOTOS = 2;
 
 function hashDistance(left: string, right: string) {
   if (!/^[0-9a-f]+$/i.test(left) || left.length !== right.length) return Infinity;
@@ -492,10 +496,13 @@ export function selectLunchiePresentationPhotoKeys(
 ) {
   const hashes: string[] = [];
   const keys = new Set<string>();
+  const sourceIds = new Set<string>();
   const semanticFingerprints = new Set<string>();
   const safe: string[] = [];
   for (const row of rows) {
     if (keys.has(row.r2_key)) continue;
+    const sourceId = row.drive_file_id?.trim() || null;
+    if (sourceId && sourceIds.has(sourceId)) continue;
     const hash = row.perceptual_hash?.trim().toLowerCase() || null;
     if (hash && hashes.some((known) => hashDistance(hash, known) <= 8)) continue;
     const dishes = json<string[]>(row.dishes, [])
@@ -510,6 +517,7 @@ export function selectLunchiePresentationPhotoKeys(
     if (!hash && semanticFingerprints.has(semanticFingerprint)) continue;
     if (hash) hashes.push(hash);
     keys.add(row.r2_key);
+    if (sourceId) sourceIds.add(sourceId);
     semanticFingerprints.add(semanticFingerprint);
     safe.push(`/photos/${row.r2_key}`);
     if (safe.length === limit) break;
@@ -523,12 +531,50 @@ export async function lunchiePresentationPhotos(
   restaurantId: string,
 ) {
   const { results } = await db.prepare(
-    "SELECT r2_key, kind, dishes, perceptual_hash FROM restaurant_photos WHERE restaurant_id = ? AND kind IN ('dish', 'table') AND has_person = 0 AND review_status != 'rejected' ORDER BY CASE kind WHEN 'dish' THEN 0 ELSE 1 END, COALESCE(quality, 0) DESC, id ASC LIMIT 24",
+    "SELECT r2_key, drive_file_id, kind, dishes, perceptual_hash FROM restaurant_photos WHERE restaurant_id = ? AND kind IN ('dish', 'table') AND has_person = 0 AND review_status != 'rejected' ORDER BY CASE kind WHEN 'dish' THEN 0 ELSE 1 END, COALESCE(quality, 0) DESC, id ASC LIMIT 24",
   ).bind(restaurantId).all<PresentationPhotoRow>();
   // Object availability is handled by the browser at render time. Probing R2
   // for every catalogue photo made one request fan out into 100+ storage
   // reads and added several seconds to Lunchie startup.
   return selectLunchiePresentationPhotoKeys(results);
+}
+
+/** Resolve recommendation media in bounded D1 batches, then apply exactly the
+ * same within-restaurant de-duplication contract used by the rendered card. */
+export async function lunchiePresentationPhotosByRestaurant(
+  db: any,
+  restaurantIds: string[],
+  limit = 4,
+) {
+  const uniqueIds = [...new Set(restaurantIds.map(String).filter(Boolean))];
+  const rowsByRestaurant = new Map<string, PresentationPhotoRow[]>();
+  const batchSize = 80;
+  for (let offset = 0; offset < uniqueIds.length; offset += batchSize) {
+    const ids = uniqueIds.slice(offset, offset + batchSize);
+    if (!ids.length) continue;
+    const { results } = await db.prepare(
+      `SELECT restaurant_id, r2_key, drive_file_id, kind, dishes, perceptual_hash
+       FROM restaurant_photos
+       WHERE restaurant_id IN (${ids.map(() => "?").join(",")})
+         AND kind IN ('dish', 'table')
+         AND has_person = 0
+         AND review_status != 'rejected'
+       ORDER BY restaurant_id, CASE kind WHEN 'dish' THEN 0 ELSE 1 END,
+                COALESCE(quality, 0) DESC, id ASC`,
+    ).bind(...ids).all<PresentationPhotoRow>();
+    for (const row of results) {
+      if (!row.restaurant_id) continue;
+      const current = rowsByRestaurant.get(row.restaurant_id) ?? [];
+      if (current.length < 24) current.push(row);
+      rowsByRestaurant.set(row.restaurant_id, current);
+    }
+  }
+  return new Map(
+    uniqueIds.map((restaurantId) => [
+      restaurantId,
+      selectLunchiePresentationPhotoKeys(rowsByRestaurant.get(restaurantId) ?? [], limit),
+    ]),
+  );
 }
 
 const EVENT_TYPES = new Set([
@@ -1367,11 +1413,23 @@ app.post("/api/recommend", async (c) => {
           ),
         )
       : exactResults;
-    const results = filteredResults
+    const contextualResults = filteredResults
       // Menu taxonomy never widens the hard intent filter above. It simply
       // gives the contextual ranker a verified cafe/dessert signal when an
       // otherwise broad restaurant category has a structured menu section.
       .map((restaurant) => withMenuIntentEvidence(restaurant, menuEvidence.get(restaurant.id)));
+    const presentationPhotos = await lunchiePresentationPhotosByRestaurant(
+      c.env.DB,
+      contextualResults.map((restaurant) => String(restaurant.id)),
+    );
+    // A restaurant is recommendable only when the final card can show at
+    // least two distinct, classified, person-free photos. Raw row counts are
+    // insufficient because near-duplicates collapse in the card resolver.
+    const results = contextualResults.filter(
+      (restaurant) =>
+        (presentationPhotos.get(String(restaurant.id))?.length ?? 0) >=
+        MIN_LUNCHIE_PRESENTATION_PHOTOS,
+    );
 
     let exposureMap: Record<string, { count?: number; updatedAt?: number }> =
       {};
@@ -1474,15 +1532,15 @@ app.post("/api/recommend", async (c) => {
         ),
       ),
     ]);
-    const safeSlate = await Promise.all(finalResults.map(async (item) => ({
+    const safeSlate = finalResults.map((item) => ({
         ...item.restaurant,
-        photos: await lunchiePresentationPhotos(c.env.DB, item.restaurant.id),
+        photos: presentationPhotos.get(String(item.restaurant.id)) ?? [],
         menu_items: json(item.restaurant.menus, []),
         tags: json<string[]>(item.restaurant.tags, []),
         rank: item.rank,
         score: item.score,
         propensity: item.propensity,
-      })));
+      }));
     const response = c.json({
       slate: safeSlate,
       user_id: userId,
@@ -2631,6 +2689,10 @@ app.post("/api/sessions/:token/status", async (c) => {
     const { results: catalogue } = await c.env.DB.prepare(
       "SELECT id, category, rating, price_level, dietary_options, menus, latitude, longitude FROM restaurants",
     ).all();
+    const presentationPhotos = await lunchiePresentationPhotosByRestaurant(
+      c.env.DB,
+      (catalogue as any[]).map((restaurant) => String(restaurant.id)),
+    );
     const menuEvidence = await indexedMenuEvidenceByRestaurant(
       c.env.DB,
       (catalogue as any[]).map((restaurant) => String(restaurant.id)),
@@ -2652,6 +2714,8 @@ app.post("/api/sessions/:token/status", async (c) => {
     );
     const eligibleCatalogue = (catalogue as any[]).filter(
       (restaurant) =>
+        (presentationPhotos.get(String(restaurant.id))?.length ?? 0) >=
+          MIN_LUNCHIE_PRESENTATION_PHOTOS &&
         (categories.length === 0 || categories.includes(restaurant.category)) &&
         categoryMatchesIntent(restaurant.category, session.intent) &&
         (!hasOrigin ||
