@@ -22,6 +22,7 @@ import { intentForCategory } from '@shared/intent';
 import { persistSessionSwipe } from '@/services/sessionApi';
 import { classifySwipeAvailability, type SwipeAvailability } from '@/lib/swipeAvailability';
 import { isActiveQuickMatchStatus } from '@/lib/quickMatch';
+import { normalizeRestaurantPayload } from '@shared/restaurantContract';
 import SessionManagementMenu from '@/components/lunchie/SessionManagementMenu';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -2282,7 +2283,7 @@ export default function QuickMatchPage() {
         if (!response.ok) throw Object.assign(new Error(`Restaurant request failed (${response.status})`), { status: response.status });
         const payload = await response.json();
         if (!Array.isArray(payload)) throw new Error('Restaurant response was not a list');
-        const catalogue = payload as Restaurant[];
+        const catalogue = payload.map((restaurant: Record<string, unknown>) => normalizeRestaurantPayload(restaurant) as Restaurant);
         if (catalogue.length > 0) registerRestaurants(catalogue);
         const refreshedSession = await fetchSession(token, catalogue);
         const nextState = classifySwipeAvailability({

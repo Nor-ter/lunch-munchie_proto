@@ -12,6 +12,7 @@ import { categoryMatchesIntent, type Intent } from "../../shared/intent";
 import { intentForMenuSection, menuSectionIntents } from "../../shared/menuTaxonomy";
 import { isValidCoordinate, isWithinRadius } from "../../shared/geo";
 import { normalizeQuickMatchPartySize } from "../../shared/quickMatchParty";
+import { normalizeRestaurantPayload } from "../../shared/restaurantContract";
 import { buildSlate, scoreCandidateBreakdown } from "../../server/engine/scorer";
 import type { Candidate, RecContext, SlateType } from "../../shared/engine";
 import { isAdminEmail } from "./adminAccess";
@@ -1385,7 +1386,7 @@ app.get("/api/restaurants", async (c) => {
     .bind(limit)
     .all();
   return c.json(
-    await Promise.all(results.map(async (r: any) => ({
+    await Promise.all(results.map(async (r: any) => normalizeRestaurantPayload({
       ...r,
       photos: await lunchiePresentationPhotos(c.env.DB, r.id),
       menu_items: json(r.menus, []),
