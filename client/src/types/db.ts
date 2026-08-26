@@ -1,3 +1,16 @@
+import type {
+  LunchmateProfileLoadout,
+  LunchmateRoomLoadout,
+} from './lunchmateCustomization';
+
+export interface PublicLunchmateProfile {
+  visibility: 'public' | 'private';
+  character: string | null;
+  skin: string | null;
+  loadout: LunchmateProfileLoadout | null;
+  roomConfig: LunchmateRoomLoadout | null;
+}
+
 export interface User {
   id: string;
   username: string;
@@ -6,6 +19,8 @@ export interface User {
   bio: string | null;
   location: string | null;
   created_at: string;
+  public_post_count?: number;
+  lunchmate?: PublicLunchmateProfile;
 }
 
 export interface UserSearchResult extends User {

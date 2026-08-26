@@ -8,6 +8,9 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { useUser } from '@/hooks/useUser';
 import { useProfileFeed } from '@/hooks/useProfileFeed';
 import UnifiedMunchieCard from '@/components/munchie/UnifiedMunchieCard';
+import HeaderIconButton from '@/components/ui/HeaderIconButton';
+import ProfileHeader from '@/components/profile/ProfileHeader';
+import PublicLunchmateRoom from '@/components/profile/PublicLunchmateRoom';
 
 export default function OtherProfilePage() {
   const { id = '' } = useParams<{ id: string }>();
@@ -28,8 +31,12 @@ export default function OtherProfilePage() {
       <main className="flex min-h-dvh items-center justify-center bg-[#FCF4EE] px-6 text-center">
         <div>
           <p className="text-4xl">🍽️</p>
-          <h1 className="mt-3 text-lg font-black text-[#2D211C]">유저를 찾을 수 없어요</h1>
-          <p className="mt-1 text-sm text-[#9B9B9B]">아직 실제 계정과 연결되지 않은 게시물일 수 있어요.</p>
+          <h1 className="mt-3 text-lg font-black text-[#2D211C]">
+            {remoteUser.isError ? '프로필을 불러오지 못했어요' : '유저를 찾을 수 없어요'}
+          </h1>
+          <p className="mt-1 text-sm text-[#9B9B9B]">
+            {remoteUser.isError ? '잠시 후 다시 시도해 주세요.' : '아직 실제 계정과 연결되지 않은 게시물일 수 있어요.'}
+          </p>
           <button onClick={() => navigate('/feed')} className="mt-5 rounded-full bg-[#EB5053] px-6 py-3 text-sm font-bold text-white">피드로 돌아가기</button>
         </div>
       </main>
@@ -38,12 +45,18 @@ export default function OtherProfilePage() {
 
   return (
     <main className="min-h-dvh bg-[#FCF4EE] pb-24">
-      <header className="flex items-center px-4 pb-3 pt-10">
-        <button onClick={() => history.back()} aria-label="뒤로 가기" className="flex size-10 items-center justify-center rounded-full bg-white shadow-sm">
-          <ChevronLeft size={20} />
-        </button>
-        <h1 className="flex-1 pr-10 text-center text-sm font-black text-[#2D211C]">프로필</h1>
-      </header>
+      <ProfileHeader
+        leftAction={(
+          <HeaderIconButton onClick={() => history.back()} aria-label="뒤로 가기">
+            <ChevronLeft size={20} />
+          </HeaderIconButton>
+        )}
+      />
+
+      <PublicLunchmateRoom
+        lunchmate={remoteUser.data?.lunchmate}
+        unavailable={remoteUser.isError}
+      />
 
       <section className="mx-4 mt-3 rounded-[28px] bg-[#F8DCD2] p-6">
         <div className="flex items-center gap-4">

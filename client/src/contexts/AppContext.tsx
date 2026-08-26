@@ -25,6 +25,12 @@ import {
 import { logCourseSave, logFeedLike } from '@/lib/eventLogger';
 import { persistSessionSwipe } from '@/services/sessionApi';
 import {
+  hasLunchmatePresentation,
+  localLunchmateFieldsFromPublic,
+  savePublicLunchmateProfile,
+} from '@/services/profileApi';
+import type { PublicLunchmateProfile } from '@/types/db';
+import {
   isActiveQuickMatchStatus,
   normalizeDietaryPreferences,
   normalizeQuickMatchStatus,
@@ -234,6 +240,8 @@ export interface UserProfile {
   lunchmateRoomLoadout?: LunchmateRoomLoadout;
   /** 런치메이트룸에서 적용한 네 slot 코스튬 조합 */
   lunchmateLoadout?: LunchmateProfileLoadout;
+  /** D1 공개 프로필에서 런치메이트 룸을 노출할지 여부 */
+  lunchmateVisibility?: 'public' | 'private';
   /** 보유한 런치메이트 코스튬 manifest ID 목록 */
   lunchmateOwnedItemIds?: string[];
   /** 현재 브라우저 preview에서 지급한 레벨별 코스튬 이력 */
@@ -349,6 +357,17 @@ const DEFAULT_PROFILE: UserProfile = {
   lunchmateOwnedItemIds: normalizeLunchmateOwnedItemIds(undefined),
   lunchmateRewardClaims: [],
 };
+
+function clearPublicLunchmatePresentation(profile: UserProfile): UserProfile {
+  return {
+    ...profile,
+    foodieChar: undefined,
+    foodieSkin: undefined,
+    lunchmateRoomLoadout: undefined,
+    lunchmateLoadout: undefined,
+    lunchmateVisibility: 'public',
+  };
+}
 
 // ─── Context ──────────────────────────────────────────────────────────────────
 
@@ -722,15 +741,18 @@ export function AppProvider({
           lunchmateRewardClaims: normalizeLunchmateRewardClaims(parsed.lunchmateRewardClaims),
         };
         if (migratedId) localStorage.setItem('lm_profile', JSON.stringify(normalizedProfile));
-        return initialAuthUserId
-          ? { ...normalizedProfile, id: initialAuthUserId }
-          : normalizedProfile;
+        if (!initialAuthUserId) return normalizedProfile;
+        const authenticatedProfile = { ...normalizedProfile, id: initialAuthUserId };
+        return lastAuthUidRef.current && lastAuthUidRef.current !== initialAuthUserId
+          ? clearPublicLunchmatePresentation(authenticatedProfile)
+          : authenticatedProfile;
       }
     } catch { /* fall through */ }
     return { ...DEFAULT_PROFILE, id: initialAuthUserId ?? generateUserId() };
   });
   const initialStoredProfileRef = useRef(localStorage.getItem('lm_profile'));
   const isInitialProfilePersistenceRef = useRef(true);
+  const lunchmateServerHydratedRef = useRef(false);
   const [feedCursor, setFeedCursor] = useState<string | null>('0');
   const [hasMoreFeedPosts, setHasMoreFeedPosts] = useState(true);
   const [isLoadingMoreFeedPosts, setIsLoadingMoreFeedPosts] = useState(false);
@@ -1004,20 +1026,42 @@ export function AppProvider({
       .then(response => response.ok ? response.json() : null)
       .then((data: {
         user?: { sub?: string; name?: string; picture?: string };
-        profile?: { username?: string | null; handle?: string | null; profile_image_url?: string | null } | null;
+        profile?: {
+          username?: string | null;
+          handle?: string | null;
+          profile_image_url?: string | null;
+          lunchmate?: PublicLunchmateProfile;
+        } | null;
       } | null) => {
         const googleUser = data?.user;
         if (!googleUser || googleUser.sub !== initialAuthUserId) return;
         const serverProfile = data?.profile;
-        setProfile(previous => ({
-          ...previous,
-          ...(serverProfile?.username || googleUser.name ? { name: serverProfile?.username || googleUser.name! } : {}),
-          ...(serverProfile?.handle ? { handle: serverProfile.handle } : {}),
-          // A null server value is meaningful: the user deliberately removed
-          // their photo and chose the emoji avatar. Never fall back to Google
-          // in that case.
-          ...(serverProfile ? { avatarPhoto: serverProfile.profile_image_url ?? undefined } : googleUser.picture ? { avatarPhoto: googleUser.picture } : {}),
-        }));
+        setProfile(previous => {
+          const serverLunchmate = serverProfile?.lunchmate;
+          const localBelongsToAccount = isFirstAuthAdoption
+            || legacyProfileIdRef.current === initialAuthUserId;
+          const shouldMigrateLegacyLunchmate = Boolean(
+            serverLunchmate
+            && !hasLunchmatePresentation(localLunchmateFieldsFromPublic(serverLunchmate))
+            && localBelongsToAccount
+            && hasLunchmatePresentation(previous),
+          );
+          return {
+            ...previous,
+            ...(serverProfile?.username || googleUser.name ? { name: serverProfile?.username || googleUser.name! } : {}),
+            ...(serverProfile?.handle ? { handle: serverProfile.handle } : {}),
+            // A null server value is meaningful: the user deliberately removed
+            // their photo and chose the emoji avatar. Never fall back to Google
+            // in that case.
+            ...(serverProfile ? { avatarPhoto: serverProfile.profile_image_url ?? undefined } : googleUser.picture ? { avatarPhoto: googleUser.picture } : {}),
+            ...(serverLunchmate
+              ? shouldMigrateLegacyLunchmate
+                ? { lunchmateVisibility: serverLunchmate.visibility }
+                : localLunchmateFieldsFromPublic(serverLunchmate)
+              : {}),
+          };
+        });
+        lunchmateServerHydratedRef.current = true;
       })
       .catch(() => { /* profile fallback remains usable */ });
   }, []);
@@ -1043,6 +1087,27 @@ export function AppProvider({
     }
     localStorage.setItem('lm_profile', JSON.stringify(profile));
   }, [profile]);
+  useEffect(() => {
+    if (
+      !lunchmateServerHydratedRef.current
+      || !initialAuthUserId
+      || profile.id !== initialAuthUserId
+    ) return;
+    const timer = window.setTimeout(() => {
+      void savePublicLunchmateProfile(profile).catch((error) => {
+        console.warn('Lunchmate D1 profile sync failed', error);
+      });
+    }, 150);
+    return () => window.clearTimeout(timer);
+  }, [
+    initialAuthUserId,
+    profile.id,
+    profile.foodieChar,
+    profile.foodieSkin,
+    profile.lunchmateLoadout,
+    profile.lunchmateRoomLoadout,
+    profile.lunchmateVisibility,
+  ]);
   useEffect(() => {
     // 업로드 사진(data URL)이 크면 quota 초과가 날 수 있다 — 실패해도 앱은 계속 동작.
     try { localStorage.setItem('lm_feed_v3', JSON.stringify(feedPosts)); } catch { /* noop */ }

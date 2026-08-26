@@ -477,3 +477,21 @@
 - 실제 로컬 catalogue 77개와 문제의 5개 조건으로 71개 후보, `dietaryBestEffort=true`를 확인했다.
 - 전체 Vitest 52 files / 462 tests, TypeScript, production build, Cloudflare policy, Quick Match Playwright 4/4 PASS. E2E는 문제의 5개 조건 생성부터 식당 카드와 best-effort 안내 노출까지 검증한다.
 - 신규 env/secret/Google 키/DB schema 변경 없음. 식단 유형을 무조건 충족한다고 표시하지 않으며, 재료 제외는 완화하지 않는다. 기존 GCP 키 restriction 및 Android SHA-1 제한 TODO는 그대로 남아 있다.
+
+---
+
+## 21. 타인 공개 Lunchmate 프로필·프로필 헤더 정합성 (2026-08-26)
+
+### 21.1 TRIAGE / RCA
+- 증상 태그: `data-state`, `auth`. Cloudflare 상태에 이 흐름을 막는 알려진 장애는 없었다.
+- 타인 프로필 route는 사용자·피드만 조회했고 Lunchmate 공개 표현 데이터 계약이 없었다. 내 프로필 헤더는 타인 프로필과 다른 구조여서 중앙 제목도 누락됐다.
+
+### 21.2 FIX
+- Cloudflare D1 `users`에 캐릭터·스킨·장착 아이템·룸 배치·공개 범위를 저장하는 additive migration을 추가했다. 공개 GET은 route의 사용자 ID로 조회하고 비공개 값은 서버에서 제거한다.
+- owner PATCH는 인증 세션의 사용자 ID에만 적용하며 inventory·보상·XP는 계약에서 제외했다. 계정 전환 시 이전 사용자의 로컬 표현 상태를 지운 뒤 서버 상태를 hydrate한다.
+- 타인 프로필은 기존 룸·캐릭터 renderer를 정적 읽기 전용으로 재사용하고 public/private/empty/error 상태를 분리했다. 양쪽 프로필은 화면 기준 중앙 정렬된 공용 `프로필` 헤더를 사용하며 기존 설정·뒤로가기 동작을 유지한다.
+
+### 21.3 VERIFY / GATE
+- Cloudflare API/데이터 계약 및 UI 집중 Vitest, TypeScript, production build를 통과했다. 모바일 Playwright에서 owner/visitor 헤더, 비로그인 공개 룸, 새로고침, private/empty 상태, B→C SPA 전환을 검증했다.
+- 공개 응답과 저장 payload에 inventory·보상·XP가 없고, 타인 화면은 방문자의 로컬 Lunchmate 상태를 참조하지 않으며 편집 핸들러를 노출하지 않는다. 신규 secret/env/Google 키는 없다.
+- 원격 D1 migration·Cloudflare preview 배포는 실행하지 않았다. 실제 검증 URL 제공과 폰 sign-off 전 상태는 `Human Verification` 이전으로 유지한다. 기존 GCP 키 restriction 및 Android SHA-1 제한 TODO는 이번 범위 밖으로 남아 있다.

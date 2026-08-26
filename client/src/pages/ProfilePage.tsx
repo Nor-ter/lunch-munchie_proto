@@ -29,7 +29,8 @@ import LunchboxBottomSheet, {
 } from '@/components/munchie/LunchboxBottomSheet';
 import LunchmateProgressSheet from '@/components/munchie/LunchmateProgressSheet';
 import LunchmateLevelUpModal from '@/components/munchie/LunchmateLevelUpModal';
-import HeaderIconButton, { HeaderActionRow } from '@/components/ui/HeaderIconButton';
+import HeaderIconButton from '@/components/ui/HeaderIconButton';
+import ProfileHeader from '@/components/profile/ProfileHeader';
 import { useLunchmateFlow } from '@/hooks/useLunchmateFlow';
 import {
   consumeLunchboxFood,
@@ -404,23 +405,25 @@ function ProfilePageContent() {
   return (
     <div className="min-h-dvh bg-[#FCF4EE] pb-24">
       {/* 상단 메뉴 */}
-      <HeaderActionRow className="header-action-row--raised">
-        <HeaderIconButton
-          onClick={() => { setEditName(profile.name); setEditHandle(profile.handle ?? ''); setActiveSheet('settings'); }}
-          aria-label="프로필 설정"
-        >
-          <Settings size={18} color="#4A4A4A" />
-        </HeaderIconButton>
+      <ProfileHeader
+        rightAction={(
+          <HeaderIconButton
+            onClick={() => { setEditName(profile.name); setEditHandle(profile.handle ?? ''); setActiveSheet('settings'); }}
+            aria-label="프로필 설정"
+          >
+            <Settings size={18} color="#4A4A4A" />
+          </HeaderIconButton>
+        )}
+      />
 
-        {/* 아바타 업로드용 숨은 파일 입력 — 헤더 아바타 탭 시트/설정 시트 공용 */}
-        <input
-          ref={avatarFileRef}
-          type="file"
-          accept="image/*"
-          className="hidden"
-          onChange={handleAvatarUpload}
-        />
-      </HeaderActionRow>
+      {/* 아바타 업로드용 숨은 파일 입력 — 헤더 아바타 탭 시트/설정 시트 공용 */}
+      <input
+        ref={avatarFileRef}
+        type="file"
+        accept="image/*"
+        className="hidden"
+        onChange={handleAvatarUpload}
+      />
 
       {/* 핑크 프로필 카드 */}
       <div className="mx-4 mt-2 rounded-[30px] p-4 pb-5" style={{ background: '#F8DCD2' }}>
@@ -713,11 +716,13 @@ function ProfileGuestPreview() {
 
   return (
     <div className="min-h-dvh bg-[#FCF4EE] pb-24">
-      <HeaderActionRow className="header-action-row--raised">
-        <HeaderIconButton onClick={goToLogin} aria-label="프로필 설정">
-          <Settings size={18} color="#4A4A4A" />
-        </HeaderIconButton>
-      </HeaderActionRow>
+      <ProfileHeader
+        rightAction={(
+          <HeaderIconButton onClick={goToLogin} aria-label="프로필 설정">
+            <Settings size={18} color="#4A4A4A" />
+          </HeaderIconButton>
+        )}
+      />
 
       <div className="mx-4 mt-2 rounded-[30px] p-4 pb-5" style={{ background: '#F8DCD2' }}>
         <FoodieBuddy
