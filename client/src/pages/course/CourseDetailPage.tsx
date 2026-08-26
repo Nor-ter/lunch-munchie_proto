@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useParams, useLocation, useSearch } from 'wouter';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Bookmark, ThumbsUp, ChevronLeft, ChevronRight, Star, X, GripVertical, Clock, MapPin, Plus, Search, Share2, Trash2 } from 'lucide-react';
+import { Bookmark, ThumbsUp, ChevronRight, Star, X, GripVertical, Clock, MapPin, Plus, Search, Share2, Trash2 } from 'lucide-react';
 import {
   DndContext,
   closestCenter,
@@ -38,6 +38,7 @@ import { getLunchmateLevelIcon } from '@/constants/lunchmateLevelIcons';
 import { getLunchmateProgressSnapshot } from '@/utils/lunchmateProgress';
 import { lunchmateTotalXpFromProfile } from '@/utils/lunchmateProfile';
 import { logCourseOpen } from '@/lib/eventLogger';
+import BackButton from '@/components/ui/BackButton';
 
 type FromMode = 'explore' | 'saved' | 'feed' | 'template' | 'template-detail' | 'profile';
 
@@ -643,14 +644,8 @@ export default function CourseDetailPage() {
       transition={{ duration: 0.3 }}
     >
       {/* Back button */}
-      <div className="flex items-center justify-between px-4 pb-3 pt-4">
-        <button
-          onClick={() => navigate(backPath)}
-          aria-label="이전 화면으로 돌아가기"
-          className="flex h-9 w-9 items-center justify-center rounded-full border border-[#EBD8CE] bg-white text-[#8B6A5D] shadow-sm"
-        >
-          <ChevronLeft size={20} />
-        </button>
+      <div className="flex items-center justify-between px-5 pb-3 pt-[max(12px,env(safe-area-inset-top))]">
+        <BackButton onClick={() => navigate(backPath)} aria-label="이전 화면으로 돌아가기" />
         <div className="text-center">
           <p className="text-[10px] font-black uppercase tracking-[0.18em] text-[#E67E78]">Munchie</p>
           <p className="text-[16px] font-black text-[#49362E]">코스맵 보기</p>

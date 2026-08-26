@@ -1,7 +1,8 @@
 import { motion } from 'framer-motion';
-import { ChevronLeft, Star, MapPin, Clock, X } from 'lucide-react';
+import { Star, MapPin, Clock, X } from 'lucide-react';
 import { useApp, type Restaurant } from '@/contexts/AppContext';
 import type { CoursePlace } from '@/types/course';
+import BackButton from '@/components/ui/BackButton';
 
 /**
  * 식당 상세 슬라이드 페이지 — 코스 에디터/코스 상세의 코스 순서에서
@@ -69,13 +70,9 @@ export default function RestaurantDetailSheet({
       {/* Hero */}
       <div className={`relative overflow-hidden bg-[#F5EEE8] ${isModal ? 'h-[160px]' : 'h-[220px]'}`}>
         <img src={restaurant.image} alt={restaurant.name} className="h-full w-full object-cover" />
-        <button
-          onClick={onClose}
-          aria-label={isModal ? '상세정보 닫기' : '뒤로가기'}
-          className="absolute top-4 left-4 w-9 h-9 rounded-full bg-white/90 shadow flex items-center justify-center active:scale-95"
-        >
-          {isModal ? <X size={18} /> : <ChevronLeft size={20} />}
-        </button>
+        <BackButton onClick={onClose} aria-label={isModal ? '상세정보 닫기' : '뒤로가기'} className="absolute left-5 top-[max(12px,env(safe-area-inset-top))] bg-white/90">
+          {isModal ? <X size={18} aria-hidden="true" /> : undefined}
+        </BackButton>
       </div>
 
       <div className="px-4 pt-4">

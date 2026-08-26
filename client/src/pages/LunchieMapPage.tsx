@@ -1,8 +1,9 @@
 import { useLocation } from 'wouter';
-import { ArrowLeft, MapPin, Clock, Star } from 'lucide-react';
+import { MapPin, Clock, Star } from 'lucide-react';
 import { MapContainer, TileLayer, Marker, Popup } from 'react-leaflet';
 import L from 'leaflet';
 import { useApp } from '@/contexts/AppContext';
+import BackButton from '@/components/ui/BackButton';
 
 // Set up leaflet icons
 delete (L.Icon.Default.prototype as any)._getIconUrl;
@@ -53,13 +54,8 @@ export default function LunchieMapPage() {
   return (
     <div className="min-h-dvh bg-[#FCF4EE] flex flex-col">
       {/* Header */}
-      <div className="flex items-center justify-between px-5 pt-12 pb-3 bg-white z-10 border-b border-[#E5E5E5]">
-        <button
-          onClick={() => window.history.back()}
-          className="w-9 h-9 rounded-full bg-[#F5F5F5] flex items-center justify-center active:scale-95"
-        >
-          <ArrowLeft size={17} color="#1A1A1A" />
-        </button>
+      <div className="flex items-center justify-between bg-white px-5 pb-3 pt-[max(12px,env(safe-area-inset-top))] z-10 border-b border-[#E5E5E5]">
+        <BackButton onClick={() => window.history.back()} aria-label="이전 화면으로 돌아가기" />
         <span className="font-semibold text-[15px] text-[#1A1A1A]">식당 위치 안내</span>
         <div className="w-9" />
       </div>

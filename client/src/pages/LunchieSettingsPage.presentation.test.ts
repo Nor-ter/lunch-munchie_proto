@@ -95,8 +95,9 @@ describe('Lunchie Quick Match presentation', () => {
   });
 
   it('keeps the Quick Match and lobby navigation bar flat like the home navigation', () => {
-    expect(tabBarSource).toContain('location === "/lunchie/settings"');
+    expect(tabBarSource).toContain('tab.path === "/lunchie/settings"');
     expect(tabBarSource).toContain('location === "/session/lobby"');
+    expect(tabBarSource).not.toContain('tab-bar--flat');
     expect(settingsSource).not.toContain('fixed inset-x-0 bottom-[var(--lm-tab-bar-height)]');
   });
 

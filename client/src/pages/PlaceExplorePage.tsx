@@ -11,7 +11,7 @@
  */
 import { useMemo, useState } from 'react';
 import { useLocation } from 'wouter';
-import { ChevronLeft, Search, MapPin, X, Check } from 'lucide-react';
+import { Search, MapPin, X, Check } from 'lucide-react';
 import { toast } from 'sonner';
 import { useApp, type Restaurant } from '@/contexts/AppContext';
 import { usePlacesSearch } from '@/hooks/usePlacesSearch';
@@ -19,6 +19,7 @@ import { useDirections } from '@/hooks/useDirections';
 import { getPlaceDetails } from '@/services/placesApi';
 import { mapGoogleRestaurant } from '@/lib/googlePlaces';
 import { CourseMap, type MapPoint } from '@/components/map/CourseMap';
+import BackButton from '@/components/ui/BackButton';
 
 export default function PlaceExplorePage() {
   const [, navigate] = useLocation();
@@ -102,10 +103,8 @@ export default function PlaceExplorePage() {
 
   return (
     <div className="min-h-dvh bg-[#FFF8F2] pb-8">
-      <div className="sticky top-0 z-10 flex items-center gap-3 border-b border-[#F0E8E0] bg-white px-4 py-3">
-        <button onClick={() => navigate('/feed')} className="shrink-0 active:scale-90" aria-label="뒤로">
-          <ChevronLeft size={22} color="#1A1A1A" />
-        </button>
+      <div className="sticky top-0 z-10 flex items-center gap-3 border-b border-[#F0E8E0] bg-white px-5 pb-3 pt-[max(12px,env(safe-area-inset-top))]">
+        <BackButton onClick={() => navigate('/feed')} aria-label="뒤로" />
         <p className="text-[16px] font-bold text-[#1A1A1A]">실제 식당 탐색</p>
       </div>
 

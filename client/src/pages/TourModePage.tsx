@@ -7,11 +7,12 @@
 import { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useLocation } from 'wouter';
-import { ArrowLeft, MapPin, Clock, Users, DollarSign, ChevronRight, Share2, Navigation } from 'lucide-react';
+import { MapPin, Clock, Users, DollarSign, ChevronRight, Share2, Navigation } from 'lucide-react';
 import { MapContainer, TileLayer, Marker, Popup, Polyline } from 'react-leaflet';
 import L from 'leaflet';
 import { useApp } from '@/contexts/AppContext';
 import { toast } from 'sonner';
+import BackButton from '@/components/ui/BackButton';
 
 delete (L.Icon.Default.prototype as unknown as Record<string, unknown>)._getIconUrl;
 L.Icon.Default.mergeOptions({
@@ -329,11 +330,8 @@ export default function TourModePage() {
   if (phase === 'map' && selectedTour) {
     return (
       <div className="min-h-dvh">
-        <div className="flex items-center justify-between px-5 pt-12 pb-3 bg-white">
-          <button onClick={() => setPhase('conditions')}
-            className="w-10 h-10 rounded-full bg-[#F5F5F5] flex items-center justify-center active:scale-95">
-            <ArrowLeft size={18} color="#1A1A1A" />
-          </button>
+        <div className="flex items-center justify-between bg-white px-5 pb-3 pt-[max(12px,env(safe-area-inset-top))]">
+          <BackButton onClick={() => setPhase('conditions')} aria-label="조건 선택으로 돌아가기" />
           <span className="font-bold text-[16px] text-[#1A1A1A]">투어 공유</span>
           <button onClick={handleShare}
             className="w-10 h-10 rounded-full bg-[#FFF5F5] flex items-center justify-center active:scale-95">
@@ -348,11 +346,8 @@ export default function TourModePage() {
   return (
     <div className="min-h-dvh bg-white">
       {/* Header */}
-      <div className="flex items-center justify-between px-5 pt-12 pb-4">
-        <button onClick={() => phase === 'select' ? navigate('/') : setPhase('select')}
-          className="w-10 h-10 rounded-full bg-[#F5F5F5] flex items-center justify-center active:scale-95">
-          <ArrowLeft size={18} color="#1A1A1A" />
-        </button>
+      <div className="flex items-center justify-between px-5 pb-4 pt-[max(12px,env(safe-area-inset-top))]">
+        <BackButton onClick={() => phase === 'select' ? navigate('/') : setPhase('select')} aria-label="이전 화면으로 돌아가기" />
         <span className="font-bold text-[17px] text-[#1A1A1A]">Tour Mode</span>
         <div className="w-10" />
       </div>

@@ -44,6 +44,7 @@ import { useDirections } from '@/hooks/useDirections';
 import { getPlaceDetails } from '@/services/placesApi';
 import { mapGoogleRestaurant } from '@/lib/googlePlaces';
 import { replaceWithGoogleAuth, startGoogleAuth } from '@/services/authApi';
+import BackButton from '@/components/ui/BackButton';
 
 const STEP_TITLES = [
   '코스맵을 정하세요',
@@ -1353,9 +1354,9 @@ export function PhotoEditorModal({ originalSrc, cropAspect, onSave, onBack }: {
       className="fixed inset-0 z-[70] flex flex-col bg-[#171210]"
     >
       {/* 헤더 — Back / Reset / Save */}
-      <div className="relative flex items-center justify-between px-4 pb-2 pt-11">
+      <div className="relative flex items-center justify-between px-5 pb-2 pt-[max(12px,env(safe-area-inset-top))]">
         <div className="flex items-center gap-1.5">
-          <button type="button" onClick={() => onBack(safeCropAspect)} aria-label="사진 편집 뒤로가기" title="뒤로가기" className="flex h-9 w-9 items-center justify-center rounded-full border border-white/25 text-white/85 active:scale-90"><ChevronLeft size={18} /></button>
+          <BackButton onClick={() => onBack(safeCropAspect)} aria-label="사진 편집 뒤로가기" title="뒤로가기" />
           <button type="button" onClick={resetEdits} aria-label="사진 편집 초기화" title="초기화" className="flex h-9 w-9 items-center justify-center rounded-full border border-white/25 text-white/85 active:scale-90"><RotateCcw size={16} /></button>
         </div>
         <p className="pointer-events-none absolute left-1/2 -translate-x-1/2 text-[13px] font-black text-white">포토에디터</p>
@@ -1821,15 +1822,11 @@ function CoursemapCreateContent() {
   return (
     <div className="min-h-dvh bg-[#FCF4EE] pb-32">
       {/* 헤더 */}
-      <div className="sticky top-0 z-20 bg-[#FCF4EE]/95 px-4 pb-3 pt-10 backdrop-blur">
+      <div className="sticky top-0 z-20 bg-[#FCF4EE]/95 px-5 pb-3 pt-[max(12px,env(safe-area-inset-top))] backdrop-blur">
         <div className="flex items-center justify-between">
-          <button
-            onClick={goBack}
-            aria-label="뒤로"
-            className="flex h-9 w-9 items-center justify-center rounded-full bg-white shadow"
-          >
-            {step === 3 ? <X size={18} /> : <ChevronLeft size={20} />}
-          </button>
+          <BackButton onClick={goBack} aria-label="뒤로">
+            {step === 3 ? <X size={18} aria-hidden="true" /> : undefined}
+          </BackButton>
           <div className="text-center">
             <p className="text-[11px] font-bold uppercase tracking-[0.16em] text-[#F25055]">Munchie 코스맵 만들기</p>
             <p className="mt-0.5 text-[15px] font-bold text-[#1F1713]">{step + 1}. {STEP_TITLES[step]}</p>

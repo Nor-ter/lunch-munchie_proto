@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { ChevronLeft, MapPin } from 'lucide-react';
+import { MapPin } from 'lucide-react';
 import { useLocation, useParams } from 'wouter';
 import { FollowButton } from '@/components/follow/FollowButton';
 import { FollowerListSheet, type FollowListMode } from '@/components/follow/FollowerListSheet';
@@ -8,6 +8,7 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { useUser } from '@/hooks/useUser';
 import { useProfileFeed } from '@/hooks/useProfileFeed';
 import UnifiedMunchieCard from '@/components/munchie/UnifiedMunchieCard';
+import BackButton from '@/components/ui/BackButton';
 
 export default function OtherProfilePage() {
   const { id = '' } = useParams<{ id: string }>();
@@ -38,10 +39,8 @@ export default function OtherProfilePage() {
 
   return (
     <main className="min-h-dvh bg-[#FCF4EE] pb-24">
-      <header className="flex items-center px-4 pb-3 pt-10">
-        <button onClick={() => history.back()} aria-label="뒤로 가기" className="flex size-10 items-center justify-center rounded-full bg-white shadow-sm">
-          <ChevronLeft size={20} />
-        </button>
+      <header className="flex items-center px-5 pb-3 pt-[max(12px,env(safe-area-inset-top))]">
+        <BackButton onClick={() => history.back()} aria-label="뒤로 가기" />
         <h1 className="flex-1 pr-10 text-center text-sm font-black text-[#2D211C]">프로필</h1>
       </header>
 

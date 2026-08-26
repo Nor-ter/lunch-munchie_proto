@@ -1,12 +1,12 @@
 import { useMemo, useState } from 'react';
 import { AnimatePresence } from 'framer-motion';
-import { ChevronLeft } from 'lucide-react';
 import { toast } from 'sonner';
 import { useLocation, useParams, useSearch } from 'wouter';
 import { useApp } from '@/contexts/AppContext';
 import OneLineReviewBox from '@/components/munchie/OneLineReviewBox';
 import { createTemplatePhotoPlacement } from '@/components/munchie/TemplatePhotoPositionEditor';
 import { COURSEMAP_TEMPLATES, getTemplateById, getTemplateForCourse } from '@/constants/coursemapTemplates';
+import BackButton from '@/components/ui/BackButton';
 import {
   DecorateStep,
   PhotoEditorModal,
@@ -94,8 +94,8 @@ export default function FeedEditPage() {
 
   return (
     <main className="min-h-dvh bg-[#FCF4EE] pb-28">
-      <header className="sticky top-0 z-20 flex items-center justify-between bg-[#FCF4EE]/95 px-4 pb-3 pt-4 backdrop-blur">
-        <button onClick={() => navigate(detailPath)} aria-label="뒤로" className="flex h-9 w-9 items-center justify-center rounded-full bg-white shadow"><ChevronLeft size={20} /></button>
+      <header className="sticky top-0 z-20 flex items-center justify-between bg-[#FCF4EE]/95 px-5 pb-3 pt-[max(12px,env(safe-area-inset-top))] backdrop-blur">
+        <BackButton onClick={() => navigate(detailPath)} aria-label="뒤로" />
         <p className="text-[16px] font-black">Munchie 피드 수정</p>
         <span className="w-9" />
       </header>
