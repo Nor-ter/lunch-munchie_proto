@@ -51,6 +51,12 @@ describe("group-session recommendation attribution", () => {
             { id: "r1", category: "한식", rating: 4.5, price_level: 2, dietary_options: "[]", latitude: 0, longitude: 0 },
             { id: "r2", category: "일식", rating: 4.2, price_level: 2, dietary_options: "[]", latitude: 0, longitude: 0 },
           ] };
+          if (query.includes("FROM restaurant_photos")) return { results: [
+            { restaurant_id: "r1", r2_key: "r1-a.jpg", drive_file_id: "r1-a", kind: "dish", dishes: '["rice"]', perceptual_hash: null },
+            { restaurant_id: "r1", r2_key: "r1-b.jpg", drive_file_id: "r1-b", kind: "dish", dishes: '["soup"]', perceptual_hash: null },
+            { restaurant_id: "r2", r2_key: "r2-a.jpg", drive_file_id: "r2-a", kind: "dish", dishes: '["sushi"]', perceptual_hash: null },
+            { restaurant_id: "r2", r2_key: "r2-b.jpg", drive_file_id: "r2-b", kind: "dish", dishes: '["ramen"]', perceptual_hash: null },
+          ] };
           return { results: [] };
         };
         const statement = {

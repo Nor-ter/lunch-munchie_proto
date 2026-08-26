@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Bar, BarChart, CartesianGrid, Cell, Line, LineChart, Pie, PieChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
-import { Activity, BarChart3, DatabaseZap, LayoutDashboard, LockKeyhole, RefreshCw, ShieldCheck, SlidersHorizontal, UsersRound } from 'lucide-react';
+import { Activity, BarChart3, DatabaseZap, Images, LayoutDashboard, LockKeyhole, RefreshCw, ShieldCheck, SlidersHorizontal, UsersRound } from 'lucide-react';
+import AdminPhotoReviewPanel from '@/components/admin/AdminPhotoReviewPanel';
 
 type Trend = { day: string; activeActors: number; sessions: number; decisions: number };
 type Persona = { category: string; selectors: number; decisions: number };
@@ -140,6 +141,7 @@ export default function AdminDashboardPage() {
           <div className="mt-9 space-y-1">
             <a href="#overview" className="flex items-center gap-3 rounded-xl bg-white/[0.09] px-3 py-2.5 text-sm font-semibold"><LayoutDashboard size={17} className="text-[#FF9092]" />개요</a>
             <a href="#catalogue" className="flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm text-white/60 hover:bg-white/[0.05] hover:text-white"><DatabaseZap size={17} />카탈로그 현황</a>
+            <a href="#photo-review" className="flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm text-white/60 hover:bg-white/[0.05] hover:text-white"><Images size={17} />이미지 검수</a>
             <a href="#funnel" className="flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm text-white/60 hover:bg-white/[0.05] hover:text-white"><Activity size={17} />이용·전환</a>
             <a href="#learning" className="flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm text-white/60 hover:bg-white/[0.05] hover:text-white"><SlidersHorizontal size={17} />추천 정책</a>
             <a href="#data-contract" className="flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm text-white/60 hover:bg-white/[0.05] hover:text-white"><DatabaseZap size={17} />데이터 계약</a>
@@ -191,6 +193,8 @@ export default function AdminDashboardPage() {
             <MetricCard label="좌표 완성도" value={coverage(metrics.catalogue.completeness.coordinates, metrics.catalogue.restaurants)} detail={`${metrics.catalogue.completeness.coordinates}/${metrics.catalogue.restaurants}곳 위치 보유`} />
           </div>
         </section>
+
+        <AdminPhotoReviewPanel />
 
         <section className="mt-5 grid grid-cols-1 gap-4 sm:gap-5 md:grid-cols-2 xl:grid-cols-12">
           <Panel id="catalogue-coverage" className="md:col-span-2 xl:col-span-5" title="카탈로그 완성도" detail="추천 가능한 식당 레코드에 필요한 핵심 필드의 충족률입니다.">
