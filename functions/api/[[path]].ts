@@ -13,6 +13,7 @@ import { intentForMenuSection, menuSectionIntents } from "../../shared/menuTaxon
 import { isValidCoordinate, isWithinRadius } from "../../shared/geo";
 import { normalizeQuickMatchPartySize } from "../../shared/quickMatchParty";
 import { normalizeRestaurantPayload } from "../../shared/restaurantContract";
+import { normalizeLunchieSessionAvatar } from "../../shared/lunchieAvatar";
 import { buildSlate, scoreCandidateBreakdown } from "../../server/engine/scorer";
 import type { Candidate, RecContext, SlateType } from "../../shared/engine";
 import { isAdminEmail } from "./adminAccess";
@@ -32,7 +33,9 @@ import {
   getGoogleDirections,
   getGoogleLocationDetails,
   getGooglePlaceDetails,
+  googlePlacePhotosSynced,
   googlePlacesErrorResponse,
+  storedRestaurantPhotoUrls,
 } from "./googlePlaces";
 import { feedItemMatchesLocation, parseFeedLocationFilter } from "./feedLocation";
 
@@ -530,6 +533,38 @@ export async function lunchiePresentationPhotos(
   // for every catalogue photo made one request fan out into 100+ storage
   // reads and added several seconds to Lunchie startup.
   return selectLunchiePresentationPhotoKeys(results);
+}
+
+async function restaurantDetailPhotos(db: any, restaurantId: string, storedPhotos: unknown) {
+  const presentation = await lunchiePresentationPhotos(db, restaurantId);
+  if (presentation.length > 0) return presentation;
+  return storedRestaurantPhotoUrls(storedPhotos);
+}
+
+type IndexedMenuRow = {
+  name: string;
+  price: number | null;
+  category: string | null;
+  description: string | null;
+  dietary: string | null;
+};
+
+/** Prefer the queryable menu index over the legacy restaurants.menus JSON snapshot. */
+async function restaurantIndexedMenuItems(db: any, restaurantId: string) {
+  try {
+    const { results } = await db.prepare(
+      "SELECT name, price, category, description, dietary FROM restaurant_menu_items WHERE restaurant_id = ? ORDER BY category ASC, name ASC LIMIT 80",
+    ).bind(restaurantId).all<IndexedMenuRow>();
+    return (results ?? []).map((item) => ({
+      name: item.name,
+      price: typeof item.price === "number" && Number.isFinite(item.price) ? item.price : null,
+      category: item.category || undefined,
+      description: item.description || undefined,
+      dietary: json<string[]>(item.dietary, []),
+    }));
+  } catch {
+    return [];
+  }
 }
 
 /** Resolve recommendation media in bounded D1 batches, then apply exactly the
@@ -1648,6 +1683,49 @@ app.get("/api/restaurants", async (c) => {
   );
 });
 
+// 저장된 Lunchie 여정은 식당 ID만 보관한다. 전체 카탈로그 초기화와 무관하게
+// 해당 식당을 다시 열 수 있도록 정본 행을 ID로 직접 조회한다.
+app.get("/api/restaurants/:id", async (c) => {
+  const restaurant = await c.env.DB.prepare(
+    "SELECT * FROM restaurants WHERE id = ? LIMIT 1",
+  )
+    .bind(c.req.param("id"))
+    .first();
+  if (!restaurant) return c.json({ error: "restaurant_not_found" }, 404);
+  let row = restaurant as any;
+  const indexedMenu = await restaurantIndexedMenuItems(c.env.DB, row.id);
+  let photos = await restaurantDetailPhotos(c.env.DB, row.id, row.photos);
+  if (
+    photos.length === 0
+    && row.source === "google"
+    && typeof row.google_place_id === "string"
+    && row.google_place_id
+    && !googlePlacePhotosSynced(row.photos)
+  ) {
+    try {
+      await getGooglePlaceDetails(c.env, { placeId: row.google_place_id });
+      const refreshed = await c.env.DB.prepare(
+        "SELECT * FROM restaurants WHERE id = ? LIMIT 1",
+      )
+        .bind(row.id)
+        .first();
+      if (refreshed) {
+        row = refreshed as any;
+        photos = await restaurantDetailPhotos(c.env.DB, row.id, row.photos);
+      }
+    } catch {
+      // Keep the stored text details even if photo backfill fails.
+    }
+  }
+  return c.json({
+    ...row,
+    photos,
+    menu_items: indexedMenu.length > 0 ? indexedMenu : json(row.menus, []),
+    tags: json<string[]>(row.tags, []),
+    dietary_options: json<string[]>(row.dietary_options, []),
+  });
+});
+
 // REST API — /api/courses (Munchie 코스 목록)
 app.get("/api/courses", async (c) => {
   try {
@@ -2345,7 +2423,7 @@ export function sessionResults(
     memberCompletion: members.map((member) => ({
       id: member.user_id,
       name: member.user_name,
-      emoji: member.emoji,
+      emoji: normalizeLunchieSessionAvatar(member.emoji),
       completed: finalStage
         ? finalVoters.has(member.user_id)
         : prelimComplete(member.user_id),
@@ -2381,7 +2459,7 @@ app.post("/api/sessions/create", async (c) => {
   const hostId =
     nullableText(body.hostId, 256) ?? `guest:${crypto.randomUUID()}`;
   const hostName = nullableText(body.hostName, 80) ?? "호스트";
-  const emoji = nullableText(body.emoji, 16) ?? "👤";
+  const emoji = normalizeLunchieSessionAvatar(nullableText(body.emoji, 16));
   const groupSize =
     typeof body.groupSize === "number" && Number.isFinite(body.groupSize)
       ? normalizeQuickMatchPartySize(Math.floor(body.groupSize))
@@ -2520,7 +2598,10 @@ app.get("/api/sessions/:token", async (c) => {
     : null;
   return c.json({
     session: sessionPayload(session),
-    members,
+    members: members.map((member: any) => ({
+      ...member,
+      emoji: normalizeLunchieSessionAvatar(member.emoji),
+    })),
     slate: slate ? {
       id: slate.id,
       policy_version: slate.policy_version,
@@ -2534,7 +2615,7 @@ app.post("/api/sessions/:token/join", async (c) => {
   const body = await c.req.json<Record<string, unknown>>().catch(() => ({}));
   const userId = nullableText(body.userId, 256);
   const userName = nullableText(body.userName, 80);
-  const emoji = nullableText(body.emoji, 16) ?? "👤";
+  const emoji = normalizeLunchieSessionAvatar(nullableText(body.emoji, 16));
   const preferences = Array.isArray(body.preferences)
     ? sessionPreferences(JSON.stringify(body.preferences)).slice(0, 20)
     : [];

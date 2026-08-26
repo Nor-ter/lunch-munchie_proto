@@ -1,5 +1,6 @@
 import { normalizeFoodTag } from '@/constants/foodTags';
 import type { FeedPost } from '@/contexts/AppContext';
+import { feedAuthorEmoji } from '@/lib/feedAuthor';
 
 export type FeedViewerIdentity = {
   id: string;
@@ -47,25 +48,17 @@ export function feedPostFromApi(value: unknown, viewer: FeedViewerIdentity): Fee
       : creatorId === 'user_minsu'
         ? '민수'
         : 'Lunchie 사용자';
-  const fallbackEmoji = creatorId === viewer.id
-    ? viewer.emoji
-    : creatorId === 'user_minji'
-      ? '🐰'
-      : creatorId === 'user_jenny'
-        ? '🍓'
-        : creatorId === 'user_minsu'
-          ? '🐻'
-          : '🐳';
+  const authorName = typeof feed.authorName === 'string' && feed.authorName.trim()
+    ? feed.authorName
+    : creatorId === viewer.id
+      ? viewer.name
+      : fallbackName;
 
   return {
     id: String(feed.id ?? ''),
     authorId: creatorId,
-    authorName: typeof feed.authorName === 'string' && feed.authorName.trim()
-      ? feed.authorName
-      : creatorId === viewer.id
-        ? viewer.name
-        : fallbackName,
-    authorEmoji: fallbackEmoji,
+    authorName,
+    authorEmoji: feedAuthorEmoji(creatorId, authorName, viewer),
     authorImage: typeof feed.authorImage === 'string' ? feed.authorImage : undefined,
     courseId: String(feed.courseId ?? ''),
     photos,

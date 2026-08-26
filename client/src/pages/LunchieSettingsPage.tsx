@@ -53,10 +53,10 @@ import {
 } from '@/lib/quickMatch';
 
 const PREFERENCE_CARDS: { value: Intent | null; label: string; image?: string; color: string }[] = [
-  { value: 'cafe', label: 'COFFEE', image: '/assets/characters/quick-match/coffee.png', color: '#FFF0E7' },
-  { value: 'meal', label: 'FOODIE', image: '/assets/characters/quick-match/rice.png', color: '#FFE9E4' },
-  { value: 'dessert', label: 'DESSERT', image: '/assets/characters/quick-match/dessert.png', color: '#FFE7EC' },
-  { value: null, label: 'RANDOM', color: '#FFF4D9' },
+  { value: 'cafe', label: '커피', image: '/assets/characters/quick-match/coffee.png', color: '#FFF0E7' },
+  { value: 'meal', label: '식사', image: '/assets/characters/quick-match/rice.png', color: '#FFE9E4' },
+  { value: 'dessert', label: '디저트', image: '/assets/characters/quick-match/dessert.png', color: '#FFE7EC' },
+  { value: null, label: '랜덤', color: '#FFF4D9' },
 ];
 
 const RADIUS_OPTIONS = [1000, 2000, 3000, 4000, 5000];
@@ -253,7 +253,7 @@ function DeadlineDial({ minutes, onChange }: { minutes: number; onChange: (minut
         </g>
       </svg>
       <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center">
-        <strong className="text-[30px] leading-none text-[#26232A] tabular-nums">{minutes} <span className="text-[17px]">min</span></strong>
+        <strong className="text-[30px] leading-none text-[#26232A] tabular-nums">{minutes} <span className="text-[17px]">분</span></strong>
       </div>
     </div>
   );
@@ -537,9 +537,9 @@ function IngredientAvoidancePicker({ selected, onToggle }: { selected: string[];
         className={`flex min-h-11 w-full items-center rounded-[12px] border px-3 text-left transition-colors ${selectedLabels.length ? 'border-[#55A964] bg-[#EDF8EE]' : 'border-transparent bg-[#F8F5F3]'}`}
       >
         <span className="mr-2 text-base">🚫</span>
-        <strong className="text-[11px] text-[#514A4D]">Ingredients to avoid</strong>
+        <strong className="text-[11px] text-[#514A4D]">피하고 싶은 재료</strong>
         <span className="ml-2 min-w-0 flex-1 truncate text-[10px] font-semibold text-[#7B7276]">
-          {selectedLabels.length ? selectedLabels.join(', ') : 'No ingredients selected'}
+          {selectedLabels.length ? selectedLabels.join(', ') : '선택한 재료 없음'}
         </span>
         {selectedLabels.length > 0 && <span className="mr-2 rounded-full bg-[#55A964] px-1.5 py-0.5 text-[9px] font-bold text-white">{selectedLabels.length}</span>}
         <ChevronDown size={15} className={`shrink-0 text-[#8A8084] transition-transform ${open ? 'rotate-180' : ''}`} />
@@ -890,7 +890,7 @@ export default function LunchieSettingsPage() {
 
     if (isSolo) {
       await startSession(session.inviteCode, deadlineMin);
-      toast.success('Quick Match를 시작합니다.');
+      toast.success('빠른 매칭을 시작합니다.');
       navigate('/lunchie/swipe');
     } else {
       toast.success('세션이 만들어졌어요. 친구를 초대해 보세요.');
@@ -924,7 +924,7 @@ export default function LunchieSettingsPage() {
         } catch (error) {
           const status = (error as { status?: number }).status;
           if (status !== 404 && status !== 410) {
-            toast.error('We could not verify the current Quick Match. Please try again.');
+            toast.error('진행 중인 빠른 매칭을 확인하지 못했어요. 다시 시도해 주세요.');
             return;
           }
           setCurrentSession(null);
@@ -933,7 +933,8 @@ export default function LunchieSettingsPage() {
 
       await createAndEnterSession();
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : '세션 생성에 실패했습니다.');
+      console.error('빠른 매칭 세션 생성 실패', error);
+      toast.error('세션을 만들지 못했어요. 잠시 후 다시 시도해 주세요.');
     } finally {
       setIsCreating(false);
       creationLockRef.current = false;
@@ -982,47 +983,47 @@ export default function LunchieSettingsPage() {
         </motion.button>
         <div>
           <h1 className="text-[19px] font-extrabold leading-none tracking-[-0.4px] text-[#F4515E]">Lunchie</h1>
-          <p className="mt-1 text-[10px] font-bold tracking-[0.7px] text-[#9B959A]">QUICK MATCH</p>
+          <p className="mt-1 text-[10px] font-bold tracking-[0.7px] text-[#9B959A]">빠른 매칭</p>
         </div>
       </header>
 
       <main className="mx-auto max-w-[480px] space-y-3 px-4 pb-32">
         {sessionCheckFailed && currentSession && (
           <section role="alert" className="rounded-[20px] border border-[#F2C6C1] bg-white p-4 shadow-sm">
-            <h2 className="text-[14px] font-black text-[#302B2E]">We couldn’t check your Quick Match</h2>
-            <p className="mt-1 text-[11px] leading-relaxed text-[#7C7276]">Your saved session is still here. Retry before creating another one.</p>
+            <h2 className="text-[14px] font-black text-[#302B2E]">진행 중인 빠른 매칭을 확인하지 못했어요</h2>
+            <p className="mt-1 text-[11px] leading-relaxed text-[#7C7276]">저장된 세션은 유지하고 있어요. 새 세션을 만들기 전에 다시 확인해 주세요.</p>
             <div className="mt-3 flex flex-wrap gap-2">
-              <button type="button" onClick={() => setSessionCheckAttempt(attempt => attempt + 1)} className="min-h-10 rounded-xl bg-[#F4515E] px-4 text-[12px] font-bold text-white">Try again</button>
-              <button type="button" onClick={() => setCurrentSession(null)} className="min-h-10 rounded-xl bg-[#FFF0EE] px-4 text-[12px] font-bold text-[#C43B47]">Clear saved session</button>
+              <button type="button" onClick={() => setSessionCheckAttempt(attempt => attempt + 1)} className="min-h-10 rounded-xl bg-[#F4515E] px-4 text-[12px] font-bold text-white">다시 시도</button>
+              <button type="button" onClick={() => setCurrentSession(null)} className="min-h-10 rounded-xl bg-[#FFF0EE] px-4 text-[12px] font-bold text-[#C43B47]">저장된 세션 지우기</button>
             </div>
           </section>
         )}
         {hasActiveSession && currentSession && (
-          <section className="rounded-[22px] border border-[#F5B8B4] bg-[#FFFCFA] p-4 shadow-[0_8px_24px_rgba(180,100,90,0.10)]" aria-label="Quick Match in progress">
+          <section className="rounded-[22px] border border-[#F5B8B4] bg-[#FFFCFA] p-4 shadow-[0_8px_24px_rgba(180,100,90,0.10)]" aria-label="진행 중인 빠른 매칭">
             <div className="flex items-start gap-3">
               <div className="min-w-0 flex-1">
                 <div className="flex flex-wrap items-center gap-2">
-                  <h2 className="text-[15px] font-black text-[#26232A]">Quick Match in progress</h2>
+                  <h2 className="text-[15px] font-black text-[#26232A]">진행 중인 빠른 매칭</h2>
                   <span className="rounded-full bg-[#FFF0EE] px-2.5 py-1 text-[10px] font-black uppercase tracking-wide text-[#D83D49]">
-                    {currentSession.status === 'waiting' ? 'Waiting' : currentSession.status === 'choosing' ? 'Choosing' : 'Voting'}
+                    {currentSession.status === 'waiting' ? '대기 중' : currentSession.status === 'choosing' ? '최종 선택 중' : '투표 중'}
                   </span>
                 </div>
-                <p className="mt-1 text-[11px] font-semibold text-[#8A8084]">Server-verified and ready to resume.</p>
+                <p className="mt-1 text-[11px] font-semibold text-[#8A8084]">서버에서 확인된 세션으로 바로 이어서 할 수 있어요.</p>
               </div>
               <SessionManagementMenu onEnded={() => navigate('/lunchie/settings')} className="text-[#6F6468]" />
             </div>
             <div className="mt-3 grid grid-cols-2 gap-2 text-[11px]">
-              <span className="rounded-xl bg-[#FFF6F2] px-3 py-2 font-bold text-[#645A5E]">👥 {currentSession.members.length}/{currentSession.filters.partySize} people</span>
-              <span className="rounded-xl bg-[#FFF6F2] px-3 py-2 font-bold text-[#645A5E]">⏱ {currentSession.deadlineMinutes ?? deadlineMin} min</span>
+              <span className="rounded-xl bg-[#FFF6F2] px-3 py-2 font-bold text-[#645A5E]">👥 {currentSession.members.length}/{currentSession.filters.partySize}명</span>
+              <span className="rounded-xl bg-[#FFF6F2] px-3 py-2 font-bold text-[#645A5E]">⏱ {currentSession.deadlineMinutes ?? deadlineMin}분</span>
               <span className="rounded-xl bg-[#FFF6F2] px-3 py-2 font-bold text-[#645A5E]">📍 {formatRadius(currentSession.filters.radius)}</span>
-              <span className="rounded-xl bg-[#FFF6F2] px-3 py-2 font-bold text-[#645A5E]">{currentSession.filters.partySize === 1 ? '🙋 Solo' : '🤝 Group'}</span>
+              <span className="rounded-xl bg-[#FFF6F2] px-3 py-2 font-bold text-[#645A5E]">{currentSession.filters.partySize === 1 ? '🙋 혼자' : '🤝 함께'}</span>
             </div>
             <button
               type="button"
               onClick={() => navigate(currentSession.status === 'waiting' ? '/session/lobby' : '/lunchie/swipe')}
               className="mt-3 min-h-11 w-full rounded-[14px] bg-[#F4515E] px-4 text-[13px] font-black text-white outline-none transition-transform active:scale-[0.98] focus-visible:ring-2 focus-visible:ring-[#F4515E] focus-visible:ring-offset-2"
             >
-              {currentSession.status === 'waiting' ? 'Return to lobby' : 'Continue Quick Match'}
+              {currentSession.status === 'waiting' ? '대기방으로 돌아가기' : '빠른 매칭 계속하기'}
             </button>
           </section>
         )}
@@ -1078,7 +1079,7 @@ export default function LunchieSettingsPage() {
         </Card>
 
         <Card>
-          <CardTitle icon={<UtensilsCrossed size={16} />} badge={`${chosenCount} 선택`}>오늘의 Quick Match</CardTitle>
+          <CardTitle icon={<UtensilsCrossed size={16} />} badge={`${chosenCount} 선택`}>오늘의 빠른 매칭</CardTitle>
           <div className="grid grid-cols-4 gap-2">
             {PREFERENCE_CARDS.map(option => (
               <PreferenceCard key={option.label} option={option} selected={intent === option.value} onClick={() => setIntent(option.value)} />
@@ -1116,13 +1117,13 @@ export default function LunchieSettingsPage() {
 
           <div className="my-3 h-px bg-[#F0EAE8]" />
           <div className="mb-2 flex items-center justify-between gap-3">
-            <p className="text-[12px] font-extrabold text-[#524B4F]">Dietary requirements</p>
+            <p className="text-[12px] font-extrabold text-[#524B4F]">식단 요구 사항</p>
             <button
               type="button"
               onClick={() => setDietary(current => current.filter(value => !DIETARY_REQUIREMENTS.some(option => option.value === value)))}
               className="min-h-9 rounded-lg px-2 text-[10px] font-bold text-[#C43B47] outline-none focus-visible:ring-2 focus-visible:ring-[#F4515E]"
             >
-              Clear requirements
+              선택 초기화
             </button>
           </div>
           <div className="grid grid-cols-2 gap-1.5">
@@ -1157,14 +1158,14 @@ export default function LunchieSettingsPage() {
             className="lunchie-session-primary-action w-full disabled:cursor-not-allowed disabled:opacity-60"
           >
             {isCheckingSession
-              ? 'Checking current session…'
+              ? '진행 중인 세션 확인 중…'
               : isCreating
               ? '준비하는 중…'
               : hasPartySizeConflict
                 ? `기존 세션 종료 후 ${isSolo ? '혼자로' : `${partySize}명으로`} 시작하기`
               : hasActiveSession && currentSession
                 ? currentSession.status === 'waiting' ? '대기방으로 돌아가기' : '투표 계속하기'
-                : isSolo ? 'Swipe 시작하기' : '세션 만들고 초대하기'}
+                : isSolo ? '카드 선택 시작하기' : '세션 만들고 초대하기'}
           </motion.button>
         </div>
       </main>

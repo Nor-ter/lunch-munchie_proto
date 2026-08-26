@@ -108,3 +108,46 @@ export function getCoursePlacesFromStops(
     address: restaurant.address,
   }));
 }
+
+/** Feed stop coordinates let the course map render before the restaurant catalogue hydrates. */
+export function getCoursePlacesFromFeedStops(
+  feedStops: Array<{ placeId: string; latitude: number; longitude: number }>,
+  course: Course | undefined,
+  getRestaurantById: (id: string) => Restaurant | undefined,
+): CoursePlace[] {
+  if (!feedStops.length) return [];
+
+  const stopById = new Map(feedStops.map((stop) => [stop.placeId, stop]));
+  const orderedPlaceIds = course
+    ? getOrderedCourseStops(course)
+      .map((stop) => stop.placeId)
+      .filter((placeId) => stopById.has(placeId))
+    : feedStops.map((stop) => stop.placeId);
+
+  if (!orderedPlaceIds.length) return [];
+
+  const points = getCourseMapPoints(orderedPlaceIds.map((placeId) => {
+    const geo = stopById.get(placeId)!;
+    return { lat: geo.latitude, lng: geo.longitude };
+  }));
+
+  return orderedPlaceIds.map((placeId, index) => {
+    const restaurant = getRestaurantById(placeId);
+    const geo = stopById.get(placeId)!;
+    const courseStop = course?.stops.find((stop) => stop.placeId === placeId);
+    return {
+      id: placeId,
+      name: restaurant?.name ?? `스팟 ${index + 1}`,
+      rating: restaurant?.rating ?? 0,
+      distance: restaurant?.distance ?? '',
+      category: restaurant?.category ?? '맛집',
+      priceLevel: restaurant?.priceRange ?? 1,
+      time: courseStop?.startTime,
+      imageUrl: restaurant?.image,
+      coords: points[index] ?? { x: 50, y: 50 },
+      latitude: geo.latitude,
+      longitude: geo.longitude,
+      address: restaurant?.address,
+    };
+  });
+}

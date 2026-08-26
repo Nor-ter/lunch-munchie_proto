@@ -40,27 +40,27 @@ export type DietaryChoice = {
 };
 
 export const DIETARY_REQUIREMENTS: DietaryChoice[] = [
-  { label: 'Vegetarian', value: 'VEGETARIAN', icon: '🥬', supported: true },
-  { label: 'Vegan', value: 'VEGAN', icon: '🌱', supported: true },
+  { label: '채식', value: 'VEGETARIAN', icon: '🥬', supported: true },
+  { label: '비건', value: 'VEGAN', icon: '🌱', supported: true },
   {
-    label: 'Pescatarian',
+    label: '페스코 채식',
     value: 'PESCATARIAN',
     icon: '🐟',
     supported: true,
   },
-  { label: 'Halal', value: 'HALAL', icon: '🌙', supported: true },
-  { label: 'Gluten-free', value: 'GLUTEN_FREE', icon: '🌾', supported: true },
+  { label: '할랄', value: 'HALAL', icon: '🌙', supported: true },
+  { label: '글루텐 프리', value: 'GLUTEN_FREE', icon: '🌾', supported: true },
 ];
 
 export const INGREDIENT_AVOIDANCES: DietaryChoice[] = [
-  { label: 'Pork', value: 'NO_PORK', icon: '🐖', supported: true },
-  { label: 'Beef', value: 'NO_BEEF', icon: '🐄', supported: true },
-  { label: 'Lamb', value: 'NO_LAMB', icon: '🐑', supported: true },
-  { label: 'Seafood', value: 'NO_SEAFOOD', icon: '🐟', supported: true },
-  { label: 'Shellfish', value: 'NO_SHELLFISH', icon: '🦐', supported: true },
-  { label: 'Nuts', value: 'NO_NUTS', icon: '🥜', supported: true },
-  { label: 'Dairy', value: 'NO_DAIRY', icon: '🥛', supported: true },
-  { label: 'Eggs', value: 'NO_EGGS', icon: '🥚', supported: true },
+  { label: '돼지고기', value: 'NO_PORK', icon: '🐖', supported: true },
+  { label: '소고기', value: 'NO_BEEF', icon: '🐄', supported: true },
+  { label: '양고기', value: 'NO_LAMB', icon: '🐑', supported: true },
+  { label: '해산물', value: 'NO_SEAFOOD', icon: '🐟', supported: true },
+  { label: '갑각류·조개류', value: 'NO_SHELLFISH', icon: '🦐', supported: true },
+  { label: '견과류', value: 'NO_NUTS', icon: '🥜', supported: true },
+  { label: '유제품', value: 'NO_DAIRY', icon: '🥛', supported: true },
+  { label: '달걀', value: 'NO_EGGS', icon: '🥚', supported: true },
 ];
 
 const SUPPORTED_DIETARY_VALUES = new Set(

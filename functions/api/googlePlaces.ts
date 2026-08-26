@@ -54,6 +54,9 @@ function categoryFromTypes(types: string[]) {
 export interface GooglePlacesEnv {
   DB: any;
   GOOGLE_MAPS_SERVER_API_KEY?: string;
+  PHOTOS_R2?: {
+    put: (key: string, value: ArrayBuffer | Uint8Array, options?: { httpMetadata?: { contentType?: string } }) => Promise<unknown>;
+  };
 }
 
 export class GooglePlacesProxyError extends Error {
@@ -264,6 +267,107 @@ function parseArray(value: string | null | undefined) {
   }
 }
 
+export function storedRestaurantPhotoUrls(value: unknown): string[] {
+  if (Array.isArray(value)) {
+    return value.filter((item): item is string => typeof item === 'string' && item.startsWith('/photos/'));
+  }
+  if (typeof value !== 'string' || !value.trim()) return [];
+  try {
+    const parsed = JSON.parse(value);
+    return Array.isArray(parsed)
+      ? parsed.filter((item): item is string => typeof item === 'string' && item.startsWith('/photos/'))
+      : [];
+  } catch {
+    return [];
+  }
+}
+
+export function googlePlacePhotosSynced(value: unknown): boolean {
+  if (storedRestaurantPhotoUrls(value).length > 0) return true;
+  const marker = (candidate: unknown) => Boolean(
+    candidate
+    && typeof candidate === 'object'
+    && !Array.isArray(candidate)
+    && (candidate as { googleCached?: unknown }).googleCached === true,
+  );
+  if (marker(value)) return true;
+  if (typeof value !== 'string' || !value.trim()) return false;
+  try {
+    return marker(JSON.parse(value));
+  } catch {
+    return false;
+  }
+}
+
+function photosColumnValue(urls: string[], attempted: boolean): string {
+  if (urls.length > 0) return JSON.stringify(urls);
+  return attempted ? JSON.stringify({ googleCached: true }) : '[]';
+}
+
+function googlePhotoResourceNames(payload: Record<string, unknown>): string[] {
+  const photos = Array.isArray(payload.photos) ? payload.photos : [];
+  const names: string[] = [];
+  for (const photo of photos) {
+    if (!photo || typeof photo !== 'object') continue;
+    const name = (photo as { name?: unknown }).name;
+    if (typeof name !== 'string' || !name.includes('/photos/')) continue;
+    names.push(name);
+    if (names.length >= 4) break;
+  }
+  return names;
+}
+
+async function hashPhotoBytes(bytes: ArrayBuffer): Promise<string> {
+  const digest = await crypto.subtle.digest('SHA-256', bytes);
+  return Array.from(new Uint8Array(digest), (part) => part.toString(16).padStart(2, '0')).join('');
+}
+
+async function cacheGooglePlacePhotos(
+  env: GooglePlacesEnv,
+  photoNames: string[],
+  fetcher: typeof fetch,
+): Promise<string[]> {
+  const bucket = env.PHOTOS_R2;
+  const apiKey = env.GOOGLE_MAPS_SERVER_API_KEY?.trim();
+  if (!bucket || !apiKey || photoNames.length === 0) return [];
+
+  const stored: string[] = [];
+  for (const photoName of photoNames) {
+    try {
+      const mediaUrl = `https://places.googleapis.com/v1/${photoName}/media?maxHeightPx=800&skipHttpRedirect=true`;
+      const mediaResponse = await fetcher(mediaUrl, {
+        headers: { 'X-Goog-Api-Key': apiKey },
+      });
+      if (!mediaResponse.ok) continue;
+
+      const contentType = mediaResponse.headers.get('content-type') || '';
+      let bytes: ArrayBuffer;
+      let type = 'image/jpeg';
+      if (contentType.includes('application/json')) {
+        const payload = (await mediaResponse.json()) as { photoUri?: unknown };
+        const photoUri = typeof payload.photoUri === 'string' ? payload.photoUri : undefined;
+        if (!photoUri) continue;
+        const imageResponse = await fetcher(photoUri);
+        if (!imageResponse.ok) continue;
+        type = imageResponse.headers.get('content-type') || 'image/jpeg';
+        bytes = await imageResponse.arrayBuffer();
+      } else {
+        type = contentType.startsWith('image/') ? contentType : 'image/jpeg';
+        bytes = await mediaResponse.arrayBuffer();
+      }
+      if (!bytes.byteLength) continue;
+
+      const hash = await hashPhotoBytes(bytes);
+      const key = `photos/google/${hash}.jpg`;
+      await bucket.put(key, bytes, { httpMetadata: { contentType: type } });
+      stored.push(`/${key}`);
+    } catch {
+      continue;
+    }
+  }
+  return stored;
+}
+
 function clientRestaurant(row: RestaurantRow) {
   return {
     ...row,
@@ -299,7 +403,14 @@ export async function getGooglePlaceDetails(
   const sessionToken = optionalString(body, 'sessionToken', 100);
   const cached = await env.DB.prepare(RESTAURANT_SELECT).bind(placeId).first<RestaurantRow>();
   const cachedTypes = cached ? parseArray(cached.place_types).filter((value): value is string => typeof value === 'string') : [];
-  if (cached?.synced_at && Date.now() - cached.synced_at < DETAILS_TTL_MS && isFoodPlaceTypes(cachedTypes)) {
+  // Text metadata can be fresh while photos were never requested. Treat those
+  // rows as stale so the next details lookup can fetch and cache images once.
+  if (
+    cached?.synced_at
+    && Date.now() - cached.synced_at < DETAILS_TTL_MS
+    && isFoodPlaceTypes(cachedTypes)
+    && googlePlacePhotosSynced(cached.photos)
+  ) {
     return { restaurant: clientRestaurant(cached), fromCache: true };
   }
 
@@ -321,6 +432,7 @@ export async function getGooglePlaceDetails(
         'editorialSummary',
         'internationalPhoneNumber',
         'regularOpeningHours.weekdayDescriptions',
+        'photos',
       ].join(','),
     },
   });
@@ -334,19 +446,28 @@ export async function getGooglePlaceDetails(
   const summary = google.editorialSummary as { text?: unknown } | undefined;
   const location = google.location as { latitude?: unknown; longitude?: unknown } | undefined;
   const openingHours = google.regularOpeningHours as { weekdayDescriptions?: unknown } | undefined;
+  const photoNames = googlePhotoResourceNames(google);
+  const photos = await cacheGooglePlacePhotos(env, photoNames, fetcher);
+  const attemptedPhotoSync = photoNames.length === 0 || Boolean(env.PHOTOS_R2);
   const syncedAt = Date.now();
 
   await env.DB.prepare(`INSERT INTO restaurants (
       id, name, category, address, latitude, longitude, rating, review_count,
-      price_level, short_description, phone_number, business_hours,
+      price_level, short_description, phone_number, business_hours, photos,
       google_place_id, synced_at, source, place_types
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'google', ?)
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'google', ?)
     ON CONFLICT(google_place_id) DO UPDATE SET
       name = excluded.name, category = excluded.category, address = excluded.address,
       latitude = excluded.latitude, longitude = excluded.longitude, rating = excluded.rating,
       review_count = excluded.review_count, price_level = excluded.price_level,
       short_description = excluded.short_description, phone_number = excluded.phone_number,
-      business_hours = excluded.business_hours, synced_at = excluded.synced_at,
+      business_hours = excluded.business_hours,
+      photos = CASE
+        WHEN excluded.photos GLOB '[*' AND excluded.photos != '[]' THEN excluded.photos
+        WHEN restaurants.photos GLOB '[*' AND restaurants.photos != '[]' THEN restaurants.photos
+        ELSE excluded.photos
+      END,
+      synced_at = excluded.synced_at,
       source = 'google', place_types = excluded.place_types`)
     .bind(
       `google_${id}`,
@@ -363,6 +484,7 @@ export async function getGooglePlaceDetails(
       Array.isArray(openingHours?.weekdayDescriptions)
         ? openingHours.weekdayDescriptions.filter(value => typeof value === 'string').join('\n')
         : null,
+      photosColumnValue(photos, attemptedPhotoSync),
       id,
       syncedAt,
       JSON.stringify(types),
