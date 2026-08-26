@@ -14,4 +14,11 @@ describe('RestaurantDetailSheet presentation', () => {
     expect(source).toContain("aria-label={isModal ? '상세정보 닫기' : '뒤로가기'}");
     expect(source).toContain('isModal ? <X size={18} /> : <ChevronLeft size={20} />');
   });
+
+  it('accepts the active Quick Match restaurant as a safe detail fallback', () => {
+    expect(source).toContain('fallbackRestaurant?: Restaurant');
+    expect(source).toContain('matchingRestaurant ?? fallbackRestaurant ??');
+    expect(source).toContain("restaurant.address || '주소 정보 없음'");
+    expect(source).toContain("restaurant.openHours || '영업시간 정보 없음'");
+  });
 });

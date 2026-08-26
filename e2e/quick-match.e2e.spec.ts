@@ -247,6 +247,7 @@ test('waiting companion stays visible when results arrive and returns to the res
 test('solo start sends the new member credential and opens the restaurant deck', async ({ page }) => {
   const browserErrors = captureUnexpectedBrowserErrors(page);
   const memberKey = 'solo-member-key';
+  let restaurantChoiceSwipeCount = 0;
   const restaurant = {
     id: 'restaurant-e2e',
     name: 'Solo Lunch Kitchen',
@@ -316,6 +317,14 @@ test('solo start sends the new member credential and opens the restaurant deck',
       await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(response) });
       return;
     }
+    if (url.pathname === '/api/swipes') {
+      const body = request.postDataJSON();
+      if (body.restaurantId === restaurant.id && ['like', 'skip', 'LIKE', 'NOPE'].includes(body.action)) {
+        restaurantChoiceSwipeCount += 1;
+      }
+      await route.fulfill({ status: 200, contentType: 'application/json', body: '{"ok":true}' });
+      return;
+    }
     await route.fulfill({ status: 200, contentType: 'application/json', body: '{}' });
   });
   await seedIdentity(page);
@@ -339,6 +348,27 @@ test('solo start sends the new member credential and opens the restaurant deck',
   await expect(loadingIntro.getByText(/NOPE|LIKE|싫어요|좋아요/)).toHaveCount(0);
   await expect(page.getByRole('heading', { name: restaurant.name })).toBeVisible();
   await expect(page.getByRole('note')).toContainText('Closest available matches');
+
+  // 시작 오버레이 문구에 의존하지 않는다. 문구가 바뀌면 대기가 조용히 무력화되므로,
+  // 오버레이가 걷힐 때까지는 Playwright의 actionability 재시도에 맡긴다.
+  await page.getByRole('heading', { name: restaurant.name }).click();
+  const detailsButton = page.getByRole('button', { name: `${restaurant.name} 식당 상세보기` });
+  await expect(detailsButton).toBeVisible();
+
+  await detailsButton.click();
+  await expect(page.getByText(restaurant.address, { exact: true })).toBeVisible();
+  await expect(page.getByText(restaurant.openHours, { exact: true })).toBeVisible();
+  await page.getByRole('button', { name: '뒤로가기' }).click();
+  await expect(page.getByText(restaurant.address, { exact: true })).toHaveCount(0);
+  await expect(detailsButton).toBeVisible();
+
+  await detailsButton.click();
+  await expect(page.getByText(restaurant.address, { exact: true })).toBeVisible();
+  await page.evaluate(() => window.history.back());
+  await expect(page.getByText(restaurant.address, { exact: true })).toHaveCount(0);
+  await expect(detailsButton).toBeVisible();
+  await expect(page.getByRole('heading', { name: restaurant.name })).toBeVisible();
+  expect(restaurantChoiceSwipeCount).toBe(0);
   expect(browserErrors).toEqual([]);
 });
 

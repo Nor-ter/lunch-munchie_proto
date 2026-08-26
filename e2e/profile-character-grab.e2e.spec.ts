@@ -71,12 +71,13 @@ test('character grabs on a short move and carries its shadow with it', async ({ 
 
   await page.mouse.move(startX, startY);
   await page.mouse.down();
-  await expect(character).toHaveAttribute('data-lunchmate-profile-grab', 'pressing');
-  await expect(character).toHaveCSS('cursor', 'grabbing');
 
   // 손떨림 수준의 3px 이동은 누르는 피드백을 유지한다.
+  // 정지 상태로 LUNCHMATE_PROFILE_LONG_PRESS_MS(400ms)가 지나면 long-press 자동 잡기가
+  // 걸리므로, 단언 왕복을 사이에 두지 않고 pointerdown 직후 곧바로 움직인다.
   await page.mouse.move(startX + 3, startY);
   await expect(character).toHaveAttribute('data-lunchmate-profile-grab', 'pressing');
+  await expect(character).toHaveCSS('cursor', 'grabbing');
 
   // 4px부터 기다림 없이 잡히고, 포인터가 원래 영역을 벗어나도 capture가 이동을 잇는다.
   await page.mouse.move(startX + 5, startY - 2);

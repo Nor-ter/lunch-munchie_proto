@@ -7,7 +7,7 @@
 import { useState, useCallback, useEffect, useRef } from 'react';
 import { motion, useMotionValue, useTransform, useMotionTemplate, AnimatePresence, type MotionValue } from 'framer-motion';
 import { useLocation } from 'wouter';
-import { ArrowLeft, Heart, X, Star, MapPin, Clock, Phone, Navigation, Share2, Download, Link2, Home, Bookmark, RotateCcw, Loader2, RefreshCw, SlidersHorizontal } from 'lucide-react';
+import { ArrowLeft, Heart, X, Star, MapPin, Clock, Phone, Navigation, Share2, Download, Link2, Home, Bookmark, RotateCcw, Loader2, RefreshCw, SlidersHorizontal, Info } from 'lucide-react';
 import { toast } from 'sonner';
 import { useApp, type Restaurant, type MenuItem } from '@/contexts/AppContext';
 import { useCourseShare } from '@/hooks/useCourseShare';
@@ -24,6 +24,7 @@ import { classifySwipeAvailability, type SwipeAvailability } from '@/lib/swipeAv
 import { isActiveQuickMatchStatus } from '@/lib/quickMatch';
 import { normalizeRestaurantPayload } from '@shared/restaurantContract';
 import SessionManagementMenu from '@/components/lunchie/SessionManagementMenu';
+import RestaurantDetailSheet from '@/components/munchie/RestaurantDetailSheet';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -261,6 +262,7 @@ function SwipeCard({
   progress,
   total,
   isLocked,
+  onOpenRestaurantDetails,
 }: {
   restaurant: any;
   onAction: (a: SwipeAction) => void;
@@ -269,6 +271,7 @@ function SwipeCard({
   progress: number;
   total: number;
   isLocked: boolean;
+  onOpenRestaurantDetails: (restaurant: Restaurant) => void;
 }) {
   const [isRevealed, setIsRevealed] = useState(false);
   // 큐브 회전 단계(단조). photoIndex는 foodPhotos 길이로 파생 — 도트/사진 순번 표시에 사용.
@@ -541,6 +544,19 @@ function SwipeCard({
                 <X size={16} color="white" />
               </button>
             </div>
+
+            <button
+              type="button"
+              onClick={(event) => {
+                event.stopPropagation();
+                onOpenRestaurantDetails(restaurant);
+              }}
+              aria-label={`${restaurant.name} 식당 상세보기`}
+              className="mx-5 mb-2 flex min-h-10 flex-shrink-0 items-center justify-center gap-2 rounded-xl border border-white/15 bg-white/10 px-4 text-[13px] font-bold text-white outline-none transition-colors active:bg-white/20 focus-visible:ring-2 focus-visible:ring-white/80"
+            >
+              <Info size={16} aria-hidden="true" />
+              식당 상세보기
+            </button>
 
             {restaurant.menuItems && restaurant.menuItems.length > 0 ? (
               /* 실제 메뉴리스트 — 소스 카테고리 구조로 섹션 나눔, 탭하면 상세 화면 */
@@ -1778,6 +1794,7 @@ function QuickMatchExperience() {
   const [rerollPrompt, setRerollPrompt] = useState<'none' | 'lastChance' | 'exhausted'>('none');
   const [showIntro, setShowIntro] = useState(true);
   const [isSubmittingSwipe, setIsSubmittingSwipe] = useState(false);
+  const [detailRestaurant, setDetailRestaurant] = useState<Restaurant | null>(null);
   const submittingSwipeRef = useRef(false);
   const [remainingMs, setRemainingMs] = useState(() => {
     if (!currentSession?.deadline) return 0;
@@ -1814,6 +1831,36 @@ function QuickMatchExperience() {
   const visibleCards = targetRestaurants.slice(currentIndex, currentIndex + 3);
   const progress = Math.min(currentIndex + 1, total);
   const progressSignalRef = useRef(new Set<string>());
+
+  useEffect(() => {
+    const syncRestaurantDetailFromHistory = () => {
+      const restaurantId = window.history.state?.lunchieQuickMatchDetail;
+      setDetailRestaurant(
+        typeof restaurantId === 'string'
+          ? targetRestaurants.find(restaurant => restaurant.id === restaurantId) ?? null
+          : null,
+      );
+    };
+    window.addEventListener('popstate', syncRestaurantDetailFromHistory);
+    return () => window.removeEventListener('popstate', syncRestaurantDetailFromHistory);
+  }, [targetRestaurants]);
+
+  const openRestaurantDetails = useCallback((restaurant: Restaurant) => {
+    window.history.pushState(
+      { ...window.history.state, lunchieQuickMatchDetail: restaurant.id },
+      '',
+      window.location.href,
+    );
+    setDetailRestaurant(restaurant);
+  }, []);
+
+  const closeRestaurantDetails = useCallback(() => {
+    if (window.history.state?.lunchieQuickMatchDetail) {
+      window.history.back();
+      return;
+    }
+    setDetailRestaurant(null);
+  }, []);
 
   // The server cannot infer a client-specific deck after recommendation
   // filtering. Announce the exact target once per generation so each member's
@@ -2179,6 +2226,7 @@ function QuickMatchExperience() {
                 progress={progress}
                 total={total}
                 isLocked={isSubmittingSwipe}
+                onOpenRestaurantDetails={openRestaurantDetails}
               />
             ))}
           </AnimatePresence>
@@ -2207,6 +2255,16 @@ function QuickMatchExperience() {
           <Heart size={30} color="white" fill="white" />
         </motion.button>
       </div>
+
+      <AnimatePresence>
+        {detailRestaurant && (
+          <RestaurantDetailSheet
+            restaurantId={detailRestaurant.id}
+            fallbackRestaurant={detailRestaurant}
+            onClose={closeRestaurantDetails}
+          />
+        )}
+      </AnimatePresence>
     </div>
   );
 }
