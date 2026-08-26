@@ -139,3 +139,60 @@ test('deleting from the feed menu permanently removes the server post and stale 
   const cachedIds = await page.evaluate(() => JSON.parse(localStorage.getItem('lm_feed_v3') ?? '[]').map((post: { id: string }) => post.id));
   expect(cachedIds).not.toContain(POST_ID);
 });
+
+test('configured administrator can delete another author post without receiving edit access', async ({ page }) => {
+  const foreignCourse = { ...course, creatorId: 'foreign-author' };
+  const foreignPost = { ...feedPost, creatorId: 'foreign-author', authorName: '다른 작성자' };
+  let deleted = false;
+  let deleteRequests = 0;
+
+  await page.route('**/api/**', async route => {
+    const request = route.request();
+    const url = new URL(request.url());
+    if (url.pathname === '/api/auth/session') {
+      await route.fulfill({
+        contentType: 'application/json',
+        body: JSON.stringify({
+          user: { sub: USER_ID, name: '관리자', email: 'pjh5635@gmail.com' },
+          profile: { id: USER_ID, username: '관리자', handle: 'admin', profile_image_url: null },
+          isAdmin: true,
+        }),
+      });
+      return;
+    }
+    if (url.pathname === '/api/feed-post' && request.method() === 'DELETE') {
+      expect(url.searchParams.get('courseId')).toBe(COURSE_ID);
+      deleteRequests += 1;
+      deleted = true;
+      await route.fulfill({ contentType: 'application/json', body: JSON.stringify({ ok: true }) });
+      return;
+    }
+    if (url.pathname === '/api/feed') {
+      await route.fulfill({
+        contentType: 'application/json',
+        body: JSON.stringify({ items: deleted ? [] : [foreignPost], nextCursor: null, hasMore: false }),
+      });
+      return;
+    }
+    if (url.pathname === '/api/courses') {
+      await route.fulfill({ contentType: 'application/json', body: JSON.stringify(deleted ? [] : [foreignCourse]) });
+      return;
+    }
+    if (url.pathname === '/api/restaurants') {
+      await route.fulfill({ contentType: 'application/json', body: '[]' });
+      return;
+    }
+    await route.fulfill({ contentType: 'application/json', body: '{}' });
+  });
+
+  await page.goto('/feed');
+  const card = page.getByTestId(`unified-munchie-card-${POST_ID}`);
+  await expect(card).toBeVisible();
+  await card.getByRole('button', { name: '게시물 메뉴' }).click();
+  await expect(card.getByRole('button', { name: '게시물 수정' })).toHaveCount(0);
+  await card.getByRole('button', { name: '관리자 삭제' }).click();
+  await page.getByRole('alertdialog').getByRole('button', { name: '확인' }).click();
+
+  await expect(card).toHaveCount(0);
+  expect(deleteRequests).toBe(1);
+});

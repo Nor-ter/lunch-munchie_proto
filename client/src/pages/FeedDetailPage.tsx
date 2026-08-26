@@ -5,17 +5,21 @@ import { useApp } from '@/contexts/AppContext';
 import UnifiedMunchieCard from '@/components/munchie/UnifiedMunchieCard';
 import { getSavedReturnPath } from '@/lib/savedNavigation';
 import { useProfileFeed } from '@/hooks/useProfileFeed';
+import { useAuthStatus } from '@/hooks/useAuthStatus';
 
 export default function FeedDetailPage() {
   const { id } = useParams<{ id: string }>();
   const search = useSearch();
   const [, navigate] = useLocation();
   const { feedPosts, isMyPost, deleteCourseWithFeed, isLoading } = useApp();
+  const { data: auth } = useAuthStatus();
   const searchParams = new URLSearchParams(search);
   const profileAuthorId = searchParams.get('authorId') ?? '';
   const profileFeed = useProfileFeed(profileAuthorId);
   const post = feedPosts.find(item => item.id === id)
     ?? profileFeed.posts.find(item => item.id === id);
+  const ownPost = Boolean(post && isMyPost(post));
+  const canDeletePost = ownPost || Boolean(auth?.isAdmin);
   const origin = searchParams.get('from');
   const fromProfile = origin === 'profile';
   const fromSaved = origin === 'saved';
@@ -70,10 +74,10 @@ export default function FeedDetailPage() {
           <ChevronLeft size={20} />
         </button>
         <p className="text-[15px] font-black text-[#2D211C]">Munchie Feed</p>
-        {isMyPost(post) ? (
+        {canDeletePost ? (
           <div className="flex gap-1">
-            <button onClick={() => navigate(`/feed/${post.id}/edit?from=${detailOrigin}`)} aria-label="피드 수정" className="flex h-10 w-10 items-center justify-center rounded-full bg-[#FDE1E1] text-[#D94447]"><Pencil size={17} /></button>
-            <button onClick={() => void deletePost()} aria-label="피드 삭제" className="flex h-10 w-10 items-center justify-center rounded-full bg-[#FCE9E7] text-[#B94A45]"><Trash2 size={17} /></button>
+            {ownPost && <button onClick={() => navigate(`/feed/${post.id}/edit?from=${detailOrigin}`)} aria-label="피드 수정" className="flex h-10 w-10 items-center justify-center rounded-full bg-[#FDE1E1] text-[#D94447]"><Pencil size={17} /></button>}
+            <button onClick={() => void deletePost()} aria-label={ownPost ? '피드 삭제' : '관리자 피드 삭제'} className="flex h-10 w-10 items-center justify-center rounded-full bg-[#FCE9E7] text-[#B94A45]"><Trash2 size={17} /></button>
           </div>
         ) : <span className="h-10 w-10" />}
       </header>

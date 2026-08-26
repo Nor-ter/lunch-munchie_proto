@@ -5,11 +5,13 @@ import { describe, expect, it } from 'vitest';
 const source = readFileSync(join(import.meta.dirname, 'UnifiedMunchieCard.tsx'), 'utf8');
 
 describe('UnifiedMunchieCard ownership menu', () => {
-  it('shows edit/delete actions only in the own-post branch', () => {
+  it('keeps edit owner-only while allowing an authenticated administrator to delete', () => {
     expect(source).toContain('const ownPost = isMyPost(post)');
+    expect(source).toContain('const canDeletePost = ownPost || Boolean(auth?.isAdmin)');
     expect(source).toContain('{ownPost ? (');
     expect(source).toContain('게시물 수정');
     expect(source).toContain('게시물 삭제');
+    expect(source).toContain('관리자 삭제');
     expect(source).toContain('작성자 보기');
     expect(source).toContain('게시물 신고');
   });

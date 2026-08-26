@@ -16,4 +16,10 @@ describe('FeedDetailPage saved view navigation', () => {
     expect(source).toContain('useProfileFeed(profileAuthorId)');
     expect(source).toContain('profileFeed.posts.find(item => item.id === id)');
   });
+
+  it('allows administrators to delete without granting edit ownership', () => {
+    expect(source).toContain('const canDeletePost = ownPost || Boolean(auth?.isAdmin)');
+    expect(source).toContain("aria-label={ownPost ? '피드 삭제' : '관리자 피드 삭제'}");
+    expect(source).toContain('{ownPost && <button');
+  });
 });
