@@ -7,10 +7,11 @@
 import { useState } from 'react';
 import { motion } from 'framer-motion';
 import { useLocation, useParams } from 'wouter';
-import { ArrowLeft, Share2, MapPin, Clock, Bookmark, Star, ChevronRight } from 'lucide-react';
+import { Share2, MapPin, Clock, Bookmark, Star, ChevronRight } from 'lucide-react';
 import { useApp } from '@/contexts/AppContext';
 import CourseMapOverlay from '@/components/CourseMapOverlay';
 import { toast } from 'sonner';
+import BackButton from '@/components/ui/BackButton';
 
 const TAG_CLASS: Record<string, string> = {
   '맛집': 'tag-food', '데이트코스': 'tag-date', '혼밥': 'tag-hash',
@@ -75,13 +76,8 @@ export default function CourseDetailPage() {
         <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/30 to-transparent pointer-events-none" />
 
         {/* Header */}
-        <div className="absolute top-0 left-0 right-0 flex items-center justify-between px-5 pt-12">
-          <button
-            onClick={() => window.history.back()}
-            className="w-9 h-9 rounded-full bg-white/80 flex items-center justify-center active:scale-95"
-          >
-            <ArrowLeft size={17} color="#1A1A1A" />
-          </button>
+        <div className="absolute left-0 right-0 top-0 flex items-center justify-between px-5 pt-[max(12px,env(safe-area-inset-top))]">
+          <BackButton onClick={() => window.history.back()} aria-label="이전 화면으로 돌아가기" />
           <span className="font-semibold text-white text-[15px]">코스 상세</span>
           <button
             onClick={handleShare}

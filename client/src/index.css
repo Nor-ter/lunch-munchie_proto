@@ -70,7 +70,7 @@
   --lm-text: #1A1A1A;
   --lm-sub: #9B9B9B;
   --lm-tab-bar-height: 88px;
-  --lm-tab-profile-icon-size: 51px;
+  --lm-tab-profile-icon-size: 59px;
 }
 
 @layer base {
@@ -192,8 +192,8 @@
     position: fixed; bottom: 0; left: 50%; transform: translateX(-50%);
     width: 100%; max-width: 480px;
     height: var(--lm-tab-bar-height);
-    background: #FF3E4D;
-    border-radius: 20px 20px 0 0;
+    background: #FF1346;
+    border-radius: 0;
     z-index: 50;
     padding-bottom: env(safe-area-inset-bottom, 0px);
   }

@@ -477,3 +477,26 @@
 - 실제 로컬 catalogue 77개와 문제의 5개 조건으로 71개 후보, `dietaryBestEffort=true`를 확인했다.
 - 전체 Vitest 52 files / 462 tests, TypeScript, production build, Cloudflare policy, Quick Match Playwright 4/4 PASS. E2E는 문제의 5개 조건 생성부터 식당 카드와 best-effort 안내 노출까지 검증한다.
 - 신규 env/secret/Google 키/DB schema 변경 없음. 식단 유형을 무조건 충족한다고 표시하지 않으며, 재료 제외는 완화하지 않는다. 기존 GCP 키 restriction 및 Android SHA-1 제한 TODO는 그대로 남아 있다.
+
+---
+
+## 21. 랜딩 Quick Match 카드 스와이프 방향 복구 (2026-08-25)
+
+### 21.1 TRIAGE / RCA
+- 증상 태그: `data-state`. 실제 폰의 372×812 운영 화면에서 가운데 `FOODIE` 카드를 왼쪽으로 스와이프하면 카드가 오른쪽 뒤 슬롯으로 이동하는 재현 증거를 확인했다.
+- 조사 시 Supabase API Gateway 성능 저하와 Cloudflare CDN/Cache 지연이 표시됐고 Google Cloud에는 광범위한 중대 장애가 없었다. 이번 증상은 네트워크 요청 전 로컬 카드 인덱스 계산에서 발생하므로 외부 장애와 무관하다.
+- `QuickMatchDeck`은 오른쪽 뒤 카드를 `(activeIndex + 1)`, 왼쪽 뒤 카드를 `(activeIndex + 2)`로 배치하면서 왼쪽 드래그에 `+2`, 오른쪽 드래그에 `+1`을 적용해 손을 놓은 카드의 이동 방향을 뒤집고 있었다.
+
+### 21.2 FIX / VERIFY
+- 왼쪽 스와이프는 다음 오른쪽 카드를 선택하고, 오른쪽 스와이프는 이전 왼쪽 카드를 선택하도록 전환 계산을 공용 함수로 분리했다. 기존 45px 임계값, 측면 카드 탭, 선택 intent, Quick Match 진입, `touchAction: pan-y`는 유지했다.
+- 최신 `origin/main` 병합 후 전체 Vitest 90 files / 596 tests, TypeScript, production build, Cloudflare policy, `git diff --check`를 통과했다.
+- Playwright 372×812 Chromium은 첫 실행에서 Vite cold-start 중 30초 `page.goto` timeout이 발생했지만 60초 timeout 재실행에서 1/1 PASS했다. 기존 WebKit PASS와 함께 좌우 드래그 후 슬롯 위치, 측면 카드 탭, `intent=cafe` 진입, 세로 pan 허용을 검증했으며, 실제 Android Chrome/iPhone Safari 판정은 Human Verification에 남긴다.
+
+### 21.3 DELIVERY
+- 운영을 덮어쓰지 않는 Cloudflare Pages preview 직접 배포를 시도했지만 실행 환경에 `CLOUDFLARE_API_TOKEN`이 없어 실패했다. 기존 동일 수정 원격 커밋에도 확인 가능한 GitHub deployment/status 기록이 없었다.
+- 최신 `origin/main`을 기존 `sk_branch`에 merge하고 `main` 작업트리의 staged·unstaged 변경을 stash에서 복원해 원본과 일치함을 확인했다. 변경은 `sk_branch`에만 commit·push하고 `sk_branch` → `main` PR로 전달하며, 배포된 검증 URL 확인 전에는 상태를 `Human Verification`으로 넘기지 않는다.
+
+### 21.4 GATE
+- **이번 변경 범위 PASS**: Quick Match diff는 UI 인덱스 계산과 테스트만 변경하며 env·키·네트워크 경로를 건드리지 않는다. 클라이언트에서 서버 키 참조나 실제 Google 키 형태 리터럴이 새로 발견되지 않았고 `.env`, `.env.local`, `mobile/.env`, `.dev.vars`, `env.enc`는 현재 ignore 및 미추적 상태다.
+- **저장소 전체 종료 게이트 BLOCK**: `env.enc`가 과거 Git 이력에 존재하며, GCP 콘솔에서 현재 전체 키 목록과 실제 API/Application restriction을 전수 확인하지 못했다.
+- 미완료 보안 TODO: 모바일 키 iOS bundle ID 및 Android 패키지명+SHA-1 restriction, 웹 키 HTTP referrer restriction, 서버 키 Places API (New)+Directions 제한을 운영 콘솔에서 재확인하고 `env.enc` 역사 노출의 민감성 평가 및 필요 시 비밀값 교체·Git 이력 정리 승인을 받는다.

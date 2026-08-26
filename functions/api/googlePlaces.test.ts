@@ -22,7 +22,7 @@ const cachedRestaurant = (overrides: Record<string, unknown> = {}) => ({
   short_description: null,
   tags: '[]',
   dietary_options: '[]',
-  photos: '[]',
+  photos: '["/photos/google/cached.jpg"]',
   menus: '[]',
   phone_number: null,
   business_hours: null,
@@ -155,8 +155,8 @@ describe('Cloudflare Google Places proxy', () => {
               stored = cachedRestaurant({
                 id: args[0], name: args[1], category: args[2], address: args[3],
                 latitude: args[4], longitude: args[5], rating: args[6],
-                review_count: args[7], price_level: args[8], google_place_id: args[12],
-                synced_at: args[13], place_types: args[14],
+                review_count: args[7], price_level: args[8], photos: args[12],
+                google_place_id: args[13], synced_at: args[14], place_types: args[15],
               });
             }
             return statement;
@@ -254,5 +254,89 @@ describe('Cloudflare Google Places proxy', () => {
       distanceMeters: 1200,
       durationSeconds: 840,
     });
+  });
+
+  it('skips a fresh D1 cache when Google photos were never stored', async () => {
+    const row = cachedRestaurant({ photos: '[]' });
+    const statement = {
+      bind: vi.fn(() => statement),
+      first: vi.fn(async () => row),
+      run: vi.fn(async () => ({ success: true })),
+    };
+    const fetcher = vi.fn(async () => Response.json({
+      id: 'place-1',
+      displayName: { text: 'Test Cafe' },
+      formattedAddress: '1 Test Street',
+      location: { latitude: -37.81, longitude: 144.96 },
+      types: ['cafe', 'food'],
+    }));
+
+    const result = await getGooglePlaceDetails(
+      { DB: { prepare: vi.fn(() => statement) }, GOOGLE_MAPS_SERVER_API_KEY: 'server-key' },
+      { placeId: 'place-1' },
+      fetcher as typeof fetch,
+    );
+
+    expect(result.fromCache).toBe(false);
+    expect(fetcher).toHaveBeenCalledOnce();
+  });
+
+  it('downloads Google photos once and stores them on R2', async () => {
+    let stored: ReturnType<typeof cachedRestaurant> | null = null;
+    const db = {
+      prepare: vi.fn((query: string) => {
+        const statement = {
+          bind: vi.fn((...args: unknown[]) => {
+            if (query.startsWith('INSERT INTO restaurants')) {
+              stored = cachedRestaurant({
+                id: args[0],
+                photos: args[12],
+                google_place_id: args[13],
+                synced_at: args[14],
+                place_types: args[15],
+              });
+            }
+            return statement;
+          }),
+          first: vi.fn(async () => query.startsWith('SELECT') ? stored : null),
+          run: vi.fn(async () => ({ success: true })),
+        };
+        return statement;
+      }),
+    };
+    const put = vi.fn(async () => undefined);
+    const jpeg = new Uint8Array([0xff, 0xd8, 0xff, 0xd9]);
+    const fetcher = vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.includes('/media')) {
+        return Response.json({ photoUri: 'https://lh3.googleusercontent.com/p/test' });
+      }
+      if (url.includes('lh3.googleusercontent.com')) {
+        return new Response(jpeg, { headers: { 'content-type': 'image/jpeg' } });
+      }
+      return Response.json({
+        id: 'place-1',
+        displayName: { text: 'Queen Victoria Market' },
+        formattedAddress: 'Queen St, Melbourne',
+        location: { latitude: -37.81, longitude: 144.96 },
+        types: ['market', 'food'],
+        photos: [{ name: 'places/place-1/photos/abc' }],
+      });
+    });
+
+    const result = await getGooglePlaceDetails(
+      {
+        DB: db,
+        GOOGLE_MAPS_SERVER_API_KEY: 'server-key',
+        PHOTOS_R2: { put },
+      },
+      { placeId: 'place-1' },
+      fetcher as typeof fetch,
+    );
+
+    expect(put).toHaveBeenCalledOnce();
+    expect(put.mock.calls[0]?.[0]).toMatch(/^photos\/google\/[a-f0-9]{64}\.jpg$/);
+    expect(result.restaurant.photos).toEqual([`/${String(put.mock.calls[0]?.[0])}`]);
+    expect(fetcher).toHaveBeenCalledTimes(3);
   });
 });

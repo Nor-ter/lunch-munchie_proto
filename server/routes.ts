@@ -22,6 +22,8 @@ import type { Candidate, RecContext, RecEventInput } from "../shared/engine.js";
 import { normalizeDiet, isHardRestriction, isIngredientAvoidance, restaurantSatisfiesDietRestriction } from "../shared/const.js";
 import type { DietRestriction } from "../shared/const.js";
 import { intentForCategory, intentForHour } from "../shared/intent.js";
+import { normalizeQuickMatchPartySize } from "../shared/quickMatchParty.js";
+import { normalizeLunchieSessionAvatar } from "../shared/lunchieAvatar.js";
 
 const router = Router();
 
@@ -350,7 +352,7 @@ router.post("/sessions/create", async (req: any, res: any) => {
       share_token: token,
       status: "WAITING",
       deadline_at: deadlineAt,
-      group_size: groupSize || 4,
+      group_size: normalizeQuickMatchPartySize(groupSize),
       filter_distance: filterDistance || 1000,
       filter_budget: filterBudget || 2,
       filter_min_rating: 0,
@@ -366,7 +368,7 @@ router.post("/sessions/create", async (req: any, res: any) => {
       session_id: sessionId,
       user_id: hostId || "unknown",
       user_name: hostName || "Guest",
-      emoji: emoji || "👤",
+      emoji: normalizeLunchieSessionAvatar(emoji),
       is_ready: false,
       created_at: new Date()
     };
@@ -395,12 +397,18 @@ router.get("/sessions/:token", async (req: any, res: any) => {
     const [session] = await db.select().from(sessions).where(eq(sessions.share_token, token));
     if (!session) return null;
     const members = await db.select().from(sessionMembers).where(eq(sessionMembers.session_id, session.id));
-    return { session, members };
+    return {
+      session,
+      members: members.map(member => ({ ...member, emoji: normalizeLunchieSessionAvatar(member.emoji) })),
+    };
   });
   if (r.ok && r.value) return res.json(r.value);
   // DB 다운이거나, DB엔 없지만 메모리(다운 중 생성된 세션)에 있을 수 있다.
   const mem = memByToken(token);
-  if (mem) return res.json({ session: mem.session, members: mem.members });
+  if (mem) return res.json({
+    session: mem.session,
+    members: mem.members.map(member => ({ ...member, emoji: normalizeLunchieSessionAvatar(member.emoji) })),
+  });
   res.status(404).json({ error: "Session not found" });
 });
 
@@ -434,13 +442,13 @@ router.post("/sessions/:token/join", async (req: any, res: any) => {
         session_id: session.id,
         user_id: userId,
         user_name: userName,
-        emoji: emoji,
+        emoji: normalizeLunchieSessionAvatar(emoji),
         is_ready: false,
         created_at: new Date()
       });
     } else {
       await db.update(sessionMembers)
-        .set({ user_name: userName, emoji: emoji })
+        .set({ user_name: userName, emoji: normalizeLunchieSessionAvatar(emoji) })
         .where(and(eq(sessionMembers.user_id, userId), eq(sessionMembers.session_id, session.id)));
     }
     return { found: true as const, full: false as const };
@@ -465,7 +473,7 @@ router.post("/sessions/:token/join", async (req: any, res: any) => {
         return res.status(403).json({ error: "member_credential_required" });
       }
       existing.user_name = userName;
-      existing.emoji = emoji;
+      existing.emoji = normalizeLunchieSessionAvatar(emoji);
     } else {
       const cap = (mem.session as { group_size?: number }).group_size ?? 99;
       if (mem.members.length >= cap) {
@@ -476,7 +484,7 @@ router.post("/sessions/:token/join", async (req: any, res: any) => {
         session_id: mem.session.id,
         user_id: userId,
         user_name: userName,
-        emoji: emoji,
+        emoji: normalizeLunchieSessionAvatar(emoji),
         is_ready: false,
         created_at: new Date()
       });
@@ -688,7 +696,7 @@ function buildResultsPayload(
     return {
       id: m.user_id,
       name: m.user_name,
-      emoji: m.emoji,
+      emoji: normalizeLunchieSessionAvatar(m.emoji),
       completed: inFinalStage ? finalVoters.has(m.user_id) : prelimDone,
       swipeCount: inFinalStage ? (finalVoters.has(m.user_id) ? 1 : 0) : Math.min(cnt, memberTarget),
       targetCount: inFinalStage ? 1 : memberTarget,
@@ -764,6 +772,7 @@ router.get("/restaurants", async (req: any, res: any) => {
       lng: r.longitude,
       priceRange: r.price_level,
       openHours: r.business_hours,
+      phone: r.phone_number || "",
       dietary: r.dietary_options || [],
       description: r.short_description
     }));
@@ -771,6 +780,37 @@ router.get("/restaurants", async (req: any, res: any) => {
     return res.json(formatted.length > 0 ? formatted : mockRestaurantsResponse());
   }
   res.json(mockRestaurantsResponse());
+});
+
+router.get("/restaurants/:id", async (req: any, res: any) => {
+  const formatRestaurant = (r: any) => ({
+    id: r.id,
+    name: r.name,
+    category: r.category,
+    tags: r.tags || [],
+    rating: r.rating,
+    reviewCount: r.review_count,
+    distance: "",
+    address: r.address,
+    image: r.photos?.[0] || "",
+    photos: r.photos || [],
+    menuItems: r.menu_items || [],
+    lat: r.latitude,
+    lng: r.longitude,
+    priceRange: r.price_level,
+    openHours: r.business_hours,
+    phone: r.phone_number || "",
+    dietary: r.dietary_options || [],
+    description: r.short_description || "",
+  });
+  const dbRes = await tryDb(async () => {
+    const rows = await db.select().from(restaurants).where(eq(restaurants.id, req.params.id)).limit(1);
+    return rows[0] ?? null;
+  });
+  if (dbRes.ok && dbRes.value) return res.json(formatRestaurant(dbRes.value));
+  const fallback = MOCK_RESTAURANTS.find(restaurant => restaurant.id === req.params.id);
+  if (fallback) return res.json(formatRestaurant(fallback));
+  return res.status(404).json({ error: "restaurant_not_found" });
 });
 
 // Courses

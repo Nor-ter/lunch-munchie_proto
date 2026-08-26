@@ -11,6 +11,7 @@ from pathlib import Path
 from typing import Any
 
 MISSING = "<missing>"
+VALIDATION_STATUSES = {"passed", "failed", "not_run", "user_confirmed"}
 
 
 def git(*args: str, check: bool = True) -> str:
@@ -82,6 +83,57 @@ def classify(
     return "UNKNOWN", "Path relationships do not prove feature behavior", "LOW"
 
 
+def inspect_behavior_contract(feature: dict[str, Any]) -> dict[str, Any]:
+    acceptance = feature.get("acceptance")
+    validation = feature.get("validation")
+    missing: list[str] = []
+
+    if not isinstance(acceptance, dict):
+        acceptance = {}
+        missing.append("acceptance")
+    if not isinstance(acceptance.get("entrypoint"), str) or not acceptance.get("entrypoint", "").strip():
+        missing.append("acceptance.entrypoint")
+    for field in ("preconditions", "actions", "observables", "edge_cases"):
+        value = acceptance.get(field)
+        if not isinstance(value, list) or not value or not all(
+            isinstance(item, str) and item.strip() for item in value
+        ):
+            missing.append(f"acceptance.{field}")
+
+    if not isinstance(validation, dict):
+        validation = {}
+        missing.append("validation")
+    validation_status = validation.get("status")
+    if validation_status not in VALIDATION_STATUSES:
+        missing.append("validation.status")
+        validation_status = "not_run"
+    evidence = validation.get("evidence")
+    if not isinstance(evidence, list) or not all(
+        isinstance(item, str) and item.strip() for item in evidence
+    ):
+        missing.append("validation.evidence")
+        evidence = []
+    if validation_status in {"passed", "failed", "user_confirmed"} and not evidence:
+        missing.append("validation.evidence(non-empty)")
+
+    semantic_status = {
+        "passed": "VERIFIED",
+        "failed": "FAILED",
+        "user_confirmed": "USER_CONFIRMED",
+        "not_run": "NOT_VERIFIED",
+    }[validation_status]
+    if missing:
+        semantic_status = "NOT_VERIFIED"
+
+    return {
+        "contract_complete": not missing,
+        "missing_fields": missing,
+        "validation_status": validation_status,
+        "semantic_status": semantic_status,
+        "validation_evidence": evidence,
+    }
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--target-before", required=True)
@@ -89,6 +141,16 @@ def main() -> int:
     parser.add_argument("--result", default="HEAD")
     parser.add_argument("--manifest", required=True, type=Path)
     parser.add_argument("--format", choices=("markdown", "json"), default="markdown")
+    parser.add_argument(
+        "--require-behavior-contract",
+        action="store_true",
+        help="Fail when a feature lacks a complete acceptance and validation contract",
+    )
+    parser.add_argument(
+        "--require-passed-validation",
+        action="store_true",
+        help="Fail unless every feature has passed or user-confirmed result-level evidence",
+    )
     args = parser.parse_args()
 
     try:
@@ -127,26 +189,52 @@ def main() -> int:
                 states["result"],
                 origin_state,
             )
+            behavior = inspect_behavior_contract(feature)
+            git_classification = label
+            git_confidence = confidence
+            if behavior["validation_status"] == "failed" and behavior["contract_complete"]:
+                label = "REGRESSED"
+                evidence = "Feature-level behavior validation failed on the result"
+                confidence = "HIGH"
+            elif behavior["semantic_status"] == "NOT_VERIFIED":
+                confidence = "LOW"
+            elif behavior["semantic_status"] == "USER_CONFIRMED" and confidence == "HIGH":
+                confidence = "MEDIUM"
             rows.append(
                 {
                     "feature": name,
                     "intent": intent,
                     "classification": label,
+                    "git_classification": git_classification,
                     "origin_ref": origin_name,
                     "paths": paths,
                     "evidence": evidence,
                     "confidence": confidence,
+                    "git_confidence": git_confidence,
+                    **behavior,
                     "source_commits": path_commits(f"{base}..{source}", paths),
                     "result_commits": path_commits(f"{target}..{result}", paths),
                     "states": states,
                 }
             )
+        behavior_contracts_passed = all(row["contract_complete"] for row in rows)
+        behavior_validations_passed = all(
+            row["semantic_status"] in {"VERIFIED", "USER_CONFIRMED"}
+            for row in rows
+        )
+        gate_passed = (
+            (not args.require_behavior_contract or behavior_contracts_passed)
+            and (not args.require_passed_validation or behavior_validations_passed)
+        )
         report = {
             "merge_base": base,
             "target_before": target,
             "source": source,
             "result": result,
             "features": rows,
+            "behavior_contracts_passed": behavior_contracts_passed,
+            "behavior_validations_passed": behavior_validations_passed,
+            "gate_passed": gate_passed,
         }
     except (OSError, ValueError, RuntimeError, json.JSONDecodeError) as exc:
         print(f"error: {exc}", file=sys.stderr)
@@ -154,24 +242,39 @@ def main() -> int:
 
     if args.format == "json":
         print(json.dumps(report, indent=2, ensure_ascii=False))
-        return 0
+        return 0 if gate_passed else 1
 
     print("# Feature provenance report\n")
     print(f"- Merge base: `{base[:12]}`")
     print(f"- Target-before: `{target[:12]}`")
     print(f"- Source: `{source[:12]}`")
     print(f"- Result: `{result[:12]}`\n")
-    print("| Feature | Intent | Classification | Origin | Confidence | Evidence |")
-    print("|---|---|---|---|---|---|")
+    print("| Feature | Intent | Classification | Origin | Git confidence | Behavior | Confidence | Evidence |")
+    print("|---|---|---|---|---|---|---|---|")
     for row in rows:
         origin = row["origin_ref"] or "source"
-        evidence = row["evidence"].replace("|", "\\|")
+        evidence_parts = [row["evidence"]]
+        if row["validation_evidence"]:
+            evidence_parts.append(
+                "validation: " + "; ".join(row["validation_evidence"])
+            )
+        evidence = "; ".join(evidence_parts).replace("|", "\\|")
         print(
             f"| {row['feature']} | {row['intent']} | {row['classification']} | "
-            f"{origin} | {row['confidence']} | {evidence} |"
+            f"{origin} | {row['git_confidence']} | {row['semantic_status']} | "
+            f"{row['confidence']} | {evidence} |"
         )
-    print("\nAutomated labels describe Git path relationships. Confirm user-visible behavior with tests or inspection.")
-    return 0
+    print("\nAutomated Git labels remain tentative until behavior is VERIFIED or USER_CONFIRMED.")
+    if not behavior_contracts_passed:
+        contract_mark = "FAIL" if args.require_behavior_contract or args.require_passed_validation else "NOTICE"
+        print(f"- {contract_mark}: one or more features lack a complete behavior contract")
+        for row in rows:
+            if row["missing_fields"]:
+                print(f"  - {row['feature']}: {', '.join(row['missing_fields'])}")
+    if not behavior_validations_passed:
+        validation_mark = "FAIL" if args.require_passed_validation else "NOTICE"
+        print(f"- {validation_mark}: one or more result-level feature validations are not passed")
+    return 0 if gate_passed else 1
 
 
 if __name__ == "__main__":

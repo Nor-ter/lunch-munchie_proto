@@ -1,4 +1,5 @@
 import type { GroupSession, SessionMember } from '@/contexts/AppContext';
+import { normalizeLunchieSessionAvatar } from '@shared/lunchieAvatar';
 
 type LobbySession = Pick<GroupSession, 'filters' | 'hostId' | 'members' | 'status'>;
 
@@ -21,7 +22,7 @@ export interface LobbyPresentation {
   isWaiting: boolean;
   canStart: boolean;
   hostName: string;
-  statusLabel: 'WAITING' | 'LIVE';
+  statusLabel: '대기 중' | '진행 중';
   statusCopy: string;
   ctaLabel: string;
   disabledReason: string | null;
@@ -47,7 +48,7 @@ function memberPresentation(
   return {
     id: member.id,
     name: member.name,
-    emoji: member.emoji,
+    emoji: normalizeLunchieSessionAvatar(member.emoji),
     ready: Boolean(member.ready),
     isHost: member.id === hostId,
     isCurrentUser: member.id === currentUserId,
@@ -119,7 +120,7 @@ export function getLobbyPresentation({
     isWaiting,
     canStart,
     hostName,
-    statusLabel: isWaiting ? 'WAITING' : 'LIVE',
+    statusLabel: isWaiting ? '대기 중' : '진행 중',
     statusCopy,
     ctaLabel,
     disabledReason,

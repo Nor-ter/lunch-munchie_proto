@@ -2,7 +2,6 @@ import { useState, type KeyboardEvent } from 'react';
 import { motion } from 'framer-motion';
 import { useLocation } from 'wouter';
 import { useHistoryState } from 'wouter/use-browser-location';
-import { ChevronLeft } from 'lucide-react';
 import { useApp } from '@/contexts/AppContext';
 import LunchmateCharacterRenderer from '@/components/munchie/LunchmateCharacterRenderer';
 import LunchmateRoomRenderer from '@/components/munchie/LunchmateRoomRenderer';
@@ -31,6 +30,7 @@ import {
   type LunchmateProgressSnapshot,
 } from '@/utils/lunchmateProgress';
 import { useLunchmateRoomMotion } from '@/hooks/useLunchmateRoomMotion';
+import BackButton from '@/components/ui/BackButton';
 
 export interface FoodieRoomNavigationState {
   fromProfile: true;
@@ -142,17 +142,10 @@ export default function FoodieRoomPage() {
 
   return (
     <main className="min-h-dvh bg-[#FCF4EE] pb-[calc(6.5rem+env(safe-area-inset-bottom,0px))] text-[#33251F]">
-      <header className="flex items-center gap-3 px-5 pb-4 pt-[calc(1rem+env(safe-area-inset-top,0px))]">
-        <button
-          type="button"
-          onClick={handleBack}
-          className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-white text-[#49372E] shadow-sm transition-transform active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#E85053]"
-          aria-label="프로필로 돌아가기"
-        >
-          <ChevronLeft size={21} strokeWidth={2.4} aria-hidden="true" />
-        </button>
+      <header className="flex items-start gap-3 px-5 pb-4 pt-[max(12px,env(safe-area-inset-top))]">
+        <BackButton onClick={handleBack} aria-label="프로필로 돌아가기" />
         <div className="min-w-0 flex-1">
-          <h1 className="text-[21px] font-black leading-tight">런치메이트 룸</h1>
+          <h1 className="text-[25px] font-black leading-none tracking-[-0.03em] text-[#DB2837]">RUNCHICKEN ROOM</h1>
           <p className="mt-0.5 text-[10px] font-semibold text-[#A18C80]">나만의 런치메이트 공간</p>
         </div>
         <span className="rounded-full bg-[#FFE7DF] px-2.5 py-1 text-[10px] font-black text-[#D94B4E]">

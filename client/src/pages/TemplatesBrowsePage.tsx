@@ -1,10 +1,11 @@
 import { useState } from 'react';
 import { motion } from 'framer-motion';
 import { useLocation } from 'wouter';
-import { ChevronLeft, ChevronRight, ImageOff } from 'lucide-react';
+import { ChevronRight, ImageOff } from 'lucide-react';
 import { COURSEMAP_TEMPLATES } from '@/constants/coursemapTemplates';
 import { type ShareTemplateDesign } from '@/constants/shareTemplates';
 import ShareTemplateInfoSheet from '@/components/munchie/ShareTemplateInfoSheet';
+import BackButton from '@/components/ui/BackButton';
 
 const FEED_TEMPLATES: ShareTemplateDesign[] = COURSEMAP_TEMPLATES.map(template => ({
   id: template.id,
@@ -89,15 +90,8 @@ export default function TemplatesBrowsePage() {
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.22 }}
     >
-      <header className="border-b border-[#EEDFD6] bg-[#FFFDFC] px-4 pb-5 pt-5">
-        <button
-          type="button"
-          onClick={() => navigate('/feed')}
-          aria-label="먼치피드로 돌아가기"
-          className="flex h-9 w-9 items-center justify-center rounded-full border border-[#E7D8CF] bg-white text-[#6C574C] shadow-sm"
-        >
-          <ChevronLeft size={19} />
-        </button>
+      <header className="border-b border-[#EEDFD6] bg-[#FFFDFC] px-5 pb-5 pt-[max(12px,env(safe-area-inset-top))]">
+        <BackButton onClick={() => navigate('/feed')} aria-label="먼치피드로 돌아가기" />
         <p className="mt-5 text-[9px] font-black uppercase tracking-[0.2em] text-[#E66F70]">Munchie templates</p>
         <h1 className="mt-1 text-[26px] font-black tracking-[-0.03em] text-[#2D211C]">템플릿 한눈에 보기</h1>
         <p className="mt-2 text-[12px] font-semibold leading-relaxed text-[#8C776B]">

@@ -77,7 +77,6 @@ export default function LunchieWaitingCompanion() {
         if (cancelled) return;
         failureCountRef.current = 0;
         setResults(data);
-        if (data.phase === 'DONE' || data.phase === 'NO_CONSENSUS') clearLunchieWaitingCompanion();
       } catch {
         failureCountRef.current += 1;
         if (!cancelled && failureCountRef.current >= 3) setResults(null);
@@ -113,10 +112,15 @@ export default function LunchieWaitingCompanion() {
   );
   const needsFinalVote = phase === 'FINAL' && !me?.completed;
   const isReroll = phase === 'REROLL';
+  const hasFinalOutcome = phase === 'DONE' || phase === 'NO_CONSENSUS';
   const countdown = remainingLabel(results?.deadlineAt ?? currentSession?.deadline ?? null, now);
 
   const primaryCopy = interactionCopy ?? (
-    needsFinalVote
+    phase === 'DONE'
+      ? 'Lunchie 결과가 나왔어요!'
+      : phase === 'NO_CONSENSUS'
+        ? '이번에는 합의가 어려웠어요'
+        : needsFinalVote
       ? '결승전 투표가 열렸어요!'
       : isReroll
         ? '새로운 후보가 도착했어요!'
@@ -124,12 +128,20 @@ export default function LunchieWaitingCompanion() {
           ? '친구들의 결승 선택을 모으는 중이에요'
           : `런치 투표 ${countdown} 남았어요`
   );
-  const secondaryCopy = needsFinalVote || isReroll
-    ? '눌러서 투표 페이지로 돌아가요'
+  const secondaryCopy = hasFinalOutcome
+    ? '눌러서 결과를 확인해요'
+    : needsFinalVote || isReroll
+      ? '눌러서 투표 페이지로 돌아가요'
     : '친구들이 고르는 동안 먼치피드를 둘러봐요';
 
+  useEffect(() => {
+    if (location === '/lunchie/swipe' && hasFinalOutcome && activeSessionId) {
+      clearLunchieWaitingCompanion();
+    }
+  }, [activeSessionId, hasFinalOutcome, location]);
+
   const handleBubbleClick = () => {
-    if (needsFinalVote || isReroll) navigate('/lunchie/swipe');
+    if (hasFinalOutcome || needsFinalVote || isReroll) navigate('/lunchie/swipe');
     else if (location !== '/feed') navigate('/feed');
   };
 
@@ -156,9 +168,9 @@ export default function LunchieWaitingCompanion() {
           <motion.button
             type="button"
             onClick={handleBubbleClick}
-            className={`pointer-events-auto relative mb-11 max-w-[220px] rounded-[20px] border bg-white px-4 py-3 text-left shadow-[0_12px_32px_rgba(86,53,43,0.18)] ${needsFinalVote || isReroll ? 'border-[#EB5053]' : 'border-[#F0DCD3]'}`}
-            animate={needsFinalVote ? { scale: [1, 1.035, 1] } : undefined}
-            transition={needsFinalVote ? { duration: 1.25, repeat: Infinity } : undefined}
+            className={`pointer-events-auto relative mb-11 max-w-[220px] rounded-[20px] border bg-white px-4 py-3 text-left shadow-[0_12px_32px_rgba(86,53,43,0.18)] ${hasFinalOutcome || needsFinalVote || isReroll ? 'border-[#EB5053]' : 'border-[#F0DCD3]'}`}
+            animate={hasFinalOutcome || needsFinalVote ? { scale: [1, 1.035, 1] } : undefined}
+            transition={hasFinalOutcome || needsFinalVote ? { duration: 1.25, repeat: Infinity } : undefined}
           >
             <span className="block text-[12px] font-black leading-snug text-[#3D322E]">{primaryCopy}</span>
             <span className="mt-1 block text-[10px] font-bold leading-snug text-[#A08B82]">{secondaryCopy}</span>
@@ -176,8 +188,8 @@ export default function LunchieWaitingCompanion() {
             <LunchmateCharacterRenderer
               flowState="idle"
               artwork="chicken"
-              chickenAssetKeyOverride={isHappy ? 'happy' : needsFinalVote ? 'surprised' : 'idle'}
-              chickenFaceSystem={!isHappy && !needsFinalVote}
+              chickenAssetKeyOverride={isHappy || hasFinalOutcome ? 'happy' : needsFinalVote ? 'surprised' : 'idle'}
+              chickenFaceSystem={!isHappy && !hasFinalOutcome && !needsFinalVote}
               animated={false}
               loadout={loadout}
               size={80}

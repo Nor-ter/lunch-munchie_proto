@@ -46,12 +46,12 @@ export function getFeedAuthorFallback(
     user: {
       id: userId,
       username: post.authorName.replace(/^@/, ""),
-      profile_image_url: null,
+      profile_image_url: post.authorImage ?? null,
       bio: null,
       location: null,
       created_at: post.createdAt,
     },
-    emoji: post.authorEmoji,
+    emoji: post.authorImage ? post.authorName.replace(/^@/, "").slice(0, 1) : post.authorEmoji,
   };
 }
 

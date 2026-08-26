@@ -52,6 +52,18 @@ const DECK_POSITIONS = [
   { x: -76, y: 4, scale: 0.88, rotate: -9, opacity: 1, zIndex: 1 },
 ] as const;
 
+const QUICK_MATCH_SWIPE_THRESHOLD = 45;
+
+export function getQuickMatchIndexAfterSwipe(activeIndex: number, offsetX: number): number {
+  if (offsetX < -QUICK_MATCH_SWIPE_THRESHOLD) {
+    return (activeIndex + 1) % QUICK_MATCH_CARDS.length;
+  }
+  if (offsetX > QUICK_MATCH_SWIPE_THRESHOLD) {
+    return (activeIndex + QUICK_MATCH_CARDS.length - 1) % QUICK_MATCH_CARDS.length;
+  }
+  return activeIndex;
+}
+
 function SteamWisps() {
   return (
     <span className="pointer-events-none absolute left-1/2 top-0 z-10 flex -translate-x-1/2 gap-1" aria-hidden="true">
@@ -134,8 +146,8 @@ function QuickMatchDeck({
               dragConstraints={{ left: 0, right: 0 }}
               dragElastic={0.45}
               onDragEnd={(_, info) => {
-                if (info.offset.x < -45) onChange((activeIndex + 2) % 3);
-                else if (info.offset.x > 45) onChange((activeIndex + 1) % 3);
+                const nextIndex = getQuickMatchIndexAfterSwipe(activeIndex, info.offset.x);
+                if (nextIndex !== activeIndex) onChange(nextIndex);
               }}
               onClick={() => !isFront && onChange(index)}
               animate={{

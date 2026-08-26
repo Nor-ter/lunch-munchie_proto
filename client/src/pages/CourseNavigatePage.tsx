@@ -6,10 +6,11 @@
 
 import { useState } from 'react';
 import { useLocation, useParams } from 'wouter';
-import { ArrowLeft, Navigation, MapPin, ChevronRight } from 'lucide-react';
+import { Navigation, MapPin, ChevronRight } from 'lucide-react';
 import { MapContainer, TileLayer, Marker, Popup, Polyline } from 'react-leaflet';
 import L from 'leaflet';
 import { useApp } from '@/contexts/AppContext';
+import BackButton from '@/components/ui/BackButton';
 
 delete (L.Icon.Default.prototype as unknown as Record<string, unknown>)._getIconUrl;
 L.Icon.Default.mergeOptions({
@@ -69,13 +70,8 @@ export default function CourseNavigatePage() {
   return (
     <div className="min-h-dvh bg-[#FCF4EE] flex flex-col">
       {/* Header */}
-      <div className="flex items-center justify-between px-5 pt-12 pb-3 bg-white z-10">
-        <button
-          onClick={() => navigate(`/course/${params.id}`)}
-          className="w-9 h-9 rounded-full bg-[#F5F5F5] flex items-center justify-center active:scale-95"
-        >
-          <ArrowLeft size={17} color="#1A1A1A" />
-        </button>
+      <div className="flex items-center justify-between bg-white px-5 pb-3 pt-[max(12px,env(safe-area-inset-top))] z-10">
+        <BackButton onClick={() => navigate(`/course/${params.id}`)} aria-label="코스 상세로 돌아가기" />
         <span className="font-semibold text-[15px] text-[#1A1A1A]">코스 따라가기</span>
         <button
           onClick={() => navigate(`/course/${params.id}/share`)}

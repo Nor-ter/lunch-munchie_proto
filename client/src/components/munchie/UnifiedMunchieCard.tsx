@@ -30,6 +30,7 @@ import {
   getSavedCourseDetailPath,
   type SavedViewMode,
 } from '@/lib/savedNavigation';
+import { AuthorAvatar } from '@/components/ui/AuthorAvatar';
 
 function timeAgo(iso: string | number) {
   const normalized = typeof iso === 'string' ? iso.replace(/T(\d):/, 'T0$1:') : iso;
@@ -43,10 +44,13 @@ function timeAgo(iso: string | number) {
 }
 
 function FeedAuthorAvatar({ post, className }: { post: FeedPost; className: string }) {
-  return post.authorImage ? (
-    <img src={post.authorImage} alt="" className={`${className} object-cover`} referrerPolicy="no-referrer" />
-  ) : (
-    <span className={className}>{post.authorEmoji}</span>
+  return (
+    <AuthorAvatar
+      image={post.authorImage}
+      emoji={post.authorEmoji}
+      name={post.authorName}
+      className={className}
+    />
   );
 }
 
@@ -90,7 +94,7 @@ export default function UnifiedMunchieCard({
     savedCourseIds,
     saveCourse,
     unsaveCourse,
-    deleteFeedPost,
+    deleteCourseWithFeed,
     incrementFeedShare,
     isMyPost,
   } = useApp();
@@ -210,10 +214,19 @@ export default function UnifiedMunchieCard({
     setShowPostMenu(false);
     setDeleteConfirmOpen(true);
   };
-  const confirmPostDelete = () => {
+  const confirmPostDelete = async () => {
+    const response = await fetch(`/api/feed-post?courseId=${encodeURIComponent(course.id)}`, {
+      method: 'DELETE',
+      credentials: 'same-origin',
+    });
+    const payload = await response.json().catch(() => ({})) as { error?: string };
+    if (!response.ok) {
+      toast.error(payload.error || '게시물을 삭제하지 못했어요.');
+      return;
+    }
     setDeleteConfirmOpen(false);
-    deleteFeedPost(post.id);
-    toast.success('게시물을 삭제했어요.');
+    deleteCourseWithFeed(course.id);
+    toast.success('게시물과 원본 코스를 삭제했어요.');
   };
   const togglePostLike = async () => {
     if (!interactive || !requireLogin()) return;
@@ -299,12 +312,12 @@ export default function UnifiedMunchieCard({
             <h2 id={`delete-post-title-${post.id}`} className="mt-3 text-[17px] font-black text-[#30221C]">
               게시물을 삭제하시겠습니까?
             </h2>
-            <p className="mt-1.5 text-[11px] font-semibold text-[#9A8277]">삭제한 게시물은 다시 복구할 수 없어요.</p>
+            <p className="mt-1.5 text-[11px] font-semibold text-[#9A8277]">게시물과 원본 코스가 영구 삭제되며 복구할 수 없어요.</p>
             <div className="mt-5 grid grid-cols-2 gap-2.5">
               <button type="button" onClick={() => setDeleteConfirmOpen(false)} className="h-11 rounded-[14px] border border-[#DFD0C8] bg-white text-[13px] font-black text-[#69564D]">
                 취소
               </button>
-              <button type="button" onClick={confirmPostDelete} className="h-11 rounded-[14px] bg-[#E85053] text-[13px] font-black text-white">
+              <button type="button" onClick={() => void confirmPostDelete()} className="h-11 rounded-[14px] bg-[#E85053] text-[13px] font-black text-white">
                 확인
               </button>
             </div>
@@ -320,7 +333,9 @@ export default function UnifiedMunchieCard({
       <>
       <article ref={cardRef} className={`relative overflow-hidden bg-[#FFFDFC] ${homeSummary ? 'rounded-[12px] border border-[#EFD0D4] shadow-[0_5px_14px_rgba(235,80,83,0.07)]' : 'rounded-[18px] border-2 border-[#EAD7CD] shadow-[0_7px_18px_rgba(123,76,53,0.1)]'}`} data-testid={`unified-munchie-card-${post.id}`}>
         <header className={`flex shrink-0 items-center gap-1 px-2 ${homeSummary ? 'h-9' : 'h-8'}`}>
-          <button type="button" onClick={() => go(authorProfilePath)} className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-white text-[9px] ${homeSummary ? 'border border-[#EB5053]' : 'border border-[#2F2926]'}`}>{post.authorEmoji}</button>
+          <button type="button" onClick={() => go(authorProfilePath)} className={`flex h-5 w-5 shrink-0 items-center justify-center overflow-hidden rounded-full bg-white text-[9px] ${homeSummary ? 'border border-[#EB5053]' : 'border border-[#2F2926]'}`}>
+            <FeedAuthorAvatar post={post} className="flex h-full w-full items-center justify-center" />
+          </button>
           <button type="button" onClick={() => go(authorProfilePath)} className={`min-w-0 truncate text-left text-[10px] font-semibold ${homeSummary ? 'text-[#3E2922]' : 'text-[#342925]'}`}>{post.authorName}</button>
           <span className={`shrink-0 text-[8px] font-medium ${homeSummary ? 'text-[#A36D6C]' : 'text-[#8B817B]'}`}>{timeAgo(post.createdAt)}</span>
           <span className="flex-1" />

@@ -60,6 +60,18 @@ class FakeD1 {
       },
       async all() {
         if (sql.includes('FROM session_members')) return { results: database.members };
+        if (sql.includes('FROM restaurant_photos')) {
+          return {
+            results: Array.from({ length: database.restaurantCount }, (_, index) => [1, 2].map(photoIndex => ({
+              restaurant_id: `restaurant-${index}`,
+              r2_key: `restaurant-${index}-${photoIndex}.jpg`,
+              drive_file_id: `restaurant-${index}-source-${photoIndex}`,
+              kind: 'dish',
+              dishes: JSON.stringify([`dish-${photoIndex}`]),
+              perceptual_hash: null,
+            }))).flat(),
+          };
+        }
         if (sql.includes('FROM restaurants')) {
           return {
             results: Array.from({ length: database.restaurantCount }, (_, index) => ({
@@ -105,6 +117,20 @@ async function post(database: FakeD1, path: string, body: Record<string, unknown
 }
 
 describe('Quick Match session lifecycle API', () => {
+  it('normalizes a retired avatar from an existing session without changing supported avatars', async () => {
+    const database = new FakeD1();
+    database.members[1].emoji = '/assets/Logo%20003%203.png';
+
+    const response = await app.request('http://local.test/api/sessions/ABC123', undefined, env(database));
+    const payload = await response.json() as { members: Array<{ user_id: string; emoji: string }> };
+
+    expect(response.status).toBe(200);
+    expect(payload.members).toEqual(expect.arrayContaining([
+      expect.objectContaining({ user_id: 'host-user', emoji: '😊' }),
+      expect.objectContaining({ user_id: 'guest-user', emoji: '😊' }),
+    ]));
+  });
+
   it('allows only the host to cancel and keeps cancellation idempotent', async () => {
     const database = new FakeD1();
     const denied = await post(database, '/api/sessions/ABC123/cancel', {

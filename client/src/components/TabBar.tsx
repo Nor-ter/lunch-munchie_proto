@@ -1,16 +1,17 @@
 import { motion } from "framer-motion";
 import { useLocation } from "wouter";
 
-// ─── Nav icons (sj_branch design) ────────────────────────────────────────────
+const ACTIVE_STROKE = "#FFFFFF";
+const INACTIVE_STROKE = "#FFD5DD";
 
 function iconProps(active: boolean) {
   return {
-    className: "h-[34px] w-[34px]",
+    className: "h-[35px] w-[35px]",
     fill: "none",
-    stroke: "white",
+    stroke: active ? ACTIVE_STROKE : INACTIVE_STROKE,
     strokeLinecap: "round" as const,
     strokeLinejoin: "round" as const,
-    style: { opacity: active ? 1 : 0.55 },
+    style: { opacity: 1 },
   };
 }
 
@@ -18,32 +19,17 @@ function MunchIcon({ active }: { active: boolean }) {
   return (
     <svg {...iconProps(active)} viewBox="0 0 40 40" aria-hidden="true">
       <rect
-        x="7"
-        y="5.5"
-        width="26"
-        height="29"
-        rx="4"
-        strokeWidth="2.2"
-        fill={active ? "white" : "none"}
+        x="7.5"
+        y="8"
+        width="25"
+        height="24"
+        rx="4.2"
+        strokeWidth="2.6"
       />
       <path
-        d="M8.2 15.2 H31.8 M8.2 24.4 H31.8"
-        stroke={active ? "#FF424B" : "white"}
-        strokeWidth="2.2"
-      />
-      <path
-        d="M12 10.4 H28"
-        stroke={active ? "#FF424B" : "white"}
-        strokeWidth="2.2"
-      />
-      <rect
-        x="11.8"
-        y="27.7"
-        width="16.4"
-        height="2.7"
-        rx="1.35"
-        fill={active ? "#FF424B" : "white"}
-        stroke="none"
+        d="M8.7 16 H31.3 M8.7 24 H31.3"
+        stroke={active ? ACTIVE_STROKE : INACTIVE_STROKE}
+        strokeWidth="2.6"
       />
     </svg>
   );
@@ -53,9 +39,8 @@ function BookmarkIcon({ active }: { active: boolean }) {
   return (
     <svg {...iconProps(active)} viewBox="0 0 40 40">
       <path
-        d="M12 6.5 H28 C30 6.5 31.3 7.9 31.3 9.8 V33.5 L20 26.8 L8.7 33.5 V9.8 C8.7 7.9 10 6.5 12 6.5 Z"
-        strokeWidth="3"
-        fill={active ? "white" : "none"}
+        d="M13 7.5 H27 C29.1 7.5 30.5 8.9 30.5 11 V32.5 L20 26 L9.5 32.5 V11 C9.5 8.9 10.9 7.5 13 7.5 Z"
+        strokeWidth="2.7"
       />
     </svg>
   );
@@ -64,11 +49,11 @@ function BookmarkIcon({ active }: { active: boolean }) {
 function HomeIcon({ active }: { active: boolean }) {
   return (
     <svg {...iconProps(active)} viewBox="0 0 40 40">
-      <path d="M6.2 19.5 L20 7 L33.8 19.5" strokeWidth="2.8" />
-      <path d="M10 18.5 V32.5 H30 V18.5" strokeWidth="2.8" />
+      <path d="M8 19 L20 8 L32 19" strokeWidth="2.5" />
+      <path d="M11 18.5 V31.5 H29 V18.5" strokeWidth="2.5" />
       <path
-        d="M16.3 32.5 V24.5 C16.3 22.2 17.8 20.8 20 20.8 C22.2 20.8 23.7 22.2 23.7 24.5 V32.5"
-        strokeWidth="2.8"
+        d="M16.5 31.5 V24.5 C16.5 22.3 18 21 20 21 C22 21 23.5 22.3 23.5 24.5 V31.5"
+        strokeWidth="2.5"
       />
     </svg>
   );
@@ -77,18 +62,16 @@ function HomeIcon({ active }: { active: boolean }) {
 function LightningIcon({ active }: { active: boolean }) {
   return (
     <svg
-      className="h-[46px] w-[46px]"
+      className="h-[43px] w-[43px]"
       fill="none"
-      stroke="white"
+      stroke={active ? ACTIVE_STROKE : INACTIVE_STROKE}
       strokeLinecap="round"
       strokeLinejoin="round"
       viewBox="0 0 40 40"
-      style={{ opacity: active ? 1 : 0.7 }}
     >
       <path
-        d="M22 5 L9 22 H19.5 L16 35 L31 18 H20.5 Z"
-        strokeWidth="2.8"
-        fill={active ? "white" : "none"}
+        d="M22 4.5 L10 22 H19 L16 35.5 L31 17.5 H21.5 Z"
+        strokeWidth="2.4"
       />
     </svg>
   );
@@ -101,7 +84,7 @@ function FaceIcon({ active }: { active: boolean }) {
       alt=""
       aria-hidden="true"
       className="tab-profile-icon object-contain"
-      style={{ opacity: active ? 1 : 0.62 }}
+      style={{ opacity: active ? 1 : 0.85 }}
     />
   );
 }
@@ -116,16 +99,10 @@ const TABS = [
 
 export default function TabBar() {
   const [location, navigate] = useLocation();
-  const isFlat = location === "/" ||
-    location === "/feed" ||
-    location === "/saved" ||
-    location === "/profile" ||
-    location === "/lunchie/settings" ||
-    location === "/session/lobby";
 
   return (
-    <div className={`tab-bar ${isFlat ? "tab-bar--flat" : ""}`}>
-      <div className="tab-bar-content grid grid-cols-5 items-center px-[22px]">
+    <div className="tab-bar">
+      <div className="tab-bar-content grid grid-cols-5 items-center px-[18px]">
         {TABS.map((tab) => {
           const isActive =
             location === tab.path ||
@@ -138,7 +115,7 @@ export default function TabBar() {
               key={tab.path}
               onClick={() => navigate(tab.path)}
               aria-label={tab.label}
-              className={`flex items-center justify-center justify-self-center transition-all active:scale-95 ${isProfile ? "h-[51px] w-[51px]" : "h-12 w-12"}`}
+              className={`flex items-center justify-center justify-self-center transition-all active:scale-95 ${isProfile ? "h-14 w-14" : "h-[52px] w-[52px]"}`}
             >
               <motion.div
                 animate={isActive && !isProfile ? { scale: 1.06 } : { scale: 1 }}

@@ -7,6 +7,15 @@ const restaurants = [
   { id: "r3", name: "Three", category: "베트남", rating: 4.1, review_count: 40, price_level: 2, dietary_options: "[]", photos: "[]", menus: "[]", tags: "[]" },
 ];
 
+const photoRows = restaurants.flatMap((restaurant) => [1, 2].map((index) => ({
+  restaurant_id: restaurant.id,
+  r2_key: `${restaurant.id}-${index}.jpg`,
+  drive_file_id: `${restaurant.id}-source-${index}`,
+  kind: "dish",
+  dishes: JSON.stringify([`${restaurant.id}-dish-${index}`]),
+  perceptual_hash: null,
+})));
+
 describe("canonical recommendation serving", () => {
   it("persists an immutable slate and server-owned impression evidence", async () => {
     const sql: string[] = [];
@@ -17,6 +26,7 @@ describe("canonical recommendation serving", () => {
           bind: () => ({
             all: async () => query.includes("FROM restaurant_menu_items")
               ? { results: [{ restaurant_id: "r1", dietary: "[\"VG\"]" }, { restaurant_id: "r2", dietary: "[\"V\"]" }] }
+              : query.includes("FROM restaurant_photos") ? { results: photoRows }
               : query.includes("FROM restaurants") ? { results: restaurants } : { results: [] },
             first: async () => null,
           }),
@@ -55,6 +65,7 @@ describe("canonical recommendation serving", () => {
         return { bind: () => ({
           all: async () => query.includes("FROM restaurant_menu_items")
             ? { results: [{ restaurant_id: "r1", dietary: "[\"VG\"]" }, { restaurant_id: "r2", dietary: "[\"V\"]" }] }
+            : query.includes("FROM restaurant_photos") ? { results: photoRows }
             : query.includes("FROM restaurants") ? { results: restaurants } : { results: [] },
           first: async () => null,
         }) };
@@ -83,6 +94,7 @@ describe("canonical recommendation serving", () => {
               { restaurant_id: "r1", dietary: "[\"VG\"]", price: 35, category: "Mains" },
               { restaurant_id: "r2", dietary: "[\"V\"]", price: 10, category: "Mains" },
             ] }
+            : query.includes("FROM restaurant_photos") ? { results: photoRows }
             : query.includes("FROM restaurants") ? { results: restaurants } : { results: [] },
           first: async () => null,
         }) };

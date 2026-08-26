@@ -12,6 +12,7 @@ import { getCourseSequenceColor } from '@/constants/courseTheme';
 import { useDirections } from '@/hooks/useDirections';
 import { toSavedCourseRoutePath } from '@/lib/savedCourseRoute';
 import RestaurantDetailSheet from '@/components/munchie/RestaurantDetailSheet';
+import { AuthorAvatar } from '@/components/ui/AuthorAvatar';
 import type { CoursePlace } from '@/types/course';
 
 const SEOUL_CENTER = { lat: 37.5665, lng: 126.978 };
@@ -181,10 +182,15 @@ export function SavedMunchieMap({
           >
             <div
               data-ui="saved-course-centroid"
-              className="relative flex h-11 w-11 items-center justify-center rounded-full border-[3px] border-white bg-[#EF6B6D] text-[18px] shadow-[0_5px_14px_rgba(70,38,27,0.3)] transition-transform active:scale-95"
+              className="relative flex h-11 w-11 items-center justify-center overflow-hidden rounded-full border-[3px] border-white bg-[#EF6B6D] text-[18px] shadow-[0_5px_14px_rgba(70,38,27,0.3)] transition-transform active:scale-95"
               aria-label={`${course.post.caption} 코스, 장소 ${course.points.length}개`}
             >
-              {course.post.authorEmoji}
+              <AuthorAvatar
+                image={course.post.authorImage}
+                emoji={course.post.authorEmoji}
+                name={course.post.authorName}
+                className="flex h-full w-full items-center justify-center"
+              />
               <span className="absolute -right-1 -top-1 flex h-5 min-w-5 items-center justify-center rounded-full border-2 border-white bg-[#4B382F] px-1 text-[9px] font-black text-white">
                 {course.points.length}
               </span>
