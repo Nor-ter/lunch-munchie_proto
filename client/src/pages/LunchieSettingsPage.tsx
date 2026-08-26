@@ -3,7 +3,7 @@
  * Session persistence remains server-first through AppContext.
  */
 
-import { useEffect, useMemo, useRef, useState, type Dispatch, type PointerEvent as ReactPointerEvent, type ReactNode, type SetStateAction } from 'react';
+import { useEffect, useMemo, useRef, useState, type Dispatch, type MouseEvent as ReactMouseEvent, type PointerEvent as ReactPointerEvent, type ReactNode, type SetStateAction } from 'react';
 import { motion } from 'framer-motion';
 import { useLocation, useSearch } from 'wouter';
 import {
@@ -25,9 +25,23 @@ import { lunchmateLoadoutFromProfile } from '@/utils/lunchmateProfile';
 import { toast } from 'sonner';
 import type { Intent } from '@shared/intent';
 import { localityForCoordinate } from '@shared/melbourneLocality';
+import {
+  QUICK_MATCH_PARTY_SIZE_MAX,
+  normalizeQuickMatchPartySize,
+} from '@shared/quickMatchParty';
 import type { LunchmateLoadout } from '@/types/lunchmateCustomization';
 import { logSessionCreated } from '@/lib/eventLogger';
 import SessionManagementMenu from '@/components/lunchie/SessionManagementMenu';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 import {
   DEFAULT_QUICK_MATCH_SETTINGS,
   DIETARY_REQUIREMENTS,
@@ -39,14 +53,15 @@ import {
 } from '@/lib/quickMatch';
 
 const PREFERENCE_CARDS: { value: Intent | null; label: string; image?: string; color: string }[] = [
-  { value: 'cafe', label: 'COFFEE', image: '/assets/characters/quick-match/coffee.png', color: '#FFF0E7' },
-  { value: 'meal', label: 'FOODIE', image: '/assets/characters/quick-match/rice.png', color: '#FFE9E4' },
-  { value: 'dessert', label: 'DESSERT', image: '/assets/characters/quick-match/dessert.png', color: '#FFE7EC' },
-  { value: null, label: 'RANDOM', color: '#FFF4D9' },
+  { value: 'cafe', label: '커피', image: '/assets/characters/quick-match/coffee.png', color: '#FFF0E7' },
+  { value: 'meal', label: '식사', image: '/assets/characters/quick-match/rice.png', color: '#FFE9E4' },
+  { value: 'dessert', label: '디저트', image: '/assets/characters/quick-match/dessert.png', color: '#FFE7EC' },
+  { value: null, label: '랜덤', color: '#FFF4D9' },
 ];
 
 const RADIUS_OPTIONS = [1000, 2000, 3000, 4000, 5000];
-const GROUP_SIZE_OPTIONS = Array.from({ length: 12 }, (_, index) => index + 1);
+const GROUP_SIZE_OPTIONS = Array.from({ length: QUICK_MATCH_PARTY_SIZE_MAX }, (_, index) => index + 1);
+const GROUP_SIZE_QUICK_OPTIONS = [1, 2, 4, 10, 20, QUICK_MATCH_PARTY_SIZE_MAX];
 const GROUP_SIZE_ITEM_HEIGHT = 48;
 const GROUP_SIZE_MAX_SCROLL = (GROUP_SIZE_OPTIONS.length - 1) * GROUP_SIZE_ITEM_HEIGHT;
 /** Strong Alarm-app-like coast: higher = longer carry after a flick. */
@@ -238,7 +253,7 @@ function DeadlineDial({ minutes, onChange }: { minutes: number; onChange: (minut
         </g>
       </svg>
       <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center">
-        <strong className="text-[30px] leading-none text-[#26232A] tabular-nums">{minutes} <span className="text-[17px]">min</span></strong>
+        <strong className="text-[30px] leading-none text-[#26232A] tabular-nums">{minutes} <span className="text-[17px]">분</span></strong>
       </div>
     </div>
   );
@@ -283,7 +298,7 @@ function GroupSizeRuler({ value, onChange }: { value: number; onChange: (value: 
   };
 
   const selectValue = (next: number) => {
-    const normalized = Math.max(1, Math.min(12, Math.round(next)));
+    const normalized = normalizeQuickMatchPartySize(next);
     onChangeRef.current(normalized);
     setScrollerTop((normalized - 1) * GROUP_SIZE_ITEM_HEIGHT, false);
   };
@@ -395,9 +410,9 @@ function GroupSizeRuler({ value, onChange }: { value: number; onChange: (value: 
           tabIndex={0}
           aria-label="인원 수"
           aria-valuemin={1}
-          aria-valuemax={12}
+          aria-valuemax={QUICK_MATCH_PARTY_SIZE_MAX}
           aria-valuenow={value}
-          aria-valuetext={value === 1 ? '혼자' : String(value)}
+          aria-valuetext={value === 1 ? '혼자' : `${value}명`}
           onScroll={event => {
             if (dragRef.current || inertiaFrameRef.current != null) return;
             const nextValue = valueFromScrollTop(event.currentTarget.scrollTop);
@@ -455,7 +470,7 @@ function GroupSizeRuler({ value, onChange }: { value: number; onChange: (value: 
             }
             if (event.key === 'End') {
               event.preventDefault();
-              selectValue(12);
+              selectValue(QUICK_MATCH_PARTY_SIZE_MAX);
             }
           }}
           style={{ WebkitOverflowScrolling: 'touch', scrollSnapType: 'y mandatory' }}
@@ -478,15 +493,31 @@ function GroupSizeRuler({ value, onChange }: { value: number; onChange: (value: 
               className={`flex h-12 w-full shrink-0 snap-center items-center justify-center text-[18px] font-black transition-[color,transform,opacity] ${
                 option === value ? 'scale-110 text-[#F4515E]' : 'scale-95 text-[#9F9699] opacity-55'
               }`}
-              aria-label={option === 1 ? '혼자' : String(option)}
+              aria-label={option === 1 ? '혼자' : `${option}명`}
             >
-              {option === 1 ? '혼자' : option}
+              {option === 1 ? '혼자' : `${option}명`}
             </div>
           ))}
           <div className="h-12 shrink-0" aria-hidden="true" />
         </div>
         <div className="pointer-events-none absolute inset-x-0 top-0 z-30 h-12 bg-gradient-to-b from-[#FFF8F6] via-[#FFF8F6]/90 to-transparent" />
         <div className="pointer-events-none absolute inset-x-0 bottom-0 z-30 h-12 bg-gradient-to-t from-[#FFF8F6] via-[#FFF8F6]/90 to-transparent" />
+      </div>
+      <div className="mt-2 grid grid-cols-6 gap-1.5" aria-label="빠른 인원 선택">
+        {GROUP_SIZE_QUICK_OPTIONS.map(option => (
+          <button
+            key={option}
+            type="button"
+            onClick={() => selectValue(option)}
+            aria-label={option === 1 ? '혼자 빠른 선택' : `${option}명 빠른 선택`}
+            aria-pressed={option === value}
+            className={`min-h-9 rounded-xl text-[11px] font-black transition-colors ${
+              option === value ? 'bg-[#F4515E] text-white' : 'bg-[#FFF0EE] text-[#B5444D]'
+            }`}
+          >
+            {option === 1 ? '혼자' : option}
+          </button>
+        ))}
       </div>
     </div>
   );
@@ -506,9 +537,9 @@ function IngredientAvoidancePicker({ selected, onToggle }: { selected: string[];
         className={`flex min-h-11 w-full items-center rounded-[12px] border px-3 text-left transition-colors ${selectedLabels.length ? 'border-[#55A964] bg-[#EDF8EE]' : 'border-transparent bg-[#F8F5F3]'}`}
       >
         <span className="mr-2 text-base">🚫</span>
-        <strong className="text-[11px] text-[#514A4D]">Ingredients to avoid</strong>
+        <strong className="text-[11px] text-[#514A4D]">피하고 싶은 재료</strong>
         <span className="ml-2 min-w-0 flex-1 truncate text-[10px] font-semibold text-[#7B7276]">
-          {selectedLabels.length ? selectedLabels.join(', ') : 'No ingredients selected'}
+          {selectedLabels.length ? selectedLabels.join(', ') : '선택한 재료 없음'}
         </span>
         {selectedLabels.length > 0 && <span className="mr-2 rounded-full bg-[#55A964] px-1.5 py-0.5 text-[9px] font-bold text-white">{selectedLabels.length}</span>}
         <ChevronDown size={15} className={`shrink-0 text-[#8A8084] transition-transform ${open ? 'rotate-180' : ''}`} />
@@ -679,7 +710,17 @@ function DistanceRuler({ radius, onChange, loadout }: { radius: number; onChange
 export default function LunchieSettingsPage() {
   const [, navigate] = useLocation();
   const search = useSearch();
-  const { createSession, startSession, fetchSession, currentSession, setCurrentSession, restaurants, profile } = useApp();
+  const {
+    createSession,
+    startSession,
+    fetchSession,
+    cancelSession,
+    leaveSession,
+    currentSession,
+    setCurrentSession,
+    restaurants,
+    profile,
+  } = useApp();
   const urlIntent = new URLSearchParams(search).get('intent');
   const initialIntent: Intent | null = urlIntent === 'meal' || urlIntent === 'cafe' || urlIntent === 'dessert' ? urlIntent : null;
   const [storedSettings] = useState(() => {
@@ -706,6 +747,9 @@ export default function LunchieSettingsPage() {
   const [isCheckingSession, setIsCheckingSession] = useState(Boolean(currentSession?.inviteCode));
   const [sessionCheckFailed, setSessionCheckFailed] = useState(false);
   const [sessionCheckAttempt, setSessionCheckAttempt] = useState(0);
+  const [replacementOpen, setReplacementOpen] = useState(false);
+  const [replacementBusy, setReplacementBusy] = useState(false);
+  const [replacementError, setReplacementError] = useState<string | null>(null);
   const lunchmateLoadout = useMemo(
     () => lunchmateLoadoutFromProfile(profile.lunchmateLoadout),
     [profile.lunchmateLoadout],
@@ -719,6 +763,11 @@ export default function LunchieSettingsPage() {
     && currentSession
     && currentSession.membershipActive !== false
     && isActiveQuickMatchStatus(currentSession.status),
+  );
+  const hasPartySizeConflict = Boolean(
+    hasActiveSession
+    && currentSession
+    && partySize !== currentSession.filters.partySize,
   );
   const realCategories = useMemo(() => new Set(restaurants.map(restaurant => restaurant.category)), [restaurants]);
 
@@ -779,7 +828,7 @@ export default function LunchieSettingsPage() {
   };
 
   const setGroupSize = (next: number) => {
-    setPartySize(Math.max(1, Math.min(12, Math.round(next))));
+    setPartySize(normalizeQuickMatchPartySize(next));
   };
 
   const confirmCurrentLocation = async () => {
@@ -805,82 +854,117 @@ export default function LunchieSettingsPage() {
     if (!origin && !isLocating) void confirmCurrentLocation().catch(() => undefined);
   };
 
+  const createAndEnterSession = async () => {
+    const categories = tags.filter(tag => realCategories.has(tag));
+    const hostName = profile.name && profile.name !== '사용자' ? profile.name : '호스트';
+    const currentOrigin = distanceEnabled
+      ? origin ?? await currentPosition()
+      : null;
+    const session = await createSession(
+      `${hostName}의 점심 세션`,
+      {
+        partySize,
+        dietary,
+        budget,
+        radius,
+        distanceEnabled,
+        originLatitude: currentOrigin?.latitude,
+        originLongitude: currentOrigin?.longitude,
+        categories,
+        intent: intent ?? undefined,
+      },
+      hostName,
+      profile.emoji,
+      deadlineMin,
+    );
+
+    logSessionCreated(session.id, {
+      intent: intent ?? 'auto',
+      party_size: partySize,
+      radius_m: distanceEnabled ? radius : null,
+      budget,
+      dietary_count: dietary.length,
+      category_count: categories.length,
+      deadline_minutes: deadlineMin,
+    });
+
+    if (isSolo) {
+      await startSession(session.inviteCode, deadlineMin);
+      toast.success('빠른 매칭을 시작합니다.');
+      navigate('/lunchie/swipe');
+    } else {
+      toast.success('세션이 만들어졌어요. 친구를 초대해 보세요.');
+      navigate('/session/lobby');
+    }
+  };
+
   const handleStart = async () => {
     if (creationLockRef.current || isCheckingSession || sessionCheckFailed) return;
-    creationLockRef.current = true;
-    if (hasActiveSession && currentSession) {
-      setIsCreating(true);
-      try {
-        const activeSession = await fetchSession(currentSession.inviteCode);
-        if (activeSession.membershipActive !== false && isActiveQuickMatchStatus(activeSession.status)) {
-          const isWaiting = activeSession.status === 'waiting';
-          toast.info(isWaiting ? '진행 중인 대기방으로 이동합니다.' : '진행 중인 투표로 이동합니다.');
-          navigate(isWaiting ? '/session/lobby' : '/lunchie/swipe');
-          creationLockRef.current = false;
-          return;
-        }
-        // A locally cached session can outlive its server record. Clear only
-        // that stale cache before creating a replacement session.
-        setCurrentSession(null);
-      } catch (error) {
-        const status = (error as { status?: number }).status;
-        if (status !== 404 && status !== 410) {
-          toast.error('We could not verify the current Quick Match. Please try again.');
-          setIsCreating(false);
-          creationLockRef.current = false;
-          return;
-        }
-        setCurrentSession(null);
-      }
+    if (hasPartySizeConflict) {
+      setReplacementError(null);
+      setReplacementOpen(true);
+      return;
     }
 
+    creationLockRef.current = true;
     setIsCreating(true);
     try {
-      const categories = tags.filter(tag => realCategories.has(tag));
-      const hostName = profile.name && profile.name !== '사용자' ? profile.name : '호스트';
-      const currentOrigin = distanceEnabled
-        ? origin ?? await currentPosition()
-        : null;
-      const session = await createSession(
-        `${hostName}의 점심 세션`,
-        {
-          partySize,
-          dietary,
-          budget,
-          radius,
-          distanceEnabled,
-          originLatitude: currentOrigin?.latitude,
-          originLongitude: currentOrigin?.longitude,
-          categories,
-          intent: intent ?? undefined,
-        },
-        hostName,
-        profile.emoji,
-        deadlineMin,
-      );
-
-      logSessionCreated(session.id, {
-        intent: intent ?? 'auto',
-        party_size: partySize,
-        radius_m: distanceEnabled ? radius : null,
-        budget,
-        dietary_count: dietary.length,
-        category_count: categories.length,
-        deadline_minutes: deadlineMin,
-      });
-
-      if (isSolo) {
-        await startSession(session.inviteCode, deadlineMin);
-        toast.success('Quick Match를 시작합니다.');
-        navigate('/lunchie/swipe');
-      } else {
-        toast.success('세션이 만들어졌어요. 친구를 초대해 보세요.');
-        navigate('/session/lobby');
+      if (hasActiveSession && currentSession) {
+        try {
+          const activeSession = await fetchSession(currentSession.inviteCode);
+          if (activeSession.membershipActive !== false && isActiveQuickMatchStatus(activeSession.status)) {
+            const isWaiting = activeSession.status === 'waiting';
+            toast.info(isWaiting ? '진행 중인 대기방으로 이동합니다.' : '진행 중인 투표로 이동합니다.');
+            navigate(isWaiting ? '/session/lobby' : '/lunchie/swipe');
+            return;
+          }
+          // A locally cached session can outlive its server record. Clear only
+          // that stale cache before creating a replacement session.
+          setCurrentSession(null);
+        } catch (error) {
+          const status = (error as { status?: number }).status;
+          if (status !== 404 && status !== 410) {
+            toast.error('진행 중인 빠른 매칭을 확인하지 못했어요. 다시 시도해 주세요.');
+            return;
+          }
+          setCurrentSession(null);
+        }
       }
+
+      await createAndEnterSession();
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : '세션 생성에 실패했습니다.');
+      console.error('빠른 매칭 세션 생성 실패', error);
+      toast.error('세션을 만들지 못했어요. 잠시 후 다시 시도해 주세요.');
     } finally {
       setIsCreating(false);
+      creationLockRef.current = false;
+    }
+  };
+
+  const handleReplaceSession = async (event: ReactMouseEvent<HTMLButtonElement>) => {
+    event.preventDefault();
+    if (!currentSession || replacementBusy || creationLockRef.current) return;
+    let endedExistingSession = false;
+    creationLockRef.current = true;
+    setReplacementBusy(true);
+    setReplacementError(null);
+    try {
+      const isHost = currentSession.hostId === profile.id;
+      if (isHost) await cancelSession(currentSession.inviteCode);
+      else await leaveSession(currentSession.inviteCode);
+      endedExistingSession = true;
+      await createAndEnterSession();
+      setReplacementOpen(false);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : '새 Quick Match를 시작하지 못했어요.';
+      if (endedExistingSession) {
+        setReplacementOpen(false);
+        toast.error(`기존 세션은 종료됐지만 새 세션을 만들지 못했어요. 다시 시도해 주세요. ${message}`);
+      } else {
+        setReplacementError(message);
+      }
+    } finally {
+      setReplacementBusy(false);
       creationLockRef.current = false;
     }
   };
@@ -890,48 +974,48 @@ export default function LunchieSettingsPage() {
       <header className="sticky top-0 z-20 flex items-start gap-3 bg-[#FFF6F2]/95 px-5 pb-3 pt-[max(12px,env(safe-area-inset-top))] backdrop-blur">
         <BackButton onClick={() => navigate('/')} aria-label="홈으로 돌아가기" />
         <div>
-          <h1 className="text-[25px] font-black leading-none tracking-[-0.03em] text-[#DB2837]">LUNCHIE MODE</h1>
-          <p className="mt-2 text-[11px] font-semibold text-[#8D776C]">QUICK MATCH</p>
+          <h1 className="text-[19px] font-extrabold leading-none tracking-[-0.4px] text-[#F4515E]">Lunchie</h1>
+          <p className="mt-1 text-[10px] font-bold tracking-[0.7px] text-[#9B959A]">빠른 매칭</p>
         </div>
       </header>
 
       <main className="mx-auto max-w-[480px] space-y-3 px-4 pb-32">
         {sessionCheckFailed && currentSession && (
           <section role="alert" className="rounded-[20px] border border-[#F2C6C1] bg-white p-4 shadow-sm">
-            <h2 className="text-[14px] font-black text-[#302B2E]">We couldn’t check your Quick Match</h2>
-            <p className="mt-1 text-[11px] leading-relaxed text-[#7C7276]">Your saved session is still here. Retry before creating another one.</p>
+            <h2 className="text-[14px] font-black text-[#302B2E]">진행 중인 빠른 매칭을 확인하지 못했어요</h2>
+            <p className="mt-1 text-[11px] leading-relaxed text-[#7C7276]">저장된 세션은 유지하고 있어요. 새 세션을 만들기 전에 다시 확인해 주세요.</p>
             <div className="mt-3 flex flex-wrap gap-2">
-              <button type="button" onClick={() => setSessionCheckAttempt(attempt => attempt + 1)} className="min-h-10 rounded-xl bg-[#F4515E] px-4 text-[12px] font-bold text-white">Try again</button>
-              <button type="button" onClick={() => setCurrentSession(null)} className="min-h-10 rounded-xl bg-[#FFF0EE] px-4 text-[12px] font-bold text-[#C43B47]">Clear saved session</button>
+              <button type="button" onClick={() => setSessionCheckAttempt(attempt => attempt + 1)} className="min-h-10 rounded-xl bg-[#F4515E] px-4 text-[12px] font-bold text-white">다시 시도</button>
+              <button type="button" onClick={() => setCurrentSession(null)} className="min-h-10 rounded-xl bg-[#FFF0EE] px-4 text-[12px] font-bold text-[#C43B47]">저장된 세션 지우기</button>
             </div>
           </section>
         )}
         {hasActiveSession && currentSession && (
-          <section className="rounded-[22px] border border-[#F5B8B4] bg-[#FFFCFA] p-4 shadow-[0_8px_24px_rgba(180,100,90,0.10)]" aria-label="Quick Match in progress">
+          <section className="rounded-[22px] border border-[#F5B8B4] bg-[#FFFCFA] p-4 shadow-[0_8px_24px_rgba(180,100,90,0.10)]" aria-label="진행 중인 빠른 매칭">
             <div className="flex items-start gap-3">
               <div className="min-w-0 flex-1">
                 <div className="flex flex-wrap items-center gap-2">
-                  <h2 className="text-[15px] font-black text-[#26232A]">Quick Match in progress</h2>
+                  <h2 className="text-[15px] font-black text-[#26232A]">진행 중인 빠른 매칭</h2>
                   <span className="rounded-full bg-[#FFF0EE] px-2.5 py-1 text-[10px] font-black uppercase tracking-wide text-[#D83D49]">
-                    {currentSession.status === 'waiting' ? 'Waiting' : currentSession.status === 'choosing' ? 'Choosing' : 'Voting'}
+                    {currentSession.status === 'waiting' ? '대기 중' : currentSession.status === 'choosing' ? '최종 선택 중' : '투표 중'}
                   </span>
                 </div>
-                <p className="mt-1 text-[11px] font-semibold text-[#8A8084]">Server-verified and ready to resume.</p>
+                <p className="mt-1 text-[11px] font-semibold text-[#8A8084]">서버에서 확인된 세션으로 바로 이어서 할 수 있어요.</p>
               </div>
               <SessionManagementMenu onEnded={() => navigate('/lunchie/settings')} className="text-[#6F6468]" />
             </div>
             <div className="mt-3 grid grid-cols-2 gap-2 text-[11px]">
-              <span className="rounded-xl bg-[#FFF6F2] px-3 py-2 font-bold text-[#645A5E]">👥 {currentSession.members.length}/{currentSession.filters.partySize} people</span>
-              <span className="rounded-xl bg-[#FFF6F2] px-3 py-2 font-bold text-[#645A5E]">⏱ {currentSession.deadlineMinutes ?? deadlineMin} min</span>
+              <span className="rounded-xl bg-[#FFF6F2] px-3 py-2 font-bold text-[#645A5E]">👥 {currentSession.members.length}/{currentSession.filters.partySize}명</span>
+              <span className="rounded-xl bg-[#FFF6F2] px-3 py-2 font-bold text-[#645A5E]">⏱ {currentSession.deadlineMinutes ?? deadlineMin}분</span>
               <span className="rounded-xl bg-[#FFF6F2] px-3 py-2 font-bold text-[#645A5E]">📍 {formatRadius(currentSession.filters.radius)}</span>
-              <span className="rounded-xl bg-[#FFF6F2] px-3 py-2 font-bold text-[#645A5E]">{currentSession.filters.partySize === 1 ? '🙋 Solo' : '🤝 Group'}</span>
+              <span className="rounded-xl bg-[#FFF6F2] px-3 py-2 font-bold text-[#645A5E]">{currentSession.filters.partySize === 1 ? '🙋 혼자' : '🤝 함께'}</span>
             </div>
             <button
               type="button"
               onClick={() => navigate(currentSession.status === 'waiting' ? '/session/lobby' : '/lunchie/swipe')}
               className="mt-3 min-h-11 w-full rounded-[14px] bg-[#F4515E] px-4 text-[13px] font-black text-white outline-none transition-transform active:scale-[0.98] focus-visible:ring-2 focus-visible:ring-[#F4515E] focus-visible:ring-offset-2"
             >
-              {currentSession.status === 'waiting' ? 'Return to lobby' : 'Continue Quick Match'}
+              {currentSession.status === 'waiting' ? '대기방으로 돌아가기' : '빠른 매칭 계속하기'}
             </button>
           </section>
         )}
@@ -947,8 +1031,14 @@ export default function LunchieSettingsPage() {
           <div className="mb-3 flex items-center gap-2 text-[14px] font-extrabold text-[#26232A]">
             <Users size={17} className="text-[#F4515E]" />
             <span>인원</span>
+            <span className="ml-auto rounded-full bg-[#FFE4E3] px-2.5 py-1 text-[11px] text-[#D83C49]">
+              {partySize === 1 ? '혼자' : `${partySize}명`}
+            </span>
           </div>
           <GroupSizeRuler value={partySize} onChange={setGroupSize} />
+          <p className="mt-2 text-center text-[10px] font-semibold text-[#948A8E]">
+            최대 {QUICK_MATCH_PARTY_SIZE_MAX}명까지 함께 선택할 수 있어요.
+          </p>
         </Card>
 
         <Card>
@@ -981,7 +1071,7 @@ export default function LunchieSettingsPage() {
         </Card>
 
         <Card>
-          <CardTitle icon={<UtensilsCrossed size={16} />} badge={`${chosenCount} 선택`}>오늘의 Quick Match</CardTitle>
+          <CardTitle icon={<UtensilsCrossed size={16} />} badge={`${chosenCount} 선택`}>오늘의 빠른 매칭</CardTitle>
           <div className="grid grid-cols-4 gap-2">
             {PREFERENCE_CARDS.map(option => (
               <PreferenceCard key={option.label} option={option} selected={intent === option.value} onClick={() => setIntent(option.value)} />
@@ -1019,13 +1109,13 @@ export default function LunchieSettingsPage() {
 
           <div className="my-3 h-px bg-[#F0EAE8]" />
           <div className="mb-2 flex items-center justify-between gap-3">
-            <p className="text-[12px] font-extrabold text-[#524B4F]">Dietary requirements</p>
+            <p className="text-[12px] font-extrabold text-[#524B4F]">식단 요구 사항</p>
             <button
               type="button"
               onClick={() => setDietary(current => current.filter(value => !DIETARY_REQUIREMENTS.some(option => option.value === value)))}
               className="min-h-9 rounded-lg px-2 text-[10px] font-bold text-[#C43B47] outline-none focus-visible:ring-2 focus-visible:ring-[#F4515E]"
             >
-              Clear requirements
+              선택 초기화
             </button>
           </div>
           <div className="grid grid-cols-2 gap-1.5">
@@ -1060,15 +1150,46 @@ export default function LunchieSettingsPage() {
             className="lunchie-session-primary-action w-full disabled:cursor-not-allowed disabled:opacity-60"
           >
             {isCheckingSession
-              ? 'Checking current session…'
+              ? '진행 중인 세션 확인 중…'
               : isCreating
               ? '준비하는 중…'
+              : hasPartySizeConflict
+                ? `기존 세션 종료 후 ${isSolo ? '혼자로' : `${partySize}명으로`} 시작하기`
               : hasActiveSession && currentSession
                 ? currentSession.status === 'waiting' ? '대기방으로 돌아가기' : '투표 계속하기'
-                : isSolo ? 'Swipe 시작하기' : '세션 만들고 초대하기'}
+                : isSolo ? '카드 선택 시작하기' : '세션 만들고 초대하기'}
           </motion.button>
         </div>
       </main>
+
+      <AlertDialog open={replacementOpen} onOpenChange={open => !replacementBusy && setReplacementOpen(open)}>
+        <AlertDialogContent className="max-w-[390px] rounded-[22px] border-[#F0D9D3] bg-[#FFFBF8] p-5">
+          <AlertDialogHeader className="text-left">
+            <AlertDialogTitle className="text-[19px] font-black text-[#26232A]">
+              새 인원 설정으로 시작할까요?
+            </AlertDialogTitle>
+            <AlertDialogDescription className="text-[13px] leading-relaxed text-[#746A6E]">
+              현재 {currentSession?.filters.partySize ?? 1}명 세션이 진행 중이에요. {isSolo ? '혼자' : `${partySize}명`} 설정을 적용하려면
+              {currentSession?.hostId === profile.id ? ' 기존 세션을 종료하고' : ' 기존 세션에서 나간 뒤'} 새 Quick Match를 만들어야 해요.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          {replacementError && (
+            <p role="alert" className="rounded-xl bg-[#FFF0EE] px-3 py-2 text-[12px] font-semibold text-[#C93742]">
+              {replacementError}
+            </p>
+          )}
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={replacementBusy} className="min-h-11 rounded-xl">기존 세션 계속하기</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={event => void handleReplaceSession(event)}
+              disabled={replacementBusy}
+              className="min-h-11 rounded-xl bg-[#C93742] font-bold text-white hover:bg-[#AE2D37]"
+            >
+              {replacementBusy ? '새 세션 준비 중…' : `${currentSession?.hostId === profile.id ? '종료' : '나가기'} 후 새로 시작`}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

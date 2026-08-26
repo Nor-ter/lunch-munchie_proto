@@ -7,7 +7,7 @@
 import { useState, useCallback, useEffect, useRef } from 'react';
 import { motion, useMotionValue, useTransform, useMotionTemplate, AnimatePresence, type MotionValue } from 'framer-motion';
 import { useLocation } from 'wouter';
-import { Heart, X, Star, MapPin, Clock, Phone, Navigation, Share2, Download, Link2, Home, Bookmark, RotateCcw, Loader2, RefreshCw, SlidersHorizontal } from 'lucide-react';
+import { Heart, X, Star, MapPin, Clock, Phone, Navigation, Share2, Download, Link2, Home, Bookmark, RotateCcw, Loader2, RefreshCw, SlidersHorizontal, Info } from 'lucide-react';
 import { toast } from 'sonner';
 import { useApp, type Restaurant, type MenuItem } from '@/contexts/AppContext';
 import { useCourseShare } from '@/hooks/useCourseShare';
@@ -22,8 +22,12 @@ import { intentForCategory } from '@shared/intent';
 import { persistSessionSwipe } from '@/services/sessionApi';
 import { classifySwipeAvailability, type SwipeAvailability } from '@/lib/swipeAvailability';
 import { isActiveQuickMatchStatus } from '@/lib/quickMatch';
+import { beginMenuPhotoRotation, completeMenuPhotoRotation } from '@/lib/menuPhotoRotation';
+import { normalizeRestaurantPayload } from '@shared/restaurantContract';
 import SessionManagementMenu from '@/components/lunchie/SessionManagementMenu';
 import BackButton from '@/components/ui/BackButton';
+import QuickMatchRestaurantDetailSheet from '@/components/lunchie/QuickMatchRestaurantDetailSheet';
+import { restaurantSummary } from '@/lib/restaurantPresentation';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -41,39 +45,39 @@ function SwipeStateScreen({
   const content = {
     loading: {
       title: '결승 후보를 준비하고 있어요',
-      description: 'Preparing your Quick Match and restaurant options…',
+      description: '빠른 매칭과 식당 후보를 준비하고 있어요…',
     },
     'api-error': {
-      title: 'We couldn’t load Quick Match',
-      description: 'Check your connection and try again.',
+      title: '빠른 매칭을 불러오지 못했어요',
+      description: '인터넷 연결을 확인하고 다시 시도해 주세요.',
     },
     'catalog-empty': {
-      title: 'Restaurants aren’t available yet',
-      description: 'We couldn’t load restaurant options for this Quick Match.',
+      title: '아직 추천할 식당이 없어요',
+      description: '이 빠른 매칭에 맞는 식당 후보를 불러오지 못했어요.',
     },
     'no-matches': {
-      title: 'No matches found',
-      description: 'Try increasing the distance or adjusting your preferences.',
+      title: '조건에 맞는 식당이 없어요',
+      description: '검색 거리를 늘리거나 취향 조건을 조정해 보세요.',
     },
     'session-missing': {
-      title: 'Quick Match를 다시 준비할게요',
-      description: 'No Quick Match found. Start a new Quick Match from settings.',
+      title: '빠른 매칭을 다시 준비할게요',
+      description: '진행 중인 빠른 매칭이 없어요. 설정에서 새로 시작해 주세요.',
     },
     'session-invalid': {
-      title: 'This Quick Match is no longer available',
-      description: 'It may have ended, expired, been cancelled, or you may have left the lobby.',
+      title: '더 이상 참여할 수 없는 빠른 매칭이에요',
+      description: '이미 종료·만료·취소됐거나 대기방에서 나간 세션일 수 있어요.',
     },
     'session-not-started': {
-      title: 'This Quick Match hasn’t started yet',
-      description: 'Return to the lobby and wait for the host to begin.',
+      title: '아직 빠른 매칭이 시작되지 않았어요',
+      description: '대기방으로 돌아가 호스트가 시작할 때까지 기다려 주세요.',
     },
   }[state];
   const canRetry = state === 'api-error' || state === 'catalog-empty';
   const primaryLabel = state === 'no-matches'
-    ? 'Edit preferences'
+    ? '조건 수정하기'
     : state === 'session-not-started'
-      ? 'Return to lobby'
-      : 'Back to settings';
+      ? '대기방으로 돌아가기'
+      : '설정으로 돌아가기';
   const primaryPath = state === 'session-not-started' ? '/session/lobby' : '/lunchie/settings';
 
   return (
@@ -100,12 +104,12 @@ function SwipeStateScreen({
             </button>
             {canRetry && onRetry && (
               <button type="button" onClick={onRetry} className="flex min-h-11 w-full items-center justify-center gap-2 rounded-2xl border border-[#E9D8D3] bg-[#FFF9F6] px-4 text-[13px] font-bold text-[#5E5559] outline-none focus-visible:ring-2 focus-visible:ring-[#F4515E]">
-                <RefreshCw size={15} aria-hidden="true" /> Try again
+                <RefreshCw size={15} aria-hidden="true" /> 다시 시도
               </button>
             )}
             {currentSession && (state === 'catalog-empty' || state === 'no-matches' || state === 'session-not-started') && (
               <div className="flex items-center justify-center gap-1 pt-2 text-[11px] font-semibold text-[#81767A]">
-                Manage this session
+                이 세션 관리
                 <SessionManagementMenu onEnded={() => navigate('/lunchie/settings')} className="text-[#81767A]" />
               </div>
             )}
@@ -136,10 +140,11 @@ const CUBE_DURATION = 0.7;
 // 다음/이전 사진을 보여주는 진짜 3D 큐브 슬라이더(tl_revise 애니메이션 UI). step: 단조 증가/감소
 // 정수(다음 +1, 이전 -1). 90도 도는 동안 실제 보이는 면은 나가는 면+들어오는 면 둘뿐이라 네 면만으로
 // 임의 개수 사진을 끊김 없이 굴린다.
-function MenuCube({ photos, step, onPhotoError }: {
+function MenuCube({ photos, step, onPhotoError, onRotationComplete }: {
   photos: string[];
   step: number;
   onPhotoError?: (src: string) => void;
+  onRotationComplete?: () => void;
 }) {
   const ref = useRef<HTMLDivElement>(null);
   const [depth, setDepth] = useState(160);
@@ -180,6 +185,7 @@ function MenuCube({ photos, step, onPhotoError }: {
           style={{ transformStyle: 'preserve-3d' }}
           animate={{ rotateY: -90 * step }}
           transition={{ duration: CUBE_DURATION, ease: CUBE_EASE }}
+          onAnimationComplete={onRotationComplete}
         >
           {[0, 1, 2, 3].map(f => (
             <div
@@ -261,6 +267,7 @@ function SwipeCard({
   progress,
   total,
   isLocked,
+  onOpenRestaurantDetails,
 }: {
   restaurant: any;
   onAction: (a: SwipeAction) => void;
@@ -269,10 +276,13 @@ function SwipeCard({
   progress: number;
   total: number;
   isLocked: boolean;
+  onOpenRestaurantDetails: (restaurant: Restaurant) => void;
 }) {
   const [isRevealed, setIsRevealed] = useState(false);
-  // 큐브 회전 단계(단조). photoIndex는 foodPhotos 길이로 파생 — 도트/라벨 표시에 사용.
+  // 큐브 회전 단계(단조). photoIndex는 foodPhotos 길이로 파생 — 도트/사진 순번 표시에 사용.
   const [photoStep, setPhotoStep] = useState(0);
+  const photoRotationLock = useRef(false);
+  const [isPhotoRotating, setIsPhotoRotating] = useState(false);
   const [detailIndex, setDetailIndex] = useState<number | null>(null);
   const x = useMotionValue(0);
   const rotate = useTransform(x, [-220, 220], [-16, 16]);
@@ -316,6 +326,28 @@ function SwipeCard({
   const foodPhotos = candidatePhotoSources.filter((photo) => !failedPhotoSources.has(photo));
   const primaryPhoto = hasCanonicalPhotoList ? foodPhotos[0] : restaurant.image;
   const photoIndex = foodPhotos.length ? ((photoStep % foodPhotos.length) + foodPhotos.length) % foodPhotos.length : 0;
+  const detailSummary = restaurantSummary(restaurant);
+  const rotateMenuPhoto = useCallback((direction: -1 | 1) => {
+    const accepted = beginMenuPhotoRotation(photoRotationLock, direction, delta => {
+      setPhotoStep(step => step + delta);
+    });
+    if (accepted) setIsPhotoRotating(true);
+  }, []);
+  const finishMenuPhotoRotation = useCallback(() => {
+    completeMenuPhotoRotation(photoRotationLock);
+    setIsPhotoRotating(false);
+  }, []);
+
+  useEffect(() => {
+    completeMenuPhotoRotation(photoRotationLock);
+    setIsPhotoRotating(false);
+  }, [restaurant.id, candidatePhotoKey]);
+  const photoLabel = foodPhotos.length === 0
+    ? '등록된 음식 사진이 없어요'
+    : `메뉴 사진 ${photoIndex + 1} / ${foodPhotos.length}`;
+  const photoProgressAriaLabel = foodPhotos.length > 0
+    ? `메뉴 사진 전체 ${foodPhotos.length}장 중 ${photoIndex + 1}번째`
+    : undefined;
 
   const handleDragEnd = useCallback((_: unknown, info: { offset: { x: number } }) => {
     if (isLocked) return;
@@ -346,8 +378,11 @@ function SwipeCard({
       dragElastic={0.6}
       onDragEnd={handleDragEnd}
       whileDrag={{ cursor: 'grabbing' }}
-      onTap={() => {
-        if (!isRevealed) {
+      onTap={(event) => {
+        const target = event.target;
+        const openedDetail = target instanceof Element
+          && Boolean(target.closest('[data-ui="quick-match-detail-trigger"]'));
+        if (!openedDetail && !isRevealed) {
           setPhotoStep(0);
           setIsRevealed(true);
         }
@@ -383,19 +418,15 @@ function SwipeCard({
         />
         <div className="absolute inset-0 bg-gradient-to-t from-black/75 via-black/10 to-transparent" />
 
-        {/* Progress */}
-        <div className="absolute top-4 left-5 right-5 flex items-center justify-between">
-          <div className="flex gap-1">
-            {Array.from({ length: total }).map((_, i) => (
-              <div key={i} className="h-1 rounded-full transition-all"
-                style={{
-                  width: i < progress ? 22 : 14,
-                  background: i < progress ? 'white' : 'rgba(255,255,255,0.35)',
-                }} />
-            ))}
-          </div>
-          <span className="text-white/80 text-[12px] font-bold bg-black/20 px-2 py-0.5 rounded-full">
-            {progress}/{total}
+        {/* Restaurant-card progress stays independent from the menu photo index. */}
+        <div className="pointer-events-none absolute left-1/2 top-4 z-10 -translate-x-1/2">
+          <span
+            role="status"
+            aria-live="polite"
+            aria-label={`전체 ${total}개 중 ${progress}번째 음식점`}
+            className="inline-flex min-h-7 min-w-[64px] items-center justify-center rounded-md bg-black/45 px-3 py-1 text-[13px] font-black tabular-nums text-white shadow-sm backdrop-blur-sm"
+          >
+            {progress} / {total}
           </span>
         </div>
 
@@ -418,7 +449,20 @@ function SwipeCard({
             ))}
           </div>
           <h2 className="text-white font-black text-[24px] leading-tight">{restaurant.name}</h2>
-          <p className="text-white/70 text-[12px] mt-1">{restaurant.description}</p>
+          <button
+            type="button"
+            data-ui="quick-match-detail-trigger"
+            aria-label={`${restaurant.name} 상세정보 보기`}
+            onPointerDown={(event) => event.stopPropagation()}
+            onClick={(event) => {
+              event.stopPropagation();
+              onOpenRestaurantDetails(restaurant);
+            }}
+            className="mt-2 flex min-h-9 w-full items-center justify-between gap-2 rounded-xl bg-black/25 px-3 py-2 text-left outline-none transition-colors active:bg-black/40 focus-visible:ring-2 focus-visible:ring-white/80"
+          >
+            <span className="min-w-0 flex-1 truncate text-[12px] font-semibold text-white/75">{detailSummary}</span>
+            <span className="shrink-0 text-[11px] font-black text-white">상세보기 ›</span>
+          </button>
           <div className="flex items-center gap-3 mt-2">
             <div className="flex items-center gap-1">
               <Star size={12} fill="#FFD700" color="#FFD700" />
@@ -440,7 +484,7 @@ function SwipeCard({
           className="absolute top-8 left-5 border-[3px] border-[#3CBA44] rounded-2xl px-4 py-2"
           style={{ opacity: likeOp, rotate: -12 }}
         >
-          <span className="text-[#3CBA44] font-black text-[18px]">LIKE ♡</span>
+          <span className="text-[#3CBA44] font-black text-[18px]">좋아요 ♡</span>
         </motion.div>
 
         {/* NOPE overlay */}
@@ -448,7 +492,7 @@ function SwipeCard({
           className="absolute top-8 right-5 border-[3px] border-[#EB5053] rounded-2xl px-4 py-2"
           style={{ opacity: nopeOp, rotate: 12 }}
         >
-          <span className="text-[#EB5053] font-black text-[18px]">NOPE ✕</span>
+          <span className="text-[#EB5053] font-black text-[18px]">패스 ✕</span>
         </motion.div>
         {/* 좋아요 샤이닝 효과 — 두 겹의 대각선 빛이 어긋나게 스치고, 전체 플래시 + 사방으로 빛 파티클이 튄다 */}
         <motion.div
@@ -540,6 +584,19 @@ function SwipeCard({
               </button>
             </div>
 
+            <button
+              type="button"
+              onClick={(event) => {
+                event.stopPropagation();
+                onOpenRestaurantDetails(restaurant);
+              }}
+              aria-label={`${restaurant.name} 식당 상세보기`}
+              className="mx-5 mb-2 flex min-h-10 flex-shrink-0 items-center justify-center gap-2 rounded-xl border border-white/15 bg-white/10 px-4 text-[13px] font-bold text-white outline-none transition-colors active:bg-white/20 focus-visible:ring-2 focus-visible:ring-white/80"
+            >
+              <Info size={16} aria-hidden="true" />
+              식당 상세보기
+            </button>
+
             {restaurant.menuItems && restaurant.menuItems.length > 0 ? (
               /* 실제 메뉴리스트 — 소스 카테고리 구조로 섹션 나눔, 탭하면 상세 화면 */
               <div className="flex-1 px-5 pb-4 flex flex-col min-h-0">
@@ -588,24 +645,31 @@ function SwipeCard({
                   {foodPhotos.length > 0 ? (
                     <>
                       {/* 좌/우 탭 시 큐브가 Y축으로 90도씩 굴러간다 */}
-                      <MenuCube photos={foodPhotos} step={photoStep} onPhotoError={markPhotoFailed} />
+                      <MenuCube
+                        photos={foodPhotos}
+                        step={photoStep}
+                        onPhotoError={markPhotoFailed}
+                        onRotationComplete={finishMenuPhotoRotation}
+                      />
                       {foodPhotos.length > 1 && (
                         <>
                           <button
                             className="absolute inset-y-0 left-0 w-1/2"
+                            disabled={isPhotoRotating}
                             onClick={(e) => {
                               e.stopPropagation();
-                              setPhotoStep(s => s - 1);
+                              rotateMenuPhoto(-1);
                             }}
-                            aria-label="이전 메뉴"
+                            aria-label="이전 사진"
                           />
                           <button
                             className="absolute inset-y-0 right-0 w-1/2"
+                            disabled={isPhotoRotating}
                             onClick={(e) => {
                               e.stopPropagation();
-                              setPhotoStep(s => s + 1);
+                              rotateMenuPhoto(1);
                             }}
-                            aria-label="다음 메뉴"
+                            aria-label="다음 사진"
                           />
                         </>
                       )}
@@ -618,7 +682,13 @@ function SwipeCard({
                       emojiClass="text-[80px]"
                     />
                   )}
-                  <div className="absolute top-3 left-1/2 -translate-x-1/2 flex gap-1.5 pointer-events-none">
+                  <div
+                    data-ui="menu-photo-progress"
+                    data-photo-index={photoIndex + 1}
+                    data-photo-count={foodPhotos.length}
+                    aria-hidden="true"
+                    className="absolute top-3 left-1/2 -translate-x-1/2 flex gap-1.5 pointer-events-none"
+                  >
                     {foodPhotos.map((_: string, j: number) => (
                       <div key={j} className="w-1.5 h-1.5 rounded-full"
                         style={{ background: j === photoIndex ? 'white' : 'rgba(255,255,255,0.4)' }} />
@@ -626,8 +696,13 @@ function SwipeCard({
                   </div>
                 </div>
                 <div className="pt-3 flex-shrink-0">
-                  <p className="font-bold text-[16px] text-white">
-                    {foodPhotos.length > 0 ? `메뉴 ${photoIndex + 1}` : '등록된 음식 사진이 없어요'}
+                  <p
+                    role={photoProgressAriaLabel ? 'status' : undefined}
+                    aria-live={photoProgressAriaLabel ? 'polite' : undefined}
+                    aria-label={photoProgressAriaLabel}
+                    className="font-bold text-[16px] text-white"
+                  >
+                    {photoLabel}
                   </p>
                   <p className="text-[12px] text-white/50 mt-0.5">{restaurant.description}</p>
                 </div>
@@ -640,7 +715,7 @@ function SwipeCard({
                 {restaurant.menuItems && restaurant.menuItems.length > 0
                   ? `메뉴 ${restaurant.menuItems.length}개`
                   : foodPhotos.length > 1
-                    ? '← 이전 / 다음 메뉴 →'
+                    ? '← 이전 / 다음 사진 →'
                     : '사진 정보'} · ✕ 눌러서 닫기
               </p>
             </div>
@@ -1279,7 +1354,7 @@ function FinalBattleResultScreen({
             : { duration: 0.25 }}
         >
           <div className="w-14 h-14 rounded-full bg-[#EB5053] border-[3px] border-white flex items-center justify-center shadow-2xl">
-            <span className="font-black text-white text-[15px]">VS</span>
+            <span className="font-black text-white text-[15px]">대결</span>
           </div>
         </motion.div>
       </div>
@@ -1378,7 +1453,8 @@ function WaitingOrDecidedScreen({ onContinue, onReroll }: { onContinue: (winner?
       // 신호: finalist 선택 = CHOOSE(pairwise), '둘 다 별로' = NOPE(명시 음성)
       logEvent({ event_type: 'SWIPE', action: isReject ? 'NOPE' : 'CHOOSE', slate_type: 'FINAL', restaurant_id: restaurantId, round, user_id: profile.id, session_id: currentSession?.id ?? null });
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : '최종 선택을 저장하지 못했어요.');
+      console.error('빠른 매칭 최종 선택 저장 실패', error);
+      toast.error('최종 선택을 저장하지 못했어요. 다시 시도해 주세요.');
     } finally {
       setIsVoting(false);
     }
@@ -1771,6 +1847,7 @@ function QuickMatchExperience() {
   const [rerollPrompt, setRerollPrompt] = useState<'none' | 'lastChance' | 'exhausted'>('none');
   const [showIntro, setShowIntro] = useState(true);
   const [isSubmittingSwipe, setIsSubmittingSwipe] = useState(false);
+  const [detailRestaurant, setDetailRestaurant] = useState<Restaurant | null>(null);
   const submittingSwipeRef = useRef(false);
   const [remainingMs, setRemainingMs] = useState(() => {
     if (!currentSession?.deadline) return 0;
@@ -1807,6 +1884,36 @@ function QuickMatchExperience() {
   const visibleCards = targetRestaurants.slice(currentIndex, currentIndex + 3);
   const progress = Math.min(currentIndex + 1, total);
   const progressSignalRef = useRef(new Set<string>());
+
+  useEffect(() => {
+    const syncRestaurantDetailFromHistory = () => {
+      const restaurantId = window.history.state?.lunchieQuickMatchDetail;
+      setDetailRestaurant(
+        typeof restaurantId === 'string'
+          ? targetRestaurants.find(restaurant => restaurant.id === restaurantId) ?? null
+          : null,
+      );
+    };
+    window.addEventListener('popstate', syncRestaurantDetailFromHistory);
+    return () => window.removeEventListener('popstate', syncRestaurantDetailFromHistory);
+  }, [targetRestaurants]);
+
+  const openRestaurantDetails = useCallback((restaurant: Restaurant) => {
+    window.history.pushState(
+      { ...window.history.state, lunchieQuickMatchDetail: restaurant.id },
+      '',
+      window.location.href,
+    );
+    setDetailRestaurant(restaurant);
+  }, []);
+
+  const closeRestaurantDetails = useCallback(() => {
+    if (window.history.state?.lunchieQuickMatchDetail) {
+      window.history.back();
+      return;
+    }
+    setDetailRestaurant(null);
+  }, []);
 
   // The server cannot infer a client-specific deck after recommendation
   // filtering. Announce the exact target once per generation so each member's
@@ -1904,7 +2011,8 @@ function QuickMatchExperience() {
     try {
       await addSwipe(restaurant.id, action === 'like' ? 'like' : 'skip');
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : '선택을 저장하지 못했어요. 다시 눌러주세요.');
+      console.error('빠른 매칭 선택 저장 실패', error);
+      toast.error('선택을 저장하지 못했어요. 다시 눌러 주세요.');
       submittingSwipeRef.current = false;
       setIsSubmittingSwipe(false);
       return;
@@ -2076,12 +2184,12 @@ function QuickMatchExperience() {
       {/* Header */}
       <div className="flex items-center justify-between px-5 pb-3 pt-[max(12px,env(safe-area-inset-top))]">
         <BackButton
-          onClick={() => { logAbandon('back'); navigate('/session/lobby'); }}
-          aria-label="대기방으로 돌아가기"
+          onClick={() => { logAbandon('back'); navigate('/lunchie/settings'); }}
+          aria-label="빠른 매칭 설정으로 돌아가기"
         />
         <div className="text-center">
           <p className="font-black text-[16px] text-[#1A1A1A]">예선전 🍽️</p>
-          <p className="text-[11px] text-[#9B9B9B]">마음에 드는 음식을 골라보세요 · {progress}/{total}</p>
+          <p className="text-[11px] text-[#9B9B9B]">마음에 드는 음식을 골라보세요</p>
         </div>
         {currentSession?.deadline ? (
           <motion.div
@@ -2102,9 +2210,9 @@ function QuickMatchExperience() {
 
       {currentSession.dietaryBestEffort && (
         <div role="note" className="mx-5 mb-2 rounded-2xl border border-[#F3CFAE] bg-[#FFF7E8] px-4 py-3 text-center">
-          <p className="text-[12px] font-black text-[#7A4B20]">Closest available matches</p>
+          <p className="text-[12px] font-black text-[#7A4B20]">현재 위치에서 가장 가까운 후보</p>
           <p className="mt-1 text-[10px] font-semibold leading-relaxed text-[#8A6747]">
-            No venue verifies every selected diet style. Ingredient exclusions are still applied—please confirm dietary requirements with the venue.
+            선택한 모든 식단 조건을 매장에서 보장하지는 않아요. 제외 재료는 반영했지만 주문 전에 매장에 다시 확인해 주세요.
           </p>
         </div>
       )}
@@ -2113,87 +2221,47 @@ function QuickMatchExperience() {
       <AnimatePresence>
         {showIntro && (
           <motion.div
-            className="absolute inset-0 bg-[#1A1A1A] z-50 flex flex-col items-center justify-center"
+            role="status"
+            aria-live="polite"
+            aria-label="Quick Match 음식점 후보를 준비하고 있어요"
+            className="absolute inset-0 z-50 flex flex-col items-center justify-center bg-[#1A1A1A] px-6 text-center"
             exit={{ opacity: 0, scale: 1.05 }}
             transition={{ duration: 0.3 }}
           >
-            <div className="flex flex-col items-center">
-              <motion.div
-                className="mb-5 flex items-center justify-center"
-                animate={{ y: [0, -10, 0], rotate: [0, -1.2, 1.2, 0] }}
-                transition={{ duration: 2.2, repeat: Infinity, ease: 'easeInOut' }}
-              >
-                <LunchmateCharacterRenderer
-                  flowState="idle"
-                  loadout={lunchmateLoadout}
-                  size={128}
-                  renderSize="compact"
-                  animated
-                  alt="Quick Match를 시작하는 나의 런치킨"
-                />
-              </motion.div>
-              <p className="font-black text-white text-[22px]">예선전 시작! 🍽️</p>
-            </div>
-            <p className="text-white/60 text-[14px] mt-2">카드를 좌우로 스와이프 해보세요</p>
-            <div className="mt-5 w-56">
-              <div className="mb-2 flex items-center justify-between text-[11px] text-white/55">
-                <span>추천 카드를 준비하고 있어요</span>
-                <span>약 3초</span>
-              </div>
-              <div className="h-2 overflow-hidden rounded-full bg-white/15">
-                <motion.div
-                  className="h-full origin-left rounded-full bg-[#EB5053]"
-                  initial={{ scaleX: 0 }}
-                  animate={{ scaleX: 1 }}
-                  transition={{ duration: 2.8, ease: 'linear' }}
-                />
-              </div>
+            <motion.div
+              className="flex items-center justify-center"
+              animate={{ y: [0, -8, 0] }}
+              transition={{ duration: 2.2, repeat: Infinity, ease: 'easeInOut' }}
+            >
+              <LunchmateCharacterRenderer
+                flowState="idle"
+                artwork="chicken"
+                chickenAssetKeyOverride="idle"
+                chickenFaceSystem
+                loadout={lunchmateLoadout}
+                size={148}
+                renderSize="compact"
+                animated={false}
+                alt="Quick Match를 준비하는 나의 런치킨"
+              />
+            </motion.div>
+
+            <div className="mt-6 max-w-[280px]">
+              <p className="text-[22px] font-black text-white">음식점 카드를 준비하고 있어요</p>
+              <p className="mt-2 text-[14px] font-semibold leading-relaxed text-white/60">
+                내 취향에 맞는 후보를 고르고 있어요
+              </p>
             </div>
 
-            {/* Swipe gesture demo card */}
-            <div className="relative w-36 h-48 mt-6 flex items-center justify-center">
-              <motion.div
-                className="absolute w-32 h-44 rounded-2xl shadow-2xl flex items-center justify-center text-6xl overflow-hidden"
-                style={{ background: '#FFF1E0' }}
-                animate={{
-                  x: [0, -90, -90, 0, 90, 90, 0],
-                  rotate: [0, -16, -16, 0, 16, 16, 0],
-                }}
-                transition={{ duration: 2.6, times: [0, 0.2, 0.32, 0.5, 0.7, 0.82, 1], repeat: Infinity, ease: 'easeInOut' }}
-              >
-                🍱
-                <motion.div
-                  className="absolute top-4 right-4 border-[3px] rounded-lg px-2 py-0.5 font-black text-[13px]"
-                  style={{ borderColor: '#EB5053', color: '#EB5053', transform: 'rotate(15deg)' }}
-                  animate={{ opacity: [0, 0, 1, 1, 0, 0] }}
-                  transition={{ duration: 2.6, times: [0, 0.15, 0.18, 0.34, 0.37, 1], repeat: Infinity, ease: 'easeInOut' }}
-                >
-                  NOPE
-                </motion.div>
-                <motion.div
-                  className="absolute top-4 left-4 border-[3px] rounded-lg px-2 py-0.5 font-black text-[13px]"
-                  style={{ borderColor: '#3CBA44', color: '#3CBA44', transform: 'rotate(-15deg)' }}
-                  animate={{ opacity: [0, 0, 1, 1, 0, 0] }}
-                  transition={{ duration: 2.6, times: [0, 0.65, 0.68, 0.84, 0.87, 1], repeat: Infinity, ease: 'easeInOut' }}
-                >
-                  LIKE
-                </motion.div>
-              </motion.div>
-            </div>
-
-            <div className="flex gap-8 mt-8">
-              <div className="flex flex-col items-center gap-2">
-                <div className="w-14 h-14 rounded-full bg-white flex items-center justify-center">
-                  <X size={24} color="#EB5053" strokeWidth={2.5} />
-                </div>
-                <span className="text-white/70 text-[12px]">← 싫어요</span>
-              </div>
-              <div className="flex flex-col items-center gap-2">
-                <div className="w-14 h-14 rounded-full flex items-center justify-center" style={{ background: '#EB5053' }}>
-                  <Heart size={24} color="white" fill="white" />
-                </div>
-                <span className="text-white/70 text-[12px]">좋아요 →</span>
-              </div>
+            <div aria-hidden="true" className="mt-6 flex h-3 items-center justify-center gap-2">
+              {[0, 1, 2].map((dot) => (
+                <motion.span
+                  key={dot}
+                  className="size-2 rounded-full bg-[#EB5053]"
+                  animate={{ opacity: [0.35, 1, 0.35], scale: [0.85, 1, 0.85] }}
+                  transition={{ duration: 1.2, repeat: Infinity, delay: dot * 0.18, ease: 'easeInOut' }}
+                />
+              ))}
             </div>
           </motion.div>
         )}
@@ -2212,6 +2280,7 @@ function QuickMatchExperience() {
                 progress={progress}
                 total={total}
                 isLocked={isSubmittingSwipe}
+                onOpenRestaurantDetails={openRestaurantDetails}
               />
             ))}
           </AnimatePresence>
@@ -2240,6 +2309,16 @@ function QuickMatchExperience() {
           <Heart size={30} color="white" fill="white" />
         </motion.button>
       </div>
+
+      <AnimatePresence>
+        {detailRestaurant && (
+          <QuickMatchRestaurantDetailSheet
+            open
+            restaurant={detailRestaurant}
+            onClose={closeRestaurantDetails}
+          />
+        )}
+      </AnimatePresence>
     </div>
   );
 }
@@ -2283,7 +2362,7 @@ export default function QuickMatchPage() {
         if (!response.ok) throw Object.assign(new Error(`Restaurant request failed (${response.status})`), { status: response.status });
         const payload = await response.json();
         if (!Array.isArray(payload)) throw new Error('Restaurant response was not a list');
-        const catalogue = payload as Restaurant[];
+        const catalogue = payload.map((restaurant: Record<string, unknown>) => normalizeRestaurantPayload(restaurant) as Restaurant);
         if (catalogue.length > 0) registerRestaurants(catalogue);
         const refreshedSession = await fetchSession(token, catalogue);
         const nextState = classifySwipeAvailability({

@@ -37,3 +37,17 @@ Verify these as behavior and visual contracts across the relevant components. If
 - Treat field renames such as `lunchmateXp` to `lunchmateTotalXp` as cross-file migrations.
 - Search for duplicate definitions after an apparently clean merge.
 - Validate asset manifests, tests, type checks, and production builds independently.
+
+## Code-present but behavior-blocked profile grab
+
+The Profile character grab provided a later example of why path provenance is not behavior proof. Grab symbols, assets, pointer handlers, and source-level tests were present, yet the merged runtime could still feel intermittent because independent behaviors shared lifecycle state:
+
+- an 8px pre-activation movement guard cancelled a fast drag;
+- pointer capture began too late, allowing the pointer to leave the hit area;
+- `landing` plus a random 1-1.5s `recovering` phase rejected immediate re-grabs;
+- a tap-expression reaction reused automatic-motion `suspended` state as a grab blocker;
+- the moving visual position could differ from the fixed anchor during re-entry.
+
+A one-shot idle-state test, source-string assertion, full unit suite, type check, and production build did not cover those combined transitions. The effective acceptance test pressed the visible character, crossed the drag threshold, verified the character and shadow moved together, re-grabbed during landing repeatedly, and dragged while a tap reaction was active.
+
+For future Lunchie Munchie profile merges, treat automatic motion, tap reactions, food dragging, feeding, landing/recovery, and pointer capture as one interaction state graph. Do not mark character interaction features imported or combined until the result-level transition matrix passes.

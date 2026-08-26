@@ -10,7 +10,7 @@ export default function FeedDetailPage() {
   const { id } = useParams<{ id: string }>();
   const search = useSearch();
   const [, navigate] = useLocation();
-  const { feedPosts, isMyPost, deleteFeedPost, isLoading } = useApp();
+  const { feedPosts, isMyPost, deleteCourseWithFeed, isLoading } = useApp();
   const post = feedPosts.find(item => item.id === id);
   const origin = new URLSearchParams(search).get('from');
   const fromProfile = origin === 'profile';
@@ -39,7 +39,7 @@ export default function FeedDetailPage() {
       toast.error(payload.error || '게시물을 삭제하지 못했어요.');
       return;
     }
-    deleteFeedPost(post.id);
+    deleteCourseWithFeed(post.courseId);
     toast.success('게시물과 원본 코스를 삭제했어요.');
     navigate(backPath, { replace: true });
   };
@@ -60,7 +60,7 @@ export default function FeedDetailPage() {
   }
 
   return (
-    <main className="min-h-dvh bg-[#FCF4EE] pb-8">
+    <main className="mx-auto min-h-dvh max-w-[430px] bg-[#FCF4EE] pb-8">
       <header className="sticky top-0 z-30 flex items-center justify-between bg-[#FCF4EE]/95 px-5 pb-3 pt-[max(12px,env(safe-area-inset-top))] backdrop-blur">
         <BackButton onClick={() => navigate(backPath)} aria-label={backLabel} />
         <p className="text-[15px] font-black text-[#2D211C]">Munchie Feed</p>

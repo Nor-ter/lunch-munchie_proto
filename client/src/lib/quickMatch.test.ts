@@ -51,8 +51,9 @@ describe('Quick Match state normalization', () => {
       deadlineMinutes: 15,
     });
     expect(normalizeQuickMatchSettings({ partySize: 40, togetherPartySize: 40, deadlineMinutes: -2 })).toMatchObject({
-      partySize: 12,
+      partySize: 30,
       deadlineMinutes: 1,
     });
+    expect(normalizeQuickMatchSettings({ partySize: 30 })).toMatchObject({ partySize: 30 });
   });
 });

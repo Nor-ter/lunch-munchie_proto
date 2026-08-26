@@ -1,4 +1,5 @@
 import type { Intent } from '@shared/intent';
+import { normalizeQuickMatchPartySize } from '@shared/quickMatchParty';
 
 export type QuickMatchSessionStatus =
   | 'waiting'
@@ -39,27 +40,27 @@ export type DietaryChoice = {
 };
 
 export const DIETARY_REQUIREMENTS: DietaryChoice[] = [
-  { label: 'Vegetarian', value: 'VEGETARIAN', icon: '🥬', supported: true },
-  { label: 'Vegan', value: 'VEGAN', icon: '🌱', supported: true },
+  { label: '채식', value: 'VEGETARIAN', icon: '🥬', supported: true },
+  { label: '비건', value: 'VEGAN', icon: '🌱', supported: true },
   {
-    label: 'Pescatarian',
+    label: '페스코 채식',
     value: 'PESCATARIAN',
     icon: '🐟',
     supported: true,
   },
-  { label: 'Halal', value: 'HALAL', icon: '🌙', supported: true },
-  { label: 'Gluten-free', value: 'GLUTEN_FREE', icon: '🌾', supported: true },
+  { label: '할랄', value: 'HALAL', icon: '🌙', supported: true },
+  { label: '글루텐 프리', value: 'GLUTEN_FREE', icon: '🌾', supported: true },
 ];
 
 export const INGREDIENT_AVOIDANCES: DietaryChoice[] = [
-  { label: 'Pork', value: 'NO_PORK', icon: '🐖', supported: true },
-  { label: 'Beef', value: 'NO_BEEF', icon: '🐄', supported: true },
-  { label: 'Lamb', value: 'NO_LAMB', icon: '🐑', supported: true },
-  { label: 'Seafood', value: 'NO_SEAFOOD', icon: '🐟', supported: true },
-  { label: 'Shellfish', value: 'NO_SHELLFISH', icon: '🦐', supported: true },
-  { label: 'Nuts', value: 'NO_NUTS', icon: '🥜', supported: true },
-  { label: 'Dairy', value: 'NO_DAIRY', icon: '🥛', supported: true },
-  { label: 'Eggs', value: 'NO_EGGS', icon: '🥚', supported: true },
+  { label: '돼지고기', value: 'NO_PORK', icon: '🐖', supported: true },
+  { label: '소고기', value: 'NO_BEEF', icon: '🐄', supported: true },
+  { label: '양고기', value: 'NO_LAMB', icon: '🐑', supported: true },
+  { label: '해산물', value: 'NO_SEAFOOD', icon: '🐟', supported: true },
+  { label: '갑각류·조개류', value: 'NO_SHELLFISH', icon: '🦐', supported: true },
+  { label: '견과류', value: 'NO_NUTS', icon: '🥜', supported: true },
+  { label: '유제품', value: 'NO_DAIRY', icon: '🥛', supported: true },
+  { label: '달걀', value: 'NO_EGGS', icon: '🥚', supported: true },
 ];
 
 const SUPPORTED_DIETARY_VALUES = new Set(
@@ -155,10 +156,10 @@ const RADIUS_VALUES = new Set([1000, 2000, 3000, 4000, 5000]);
 export function normalizeQuickMatchSettings(value: unknown): QuickMatchSettingsSnapshot {
   if (!value || typeof value !== 'object') return DEFAULT_QUICK_MATCH_SETTINGS;
   const input = value as Record<string, unknown>;
-  const rawParty = Number(input.partySize);
-  const partySize = Number.isFinite(rawParty)
-    ? Math.max(1, Math.min(12, Math.round(rawParty)))
-    : DEFAULT_QUICK_MATCH_SETTINGS.partySize;
+  const partySize = normalizeQuickMatchPartySize(
+    input.partySize,
+    DEFAULT_QUICK_MATCH_SETTINGS.partySize,
+  );
   const rawDeadline = Number(input.deadlineMinutes);
   const deadlineMinutes = Number.isFinite(rawDeadline)
     ? Math.max(1, Math.min(15, Math.round(rawDeadline)))

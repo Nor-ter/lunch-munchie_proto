@@ -3,55 +3,111 @@
     {
       "name": "Profile user name and feed display",
       "intent": "import",
-      "origin_ref": "merge4_v1",
-      "paths": [
-        "client/src/hooks/useProfileFeed.ts",
-        "client/src/lib/profileFeed.ts",
-        "client/src/pages/OtherProfilePage.tsx"
-      ]
+      "origin_ref": "origin/merge4_v1",
+      "paths": ["client/src/hooks/useProfileFeed.ts", "client/src/lib/profileFeed.ts", "client/src/pages/OtherProfilePage.tsx"],
+      "acceptance": {
+        "entrypoint": "/profile/:id",
+        "preconditions": ["a signed-in viewer opens another existing user"],
+        "actions": ["open the profile and inspect its feed"],
+        "observables": ["the requested user's name and posts render"],
+        "edge_cases": ["empty feed and own-profile identity remain distinct"]
+      },
+      "validation": { "status": "not_run", "evidence": [] }
     },
     {
       "name": "Course selected restaurant emphasis and profile redirection",
       "intent": "import",
-      "origin_ref": "merge4_v1",
-      "paths": [
-        "client/src/components/course/CourseMap.tsx",
-        "client/src/pages/course/CourseDetailPage.tsx"
-      ]
+      "origin_ref": "origin/merge4_v1",
+      "paths": ["client/src/components/course/CourseMap.tsx", "client/src/pages/course/CourseDetailPage.tsx"],
+      "acceptance": {
+        "entrypoint": "/course/:id",
+        "preconditions": ["a course has restaurants and an author"],
+        "actions": ["select a restaurant marker", "open the author profile"],
+        "observables": ["the selected restaurant is emphasized", "the correct profile opens"],
+        "edge_cases": ["selection survives map rerender without redirecting to the wrong user"]
+      },
+      "validation": { "status": "not_run", "evidence": [] }
     },
     {
       "name": "Feed list scroll location",
       "intent": "import",
-      "origin_ref": "merge4_v1",
-      "paths": [
-        "client/src/components/SlideTransitionRoutes.tsx",
-        "client/src/components/SlideTransitionRoutes.test.ts"
-      ]
+      "origin_ref": "origin/merge4_v1",
+      "paths": ["client/src/components/SlideTransitionRoutes.tsx", "client/src/components/SlideTransitionRoutes.test.ts"],
+      "acceptance": {
+        "entrypoint": "/feed",
+        "preconditions": ["the feed is long enough to scroll"],
+        "actions": ["scroll", "open a feed item", "navigate back"],
+        "observables": ["the previous feed scroll position is restored"],
+        "edge_cases": ["repeat detail navigation without restoring another route's position"]
+      },
+      "validation": { "status": "not_run", "evidence": [] }
     },
     {
       "name": "Saved map and list toggle",
       "intent": "import",
-      "origin_ref": "merge4_v1",
-      "paths": [
-        "client/src/components/saved/SavedMunchieMap.tsx",
-        "client/src/hooks/useSavedFeedMapPoints.ts",
-        "client/src/pages/SavedPage.tsx"
-      ]
+      "origin_ref": "origin/merge4_v1",
+      "paths": ["client/src/components/saved/SavedMunchieMap.tsx", "client/src/hooks/useSavedFeedMapPoints.ts", "client/src/pages/SavedPage.tsx"],
+      "acceptance": {
+        "entrypoint": "/saved",
+        "preconditions": ["at least one saved item has a mappable location"],
+        "actions": ["switch between list and map", "select a saved marker"],
+        "observables": ["both views show the same saved set", "the selected item opens"],
+        "edge_cases": ["toggle repeatedly without losing or duplicating saved items"]
+      },
+      "validation": { "status": "not_run", "evidence": [] }
     },
     {
       "name": "Left-side gimbap level indicator",
       "intent": "retain",
-      "paths": ["client/src/components/munchie/FoodieBuddy.tsx"]
+      "paths": ["client/src/components/munchie/FoodieBuddy.tsx"],
+      "acceptance": {
+        "entrypoint": "/profile",
+        "preconditions": ["the profile has a Lunchmate progress snapshot"],
+        "actions": ["open Profile and inspect progress"],
+        "observables": ["the gimbap indicator remains on the left and reflects progress"],
+        "edge_cases": ["level-up and max-level states preserve the indicator"]
+      },
+      "validation": { "status": "not_run", "evidence": [] }
     },
     {
       "name": "Bento-styled My Lunchbox",
       "intent": "retain",
-      "paths": ["client/src/components/munchie/LunchboxBottomSheet.tsx"]
+      "paths": ["client/src/components/munchie/LunchboxBottomSheet.tsx"],
+      "acceptance": {
+        "entrypoint": "/profile",
+        "preconditions": ["the Lunchbox can be opened"],
+        "actions": ["open My Lunchbox and choose food"],
+        "observables": ["the bento layout and food selection remain usable"],
+        "edge_cases": ["empty, unavailable, and repeated selection states remain coherent"]
+      },
+      "validation": { "status": "not_run", "evidence": [] }
     },
     {
       "name": "Hanger Lunchmate control",
       "intent": "retain",
-      "paths": ["client/src/components/munchie/FoodieBuddy.tsx"]
+      "paths": ["client/src/components/munchie/FoodieBuddy.tsx"],
+      "acceptance": {
+        "entrypoint": "/profile",
+        "preconditions": ["the Lunchmate room control is enabled"],
+        "actions": ["activate the hanger control"],
+        "observables": ["the hanger icon remains visible and opens the Lunchmate room"],
+        "edge_cases": ["keyboard activation and return navigation preserve the control"]
+      },
+      "validation": { "status": "not_run", "evidence": [] }
+    },
+    {
+      "name": "Profile character grab and moving shadow",
+      "intent": "combine",
+      "origin_ref": "69b23bee",
+      "paths": ["client/src/components/munchie/FoodieBuddy.tsx", "client/src/hooks/useLunchmateProfileMotion.ts", "e2e/profile-character-grab.e2e.spec.ts"],
+      "acceptance": {
+        "entrypoint": "/profile",
+        "preconditions": ["the character is visible and no feeding flow owns the pointer"],
+        "actions": ["press the visible character", "move at least 4px", "release"],
+        "observables": ["the character becomes grabbed", "the shadow follows the character"],
+        "edge_cases": ["re-grab during landing", "drag during a tap reaction", "leave the original hit area"]
+      },
+      "validation": { "status": "not_run", "evidence": [] }
     }
   ]
 }

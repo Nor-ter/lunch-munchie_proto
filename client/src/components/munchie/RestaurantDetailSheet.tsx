@@ -1,8 +1,11 @@
 import { motion } from 'framer-motion';
+import { useEffect, useState } from 'react';
 import { Star, MapPin, Clock, X } from 'lucide-react';
 import { useApp, type Restaurant } from '@/contexts/AppContext';
+import { getRestaurantById as fetchRestaurantById } from '@/services/restaurantsApi';
 import type { CoursePlace } from '@/types/course';
 import BackButton from '@/components/ui/BackButton';
+import { formatRestaurantReviewCount } from '@shared/restaurantContract';
 
 /**
  * 식당 상세 슬라이드 페이지 — 코스 에디터/코스 상세의 코스 순서에서
@@ -13,20 +16,23 @@ export default function RestaurantDetailSheet({
   restaurantId,
   onClose,
   fallbackPlace,
+  fallbackRestaurant,
   presentation = 'fullscreen',
 }: {
   restaurantId: string;
   onClose: () => void;
   fallbackPlace?: CoursePlace;
+  fallbackRestaurant?: Restaurant;
   presentation?: 'fullscreen' | 'modal';
 }) {
-  const { getRestaurantById } = useApp();
-  const linkedRestaurant = getRestaurantById(restaurantId);
+  const { getRestaurantById, registerRestaurants } = useApp();
+  const [fetchedRestaurant, setFetchedRestaurant] = useState<Restaurant | null>(null);
+  const linkedRestaurant = fetchedRestaurant ?? getRestaurantById(restaurantId);
   const matchingRestaurant = linkedRestaurant && (
     !fallbackPlace || linkedRestaurant.name.trim().toLocaleLowerCase() === fallbackPlace.name.trim().toLocaleLowerCase()
   ) ? linkedRestaurant : undefined;
   const fallbackPhoto = fallbackPlace?.imageUrl ?? '';
-  const restaurant: Restaurant | undefined = matchingRestaurant ?? (fallbackPlace ? {
+  const restaurant: Restaurant | undefined = matchingRestaurant ?? fallbackRestaurant ?? (fallbackPlace ? {
     id: fallbackPlace.id,
     name: fallbackPlace.name,
     category: fallbackPlace.category,
@@ -45,12 +51,27 @@ export default function RestaurantDetailSheet({
     description: '코스에 등록된 장소예요.',
   } : undefined);
 
+  useEffect(() => {
+    let active = true;
+    void fetchRestaurantById(restaurantId)
+      .then((found) => {
+        if (!active || !found) return;
+        registerRestaurants([found]);
+        setFetchedRestaurant(found);
+      })
+      .catch(() => undefined);
+    return () => { active = false; };
+  }, [registerRestaurants, restaurantId]);
+
   if (!restaurant) return null;
   const isModal = presentation === 'modal';
+  const heroSrc = restaurant.image || restaurant.photos?.[0] || '';
   const menuPhotos = Array.from(new Set([
     ...(restaurant.menuItems ?? []).map(item => item.image).filter((image): image is string => !!image),
     ...(restaurant.photos ?? []),
-  ])).slice(0, 4);
+  ])).filter(Boolean).slice(0, 4);
+  const tags = Array.isArray(restaurant.tags) ? restaurant.tags : [];
+  const priceRange = Math.min(4, Math.max(1, Number(restaurant.priceRange) || 1));
 
   return (
     <motion.div
@@ -69,8 +90,16 @@ export default function RestaurantDetailSheet({
     >
       {/* Hero */}
       <div className={`relative overflow-hidden bg-[#F5EEE8] ${isModal ? 'h-[160px]' : 'h-[220px]'}`}>
-        <img src={restaurant.image} alt={restaurant.name} className="h-full w-full object-cover" />
-        <BackButton onClick={onClose} aria-label={isModal ? '상세정보 닫기' : '뒤로가기'} className="absolute left-5 top-[max(12px,env(safe-area-inset-top))] bg-white/90">
+        {heroSrc ? (
+          <img src={heroSrc} alt={restaurant.name} className="h-full w-full object-cover" />
+        ) : (
+          <div className="h-full w-full bg-[#F5EEE8]" aria-hidden="true" />
+        )}
+        <BackButton
+          onClick={onClose}
+          aria-label={isModal ? '상세정보 닫기' : '뒤로가기'}
+          className="absolute left-5 top-[max(12px,env(safe-area-inset-top))] bg-white/90"
+        >
           {isModal ? <X size={18} aria-hidden="true" /> : undefined}
         </BackButton>
       </div>
@@ -84,13 +113,13 @@ export default function RestaurantDetailSheet({
         <div className="flex items-center gap-2 flex-wrap">
           <span className="flex items-center gap-1 bg-[#FFF5F5] rounded-full px-2.5 py-1 text-[12px] font-bold text-[#EB5053]">
             <Star size={12} fill="#EB5053" /> {restaurant.rating}
-            <span className="font-semibold text-[#C79396]">({restaurant.reviewCount.toLocaleString()})</span>
+            <span className="font-semibold text-[#C79396]">({formatRestaurantReviewCount(restaurant.reviewCount)})</span>
           </span>
           <span className="text-[12px] font-semibold text-white rounded-full px-2.5 py-1" style={{ background: '#EB5053' }}>
             {restaurant.category}
           </span>
           <span className="text-[12px] font-semibold text-[#4A4A4A] bg-[#F5F5F5] rounded-full px-2.5 py-1">
-            {'₩'.repeat(restaurant.priceRange)}
+            {'₩'.repeat(priceRange)}
           </span>
           <span className="text-[12px] font-semibold text-[#4A4A4A] bg-[#F5F5F5] rounded-full px-2.5 py-1">
             📍 {restaurant.distance}
@@ -99,18 +128,18 @@ export default function RestaurantDetailSheet({
 
         <div className="space-y-1.5">
           <p className="flex items-start gap-1.5 text-[13px] text-[#4A4A4A]">
-            <MapPin size={13} className="mt-0.5 shrink-0 text-[#9B9B9B]" /> {restaurant.address}
+            <MapPin size={13} className="mt-0.5 shrink-0 text-[#9B9B9B]" /> {restaurant.address || '주소 정보 없음'}
           </p>
           <p className="flex items-center gap-1.5 text-[13px] text-[#4A4A4A]">
-            <Clock size={13} className="shrink-0 text-[#9B9B9B]" /> {restaurant.openHours}
+            <Clock size={13} className="shrink-0 text-[#9B9B9B]" /> {restaurant.openHours || '영업시간 정보 없음'}
           </p>
         </div>
 
         <p className="text-[13px] leading-relaxed text-[#4A4A4A]">{restaurant.description}</p>
 
-        {restaurant.tags.length > 0 && (
+        {tags.length > 0 && (
           <div className="flex gap-1.5 flex-wrap">
-            {restaurant.tags.map(tag => (
+            {tags.map(tag => (
               <span key={tag} className="tag tag-hash">#{tag}</span>
             ))}
           </div>
@@ -120,13 +149,17 @@ export default function RestaurantDetailSheet({
       {/* 메뉴 사진 */}
       <div className="mx-4 mt-4 pb-10">
         <p className="mb-2 text-[13px] font-bold text-[#1A1A1A]">메뉴 사진</p>
-        <div className="grid grid-cols-4 gap-2">
-          {menuPhotos.map((url, i) => (
-            <div key={i} className="aspect-square rounded-xl overflow-hidden bg-[#F5F5F5]">
-              <img src={url} alt="" className="w-full h-full object-cover" loading="lazy" />
-            </div>
-          ))}
-        </div>
+        {menuPhotos.length > 0 ? (
+          <div className="grid grid-cols-4 gap-2">
+            {menuPhotos.map((url, i) => (
+              <div key={i} className="aspect-square rounded-xl overflow-hidden bg-[#F5F5F5]">
+                <img src={url} alt="" className="w-full h-full object-cover" loading="lazy" />
+              </div>
+            ))}
+          </div>
+        ) : (
+          <p className="text-[12px] text-[#9B9B9B]">등록된 메뉴 사진이 없어요.</p>
+        )}
       </div>
 
     </motion.div>
