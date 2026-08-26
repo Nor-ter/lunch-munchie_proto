@@ -20,7 +20,8 @@ describe("profile feed synchronization boundary", () => {
   });
 
   it("uses the same canonical hook for the signed-in user's own profile", () => {
-    expect(profileSource).toContain("useProfileFeed(profile.id)");
+    expect(profileSource).toContain("useProfileFeed(authenticatedUserId)");
+    expect(profileSource).not.toContain("useProfileFeed(profile.id)");
     expect(profileSource).not.toContain("feedPosts.filter(isMyPost)");
   });
 });

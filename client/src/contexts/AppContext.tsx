@@ -28,6 +28,7 @@ import {
 } from '@/utils/lunchmateProfile';
 import { logCourseSave, logFeedLike } from '@/lib/eventLogger';
 import { feedPostFromApi, normalizeFeedApiPage } from '@/lib/feedApi';
+import { isAuthenticatedContentOwner } from '@/lib/profileFeed';
 import { persistSessionSwipe } from '@/services/sessionApi';
 import { mergeCanonicalRestaurantPresentation } from '@/lib/restaurantPresentation';
 import {
@@ -891,11 +892,13 @@ export function AppProvider({
   useEffect(() => {
     // profile.id는 이전 익명 프로필을 잠깐 유지할 수 있다. 인증된 Google sub를
     // 우선 사용해야 과거 작성물이 실제 소유자로 판별되어 자동 복구된다.
-    const ownerIds = new Set([initialAuthUserId, profile.id].filter((id): id is string => Boolean(id)));
+    // Once authenticated, never treat a stale persisted profile ID as another
+    // ownership candidate. Anonymous mode may still use its local profile ID.
+    const ownershipId = initialAuthUserId ?? profile.id;
     const legacy = feedPosts
       .filter((post): post is FeedPost & { courseId: string } => {
         const courseId = post.courseId;
-        return typeof courseId === 'string' && typeof post.authorId === 'string' && ownerIds.has(post.authorId) && !post.decor?.length && !legacyMediaMigrationRef.current.has(courseId);
+        return typeof courseId === 'string' && post.authorId === ownershipId && !post.decor?.length && !legacyMediaMigrationRef.current.has(courseId);
       })
       .map(post => ({ post, decor: getCoursemapDecor(post.courseId) }))
       .filter((item): item is { post: FeedPost; decor: NonNullable<ReturnType<typeof getCoursemapDecor>> } => Boolean(item.decor?.length));
@@ -1174,7 +1177,14 @@ export function AppProvider({
     }));
   }, []);
 
-  const isMyPost = useCallback((post: FeedPost) => post.authorId === profile.id, [profile.id]);
+  // UI ownership must use the same identity as the server mutation guard.
+  // `profile.id` is persisted browser presentation state and can briefly hold
+  // a previous account after login/logout; the authenticated Google subject
+  // is the only value that can match `courses.author_id` safely.
+  const isMyPost = useCallback(
+    (post: FeedPost) => isAuthenticatedContentOwner(post.authorId, initialAuthUserId),
+    [initialAuthUserId],
+  );
 
   const setCourseSkin = useCallback((courseId: string, skinId: string | null) => {
     setCourseSkins(prev => {
@@ -1545,7 +1555,7 @@ export function AppProvider({
       || updates.lunchmateTotalXp !== undefined
       || 'avatarPhoto' in updates
     ) {
-      setFeedPosts(posts => posts.map(post => post.authorId === profile.id
+      setFeedPosts(posts => posts.map(post => post.authorId === initialAuthUserId
         ? {
             ...post,
             authorName: updates.name ?? post.authorName,
@@ -1554,7 +1564,7 @@ export function AppProvider({
           }
         : post));
     }
-  }, [profile.id]);
+  }, [initialAuthUserId]);
 
   const getRestaurantById = useCallback((id: string) => restaurants.find(r => r.id === id), [restaurants]);
   const getCourseById = useCallback((id: string) => courses.find(c => c.id === id), [courses]);

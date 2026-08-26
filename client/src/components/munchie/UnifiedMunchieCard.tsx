@@ -148,7 +148,10 @@ export default function UnifiedMunchieCard({
   const profileReturnQuery = detailOrigin === 'profile' && profileReturnId
     ? `&profileId=${encodeURIComponent(profileReturnId)}`
     : '';
-  const compactDetailPath = `/feed/${post.id}?from=${detailOrigin}${profileReturnQuery}`;
+  const profileAuthorQuery = detailOrigin === 'profile' && post.authorId
+    ? `&authorId=${encodeURIComponent(post.authorId)}`
+    : '';
+  const compactDetailPath = `/feed/${post.id}?from=${detailOrigin}${profileReturnQuery}${profileAuthorQuery}`;
   const courseMapPath = detailOrigin === 'saved' && savedView
     ? getSavedCourseDetailPath(course.id, post.id, savedView)
     : `/course/${course.id}?from=${detailOrigin}&post=${post.id}`;

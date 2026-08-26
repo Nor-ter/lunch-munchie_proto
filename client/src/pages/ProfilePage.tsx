@@ -122,10 +122,10 @@ function MyFeedItem({ post }: { post: FeedPost }) {
 
 // ── ProfilePage ───────────────────────────────────────────────────────────────
 
-function ProfilePageContent() {
+function ProfilePageContent({ authenticatedUserId }: { authenticatedUserId: string }) {
   const [, navigate] = useLocation();
   const { profile, updateProfile, courses } = useApp();
-  const { posts: myPosts, isLoading: isProfileFeedLoading } = useProfileFeed(profile.id);
+  const { posts: myPosts, isLoading: isProfileFeedLoading } = useProfileFeed(authenticatedUserId);
   const lunchmateLoadout = useMemo(
     () => lunchmateLoadoutFromProfile(profile.lunchmateLoadout),
     [profile.lunchmateLoadout],
@@ -799,5 +799,5 @@ export default function ProfilePage() {
   if (!auth.data || auth.isError || auth.data.isAnonymous) {
     return <ProfileGuestPreview />;
   }
-  return <ProfilePageContent />;
+  return <ProfilePageContent authenticatedUserId={auth.data.uid} />;
 }

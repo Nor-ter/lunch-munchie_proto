@@ -3,12 +3,16 @@ import { expect, test, type Page } from "playwright/test";
 const VIEWER_ID = "profile-sync-viewer";
 const AUTHOR_ID = "profile-sync-author";
 
-function apiPost(courseId: string) {
+function apiPost(
+  courseId: string,
+  creatorId = AUTHOR_ID,
+  authorName = creatorId === VIEWER_ID ? "뷰어" : "동기화 작성자",
+) {
   return {
     id: `post_${courseId}`,
     courseId,
-    creatorId: AUTHOR_ID,
-    authorName: "동기화 작성자",
+    creatorId,
+    authorName,
     authorImage: null,
     description: `${courseId} 기록`,
     photos: [],
@@ -101,4 +105,80 @@ test("another user's profile stays in sync with canonical create/delete state", 
   api.setPosts([apiPost("course-after")]);
   await page.evaluate(() => window.dispatchEvent(new Event("focus")));
   await expect(page.getByTestId("unified-munchie-card-post_course-after")).toBeVisible();
+});
+
+test("my profile uses the signed-in subject and permanently deletes only my post", async ({ page }) => {
+  const ownPost = apiPost("course-mine", VIEWER_ID);
+  const foreignPost = apiPost("course-foreign", AUTHOR_ID);
+  let ownPosts = [ownPost];
+  let deleteRequests = 0;
+
+  await page.addInitScript(({ staleProfileId }) => {
+    // Reproduce an account switch where browser presentation state still
+    // belongs to another user. It must never drive ownership or profile data.
+    localStorage.setItem("lm_profile", JSON.stringify({
+      id: staleProfileId,
+      name: "이전 사용자",
+      handle: "stale_user",
+      emoji: "👤",
+      dietary: [],
+      categoryPrefs: [],
+      totalSwipes: 0,
+      totalLikes: 0,
+      joinedAt: new Date().toISOString(),
+    }));
+  }, { staleProfileId: AUTHOR_ID });
+
+  await page.route("**/api/**", async route => {
+    const request = route.request();
+    const url = new URL(request.url());
+    if (url.pathname === "/api/auth/session") {
+      await route.fulfill({ contentType: "application/json", body: JSON.stringify({
+        user: { sub: VIEWER_ID, name: "뷰어", email: "viewer@example.com" },
+        profile: { id: VIEWER_ID, username: "뷰어", handle: "viewer", profile_image_url: null },
+      }) });
+      return;
+    }
+    if (url.pathname === "/api/feed-post" && request.method() === "DELETE") {
+      expect(url.searchParams.get("courseId")).toBe("course-mine");
+      deleteRequests += 1;
+      ownPosts = [];
+      await route.fulfill({ contentType: "application/json", body: JSON.stringify({ ok: true }) });
+      return;
+    }
+    if (url.pathname === "/api/feed") {
+      const items = url.searchParams.get("authorId") === VIEWER_ID
+        ? ownPosts
+        : [foreignPost];
+      await route.fulfill({ contentType: "application/json", body: JSON.stringify({
+        items,
+        nextCursor: null,
+        hasMore: false,
+        policyVersion: url.searchParams.has("authorId")
+          ? "feed-author-chronological-v1"
+          : "feed-personal-v1",
+      }) });
+      return;
+    }
+    if (url.pathname === "/api/courses" || url.pathname === "/api/restaurants") {
+      await route.fulfill({ contentType: "application/json", body: "[]" });
+      return;
+    }
+    await route.fulfill({ contentType: "application/json", body: "{}" });
+  });
+
+  await page.goto("/profile");
+  const ownCard = page.getByTestId(`unified-munchie-card-${ownPost.id}`);
+  await expect(ownCard).toBeVisible();
+  await expect(page.getByTestId(`unified-munchie-card-${foreignPost.id}`)).toHaveCount(0);
+
+  await ownCard.getByRole("button", { name: "게시물 메뉴" }).click();
+  await ownCard.getByRole("button", { name: "게시물 삭제" }).click();
+  await page.getByRole("alertdialog").getByRole("button", { name: "확인" }).click();
+
+  await expect(ownCard).toHaveCount(0);
+  expect(deleteRequests).toBe(1);
+  await page.reload();
+  await expect(page.getByTestId(`unified-munchie-card-${ownPost.id}`)).toHaveCount(0);
+  await expect(page.getByTestId(`unified-munchie-card-${foreignPost.id}`)).toHaveCount(0);
 });
