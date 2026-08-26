@@ -30,6 +30,7 @@ import {
   getSavedCourseDetailPath,
   type SavedViewMode,
 } from '@/lib/savedNavigation';
+import { AuthorAvatar } from '@/components/ui/AuthorAvatar';
 
 function timeAgo(iso: string | number) {
   const normalized = typeof iso === 'string' ? iso.replace(/T(\d):/, 'T0$1:') : iso;
@@ -43,10 +44,13 @@ function timeAgo(iso: string | number) {
 }
 
 function FeedAuthorAvatar({ post, className }: { post: FeedPost; className: string }) {
-  return post.authorImage ? (
-    <img src={post.authorImage} alt="" className={`${className} object-cover`} referrerPolicy="no-referrer" />
-  ) : (
-    <span className={className}>{post.authorEmoji}</span>
+  return (
+    <AuthorAvatar
+      image={post.authorImage}
+      emoji={post.authorEmoji}
+      name={post.authorName}
+      className={className}
+    />
   );
 }
 
@@ -320,7 +324,9 @@ export default function UnifiedMunchieCard({
       <>
       <article ref={cardRef} className={`relative overflow-hidden bg-[#FFFDFC] ${homeSummary ? 'rounded-[12px] border border-[#EFD0D4] shadow-[0_5px_14px_rgba(235,80,83,0.07)]' : 'rounded-[18px] border-2 border-[#EAD7CD] shadow-[0_7px_18px_rgba(123,76,53,0.1)]'}`} data-testid={`unified-munchie-card-${post.id}`}>
         <header className={`flex shrink-0 items-center gap-1 px-2 ${homeSummary ? 'h-9' : 'h-8'}`}>
-          <button type="button" onClick={() => go(authorProfilePath)} className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-white text-[9px] ${homeSummary ? 'border border-[#EB5053]' : 'border border-[#2F2926]'}`}>{post.authorEmoji}</button>
+          <button type="button" onClick={() => go(authorProfilePath)} className={`flex h-5 w-5 shrink-0 items-center justify-center overflow-hidden rounded-full bg-white text-[9px] ${homeSummary ? 'border border-[#EB5053]' : 'border border-[#2F2926]'}`}>
+            <FeedAuthorAvatar post={post} className="flex h-full w-full items-center justify-center" />
+          </button>
           <button type="button" onClick={() => go(authorProfilePath)} className={`min-w-0 truncate text-left text-[10px] font-semibold ${homeSummary ? 'text-[#3E2922]' : 'text-[#342925]'}`}>{post.authorName}</button>
           <span className={`shrink-0 text-[8px] font-medium ${homeSummary ? 'text-[#A36D6C]' : 'text-[#8B817B]'}`}>{timeAgo(post.createdAt)}</span>
           <span className="flex-1" />
