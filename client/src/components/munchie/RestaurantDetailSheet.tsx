@@ -1,6 +1,8 @@
 import { motion } from 'framer-motion';
+import { useEffect, useState } from 'react';
 import { ChevronLeft, Star, MapPin, Clock, X } from 'lucide-react';
 import { useApp, type Restaurant } from '@/contexts/AppContext';
+import { getRestaurantById as fetchRestaurantById } from '@/services/restaurantsApi';
 import type { CoursePlace } from '@/types/course';
 import { formatRestaurantReviewCount } from '@shared/restaurantContract';
 
@@ -22,8 +24,9 @@ export default function RestaurantDetailSheet({
   fallbackRestaurant?: Restaurant;
   presentation?: 'fullscreen' | 'modal';
 }) {
-  const { getRestaurantById } = useApp();
-  const linkedRestaurant = getRestaurantById(restaurantId);
+  const { getRestaurantById, registerRestaurants } = useApp();
+  const [fetchedRestaurant, setFetchedRestaurant] = useState<Restaurant | null>(null);
+  const linkedRestaurant = fetchedRestaurant ?? getRestaurantById(restaurantId);
   const matchingRestaurant = linkedRestaurant && (
     !fallbackPlace || linkedRestaurant.name.trim().toLocaleLowerCase() === fallbackPlace.name.trim().toLocaleLowerCase()
   ) ? linkedRestaurant : undefined;
@@ -47,12 +50,25 @@ export default function RestaurantDetailSheet({
     description: '코스에 등록된 장소예요.',
   } : undefined);
 
+  useEffect(() => {
+    let active = true;
+    void fetchRestaurantById(restaurantId)
+      .then((found) => {
+        if (!active || !found) return;
+        registerRestaurants([found]);
+        setFetchedRestaurant(found);
+      })
+      .catch(() => undefined);
+    return () => { active = false; };
+  }, [registerRestaurants, restaurantId]);
+
   if (!restaurant) return null;
   const isModal = presentation === 'modal';
+  const heroSrc = restaurant.image || restaurant.photos?.[0] || '';
   const menuPhotos = Array.from(new Set([
     ...(restaurant.menuItems ?? []).map(item => item.image).filter((image): image is string => !!image),
     ...(restaurant.photos ?? []),
-  ])).slice(0, 4);
+  ])).filter(Boolean).slice(0, 4);
   const tags = Array.isArray(restaurant.tags) ? restaurant.tags : [];
   const priceRange = Math.min(4, Math.max(1, Number(restaurant.priceRange) || 1));
 
@@ -73,7 +89,11 @@ export default function RestaurantDetailSheet({
     >
       {/* Hero */}
       <div className={`relative overflow-hidden bg-[#F5EEE8] ${isModal ? 'h-[160px]' : 'h-[220px]'}`}>
-        <img src={restaurant.image || restaurant.photos?.[0]} alt={restaurant.name} className="h-full w-full object-cover" />
+        {heroSrc ? (
+          <img src={heroSrc} alt={restaurant.name} className="h-full w-full object-cover" />
+        ) : (
+          <div className="h-full w-full bg-[#F5EEE8]" aria-hidden="true" />
+        )}
         <button
           onClick={onClose}
           aria-label={isModal ? '상세정보 닫기' : '뒤로가기'}
@@ -128,13 +148,17 @@ export default function RestaurantDetailSheet({
       {/* 메뉴 사진 */}
       <div className="mx-4 mt-4 pb-10">
         <p className="mb-2 text-[13px] font-bold text-[#1A1A1A]">메뉴 사진</p>
-        <div className="grid grid-cols-4 gap-2">
-          {menuPhotos.map((url, i) => (
-            <div key={i} className="aspect-square rounded-xl overflow-hidden bg-[#F5F5F5]">
-              <img src={url} alt="" className="w-full h-full object-cover" loading="lazy" />
-            </div>
-          ))}
-        </div>
+        {menuPhotos.length > 0 ? (
+          <div className="grid grid-cols-4 gap-2">
+            {menuPhotos.map((url, i) => (
+              <div key={i} className="aspect-square rounded-xl overflow-hidden bg-[#F5F5F5]">
+                <img src={url} alt="" className="w-full h-full object-cover" loading="lazy" />
+              </div>
+            ))}
+          </div>
+        ) : (
+          <p className="text-[12px] text-[#9B9B9B]">등록된 메뉴 사진이 없어요.</p>
+        )}
       </div>
 
     </motion.div>

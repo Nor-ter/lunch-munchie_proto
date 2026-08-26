@@ -46,11 +46,13 @@ describe('unified Lunchie group flow', () => {
   });
 
   it('opens the shared restaurant details without coupling the action to a swipe', () => {
-    expect(swipeSource).toContain("import RestaurantDetailSheet from '@/components/munchie/RestaurantDetailSheet'");
+    expect(swipeSource).toContain("import QuickMatchRestaurantDetailSheet from '@/components/lunchie/QuickMatchRestaurantDetailSheet'");
+    expect(swipeSource).not.toContain("import RestaurantDetailSheet from '@/components/munchie/RestaurantDetailSheet'");
     expect(swipeSource).toContain('aria-label={`${restaurant.name} 식당 상세보기`}');
     expect(swipeSource).toContain('onOpenRestaurantDetails(restaurant)');
     expect(swipeSource).toContain('lunchieQuickMatchDetail');
-    expect(swipeSource).toContain('fallbackRestaurant={detailRestaurant}');
+    expect(swipeSource).toContain('restaurant={detailRestaurant}');
+    expect(swipeSource).toContain('onClose={closeRestaurantDetails}');
   });
 
   it('advertises a light-only browser color scheme', () => {

@@ -26,7 +26,7 @@ export default function MunchieFeedPage() {
   const auth = useAuthStatus();
   const canSearch = Boolean(auth.data && !auth.data.isAnonymous);
   const userSearch = useUserSearch(searchTerm, canSearch);
-  const [showFilters, setShowFilters] = useState(true);
+  const [showFilters, setShowFilters] = useState(false);
   const [draftCenter, setDraftCenter] = useState<FeedRadiusCenter | null>(null);
   const [draftRadiusKm, setDraftRadiusKm] = useState(5);
   const [appliedLocation, setAppliedLocation] = useState<FeedLocationFilter | null>(null);

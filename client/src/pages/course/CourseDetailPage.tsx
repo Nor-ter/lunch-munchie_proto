@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useParams, useLocation, useSearch } from 'wouter';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -24,8 +24,9 @@ import { CourseMapView } from '@/components/course/CourseMapView';
 import { MAX_COURSE_STOPS, type CourseStop, type Restaurant, useApp } from '@/contexts/AppContext';
 import { CoursePlace } from '@/types/course';
 import { getCourseSequenceColor } from '@/constants/courseTheme';
-import { getCourseMapPoints, getCoursePlacesFromStops } from '@/lib/courseMapSync';
+import { getCourseMapPoints, getCoursePlacesFromFeedStops, getCoursePlacesFromStops } from '@/lib/courseMapSync';
 import { resolveFeedAuthorId } from '@/lib/profileFeed';
+import { AuthorAvatar } from '@/components/ui/AuthorAvatar';
 import RestaurantDetailSheet from '@/components/munchie/RestaurantDetailSheet';
 import { usePlacesSearch } from '@/hooks/usePlacesSearch';
 import { getPlaceDetails } from '@/services/placesApi';
@@ -303,6 +304,7 @@ export default function CourseDetailPage() {
     deleteCourseWithFeed,
     profile,
     isMyPost,
+    isLoading,
   } = useApp();
   const templateFrom = new URLSearchParams(search).get('templateFrom');
   const requestedPostId = new URLSearchParams(search).get('post');
@@ -319,18 +321,28 @@ export default function CourseDetailPage() {
     () => (appCourse ? getCoursePlacesFromStops(appCourse, getRestaurantById) : []),
     [appCourse, getRestaurantById],
   );
-  const legacyPhotoPlaces: CoursePlace[] = (orphanPost?.photos ?? []).slice(0, 3).map((photo, index) => ({
-    id: `legacy-${orphanPost!.id}-${index}`,
-    name: `코스 스팟 ${index + 1}`,
-    rating: 0,
-    distance: '기록 사진',
-    category: orphanPost?.tags[index] ?? 'Munchie',
-    priceLevel: 1,
-    imageUrl: photo,
-    coords: [{ x: 20, y: 28 }, { x: 70, y: 50 }, { x: 32, y: 76 }][index]!,
-  }));
-  const initialPlaces = appCourse && syncedPlaces.length > 0
-    ? syncedPlaces
+  const feedGeoPlaces = useMemo(
+    () => (orphanPost?.stops?.length
+      ? getCoursePlacesFromFeedStops(orphanPost.stops, appCourse, getRestaurantById)
+      : []),
+    [orphanPost, appCourse, getRestaurantById],
+  );
+  const resolvedPlaces = syncedPlaces.length > 0 ? syncedPlaces : feedGeoPlaces;
+  const legacyPhotoPlaces: CoursePlace[] = useMemo(
+    () => (orphanPost?.photos ?? []).slice(0, 3).map((photo, index) => ({
+      id: `legacy-${orphanPost!.id}-${index}`,
+      name: `코스 스팟 ${index + 1}`,
+      rating: 0,
+      distance: '기록 사진',
+      category: orphanPost?.tags[index] ?? 'Munchie',
+      priceLevel: 1,
+      imageUrl: photo,
+      coords: [{ x: 20, y: 28 }, { x: 70, y: 50 }, { x: 32, y: 76 }][index]!,
+    })),
+    [orphanPost],
+  );
+  const initialPlaces = resolvedPlaces.length > 0
+    ? resolvedPlaces
     : legacyPhotoPlaces.length > 0
       ? legacyPhotoPlaces
       : [];
@@ -355,6 +367,10 @@ export default function CourseDetailPage() {
     : orphanPost?.authorLevelName ?? '한입 새싹';
   const authorLevelIcon = getLunchmateLevelIcon(authorLevel);
   const AuthorLevelIcon = authorLevelIcon.Icon;
+  const authorAvatarImage = isOwnCourseAuthor ? profile.avatarPhoto : orphanPost?.authorImage;
+  const authorAvatarEmoji = isOwnCourseAuthor ? profile.emoji : orphanPost?.authorEmoji ?? '🍽️';
+  const mapContainerRef = useRef<HTMLDivElement>(null);
+  const [mapWidth, setMapWidth] = useState(362);
   const isCoursePostLiked = orphanPost ? likedFeedIds.includes(orphanPost.id) : false;
   const isCourseSaved = id ? savedCourseIds.includes(id) : false;
 
@@ -371,6 +387,11 @@ export default function CourseDetailPage() {
   const [editingPlaceIndex, setEditingPlaceIndex] = useState<number | 'new' | null>(null);
   const [detailsLoadingId, setDetailsLoadingId] = useState<string | null>(null);
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
+  const mapGeoPlaces = places.filter(
+    (place) => typeof place.latitude === 'number' && typeof place.longitude === 'number',
+  );
+  const mapReady = mapGeoPlaces.length > 0;
+  const mapLoading = !mapReady && (isLoading || Boolean(appCourse && resolvedPlaces.length === 0));
   const searchBias = places[0]?.latitude != null && places[0]?.longitude != null
     ? { lat: places[0].latitude, lng: places[0].longitude }
     : undefined;
@@ -439,8 +460,18 @@ export default function CourseDetailPage() {
 
   useEffect(() => {
     if (isEditing) return;
-    setPlaces(initialPlaces);
-  }, [id, isEditing, appCourse, syncedPlaces]);
+    setPlaces(resolvedPlaces.length > 0 ? resolvedPlaces : legacyPhotoPlaces);
+  }, [id, isEditing, resolvedPlaces, legacyPhotoPlaces]);
+
+  useLayoutEffect(() => {
+    const node = mapContainerRef.current;
+    if (!node) return;
+    const updateWidth = () => setMapWidth(Math.max(1, Math.floor(node.clientWidth)));
+    updateWidth();
+    const observer = new ResizeObserver(updateWidth);
+    observer.observe(node);
+    return () => observer.disconnect();
+  }, []);
 
   useEffect(() => {
     if (!deleteConfirmOpen) return;
@@ -670,8 +701,13 @@ export default function CourseDetailPage() {
             aria-label={`${authorHandle} 프로필 보기`}
             className="flex items-center gap-2 rounded-xl text-left outline-none transition-transform active:scale-[0.98] focus-visible:ring-2 focus-visible:ring-[#ED7773] focus-visible:ring-offset-2"
           >
-            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[#F3EDE8] text-lg">
-              {orphanPost?.authorEmoji || '🍽️'}
+            <div className="flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-full bg-[#F3EDE8] text-lg">
+              <AuthorAvatar
+                image={authorAvatarImage}
+                emoji={authorAvatarEmoji}
+                name={authorHandle}
+                className="flex h-full w-full items-center justify-center"
+              />
             </div>
             <div>
               <div className="flex items-center gap-1.5">
@@ -690,8 +726,13 @@ export default function CourseDetailPage() {
           </button>
         ) : (
           <div className="flex items-center gap-2">
-            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[#F3EDE8] text-lg">
-              {orphanPost?.authorEmoji || '🍽️'}
+            <div className="flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-full bg-[#F3EDE8] text-lg">
+              <AuthorAvatar
+                image={authorAvatarImage}
+                emoji={authorAvatarEmoji}
+                name={authorHandle}
+                className="flex h-full w-full items-center justify-center"
+              />
             </div>
             <div>
               <span className="block font-medium text-sm">@{authorHandle}</span>
@@ -738,17 +779,27 @@ export default function CourseDetailPage() {
 
       {/* Map area — 지도·경로·순번 마커만 표시한다. */}
       <div
+        ref={mapContainerRef}
         data-ui="course-map-area"
         className="relative mx-4 mb-4 h-[270px] overflow-hidden rounded-[22px] border border-[#E9D8CF] bg-[#FBF7F1] shadow-[0_8px_22px_rgba(105,67,48,0.08)]"
       >
-        <CourseMapView
-          places={places}
-          width={430}
-          height={270}
-          className="h-full w-full"
-          selectedPlaceId={selectedPlaceId}
-          onSelectPlace={setSelectedPlaceId}
-        />
+        {mapReady ? (
+          <CourseMapView
+            places={mapGeoPlaces}
+            width={mapWidth}
+            height={270}
+            className="h-full w-full"
+            selectedPlaceId={selectedPlaceId}
+            onSelectPlace={setSelectedPlaceId}
+          />
+        ) : (
+          <div
+            className="flex h-full items-center justify-center bg-[#F3EDE8] text-[12px] text-[#9B9B9B]"
+            aria-busy={mapLoading || undefined}
+          >
+            {mapLoading ? '지도 불러오는 중…' : '표시할 지도 좌표가 없어요.'}
+          </div>
+        )}
         <AnimatePresence>
           {selectedPlaceId && (
             <motion.div

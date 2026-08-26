@@ -33,7 +33,9 @@ import {
   getGoogleDirections,
   getGoogleLocationDetails,
   getGooglePlaceDetails,
+  googlePlacePhotosSynced,
   googlePlacesErrorResponse,
+  storedRestaurantPhotoUrls,
 } from "./googlePlaces";
 import { feedItemMatchesLocation, parseFeedLocationFilter } from "./feedLocation";
 
@@ -531,6 +533,38 @@ export async function lunchiePresentationPhotos(
   // for every catalogue photo made one request fan out into 100+ storage
   // reads and added several seconds to Lunchie startup.
   return selectLunchiePresentationPhotoKeys(results);
+}
+
+async function restaurantDetailPhotos(db: any, restaurantId: string, storedPhotos: unknown) {
+  const presentation = await lunchiePresentationPhotos(db, restaurantId);
+  if (presentation.length > 0) return presentation;
+  return storedRestaurantPhotoUrls(storedPhotos);
+}
+
+type IndexedMenuRow = {
+  name: string;
+  price: number | null;
+  category: string | null;
+  description: string | null;
+  dietary: string | null;
+};
+
+/** Prefer the queryable menu index over the legacy restaurants.menus JSON snapshot. */
+async function restaurantIndexedMenuItems(db: any, restaurantId: string) {
+  try {
+    const { results } = await db.prepare(
+      "SELECT name, price, category, description, dietary FROM restaurant_menu_items WHERE restaurant_id = ? ORDER BY category ASC, name ASC LIMIT 80",
+    ).bind(restaurantId).all<IndexedMenuRow>();
+    return (results ?? []).map((item) => ({
+      name: item.name,
+      price: typeof item.price === "number" && Number.isFinite(item.price) ? item.price : null,
+      category: item.category || undefined,
+      description: item.description || undefined,
+      dietary: json<string[]>(item.dietary, []),
+    }));
+  } catch {
+    return [];
+  }
 }
 
 /** Resolve recommendation media in bounded D1 batches, then apply exactly the
@@ -1647,6 +1681,49 @@ app.get("/api/restaurants", async (c) => {
       tags: json<string[]>(r.tags, []),
     }))),
   );
+});
+
+// 저장된 Lunchie 여정은 식당 ID만 보관한다. 전체 카탈로그 초기화와 무관하게
+// 해당 식당을 다시 열 수 있도록 정본 행을 ID로 직접 조회한다.
+app.get("/api/restaurants/:id", async (c) => {
+  const restaurant = await c.env.DB.prepare(
+    "SELECT * FROM restaurants WHERE id = ? LIMIT 1",
+  )
+    .bind(c.req.param("id"))
+    .first();
+  if (!restaurant) return c.json({ error: "restaurant_not_found" }, 404);
+  let row = restaurant as any;
+  const indexedMenu = await restaurantIndexedMenuItems(c.env.DB, row.id);
+  let photos = await restaurantDetailPhotos(c.env.DB, row.id, row.photos);
+  if (
+    photos.length === 0
+    && row.source === "google"
+    && typeof row.google_place_id === "string"
+    && row.google_place_id
+    && !googlePlacePhotosSynced(row.photos)
+  ) {
+    try {
+      await getGooglePlaceDetails(c.env, { placeId: row.google_place_id });
+      const refreshed = await c.env.DB.prepare(
+        "SELECT * FROM restaurants WHERE id = ? LIMIT 1",
+      )
+        .bind(row.id)
+        .first();
+      if (refreshed) {
+        row = refreshed as any;
+        photos = await restaurantDetailPhotos(c.env.DB, row.id, row.photos);
+      }
+    } catch {
+      // Keep the stored text details even if photo backfill fails.
+    }
+  }
+  return c.json({
+    ...row,
+    photos,
+    menu_items: indexedMenu.length > 0 ? indexedMenu : json(row.menus, []),
+    tags: json<string[]>(row.tags, []),
+    dietary_options: json<string[]>(row.dietary_options, []),
+  });
 });
 
 // REST API — /api/courses (Munchie 코스 목록)

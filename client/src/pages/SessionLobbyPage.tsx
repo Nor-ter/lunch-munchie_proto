@@ -76,7 +76,7 @@ export default function SessionLobbyPage() {
         .then(session => {
           if (!active) return;
           if (session.membershipActive === false || !isActiveQuickMatchStatus(session.status)) {
-            toast.info(session.status === 'cancelled' ? 'This Quick Match was cancelled.' : 'This Quick Match is no longer active.');
+            toast.info(session.status === 'cancelled' ? '빠른 매칭이 취소됐어요.' : '더 이상 진행 중인 빠른 매칭이 아니에요.');
             setCurrentSession(null);
             navigate('/lunchie/settings');
           } else if (session.status !== 'waiting') {
@@ -163,7 +163,7 @@ export default function SessionLobbyPage() {
             />
             <span className="absolute -right-2 -top-2 flex size-9 items-center justify-center rounded-full bg-[#EB5053] text-lg text-white shadow-lg">✓</span>
           </motion.div>
-          <span className="rounded-full bg-[#FFE3DF] px-3 py-1 text-[11px] font-black tracking-[0.4px] text-[#D8484B]">JOINED</span>
+          <span className="rounded-full bg-[#FFE3DF] px-3 py-1 text-[11px] font-black tracking-[0.4px] text-[#D8484B]">참여 완료</span>
           <h1 className="mt-4 text-[25px] font-black tracking-[-0.7px] text-[#2F2927]">참여 완료!</h1>
           <p className="mt-2 max-w-[290px] text-[14px] font-semibold leading-relaxed text-[#8A7B75]">
             {presentation.isWaiting ? (
@@ -246,7 +246,9 @@ export default function SessionLobbyPage() {
     } catch (error) {
       console.error(error);
       const failure = error as Error & { code?: string };
-      const message = failure.message || '투표를 시작하지 못했습니다.';
+      const message = failure.code === 'NO_ELIGIBLE_RESTAURANTS'
+        ? '현재 조건에 맞는 식당이 없어요. 반경이나 조건을 바꿔 주세요.'
+        : '투표를 시작하지 못했어요. 잠시 후 다시 시도해 주세요.';
       setStartFailure({ message, code: failure.code });
       toast.error(message);
       setIsStarting(false);
@@ -267,13 +269,13 @@ export default function SessionLobbyPage() {
   return (
     <ScreenContainer className="lunchie-lobby flex min-h-dvh flex-col overflow-x-hidden px-5">
       <header className="flex items-center gap-3 pb-5 pt-[max(32px,env(safe-area-inset-top))]">
-        <IconButton aria-label="Quick Match 설정으로 돌아가기" onClick={() => navigate('/lunchie/settings')} className="shrink-0">
+        <IconButton aria-label="빠른 매칭 설정으로 돌아가기" onClick={() => navigate('/lunchie/settings')} className="shrink-0">
           <ArrowLeft size={20} aria-hidden="true" />
         </IconButton>
         <div className="min-w-0 flex-1">
           <h1 className="truncate text-[20px] font-black text-[var(--lm-text)]">{currentSession.name}</h1>
           <p className="mt-0.5 truncate text-[12px] text-[var(--lm-sub)]">
-            Host {presentation.hostName} · {presentation.memberCount}/{presentation.capacity}명
+            호스트 {presentation.hostName} · {presentation.memberCount}/{presentation.capacity}명
           </p>
         </div>
         <StatusBadge
@@ -413,7 +415,7 @@ export default function SessionLobbyPage() {
                           </div>
                           {member.isHost && (
                             <span className="mt-0.5 inline-flex items-center gap-1 text-[10px] font-bold text-[var(--lm-primary)]">
-                              <Crown size={11} aria-hidden="true" /> Host
+                              <Crown size={11} aria-hidden="true" /> 호스트
                             </span>
                           )}
                         </div>

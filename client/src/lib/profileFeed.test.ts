@@ -75,5 +75,22 @@ describe("profile feed data boundary", () => {
       emoji: "😊",
     });
   });
+
+  it("keeps a feed author photo when the remote users table is unavailable", () => {
+    const legacyPost = post({ authorImage: "https://example.com/avatar.jpg" });
+    const userId = resolveFeedAuthorId(legacyPost);
+
+    expect(getFeedAuthorFallback([legacyPost], userId)).toEqual({
+      user: {
+        id: userId,
+        username: "지민",
+        profile_image_url: "https://example.com/avatar.jpg",
+        bio: null,
+        location: null,
+        created_at: legacyPost.createdAt,
+      },
+      emoji: "지",
+    });
+  });
 });
 

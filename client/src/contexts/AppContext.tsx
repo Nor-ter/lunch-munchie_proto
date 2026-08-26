@@ -28,6 +28,8 @@ import {
 } from '@/utils/lunchmateProfile';
 import { logCourseSave, logFeedLike } from '@/lib/eventLogger';
 import { persistSessionSwipe } from '@/services/sessionApi';
+import { mergeCanonicalRestaurantPresentation } from '@/lib/restaurantPresentation';
+import { feedAuthorEmoji } from '@/lib/feedAuthor';
 import {
   isActiveQuickMatchStatus,
   normalizeDietaryPreferences,
@@ -84,6 +86,7 @@ export interface Restaurant {
   lng: number;
   priceRange: 1 | 2 | 3 | 4;
   openHours: string;
+  phone?: string;
   dietary: string[];
   description: string;
 }
@@ -769,7 +772,7 @@ export function AppProvider({
       id: feed.id,
       authorId: feed.creatorId,
       authorName: feed.authorName || (feed.creatorId === profile.id ? profile.name : feed.creatorId === 'user_minji' ? '김민지' : feed.creatorId === 'user_jenny' ? '제니' : feed.creatorId === 'user_minsu' ? '민수' : 'Lunchie 사용자'),
-      authorEmoji: feed.creatorId === profile.id ? profile.emoji : feed.creatorId === 'user_minji' ? '🐰' : feed.creatorId === 'user_jenny' ? '🍓' : feed.creatorId === 'user_minsu' ? '🐻' : '🐳',
+      authorEmoji: feedAuthorEmoji(feed.creatorId, feed.authorName || profile.name, profile),
       authorImage: typeof feed.authorImage === 'string' ? feed.authorImage : undefined,
       courseId: feed.courseId,
       photos: (Array.isArray(feed.photos) ? feed.photos : []).filter((photo: unknown): photo is string => typeof photo === 'string').map((photo: string) => photo.startsWith('http') || photo.startsWith('/') ? photo : `/photos/${photo}`),
@@ -873,7 +876,7 @@ export function AppProvider({
             id: feed.id,
             authorId: feed.creatorId,
             authorName: feed.authorName || (feed.creatorId === profile.id ? profile.name : feed.creatorId === 'user_minji' ? '김민지' : feed.creatorId === 'user_jenny' ? '제니' : feed.creatorId === 'user_minsu' ? '민수' : 'Lunchie 사용자'),
-            authorEmoji: feed.creatorId === 'user_minji' ? '🐰' : feed.creatorId === 'user_jenny' ? '🍓' : feed.creatorId === 'user_minsu' ? '🐻' : '🐳',
+            authorEmoji: feedAuthorEmoji(feed.creatorId, feed.authorName || profile.name, profile),
             authorImage: typeof feed.authorImage === 'string' ? feed.authorImage : undefined,
             courseId: feed.courseId,
             photos: (Array.isArray(feed.photos) ? feed.photos : []).filter((photo: unknown): photo is string => typeof photo === 'string').map((photo: string) => photo.startsWith('http') || photo.startsWith('/') ? photo : `/photos/${photo}`),
@@ -917,7 +920,7 @@ export function AppProvider({
 
   // A room can outlive a deployment in localStorage. Refresh only the card
   // presentation from the canonical catalogue so an already-open Lunchie
-  // session gets repaired R2 image paths without changing its immutable deck,
+  // session gets repaired display details without changing its immutable deck,
   // order, votes, or recommendation attribution.
   useEffect(() => {
     if (!currentSession?.restaurants?.length || !restaurants.length) return;
@@ -928,14 +931,10 @@ export function AppProvider({
       const hydratedRestaurants = previous.restaurants.map(restaurant => {
         const canonical = catalogueById.get(restaurant.id);
         if (!canonical) return restaurant;
-        const photos = canonical.photos ?? [];
-        const image = photos[0] ?? '';
-        if (
-          JSON.stringify(photos) === JSON.stringify(restaurant.photos ?? []) &&
-          image === restaurant.image
-        ) return restaurant;
+        const hydrated = mergeCanonicalRestaurantPresentation(restaurant, canonical);
+        if (JSON.stringify(hydrated) === JSON.stringify(restaurant)) return restaurant;
         changed = true;
-        return { ...restaurant, photos, image };
+        return hydrated;
       });
       return changed ? { ...previous, restaurants: hydratedRestaurants } : previous;
     });
@@ -1589,7 +1588,13 @@ export function AppProvider({
 
   const updateProfile = useCallback((updates: Partial<UserProfile>) => {
     setProfile(prev => ({ ...prev, ...updates }));
-    if (updates.name !== undefined || updates.emoji !== undefined || updates.lunchmateXp !== undefined || updates.lunchmateTotalXp !== undefined) {
+    if (
+      updates.name !== undefined
+      || updates.emoji !== undefined
+      || updates.lunchmateXp !== undefined
+      || updates.lunchmateTotalXp !== undefined
+      || 'avatarPhoto' in updates
+    ) {
       setFeedPosts(posts => posts.map(post => post.authorId === profile.id
         ? {
             ...post,

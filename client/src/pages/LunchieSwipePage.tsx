@@ -22,9 +22,11 @@ import { intentForCategory } from '@shared/intent';
 import { persistSessionSwipe } from '@/services/sessionApi';
 import { classifySwipeAvailability, type SwipeAvailability } from '@/lib/swipeAvailability';
 import { isActiveQuickMatchStatus } from '@/lib/quickMatch';
+import { beginMenuPhotoRotation, completeMenuPhotoRotation } from '@/lib/menuPhotoRotation';
 import { normalizeRestaurantPayload } from '@shared/restaurantContract';
 import SessionManagementMenu from '@/components/lunchie/SessionManagementMenu';
-import RestaurantDetailSheet from '@/components/munchie/RestaurantDetailSheet';
+import QuickMatchRestaurantDetailSheet from '@/components/lunchie/QuickMatchRestaurantDetailSheet';
+import { restaurantSummary } from '@/lib/restaurantPresentation';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -42,39 +44,39 @@ function SwipeStateScreen({
   const content = {
     loading: {
       title: '결승 후보를 준비하고 있어요',
-      description: 'Preparing your Quick Match and restaurant options…',
+      description: '빠른 매칭과 식당 후보를 준비하고 있어요…',
     },
     'api-error': {
-      title: 'We couldn’t load Quick Match',
-      description: 'Check your connection and try again.',
+      title: '빠른 매칭을 불러오지 못했어요',
+      description: '인터넷 연결을 확인하고 다시 시도해 주세요.',
     },
     'catalog-empty': {
-      title: 'Restaurants aren’t available yet',
-      description: 'We couldn’t load restaurant options for this Quick Match.',
+      title: '아직 추천할 식당이 없어요',
+      description: '이 빠른 매칭에 맞는 식당 후보를 불러오지 못했어요.',
     },
     'no-matches': {
-      title: 'No matches found',
-      description: 'Try increasing the distance or adjusting your preferences.',
+      title: '조건에 맞는 식당이 없어요',
+      description: '검색 거리를 늘리거나 취향 조건을 조정해 보세요.',
     },
     'session-missing': {
-      title: 'Quick Match를 다시 준비할게요',
-      description: 'No Quick Match found. Start a new Quick Match from settings.',
+      title: '빠른 매칭을 다시 준비할게요',
+      description: '진행 중인 빠른 매칭이 없어요. 설정에서 새로 시작해 주세요.',
     },
     'session-invalid': {
-      title: 'This Quick Match is no longer available',
-      description: 'It may have ended, expired, been cancelled, or you may have left the lobby.',
+      title: '더 이상 참여할 수 없는 빠른 매칭이에요',
+      description: '이미 종료·만료·취소됐거나 대기방에서 나간 세션일 수 있어요.',
     },
     'session-not-started': {
-      title: 'This Quick Match hasn’t started yet',
-      description: 'Return to the lobby and wait for the host to begin.',
+      title: '아직 빠른 매칭이 시작되지 않았어요',
+      description: '대기방으로 돌아가 호스트가 시작할 때까지 기다려 주세요.',
     },
   }[state];
   const canRetry = state === 'api-error' || state === 'catalog-empty';
   const primaryLabel = state === 'no-matches'
-    ? 'Edit preferences'
+    ? '조건 수정하기'
     : state === 'session-not-started'
-      ? 'Return to lobby'
-      : 'Back to settings';
+      ? '대기방으로 돌아가기'
+      : '설정으로 돌아가기';
   const primaryPath = state === 'session-not-started' ? '/session/lobby' : '/lunchie/settings';
 
   return (
@@ -101,12 +103,12 @@ function SwipeStateScreen({
             </button>
             {canRetry && onRetry && (
               <button type="button" onClick={onRetry} className="flex min-h-11 w-full items-center justify-center gap-2 rounded-2xl border border-[#E9D8D3] bg-[#FFF9F6] px-4 text-[13px] font-bold text-[#5E5559] outline-none focus-visible:ring-2 focus-visible:ring-[#F4515E]">
-                <RefreshCw size={15} aria-hidden="true" /> Try again
+                <RefreshCw size={15} aria-hidden="true" /> 다시 시도
               </button>
             )}
             {currentSession && (state === 'catalog-empty' || state === 'no-matches' || state === 'session-not-started') && (
               <div className="flex items-center justify-center gap-1 pt-2 text-[11px] font-semibold text-[#81767A]">
-                Manage this session
+                이 세션 관리
                 <SessionManagementMenu onEnded={() => navigate('/lunchie/settings')} className="text-[#81767A]" />
               </div>
             )}
@@ -137,10 +139,11 @@ const CUBE_DURATION = 0.7;
 // 다음/이전 사진을 보여주는 진짜 3D 큐브 슬라이더(tl_revise 애니메이션 UI). step: 단조 증가/감소
 // 정수(다음 +1, 이전 -1). 90도 도는 동안 실제 보이는 면은 나가는 면+들어오는 면 둘뿐이라 네 면만으로
 // 임의 개수 사진을 끊김 없이 굴린다.
-function MenuCube({ photos, step, onPhotoError }: {
+function MenuCube({ photos, step, onPhotoError, onRotationComplete }: {
   photos: string[];
   step: number;
   onPhotoError?: (src: string) => void;
+  onRotationComplete?: () => void;
 }) {
   const ref = useRef<HTMLDivElement>(null);
   const [depth, setDepth] = useState(160);
@@ -181,6 +184,7 @@ function MenuCube({ photos, step, onPhotoError }: {
           style={{ transformStyle: 'preserve-3d' }}
           animate={{ rotateY: -90 * step }}
           transition={{ duration: CUBE_DURATION, ease: CUBE_EASE }}
+          onAnimationComplete={onRotationComplete}
         >
           {[0, 1, 2, 3].map(f => (
             <div
@@ -276,6 +280,8 @@ function SwipeCard({
   const [isRevealed, setIsRevealed] = useState(false);
   // 큐브 회전 단계(단조). photoIndex는 foodPhotos 길이로 파생 — 도트/사진 순번 표시에 사용.
   const [photoStep, setPhotoStep] = useState(0);
+  const photoRotationLock = useRef(false);
+  const [isPhotoRotating, setIsPhotoRotating] = useState(false);
   const [detailIndex, setDetailIndex] = useState<number | null>(null);
   const x = useMotionValue(0);
   const rotate = useTransform(x, [-220, 220], [-16, 16]);
@@ -319,6 +325,22 @@ function SwipeCard({
   const foodPhotos = candidatePhotoSources.filter((photo) => !failedPhotoSources.has(photo));
   const primaryPhoto = hasCanonicalPhotoList ? foodPhotos[0] : restaurant.image;
   const photoIndex = foodPhotos.length ? ((photoStep % foodPhotos.length) + foodPhotos.length) % foodPhotos.length : 0;
+  const detailSummary = restaurantSummary(restaurant);
+  const rotateMenuPhoto = useCallback((direction: -1 | 1) => {
+    const accepted = beginMenuPhotoRotation(photoRotationLock, direction, delta => {
+      setPhotoStep(step => step + delta);
+    });
+    if (accepted) setIsPhotoRotating(true);
+  }, []);
+  const finishMenuPhotoRotation = useCallback(() => {
+    completeMenuPhotoRotation(photoRotationLock);
+    setIsPhotoRotating(false);
+  }, []);
+
+  useEffect(() => {
+    completeMenuPhotoRotation(photoRotationLock);
+    setIsPhotoRotating(false);
+  }, [restaurant.id, candidatePhotoKey]);
   const photoLabel = foodPhotos.length === 0
     ? '등록된 음식 사진이 없어요'
     : `메뉴 사진 ${photoIndex + 1} / ${foodPhotos.length}`;
@@ -355,8 +377,11 @@ function SwipeCard({
       dragElastic={0.6}
       onDragEnd={handleDragEnd}
       whileDrag={{ cursor: 'grabbing' }}
-      onTap={() => {
-        if (!isRevealed) {
+      onTap={(event) => {
+        const target = event.target;
+        const openedDetail = target instanceof Element
+          && Boolean(target.closest('[data-ui="quick-match-detail-trigger"]'));
+        if (!openedDetail && !isRevealed) {
           setPhotoStep(0);
           setIsRevealed(true);
         }
@@ -423,7 +448,20 @@ function SwipeCard({
             ))}
           </div>
           <h2 className="text-white font-black text-[24px] leading-tight">{restaurant.name}</h2>
-          <p className="text-white/70 text-[12px] mt-1">{restaurant.description}</p>
+          <button
+            type="button"
+            data-ui="quick-match-detail-trigger"
+            aria-label={`${restaurant.name} 상세정보 보기`}
+            onPointerDown={(event) => event.stopPropagation()}
+            onClick={(event) => {
+              event.stopPropagation();
+              onOpenRestaurantDetails(restaurant);
+            }}
+            className="mt-2 flex min-h-9 w-full items-center justify-between gap-2 rounded-xl bg-black/25 px-3 py-2 text-left outline-none transition-colors active:bg-black/40 focus-visible:ring-2 focus-visible:ring-white/80"
+          >
+            <span className="min-w-0 flex-1 truncate text-[12px] font-semibold text-white/75">{detailSummary}</span>
+            <span className="shrink-0 text-[11px] font-black text-white">상세보기 ›</span>
+          </button>
           <div className="flex items-center gap-3 mt-2">
             <div className="flex items-center gap-1">
               <Star size={12} fill="#FFD700" color="#FFD700" />
@@ -445,7 +483,7 @@ function SwipeCard({
           className="absolute top-8 left-5 border-[3px] border-[#3CBA44] rounded-2xl px-4 py-2"
           style={{ opacity: likeOp, rotate: -12 }}
         >
-          <span className="text-[#3CBA44] font-black text-[18px]">LIKE ♡</span>
+          <span className="text-[#3CBA44] font-black text-[18px]">좋아요 ♡</span>
         </motion.div>
 
         {/* NOPE overlay */}
@@ -453,7 +491,7 @@ function SwipeCard({
           className="absolute top-8 right-5 border-[3px] border-[#EB5053] rounded-2xl px-4 py-2"
           style={{ opacity: nopeOp, rotate: 12 }}
         >
-          <span className="text-[#EB5053] font-black text-[18px]">NOPE ✕</span>
+          <span className="text-[#EB5053] font-black text-[18px]">패스 ✕</span>
         </motion.div>
         {/* 좋아요 샤이닝 효과 — 두 겹의 대각선 빛이 어긋나게 스치고, 전체 플래시 + 사방으로 빛 파티클이 튄다 */}
         <motion.div
@@ -606,22 +644,29 @@ function SwipeCard({
                   {foodPhotos.length > 0 ? (
                     <>
                       {/* 좌/우 탭 시 큐브가 Y축으로 90도씩 굴러간다 */}
-                      <MenuCube photos={foodPhotos} step={photoStep} onPhotoError={markPhotoFailed} />
+                      <MenuCube
+                        photos={foodPhotos}
+                        step={photoStep}
+                        onPhotoError={markPhotoFailed}
+                        onRotationComplete={finishMenuPhotoRotation}
+                      />
                       {foodPhotos.length > 1 && (
                         <>
                           <button
                             className="absolute inset-y-0 left-0 w-1/2"
+                            disabled={isPhotoRotating}
                             onClick={(e) => {
                               e.stopPropagation();
-                              setPhotoStep(s => s - 1);
+                              rotateMenuPhoto(-1);
                             }}
                             aria-label="이전 사진"
                           />
                           <button
                             className="absolute inset-y-0 right-0 w-1/2"
+                            disabled={isPhotoRotating}
                             onClick={(e) => {
                               e.stopPropagation();
-                              setPhotoStep(s => s + 1);
+                              rotateMenuPhoto(1);
                             }}
                             aria-label="다음 사진"
                           />
@@ -636,7 +681,13 @@ function SwipeCard({
                       emojiClass="text-[80px]"
                     />
                   )}
-                  <div aria-hidden="true" className="absolute top-3 left-1/2 -translate-x-1/2 flex gap-1.5 pointer-events-none">
+                  <div
+                    data-ui="menu-photo-progress"
+                    data-photo-index={photoIndex + 1}
+                    data-photo-count={foodPhotos.length}
+                    aria-hidden="true"
+                    className="absolute top-3 left-1/2 -translate-x-1/2 flex gap-1.5 pointer-events-none"
+                  >
                     {foodPhotos.map((_: string, j: number) => (
                       <div key={j} className="w-1.5 h-1.5 rounded-full"
                         style={{ background: j === photoIndex ? 'white' : 'rgba(255,255,255,0.4)' }} />
@@ -1302,7 +1353,7 @@ function FinalBattleResultScreen({
             : { duration: 0.25 }}
         >
           <div className="w-14 h-14 rounded-full bg-[#EB5053] border-[3px] border-white flex items-center justify-center shadow-2xl">
-            <span className="font-black text-white text-[15px]">VS</span>
+            <span className="font-black text-white text-[15px]">대결</span>
           </div>
         </motion.div>
       </div>
@@ -1401,7 +1452,8 @@ function WaitingOrDecidedScreen({ onContinue, onReroll }: { onContinue: (winner?
       // 신호: finalist 선택 = CHOOSE(pairwise), '둘 다 별로' = NOPE(명시 음성)
       logEvent({ event_type: 'SWIPE', action: isReject ? 'NOPE' : 'CHOOSE', slate_type: 'FINAL', restaurant_id: restaurantId, round, user_id: profile.id, session_id: currentSession?.id ?? null });
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : '최종 선택을 저장하지 못했어요.');
+      console.error('빠른 매칭 최종 선택 저장 실패', error);
+      toast.error('최종 선택을 저장하지 못했어요. 다시 시도해 주세요.');
     } finally {
       setIsVoting(false);
     }
@@ -1958,7 +2010,8 @@ function QuickMatchExperience() {
     try {
       await addSwipe(restaurant.id, action === 'like' ? 'like' : 'skip');
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : '선택을 저장하지 못했어요. 다시 눌러주세요.');
+      console.error('빠른 매칭 선택 저장 실패', error);
+      toast.error('선택을 저장하지 못했어요. 다시 눌러 주세요.');
       submittingSwipeRef.current = false;
       setIsSubmittingSwipe(false);
       return;
@@ -2129,7 +2182,10 @@ function QuickMatchExperience() {
     <div className="min-h-dvh bg-[#FCF4EE] relative">
       {/* Header */}
       <div className="flex items-center justify-between px-5 pt-12 pb-3">
-        <button onClick={() => { logAbandon('back'); navigate('/session/lobby'); }}
+        <button
+          type="button"
+          aria-label="빠른 매칭 설정으로 돌아가기"
+          onClick={() => { logAbandon('back'); navigate('/lunchie/settings'); }}
           className="w-10 h-10 rounded-full bg-white shadow-sm flex items-center justify-center active:scale-95 flex-shrink-0">
           <ArrowLeft size={18} color="#1A1A1A" />
         </button>
@@ -2156,9 +2212,9 @@ function QuickMatchExperience() {
 
       {currentSession.dietaryBestEffort && (
         <div role="note" className="mx-5 mb-2 rounded-2xl border border-[#F3CFAE] bg-[#FFF7E8] px-4 py-3 text-center">
-          <p className="text-[12px] font-black text-[#7A4B20]">Closest available matches</p>
+          <p className="text-[12px] font-black text-[#7A4B20]">현재 위치에서 가장 가까운 후보</p>
           <p className="mt-1 text-[10px] font-semibold leading-relaxed text-[#8A6747]">
-            No venue verifies every selected diet style. Ingredient exclusions are still applied—please confirm dietary requirements with the venue.
+            선택한 모든 식단 조건을 매장에서 보장하지는 않아요. 제외 재료는 반영했지만 주문 전에 매장에 다시 확인해 주세요.
           </p>
         </div>
       )}
@@ -2258,9 +2314,9 @@ function QuickMatchExperience() {
 
       <AnimatePresence>
         {detailRestaurant && (
-          <RestaurantDetailSheet
-            restaurantId={detailRestaurant.id}
-            fallbackRestaurant={detailRestaurant}
+          <QuickMatchRestaurantDetailSheet
+            open
+            restaurant={detailRestaurant}
             onClose={closeRestaurantDetails}
           />
         )}

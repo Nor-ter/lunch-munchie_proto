@@ -20,8 +20,8 @@ describe('Munchie Feed user search', () => {
     expect(source).toContain('내 프로필');
   });
 
-  it('keeps user search and the source collapsible food filters together', () => {
-    expect(source).toContain("const [showFilters, setShowFilters] = useState(true)");
+  it('starts with food filters collapsed and keeps them next to user search', () => {
+    expect(source).toContain("const [showFilters, setShowFilters] = useState(false)");
     expect(source).toContain('aria-label="필터 보기"');
     expect(source).toContain('{!searchActive && <AnimatePresence');
     expect(source).toContain('{showFilters && (');

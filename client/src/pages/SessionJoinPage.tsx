@@ -94,7 +94,8 @@ export default function SessionJoinPage() {
       toast.success(`"${session.name}" 세션에 참가했습니다! 🎉`);
       navigate('/session/lobby');
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : '세션 참가에 실패했습니다.');
+      console.error('빠른 매칭 세션 참가 실패', e);
+      toast.error('세션에 참가하지 못했어요. 초대 링크를 확인하고 다시 시도해 주세요.');
     } finally {
       setIsJoining(false);
     }
@@ -176,7 +177,7 @@ export default function SessionJoinPage() {
           className="bg-white rounded-3xl p-6 shadow-sm border border-black/5 space-y-6"
         >
           <div className="text-center mb-2">
-            <span className="text-[11px] font-bold text-[#EB5053] bg-[#FFF5F5] px-2.5 py-1 rounded-full uppercase tracking-wider">INVITATION</span>
+            <span className="text-[11px] font-bold text-[#EB5053] bg-[#FFF5F5] px-2.5 py-1 rounded-full tracking-wider">초대장</span>
             <h2 className="font-bold text-[20px] text-[#1A1A1A] mt-2 leading-tight">
               "{sessionName}"
             </h2>

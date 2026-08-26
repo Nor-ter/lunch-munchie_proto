@@ -27,4 +27,10 @@ describe('SavedPage list bookmark presentation', () => {
     expect(savedSource).toContain('selectedFeedId={selectedMapFeedId}');
     expect(savedSource).toContain('onSelectedFeedIdChange={selectSavedMapFeed}');
   });
+
+  it('restores the Lunchie restaurant tab from navigation query state', () => {
+    expect(savedSource).toContain('getSavedTabFromSearch(search)');
+    expect(savedSource).toContain("get('tab') === 'restaurants'");
+    expect(savedSource).toContain('aria-pressed={tab === key}');
+  });
 });

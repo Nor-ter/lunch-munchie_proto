@@ -19,6 +19,10 @@ import { useAuthStatus } from '@/hooks/useAuthStatus';
 
 type Tab = 'coursemaps' | 'restaurants';
 
+export function getSavedTabFromSearch(search: string): Tab {
+  return new URLSearchParams(search).get('tab') === 'restaurants' ? 'restaurants' : 'coursemaps';
+}
+
 type JourneyStop = { restaurant_id: string; name: string; category: string | null; at: number };
 type JourneyDay = { key: string; label: string; stops: JourneyStop[] };
 
@@ -47,7 +51,7 @@ export default function SavedPage() {
     feedPosts, savedCourseIds, unsaveCourse,
   } = useApp();
   const auth = useAuthStatus();
-  const [tab, setTab] = useState<Tab>('coursemaps');
+  const [tab, setTab] = useState<Tab>(() => getSavedTabFromSearch(search));
   const [activeFilter, setActiveFilter] = useState<TagType | 'all'>('all');
   const [munchieView, setMunchieView] = useState<SavedViewMode>(
     () => getSavedViewFromSearch(search),
@@ -120,7 +124,7 @@ export default function SavedPage() {
         </p>
 
         {/* 모드 세그먼트 */}
-        <div className="flex rounded-full bg-[#F5F0EA] p-1">
+        <div className="flex rounded-full bg-[#F5F0EA] p-1" role="group" aria-label="저장 목록 탭">
           {([
             ['coursemaps', 'Munchie 먼치픽', MapIcon, savedPosts.length],
             ['restaurants', 'Lunchie 런치픽', Zap, journeyStops.length],
@@ -128,6 +132,7 @@ export default function SavedPage() {
             <button
               key={key}
               onClick={() => setTab(key)}
+              aria-pressed={tab === key}
               className="relative flex-1 h-10 rounded-full text-[13px] font-bold transition-colors flex items-center justify-center gap-1.5"
               style={{ color: tab === key ? '#FFFFFF' : '#8A7A6C' }}
             >
