@@ -8,6 +8,11 @@ import {
 } from "react";
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import { useLocation } from "wouter";
+import {
+  readFeedScrollTop,
+  saveFeedScrollTop,
+  saveFeedScrollTopFallback,
+} from "@/lib/feedHistoryState";
 
 function usePrevious<T>(value: T): T | undefined {
   const state = useRef({ curr: value, prev: undefined as T | undefined });
@@ -30,19 +35,6 @@ function getSlideDirection(from: string | undefined, to: string): number {
 
 const slideEase = [0.32, 0.72, 0, 1] as const;
 const DURATION = 0.42;
-const FEED_SCROLL_STORAGE_KEY = "lm:scroll:/feed";
-
-function readFeedScrollTop() {
-  if (typeof window === "undefined") return 0;
-  const value = Number(window.sessionStorage.getItem(FEED_SCROLL_STORAGE_KEY));
-  return Number.isFinite(value) && value > 0 ? value : 0;
-}
-
-function saveFeedScrollTop(value: number) {
-  if (typeof window === "undefined") return;
-  window.sessionStorage.setItem(FEED_SCROLL_STORAGE_KEY, String(Math.max(0, value)));
-}
-
 export function isFeedListLocation(location: string) {
   const pathname = location.split(/[?#]/, 1)[0];
   return pathname === "/feed";
@@ -72,7 +64,9 @@ function RouteScrollLayer({ location, children }: { location: string; children: 
 
     return () => {
       window.cancelAnimationFrame(restoreFrame);
-      saveFeedScrollTop(node.scrollTop);
+      // Cleanup runs after the next history entry becomes current. Keep this
+      // fallback out of history.state so it cannot overwrite the profile entry.
+      saveFeedScrollTopFallback(node.scrollTop);
     };
   }, [isFeed]);
 

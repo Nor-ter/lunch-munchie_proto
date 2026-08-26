@@ -168,3 +168,86 @@ test('switching from user B to C clears B before C loads', async ({ page }) => {
   await expect(page.getByText('User C', { exact: true })).toBeVisible();
   await expect(page.getByTestId('public-lunchmate-room')).toBeVisible();
 });
+
+test('returning from another profile preserves the Munchie Feed history entry', async ({ page }) => {
+  await page.setViewportSize({ width: 360, height: 740 });
+  await mockBaseApis(page);
+
+  let feedRequests = 0;
+  const feedItems = Array.from({ length: 12 }, (_, index) => ({
+    id: `feed-${index}`,
+    creatorId: 'feed-user',
+    authorName: 'Feed User',
+    authorImage: null,
+    courseId: `course-${index}`,
+    photos: [],
+    description: `Feed item ${index}`,
+    likesCount: 0,
+    savesCount: 0,
+    comments: [],
+    tags: ['맛집'],
+    stops: [],
+    createdAt: Date.now() - index * 1_000,
+  }));
+  await page.route('**/api/feed**', route => {
+    feedRequests += 1;
+    return route.fulfill({
+      contentType: 'application/json',
+      body: JSON.stringify({ items: feedItems, nextCursor: null, hasMore: false }),
+    });
+  });
+  await page.route('**/api/users/feed-user', route => route.fulfill({
+    contentType: 'application/json',
+    body: JSON.stringify({
+      id: 'feed-user', username: 'Feed User', handle: 'feed_user', profile_image_url: null,
+      bio: null, location: null, created_at: 1, lunchmate: lunchmate('blue-note'),
+    }),
+  }));
+
+  await page.goto('/feed');
+  const feedScroller = page.locator('[data-scroll-route="/feed"]');
+  const filterToggle = page.getByRole('button', { name: '필터 보기' });
+  const categoryFilter = page.getByRole('button', { name: '맛집', exact: true });
+  await expect(page.locator('main article')).toHaveCount(12);
+  await categoryFilter.click();
+  await expect(categoryFilter).toHaveAttribute('aria-pressed', 'true');
+  await filterToggle.click();
+  await expect(filterToggle).toHaveAttribute('aria-pressed', 'false');
+
+  await feedScroller.evaluate(element => element.scrollTo({ top: 1_200 }));
+  const firstProfileLink = page.locator('main article').nth(4).getByRole('button', { name: 'Feed User', exact: true });
+  await firstProfileLink.scrollIntoViewIfNeeded();
+  const firstScrollTop = await feedScroller.evaluate(element => element.scrollTop);
+  expect(firstScrollTop).toBeGreaterThan(500);
+  const requestsBeforeFirstProfile = feedRequests;
+  await firstProfileLink.click();
+  await expect(page).toHaveURL('/profile/feed-user');
+
+  await page.goBack();
+  await expect(page).toHaveURL('/feed');
+  await expect(filterToggle).toHaveAttribute('aria-pressed', 'false');
+  await expect(page.locator('main article')).toHaveCount(12);
+  await expect.poll(() => feedScroller.evaluate(element => Math.round(element.scrollTop))).toBe(Math.round(firstScrollTop));
+  expect(feedRequests).toBe(requestsBeforeFirstProfile);
+  await filterToggle.click();
+  await expect(categoryFilter).toHaveAttribute('aria-pressed', 'true');
+  await filterToggle.click();
+  await expect(filterToggle).toHaveAttribute('aria-pressed', 'false');
+
+  await feedScroller.evaluate(element => element.scrollTo({ top: 1_600 }));
+  const secondProfileLink = page.locator('main article').nth(6).getByRole('button', { name: 'Feed User', exact: true });
+  await secondProfileLink.scrollIntoViewIfNeeded();
+  const secondScrollTop = await feedScroller.evaluate(element => element.scrollTop);
+  const requestsBeforeSecondProfile = feedRequests;
+  await secondProfileLink.click();
+  await expect(page).toHaveURL('/profile/feed-user');
+
+  await page.getByRole('button', { name: '뒤로 가기' }).click();
+  await expect(page).toHaveURL('/feed');
+  await expect(filterToggle).toHaveAttribute('aria-pressed', 'false');
+  await expect(page.locator('main article')).toHaveCount(12);
+  await expect.poll(() => feedScroller.evaluate(element => Math.round(element.scrollTop))).toBe(Math.round(secondScrollTop));
+  expect(feedRequests).toBe(requestsBeforeSecondProfile);
+  await filterToggle.click();
+  await expect(categoryFilter).toHaveAttribute('aria-pressed', 'true');
+});

@@ -33,6 +33,8 @@ describe('UnifiedMunchieCard ownership menu', () => {
 
   it('routes own and other author profile clicks to different destinations', () => {
     expect(source).toContain("const authorProfilePath = ownPost ? '/profile' : `/profile/${resolveFeedAuthorId(post)}`");
-    expect(source).toContain('onClick={() => go(authorProfilePath)}');
+    expect(source).toContain('onBeforeAuthorProfileNavigate?.()');
+    expect(source).toContain('navigate(authorProfilePath)');
+    expect(source).toContain('onClick={goToAuthorProfile}');
   });
 });

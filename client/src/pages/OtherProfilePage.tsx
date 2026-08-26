@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { ChevronLeft } from 'lucide-react';
-import { useLocation, useParams } from 'wouter';
+import { useParams } from 'wouter';
 import { FollowButton } from '@/components/follow/FollowButton';
 import { FollowerListSheet, type FollowListMode } from '@/components/follow/FollowerListSheet';
 import { ProfileStats } from '@/components/follow/ProfileStats';
@@ -16,13 +16,13 @@ import PublicLunchmateRoom from '@/components/profile/PublicLunchmateRoom';
 
 export default function OtherProfilePage() {
   const { id = '' } = useParams<{ id: string }>();
-  const [, navigate] = useLocation();
   const remoteUser = useUser(id);
   const { posts, fallbackAuthor } = useProfileFeed(id);
   const [listMode, setListMode] = useState<FollowListMode | null>(null);
   const user = remoteUser.data ?? fallbackAuthor?.user;
   const avatarFallback = fallbackAuthor?.emoji ?? user?.username.slice(0, 1).toUpperCase();
   const totalLikes = posts.reduce((sum, post) => sum + post.likes, 0);
+  const goBack = () => window.history.back();
 
   if (remoteUser.isLoading && !fallbackAuthor) {
     return <main className="flex min-h-dvh items-center justify-center bg-[#FCF4EE] text-sm text-[#9B9B9B]">프로필을 불러오는 중…</main>;
@@ -39,7 +39,7 @@ export default function OtherProfilePage() {
           <p className="mt-1 text-sm text-[#9B9B9B]">
             {remoteUser.isError ? '잠시 후 다시 시도해 주세요.' : '아직 실제 계정과 연결되지 않은 게시물일 수 있어요.'}
           </p>
-          <button onClick={() => navigate('/feed')} className="mt-5 rounded-full bg-[#EB5053] px-6 py-3 text-sm font-bold text-white">피드로 돌아가기</button>
+          <button onClick={goBack} className="mt-5 rounded-full bg-[#EB5053] px-6 py-3 text-sm font-bold text-white">이전 화면으로 돌아가기</button>
         </div>
       </main>
     );
@@ -49,7 +49,7 @@ export default function OtherProfilePage() {
     <main className="min-h-dvh bg-[#FCF4EE] pb-24">
       <ProfileHeader
         leftAction={(
-          <HeaderIconButton onClick={() => history.back()} aria-label="뒤로 가기">
+          <HeaderIconButton onClick={goBack} aria-label="뒤로 가기">
             <ChevronLeft size={20} />
           </HeaderIconButton>
         )}

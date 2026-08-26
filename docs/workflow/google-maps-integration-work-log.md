@@ -505,3 +505,9 @@
 - owner와 visitor가 `ProfileIdentitySummary`, `ProfileLunchmateFrame`, `ProfileHeroCard`, `ProfileHeader`, `ProfileStats`를 공유하도록 UI 구조를 정리했다. Room 높이·radius·캐릭터 크기/중앙 anchor와 avatar·name·badge·handle typography가 공용 정의를 따른다.
 - visitor Follow는 이름 첫 줄에서 분리해 handle 줄 우측에 배치하고, 선택적 location/bio는 compact typography와 최대 2줄로 제한했다. `보기 전용` 표시는 완전히 제거했지만 read-only attribute와 편집 control 미노출은 유지한다.
 - Follow/Auth/API/D1/Lunchmate data contract는 변경하지 않았다. 로컬 실제 화면, 관련 Vitest·TypeScript·production build와 모바일 owner/visitor E2E를 재검증했다.
+
+### 21.6 PROFILE BACK HISTORY FOLLOW-UP
+- Feed에서 타인 프로필을 연 뒤 history Back으로 복귀해도 `MunchieFeedPage`가 재마운트되며 filter/search/location UI가 기본값으로 돌아가고 첫 페이지를 다시 요청하는 상태 초기화를 재현했다. 기존 전역 Feed scroll fallback만으로는 history entry별 UI·pagination 의미를 보존하지 못했다.
+- Feed의 현재 browser history entry에 scrollTop과 filter/search/location view state를 저장한다. Feed 작성자 또는 사용자 검색 결과에서 타인 프로필로 들어갈 때 해당 entry를 복귀 대상으로 표시하고, Back 복귀 시 AppContext에 남아 있는 loaded items/cursor를 유지해 불필요한 전체 refresh를 생략한다.
+- 타인 프로필 상단 Back과 오류 상태의 복귀 버튼은 모두 `window.history.back()`을 사용한다. Follow/Profile/Lunchmate API와 데이터 계약은 변경하지 않았다.
+- 360×740 Playwright에서 12개 Feed를 아래로 스크롤한 뒤 타인 프로필 진입 → 브라우저 기본 Back 및 화면 상단 Back을 각각 실행해 동일 scrollTop, 접힌 filter 상태, 12개 loaded items와 Feed request 수가 유지됨을 확인했다. 전체 프로필 E2E 5/5와 관련 Vitest 16/16을 통과했다.
