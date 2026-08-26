@@ -6,6 +6,7 @@ const profileSource = readFileSync(join(import.meta.dirname, 'ProfilePage.tsx'),
 const contextSource = readFileSync(join(import.meta.dirname, '..', 'contexts', 'AppContext.tsx'), 'utf8');
 const buddySource = readFileSync(join(import.meta.dirname, '..', 'components', 'munchie', 'FoodieBuddy.tsx'), 'utf8');
 const progressSource = readFileSync(join(import.meta.dirname, '..', 'components', 'munchie', 'LunchmateProgressSheet.tsx'), 'utf8');
+const identitySource = readFileSync(join(import.meta.dirname, '..', 'components', 'profile', 'ProfileIdentitySummary.tsx'), 'utf8');
 
 describe('Profile information and level synchronization', () => {
   it('keeps the sk profile copy and compact badge presentation', () => {
@@ -13,7 +14,7 @@ describe('Profile information and level synchronization', () => {
     expect(profileSource).toContain("body: JSON.stringify({ username, handle })");
     expect(profileSource).toContain("updateProfile({ name: saved.profile.username, handle: saved.profile.handle })");
     expect(profileSource).toContain('오늘도 맛있는 하루를 위해');
-    expect(profileSource).toContain('🏅 배지');
+    expect(identitySource).toContain('🏅 배지');
   });
 
   it('persists canonical lunchmate XP while keeping the clickable kimbap level UI', () => {

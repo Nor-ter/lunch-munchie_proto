@@ -1,5 +1,9 @@
 import LunchmateCharacterRenderer from '@/components/munchie/LunchmateCharacterRenderer';
 import LunchmateRoomRenderer from '@/components/munchie/LunchmateRoomRenderer';
+import ProfileLunchmateFrame, {
+  PROFILE_LUNCHMATE_CHARACTER_ANCHOR_CLASS,
+  PROFILE_LUNCHMATE_CHARACTER_SIZE,
+} from '@/components/profile/ProfileLunchmateFrame';
 import { lunchmateLoadoutFromProfile } from '@/utils/lunchmateProfile';
 import type { PublicLunchmateProfile } from '@/types/db';
 
@@ -10,9 +14,9 @@ export interface PublicLunchmateRoomProps {
 
 function LunchmateState({ children }: { children: string }) {
   return (
-    <div className="flex h-[clamp(144px,38vw,150px)] items-center justify-center rounded-3xl border-2 border-dashed border-white/70 bg-white/35 px-6 text-center text-[13px] font-bold text-[#8A6E60]">
+    <ProfileLunchmateFrame className="flex items-center justify-center border-2 border-dashed border-white/70 px-6 text-center text-[13px] font-bold text-[#8A6E60]">
       {children}
-    </div>
+    </ProfileLunchmateFrame>
   );
 }
 
@@ -38,21 +42,17 @@ export default function PublicLunchmateRoom({ lunchmate, unavailable = false }: 
       ) : !lunchmate || !hasPresentation ? (
         <LunchmateState>아직 공개된 런치메이트 룸이 없어요.</LunchmateState>
       ) : (
-        <div
-          className="relative overflow-hidden rounded-3xl bg-[#F7EEE8]"
-          style={{ height: 'clamp(144px, 38vw, 150px)' }}
-          data-testid="public-lunchmate-room"
-        >
+        <ProfileLunchmateFrame data-testid="public-lunchmate-room">
           <LunchmateRoomRenderer
             foodieSkin={lunchmate.skin}
             loadout={lunchmate.roomConfig}
             variant="profile"
           />
-          <div className="pointer-events-none absolute bottom-[3px] left-1/2 z-10 flex w-[116px] -translate-x-1/2 flex-col items-center">
+          <div className={PROFILE_LUNCHMATE_CHARACTER_ANCHOR_CLASS}>
             <LunchmateCharacterRenderer
               flowState="idle"
               loadout={lunchmateLoadoutFromProfile(lunchmate.loadout)}
-              size={86}
+              size={PROFILE_LUNCHMATE_CHARACTER_SIZE}
               renderSize="compact"
               artwork="chicken"
               chickenAssetKeyOverride="idle"
@@ -67,10 +67,7 @@ export default function PublicLunchmateRoom({ lunchmate, unavailable = false }: 
             />
             <div className="h-[5px] w-[45px] rounded-full bg-black/15" aria-hidden="true" />
           </div>
-          <span className="pointer-events-none absolute right-2.5 top-2.5 z-20 rounded-full bg-white/85 px-2.5 py-1.5 text-[9px] font-black text-[#8A6E60] shadow-sm">
-            보기 전용
-          </span>
-        </div>
+        </ProfileLunchmateFrame>
       )}
     </div>
   );

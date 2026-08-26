@@ -22,6 +22,7 @@ const LEVEL_UP_MODAL_SOURCE = readFileSync(join(COMPONENT_ROOT, 'LunchmateLevelU
 const SKIN_PICKER_SOURCE = readFileSync(join(COMPONENT_ROOT, 'SkinPicker.tsx'), 'utf8');
 const FOODIE_ROOM_SOURCE = readFileSync(join(process.cwd(), 'client', 'src', 'pages', 'FoodieRoomPage.tsx'), 'utf8');
 const PROFILE_SOURCE = readFileSync(join(process.cwd(), 'client', 'src', 'pages', 'ProfilePage.tsx'), 'utf8');
+const PROFILE_IDENTITY_SOURCE = readFileSync(join(process.cwd(), 'client', 'src', 'components', 'profile', 'ProfileIdentitySummary.tsx'), 'utf8');
 const APP_CONTEXT_SOURCE = readFileSync(join(process.cwd(), 'client', 'src', 'contexts', 'AppContext.tsx'), 'utf8');
 const STARTER_ITEM_ID_SET: ReadonlySet<string> = new Set(LUNCHMATE_STARTER_ITEM_IDS);
 
@@ -178,11 +179,12 @@ describe('Lunchmate wardrobe UI contracts', () => {
   });
 
   it('keeps the Profile avatar overlap while separating the identity block below the banner', () => {
-    expect(PROFILE_SOURCE).toContain('className="relative z-20 -mt-9 px-3"');
-    expect(PROFILE_SOURCE).toContain('className="flex items-start gap-4"');
-    expect(PROFILE_SOURCE).toContain('className="min-w-0 flex-1 pt-11"');
-    expect(PROFILE_SOURCE).toContain('className="flex min-w-0 items-center gap-2 whitespace-nowrap"');
-    expect(PROFILE_SOURCE).toContain('className="mt-1.5 whitespace-nowrap text-[13px]');
+    expect(PROFILE_SOURCE).toContain('<ProfileIdentitySummary');
+    expect(PROFILE_IDENTITY_SOURCE).toContain('className="relative z-20 -mt-9 px-3"');
+    expect(PROFILE_IDENTITY_SOURCE).toContain('className="flex min-w-0 items-start gap-4"');
+    expect(PROFILE_IDENTITY_SOURCE).toContain('className="min-w-0 flex-1 pt-11"');
+    expect(PROFILE_IDENTITY_SOURCE).toContain('className="flex min-w-0 items-center gap-2 whitespace-nowrap"');
+    expect(PROFILE_IDENTITY_SOURCE).toContain('className="mt-1.5 flex min-w-0 items-center gap-3"');
     expect(PROFILE_SOURCE).toContain('className="mt-5 grid grid-cols-3"');
   });
 

@@ -41,6 +41,10 @@ const FOODIE_BUDDY_SOURCE = readFileSync(
   join(process.cwd(), 'client', 'src', 'components', 'munchie', 'FoodieBuddy.tsx'),
   'utf8',
 );
+const PROFILE_FRAME_SOURCE = readFileSync(
+  join(process.cwd(), 'client', 'src', 'components', 'profile', 'ProfileLunchmateFrame.tsx'),
+  'utf8',
+);
 const PROFILE_SOURCE = readFileSync(
   join(process.cwd(), 'client', 'src', 'pages', 'ProfilePage.tsx'),
   'utf8',
@@ -1003,8 +1007,8 @@ describe('Profile motion integration contract', () => {
     expect(FOODIE_BUDDY_SOURCE).toContain(
       'data-lunchmate-profile-grab-pose="true"',
     );
-    expect(FOODIE_BUDDY_SOURCE).toContain('const LUNCHMATE_RENDER_SIZE = 86');
-    expect(FOODIE_BUDDY_SOURCE).toContain("height: 'clamp(144px, 38vw, 150px)'");
+    expect(PROFILE_FRAME_SOURCE).toContain('PROFILE_LUNCHMATE_CHARACTER_SIZE = 86');
+    expect(PROFILE_FRAME_SOURCE).toContain("height: 'clamp(144px, 38vw, 150px)'");
   });
 
   it('keeps one opaque PNG and uses the squash midpoint source swap', () => {

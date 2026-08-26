@@ -85,6 +85,7 @@ const EYEWEAR_COLLECTION_WAVE1_ROOT = join(
 const COMPONENT_ROOT = join(process.cwd(), 'client', 'src', 'components', 'munchie');
 const RENDERER_SOURCE_PATH = join(COMPONENT_ROOT, 'LunchmateCharacterRenderer.tsx');
 const FOODIE_BUDDY_SOURCE_PATH = join(COMPONENT_ROOT, 'FoodieBuddy.tsx');
+const PROFILE_FRAME_SOURCE_PATH = join(process.cwd(), 'client', 'src', 'components', 'profile', 'ProfileLunchmateFrame.tsx');
 const LEVEL_UP_SOURCE_PATH = join(COMPONENT_ROOT, 'LunchmateLevelUpModal.tsx');
 const FLOW_SOURCE_PATH = join(process.cwd(), 'client', 'src', 'hooks', 'useLunchmateFlow.ts');
 const FOODIE_ROOM_SOURCE_PATH = join(process.cwd(), 'client', 'src', 'pages', 'FoodieRoomPage.tsx');
@@ -783,9 +784,10 @@ describe('Lunchmate Costume Collection Wave 1', () => {
 
   it('keeps the approved Profile and Room character sizes at their theme anchors', () => {
     const foodieBuddySource = readFileSync(FOODIE_BUDDY_SOURCE_PATH, 'utf8');
+    const profileFrameSource = readFileSync(PROFILE_FRAME_SOURCE_PATH, 'utf8');
     const foodieRoomSource = readFileSync(FOODIE_ROOM_SOURCE_PATH, 'utf8');
-    expect(foodieBuddySource).toContain('const LUNCHMATE_RENDER_SIZE = 86');
-    expect(foodieBuddySource).toContain('size={LUNCHMATE_RENDER_SIZE}');
+    expect(profileFrameSource).toContain('PROFILE_LUNCHMATE_CHARACTER_SIZE = 86');
+    expect(foodieBuddySource).toContain('size={PROFILE_LUNCHMATE_CHARACTER_SIZE}');
     expect(foodieRoomSource).toContain('size={156}');
     expect(foodieRoomSource).toContain('bottom-[15.625%]');
   });
@@ -1042,9 +1044,9 @@ describe('Lunchmate Costume Collection Wave 3', () => {
   });
 
   it('retains the approved Profile and FoodieRoom rendering sizes', () => {
-    const foodieBuddySource = readFileSync(FOODIE_BUDDY_SOURCE_PATH, 'utf8');
+    const profileFrameSource = readFileSync(PROFILE_FRAME_SOURCE_PATH, 'utf8');
     const foodieRoomSource = readFileSync(FOODIE_ROOM_SOURCE_PATH, 'utf8');
-    expect(foodieBuddySource).toContain('const LUNCHMATE_RENDER_SIZE = 86');
+    expect(profileFrameSource).toContain('PROFILE_LUNCHMATE_CHARACTER_SIZE = 86');
     expect(foodieRoomSource).toContain('size={156}');
     expect(foodieRoomSource).toContain('bottom-[15.625%]');
   });
@@ -1157,6 +1159,7 @@ describe('Lunchmate food flow and presentation contracts', () => {
     const levelUpSource = readFileSync(LEVEL_UP_SOURCE_PATH, 'utf8');
     const foodieRoomSource = readFileSync(FOODIE_ROOM_SOURCE_PATH, 'utf8');
     const foodieBuddySource = readFileSync(FOODIE_BUDDY_SOURCE_PATH, 'utf8');
+    const profileFrameSource = readFileSync(PROFILE_FRAME_SOURCE_PATH, 'utf8');
 
     expect(levelUpSource).toContain('levelUpActive');
     expect(levelUpSource).toContain('loadout={loadout}');
@@ -1170,11 +1173,11 @@ describe('Lunchmate food flow and presentation contracts', () => {
     expect(foodieRoomSource).toContain('className="absolute inset-x-0 bottom-[15.625%] z-10 flex justify-center"');
     expect(foodieBuddySource).toContain('artwork="chicken"');
     expect(foodieBuddySource).toContain('animated={false}');
-    expect(foodieBuddySource).toContain('const LUNCHMATE_RENDER_SIZE = 86');
+    expect(profileFrameSource).toContain('PROFILE_LUNCHMATE_CHARACTER_SIZE = 86');
     expect(foodieBuddySource).toContain('chickenFaceSystem={profileFaceSystemEnabled}');
     expect(foodieBuddySource).toContain("chickenFaceOverride={profileMotion.grab.phase === 'grabbed'");
     expect(foodieBuddySource).toContain(": profileTapFace ?? 'default'}");
-    expect(foodieBuddySource).toContain("height: 'clamp(144px, 38vw, 150px)'");
+    expect(profileFrameSource).toContain("height: 'clamp(144px, 38vw, 150px)'");
     expect(foodieBuddySource).toContain("background: 'rgba(255,255,255,0.85)'");
     expect(foodieBuddySource).toContain('aria-label={`김밥 EXP ${progressLabel}`}');
     expect(foodieBuddySource).not.toContain('👀→');

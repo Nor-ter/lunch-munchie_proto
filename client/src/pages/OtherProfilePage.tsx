@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { ChevronLeft, MapPin } from 'lucide-react';
+import { ChevronLeft } from 'lucide-react';
 import { useLocation, useParams } from 'wouter';
 import { FollowButton } from '@/components/follow/FollowButton';
 import { FollowerListSheet, type FollowListMode } from '@/components/follow/FollowerListSheet';
@@ -11,6 +11,7 @@ import UnifiedMunchieCard from '@/components/munchie/UnifiedMunchieCard';
 import HeaderIconButton from '@/components/ui/HeaderIconButton';
 import ProfileHeader from '@/components/profile/ProfileHeader';
 import ProfileHeroCard from '@/components/profile/ProfileHeroCard';
+import ProfileIdentitySummary from '@/components/profile/ProfileIdentitySummary';
 import PublicLunchmateRoom from '@/components/profile/PublicLunchmateRoom';
 
 export default function OtherProfilePage() {
@@ -60,28 +61,19 @@ export default function OtherProfilePage() {
           unavailable={remoteUser.isError}
         />
 
-        <div className="relative z-20 -mt-9 px-3">
-          <div className="flex min-w-0 items-start gap-4">
+        <ProfileIdentitySummary
+          avatar={(
             <Avatar className="size-[78px] shrink-0 border-4 border-[#F8DCD2] bg-white shadow-md">
               {user.profile_image_url && <AvatarImage src={user.profile_image_url} alt={`${user.username} 프로필`} />}
               <AvatarFallback className="bg-white/70 text-xl font-black">{avatarFallback}</AvatarFallback>
             </Avatar>
-            <div className="min-w-0 flex-1 pt-11">
-              <div className="flex min-w-0 items-center gap-2 whitespace-nowrap">
-                <p className="min-w-0 truncate text-[19px] font-black text-[#3B2A22]">{user.username}</p>
-                <span className="shrink-0 rounded-full bg-white/80 px-1.5 py-0.5 text-[9px] font-bold text-[#C7864B]">🏅 배지</span>
-              </div>
-              {user.handle && (
-                <p className="mt-1.5 truncate text-[13px] font-medium text-[#8A6E60]" data-testid="profile-user-handle">
-                  @{user.handle}
-                </p>
-              )}
-              {user.location && <p className="mt-1 flex items-center gap-1 text-xs text-[#8A6E60]"><MapPin size={12} />{user.location}</p>}
-              {user.bio && <p className="mt-2 text-sm text-[#6F5549]">{user.bio}</p>}
-            </div>
-            {remoteUser.data && <div className="shrink-0 pt-11"><FollowButton userId={user.id} /></div>}
-          </div>
-        </div>
+          )}
+          displayName={user.username}
+          handle={user.handle}
+          location={user.location}
+          bio={user.bio}
+          secondaryAction={remoteUser.data ? <FollowButton userId={user.id} /> : undefined}
+        />
         <div className="mt-5 grid grid-cols-3">
           <ProfileStats
             userId={user.id}

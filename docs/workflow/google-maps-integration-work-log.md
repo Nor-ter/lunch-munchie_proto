@@ -500,3 +500,8 @@
 - 첫 로컬 검증에서 visitor Room과 사용자 정보가 서로 다른 카드로 보여 owner 프로필과 시각 구조가 달랐다.
 - owner·guest·visitor가 같은 `ProfileHeroCard` 외곽을 사용하도록 통합하고, visitor도 Room 아래에 아바타와 사용자 정보가 겹치는 owner 구성을 따른다. visitor Room에는 `보기 전용` 상태만 남기고 편집 control은 계속 노출하지 않는다.
 - 로컬 Cloudflare Pages/D1 실제 화면과 390px 모바일 Playwright에서 통합 카드, 중앙 헤더, 공개·private·empty, 새로고침, B→C 전환을 재검증했다.
+
+### 21.5 PROFILE UI CONSISTENCY FOLLOW-UP
+- owner와 visitor가 `ProfileIdentitySummary`, `ProfileLunchmateFrame`, `ProfileHeroCard`, `ProfileHeader`, `ProfileStats`를 공유하도록 UI 구조를 정리했다. Room 높이·radius·캐릭터 크기/중앙 anchor와 avatar·name·badge·handle typography가 공용 정의를 따른다.
+- visitor Follow는 이름 첫 줄에서 분리해 handle 줄 우측에 배치하고, 선택적 location/bio는 compact typography와 최대 2줄로 제한했다. `보기 전용` 표시는 완전히 제거했지만 read-only attribute와 편집 control 미노출은 유지한다.
+- Follow/Auth/API/D1/Lunchmate data contract는 변경하지 않았다. 로컬 실제 화면, 관련 Vitest·TypeScript·production build와 모바일 owner/visitor E2E를 재검증했다.

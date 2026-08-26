@@ -12,6 +12,10 @@ import { getSkinById, MUNCHIE_SKINS, type MunchieSkin } from '@/constants/skins'
 import type { LunchmateProgressSnapshot } from '@/utils/lunchmateProgress';
 import LunchmateCharacterRenderer from '@/components/munchie/LunchmateCharacterRenderer';
 import LunchmateRoomRenderer from '@/components/munchie/LunchmateRoomRenderer';
+import ProfileLunchmateFrame, {
+  PROFILE_LUNCHMATE_CHARACTER_ANCHOR_CLASS,
+  PROFILE_LUNCHMATE_CHARACTER_SIZE,
+} from '@/components/profile/ProfileLunchmateFrame';
 import type {
   LunchmateLoadout,
   LunchmateRoomLoadout,
@@ -67,7 +71,6 @@ export function foodieLevel(score: number): { level: FoodieLevel; index: number;
 }
 
 const BUBBLES = ['냠냠 😋', '오늘 뭐 먹지?', '코스맵 더 줘!', '맛집 가고 싶다…', '먹부림 최고 🍴'];
-const LUNCHMATE_RENDER_SIZE = 86;
 export const PROFILE_TAP_STREAK_RESET_MS = 2_000;
 
 export type LunchmateProfileTapFace = 'surprised' | 'crying' | 'angry';
@@ -506,11 +509,7 @@ export default function FoodieBuddy({
 
   return (
     <div className="block w-full text-left">
-      <div
-        ref={profileMotion.stageRef}
-        className="relative rounded-3xl overflow-hidden"
-        style={{ height: 'clamp(144px, 38vw, 150px)', background: '#F7EEE8' }}
-      >
+      <ProfileLunchmateFrame ref={profileMotion.stageRef}>
         <LunchmateRoomRenderer
           foodieSkin={skin.id}
           loadout={roomLoadout}
@@ -761,10 +760,8 @@ export default function FoodieBuddy({
           data-lunchmate-drop-active={isFoodDragging ? 'true' : 'false'}
           data-lunchmate-drop-over={isFoodDragOver ? 'true' : 'false'}
           data-lunchmate-profile-grab-anchor="true"
-          className="pointer-events-none absolute left-1/2 z-10 flex w-[116px] flex-col items-center rounded-[28px] transition-[background-color,box-shadow]"
+          className={`${PROFILE_LUNCHMATE_CHARACTER_ANCHOR_CLASS} rounded-[28px] transition-[background-color,box-shadow]`}
           style={{
-            bottom: 3,
-            marginLeft: -58,
             background: isFoodDragging ? 'rgba(255,255,255,0.2)' : 'transparent',
             boxShadow: isFoodDragOver
               ? `0 0 0 3px rgba(255,255,255,0.95), 0 0 0 6px ${skin.accent}`
@@ -954,7 +951,7 @@ export default function FoodieBuddy({
                             flowState={effectiveUiState}
                             levelUpActive={levelUpActive}
                             loadout={loadout}
-                            size={LUNCHMATE_RENDER_SIZE}
+                            size={PROFILE_LUNCHMATE_CHARACTER_SIZE}
                             renderSize="compact"
                             artwork="chicken"
                             chickenAssetKeyOverride={profileChickenAsset}
@@ -980,7 +977,7 @@ export default function FoodieBuddy({
               <motion.div
                 className="mx-auto rounded-full"
                 style={{
-                  width: LUNCHMATE_RENDER_SIZE * 0.52,
+                  width: PROFILE_LUNCHMATE_CHARACTER_SIZE * 0.52,
                   height: 5,
                   background: 'rgba(0,0,0,0.14)',
                   marginTop: -1,
@@ -1018,7 +1015,7 @@ export default function FoodieBuddy({
             </motion.span>
           </>
         )}
-      </div>
+      </ProfileLunchmateFrame>
       {profileFoodDragPreview && typeof document !== 'undefined' && createPortal(
         <div
           className="pointer-events-none fixed z-[120] h-[70px] w-[70px]"

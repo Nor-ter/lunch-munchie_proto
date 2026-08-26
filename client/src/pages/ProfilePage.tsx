@@ -32,6 +32,7 @@ import LunchmateLevelUpModal from '@/components/munchie/LunchmateLevelUpModal';
 import HeaderIconButton from '@/components/ui/HeaderIconButton';
 import ProfileHeader from '@/components/profile/ProfileHeader';
 import ProfileHeroCard from '@/components/profile/ProfileHeroCard';
+import ProfileIdentitySummary from '@/components/profile/ProfileIdentitySummary';
 import { useLunchmateFlow } from '@/hooks/useLunchmateFlow';
 import {
   consumeLunchboxFood,
@@ -458,8 +459,8 @@ function ProfilePageContent() {
           onFoodDrop={handleStagedFoodDrop}
           onFoodDragCancel={clearFoodDragState}
         />
-        <div className="relative z-20 -mt-9 px-3">
-          <div className="flex items-start gap-4">
+        <ProfileIdentitySummary
+          avatar={(
             <button
               onClick={() => setActiveSheet('avatar')}
               className="relative shrink-0 rounded-full border-4 border-[#F8DCD2] shadow-md active:scale-95 transition-transform"
@@ -470,21 +471,11 @@ function ProfilePageContent() {
                 <Camera size={11} color="white" />
               </span>
             </button>
-            <div className="min-w-0 flex-1 pt-11">
-              <div className="flex min-w-0 items-center gap-2 whitespace-nowrap">
-                <p className="min-w-0 truncate text-[19px] font-black text-[#3B2A22]">
-                  {profile.name}
-                </p>
-                <span className="shrink-0 rounded-full bg-white/80 px-1.5 py-0.5 text-[9px] font-bold text-[#C7864B]">
-                  🏅 배지
-                </span>
-              </div>
-              <p className="mt-1.5 whitespace-nowrap text-[13px] font-medium text-[#8A6E60]">
-                {profile.handle ? `@${profile.handle}` : '오늘도 맛있는 하루를 위해'}
-              </p>
-            </div>
-          </div>
-        </div>
+          )}
+          displayName={profile.name}
+          handle={profile.handle}
+          handleFallback="오늘도 맛있는 하루를 위해"
+        />
         <div className="mt-5 grid grid-cols-3">
           <ProfileStats
             userId={profile.id}

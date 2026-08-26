@@ -52,7 +52,9 @@ test('owner and visitor profiles share a centred mobile header', async ({ page }
   await expect(ownerTitle).toBeVisible();
   await expect(page.getByRole('button', { name: '프로필 설정' })).toBeVisible();
   const ownerBox = await ownerTitle.boundingBox();
+  const ownerStageBox = await page.locator('[data-profile-lunchmate-stage="true"]').first().boundingBox();
   expect(ownerBox).not.toBeNull();
+  expect(ownerStageBox).not.toBeNull();
   expect(Math.abs((ownerBox!.x + ownerBox!.width / 2) - 180)).toBeLessThanOrEqual(1);
 
   await page.route('**/api/users/visitor-user', route => route.fulfill({
@@ -70,6 +72,10 @@ test('owner and visitor profiles share a centred mobile header', async ({ page }
   await expect(page.getByRole('button', { name: '뒤로 가기' })).toBeVisible();
   await expect(page.locator('[data-profile-hero-card="visitor"]')).toBeVisible();
   await expect(page.locator('[data-profile-hero-card="visitor"] [data-testid="public-lunchmate-room"]')).toBeVisible();
+  const visitorStageBox = await page.locator('[data-profile-lunchmate-stage="true"]').boundingBox();
+  expect(visitorStageBox).not.toBeNull();
+  expect(Math.abs(visitorStageBox!.width - ownerStageBox!.width)).toBeLessThanOrEqual(1);
+  expect(Math.abs(visitorStageBox!.height - ownerStageBox!.height)).toBeLessThanOrEqual(1);
 });
 
 test('anonymous visitor sees the viewed user public room without edit controls', async ({ page }) => {
@@ -85,9 +91,14 @@ test('anonymous visitor sees the viewed user public room without edit controls',
   await page.goto('/profile/public-user');
   await expect(page.getByTestId('public-lunchmate-room')).toBeVisible();
   await expect(page.locator('[data-profile-hero-card="visitor"]')).toContainText('Public User');
-  await expect(page.getByText('보기 전용')).toBeVisible();
+  await expect(page.getByText('보기 전용')).toHaveCount(0);
   await expect(page.locator('[data-lunchmate-room-background="profile"]')).toBeVisible();
   await expect(page.locator('[data-lunchmate-artwork="chicken"]')).toBeVisible();
+  const publicNameBox = await page.getByText('Public User', { exact: true }).boundingBox();
+  const followBox = await page.getByTestId('follow-button').boundingBox();
+  expect(publicNameBox).not.toBeNull();
+  expect(followBox).not.toBeNull();
+  expect(followBox!.y).toBeGreaterThan(publicNameBox!.y);
   await expect(
     page.getByRole('region', { name: '읽기 전용 런치메이트 룸' }).getByRole('button'),
   ).toHaveCount(0);
