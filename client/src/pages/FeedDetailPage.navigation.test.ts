@@ -3,6 +3,7 @@ import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 
 const source = readFileSync(join(import.meta.dirname, 'FeedDetailPage.tsx'), 'utf8');
+const cardSource = readFileSync(join(import.meta.dirname, '../components/munchie/UnifiedMunchieCard.tsx'), 'utf8');
 
 describe('FeedDetailPage saved view navigation', () => {
   it('passes map origin through to the course card', () => {
@@ -17,9 +18,26 @@ describe('FeedDetailPage saved view navigation', () => {
     expect(source).toContain('profileFeed.posts.find(item => item.id === id)');
   });
 
-  it('allows administrators to delete without granting edit ownership', () => {
-    expect(source).toContain('const canDeletePost = ownPost || Boolean(auth?.isAdmin)');
-    expect(source).toContain("aria-label={ownPost ? '피드 삭제' : '관리자 피드 삭제'}");
-    expect(source).toContain('{ownPost && <button');
+  it('centers the header title without owner edit and delete actions', () => {
+    expect(source).toContain('grid grid-cols-[40px_1fr_40px] items-center');
+    expect(source).toContain('text-center text-[15px] font-black');
+    expect(source).toContain("import BackButton from '@/components/ui/BackButton'");
+    expect(source).toContain('pt-[max(12px,env(safe-area-inset-top))]');
+    expect(source).not.toContain('aria-label="피드 수정"');
+    expect(source).not.toContain('aria-label="피드 삭제"');
+    expect(source).not.toContain('deletePost');
+  });
+
+  it('keeps the feed detail surface mobile-width', () => {
+    expect(source).toContain('mx-auto min-h-dvh max-w-[430px] bg-[#FCF4EE]');
+  });
+
+  it('keeps owner edit and delete actions in the card menu', () => {
+    expect(cardSource).toContain('aria-label="게시물 메뉴"');
+    expect(cardSource).toContain('게시물 수정');
+    expect(cardSource).toContain('게시물 삭제');
+    expect(cardSource).toContain('confirmPostDelete');
+    expect(cardSource).toContain('const canDeletePost = ownPost || Boolean(auth?.isAdmin)');
+    expect(cardSource).toContain('관리자 삭제');
   });
 });
