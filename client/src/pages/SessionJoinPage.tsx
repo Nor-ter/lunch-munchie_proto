@@ -2,11 +2,12 @@ import { useEffect, useState } from 'react';
 import { useLocation, useParams } from 'wouter';
 import { useApp } from '@/contexts/AppContext';
 import { toast } from 'sonner';
-import { Loader2, ArrowLeft, Shield, LogIn } from 'lucide-react';
+import { ChevronDown, Loader2, Shield, LogIn } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { useAuthStatus } from '@/hooks/useAuthStatus';
 import { DIETARY_REQUIREMENTS, INGREDIENT_AVOIDANCES, normalizeDietaryPreferences } from '@/lib/quickMatch';
 import { startGoogleAuth } from '@/services/authApi';
+import BackButton from '@/components/ui/BackButton';
 
 const EMOJIS = ['😊', '🍱', '🍜', '🍣', '🥩', '🍕', '🌮', '🍔', '🥗', '☕', '🎂', '🍰', '🦊', '🐱', '🐼', '🐨'];
 const DIETARY_OPTIONS = [...DIETARY_REQUIREMENTS, ...INGREDIENT_AVOIDANCES];
@@ -29,6 +30,8 @@ export default function SessionJoinPage() {
   const [selectedEmoji, setSelectedEmoji] = useState(profile.emoji || '🙂');
   const [dietary, setDietary] = useState<string[]>(() => normalizeDietaryPreferences(profile.dietary));
   const isLoggedIn = Boolean(auth.data && !auth.data.isAnonymous);
+  const [dietaryOpen, setDietaryOpen] = useState(false);
+  const selectedDietaryOptions = DIETARY_OPTIONS.filter(option => dietary.includes(option.value));
 
   useEffect(() => {
     if (!isLoggedIn || name) return;
@@ -109,12 +112,10 @@ export default function SessionJoinPage() {
   }
 
   return (
-    <div className="min-h-dvh bg-[#FCF4EE] flex flex-col justify-between px-5 py-8">
+    <div className="min-h-dvh bg-[#FCF4EE] flex flex-col px-5 pb-[calc(24px+env(safe-area-inset-bottom))] pt-[max(12px,env(safe-area-inset-top))]">
       {/* Header */}
-      <div className="flex items-center gap-3 pt-4">
-        <button onClick={() => navigate('/')} className="w-10 h-10 rounded-full bg-white flex items-center justify-center active:scale-95 shadow-sm">
-          <ArrowLeft size={18} color="#1A1A1A" />
-        </button>
+      <div className="flex items-center gap-3">
+        <BackButton onClick={() => navigate('/')} aria-label="홈으로 돌아가기" />
         <div>
           <h1 className="font-bold text-[18px] text-[#1A1A1A]">점심 세션 참여하기</h1>
           <p className="text-[12px] text-[#9B9B9B]">친구들과 맛집 결정을 함께해요</p>
@@ -122,59 +123,13 @@ export default function SessionJoinPage() {
       </div>
 
       {/* Main Content */}
-      <div className="flex-1 flex flex-col justify-center py-6 space-y-4">
-        {/* Login Banner */}
-        <motion.div 
-          initial={{ opacity: 0, y: -10 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="bg-white rounded-2xl p-4 shadow-sm border border-black/5 flex items-center justify-between"
-        >
-          {isLoggedIn ? (
-            <>
-              <div className="flex items-center gap-2.5">
-                <div className="w-8 h-8 rounded-full bg-[#3CBA44]/10 flex items-center justify-center text-[14px]">
-                  ✅
-                </div>
-                <div>
-                  <p className="text-[13px] font-bold text-[#1A1A1A]">회원 로그인 완료</p>
-                  <p className="text-[11px] text-[#9B9B9B]">취향 데이터 연동 중</p>
-                </div>
-              </div>
-              <button 
-                onClick={handleLogout} 
-                className="text-[12px] font-semibold text-[#9B9B9B] hover:text-[#1A1A1A] px-3 py-1.5 rounded-lg bg-[#F5F5F5] active:scale-95 transition-all"
-              >
-                로그아웃
-              </button>
-            </>
-          ) : (
-            <>
-              <div className="flex items-center gap-2.5">
-                <div className="w-8 h-8 rounded-full bg-[#EB5053]/10 flex items-center justify-center">
-                  <LogIn size={15} color="#EB5053" />
-                </div>
-                <div>
-                  <p className="text-[13px] font-bold text-[#1A1A1A]">이미 계정이 있으신가요?</p>
-                  <p className="text-[11px] text-[#9B9B9B]">로그인하면 취향을 바로 연동해요</p>
-                </div>
-              </div>
-              <button 
-                onClick={handleLogin} 
-                className="text-[12px] font-bold text-white px-3.5 py-1.5 rounded-lg bg-[#EB5053] hover:bg-[#C0392B] active:scale-95 transition-all shadow-sm shadow-[#EB5053]/10"
-              >
-                로그인하기
-              </button>
-            </>
-          )}
-        </motion.div>
-
-        {/* Setup Form Card */}
+      <div className="py-5 space-y-4">
         <motion.div 
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
-          className="bg-white rounded-3xl p-6 shadow-sm border border-black/5 space-y-6"
+          className="bg-white rounded-3xl p-5 shadow-sm border border-black/5 space-y-5"
         >
-          <div className="text-center mb-2">
+          <div className="text-center">
             <span className="text-[11px] font-bold text-[#EB5053] bg-[#FFF5F5] px-2.5 py-1 rounded-full uppercase tracking-wider">INVITATION</span>
             <h2 className="font-bold text-[20px] text-[#1A1A1A] mt-2 leading-tight">
               "{sessionName}"
@@ -187,7 +142,7 @@ export default function SessionJoinPage() {
             <div className="w-16 h-16 rounded-2xl bg-[#FFF5F5] flex items-center justify-center text-3xl shadow-md border-2 border-[#EB5053]/10 relative mb-3">
               {selectedEmoji}
             </div>
-            
+
             <p className="text-[11px] text-[#9B9B9B] mb-2.5">내 캐릭터 선택</p>
             <div className="grid grid-cols-8 gap-1.5 w-full justify-center">
               {EMOJIS.slice(0, 16).map(e => (
@@ -196,8 +151,8 @@ export default function SessionJoinPage() {
                   type="button"
                   onClick={() => setSelectedEmoji(e)}
                   className={`text-lg p-1 rounded-lg transition-all ${
-                    selectedEmoji === e 
-                      ? 'bg-[#FFF5F5] ring-2 ring-[#EB5053] scale-110' 
+                    selectedEmoji === e
+                      ? 'bg-[#FFF5F5] ring-2 ring-[#EB5053] scale-110'
                       : 'bg-[#F5F5F5] hover:bg-[#EAEAEA]'
                   }`}
                 >
@@ -220,40 +175,94 @@ export default function SessionJoinPage() {
             />
           </div>
 
-          {/* Dietary Restrictions Selector */}
-          <div className="space-y-2">
-            <div className="flex items-center gap-1.5">
-              <Shield size={14} color="#EB5053" />
-              <label className="font-semibold text-[13px] text-[#1A1A1A]">식단 제약 사항</label>
-            </div>
-            <p className="text-[11px] text-[#9B9B9B]">해당하는 제한 사항이 있다면 선택해주세요 (중복 선택 가능)</p>
-            <div className="flex flex-wrap gap-1.5">
-              {DIETARY_OPTIONS.map(option => {
-                const isSelected = dietary.includes(option.value);
-                return (
-                  <button
-                    key={option.value}
-                    type="button"
-                    onClick={() => toggleDietary(option.value)}
-                    className={`px-3 py-1.5 rounded-full text-[11px] font-semibold transition-all active:scale-95 ${
-                      isSelected ? 'text-white' : 'bg-[#F5F5F5] text-[#4A4A4A]'
-                    }`}
-                    style={isSelected ? { background: '#EB5053' } : {}}
-                  >
-                    {option.label}
-                  </button>
-                );
-              })}
-            </div>
-            <p className="text-[10px] leading-relaxed text-[#9B9B9B]">
+          <section className="rounded-2xl border border-[#F1E4DE] bg-[#FFFDFC] p-4">
+            <button
+              type="button"
+              onClick={() => setDietaryOpen(open => !open)}
+              className="flex w-full items-center gap-3 text-left"
+              aria-expanded={dietaryOpen}
+              aria-controls="join-dietary-options"
+            >
+              <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[#FFF1F1] text-[#EB5053]">
+                <Shield size={15} />
+              </div>
+              <div className="min-w-0 flex-1">
+                <div className="flex items-center gap-2">
+                  <p className="text-[13px] font-black text-[#1A1A1A]">식단 제약 사항</p>
+                  <span className="rounded-full bg-[#F5F1EE] px-2 py-0.5 text-[10px] font-black text-[#9B857A]">선택 사항</span>
+                </div>
+                <p className="mt-0.5 truncate text-[11px] font-semibold text-[#9B9B9B]">
+                  {selectedDietaryOptions.length
+                    ? `${selectedDietaryOptions.length}개 선택 · ${selectedDietaryOptions.map(option => option.label).join(', ')}`
+                    : '선택한 식단 제약이 없어요'}
+                </p>
+              </div>
+              <ChevronDown className={`shrink-0 text-[#9B9B9B] transition-transform ${dietaryOpen ? 'rotate-180' : ''}`} size={18} />
+            </button>
+
+            {dietaryOpen && (
+              <div id="join-dietary-options" className="mt-4 flex flex-wrap gap-1.5 border-t border-[#F4E8E2] pt-4">
+                {DIETARY_OPTIONS.map(option => {
+                  const isSelected = dietary.includes(option.value);
+                  return (
+                    <button
+                      key={option.value}
+                      type="button"
+                      onClick={() => toggleDietary(option.value)}
+                      className={`rounded-full px-3 py-1.5 text-[11px] font-semibold transition-all active:scale-95 ${
+                        isSelected ? 'text-white' : 'bg-[#F5F5F5] text-[#4A4A4A]'
+                      }`}
+                      style={isSelected ? { background: '#EB5053' } : {}}
+                    >
+                      {option.label}
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+            <p className="mt-3 text-[10px] leading-relaxed text-[#9B9B9B]">
               메뉴 정보를 기준으로 필터링합니다. 심한 알레르기는 매장에 재료와 교차오염 여부를 꼭 확인해주세요.
             </p>
-          </div>
+          </section>
+        </motion.div>
+
+        <motion.div
+          initial={{ opacity: 0, y: 8 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="rounded-2xl border border-black/5 bg-white/75 p-3"
+        >
+          {isLoggedIn ? (
+            <div className="flex items-center justify-between gap-3">
+              <div className="min-w-0">
+                <p className="text-[12px] font-bold text-[#4A4A4A]">회원 로그인 완료</p>
+                <p className="truncate text-[10px] text-[#9B9B9B]">저장된 취향을 기본값으로 적용했어요</p>
+              </div>
+              <button
+                onClick={handleLogout}
+                className="shrink-0 rounded-full bg-[#F5F5F5] px-3 py-1.5 text-[11px] font-semibold text-[#9B9B9B] active:scale-95"
+              >
+                로그아웃
+              </button>
+            </div>
+          ) : (
+            <div className="flex items-center justify-between gap-3">
+              <div className="flex min-w-0 items-center gap-2">
+                <LogIn size={14} className="shrink-0 text-[#EB5053]" />
+                <p className="truncate text-[11px] font-semibold text-[#8C7A72]">로그인하면 저장된 취향을 불러올 수 있어요</p>
+              </div>
+              <button
+                onClick={handleLogin}
+                className="shrink-0 rounded-full bg-white px-3 py-1.5 text-[11px] font-bold text-[#EB5053] active:scale-95"
+              >
+                로그인
+              </button>
+            </div>
+          )}
         </motion.div>
       </div>
 
       {/* Action Button */}
-      <div className="space-y-3">
+      <div className="sticky bottom-[calc(16px+env(safe-area-inset-bottom))] space-y-3 pt-2">
         <button
           onClick={handleJoin}
           disabled={isJoining}
@@ -265,7 +274,7 @@ export default function SessionJoinPage() {
               참가하는 중...
             </>
           ) : (
-            isLoggedIn ? '🎉 세션 참가하기' : '🎉 비회원으로 세션 참가하기'
+            '🎉 세션 참여하기'
           )}
         </button>
       </div>
