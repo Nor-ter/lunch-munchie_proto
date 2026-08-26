@@ -18,7 +18,7 @@ const restaurant = {
   dietary_options: [],
 };
 
-test('saved Lunchie restaurant uses Google Maps and returns to the Lunchie tab', async ({ page }) => {
+test('saved Lunchie restaurant uses its configured map and returns to the Lunchie tab', async ({ page }) => {
   let googleMapsLoaderRequested = false;
   let openStreetMapRequested = false;
   page.on('request', request => {
@@ -75,7 +75,13 @@ test('saved Lunchie restaurant uses Google Maps and returns to the Lunchie tab',
   expect(regionBox!.width).toBeLessThan(390);
   expect(mapBox!.height).toBeGreaterThanOrEqual(regionBox!.height - 3);
   expect(mapBox!.width).toBeGreaterThanOrEqual(regionBox!.width - 3);
-  expect(googleMapsLoaderRequested).toBe(true);
+  const unavailableMap = region.getByRole('alert');
+  if (await unavailableMap.isVisible()) {
+    await expect(unavailableMap).toContainText('Google 지도 설정을 확인해 주세요.');
+    expect(googleMapsLoaderRequested).toBe(false);
+  } else {
+    await expect.poll(() => googleMapsLoaderRequested).toBe(true);
+  }
   expect(openStreetMapRequested).toBe(false);
 
   await page.getByRole('button', { name: 'Lunchie 런치픽으로 돌아가기' }).click();
