@@ -29,7 +29,8 @@ describe('Lunchie swipe photo recovery', () => {
     expect(source).not.toContain('`메뉴 ${photoIndex + 1}`');
     expect(source).toContain('aria-label="이전 사진"');
     expect(source).toContain('aria-label="다음 사진"');
-    expect(source).toContain("? '← 이전 / 다음 사진 →'");
+    expect(source).not.toContain('← 이전 / 다음 사진 →');
+    expect(source).not.toContain('✕ 눌러서 닫기');
     expect(source).toContain('foodPhotos.length > 0 ? (');
     expect(source).toContain('data-ui="menu-photo-progress"');
     expect(source).toContain('data-photo-index={photoIndex + 1}');

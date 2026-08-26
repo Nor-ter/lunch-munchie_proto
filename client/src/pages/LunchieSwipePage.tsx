@@ -371,8 +371,15 @@ function SwipeCard({
 
   return (
     <motion.div
-      className="absolute inset-0 rounded-3xl overflow-hidden"
-      style={{ x, rotate, zIndex: 20 }}
+      className="absolute inset-0"
+      style={{
+        x,
+        rotate,
+        zIndex: 20,
+        // Swipe rotateZ must not flatten the menu flip; keep a 3D containing block.
+        transformStyle: 'preserve-3d',
+        WebkitTransformStyle: 'preserve-3d',
+      }}
       drag={isRevealed || isLocked ? false : 'x'}
       dragConstraints={{ left: 0, right: 0 }}
       dragElastic={0.6}
@@ -388,19 +395,35 @@ function SwipeCard({
         }
       }}
     >
-      {/* tl_branch: 식당 카드와 메뉴 패널을 동일한 3D 공간에서 뒤집는다. */}
-      <div className="w-full h-full relative" style={{ perspective: 1600 }}>
+      {/* tl_branch: 식당 카드와 메뉴 패널을 동일한 3D 공간에서 뒤집는다.
+          overflow/radius는 face에만 둔다 — 조상 overflow:hidden은 preserve-3d와
+          backface-visibility를 깨뜨려 앞면이 뒤집힌 채로 보인다. */}
+      <div
+        className="w-full h-full relative"
+        style={{
+          perspective: 1600,
+          transformStyle: 'preserve-3d',
+          WebkitTransformStyle: 'preserve-3d',
+        }}
+      >
         <motion.div
           className="w-full h-full relative"
-          style={{ transformStyle: 'preserve-3d' }}
+          data-ui="quick-match-card-flipper"
+          style={{ transformStyle: 'preserve-3d', WebkitTransformStyle: 'preserve-3d' }}
           animate={{ rotateY: isRevealed ? 180 : 0 }}
-          transition={{ duration: 0.6, ease: [0.45, 0, 0.2, 1] }}
+          transition={{ duration: 0.55, ease: [0.4, 0.0, 0.2, 1] }}
         >
           <div
-            className="absolute inset-0 w-full h-full"
+            data-ui="quick-match-card-face-front"
+            className="absolute inset-0 w-full h-full rounded-3xl overflow-hidden"
             style={{
+              transform: 'rotateY(0deg) translateZ(1px)',
               backfaceVisibility: 'hidden',
               WebkitBackfaceVisibility: 'hidden',
+              // Flatten face children into one plane so WebKit layer children
+              // (filters / mix-blend) also respect backface hiding mid-flip.
+              transformStyle: 'flat',
+              WebkitTransformStyle: 'flat',
               pointerEvents: isRevealed ? 'none' : 'auto',
             }}
           >
@@ -559,13 +582,16 @@ function SwipeCard({
 
           {/* 데이터 메뉴 UI는 유지하고, 표시 방식만 tl_branch의 카드 뒷면 flip으로 복구 */}
           <div
-            className="absolute inset-0 w-full h-full flex flex-col"
+            data-ui="quick-match-card-face-back"
+            className="absolute inset-0 w-full h-full flex flex-col rounded-3xl overflow-hidden"
             style={{
               background: 'rgba(20,16,14,0.92)',
               backdropFilter: 'blur(8px)',
-              transform: 'rotateY(180deg)',
+              transform: 'rotateY(180deg) translateZ(1px)',
               backfaceVisibility: 'hidden',
               WebkitBackfaceVisibility: 'hidden',
+              transformStyle: 'flat',
+              WebkitTransformStyle: 'flat',
               pointerEvents: isRevealed ? 'auto' : 'none',
             }}
             onClick={(e) => e.stopPropagation()}
@@ -708,17 +734,6 @@ function SwipeCard({
                 </div>
               </div>
             )}
-
-            {/* hint */}
-            <div className="text-center pb-2 flex-shrink-0">
-              <p className="text-white/40 text-[11px]">
-                {restaurant.menuItems && restaurant.menuItems.length > 0
-                  ? `메뉴 ${restaurant.menuItems.length}개`
-                  : foodPhotos.length > 1
-                    ? '← 이전 / 다음 사진 →'
-                    : '사진 정보'} · ✕ 눌러서 닫기
-              </p>
-            </div>
           </div>
         </motion.div>
       </div>
