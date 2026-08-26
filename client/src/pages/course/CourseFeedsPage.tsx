@@ -1,9 +1,10 @@
 import { useMemo, useState } from 'react';
 import { motion } from 'framer-motion';
 import { useLocation, useParams, useSearch } from 'wouter';
-import { ChevronLeft, MessageCircle, Plus } from 'lucide-react';
+import { MessageCircle, Plus } from 'lucide-react';
 import { useApp } from '@/contexts/AppContext';
 import UnifiedMunchieCard from '@/components/munchie/UnifiedMunchieCard';
+import BackButton from '@/components/ui/BackButton';
 
 type SortMode = 'latest' | 'likes';
 
@@ -39,19 +40,13 @@ export default function CourseFeedsPage() {
 
   return (
     <motion.main
-      className="mx-auto min-h-dvh max-w-[430px] bg-[#FCF4EE] pb-10"
+      className="min-h-dvh bg-[#FCF4EE] pb-10"
       initial={{ opacity: 0, y: 14 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.25 }}
     >
-      <header className="px-5 pb-5 pt-5">
-        <button
-          onClick={() => navigate(backPath)}
-          aria-label="코스 상세로 돌아가기"
-          className="mb-5 flex h-10 w-10 items-center justify-center rounded-full bg-white shadow-sm"
-        >
-          <ChevronLeft size={20} />
-        </button>
+      <header className="px-5 pb-5 pt-[max(12px,env(safe-area-inset-top))]">
+        <BackButton onClick={() => navigate(backPath)} aria-label="코스 상세로 돌아가기" />
         <div className="flex items-center gap-2 text-[#D94447]">
           <MessageCircle size={16} />
           <p className="text-[11px] font-bold uppercase tracking-[0.16em]">Munchie feed</p>

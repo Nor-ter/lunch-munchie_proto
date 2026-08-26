@@ -8,7 +8,6 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { AnimatePresence, motion, useReducedMotion } from 'framer-motion';
 import { useLocation } from 'wouter';
 import {
-  ArrowLeft,
   CheckCircle2,
   ChevronDown,
   Copy,
@@ -23,9 +22,9 @@ import { toast } from 'sonner';
 import { LunchieLogo } from '@/components/brand/LunchieLogo';
 import LunchmateCharacterRenderer from '@/components/munchie/LunchmateCharacterRenderer';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import BackButton from '@/components/ui/BackButton';
 import {
   AppCard,
-  IconButton,
   PrimaryButton,
   ScreenContainer,
   StatusBadge,
@@ -41,14 +40,25 @@ function isAbortError(error: unknown): boolean {
 }
 
 export function resolveInviteOrigin(configuredOrigin: string | undefined, browserOrigin: string): string {
+  const resolveShareOrigin = (origin: string, fallback: string): string => {
+    try {
+      const parsed = new URL(origin);
+      if (parsed.port === '5173') {
+        parsed.port = '8788';
+        return parsed.origin;
+      }
+      return parsed.origin;
+    } catch {
+      return fallback;
+    }
+  };
+
+  const fallbackOrigin = resolveShareOrigin(browserOrigin, browserOrigin);
   const candidate = configuredOrigin?.trim();
-  if (!candidate) return browserOrigin;
-  try {
-    const parsed = new URL(candidate);
-    return parsed.protocol === 'http:' || parsed.protocol === 'https:' ? parsed.origin : browserOrigin;
-  } catch {
-    return browserOrigin;
-  }
+  if (!candidate) return fallbackOrigin;
+
+  const inviteOrigin = resolveShareOrigin(candidate, fallbackOrigin);
+  return inviteOrigin.startsWith('http://') || inviteOrigin.startsWith('https://') ? inviteOrigin : fallbackOrigin;
 }
 
 export default function SessionLobbyPage() {
@@ -268,10 +278,8 @@ export default function SessionLobbyPage() {
 
   return (
     <ScreenContainer className="lunchie-lobby flex min-h-dvh flex-col overflow-x-hidden px-5">
-      <header className="flex items-center gap-3 pb-5 pt-[max(32px,env(safe-area-inset-top))]">
-        <IconButton aria-label="빠른 매칭 설정으로 돌아가기" onClick={() => navigate('/lunchie/settings')} className="shrink-0">
-          <ArrowLeft size={20} aria-hidden="true" />
-        </IconButton>
+      <header className="flex items-center gap-3 pb-5 pt-[max(12px,env(safe-area-inset-top))]">
+        <BackButton aria-label="빠른 매칭 설정으로 돌아가기" onClick={() => navigate('/lunchie/settings')} />
         <div className="min-w-0 flex-1">
           <h1 className="truncate text-[20px] font-black text-[var(--lm-text)]">{currentSession.name}</h1>
           <p className="mt-0.5 truncate text-[12px] text-[var(--lm-sub)]">

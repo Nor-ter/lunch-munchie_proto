@@ -1,9 +1,10 @@
 import { motion } from 'framer-motion';
 import { useEffect, useState } from 'react';
-import { ChevronLeft, Star, MapPin, Clock, X } from 'lucide-react';
+import { Star, MapPin, Clock, X } from 'lucide-react';
 import { useApp, type Restaurant } from '@/contexts/AppContext';
 import { getRestaurantById as fetchRestaurantById } from '@/services/restaurantsApi';
 import type { CoursePlace } from '@/types/course';
+import BackButton from '@/components/ui/BackButton';
 import { formatRestaurantReviewCount } from '@shared/restaurantContract';
 
 /**
@@ -94,13 +95,13 @@ export default function RestaurantDetailSheet({
         ) : (
           <div className="h-full w-full bg-[#F5EEE8]" aria-hidden="true" />
         )}
-        <button
+        <BackButton
           onClick={onClose}
           aria-label={isModal ? '상세정보 닫기' : '뒤로가기'}
-          className="absolute top-4 left-4 w-9 h-9 rounded-full bg-white/90 shadow flex items-center justify-center active:scale-95"
+          className="absolute left-5 top-[max(12px,env(safe-area-inset-top))] bg-white/90"
         >
-          {isModal ? <X size={18} /> : <ChevronLeft size={20} />}
-        </button>
+          {isModal ? <X size={18} aria-hidden="true" /> : undefined}
+        </BackButton>
       </div>
 
       <div className="px-4 pt-4">

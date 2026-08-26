@@ -7,7 +7,7 @@
 import { useState, useCallback, useEffect, useRef } from 'react';
 import { motion, useMotionValue, useTransform, useMotionTemplate, AnimatePresence, type MotionValue } from 'framer-motion';
 import { useLocation } from 'wouter';
-import { ArrowLeft, Heart, X, Star, MapPin, Clock, Phone, Navigation, Share2, Download, Link2, Home, Bookmark, RotateCcw, Loader2, RefreshCw, SlidersHorizontal, Info } from 'lucide-react';
+import { Heart, X, Star, MapPin, Clock, Phone, Navigation, Share2, Download, Link2, Home, Bookmark, RotateCcw, Loader2, RefreshCw, SlidersHorizontal, Info } from 'lucide-react';
 import { toast } from 'sonner';
 import { useApp, type Restaurant, type MenuItem } from '@/contexts/AppContext';
 import { useCourseShare } from '@/hooks/useCourseShare';
@@ -25,6 +25,7 @@ import { isActiveQuickMatchStatus } from '@/lib/quickMatch';
 import { beginMenuPhotoRotation, completeMenuPhotoRotation } from '@/lib/menuPhotoRotation';
 import { normalizeRestaurantPayload } from '@shared/restaurantContract';
 import SessionManagementMenu from '@/components/lunchie/SessionManagementMenu';
+import BackButton from '@/components/ui/BackButton';
 import QuickMatchRestaurantDetailSheet from '@/components/lunchie/QuickMatchRestaurantDetailSheet';
 import { restaurantSummary } from '@/lib/restaurantPresentation';
 
@@ -2181,14 +2182,11 @@ function QuickMatchExperience() {
   return (
     <div className="min-h-dvh bg-[#FCF4EE] relative">
       {/* Header */}
-      <div className="flex items-center justify-between px-5 pt-12 pb-3">
-        <button
-          type="button"
-          aria-label="빠른 매칭 설정으로 돌아가기"
+      <div className="flex items-center justify-between px-5 pb-3 pt-[max(12px,env(safe-area-inset-top))]">
+        <BackButton
           onClick={() => { logAbandon('back'); navigate('/lunchie/settings'); }}
-          className="w-10 h-10 rounded-full bg-white shadow-sm flex items-center justify-center active:scale-95 flex-shrink-0">
-          <ArrowLeft size={18} color="#1A1A1A" />
-        </button>
+          aria-label="빠른 매칭 설정으로 돌아가기"
+        />
         <div className="text-center">
           <p className="font-black text-[16px] text-[#1A1A1A]">예선전 🍽️</p>
           <p className="text-[11px] text-[#9B9B9B]">마음에 드는 음식을 골라보세요</p>

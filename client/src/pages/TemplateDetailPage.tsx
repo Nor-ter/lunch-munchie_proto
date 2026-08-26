@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { motion } from 'framer-motion';
 import { useLocation, useParams, useSearch } from 'wouter';
-import { Archive, Bookmark, ChevronDown, ChevronLeft, Clock3, MapPin, Pencil, Share2, ThumbsUp } from 'lucide-react';
+import { Archive, Bookmark, ChevronDown, Clock3, MapPin, Pencil, Share2, ThumbsUp } from 'lucide-react';
 import { toast } from 'sonner';
 import { useApp, type Course } from '@/contexts/AppContext';
 import { getTemplateById, getTemplateForCourse } from '@/constants/coursemapTemplates';
@@ -9,6 +9,7 @@ import TemplateArtwork from '@/components/munchie/TemplateArtwork';
 import TemplateInfoSheet from '@/components/munchie/TemplateInfoSheet';
 import OneLineReviewBox from '@/components/munchie/OneLineReviewBox';
 import { fromFeedPhotoPlacements } from '@/lib/coursemapDecor';
+import BackButton from '@/components/ui/BackButton';
 
 export default function TemplateDetailPage() {
   const { templateId } = useParams<{ templateId: string }>();
@@ -115,15 +116,9 @@ export default function TemplateDetailPage() {
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.28 }}
     >
-      <header className="flex items-center justify-between px-4 pb-3 pt-4">
+      <header className="flex items-center justify-between px-5 pb-3 pt-[max(12px,env(safe-area-inset-top))]">
         <div className="flex w-[84px] justify-start">
-          <button
-            onClick={() => navigate(backPath)}
-            aria-label={backLabel}
-            className="flex h-10 w-10 items-center justify-center rounded-full bg-white shadow-sm"
-          >
-            <ChevronLeft size={20} />
-          </button>
+          <BackButton onClick={() => navigate(backPath)} aria-label={backLabel} />
         </div>
         <button
           type="button"

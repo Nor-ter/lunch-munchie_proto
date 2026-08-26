@@ -1,8 +1,8 @@
 import { useEffect, useRef, useState } from 'react';
 import { useLocation, useSearch } from 'wouter';
-import { ChevronLeft, MapPin, Clock, Star } from 'lucide-react';
+import { MapPin, Clock, Star } from 'lucide-react';
 import { Map as GoogleMap, Marker } from '@vis.gl/react-google-maps';
-import HeaderIconButton from '@/components/ui/HeaderIconButton';
+import BackButton from '@/components/ui/BackButton';
 import { useApp, type MenuItem, type Restaurant } from '@/contexts/AppContext';
 import { getRestaurantById as fetchRestaurantById } from '@/services/restaurantsApi';
 
@@ -92,19 +92,17 @@ export default function LunchieMapPage() {
 
   return (
     <div className="mx-auto min-h-dvh max-w-[430px] bg-[#FFF8F3] pb-6">
-      <header className="flex items-center justify-between px-4 pb-3 pt-4">
-        <HeaderIconButton
+      <header className="flex items-center justify-between px-5 pb-3 pt-[max(12px,env(safe-area-inset-top))]">
+        <BackButton
           onClick={() => navigate(SAVED_LUNCHIE_PATH)}
           aria-label="Lunchie 런치픽으로 돌아가기"
           className="border border-[#EBD8CE] text-[#8B6A5D]"
-        >
-          <ChevronLeft size={20} aria-hidden="true" />
-        </HeaderIconButton>
+        />
         <div className="text-center">
           <p className="text-[10px] font-black uppercase tracking-[0.18em] text-[#E67E78]">Lunchie</p>
           <p className="text-[16px] font-black text-[#49362E]">Lunchie Pick</p>
         </div>
-        <div className="h-10 w-10" aria-hidden="true" />
+        <div className="h-9 w-9" aria-hidden="true" />
       </header>
 
       <main

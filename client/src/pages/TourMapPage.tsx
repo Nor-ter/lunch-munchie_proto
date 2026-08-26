@@ -9,10 +9,11 @@
 import { useState, useRef, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useLocation } from 'wouter';
-import { ArrowLeft, Download, Share2, Camera, Sliders, ChevronDown, ChevronUp } from 'lucide-react';
+import { Download, Share2, Camera, Sliders, ChevronDown, ChevronUp } from 'lucide-react';
 import { useApp } from '@/contexts/AppContext';
 import { toast } from 'sonner';
 import html2canvas from 'html2canvas';
+import BackButton from '@/components/ui/BackButton';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -323,11 +324,8 @@ export default function TourMapPage() {
   return (
     <div className="min-h-dvh bg-[#FCF4EE]">
       {/* Header */}
-      <div className="flex items-center justify-between px-5 pt-12 pb-4 border-b border-[#E5E5E5]">
-        <button onClick={() => window.history.back()}
-          className="w-10 h-10 rounded-full bg-[#F5F5F5] flex items-center justify-center active:scale-95">
-          <ArrowLeft size={18} color="#1A1A1A" />
-        </button>
+      <div className="flex items-center justify-between border-b border-[#E5E5E5] px-5 pb-4 pt-[max(12px,env(safe-area-inset-top))]">
+        <BackButton onClick={() => window.history.back()} aria-label="이전 화면으로 돌아가기" />
         <div className="text-center">
           <p className="font-bold text-[16px] text-[#1A1A1A]">코스맵 공유 🗺️</p>
           <p className="text-[11px] text-[#9B9B9B]">Strava 스타일 투명 오버레이</p>

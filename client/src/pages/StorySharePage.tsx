@@ -1,7 +1,7 @@
 import { useMemo, useRef, useState } from 'react';
 import { motion } from 'framer-motion';
 import { useLocation, useParams } from 'wouter';
-import { ChevronLeft, Download, Instagram, Link2, LockKeyhole, Map, Newspaper, Share2 } from 'lucide-react';
+import { Download, Instagram, Link2, LockKeyhole, Map, Newspaper, Share2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { CourseMap } from '@/components/course/CourseMap';
 import TemplateArtwork from '@/components/munchie/TemplateArtwork';
@@ -10,6 +10,7 @@ import { type Course, type FeedPost, useApp } from '@/contexts/AppContext';
 import { useCourseShare } from '@/hooks/useCourseShare';
 import { getCoursePlacesFromStops } from '@/lib/courseMapSync';
 import { fromFeedPhotoPlacements } from '@/lib/coursemapDecor';
+import BackButton from '@/components/ui/BackButton';
 
 type ShareView = 'feed' | 'map';
 
@@ -113,10 +114,8 @@ export default function StorySharePage() {
 
   return (
     <main className="mx-auto min-h-dvh max-w-[430px] overscroll-contain bg-[#FFF8F3] pb-32 text-[#35241D]">
-      <header className="sticky top-0 z-30 flex items-center border-b border-[#F0E1D9] bg-[#FFFDFC]/95 px-4 py-3 backdrop-blur">
-        <button type="button" onClick={() => navigate(`/feed/${post.id}`)} aria-label="피드로 돌아가기" className="flex h-9 w-9 items-center justify-center rounded-full border border-[#EADBD3] bg-white text-[#6B554B] shadow-sm">
-          <ChevronLeft size={20} />
-        </button>
+      <header className="sticky top-0 z-30 flex items-center border-b border-[#F0E1D9] bg-[#FFFDFC]/95 px-5 pb-3 pt-[max(12px,env(safe-area-inset-top))] backdrop-blur">
+        <BackButton onClick={() => navigate(`/feed/${post.id}`)} aria-label="피드로 돌아가기" />
         <div className="min-w-0 flex-1 text-center">
           <p className="text-[9px] font-black uppercase tracking-[0.18em] text-[#EA7472]">Munchie story</p>
           <h1 className="mt-0.5 text-[16px] font-black">스토리 공유하기</h1>

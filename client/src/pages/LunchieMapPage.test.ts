@@ -23,15 +23,17 @@ describe('LunchieMapPage persisted restaurant recovery', () => {
   });
 
   it('uses the shared header back-button and returns to the saved Lunchie tab', () => {
-    expect(source).toContain("from '@/components/ui/HeaderIconButton'");
-    expect(source).toContain('<ChevronLeft size={20} aria-hidden="true" />');
+    expect(source).toContain("import BackButton from '@/components/ui/BackButton'");
+    expect(source).toContain('<BackButton');
     expect(source).toContain('aria-label="Lunchie 런치픽으로 돌아가기"');
     expect(source).toContain("const SAVED_LUNCHIE_PATH = '/saved?tab=restaurants'");
     expect(source).toContain('navigate(SAVED_LUNCHIE_PATH)');
+    expect(source).not.toContain('window.history.back()');
     expect(source).not.toContain('식당 위치 안내');
     expect(source).toContain('tracking-[0.18em] text-[#E67E78]">Lunchie</p>');
     expect(source).toContain('text-[16px] font-black text-[#49362E]">Lunchie Pick</p>');
-    expect(source).toContain('className="h-10 w-10" aria-hidden="true"');
+    expect(source).toContain('className="h-9 w-9" aria-hidden="true"');
+    expect(source).toContain('pt-[max(12px,env(safe-area-inset-top))]');
   });
 
   it('uses the shared rounded detail-card composition with the map inside it', () => {

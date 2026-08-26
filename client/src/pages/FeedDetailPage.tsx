@@ -1,8 +1,9 @@
 import { useLocation, useParams, useSearch } from 'wouter';
-import { ChevronLeft, Pencil, Trash2 } from 'lucide-react';
+import { Pencil, Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { useApp } from '@/contexts/AppContext';
 import UnifiedMunchieCard from '@/components/munchie/UnifiedMunchieCard';
+import BackButton from '@/components/ui/BackButton';
 import { getSavedReturnPath } from '@/lib/savedNavigation';
 
 export default function FeedDetailPage() {
@@ -60,10 +61,8 @@ export default function FeedDetailPage() {
 
   return (
     <main className="mx-auto min-h-dvh max-w-[430px] bg-[#FCF4EE] pb-8">
-      <header className="sticky top-0 z-30 flex items-center justify-between bg-[#FCF4EE]/95 px-4 pb-3 pt-4 backdrop-blur">
-        <button onClick={() => navigate(backPath)} aria-label={backLabel} className="flex h-10 w-10 items-center justify-center rounded-full bg-white shadow-sm">
-          <ChevronLeft size={20} />
-        </button>
+      <header className="sticky top-0 z-30 flex items-center justify-between bg-[#FCF4EE]/95 px-5 pb-3 pt-[max(12px,env(safe-area-inset-top))] backdrop-blur">
+        <BackButton onClick={() => navigate(backPath)} aria-label={backLabel} />
         <p className="text-[15px] font-black text-[#2D211C]">Munchie Feed</p>
         {isMyPost(post) ? (
           <div className="flex gap-1">
