@@ -129,14 +129,14 @@ test('mobile settings keeps the timer and vertical people wheel synchronized wit
   await expect(groupSize).toHaveAttribute('aria-valuetext', '혼자');
   await expect(page.getByRole('button', { name: '같이', exact: true })).toHaveCount(0);
 
-  const pescatarian = page.getByRole('button', { name: '🐟 Pescatarian', exact: true });
+  const pescatarian = page.getByRole('button', { name: '🐟 페스코 채식', exact: true });
   await pescatarian.click();
   await expect(pescatarian).toHaveAttribute('aria-pressed', 'true');
-  await page.getByRole('button', { name: /Ingredients to avoid/ }).click();
-  const nuts = page.getByRole('button', { name: '🥜 Nuts', exact: true });
+  await page.getByRole('button', { name: /피하고 싶은 재료/ }).click();
+  const nuts = page.getByRole('button', { name: '🥜 견과류', exact: true });
   await nuts.click();
   await expect(nuts).toHaveAttribute('aria-pressed', 'true');
-  const eggs = page.getByRole('button', { name: '🥚 Eggs', exact: true });
+  const eggs = page.getByRole('button', { name: '🥚 달걀', exact: true });
   await eggs.click();
   await expect(eggs).toHaveAttribute('aria-pressed', 'true');
 
@@ -222,17 +222,23 @@ test('solo start sends the new member credential and opens the restaurant deck',
   await page.goto('/lunchie/settings');
 
   await page.getByRole('option', { name: '혼자', exact: true }).click();
-  await page.getByRole('button', { name: '🥬 Vegetarian', exact: true }).click();
-  await page.getByRole('button', { name: '🌾 Gluten-free', exact: true }).click();
-  await page.getByRole('button', { name: /Ingredients to avoid/ }).click();
-  await page.getByRole('button', { name: '🥛 Dairy', exact: true }).click();
-  await page.getByRole('button', { name: '🥚 Eggs', exact: true }).click();
-  await page.getByRole('button', { name: '🐟 Seafood', exact: true }).click();
-  await page.getByRole('button', { name: 'Swipe 시작하기' }).click();
+  await page.getByRole('button', { name: '🥬 채식', exact: true }).click();
+  await page.getByRole('button', { name: '🌾 글루텐 프리', exact: true }).click();
+  await page.getByRole('button', { name: /피하고 싶은 재료/ }).click();
+  await page.getByRole('button', { name: '🥛 유제품', exact: true }).click();
+  await page.getByRole('button', { name: '🥚 달걀', exact: true }).click();
+  await page.getByRole('button', { name: '🐟 해산물', exact: true }).click();
+  await page.getByRole('button', { name: '카드 선택 시작하기' }).click();
 
   await expect(page).toHaveURL(/\/lunchie\/swipe$/);
   await expect(page.getByRole('heading', { name: restaurant.name })).toBeVisible();
-  await expect(page.getByRole('note')).toContainText('Closest available matches');
+  await expect(page.getByRole('note')).toContainText('현재 위치에서 가장 가까운 후보');
+
+  await page.getByRole('button', { name: '빠른 매칭 설정으로 돌아가기' }).click();
+  await expect(page).toHaveURL(/\/lunchie\/settings$/);
+  await expect(page.getByRole('region', { name: '진행 중인 빠른 매칭' })).toBeVisible();
+  await page.waitForTimeout(1_200);
+  await expect(page).toHaveURL(/\/lunchie\/settings$/);
   expect(browserErrors).toEqual([]);
 });
 
@@ -243,13 +249,13 @@ test('desktop settings verifies the active session and cancels it through the sh
   await seedIdentity(page, cachedSession());
   await page.goto('/lunchie/settings');
 
-  await expect(page.getByRole('region', { name: 'Quick Match in progress' })).toBeVisible();
-  await expect(page.getByText('👥 1/4 people', { exact: true })).toBeVisible();
-  await page.getByRole('button', { name: 'Quick Match management' }).click();
-  await page.getByRole('menuitem', { name: 'Cancel Quick Match' }).click();
+  await expect(page.getByRole('region', { name: '진행 중인 빠른 매칭' })).toBeVisible();
+  await expect(page.getByText('👥 1/4명', { exact: true })).toBeVisible();
+  await page.getByRole('button', { name: '빠른 매칭 관리' }).click();
+  await page.getByRole('menuitem', { name: '빠른 매칭 취소' }).click();
   await expect(page.getByRole('alertdialog')).toBeVisible();
-  await page.getByRole('button', { name: 'Cancel Quick Match' }).click();
-  await expect(page.getByRole('region', { name: 'Quick Match in progress' })).toHaveCount(0);
+  await page.getByRole('button', { name: '빠른 매칭 취소' }).click();
+  await expect(page.getByRole('region', { name: '진행 중인 빠른 매칭' })).toHaveCount(0);
   expect(await page.evaluate(() => localStorage.getItem('lm_session'))).toBeNull();
   expect(browserErrors).toEqual([]);
 });
@@ -260,8 +266,8 @@ test('swipe shows an explicit empty-catalogue state for a restored active sessio
   await mockCommonApi(page, 'SWIPING_1');
   await seedIdentity(page, cachedSession({ status: 'voting' }));
   await page.goto('/lunchie/swipe');
-  await expect(page.getByRole('heading', { name: 'Restaurants aren’t available yet' })).toBeVisible();
-  await expect(page.getByRole('button', { name: 'Try again' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: '아직 추천할 식당이 없어요' })).toBeVisible();
+  await expect(page.getByRole('button', { name: '다시 시도' })).toBeVisible();
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth)).toBe(true);
   expect(browserErrors).toEqual([]);
 });

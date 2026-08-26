@@ -7,7 +7,7 @@ const source = readFileSync(join(import.meta.dirname, 'LunchieSwipePage.tsx'), '
 describe('Lunchie Quick Match recovery UI', () => {
   it('does not leave a blank page when the active session is missing', () => {
     expect(source).not.toContain('if (!currentSession) return null');
-    expect(source).toContain('Quick Match를 다시 준비할게요');
+    expect(source).toContain('빠른 매칭을 다시 준비할게요');
     expect(source).toContain("navigate('/lunchie/settings')");
   });
 

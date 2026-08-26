@@ -115,7 +115,7 @@ export default function QuickMatchRestaurantDetailSheet({
               </div>
 
               <section className="mt-4">
-                <h3 className="text-[11px] font-black uppercase tracking-[0.12em] text-[#AE9185]">About</h3>
+                <h3 className="text-[11px] font-black tracking-[0.12em] text-[#AE9185]">상세 정보</h3>
                 <p className="mt-2 whitespace-pre-line text-[14px] font-semibold leading-6 text-[#493A34]">{summary}</p>
               </section>
 

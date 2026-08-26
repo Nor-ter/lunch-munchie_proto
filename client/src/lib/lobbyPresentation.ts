@@ -21,7 +21,7 @@ export interface LobbyPresentation {
   isWaiting: boolean;
   canStart: boolean;
   hostName: string;
-  statusLabel: 'WAITING' | 'LIVE';
+  statusLabel: '대기 중' | '진행 중';
   statusCopy: string;
   ctaLabel: string;
   disabledReason: string | null;
@@ -119,7 +119,7 @@ export function getLobbyPresentation({
     isWaiting,
     canStart,
     hostName,
-    statusLabel: isWaiting ? 'WAITING' : 'LIVE',
+    statusLabel: isWaiting ? '대기 중' : '진행 중',
     statusCopy,
     ctaLabel,
     disabledReason,
