@@ -4,6 +4,7 @@ import { ChevronLeft, Star, MapPin, Clock, X } from 'lucide-react';
 import { useApp, type Restaurant } from '@/contexts/AppContext';
 import { getRestaurantById as fetchRestaurantById } from '@/services/restaurantsApi';
 import type { CoursePlace } from '@/types/course';
+import { formatRestaurantReviewCount } from '@shared/restaurantContract';
 
 /**
  * 식당 상세 슬라이드 페이지 — 코스 에디터/코스 상세의 코스 순서에서
@@ -107,7 +108,7 @@ export default function RestaurantDetailSheet({
         <div className="flex items-center gap-2 flex-wrap">
           <span className="flex items-center gap-1 bg-[#FFF5F5] rounded-full px-2.5 py-1 text-[12px] font-bold text-[#EB5053]">
             <Star size={12} fill="#EB5053" /> {restaurant.rating}
-            <span className="font-semibold text-[#C79396]">({restaurant.reviewCount.toLocaleString()})</span>
+            <span className="font-semibold text-[#C79396]">({formatRestaurantReviewCount(restaurant.reviewCount)})</span>
           </span>
           <span className="text-[12px] font-semibold text-white rounded-full px-2.5 py-1" style={{ background: '#EB5053' }}>
             {restaurant.category}

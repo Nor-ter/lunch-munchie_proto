@@ -94,7 +94,7 @@ export default function UnifiedMunchieCard({
     savedCourseIds,
     saveCourse,
     unsaveCourse,
-    deleteFeedPost,
+    deleteCourseWithFeed,
     incrementFeedShare,
     isMyPost,
   } = useApp();
@@ -214,10 +214,19 @@ export default function UnifiedMunchieCard({
     setShowPostMenu(false);
     setDeleteConfirmOpen(true);
   };
-  const confirmPostDelete = () => {
+  const confirmPostDelete = async () => {
+    const response = await fetch(`/api/feed-post?courseId=${encodeURIComponent(course.id)}`, {
+      method: 'DELETE',
+      credentials: 'same-origin',
+    });
+    const payload = await response.json().catch(() => ({})) as { error?: string };
+    if (!response.ok) {
+      toast.error(payload.error || '게시물을 삭제하지 못했어요.');
+      return;
+    }
     setDeleteConfirmOpen(false);
-    deleteFeedPost(post.id);
-    toast.success('게시물을 삭제했어요.');
+    deleteCourseWithFeed(course.id);
+    toast.success('게시물과 원본 코스를 삭제했어요.');
   };
   const togglePostLike = async () => {
     if (!interactive || !requireLogin()) return;
@@ -303,12 +312,12 @@ export default function UnifiedMunchieCard({
             <h2 id={`delete-post-title-${post.id}`} className="mt-3 text-[17px] font-black text-[#30221C]">
               게시물을 삭제하시겠습니까?
             </h2>
-            <p className="mt-1.5 text-[11px] font-semibold text-[#9A8277]">삭제한 게시물은 다시 복구할 수 없어요.</p>
+            <p className="mt-1.5 text-[11px] font-semibold text-[#9A8277]">게시물과 원본 코스가 영구 삭제되며 복구할 수 없어요.</p>
             <div className="mt-5 grid grid-cols-2 gap-2.5">
               <button type="button" onClick={() => setDeleteConfirmOpen(false)} className="h-11 rounded-[14px] border border-[#DFD0C8] bg-white text-[13px] font-black text-[#69564D]">
                 취소
               </button>
-              <button type="button" onClick={confirmPostDelete} className="h-11 rounded-[14px] bg-[#E85053] text-[13px] font-black text-white">
+              <button type="button" onClick={() => void confirmPostDelete()} className="h-11 rounded-[14px] bg-[#E85053] text-[13px] font-black text-white">
                 확인
               </button>
             </div>

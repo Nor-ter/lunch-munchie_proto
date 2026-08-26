@@ -23,6 +23,7 @@ import { persistSessionSwipe } from '@/services/sessionApi';
 import { classifySwipeAvailability, type SwipeAvailability } from '@/lib/swipeAvailability';
 import { isActiveQuickMatchStatus } from '@/lib/quickMatch';
 import { beginMenuPhotoRotation, completeMenuPhotoRotation } from '@/lib/menuPhotoRotation';
+import { normalizeRestaurantPayload } from '@shared/restaurantContract';
 import SessionManagementMenu from '@/components/lunchie/SessionManagementMenu';
 import QuickMatchRestaurantDetailSheet from '@/components/lunchie/QuickMatchRestaurantDetailSheet';
 import { restaurantSummary } from '@/lib/restaurantPresentation';
@@ -275,7 +276,7 @@ function SwipeCard({
   isLocked: boolean;
 }) {
   const [isRevealed, setIsRevealed] = useState(false);
-  // 큐브 회전 단계(단조). photoIndex는 foodPhotos 길이로 파생 — 도트/라벨 표시에 사용.
+  // 큐브 회전 단계(단조). photoIndex는 foodPhotos 길이로 파생 — 도트/사진 순번 표시에 사용.
   const [photoStep, setPhotoStep] = useState(0);
   const photoRotationLock = useRef(false);
   const [isPhotoRotating, setIsPhotoRotating] = useState(false);
@@ -340,6 +341,11 @@ function SwipeCard({
     setIsPhotoRotating(false);
     setIsRestaurantDetailOpen(false);
   }, [restaurant.id, candidatePhotoKey]);
+  const photoLabel = foodPhotos.length === 0
+    ? '등록된 음식 사진이 없어요'
+    : foodPhotos.length === 1
+      ? '대표 음식 사진'
+      : `음식 사진 · ${photoIndex + 1}/${foodPhotos.length}`;
 
   const handleDragEnd = useCallback((_: unknown, info: { offset: { x: number } }) => {
     if (isLocked) return;
@@ -646,7 +652,7 @@ function SwipeCard({
                               e.stopPropagation();
                               rotateMenuPhoto(-1);
                             }}
-                            aria-label="이전 메뉴"
+                            aria-label="이전 사진"
                           />
                           <button
                             className="absolute inset-y-0 right-0 w-1/2"
@@ -655,7 +661,7 @@ function SwipeCard({
                               e.stopPropagation();
                               rotateMenuPhoto(1);
                             }}
-                            aria-label="다음 메뉴"
+                            aria-label="다음 사진"
                           />
                         </>
                       )}
@@ -681,6 +687,7 @@ function SwipeCard({
                   </div>
                 </div>
                 <div className="pt-3 flex-shrink-0">
+                  <p className="font-bold text-[16px] text-white">{photoLabel}</p>
                   <p className="text-[12px] text-white/50 mt-0.5">{restaurant.description}</p>
                 </div>
               </div>
@@ -692,7 +699,7 @@ function SwipeCard({
                 {restaurant.menuItems && restaurant.menuItems.length > 0
                   ? `메뉴 ${restaurant.menuItems.length}개`
                   : foodPhotos.length > 1
-                    ? '← 이전 / 다음 메뉴 →'
+                    ? '← 이전 / 다음 사진 →'
                     : '사진 정보'} · ✕ 눌러서 닫기
               </p>
             </div>
@@ -2345,7 +2352,7 @@ export default function QuickMatchPage() {
         if (!response.ok) throw Object.assign(new Error(`Restaurant request failed (${response.status})`), { status: response.status });
         const payload = await response.json();
         if (!Array.isArray(payload)) throw new Error('Restaurant response was not a list');
-        const catalogue = payload as Restaurant[];
+        const catalogue = payload.map((restaurant: Record<string, unknown>) => normalizeRestaurantPayload(restaurant) as Restaurant);
         if (catalogue.length > 0) registerRestaurants(catalogue);
         const refreshedSession = await fetchSession(token, catalogue);
         const nextState = classifySwipeAvailability({
