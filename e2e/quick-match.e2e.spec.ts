@@ -265,3 +265,106 @@ test('swipe shows an explicit empty-catalogue state for a restored active sessio
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth)).toBe(true);
   expect(browserErrors).toEqual([]);
 });
+
+test('rapid menu-photo taps do not stack cube rotations', async ({ page }) => {
+  const browserErrors = captureUnexpectedBrowserErrors(page);
+  const photo = (label: string, color: string) =>
+    `data:image/svg+xml,${encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" width="480" height="480"><rect width="100%" height="100%" fill="${color}"/><text x="50%" y="50%" text-anchor="middle" fill="white" font-size="64">${label}</text></svg>`)}`;
+  const restaurant = {
+    id: 'rotation-e2e',
+    name: 'Rotation Kitchen',
+    category: '한식',
+    tags: ['맛집'],
+    rating: 4.7,
+    reviewCount: 18,
+    distance: '250m',
+    address: 'Melbourne',
+    image: '',
+    photos: [photo('ONE', '#E85053'), photo('TWO', '#F39B45'), photo('THREE', '#4DAE76')],
+    menuItems: [],
+    lat: -37.81,
+    lng: 144.96,
+    priceRange: 2,
+    openHours: 'Monday: 11:00–21:00\nTuesday: 11:00–21:00',
+    phone: '+61 3 9000 0000',
+    dietary: [],
+    description: 'A long neighbourhood restaurant description sourced from the canonical database for the expandable Quick Match detail preview.',
+  };
+
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.route('https://fonts.googleapis.com/**', route => route.fulfill({ status: 200, contentType: 'text/css', body: '' }));
+  await page.route('https://cdn.jsdelivr.net/**', route => route.fulfill({ status: 200, contentType: 'text/css', body: '' }));
+  await page.route('**/api/**', async route => {
+    const url = new URL(route.request().url());
+    if (url.pathname === '/api/auth/session') {
+      await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ user: { sub: userId, name: 'Tester' }, profile: null }) });
+      return;
+    }
+    if (url.pathname === '/api/restaurants') {
+      await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify([restaurant]) });
+      return;
+    }
+    if (url.pathname === `/api/restaurants/${restaurant.id}`) {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          ...restaurant,
+          review_count: restaurant.reviewCount,
+          price_level: restaurant.priceRange,
+          business_hours: restaurant.openHours,
+          phone_number: restaurant.phone,
+          short_description: restaurant.description,
+          latitude: restaurant.lat,
+          longitude: restaurant.lng,
+          menu_items: [],
+          dietary_options: [],
+        }),
+      });
+      return;
+    }
+    if (url.pathname === '/api/courses' || url.pathname === '/api/feed') {
+      await route.fulfill({ status: 200, contentType: 'application/json', body: '[]' });
+      return;
+    }
+    if (url.pathname === '/api/sessions/ABC123' && route.request().method() === 'GET') {
+      const response = serverSession('SWIPING_1');
+      response.session.deck_ids = [restaurant.id];
+      await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(response) });
+      return;
+    }
+    await route.fulfill({ status: 200, contentType: 'application/json', body: '{}' });
+  });
+  await seedIdentity(page, cachedSession({ status: 'voting', restaurants: [restaurant] }));
+  await page.goto('/lunchie/swipe');
+
+  const detailPreview = page.getByRole('button', { name: `${restaurant.name} 상세정보 보기` });
+  await expect(detailPreview).toBeVisible();
+  expect((await detailPreview.boundingBox())!.height).toBeLessThanOrEqual(20);
+  await detailPreview.click();
+  const detailSheet = page.getByRole('dialog', { name: `${restaurant.name} 상세정보` });
+  await expect(detailSheet).toBeVisible();
+  await expect(detailSheet.getByText(restaurant.description, { exact: true })).toBeVisible();
+  await expect(detailSheet.getByText(restaurant.address, { exact: true })).toBeVisible();
+  await expect(detailSheet.getByText(restaurant.phone, { exact: true })).toBeVisible();
+  await page.getByRole('button', { name: '상세정보 닫기', exact: true }).click();
+  await expect(detailSheet).toHaveCount(0);
+
+  await page.getByRole('heading', { name: restaurant.name }).click();
+  const nextPhoto = page.getByRole('button', { name: '다음 메뉴' });
+  await expect(nextPhoto).toBeVisible();
+  await expect(page.getByText(/^메뉴 \d+$/, { exact: true })).toHaveCount(0);
+  const photoProgress = page.locator('[data-ui="menu-photo-progress"]');
+  await expect(photoProgress).toHaveAttribute('aria-label', '메뉴 사진 1/3');
+
+  await nextPhoto.evaluate((button: HTMLButtonElement) => {
+    for (let tap = 0; tap < 6; tap += 1) button.click();
+  });
+
+  await expect(photoProgress).toHaveAttribute('aria-label', '메뉴 사진 2/3');
+  await expect(nextPhoto).toBeDisabled();
+  await expect(nextPhoto).toBeEnabled({ timeout: 2_000 });
+  await nextPhoto.click();
+  await expect(photoProgress).toHaveAttribute('aria-label', '메뉴 사진 3/3');
+  expect(browserErrors).toEqual([]);
+});

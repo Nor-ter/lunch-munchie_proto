@@ -765,6 +765,7 @@ router.get("/restaurants", async (req: any, res: any) => {
       lng: r.longitude,
       priceRange: r.price_level,
       openHours: r.business_hours,
+      phone: r.phone_number || "",
       dietary: r.dietary_options || [],
       description: r.short_description
     }));
@@ -791,6 +792,7 @@ router.get("/restaurants/:id", async (req: any, res: any) => {
     lng: r.longitude,
     priceRange: r.price_level,
     openHours: r.business_hours,
+    phone: r.phone_number || "",
     dietary: r.dietary_options || [],
     description: r.short_description || "",
   });

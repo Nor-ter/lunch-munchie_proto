@@ -14,4 +14,11 @@ describe('RestaurantDetailSheet presentation', () => {
     expect(source).toContain("aria-label={isModal ? '상세정보 닫기' : '뒤로가기'}");
     expect(source).toContain('isModal ? <X size={18} /> : <ChevronLeft size={20} />');
   });
+
+  it('does not render a broken hero image when the Google pin has no cached photo yet', () => {
+    expect(source).toContain('fetchRestaurantById(restaurantId)');
+    expect(source).toContain('heroSrc ? (');
+    expect(source).not.toContain('<img src={restaurant.image}');
+    expect(source).toContain('등록된 메뉴 사진이 없어요.');
+  });
 });

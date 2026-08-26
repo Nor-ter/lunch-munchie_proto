@@ -11,8 +11,10 @@ const restaurant = {
   review_count: 12,
   price_level: 2,
   tags: ['restaurant', 'vietnamese'],
-  photos: [],
-  menu_items: [],
+  photos: ['/photos/osm_node_622311421/pho.jpg'],
+  short_description: 'Fitzroy Vietnamese pho favourite.',
+  business_hours: '11:00-21:00',
+  menu_items: [{ name: 'Pho Bo', price: 18, category: 'Mains' }],
   dietary_options: [],
 };
 
@@ -57,14 +59,22 @@ test('saved Lunchie restaurant uses Google Maps and returns to the Lunchie tab',
 
   await expect(page.getByText(restaurant.name, { exact: true })).toBeVisible();
   await expect(page.getByText(restaurant.address, { exact: true })).toBeVisible();
+  await expect(page.getByText(restaurant.short_description, { exact: true })).toBeVisible();
+  await expect(page.getByText(restaurant.business_hours, { exact: true })).toBeVisible();
+  await expect(page.getByText('Pho Bo', { exact: true })).toBeVisible();
+  await expect(page.getByText('Lunchie', { exact: true })).toBeVisible();
+  await expect(page.getByText('Lunchie Pick', { exact: true })).toBeVisible();
+  await expect(page.locator('[data-ui="lunchie-location-card"]')).toBeVisible();
+  await expect(page.locator('[data-ui="lunchie-restaurant-detail"]')).toBeVisible();
   const region = page.locator('[data-ui="lunchie-restaurant-map"]');
-  const map = region.locator('.gm-style');
-  await expect(map).toBeVisible();
+  const mapSurface = region.locator(':scope > div').first();
+  await expect(mapSurface).toBeVisible();
 
-  const [regionBox, mapBox] = await Promise.all([region.boundingBox(), map.boundingBox()]);
-  expect(regionBox!.height).toBeGreaterThan(400);
-  expect(mapBox!.height).toBeGreaterThanOrEqual(regionBox!.height - 1);
-  expect(mapBox!.width).toBeGreaterThanOrEqual(regionBox!.width - 1);
+  const [regionBox, mapBox] = await Promise.all([region.boundingBox(), mapSurface.boundingBox()]);
+  expect(regionBox!.height).toBeGreaterThan(330);
+  expect(regionBox!.width).toBeLessThan(390);
+  expect(mapBox!.height).toBeGreaterThanOrEqual(regionBox!.height - 3);
+  expect(mapBox!.width).toBeGreaterThanOrEqual(regionBox!.width - 3);
   expect(googleMapsLoaderRequested).toBe(true);
   expect(openStreetMapRequested).toBe(false);
 

@@ -22,7 +22,10 @@ import { intentForCategory } from '@shared/intent';
 import { persistSessionSwipe } from '@/services/sessionApi';
 import { classifySwipeAvailability, type SwipeAvailability } from '@/lib/swipeAvailability';
 import { isActiveQuickMatchStatus } from '@/lib/quickMatch';
+import { beginMenuPhotoRotation, completeMenuPhotoRotation } from '@/lib/menuPhotoRotation';
 import SessionManagementMenu from '@/components/lunchie/SessionManagementMenu';
+import QuickMatchRestaurantDetailSheet from '@/components/lunchie/QuickMatchRestaurantDetailSheet';
+import { restaurantSummary } from '@/lib/restaurantPresentation';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -135,10 +138,11 @@ const CUBE_DURATION = 0.7;
 // 다음/이전 사진을 보여주는 진짜 3D 큐브 슬라이더(tl_revise 애니메이션 UI). step: 단조 증가/감소
 // 정수(다음 +1, 이전 -1). 90도 도는 동안 실제 보이는 면은 나가는 면+들어오는 면 둘뿐이라 네 면만으로
 // 임의 개수 사진을 끊김 없이 굴린다.
-function MenuCube({ photos, step, onPhotoError }: {
+function MenuCube({ photos, step, onPhotoError, onRotationComplete }: {
   photos: string[];
   step: number;
   onPhotoError?: (src: string) => void;
+  onRotationComplete?: () => void;
 }) {
   const ref = useRef<HTMLDivElement>(null);
   const [depth, setDepth] = useState(160);
@@ -179,6 +183,7 @@ function MenuCube({ photos, step, onPhotoError }: {
           style={{ transformStyle: 'preserve-3d' }}
           animate={{ rotateY: -90 * step }}
           transition={{ duration: CUBE_DURATION, ease: CUBE_EASE }}
+          onAnimationComplete={onRotationComplete}
         >
           {[0, 1, 2, 3].map(f => (
             <div
@@ -272,6 +277,9 @@ function SwipeCard({
   const [isRevealed, setIsRevealed] = useState(false);
   // 큐브 회전 단계(단조). photoIndex는 foodPhotos 길이로 파생 — 도트/라벨 표시에 사용.
   const [photoStep, setPhotoStep] = useState(0);
+  const photoRotationLock = useRef(false);
+  const [isPhotoRotating, setIsPhotoRotating] = useState(false);
+  const [isRestaurantDetailOpen, setIsRestaurantDetailOpen] = useState(false);
   const [detailIndex, setDetailIndex] = useState<number | null>(null);
   const x = useMotionValue(0);
   const rotate = useTransform(x, [-220, 220], [-16, 16]);
@@ -315,6 +323,23 @@ function SwipeCard({
   const foodPhotos = candidatePhotoSources.filter((photo) => !failedPhotoSources.has(photo));
   const primaryPhoto = hasCanonicalPhotoList ? foodPhotos[0] : restaurant.image;
   const photoIndex = foodPhotos.length ? ((photoStep % foodPhotos.length) + foodPhotos.length) % foodPhotos.length : 0;
+  const detailSummary = restaurantSummary(restaurant);
+  const rotateMenuPhoto = useCallback((direction: -1 | 1) => {
+    const accepted = beginMenuPhotoRotation(photoRotationLock, direction, delta => {
+      setPhotoStep(step => step + delta);
+    });
+    if (accepted) setIsPhotoRotating(true);
+  }, []);
+  const finishMenuPhotoRotation = useCallback(() => {
+    completeMenuPhotoRotation(photoRotationLock);
+    setIsPhotoRotating(false);
+  }, []);
+
+  useEffect(() => {
+    completeMenuPhotoRotation(photoRotationLock);
+    setIsPhotoRotating(false);
+    setIsRestaurantDetailOpen(false);
+  }, [restaurant.id, candidatePhotoKey]);
 
   const handleDragEnd = useCallback((_: unknown, info: { offset: { x: number } }) => {
     if (isLocked) return;
@@ -345,8 +370,11 @@ function SwipeCard({
       dragElastic={0.6}
       onDragEnd={handleDragEnd}
       whileDrag={{ cursor: 'grabbing' }}
-      onTap={() => {
-        if (!isRevealed) {
+      onTap={(event) => {
+        const target = event.target;
+        const openedDetail = target instanceof Element
+          && Boolean(target.closest('[data-ui="quick-match-detail-trigger"]'));
+        if (!openedDetail && !isRestaurantDetailOpen && !isRevealed) {
           setPhotoStep(0);
           setIsRevealed(true);
         }
@@ -417,7 +445,23 @@ function SwipeCard({
             ))}
           </div>
           <h2 className="text-white font-black text-[24px] leading-tight">{restaurant.name}</h2>
-          <p className="text-white/70 text-[12px] mt-1">{restaurant.description}</p>
+          <button
+            type="button"
+            data-ui="quick-match-detail-trigger"
+            aria-label={`${restaurant.name} 상세정보 보기`}
+            onPointerDown={(event) => event.stopPropagation()}
+            onClick={(event) => {
+              event.stopPropagation();
+              setIsRestaurantDetailOpen(true);
+            }}
+            className="relative mt-1 block h-5 w-full overflow-hidden text-left"
+          >
+            <span className="block truncate pr-10 text-[12px] font-semibold text-white/75">{detailSummary}</span>
+            <span
+              aria-hidden="true"
+              className="pointer-events-none absolute inset-y-0 right-0 w-14 bg-gradient-to-r from-transparent via-[#241914]/55 to-[#241914]/90"
+            />
+          </button>
           <div className="flex items-center gap-3 mt-2">
             <div className="flex items-center gap-1">
               <Star size={12} fill="#FFD700" color="#FFD700" />
@@ -587,22 +631,29 @@ function SwipeCard({
                   {foodPhotos.length > 0 ? (
                     <>
                       {/* 좌/우 탭 시 큐브가 Y축으로 90도씩 굴러간다 */}
-                      <MenuCube photos={foodPhotos} step={photoStep} onPhotoError={markPhotoFailed} />
+                      <MenuCube
+                        photos={foodPhotos}
+                        step={photoStep}
+                        onPhotoError={markPhotoFailed}
+                        onRotationComplete={finishMenuPhotoRotation}
+                      />
                       {foodPhotos.length > 1 && (
                         <>
                           <button
                             className="absolute inset-y-0 left-0 w-1/2"
+                            disabled={isPhotoRotating}
                             onClick={(e) => {
                               e.stopPropagation();
-                              setPhotoStep(s => s - 1);
+                              rotateMenuPhoto(-1);
                             }}
                             aria-label="이전 메뉴"
                           />
                           <button
                             className="absolute inset-y-0 right-0 w-1/2"
+                            disabled={isPhotoRotating}
                             onClick={(e) => {
                               e.stopPropagation();
-                              setPhotoStep(s => s + 1);
+                              rotateMenuPhoto(1);
                             }}
                             aria-label="다음 메뉴"
                           />
@@ -617,7 +668,12 @@ function SwipeCard({
                       emojiClass="text-[80px]"
                     />
                   )}
-                  <div className="absolute top-3 left-1/2 -translate-x-1/2 flex gap-1.5 pointer-events-none">
+                  <div
+                    data-ui="menu-photo-progress"
+                    role="status"
+                    aria-label={`메뉴 사진 ${photoIndex + 1}/${foodPhotos.length}`}
+                    className="absolute top-3 left-1/2 -translate-x-1/2 flex gap-1.5 pointer-events-none"
+                  >
                     {foodPhotos.map((_: string, j: number) => (
                       <div key={j} className="w-1.5 h-1.5 rounded-full"
                         style={{ background: j === photoIndex ? 'white' : 'rgba(255,255,255,0.4)' }} />
@@ -625,9 +681,6 @@ function SwipeCard({
                   </div>
                 </div>
                 <div className="pt-3 flex-shrink-0">
-                  <p className="font-bold text-[16px] text-white">
-                    {foodPhotos.length > 0 ? `메뉴 ${photoIndex + 1}` : '등록된 음식 사진이 없어요'}
-                  </p>
                   <p className="text-[12px] text-white/50 mt-0.5">{restaurant.description}</p>
                 </div>
               </div>
@@ -654,6 +707,11 @@ function SwipeCard({
         restaurantCategory={restaurant.category}
         onClose={() => setDetailIndex(null)}
         onIndexChange={setDetailIndex}
+      />
+      <QuickMatchRestaurantDetailSheet
+        open={isRestaurantDetailOpen}
+        restaurant={restaurant}
+        onClose={() => setIsRestaurantDetailOpen(false)}
       />
     </motion.div>
   );

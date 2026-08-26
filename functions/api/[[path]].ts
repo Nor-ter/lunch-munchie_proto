@@ -22,7 +22,9 @@ import {
   getGoogleDirections,
   getGoogleLocationDetails,
   getGooglePlaceDetails,
+  googlePlacePhotosSynced,
   googlePlacesErrorResponse,
+  storedRestaurantPhotoUrls,
 } from "./googlePlaces";
 import { feedItemMatchesLocation, parseFeedLocationFilter } from "./feedLocation";
 
@@ -520,6 +522,38 @@ export async function lunchiePresentationPhotos(
   // for every catalogue photo made one request fan out into 100+ storage
   // reads and added several seconds to Lunchie startup.
   return selectLunchiePresentationPhotoKeys(results);
+}
+
+async function restaurantDetailPhotos(db: any, restaurantId: string, storedPhotos: unknown) {
+  const presentation = await lunchiePresentationPhotos(db, restaurantId);
+  if (presentation.length > 0) return presentation;
+  return storedRestaurantPhotoUrls(storedPhotos);
+}
+
+type IndexedMenuRow = {
+  name: string;
+  price: number | null;
+  category: string | null;
+  description: string | null;
+  dietary: string | null;
+};
+
+/** Prefer the queryable menu index over the legacy restaurants.menus JSON snapshot. */
+async function restaurantIndexedMenuItems(db: any, restaurantId: string) {
+  try {
+    const { results } = await db.prepare(
+      "SELECT name, price, category, description, dietary FROM restaurant_menu_items WHERE restaurant_id = ? ORDER BY category ASC, name ASC LIMIT 80",
+    ).bind(restaurantId).all<IndexedMenuRow>();
+    return (results ?? []).map((item) => ({
+      name: item.name,
+      price: typeof item.price === "number" && Number.isFinite(item.price) ? item.price : null,
+      category: item.category || undefined,
+      description: item.description || undefined,
+      dietary: json<string[]>(item.dietary, []),
+    }));
+  } catch {
+    return [];
+  }
 }
 
 const EVENT_TYPES = new Set([
@@ -1403,11 +1437,35 @@ app.get("/api/restaurants/:id", async (c) => {
     .bind(c.req.param("id"))
     .first();
   if (!restaurant) return c.json({ error: "restaurant_not_found" }, 404);
-  const row = restaurant as any;
+  let row = restaurant as any;
+  const indexedMenu = await restaurantIndexedMenuItems(c.env.DB, row.id);
+  let photos = await restaurantDetailPhotos(c.env.DB, row.id, row.photos);
+  if (
+    photos.length === 0
+    && row.source === "google"
+    && typeof row.google_place_id === "string"
+    && row.google_place_id
+    && !googlePlacePhotosSynced(row.photos)
+  ) {
+    try {
+      await getGooglePlaceDetails(c.env, { placeId: row.google_place_id });
+      const refreshed = await c.env.DB.prepare(
+        "SELECT * FROM restaurants WHERE id = ? LIMIT 1",
+      )
+        .bind(row.id)
+        .first();
+      if (refreshed) {
+        row = refreshed as any;
+        photos = await restaurantDetailPhotos(c.env.DB, row.id, row.photos);
+      }
+    } catch {
+      // Keep the stored text details even if photo backfill fails.
+    }
+  }
   return c.json({
     ...row,
-    photos: await lunchiePresentationPhotos(c.env.DB, row.id),
-    menu_items: json(row.menus, []),
+    photos,
+    menu_items: indexedMenu.length > 0 ? indexedMenu : json(row.menus, []),
     tags: json<string[]>(row.tags, []),
     dietary_options: json<string[]>(row.dietary_options, []),
   });

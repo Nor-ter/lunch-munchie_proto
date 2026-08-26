@@ -20,6 +20,8 @@ type RestaurantApiRecord = Pick<GoogleRestaurantRow, 'id' | 'name' | 'category' 
   priceRange?: unknown;
   business_hours?: string | null;
   openHours?: string;
+  phone_number?: string | null;
+  phone?: string;
   dietary_options?: unknown;
   dietary?: unknown;
   short_description?: string | null;
@@ -60,6 +62,7 @@ export function mapRestaurantApiRecord(row: RestaurantApiRecord): Restaurant {
     lng: longitude,
     priceRange: Math.min(4, Math.max(1, Number.isFinite(priceLevel) ? priceLevel : 1)) as 1 | 2 | 3 | 4,
     openHours: row.business_hours ?? row.openHours ?? '',
+    phone: row.phone_number ?? row.phone ?? '',
     dietary: arrayValue(row.dietary_options ?? row.dietary),
     description: row.short_description ?? row.description ?? '',
   };

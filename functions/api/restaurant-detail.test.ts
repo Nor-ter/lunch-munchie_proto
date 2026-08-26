@@ -20,7 +20,9 @@ function createEnv(): EnvBindings {
           dietary_options: '[]',
           menus: '[]',
         } : null),
-        all: vi.fn(async () => ({ results: [] })),
+        all: vi.fn(async () => query.includes('FROM restaurant_menu_items')
+          ? { results: [{ name: 'Pho Bo', price: 18, category: 'Mains', description: 'Beef noodle soup', dietary: '[]' }] }
+          : { results: [] }),
       };
       return statement;
     }),
@@ -49,6 +51,7 @@ describe('GET /api/restaurants/:id', () => {
       latitude: -37.796131,
       longitude: 144.978655,
       tags: ['restaurant', 'vietnamese'],
+      menu_items: [{ name: 'Pho Bo', price: 18, category: 'Mains', description: 'Beef noodle soup' }],
     });
   });
 
@@ -63,5 +66,32 @@ describe('GET /api/restaurants/:id', () => {
     });
     const response = await app.request('http://localhost/api/restaurants/missing', {}, env);
     expect(response.status).toBe(404);
+  });
+
+  it('falls back to stored Google photos when Lunchie presentation photos are absent', async () => {
+    const env = createEnv();
+    env.DB.prepare = vi.fn((query: string) => {
+      const statement = {
+        bind: vi.fn(() => statement),
+        first: vi.fn(async () => query.startsWith('SELECT * FROM restaurants WHERE id = ?') ? {
+          id: 'google_ChIJ123',
+          name: 'Queen Victoria Market',
+          source: 'google',
+          google_place_id: 'ChIJ123',
+          photos: '["/photos/google/abc.jpg"]',
+          tags: '[]',
+          dietary_options: '[]',
+          menus: '[]',
+        } : null),
+        all: vi.fn(async () => ({ results: [] })),
+      };
+      return statement;
+    });
+    const response = await app.request('http://localhost/api/restaurants/google_ChIJ123', {}, env);
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toMatchObject({
+      id: 'google_ChIJ123',
+      photos: ['/photos/google/abc.jpg'],
+    });
   });
 });

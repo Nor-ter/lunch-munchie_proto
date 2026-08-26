@@ -13,6 +13,7 @@ describe('getRestaurantById', () => {
       rating: 4.2,
       review_count: 12,
       price_level: 2,
+      phone_number: '+61 3 9000 0000',
       tags: ['restaurant', 'vietnamese'],
       photos: [],
       menu_items: [],
@@ -23,6 +24,7 @@ describe('getRestaurantById', () => {
       id: 'osm_node_622311421',
       lat: -37.796131,
       lng: 144.978655,
+      phone: '+61 3 9000 0000',
     });
     expect(request).toHaveBeenCalledWith('/api/restaurants/osm_node_622311421', {
       credentials: 'same-origin',
