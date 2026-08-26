@@ -113,6 +113,7 @@ export default function UnifiedMunchieCard({
   const { data: auth } = useAuthStatus();
   const linkedCourse = courseOverride ?? getCourseById(post.courseId);
   const ownPost = isMyPost(post);
+  const canDeletePost = ownPost || Boolean(auth?.isAdmin);
   const authorProfilePath = ownPost ? '/profile' : `/profile/${resolveFeedAuthorId(post)}`;
 
   useEffect(() => {
@@ -391,6 +392,11 @@ export default function UnifiedMunchieCard({
                   <button type="button" onClick={editPost} className="flex h-9 w-full items-center gap-1.5 px-3 text-left text-[10px] font-bold text-[#51443E]"><Pencil size={12} />게시물 수정</button>
                   <button type="button" onClick={requestPostDelete} className="flex h-9 w-full items-center gap-1.5 border-t border-[#EEE3DD] px-3 text-left text-[10px] font-bold text-[#D84D52]"><Trash2 size={12} />게시물 삭제</button>
                 </>
+              ) : canDeletePost ? (
+                <>
+                  <button type="button" onClick={() => { setShowPostMenu(false); go(authorProfilePath); }} className="block h-9 w-full px-3 text-left text-[10px] font-bold text-[#51443E]">작성자 보기</button>
+                  <button type="button" onClick={requestPostDelete} className="flex h-9 w-full items-center gap-1.5 border-t border-[#EEE3DD] px-3 text-left text-[10px] font-bold text-[#D84D52]"><Trash2 size={12} />관리자 삭제</button>
+                </>
               ) : (
                 <>
                   <button type="button" onClick={() => { setShowPostMenu(false); go(authorProfilePath); }} className="block h-9 w-full px-3 text-left text-[10px] font-bold text-[#51443E]">작성자 보기</button>
@@ -427,6 +433,11 @@ export default function UnifiedMunchieCard({
                 <>
                   <button type="button" onClick={editPost} className="flex h-10 w-full items-center gap-2 px-3 text-left text-[11px] font-bold text-[#51443E]"><Pencil size={13} />게시물 수정</button>
                   <button type="button" onClick={requestPostDelete} className="flex h-10 w-full items-center gap-2 border-t border-[#EEE3DD] px-3 text-left text-[11px] font-bold text-[#D84D52]"><Trash2 size={13} />게시물 삭제</button>
+                </>
+              ) : canDeletePost ? (
+                <>
+                  <button type="button" onClick={() => { setShowPostMenu(false); go(authorProfilePath); }} className="block h-10 w-full px-3 text-left text-[11px] font-bold text-[#51443E]">작성자 보기</button>
+                  <button type="button" onClick={requestPostDelete} className="flex h-10 w-full items-center gap-2 border-t border-[#EEE3DD] px-3 text-left text-[11px] font-bold text-[#D84D52]"><Trash2 size={13} />관리자 삭제</button>
                 </>
               ) : (
                 <>

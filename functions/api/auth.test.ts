@@ -36,6 +36,7 @@ function createEnv(db = createDb()): EnvBindings {
     GOOGLE_CLIENT_ID: "test-client-id",
     GOOGLE_CLIENT_SECRET: "test-client-secret",
     AUTH_SESSION_SECRET: "test-session-secret",
+    ADMIN_EMAILS: "no-picture@example.com",
   };
 }
 
@@ -92,12 +93,14 @@ describe("Google OAuth callback", () => {
       );
       const sessionBody = await sessionResponse.json<{
         user?: { sub?: string; email?: string; name?: string; picture?: string } | null;
+        isAdmin?: boolean;
       }>();
 
       expect(sessionResponse.status).toBe(200);
       expect(sessionBody.user?.sub).toBe("google-user-without-picture");
       expect(sessionBody.user?.email).toBe("no-picture@example.com");
       expect(sessionBody.user?.picture).toBeUndefined();
+      expect(sessionBody.isAdmin).toBe(true);
     } finally {
       fetchMock.mockRestore();
     }

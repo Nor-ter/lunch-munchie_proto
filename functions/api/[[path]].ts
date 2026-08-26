@@ -113,16 +113,13 @@ const toBase64Url = (value: Uint8Array | string) => {
     .replaceAll("/", "_")
     .replaceAll("=", "");
 };
-const fromBase64Url = (value: string) =>
-  decoder.decode(
-    Uint8Array.from(
-      atob(
-        value.replaceAll("-", "+").replaceAll("_", "/") +
-          "==".slice((value.length + 3) % 4),
-      ),
-      (char) => char.charCodeAt(0),
-    ),
+const fromBase64Url = (value: string) => {
+  const normalized = value.replaceAll("-", "+").replaceAll("_", "/");
+  const padded = normalized + "=".repeat((4 - (normalized.length % 4)) % 4);
+  return decoder.decode(
+    Uint8Array.from(atob(padded), (char) => char.charCodeAt(0)),
   );
+};
 async function sign(value: string, secret: string) {
   const key = await crypto.subtle.importKey(
     "raw",
@@ -348,7 +345,12 @@ app.get("/api/auth/session", async (c) => {
           .bind(session.sub)
           .first<any>()
       : null;
-  return c.json({ user: session, profile });
+  return c.json({
+    user: session,
+    profile,
+    // Expose only the decision, never the ADMIN_EMAILS allowlist itself.
+    isAdmin: Boolean(session && isAdminEmail(session.email, c.env.ADMIN_EMAILS)),
+  });
 });
 app.post("/api/auth/logout", (c) => {
   c.header(
@@ -3233,8 +3235,8 @@ app.get("/api/journey", async (c) => {
   });
 });
 
-// 수정과 삭제는 UI의 버튼 노출만으로 판단하지 않는다. 매 요청에서 현재 Google
-// 세션의 sub와 courses.author_id가 일치해야만 실행된다.
+// 수정과 삭제는 UI의 버튼 노출만으로 판단하지 않는다. 수정은 작성자만 가능하고,
+// 삭제는 작성자 또는 ADMIN_EMAILS에 등록된 운영자만 가능하다.
 app.patch("/api/feed-post", async (c) => {
   const session = await readSession(c.req.raw, c.env.AUTH_SESSION_SECRET);
   if (!session)
@@ -3380,17 +3382,16 @@ app.delete("/api/feed-post", async (c) => {
   const courseId = new URL(c.req.url).searchParams.get("courseId");
   if (!courseId || courseId.length > 128)
     return c.json({ error: "게시물 정보가 필요합니다." }, 400);
-  // A feed is its course's public representation. The product policy is now
-  // explicit: deleting a feed permanently deletes the author-owned course and
-  // every relational record that exists only because of that course. Ownership
-  // is checked before any mutation; clients can never delete another account's
-  // content by guessing a course ID.
+  // A feed is its course's public representation. Normal users may delete only
+  // their own content; ADMIN_EMAILS grants this delete operation only and does
+  // not grant edit ownership.
+  const isAdmin = isAdminEmail(session.email, c.env.ADMIN_EMAILS);
   const course = await c.env.DB.prepare(
-    "SELECT id FROM courses WHERE id = ? AND author_id = ?",
+    "SELECT id, author_id FROM courses WHERE id = ?",
   )
-    .bind(courseId, session.sub)
-    .first<{ id: string }>();
-  if (!course)
+    .bind(courseId)
+    .first<{ id: string; author_id: string }>();
+  if (!course || (!isAdmin && course.author_id !== session.sub))
     return c.json({ error: "이 게시물을 삭제할 권한이 없습니다." }, 403);
   const { results: comments } = await c.env.DB.prepare(
     "SELECT id FROM feed_comments WHERE course_id = ?",
@@ -3427,10 +3428,7 @@ app.delete("/api/feed-post", async (c) => {
         comment.id,
       ),
     ),
-    c.env.DB.prepare("DELETE FROM courses WHERE id = ? AND author_id = ?").bind(
-      courseId,
-      session.sub,
-    ),
+    c.env.DB.prepare("DELETE FROM courses WHERE id = ?").bind(courseId),
   ];
   await c.env.DB.batch(statements);
   return c.json({ ok: true, deletedCourseId: courseId });
