@@ -14,7 +14,7 @@ export default function OtherProfilePage() {
   const { id = '' } = useParams<{ id: string }>();
   const [, navigate] = useLocation();
   const remoteUser = useUser(id);
-  const { posts, fallbackAuthor } = useProfileFeed(id);
+  const { posts, fallbackAuthor, isLoading: isProfileFeedLoading } = useProfileFeed(id);
   const [listMode, setListMode] = useState<FollowListMode | null>(null);
   const user = remoteUser.data ?? fallbackAuthor?.user;
   const avatarFallback = fallbackAuthor?.emoji ?? user?.username.slice(0, 1).toUpperCase();
@@ -80,7 +80,11 @@ export default function OtherProfilePage() {
           <h2 className="text-[18px] font-black text-[#2D211C]">{user.username}님의 피드</h2>
           <span className="text-[12px] font-bold text-[#A37E6F]">{posts.length}</span>
         </div>
-        {posts.length > 0 ? (
+        {isProfileFeedLoading && posts.length === 0 ? (
+          <div className="rounded-2xl border-2 border-dashed border-[#E5CFC5] py-9 text-center">
+            <p className="text-[13px] font-bold text-[#8A7A6C]">피드를 동기화하는 중…</p>
+          </div>
+        ) : posts.length > 0 ? (
           <div className="grid grid-cols-2 items-start gap-3" data-testid="profile-feed-grid">
             {posts.map((post) => (
               <UnifiedMunchieCard

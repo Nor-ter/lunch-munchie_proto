@@ -25,7 +25,10 @@ describe('Profile information and level synchronization', () => {
   });
 
   it('keeps existing feed author identity aligned with profile edits', () => {
-    expect(contextSource).toContain('post.authorId === profile.id');
+    expect(contextSource).toContain('isAuthenticatedContentOwner(post.authorId, initialAuthUserId)');
+    expect(contextSource).not.toContain('post.authorId === profile.id');
+    expect(contextSource).toContain('const ownershipId = initialAuthUserId ?? profile.id');
+    expect(contextSource).not.toContain('new Set([initialAuthUserId, profile.id]');
     expect(contextSource).toContain('authorName: updates.name ?? post.authorName');
     expect(contextSource).toContain('authorEmoji: updates.emoji ?? post.authorEmoji');
   });

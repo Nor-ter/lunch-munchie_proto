@@ -10,4 +10,10 @@ describe('FeedDetailPage saved view navigation', () => {
     expect(source).toContain('savedView={savedView}');
     expect(source).toContain('getSavedReturnPath(search, id)');
   });
+
+  it('loads profile posts from their canonical author timeline', () => {
+    expect(source).toContain("searchParams.get('authorId')");
+    expect(source).toContain('useProfileFeed(profileAuthorId)');
+    expect(source).toContain('profileFeed.posts.find(item => item.id === id)');
+  });
 });

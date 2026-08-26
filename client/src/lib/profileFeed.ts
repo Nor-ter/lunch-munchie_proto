@@ -6,6 +6,17 @@ export interface FeedAuthorFallback {
   emoji: string;
 }
 
+/**
+ * UI 권한과 서버 권한이 같은 주체를 보도록 하는 단일 소유권 판정기.
+ * 로컬 프로필 ID, 작성자 이름, 화면 진입 경로는 권한 근거가 될 수 없다.
+ */
+export function isAuthenticatedContentOwner(
+  authorId: string | null | undefined,
+  authenticatedUserId: string | null | undefined,
+) {
+  return Boolean(authorId && authenticatedUserId && authorId === authenticatedUserId);
+}
+
 function stableAuthorKey(value: string) {
   let hash = 2166136261;
   for (let index = 0; index < value.length; index += 1) {
@@ -54,4 +65,3 @@ export function getFeedAuthorFallback(
     emoji: post.authorImage ? post.authorName.replace(/^@/, "").slice(0, 1) : post.authorEmoji,
   };
 }
-

@@ -54,7 +54,13 @@ describe('CourseDetailPage course editing', () => {
     expect(source).toContain('fromSaved && isEditing');
     expect(source).toContain('게시물을 삭제하시겠습니까?');
     expect(source).toContain('코스맵과 먼치 피드 같이 삭제되며');
+    expect(source).toContain("fetch(`/api/feed-post?courseId=${encodeURIComponent(id)}`");
+    expect(source).toContain("method: 'DELETE'");
+    expect(source).toContain("credentials: 'same-origin'");
     expect(source).toContain('deleteCourseWithFeed(id)');
+    expect(source.indexOf('if (!response.ok)')).toBeLessThan(source.indexOf('deleteCourseWithFeed(id)'));
+    expect(source).toContain('isAuthenticatedContentOwner(authorId, authenticatedUserId)');
+    expect(source).not.toContain("authorId === profile.id || from === 'profile'");
     expect(source).toContain('ml-10 mt-3');
     expect(source).not.toContain('장소 이름을 입력하면 지도 위치까지 함께 변경돼요.');
   });

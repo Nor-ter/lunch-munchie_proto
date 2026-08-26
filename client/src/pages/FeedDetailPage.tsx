@@ -5,19 +5,24 @@ import { useApp } from '@/contexts/AppContext';
 import UnifiedMunchieCard from '@/components/munchie/UnifiedMunchieCard';
 import BackButton from '@/components/ui/BackButton';
 import { getSavedReturnPath } from '@/lib/savedNavigation';
+import { useProfileFeed } from '@/hooks/useProfileFeed';
 
 export default function FeedDetailPage() {
   const { id } = useParams<{ id: string }>();
   const search = useSearch();
   const [, navigate] = useLocation();
   const { feedPosts, isMyPost, deleteCourseWithFeed, isLoading } = useApp();
-  const post = feedPosts.find(item => item.id === id);
-  const origin = new URLSearchParams(search).get('from');
+  const searchParams = new URLSearchParams(search);
+  const profileAuthorId = searchParams.get('authorId') ?? '';
+  const profileFeed = useProfileFeed(profileAuthorId);
+  const post = feedPosts.find(item => item.id === id)
+    ?? profileFeed.posts.find(item => item.id === id);
+  const origin = searchParams.get('from');
   const fromProfile = origin === 'profile';
   const fromSaved = origin === 'saved';
   const fromNotifications = origin === 'notifications';
-  const profileReturnId = new URLSearchParams(search).get('profileId');
-  const savedView = fromSaved && new URLSearchParams(search).get('savedView') === 'map'
+  const profileReturnId = searchParams.get('profileId');
+  const savedView = fromSaved && searchParams.get('savedView') === 'map'
     ? 'map'
     : undefined;
   const detailOrigin = fromProfile ? 'profile' : fromSaved ? 'saved' : 'feed';
@@ -44,7 +49,7 @@ export default function FeedDetailPage() {
     navigate(backPath, { replace: true });
   };
 
-  if (!post && isLoading) {
+  if (!post && (isLoading || profileFeed.isLoading)) {
     return <main className="flex min-h-dvh items-center justify-center bg-[#FCF4EE] text-sm font-bold text-[#9A8579]">피드를 불러오는 중이에요…</main>;
   }
 
