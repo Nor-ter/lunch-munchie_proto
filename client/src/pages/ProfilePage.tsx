@@ -31,6 +31,7 @@ import LunchmateProgressSheet from '@/components/munchie/LunchmateProgressSheet'
 import LunchmateLevelUpModal from '@/components/munchie/LunchmateLevelUpModal';
 import HeaderIconButton from '@/components/ui/HeaderIconButton';
 import ProfileHeader from '@/components/profile/ProfileHeader';
+import ProfileHeroCard from '@/components/profile/ProfileHeroCard';
 import { useLunchmateFlow } from '@/hooks/useLunchmateFlow';
 import {
   consumeLunchboxFood,
@@ -426,7 +427,7 @@ function ProfilePageContent() {
       />
 
       {/* 핑크 프로필 카드 */}
-      <div className="mx-4 mt-2 rounded-[30px] p-4 pb-5" style={{ background: '#F8DCD2' }}>
+      <ProfileHeroCard mode="owner">
         {/* 다마고치 배너 — 코스맵·피드가 늘수록 진화하는 푸디 캐릭터 */}
         <FoodieBuddy
           score={foodieScore}
@@ -495,7 +496,7 @@ function ProfilePageContent() {
             <p className="mt-0.5 text-[10px] text-[#8A6E60]">좋아요</p>
           </div>
         </div>
-      </div>
+      </ProfileHeroCard>
 
       <FollowerListSheet
         open={followListMode !== null}
@@ -724,7 +725,7 @@ function ProfileGuestPreview() {
         )}
       />
 
-      <div className="mx-4 mt-2 rounded-[30px] p-4 pb-5" style={{ background: '#F8DCD2' }}>
+      <ProfileHeroCard mode="guest">
         <FoodieBuddy
           score={0}
           onCustomize={goToLogin}
@@ -779,7 +780,7 @@ function ProfileGuestPreview() {
             <p className="mt-0.5 text-[10px] text-[#8A6E60]">좋아요</p>
           </button>
         </div>
-      </div>
+      </ProfileHeroCard>
 
       <div className="px-4 mt-8">
         <h2 className="font-black text-[18px] text-[#1A1A1A] mb-3">나의 피드 0</h2>

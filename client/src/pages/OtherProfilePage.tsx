@@ -10,6 +10,7 @@ import { useProfileFeed } from '@/hooks/useProfileFeed';
 import UnifiedMunchieCard from '@/components/munchie/UnifiedMunchieCard';
 import HeaderIconButton from '@/components/ui/HeaderIconButton';
 import ProfileHeader from '@/components/profile/ProfileHeader';
+import ProfileHeroCard from '@/components/profile/ProfileHeroCard';
 import PublicLunchmateRoom from '@/components/profile/PublicLunchmateRoom';
 
 export default function OtherProfilePage() {
@@ -53,30 +54,35 @@ export default function OtherProfilePage() {
         )}
       />
 
-      <PublicLunchmateRoom
-        lunchmate={remoteUser.data?.lunchmate}
-        unavailable={remoteUser.isError}
-      />
+      <ProfileHeroCard mode="visitor">
+        <PublicLunchmateRoom
+          lunchmate={remoteUser.data?.lunchmate}
+          unavailable={remoteUser.isError}
+        />
 
-      <section className="mx-4 mt-3 rounded-[28px] bg-[#F8DCD2] p-6">
-        <div className="flex items-center gap-4">
-          <Avatar className="size-20 border-4 border-white/70">
-            {user.profile_image_url && <AvatarImage src={user.profile_image_url} alt={`${user.username} 프로필`} />}
-            <AvatarFallback className="bg-white/70 text-xl font-black">{avatarFallback}</AvatarFallback>
-          </Avatar>
-          <div className="min-w-0 flex-1">
-            <p className="truncate text-lg font-black text-[#3B2A22]">{user.username}</p>
-            {user.handle && (
-              <p className="mt-1 truncate text-[11px] font-semibold text-[#9A7667]" data-testid="profile-user-handle">
-                @{user.handle}
-              </p>
-            )}
-            {user.location && <p className="mt-1 flex items-center gap-1 text-xs text-[#8A6E60]"><MapPin size={12} />{user.location}</p>}
-            {user.bio && <p className="mt-2 text-sm text-[#6F5549]">{user.bio}</p>}
+        <div className="relative z-20 -mt-9 px-3">
+          <div className="flex min-w-0 items-start gap-4">
+            <Avatar className="size-[78px] shrink-0 border-4 border-[#F8DCD2] bg-white shadow-md">
+              {user.profile_image_url && <AvatarImage src={user.profile_image_url} alt={`${user.username} 프로필`} />}
+              <AvatarFallback className="bg-white/70 text-xl font-black">{avatarFallback}</AvatarFallback>
+            </Avatar>
+            <div className="min-w-0 flex-1 pt-11">
+              <div className="flex min-w-0 items-center gap-2 whitespace-nowrap">
+                <p className="min-w-0 truncate text-[19px] font-black text-[#3B2A22]">{user.username}</p>
+                <span className="shrink-0 rounded-full bg-white/80 px-1.5 py-0.5 text-[9px] font-bold text-[#C7864B]">🏅 배지</span>
+              </div>
+              {user.handle && (
+                <p className="mt-1.5 truncate text-[13px] font-medium text-[#8A6E60]" data-testid="profile-user-handle">
+                  @{user.handle}
+                </p>
+              )}
+              {user.location && <p className="mt-1 flex items-center gap-1 text-xs text-[#8A6E60]"><MapPin size={12} />{user.location}</p>}
+              {user.bio && <p className="mt-2 text-sm text-[#6F5549]">{user.bio}</p>}
+            </div>
+            {remoteUser.data && <div className="shrink-0 pt-11"><FollowButton userId={user.id} /></div>}
           </div>
-          {remoteUser.data && <FollowButton userId={user.id} />}
         </div>
-        <div className="mt-6 grid grid-cols-3">
+        <div className="mt-5 grid grid-cols-3">
           <ProfileStats
             userId={user.id}
             onPressFollowers={() => setListMode('followers')}
@@ -87,7 +93,7 @@ export default function OtherProfilePage() {
             <p className="mt-0.5 text-[10px] text-[#8A6E60]">좋아요</p>
           </div>
         </div>
-      </section>
+      </ProfileHeroCard>
 
       <section className="px-4 pb-4 pt-8">
         <div className="mb-3 flex items-end justify-between">

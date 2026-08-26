@@ -6,6 +6,7 @@ const root = join(import.meta.dirname, '..');
 const myProfileSource = readFileSync(join(import.meta.dirname, 'ProfilePage.tsx'), 'utf8');
 const otherProfileSource = readFileSync(join(import.meta.dirname, 'OtherProfilePage.tsx'), 'utf8');
 const headerSource = readFileSync(join(root, 'components', 'profile', 'ProfileHeader.tsx'), 'utf8');
+const heroSource = readFileSync(join(root, 'components', 'profile', 'ProfileHeroCard.tsx'), 'utf8');
 const roomSource = readFileSync(join(root, 'components', 'profile', 'PublicLunchmateRoom.tsx'), 'utf8');
 const userHookSource = readFileSync(join(root, 'hooks', 'useUser.ts'), 'utf8');
 const profileApiSource = readFileSync(join(root, 'services', 'profileApi.ts'), 'utf8');
@@ -31,6 +32,18 @@ describe('shared profile header and visitor Lunchmate room', () => {
     expect(roomSource).toContain('<LunchmateCharacterRenderer');
     expect(roomSource).not.toContain('onCustomize');
     expect(roomSource).not.toContain('onClick=');
+  });
+
+  it('uses the same integrated hero card composition for owner and visitor profiles', () => {
+    expect(heroSource).toContain('mx-4 mt-2 rounded-[30px] bg-[#F8DCD2] p-4 pb-5');
+    expect(myProfileSource).toContain('<ProfileHeroCard mode="owner">');
+    expect(myProfileSource).toContain('<ProfileHeroCard mode="guest">');
+    expect(otherProfileSource).toContain('<ProfileHeroCard mode="visitor">');
+    expect(otherProfileSource.indexOf('<PublicLunchmateRoom')).toBeLessThan(
+      otherProfileSource.indexOf('data-testid="profile-user-handle"'),
+    );
+    expect(otherProfileSource).toContain('relative z-20 -mt-9 px-3');
+    expect(roomSource).not.toContain('Lunchmate Room</h2>');
   });
 
   it('persists only presentation fields, never inventory or rewards', () => {

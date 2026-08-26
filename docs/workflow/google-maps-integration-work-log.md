@@ -495,3 +495,8 @@
 - Cloudflare API/데이터 계약 및 UI 집중 Vitest, TypeScript, production build를 통과했다. 모바일 Playwright에서 owner/visitor 헤더, 비로그인 공개 룸, 새로고침, private/empty 상태, B→C SPA 전환을 검증했다.
 - 공개 응답과 저장 payload에 inventory·보상·XP가 없고, 타인 화면은 방문자의 로컬 Lunchmate 상태를 참조하지 않으며 편집 핸들러를 노출하지 않는다. 신규 secret/env/Google 키는 없다.
 - 원격 D1 migration·Cloudflare preview 배포는 실행하지 않았다. 실제 검증 URL 제공과 폰 sign-off 전 상태는 `Human Verification` 이전으로 유지한다. 기존 GCP 키 restriction 및 Android SHA-1 제한 TODO는 이번 범위 밖으로 남아 있다.
+
+### 21.4 HUMAN VERIFICATION FOLLOW-UP
+- 첫 로컬 검증에서 visitor Room과 사용자 정보가 서로 다른 카드로 보여 owner 프로필과 시각 구조가 달랐다.
+- owner·guest·visitor가 같은 `ProfileHeroCard` 외곽을 사용하도록 통합하고, visitor도 Room 아래에 아바타와 사용자 정보가 겹치는 owner 구성을 따른다. visitor Room에는 `보기 전용` 상태만 남기고 편집 control은 계속 노출하지 않는다.
+- 로컬 Cloudflare Pages/D1 실제 화면과 390px 모바일 Playwright에서 통합 카드, 중앙 헤더, 공개·private·empty, 새로고침, B→C 전환을 재검증했다.

@@ -68,6 +68,8 @@ test('owner and visitor profiles share a centred mobile header', async ({ page }
   expect(visitorBox).not.toBeNull();
   expect(Math.abs((visitorBox!.x + visitorBox!.width / 2) - 180)).toBeLessThanOrEqual(1);
   await expect(page.getByRole('button', { name: '뒤로 가기' })).toBeVisible();
+  await expect(page.locator('[data-profile-hero-card="visitor"]')).toBeVisible();
+  await expect(page.locator('[data-profile-hero-card="visitor"] [data-testid="public-lunchmate-room"]')).toBeVisible();
 });
 
 test('anonymous visitor sees the viewed user public room without edit controls', async ({ page }) => {
@@ -82,6 +84,7 @@ test('anonymous visitor sees the viewed user public room without edit controls',
 
   await page.goto('/profile/public-user');
   await expect(page.getByTestId('public-lunchmate-room')).toBeVisible();
+  await expect(page.locator('[data-profile-hero-card="visitor"]')).toContainText('Public User');
   await expect(page.getByText('보기 전용')).toBeVisible();
   await expect(page.locator('[data-lunchmate-room-background="profile"]')).toBeVisible();
   await expect(page.locator('[data-lunchmate-artwork="chicken"]')).toBeVisible();
