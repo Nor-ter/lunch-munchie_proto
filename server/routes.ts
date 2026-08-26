@@ -23,6 +23,7 @@ import { normalizeDiet, isHardRestriction, isIngredientAvoidance, restaurantSati
 import type { DietRestriction } from "../shared/const.js";
 import { intentForCategory, intentForHour } from "../shared/intent.js";
 import { normalizeQuickMatchPartySize } from "../shared/quickMatchParty.js";
+import { normalizeLunchieSessionAvatar } from "../shared/lunchieAvatar.js";
 
 const router = Router();
 
@@ -367,7 +368,7 @@ router.post("/sessions/create", async (req: any, res: any) => {
       session_id: sessionId,
       user_id: hostId || "unknown",
       user_name: hostName || "Guest",
-      emoji: emoji || "👤",
+      emoji: normalizeLunchieSessionAvatar(emoji),
       is_ready: false,
       created_at: new Date()
     };
@@ -396,12 +397,18 @@ router.get("/sessions/:token", async (req: any, res: any) => {
     const [session] = await db.select().from(sessions).where(eq(sessions.share_token, token));
     if (!session) return null;
     const members = await db.select().from(sessionMembers).where(eq(sessionMembers.session_id, session.id));
-    return { session, members };
+    return {
+      session,
+      members: members.map(member => ({ ...member, emoji: normalizeLunchieSessionAvatar(member.emoji) })),
+    };
   });
   if (r.ok && r.value) return res.json(r.value);
   // DB 다운이거나, DB엔 없지만 메모리(다운 중 생성된 세션)에 있을 수 있다.
   const mem = memByToken(token);
-  if (mem) return res.json({ session: mem.session, members: mem.members });
+  if (mem) return res.json({
+    session: mem.session,
+    members: mem.members.map(member => ({ ...member, emoji: normalizeLunchieSessionAvatar(member.emoji) })),
+  });
   res.status(404).json({ error: "Session not found" });
 });
 
@@ -435,13 +442,13 @@ router.post("/sessions/:token/join", async (req: any, res: any) => {
         session_id: session.id,
         user_id: userId,
         user_name: userName,
-        emoji: emoji,
+        emoji: normalizeLunchieSessionAvatar(emoji),
         is_ready: false,
         created_at: new Date()
       });
     } else {
       await db.update(sessionMembers)
-        .set({ user_name: userName, emoji: emoji })
+        .set({ user_name: userName, emoji: normalizeLunchieSessionAvatar(emoji) })
         .where(and(eq(sessionMembers.user_id, userId), eq(sessionMembers.session_id, session.id)));
     }
     return { found: true as const, full: false as const };
@@ -466,7 +473,7 @@ router.post("/sessions/:token/join", async (req: any, res: any) => {
         return res.status(403).json({ error: "member_credential_required" });
       }
       existing.user_name = userName;
-      existing.emoji = emoji;
+      existing.emoji = normalizeLunchieSessionAvatar(emoji);
     } else {
       const cap = (mem.session as { group_size?: number }).group_size ?? 99;
       if (mem.members.length >= cap) {
@@ -477,7 +484,7 @@ router.post("/sessions/:token/join", async (req: any, res: any) => {
         session_id: mem.session.id,
         user_id: userId,
         user_name: userName,
-        emoji: emoji,
+        emoji: normalizeLunchieSessionAvatar(emoji),
         is_ready: false,
         created_at: new Date()
       });
@@ -689,7 +696,7 @@ function buildResultsPayload(
     return {
       id: m.user_id,
       name: m.user_name,
-      emoji: m.emoji,
+      emoji: normalizeLunchieSessionAvatar(m.emoji),
       completed: inFinalStage ? finalVoters.has(m.user_id) : prelimDone,
       swipeCount: inFinalStage ? (finalVoters.has(m.user_id) ? 1 : 0) : Math.min(cnt, memberTarget),
       targetCount: inFinalStage ? 1 : memberTarget,

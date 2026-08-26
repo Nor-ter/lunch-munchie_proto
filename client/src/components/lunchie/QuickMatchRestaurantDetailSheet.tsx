@@ -87,6 +87,7 @@ export default function QuickMatchRestaurantDetailSheet({
                 <div className="min-w-0">
                   <p className="text-[10px] font-black uppercase tracking-[0.16em] text-[#E67E78]">Lunchie Pick</p>
                   <h2 className="mt-0.5 truncate text-[21px] font-black text-[#342620]">{detail.name}</h2>
+                  <p className="mt-1 text-[10px] font-semibold text-[#9A8176]">아래로 내려 닫거나 뒤로가기를 사용할 수 있어요</p>
                 </div>
                 <button
                   type="button"

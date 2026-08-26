@@ -15,11 +15,13 @@ export default function RestaurantDetailSheet({
   restaurantId,
   onClose,
   fallbackPlace,
+  fallbackRestaurant,
   presentation = 'fullscreen',
 }: {
   restaurantId: string;
   onClose: () => void;
   fallbackPlace?: CoursePlace;
+  fallbackRestaurant?: Restaurant;
   presentation?: 'fullscreen' | 'modal';
 }) {
   const { getRestaurantById, registerRestaurants } = useApp();
@@ -29,7 +31,7 @@ export default function RestaurantDetailSheet({
     !fallbackPlace || linkedRestaurant.name.trim().toLocaleLowerCase() === fallbackPlace.name.trim().toLocaleLowerCase()
   ) ? linkedRestaurant : undefined;
   const fallbackPhoto = fallbackPlace?.imageUrl ?? '';
-  const restaurant: Restaurant | undefined = matchingRestaurant ?? (fallbackPlace ? {
+  const restaurant: Restaurant | undefined = matchingRestaurant ?? fallbackRestaurant ?? (fallbackPlace ? {
     id: fallbackPlace.id,
     name: fallbackPlace.name,
     category: fallbackPlace.category,
@@ -67,6 +69,8 @@ export default function RestaurantDetailSheet({
     ...(restaurant.menuItems ?? []).map(item => item.image).filter((image): image is string => !!image),
     ...(restaurant.photos ?? []),
   ])).filter(Boolean).slice(0, 4);
+  const tags = Array.isArray(restaurant.tags) ? restaurant.tags : [];
+  const priceRange = Math.min(4, Math.max(1, Number(restaurant.priceRange) || 1));
 
   return (
     <motion.div
@@ -114,7 +118,7 @@ export default function RestaurantDetailSheet({
             {restaurant.category}
           </span>
           <span className="text-[12px] font-semibold text-[#4A4A4A] bg-[#F5F5F5] rounded-full px-2.5 py-1">
-            {'₩'.repeat(restaurant.priceRange)}
+            {'₩'.repeat(priceRange)}
           </span>
           <span className="text-[12px] font-semibold text-[#4A4A4A] bg-[#F5F5F5] rounded-full px-2.5 py-1">
             📍 {restaurant.distance}
@@ -123,18 +127,18 @@ export default function RestaurantDetailSheet({
 
         <div className="space-y-1.5">
           <p className="flex items-start gap-1.5 text-[13px] text-[#4A4A4A]">
-            <MapPin size={13} className="mt-0.5 shrink-0 text-[#9B9B9B]" /> {restaurant.address}
+            <MapPin size={13} className="mt-0.5 shrink-0 text-[#9B9B9B]" /> {restaurant.address || '주소 정보 없음'}
           </p>
           <p className="flex items-center gap-1.5 text-[13px] text-[#4A4A4A]">
-            <Clock size={13} className="shrink-0 text-[#9B9B9B]" /> {restaurant.openHours}
+            <Clock size={13} className="shrink-0 text-[#9B9B9B]" /> {restaurant.openHours || '영업시간 정보 없음'}
           </p>
         </div>
 
         <p className="text-[13px] leading-relaxed text-[#4A4A4A]">{restaurant.description}</p>
 
-        {(restaurant.tags ?? []).length > 0 && (
+        {tags.length > 0 && (
           <div className="flex gap-1.5 flex-wrap">
-            {(restaurant.tags ?? []).map(tag => (
+            {tags.map(tag => (
               <span key={tag} className="tag tag-hash">#{tag}</span>
             ))}
           </div>

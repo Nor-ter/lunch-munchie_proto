@@ -7,7 +7,7 @@
 import { useState, useCallback, useEffect, useRef } from 'react';
 import { motion, useMotionValue, useTransform, useMotionTemplate, AnimatePresence, type MotionValue } from 'framer-motion';
 import { useLocation } from 'wouter';
-import { ArrowLeft, Heart, X, Star, MapPin, Clock, Phone, Navigation, Share2, Download, Link2, Home, Bookmark, RotateCcw, Loader2, RefreshCw, SlidersHorizontal } from 'lucide-react';
+import { ArrowLeft, Heart, X, Star, MapPin, Clock, Phone, Navigation, Share2, Download, Link2, Home, Bookmark, RotateCcw, Loader2, RefreshCw, SlidersHorizontal, Info } from 'lucide-react';
 import { toast } from 'sonner';
 import { useApp, type Restaurant, type MenuItem } from '@/contexts/AppContext';
 import { useCourseShare } from '@/hooks/useCourseShare';
@@ -266,6 +266,7 @@ function SwipeCard({
   progress,
   total,
   isLocked,
+  onOpenRestaurantDetails,
 }: {
   restaurant: any;
   onAction: (a: SwipeAction) => void;
@@ -274,13 +275,13 @@ function SwipeCard({
   progress: number;
   total: number;
   isLocked: boolean;
+  onOpenRestaurantDetails: (restaurant: Restaurant) => void;
 }) {
   const [isRevealed, setIsRevealed] = useState(false);
   // 큐브 회전 단계(단조). photoIndex는 foodPhotos 길이로 파생 — 도트/사진 순번 표시에 사용.
   const [photoStep, setPhotoStep] = useState(0);
   const photoRotationLock = useRef(false);
   const [isPhotoRotating, setIsPhotoRotating] = useState(false);
-  const [isRestaurantDetailOpen, setIsRestaurantDetailOpen] = useState(false);
   const [detailIndex, setDetailIndex] = useState<number | null>(null);
   const x = useMotionValue(0);
   const rotate = useTransform(x, [-220, 220], [-16, 16]);
@@ -339,13 +340,13 @@ function SwipeCard({
   useEffect(() => {
     completeMenuPhotoRotation(photoRotationLock);
     setIsPhotoRotating(false);
-    setIsRestaurantDetailOpen(false);
   }, [restaurant.id, candidatePhotoKey]);
   const photoLabel = foodPhotos.length === 0
     ? '등록된 음식 사진이 없어요'
-    : foodPhotos.length === 1
-      ? '대표 음식 사진'
-      : `음식 사진 · ${photoIndex + 1}/${foodPhotos.length}`;
+    : `메뉴 사진 ${photoIndex + 1} / ${foodPhotos.length}`;
+  const photoProgressAriaLabel = foodPhotos.length > 0
+    ? `메뉴 사진 전체 ${foodPhotos.length}장 중 ${photoIndex + 1}번째`
+    : undefined;
 
   const handleDragEnd = useCallback((_: unknown, info: { offset: { x: number } }) => {
     if (isLocked) return;
@@ -380,7 +381,7 @@ function SwipeCard({
         const target = event.target;
         const openedDetail = target instanceof Element
           && Boolean(target.closest('[data-ui="quick-match-detail-trigger"]'));
-        if (!openedDetail && !isRestaurantDetailOpen && !isRevealed) {
+        if (!openedDetail && !isRevealed) {
           setPhotoStep(0);
           setIsRevealed(true);
         }
@@ -416,19 +417,15 @@ function SwipeCard({
         />
         <div className="absolute inset-0 bg-gradient-to-t from-black/75 via-black/10 to-transparent" />
 
-        {/* Progress */}
-        <div className="absolute top-4 left-5 right-5 flex items-center justify-between">
-          <div className="flex gap-1">
-            {Array.from({ length: total }).map((_, i) => (
-              <div key={i} className="h-1 rounded-full transition-all"
-                style={{
-                  width: i < progress ? 22 : 14,
-                  background: i < progress ? 'white' : 'rgba(255,255,255,0.35)',
-                }} />
-            ))}
-          </div>
-          <span className="text-white/80 text-[12px] font-bold bg-black/20 px-2 py-0.5 rounded-full">
-            {progress}/{total}
+        {/* Restaurant-card progress stays independent from the menu photo index. */}
+        <div className="pointer-events-none absolute left-1/2 top-4 z-10 -translate-x-1/2">
+          <span
+            role="status"
+            aria-live="polite"
+            aria-label={`전체 ${total}개 중 ${progress}번째 음식점`}
+            className="inline-flex min-h-7 min-w-[64px] items-center justify-center rounded-md bg-black/45 px-3 py-1 text-[13px] font-black tabular-nums text-white shadow-sm backdrop-blur-sm"
+          >
+            {progress} / {total}
           </span>
         </div>
 
@@ -458,15 +455,12 @@ function SwipeCard({
             onPointerDown={(event) => event.stopPropagation()}
             onClick={(event) => {
               event.stopPropagation();
-              setIsRestaurantDetailOpen(true);
+              onOpenRestaurantDetails(restaurant);
             }}
-            className="relative mt-1 block h-5 w-full overflow-hidden text-left"
+            className="mt-2 flex min-h-9 w-full items-center justify-between gap-2 rounded-xl bg-black/25 px-3 py-2 text-left outline-none transition-colors active:bg-black/40 focus-visible:ring-2 focus-visible:ring-white/80"
           >
-            <span className="block truncate pr-10 text-[12px] font-semibold text-white/75">{detailSummary}</span>
-            <span
-              aria-hidden="true"
-              className="pointer-events-none absolute inset-y-0 right-0 w-14 bg-gradient-to-r from-transparent via-[#241914]/55 to-[#241914]/90"
-            />
+            <span className="min-w-0 flex-1 truncate text-[12px] font-semibold text-white/75">{detailSummary}</span>
+            <span className="shrink-0 text-[11px] font-black text-white">상세보기 ›</span>
           </button>
           <div className="flex items-center gap-3 mt-2">
             <div className="flex items-center gap-1">
@@ -589,6 +583,19 @@ function SwipeCard({
               </button>
             </div>
 
+            <button
+              type="button"
+              onClick={(event) => {
+                event.stopPropagation();
+                onOpenRestaurantDetails(restaurant);
+              }}
+              aria-label={`${restaurant.name} 식당 상세보기`}
+              className="mx-5 mb-2 flex min-h-10 flex-shrink-0 items-center justify-center gap-2 rounded-xl border border-white/15 bg-white/10 px-4 text-[13px] font-bold text-white outline-none transition-colors active:bg-white/20 focus-visible:ring-2 focus-visible:ring-white/80"
+            >
+              <Info size={16} aria-hidden="true" />
+              식당 상세보기
+            </button>
+
             {restaurant.menuItems && restaurant.menuItems.length > 0 ? (
               /* 실제 메뉴리스트 — 소스 카테고리 구조로 섹션 나눔, 탭하면 상세 화면 */
               <div className="flex-1 px-5 pb-4 flex flex-col min-h-0">
@@ -676,8 +683,9 @@ function SwipeCard({
                   )}
                   <div
                     data-ui="menu-photo-progress"
-                    role="status"
-                    aria-label={`메뉴 사진 ${photoIndex + 1}/${foodPhotos.length}`}
+                    data-photo-index={photoIndex + 1}
+                    data-photo-count={foodPhotos.length}
+                    aria-hidden="true"
                     className="absolute top-3 left-1/2 -translate-x-1/2 flex gap-1.5 pointer-events-none"
                   >
                     {foodPhotos.map((_: string, j: number) => (
@@ -687,7 +695,14 @@ function SwipeCard({
                   </div>
                 </div>
                 <div className="pt-3 flex-shrink-0">
-                  <p className="font-bold text-[16px] text-white">{photoLabel}</p>
+                  <p
+                    role={photoProgressAriaLabel ? 'status' : undefined}
+                    aria-live={photoProgressAriaLabel ? 'polite' : undefined}
+                    aria-label={photoProgressAriaLabel}
+                    className="font-bold text-[16px] text-white"
+                  >
+                    {photoLabel}
+                  </p>
                   <p className="text-[12px] text-white/50 mt-0.5">{restaurant.description}</p>
                 </div>
               </div>
@@ -714,11 +729,6 @@ function SwipeCard({
         restaurantCategory={restaurant.category}
         onClose={() => setDetailIndex(null)}
         onIndexChange={setDetailIndex}
-      />
-      <QuickMatchRestaurantDetailSheet
-        open={isRestaurantDetailOpen}
-        restaurant={restaurant}
-        onClose={() => setIsRestaurantDetailOpen(false)}
       />
     </motion.div>
   );
@@ -1836,6 +1846,7 @@ function QuickMatchExperience() {
   const [rerollPrompt, setRerollPrompt] = useState<'none' | 'lastChance' | 'exhausted'>('none');
   const [showIntro, setShowIntro] = useState(true);
   const [isSubmittingSwipe, setIsSubmittingSwipe] = useState(false);
+  const [detailRestaurant, setDetailRestaurant] = useState<Restaurant | null>(null);
   const submittingSwipeRef = useRef(false);
   const [remainingMs, setRemainingMs] = useState(() => {
     if (!currentSession?.deadline) return 0;
@@ -1872,6 +1883,36 @@ function QuickMatchExperience() {
   const visibleCards = targetRestaurants.slice(currentIndex, currentIndex + 3);
   const progress = Math.min(currentIndex + 1, total);
   const progressSignalRef = useRef(new Set<string>());
+
+  useEffect(() => {
+    const syncRestaurantDetailFromHistory = () => {
+      const restaurantId = window.history.state?.lunchieQuickMatchDetail;
+      setDetailRestaurant(
+        typeof restaurantId === 'string'
+          ? targetRestaurants.find(restaurant => restaurant.id === restaurantId) ?? null
+          : null,
+      );
+    };
+    window.addEventListener('popstate', syncRestaurantDetailFromHistory);
+    return () => window.removeEventListener('popstate', syncRestaurantDetailFromHistory);
+  }, [targetRestaurants]);
+
+  const openRestaurantDetails = useCallback((restaurant: Restaurant) => {
+    window.history.pushState(
+      { ...window.history.state, lunchieQuickMatchDetail: restaurant.id },
+      '',
+      window.location.href,
+    );
+    setDetailRestaurant(restaurant);
+  }, []);
+
+  const closeRestaurantDetails = useCallback(() => {
+    if (window.history.state?.lunchieQuickMatchDetail) {
+      window.history.back();
+      return;
+    }
+    setDetailRestaurant(null);
+  }, []);
 
   // The server cannot infer a client-specific deck after recommendation
   // filtering. Announce the exact target once per generation so each member's
@@ -2150,7 +2191,7 @@ function QuickMatchExperience() {
         </button>
         <div className="text-center">
           <p className="font-black text-[16px] text-[#1A1A1A]">예선전 🍽️</p>
-          <p className="text-[11px] text-[#9B9B9B]">마음에 드는 음식을 골라보세요 · {progress}/{total}</p>
+          <p className="text-[11px] text-[#9B9B9B]">마음에 드는 음식을 골라보세요</p>
         </div>
         {currentSession?.deadline ? (
           <motion.div
@@ -2182,87 +2223,47 @@ function QuickMatchExperience() {
       <AnimatePresence>
         {showIntro && (
           <motion.div
-            className="absolute inset-0 bg-[#1A1A1A] z-50 flex flex-col items-center justify-center"
+            role="status"
+            aria-live="polite"
+            aria-label="Quick Match 음식점 후보를 준비하고 있어요"
+            className="absolute inset-0 z-50 flex flex-col items-center justify-center bg-[#1A1A1A] px-6 text-center"
             exit={{ opacity: 0, scale: 1.05 }}
             transition={{ duration: 0.3 }}
           >
-            <div className="flex flex-col items-center">
-              <motion.div
-                className="mb-5 flex items-center justify-center"
-                animate={{ y: [0, -10, 0], rotate: [0, -1.2, 1.2, 0] }}
-                transition={{ duration: 2.2, repeat: Infinity, ease: 'easeInOut' }}
-              >
-                <LunchmateCharacterRenderer
-                  flowState="idle"
-                  loadout={lunchmateLoadout}
-                  size={128}
-                  renderSize="compact"
-                  animated
-                  alt="빠른 매칭을 시작하는 나의 런치킨"
-                />
-              </motion.div>
-              <p className="font-black text-white text-[22px]">예선전 시작! 🍽️</p>
-            </div>
-            <p className="text-white/60 text-[14px] mt-2">카드를 좌우로 스와이프 해보세요</p>
-            <div className="mt-5 w-56">
-              <div className="mb-2 flex items-center justify-between text-[11px] text-white/55">
-                <span>추천 카드를 준비하고 있어요</span>
-                <span>약 3초</span>
-              </div>
-              <div className="h-2 overflow-hidden rounded-full bg-white/15">
-                <motion.div
-                  className="h-full origin-left rounded-full bg-[#EB5053]"
-                  initial={{ scaleX: 0 }}
-                  animate={{ scaleX: 1 }}
-                  transition={{ duration: 2.8, ease: 'linear' }}
-                />
-              </div>
+            <motion.div
+              className="flex items-center justify-center"
+              animate={{ y: [0, -8, 0] }}
+              transition={{ duration: 2.2, repeat: Infinity, ease: 'easeInOut' }}
+            >
+              <LunchmateCharacterRenderer
+                flowState="idle"
+                artwork="chicken"
+                chickenAssetKeyOverride="idle"
+                chickenFaceSystem
+                loadout={lunchmateLoadout}
+                size={148}
+                renderSize="compact"
+                animated={false}
+                alt="Quick Match를 준비하는 나의 런치킨"
+              />
+            </motion.div>
+
+            <div className="mt-6 max-w-[280px]">
+              <p className="text-[22px] font-black text-white">음식점 카드를 준비하고 있어요</p>
+              <p className="mt-2 text-[14px] font-semibold leading-relaxed text-white/60">
+                내 취향에 맞는 후보를 고르고 있어요
+              </p>
             </div>
 
-            {/* Swipe gesture demo card */}
-            <div className="relative w-36 h-48 mt-6 flex items-center justify-center">
-              <motion.div
-                className="absolute w-32 h-44 rounded-2xl shadow-2xl flex items-center justify-center text-6xl overflow-hidden"
-                style={{ background: '#FFF1E0' }}
-                animate={{
-                  x: [0, -90, -90, 0, 90, 90, 0],
-                  rotate: [0, -16, -16, 0, 16, 16, 0],
-                }}
-                transition={{ duration: 2.6, times: [0, 0.2, 0.32, 0.5, 0.7, 0.82, 1], repeat: Infinity, ease: 'easeInOut' }}
-              >
-                🍱
-                <motion.div
-                  className="absolute top-4 right-4 border-[3px] rounded-lg px-2 py-0.5 font-black text-[13px]"
-                  style={{ borderColor: '#EB5053', color: '#EB5053', transform: 'rotate(15deg)' }}
-                  animate={{ opacity: [0, 0, 1, 1, 0, 0] }}
-                  transition={{ duration: 2.6, times: [0, 0.15, 0.18, 0.34, 0.37, 1], repeat: Infinity, ease: 'easeInOut' }}
-                >
-                  패스
-                </motion.div>
-                <motion.div
-                  className="absolute top-4 left-4 border-[3px] rounded-lg px-2 py-0.5 font-black text-[13px]"
-                  style={{ borderColor: '#3CBA44', color: '#3CBA44', transform: 'rotate(-15deg)' }}
-                  animate={{ opacity: [0, 0, 1, 1, 0, 0] }}
-                  transition={{ duration: 2.6, times: [0, 0.65, 0.68, 0.84, 0.87, 1], repeat: Infinity, ease: 'easeInOut' }}
-                >
-                  좋아요
-                </motion.div>
-              </motion.div>
-            </div>
-
-            <div className="flex gap-8 mt-8">
-              <div className="flex flex-col items-center gap-2">
-                <div className="w-14 h-14 rounded-full bg-white flex items-center justify-center">
-                  <X size={24} color="#EB5053" strokeWidth={2.5} />
-                </div>
-                <span className="text-white/70 text-[12px]">← 싫어요</span>
-              </div>
-              <div className="flex flex-col items-center gap-2">
-                <div className="w-14 h-14 rounded-full flex items-center justify-center" style={{ background: '#EB5053' }}>
-                  <Heart size={24} color="white" fill="white" />
-                </div>
-                <span className="text-white/70 text-[12px]">좋아요 →</span>
-              </div>
+            <div aria-hidden="true" className="mt-6 flex h-3 items-center justify-center gap-2">
+              {[0, 1, 2].map((dot) => (
+                <motion.span
+                  key={dot}
+                  className="size-2 rounded-full bg-[#EB5053]"
+                  animate={{ opacity: [0.35, 1, 0.35], scale: [0.85, 1, 0.85] }}
+                  transition={{ duration: 1.2, repeat: Infinity, delay: dot * 0.18, ease: 'easeInOut' }}
+                />
+              ))}
             </div>
           </motion.div>
         )}
@@ -2281,6 +2282,7 @@ function QuickMatchExperience() {
                 progress={progress}
                 total={total}
                 isLocked={isSubmittingSwipe}
+                onOpenRestaurantDetails={openRestaurantDetails}
               />
             ))}
           </AnimatePresence>
@@ -2309,6 +2311,16 @@ function QuickMatchExperience() {
           <Heart size={30} color="white" fill="white" />
         </motion.button>
       </div>
+
+      <AnimatePresence>
+        {detailRestaurant && (
+          <QuickMatchRestaurantDetailSheet
+            open
+            restaurant={detailRestaurant}
+            onClose={closeRestaurantDetails}
+          />
+        )}
+      </AnimatePresence>
     </div>
   );
 }

@@ -1,4 +1,5 @@
 import type { GroupSession, SessionMember } from '@/contexts/AppContext';
+import { normalizeLunchieSessionAvatar } from '@shared/lunchieAvatar';
 
 type LobbySession = Pick<GroupSession, 'filters' | 'hostId' | 'members' | 'status'>;
 
@@ -47,7 +48,7 @@ function memberPresentation(
   return {
     id: member.id,
     name: member.name,
-    emoji: member.emoji,
+    emoji: normalizeLunchieSessionAvatar(member.emoji),
     ready: Boolean(member.ready),
     isHost: member.id === hostId,
     isCurrentUser: member.id === currentUserId,

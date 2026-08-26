@@ -144,9 +144,6 @@ export default function SessionLobbyPage() {
   if (!presentation.isHost) {
     return (
       <ScreenContainer className="flex min-h-dvh flex-col overflow-hidden bg-[#FCF4EE] px-5">
-        <header className="flex items-center justify-center pt-[max(34px,env(safe-area-inset-top))]">
-          <LunchieLogo size={54} />
-        </header>
         <main className="flex flex-1 flex-col items-center justify-center pb-16 text-center">
           <motion.div
             className="relative mb-7 flex size-32 items-center justify-center rounded-[38px] bg-white shadow-[0_18px_50px_rgba(221,92,86,0.15)]"

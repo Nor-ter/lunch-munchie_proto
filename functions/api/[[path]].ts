@@ -13,6 +13,7 @@ import { intentForMenuSection, menuSectionIntents } from "../../shared/menuTaxon
 import { isValidCoordinate, isWithinRadius } from "../../shared/geo";
 import { normalizeQuickMatchPartySize } from "../../shared/quickMatchParty";
 import { normalizeRestaurantPayload } from "../../shared/restaurantContract";
+import { normalizeLunchieSessionAvatar } from "../../shared/lunchieAvatar";
 import { buildSlate, scoreCandidateBreakdown } from "../../server/engine/scorer";
 import type { Candidate, RecContext, SlateType } from "../../shared/engine";
 import { isAdminEmail } from "./adminAccess";
@@ -2422,7 +2423,7 @@ export function sessionResults(
     memberCompletion: members.map((member) => ({
       id: member.user_id,
       name: member.user_name,
-      emoji: member.emoji,
+      emoji: normalizeLunchieSessionAvatar(member.emoji),
       completed: finalStage
         ? finalVoters.has(member.user_id)
         : prelimComplete(member.user_id),
@@ -2458,7 +2459,7 @@ app.post("/api/sessions/create", async (c) => {
   const hostId =
     nullableText(body.hostId, 256) ?? `guest:${crypto.randomUUID()}`;
   const hostName = nullableText(body.hostName, 80) ?? "호스트";
-  const emoji = nullableText(body.emoji, 16) ?? "👤";
+  const emoji = normalizeLunchieSessionAvatar(nullableText(body.emoji, 16));
   const groupSize =
     typeof body.groupSize === "number" && Number.isFinite(body.groupSize)
       ? normalizeQuickMatchPartySize(Math.floor(body.groupSize))
@@ -2597,7 +2598,10 @@ app.get("/api/sessions/:token", async (c) => {
     : null;
   return c.json({
     session: sessionPayload(session),
-    members,
+    members: members.map((member: any) => ({
+      ...member,
+      emoji: normalizeLunchieSessionAvatar(member.emoji),
+    })),
     slate: slate ? {
       id: slate.id,
       policy_version: slate.policy_version,
@@ -2611,7 +2615,7 @@ app.post("/api/sessions/:token/join", async (c) => {
   const body = await c.req.json<Record<string, unknown>>().catch(() => ({}));
   const userId = nullableText(body.userId, 256);
   const userName = nullableText(body.userName, 80);
-  const emoji = nullableText(body.emoji, 16) ?? "👤";
+  const emoji = normalizeLunchieSessionAvatar(nullableText(body.emoji, 16));
   const preferences = Array.isArray(body.preferences)
     ? sessionPreferences(JSON.stringify(body.preferences)).slice(0, 20)
     : [];

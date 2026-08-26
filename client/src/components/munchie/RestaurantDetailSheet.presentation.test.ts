@@ -21,4 +21,11 @@ describe('RestaurantDetailSheet presentation', () => {
     expect(source).not.toContain('<img src={restaurant.image}');
     expect(source).toContain('등록된 메뉴 사진이 없어요.');
   });
+
+  it('accepts the active Quick Match restaurant as a safe detail fallback', () => {
+    expect(source).toContain('fallbackRestaurant?: Restaurant');
+    expect(source).toContain('matchingRestaurant ?? fallbackRestaurant ??');
+    expect(source).toContain("restaurant.address || '주소 정보 없음'");
+    expect(source).toContain("restaurant.openHours || '영업시간 정보 없음'");
+  });
 });
