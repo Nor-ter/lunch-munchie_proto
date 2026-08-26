@@ -484,14 +484,19 @@
 
 ### 21.1 TRIAGE / RCA
 - 증상 태그: `data-state`. 실제 폰의 372×812 운영 화면에서 가운데 `FOODIE` 카드를 왼쪽으로 스와이프하면 카드가 오른쪽 뒤 슬롯으로 이동하는 재현 증거를 확인했다.
-- 조사 전 외부 상태에서 Cloudflare CDN/Cache 일부 요청 지연과 Supabase API Gateway 성능 저하가 표시됐지만, 네트워크와 무관한 로컬 카드 인덱스 전환에서 같은 원인이 확인됐다.
+- 조사 시 Supabase API Gateway 성능 저하와 Cloudflare CDN/Cache 지연이 표시됐고 Google Cloud에는 광범위한 중대 장애가 없었다. 이번 증상은 네트워크 요청 전 로컬 카드 인덱스 계산에서 발생하므로 외부 장애와 무관하다.
 - `QuickMatchDeck`은 오른쪽 뒤 카드를 `(activeIndex + 1)`, 왼쪽 뒤 카드를 `(activeIndex + 2)`로 배치하면서 왼쪽 드래그에 `+2`, 오른쪽 드래그에 `+1`을 적용해 손을 놓은 카드의 이동 방향을 뒤집고 있었다.
 
 ### 21.2 FIX / VERIFY
 - 왼쪽 스와이프는 다음 오른쪽 카드를 선택하고, 오른쪽 스와이프는 이전 왼쪽 카드를 선택하도록 전환 계산을 공용 함수로 분리했다. 기존 45px 임계값, 측면 카드 탭, 선택 intent, Quick Match 진입, `touchAction: pan-y`는 유지했다.
-- 방향·순환·임계값 단위 테스트 9개, Home 관련 집중 테스트 17개, 전체 Vitest 85 files / 577 tests, TypeScript, production build, `git diff --check`를 통과했다.
-- Playwright 372×812에서 Chromium 및 WebKit 모두 좌우 드래그 후 슬롯 위치, 측면 카드 탭, `intent=cafe` 진입, 세로 pan 허용을 통과했다. 실제 Android Chrome/iPhone Safari 판정은 배포된 검증 URL의 Human Verification에 남긴다.
+- 최신 `origin/main` 병합 후 전체 Vitest 90 files / 596 tests, TypeScript, production build, Cloudflare policy, `git diff --check`를 통과했다.
+- Playwright 372×812 Chromium은 첫 실행에서 Vite cold-start 중 30초 `page.goto` timeout이 발생했지만 60초 timeout 재실행에서 1/1 PASS했다. 기존 WebKit PASS와 함께 좌우 드래그 후 슬롯 위치, 측면 카드 탭, `intent=cafe` 진입, 세로 pan 허용을 검증했으며, 실제 Android Chrome/iPhone Safari 판정은 Human Verification에 남긴다.
 
-### 21.3 GATE
-- **코드 범위 PASS (메인 에이전트 1회 검토)**: UI와 테스트만 변경했고 신규 env/secret/Google 키/API/DB schema/외부 요청이 없다. 서버용 `GOOGLE_MAPS_SERVER_API_KEY`는 Functions 경로에만, 웹 지도 SDK 키는 `VITE_GOOGLE_MAPS_API_KEY`에만 남아 있으며 `.env`, `.dev.vars`, `env.enc` ignore 상태를 확인했다.
-- 기존 미완료 보안 TODO인 GCP 콘솔 키 restriction 전수 확인과 Android 패키지명+SHA-1 Application restriction은 이번 카드 동작 수정과 무관하며 그대로 남아 있다.
+### 21.3 DELIVERY
+- 운영을 덮어쓰지 않는 Cloudflare Pages preview 직접 배포를 시도했지만 실행 환경에 `CLOUDFLARE_API_TOKEN`이 없어 실패했다. 기존 동일 수정 원격 커밋에도 확인 가능한 GitHub deployment/status 기록이 없었다.
+- 최신 `origin/main`을 기존 `sk_branch`에 merge하고 `main` 작업트리의 staged·unstaged 변경을 stash에서 복원해 원본과 일치함을 확인했다. 변경은 `sk_branch`에만 commit·push하고 `sk_branch` → `main` PR로 전달하며, 배포된 검증 URL 확인 전에는 상태를 `Human Verification`으로 넘기지 않는다.
+
+### 21.4 GATE
+- **이번 변경 범위 PASS**: Quick Match diff는 UI 인덱스 계산과 테스트만 변경하며 env·키·네트워크 경로를 건드리지 않는다. 클라이언트에서 서버 키 참조나 실제 Google 키 형태 리터럴이 새로 발견되지 않았고 `.env`, `.env.local`, `mobile/.env`, `.dev.vars`, `env.enc`는 현재 ignore 및 미추적 상태다.
+- **저장소 전체 종료 게이트 BLOCK**: `env.enc`가 과거 Git 이력에 존재하며, GCP 콘솔에서 현재 전체 키 목록과 실제 API/Application restriction을 전수 확인하지 못했다.
+- 미완료 보안 TODO: 모바일 키 iOS bundle ID 및 Android 패키지명+SHA-1 restriction, 웹 키 HTTP referrer restriction, 서버 키 Places API (New)+Directions 제한을 운영 콘솔에서 재확인하고 `env.enc` 역사 노출의 민감성 평가 및 필요 시 비밀값 교체·Git 이력 정리 승인을 받는다.
