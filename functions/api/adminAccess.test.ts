@@ -10,6 +10,10 @@ describe('administrator allowlist', () => {
     expect(isAdminEmail('member@example.com', configured)).toBe(false);
     expect(isAdminEmail(undefined, configured)).toBe(false);
   });
+
+  it('recognizes the configured Lunchie Munchie administrator email case-insensitively', () => {
+    expect(isAdminEmail('PJH5635@gmail.com', 'pjh5635@gmail.com')).toBe(true);
+  });
 });
 
 describe('admin metrics boundary', () => {

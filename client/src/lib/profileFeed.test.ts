@@ -3,6 +3,7 @@ import type { FeedPost } from "@/contexts/AppContext";
 import {
   getFeedAuthorFallback,
   getFeedPostsByAuthor,
+  isAuthenticatedContentOwner,
   resolveFeedAuthorId,
 } from "./profileFeed";
 
@@ -25,6 +26,12 @@ function post(overrides: Partial<FeedPost> = {}): FeedPost {
 }
 
 describe("profile feed data boundary", () => {
+  it("grants ownership only to the authenticated subject, never a stale local profile", () => {
+    expect(isAuthenticatedContentOwner("google-user-a", "google-user-a")).toBe(true);
+    expect(isAuthenticatedContentOwner("google-user-a", "google-user-b")).toBe(false);
+    expect(isAuthenticatedContentOwner("google-user-a", null)).toBe(false);
+  });
+
   it("uses the DB-ready authorId when present", () => {
     expect(resolveFeedAuthorId(post({ authorId: "user-123" }))).toBe(
       "user-123",
@@ -93,4 +100,3 @@ describe("profile feed data boundary", () => {
     });
   });
 });
-

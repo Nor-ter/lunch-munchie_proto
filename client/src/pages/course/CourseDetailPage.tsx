@@ -25,7 +25,7 @@ import { MAX_COURSE_STOPS, type CourseStop, type Restaurant, useApp } from '@/co
 import { CoursePlace } from '@/types/course';
 import { getCourseSequenceColor } from '@/constants/courseTheme';
 import { getCourseMapPoints, getCoursePlacesFromFeedStops, getCoursePlacesFromStops } from '@/lib/courseMapSync';
-import { resolveFeedAuthorId } from '@/lib/profileFeed';
+import { isAuthenticatedContentOwner, resolveFeedAuthorId } from '@/lib/profileFeed';
 import { AuthorAvatar } from '@/components/ui/AuthorAvatar';
 import RestaurantDetailSheet from '@/components/munchie/RestaurantDetailSheet';
 import { usePlacesSearch } from '@/hooks/usePlacesSearch';
@@ -35,6 +35,7 @@ import { toast } from 'sonner';
 import CourseSequenceMarker from '@/components/course/CourseSequenceMarker';
 import { acquireDocumentScrollLock } from '@/lib/documentScrollLock';
 import { FollowButton } from '@/components/follow/FollowButton';
+import { useAuthStatus } from '@/hooks/useAuthStatus';
 import { getLunchmateLevelIcon } from '@/constants/lunchmateLevelIcons';
 import { getLunchmateProgressSnapshot } from '@/utils/lunchmateProgress';
 import { lunchmateTotalXpFromProfile } from '@/utils/lunchmateProfile';
@@ -285,7 +286,7 @@ export default function CourseDetailPage() {
   const [, navigate] = useLocation();
   const from = useFrom();
   const search = useSearch();
-  // 프로필 진입도 내 코스맵이므로 편집 가능 모드
+  // 저장/프로필은 진입 출처일 뿐 소유권 근거가 아니다.
   const fromSaved = from === 'saved' || from === 'profile';
   const isSavedOrigin = shouldShowSavedCopyEdit(from);
   const {
@@ -307,6 +308,8 @@ export default function CourseDetailPage() {
     isMyPost,
     isLoading,
   } = useApp();
+  const auth = useAuthStatus();
+  const authenticatedUserId = auth.data && !auth.data.isAnonymous ? auth.data.uid : null;
   const templateFrom = new URLSearchParams(search).get('templateFrom');
   const requestedPostId = new URLSearchParams(search).get('post');
   const savedView = new URLSearchParams(search).get('savedView');
@@ -358,7 +361,7 @@ export default function CourseDetailPage() {
     : appCourse?.creatorId ?? '';
   const isOwnCourseAuthor = orphanPost
     ? isMyPost(orphanPost)
-    : authorId === profile.id || from === 'profile';
+    : isAuthenticatedContentOwner(authorId, authenticatedUserId);
   const ownAuthorProgress = getLunchmateProgressSnapshot(lunchmateTotalXpFromProfile(profile));
   const authorLevel = isOwnCourseAuthor
     ? ownAuthorProgress.level
@@ -570,8 +573,17 @@ export default function CourseDetailPage() {
     setIsEditing(true);
   };
 
-  const confirmCourseDelete = () => {
+  const confirmCourseDelete = async () => {
     if (!id) return;
+    const response = await fetch(`/api/feed-post?courseId=${encodeURIComponent(id)}`, {
+      method: 'DELETE',
+      credentials: 'same-origin',
+    });
+    const payload = await response.json().catch(() => ({})) as { error?: string };
+    if (!response.ok) {
+      toast.error(payload.error || '게시물을 삭제하지 못했어요.');
+      return;
+    }
     setDeleteConfirmOpen(false);
     deleteCourseWithFeed(id);
     toast.success('코스맵과 먼치 피드를 삭제했어요.');
@@ -1001,7 +1013,7 @@ export default function CourseDetailPage() {
                   <button type="button" onClick={() => setDeleteConfirmOpen(false)} className="h-11 rounded-[14px] border border-[#DFD0C8] bg-white text-[13px] font-black text-[#69564D]">
                     취소
                   </button>
-                  <button type="button" onClick={confirmCourseDelete} className="h-11 rounded-[14px] bg-[#E85053] text-[13px] font-black text-white">
+                  <button type="button" onClick={() => void confirmCourseDelete()} className="h-11 rounded-[14px] bg-[#E85053] text-[13px] font-black text-white">
                     확인
                   </button>
                 </div>

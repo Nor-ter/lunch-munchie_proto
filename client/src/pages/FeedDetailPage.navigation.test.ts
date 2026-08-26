@@ -12,6 +12,12 @@ describe('FeedDetailPage saved view navigation', () => {
     expect(source).toContain('getSavedReturnPath(search, id)');
   });
 
+  it('loads profile posts from their canonical author timeline', () => {
+    expect(source).toContain("searchParams.get('authorId')");
+    expect(source).toContain('useProfileFeed(profileAuthorId)');
+    expect(source).toContain('profileFeed.posts.find(item => item.id === id)');
+  });
+
   it('centers the header title without owner edit and delete actions', () => {
     expect(source).toContain('grid grid-cols-[40px_1fr_40px] items-center');
     expect(source).toContain('text-center text-[15px] font-black');
@@ -31,5 +37,7 @@ describe('FeedDetailPage saved view navigation', () => {
     expect(cardSource).toContain('게시물 수정');
     expect(cardSource).toContain('게시물 삭제');
     expect(cardSource).toContain('confirmPostDelete');
+    expect(cardSource).toContain('const canDeletePost = ownPost || Boolean(auth?.isAdmin)');
+    expect(cardSource).toContain('관리자 삭제');
   });
 });
