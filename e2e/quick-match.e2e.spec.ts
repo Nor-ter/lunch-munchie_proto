@@ -144,6 +144,106 @@ test('mobile settings keeps the timer and vertical people wheel synchronized wit
   expect(browserErrors).toEqual([]);
 });
 
+test('participant lobby removes the retired logo and normalizes legacy member avatars', async ({ page }) => {
+  const browserErrors = captureUnexpectedBrowserErrors(page);
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.route('https://fonts.googleapis.com/**', route => route.fulfill({ status: 200, contentType: 'text/css', body: '' }));
+  await page.route('https://cdn.jsdelivr.net/**', route => route.fulfill({ status: 200, contentType: 'text/css', body: '' }));
+  await page.route('**/api/**', async route => {
+    const url = new URL(route.request().url());
+    if (url.pathname === '/api/auth/session') {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          user: { sub: userId, name: 'Tester' },
+          profile: { username: 'Tester', profile_image_url: '/assets/Logo%20003%203.png' },
+        }),
+      });
+      return;
+    }
+    if (url.pathname === '/api/restaurants' || url.pathname === '/api/courses' || url.pathname === '/api/feed') {
+      await route.fulfill({ status: 200, contentType: 'application/json', body: '[]' });
+      return;
+    }
+    if (url.pathname === '/api/sessions/ABC123') {
+      const response = serverSession();
+      response.session.host_user_id = 'host-user';
+      response.members = [
+        { user_id: 'host-user', user_name: 'Host', emoji: '/assets/Logo%20003%203.png', is_ready: true },
+        { user_id: userId, user_name: 'Tester', emoji: '🍜', is_ready: true },
+      ];
+      await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(response) });
+      return;
+    }
+    await route.fulfill({ status: 200, contentType: 'application/json', body: '{}' });
+  });
+  await seedIdentity(page, cachedSession({
+    hostId: 'host-user',
+    members: [
+      { id: 'host-user', name: 'Host', emoji: '/assets/Logo%20003%203.png', hasVoted: false, preferences: [], ready: true },
+      { id: userId, name: 'Tester', emoji: '🍜', hasVoted: false, preferences: [], ready: true },
+    ],
+  }));
+
+  await page.goto('/session/lobby');
+
+  await expect(page.getByRole('heading', { name: '참여 완료!' })).toBeVisible();
+  await expect(page.getByLabel('2명 참여 중')).toContainText('😊🍜');
+  await expect(page.locator('header')).toHaveCount(0);
+  await expect(page.locator('main img[src="/assets/Logo%20003%203.png"]')).toHaveCount(0);
+  await expect(page.locator('.tab-bar img[src="/assets/Logo%20003%203.png"]')).toHaveCount(1);
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth)).toBe(true);
+  expect(browserErrors).toEqual([]);
+});
+
+test('waiting companion stays visible when results arrive and returns to the result flow', async ({ page }) => {
+  const browserErrors = captureUnexpectedBrowserErrors(page);
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.route('https://fonts.googleapis.com/**', route => route.fulfill({ status: 200, contentType: 'text/css', body: '' }));
+  await page.route('https://cdn.jsdelivr.net/**', route => route.fulfill({ status: 200, contentType: 'text/css', body: '' }));
+  await page.route('**/api/**', async route => {
+    const url = new URL(route.request().url());
+    if (url.pathname === '/api/auth/session') {
+      await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ user: { sub: userId, name: 'Tester' }, profile: null }) });
+      return;
+    }
+    if (url.pathname === '/api/sessions/ABC123/results') {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          phase: 'DONE',
+          deadlineAt: null,
+          memberCompletion: [{ id: userId, completed: true }],
+          winnerId: 'winner-e2e',
+        }),
+      });
+      return;
+    }
+    if (url.pathname === '/api/sessions/ABC123') {
+      await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(serverSession('SWIPING_1')) });
+      return;
+    }
+    if (url.pathname === '/api/restaurants' || url.pathname === '/api/courses' || url.pathname === '/api/feed') {
+      await route.fulfill({ status: 200, contentType: 'application/json', body: '[]' });
+      return;
+    }
+    await route.fulfill({ status: 200, contentType: 'application/json', body: '{}' });
+  });
+  await seedIdentity(page, cachedSession({ status: 'voting' }));
+  await page.addInitScript(() => localStorage.setItem('lm_lunchie_waiting_companion_session', 'session-e2e'));
+
+  await page.goto('/feed');
+
+  const resultButton = page.getByRole('button', { name: /Lunchie 결과가 나왔어요!/ });
+  await expect(resultButton).toBeVisible();
+  await expect(page.getByRole('button', { name: '기다림 도우미 런치킨과 상호작용' })).toBeVisible();
+  await resultButton.click({ force: true });
+  await expect(page).toHaveURL(/\/lunchie\/swipe$/);
+  expect(browserErrors).toEqual([]);
+});
+
 test('solo start sends the new member credential and opens the restaurant deck', async ({ page }) => {
   const browserErrors = captureUnexpectedBrowserErrors(page);
   const memberKey = 'solo-member-key';

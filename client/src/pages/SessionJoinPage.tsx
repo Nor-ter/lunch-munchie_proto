@@ -7,8 +7,9 @@ import { motion } from 'framer-motion';
 import { useAuthStatus } from '@/hooks/useAuthStatus';
 import { DIETARY_REQUIREMENTS, INGREDIENT_AVOIDANCES, normalizeDietaryPreferences } from '@/lib/quickMatch';
 import { startGoogleAuth } from '@/services/authApi';
+import { SUPPORTED_LUNCHIE_SESSION_AVATARS } from '@shared/lunchieAvatar';
 
-const EMOJIS = ['😊', '🍱', '🍜', '🍣', '🥩', '🍕', '🌮', '🍔', '🥗', '☕', '🎂', '🍰', '🦊', '🐱', '🐼', '🐨'];
+const EMOJIS = SUPPORTED_LUNCHIE_SESSION_AVATARS;
 const DIETARY_OPTIONS = [...DIETARY_REQUIREMENTS, ...INGREDIENT_AVOIDANCES];
 
 export default function SessionJoinPage() {

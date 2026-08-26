@@ -23,7 +23,15 @@ describe('Lunchie waiting companion', () => {
   it('alerts for the final and returns to the existing vote page', () => {
     expect(companionSource).toContain('결승전 투표가 열렸어요!');
     expect(companionSource).toContain("navigate('/lunchie/swipe')");
-    expect(companionSource).toContain("chickenAssetKeyOverride={isHappy ? 'happy' : needsFinalVote ? 'surprised' : 'idle'}");
+    expect(companionSource).toContain("chickenAssetKeyOverride={isHappy || hasFinalOutcome ? 'happy' : needsFinalVote ? 'surprised' : 'idle'}");
+  });
+
+  it('keeps the companion visible when the result arrives and returns to the result flow', () => {
+    expect(companionSource).toContain("const hasFinalOutcome = phase === 'DONE' || phase === 'NO_CONSENSUS'");
+    expect(companionSource).toContain('Lunchie 결과가 나왔어요!');
+    expect(companionSource).toContain('눌러서 결과를 확인해요');
+    expect(companionSource).toContain('if (hasFinalOutcome || needsFinalVote || isReroll)');
+    expect(companionSource).not.toContain("if (data.phase === 'DONE' || data.phase === 'NO_CONSENSUS') clearLunchieWaitingCompanion()");
   });
 
   it('can be launched from the group waiting screen', () => {

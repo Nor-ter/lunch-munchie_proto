@@ -93,4 +93,11 @@ describe('getLobbyPresentation', () => {
     expect(state.members[1].isHost).toBe(true);
     expect(state.hostName).toBe('지민');
   });
+
+  it('폐기된 참여자 아바타 값만 안전한 기본 이모지로 정규화한다', () => {
+    const legacyGuest = { ...guest, emoji: '/assets/Logo%20003%203.png' };
+    const state = getLobbyPresentation({ session: session(4, [host, legacyGuest]), currentUserId: host.id });
+
+    expect(state.members.map(member => member.emoji)).toEqual(['😊', '😊']);
+  });
 });
