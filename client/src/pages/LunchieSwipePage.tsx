@@ -318,9 +318,10 @@ function SwipeCard({
   const photoIndex = foodPhotos.length ? ((photoStep % foodPhotos.length) + foodPhotos.length) % foodPhotos.length : 0;
   const photoLabel = foodPhotos.length === 0
     ? '등록된 음식 사진이 없어요'
-    : foodPhotos.length === 1
-      ? '대표 음식 사진'
-      : `음식 사진 · ${photoIndex + 1}/${foodPhotos.length}`;
+    : `메뉴 사진 ${photoIndex + 1} / ${foodPhotos.length}`;
+  const photoProgressAriaLabel = foodPhotos.length > 0
+    ? `메뉴 사진 전체 ${foodPhotos.length}장 중 ${photoIndex + 1}번째`
+    : undefined;
 
   const handleDragEnd = useCallback((_: unknown, info: { offset: { x: number } }) => {
     if (isLocked) return;
@@ -388,19 +389,15 @@ function SwipeCard({
         />
         <div className="absolute inset-0 bg-gradient-to-t from-black/75 via-black/10 to-transparent" />
 
-        {/* Progress */}
-        <div className="absolute top-4 left-5 right-5 flex items-center justify-between">
-          <div className="flex gap-1">
-            {Array.from({ length: total }).map((_, i) => (
-              <div key={i} className="h-1 rounded-full transition-all"
-                style={{
-                  width: i < progress ? 22 : 14,
-                  background: i < progress ? 'white' : 'rgba(255,255,255,0.35)',
-                }} />
-            ))}
-          </div>
-          <span className="text-white/80 text-[12px] font-bold bg-black/20 px-2 py-0.5 rounded-full">
-            {progress}/{total}
+        {/* Restaurant-card progress stays independent from the menu photo index. */}
+        <div className="pointer-events-none absolute left-1/2 top-4 z-10 -translate-x-1/2">
+          <span
+            role="status"
+            aria-live="polite"
+            aria-label={`전체 ${total}개 중 ${progress}번째 음식점`}
+            className="inline-flex min-h-7 min-w-[64px] items-center justify-center rounded-md bg-black/45 px-3 py-1 text-[13px] font-black tabular-nums text-white shadow-sm backdrop-blur-sm"
+          >
+            {progress} / {total}
           </span>
         </div>
 
@@ -623,7 +620,7 @@ function SwipeCard({
                       emojiClass="text-[80px]"
                     />
                   )}
-                  <div className="absolute top-3 left-1/2 -translate-x-1/2 flex gap-1.5 pointer-events-none">
+                  <div aria-hidden="true" className="absolute top-3 left-1/2 -translate-x-1/2 flex gap-1.5 pointer-events-none">
                     {foodPhotos.map((_: string, j: number) => (
                       <div key={j} className="w-1.5 h-1.5 rounded-full"
                         style={{ background: j === photoIndex ? 'white' : 'rgba(255,255,255,0.4)' }} />
@@ -631,7 +628,14 @@ function SwipeCard({
                   </div>
                 </div>
                 <div className="pt-3 flex-shrink-0">
-                  <p className="font-bold text-[16px] text-white">{photoLabel}</p>
+                  <p
+                    role={photoProgressAriaLabel ? 'status' : undefined}
+                    aria-live={photoProgressAriaLabel ? 'polite' : undefined}
+                    aria-label={photoProgressAriaLabel}
+                    className="font-bold text-[16px] text-white"
+                  >
+                    {photoLabel}
+                  </p>
                   <p className="text-[12px] text-white/50 mt-0.5">{restaurant.description}</p>
                 </div>
               </div>
@@ -2084,7 +2088,7 @@ function QuickMatchExperience() {
         </button>
         <div className="text-center">
           <p className="font-black text-[16px] text-[#1A1A1A]">예선전 🍽️</p>
-          <p className="text-[11px] text-[#9B9B9B]">마음에 드는 음식을 골라보세요 · {progress}/{total}</p>
+          <p className="text-[11px] text-[#9B9B9B]">마음에 드는 음식을 골라보세요</p>
         </div>
         {currentSession?.deadline ? (
           <motion.div
