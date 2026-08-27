@@ -29,7 +29,10 @@ import LunchboxBottomSheet, {
 } from '@/components/munchie/LunchboxBottomSheet';
 import LunchmateProgressSheet from '@/components/munchie/LunchmateProgressSheet';
 import LunchmateLevelUpModal from '@/components/munchie/LunchmateLevelUpModal';
-import HeaderIconButton, { HeaderActionRow } from '@/components/ui/HeaderIconButton';
+import HeaderIconButton from '@/components/ui/HeaderIconButton';
+import ProfileHeader from '@/components/profile/ProfileHeader';
+import ProfileHeroCard from '@/components/profile/ProfileHeroCard';
+import ProfileIdentitySummary from '@/components/profile/ProfileIdentitySummary';
 import { useLunchmateFlow } from '@/hooks/useLunchmateFlow';
 import {
   consumeLunchboxFood,
@@ -404,26 +407,29 @@ function ProfilePageContent() {
   return (
     <div className="min-h-dvh bg-[#FCF4EE] pb-24">
       {/* 상단 메뉴 */}
-      <HeaderActionRow className="header-action-row--raised">
-        <HeaderIconButton
-          onClick={() => { setEditName(profile.name); setEditHandle(profile.handle ?? ''); setActiveSheet('settings'); }}
-          aria-label="프로필 설정"
-        >
-          <Settings size={18} color="#4A4A4A" />
-        </HeaderIconButton>
+      <ProfileHeader
+        rightAction={(
+          <HeaderIconButton
+            className="-translate-x-0.5"
+            onClick={() => { setEditName(profile.name); setEditHandle(profile.handle ?? ''); setActiveSheet('settings'); }}
+            aria-label="프로필 설정"
+          >
+            <Settings size={18} color="#4A4A4A" />
+          </HeaderIconButton>
+        )}
+      />
 
-        {/* 아바타 업로드용 숨은 파일 입력 — 헤더 아바타 탭 시트/설정 시트 공용 */}
-        <input
-          ref={avatarFileRef}
-          type="file"
-          accept="image/*"
-          className="hidden"
-          onChange={handleAvatarUpload}
-        />
-      </HeaderActionRow>
+      {/* 아바타 업로드용 숨은 파일 입력 — 헤더 아바타 탭 시트/설정 시트 공용 */}
+      <input
+        ref={avatarFileRef}
+        type="file"
+        accept="image/*"
+        className="hidden"
+        onChange={handleAvatarUpload}
+      />
 
       {/* 핑크 프로필 카드 */}
-      <div className="mx-4 mt-2 rounded-[30px] p-4 pb-5" style={{ background: '#F8DCD2' }}>
+      <ProfileHeroCard mode="owner">
         {/* 다마고치 배너 — 코스맵·피드가 늘수록 진화하는 푸디 캐릭터 */}
         <FoodieBuddy
           score={foodieScore}
@@ -454,8 +460,8 @@ function ProfilePageContent() {
           onFoodDrop={handleStagedFoodDrop}
           onFoodDragCancel={clearFoodDragState}
         />
-        <div className="relative z-20 -mt-9 px-3">
-          <div className="flex items-start gap-4">
+        <ProfileIdentitySummary
+          avatar={(
             <button
               onClick={() => setActiveSheet('avatar')}
               className="relative shrink-0 rounded-full border-4 border-[#F8DCD2] shadow-md active:scale-95 transition-transform"
@@ -466,21 +472,11 @@ function ProfilePageContent() {
                 <Camera size={11} color="white" />
               </span>
             </button>
-            <div className="min-w-0 flex-1 pt-11">
-              <div className="flex min-w-0 items-center gap-2 whitespace-nowrap">
-                <p className="min-w-0 truncate text-[19px] font-black text-[#3B2A22]">
-                  {profile.name}
-                </p>
-                <span className="shrink-0 rounded-full bg-white/80 px-1.5 py-0.5 text-[9px] font-bold text-[#C7864B]">
-                  🏅 배지
-                </span>
-              </div>
-              <p className="mt-1.5 whitespace-nowrap text-[13px] font-medium text-[#8A6E60]">
-                {profile.handle ? `@${profile.handle}` : '오늘도 맛있는 하루를 위해'}
-              </p>
-            </div>
-          </div>
-        </div>
+          )}
+          displayName={profile.name}
+          handle={profile.handle}
+          handleFallback="오늘도 맛있는 하루를 위해"
+        />
         <div className="mt-5 grid grid-cols-3">
           <ProfileStats
             userId={profile.id}
@@ -492,7 +488,7 @@ function ProfilePageContent() {
             <p className="mt-0.5 text-[10px] text-[#8A6E60]">좋아요</p>
           </div>
         </div>
-      </div>
+      </ProfileHeroCard>
 
       <FollowerListSheet
         open={followListMode !== null}
@@ -713,13 +709,15 @@ function ProfileGuestPreview() {
 
   return (
     <div className="min-h-dvh bg-[#FCF4EE] pb-24">
-      <HeaderActionRow className="header-action-row--raised">
-        <HeaderIconButton onClick={goToLogin} aria-label="프로필 설정">
-          <Settings size={18} color="#4A4A4A" />
-        </HeaderIconButton>
-      </HeaderActionRow>
+      <ProfileHeader
+        rightAction={(
+          <HeaderIconButton className="-translate-x-0.5" onClick={goToLogin} aria-label="프로필 설정">
+            <Settings size={18} color="#4A4A4A" />
+          </HeaderIconButton>
+        )}
+      />
 
-      <div className="mx-4 mt-2 rounded-[30px] p-4 pb-5" style={{ background: '#F8DCD2' }}>
+      <ProfileHeroCard mode="guest">
         <FoodieBuddy
           score={0}
           onCustomize={goToLogin}
@@ -774,7 +772,7 @@ function ProfileGuestPreview() {
             <p className="mt-0.5 text-[10px] text-[#8A6E60]">좋아요</p>
           </button>
         </div>
-      </div>
+      </ProfileHeroCard>
 
       <div className="px-4 mt-8">
         <h2 className="font-black text-[18px] text-[#1A1A1A] mb-3">나의 피드 0</h2>

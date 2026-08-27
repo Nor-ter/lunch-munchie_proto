@@ -15,26 +15,50 @@ import { useUserSearch } from '@/hooks/useUserSearch';
 import { isWithinRadius } from '@shared/geo';
 import { useLocationSearch } from '@/hooks/useLocationSearch';
 import { getLocationDetails } from '@/services/placesApi';
+import {
+  DEFAULT_FEED_VIEW_STATE,
+  markFeedProfileNavigation,
+  readRestorableFeedViewState,
+  saveFeedViewState,
+  type FeedViewState,
+} from '@/lib/feedHistoryState';
 
 export default function MunchieFeedPage() {
   const [, navigate] = useLocation();
   const { feedPosts, refreshFeedPosts, loadMoreFeedPosts, hasMoreFeedPosts, isLoadingMoreFeedPosts } = useApp();
-  const [activeFilter, setActiveFilter] = useState<TagType | 'all'>('all');
-  const [searchOpen, setSearchOpen] = useState(false);
-  const [searchInput, setSearchInput] = useState('');
-  const [searchTerm, setSearchTerm] = useState('');
+  const [restoredViewState] = useState(() => readRestorableFeedViewState());
+  const initialViewState = restoredViewState ?? DEFAULT_FEED_VIEW_STATE;
+  const [activeFilter, setActiveFilter] = useState<TagType | 'all'>(initialViewState.activeFilter);
+  const [searchOpen, setSearchOpen] = useState(initialViewState.searchOpen);
+  const [searchInput, setSearchInput] = useState(initialViewState.searchInput);
+  const [searchTerm, setSearchTerm] = useState(initialViewState.searchInput.trim());
   const auth = useAuthStatus();
   const canSearch = Boolean(auth.data && !auth.data.isAnonymous);
   const userSearch = useUserSearch(searchTerm, canSearch);
-  const [showFilters, setShowFilters] = useState(true);
-  const [draftCenter, setDraftCenter] = useState<FeedRadiusCenter | null>(null);
-  const [draftRadiusKm, setDraftRadiusKm] = useState(5);
-  const [appliedLocation, setAppliedLocation] = useState<FeedLocationFilter | null>(null);
+  const [showFilters, setShowFilters] = useState(initialViewState.showFilters);
+  const [draftCenter, setDraftCenter] = useState<FeedRadiusCenter | null>(initialViewState.draftCenter);
+  const [draftRadiusKm, setDraftRadiusKm] = useState(initialViewState.draftRadiusKm);
+  const [appliedLocation, setAppliedLocation] = useState<FeedLocationFilter | null>(initialViewState.appliedLocation);
   const [isApplyingLocation, setIsApplyingLocation] = useState(false);
   const [locationDetailsLoadingId, setLocationDetailsLoadingId] = useState<string | null>(null);
   const locationSearch = useLocationSearch(draftCenter ?? undefined);
   const hasMapsKey = Boolean(import.meta.env.VITE_GOOGLE_MAPS_API_KEY);
-  useEffect(() => { void refreshFeedPosts(null).catch(() => undefined); }, [refreshFeedPosts]);
+  const currentViewState: FeedViewState = {
+    activeFilter,
+    searchOpen,
+    searchInput,
+    showFilters,
+    draftCenter,
+    draftRadiusKm,
+    appliedLocation,
+  };
+  useEffect(() => {
+    saveFeedViewState(currentViewState);
+  }, [activeFilter, appliedLocation, draftCenter, draftRadiusKm, searchInput, searchOpen, showFilters]);
+  useEffect(() => {
+    if (restoredViewState) return;
+    void refreshFeedPosts(null).catch(() => undefined);
+  }, [refreshFeedPosts, restoredViewState]);
   useEffect(() => {
     const timer = window.setTimeout(() => setSearchTerm(searchInput.trim()), 300);
     return () => window.clearTimeout(timer);
@@ -54,6 +78,10 @@ export default function MunchieFeedPage() {
   const searchActive = searchInput.trim().length > 0;
   const searchPending = searchActive
     && (searchTerm !== searchInput.trim() || userSearch.isLoading || userSearch.isFetching);
+
+  const prepareProfileNavigation = () => {
+    markFeedProfileNavigation(currentViewState);
+  };
 
   const pickLocation = async (placeId: string) => {
     if (locationDetailsLoadingId) return;
@@ -185,6 +213,7 @@ export default function MunchieFeedPage() {
                       type="button"
                       key={filter.value}
                       onClick={() => setActiveFilter(filter.value)}
+                      aria-pressed={activeFilter === filter.value}
                       className="h-8 shrink-0 rounded-[10px] px-3 text-[10px] font-black transition-transform active:scale-95"
                       style={filter.value === 'all'
                         ? activeFilter === filter.value
@@ -340,7 +369,10 @@ export default function MunchieFeedPage() {
                   <div key={user.id} className="flex items-center gap-3 px-4 py-3">
                     <button
                       type="button"
-                      onClick={() => navigate(user.is_self ? '/profile' : `/profile/${user.id}`)}
+                      onClick={() => {
+                        if (!user.is_self) prepareProfileNavigation();
+                        navigate(user.is_self ? '/profile' : `/profile/${user.id}`);
+                      }}
                       className="flex min-w-0 flex-1 items-center gap-3 text-left"
                     >
                       <Avatar className="size-11 shrink-0 border border-[#F0D8CE]">
@@ -372,7 +404,7 @@ export default function MunchieFeedPage() {
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: -12 }}
             >
-              <UnifiedMunchieCard post={post} />
+              <UnifiedMunchieCard post={post} onBeforeAuthorProfileNavigate={prepareProfileNavigation} />
             </motion.div>
           ))}
         </AnimatePresence>

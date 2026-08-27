@@ -6,7 +6,8 @@ const source = readFileSync(join(import.meta.dirname, 'MunchieFeedPage.tsx'), 'u
 
 describe('Munchie Feed user search', () => {
   it('opens the search field from a header icon and debounces name or handle search', () => {
-    expect(source).toContain("const [searchOpen, setSearchOpen] = useState(false)");
+    expect(source).toContain('const [restoredViewState] = useState(() => readRestorableFeedViewState())');
+    expect(source).toContain('const [searchOpen, setSearchOpen] = useState(initialViewState.searchOpen)');
     expect(source).toContain("aria-label={searchOpen ? '사용자 검색 닫기' : '사용자 검색 열기'}");
     expect(source).toContain('{searchOpen && <div className="relative mt-3">');
     expect(source).toContain('사용자 이름 또는 @아이디 검색');
@@ -15,13 +16,14 @@ describe('Munchie Feed user search', () => {
   });
 
   it('opens profiles and reuses the shared follow control', () => {
+    expect(source).toContain('if (!user.is_self) prepareProfileNavigation()');
     expect(source).toContain("navigate(user.is_self ? '/profile' : `/profile/${user.id}`)");
     expect(source).toContain('<FollowButton userId={user.id} initialFollowing={user.is_following} />');
     expect(source).toContain('내 프로필');
   });
 
   it('keeps user search and the source collapsible food filters together', () => {
-    expect(source).toContain("const [showFilters, setShowFilters] = useState(true)");
+    expect(source).toContain('const [showFilters, setShowFilters] = useState(initialViewState.showFilters)');
     expect(source).toContain('aria-label="필터 보기"');
     expect(source).toContain('{!searchActive && <AnimatePresence');
     expect(source).toContain('{showFilters && (');

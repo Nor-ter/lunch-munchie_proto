@@ -1,0 +1,83 @@
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
+import { describe, expect, it } from 'vitest';
+
+const root = join(import.meta.dirname, '..');
+const myProfileSource = readFileSync(join(import.meta.dirname, 'ProfilePage.tsx'), 'utf8');
+const otherProfileSource = readFileSync(join(import.meta.dirname, 'OtherProfilePage.tsx'), 'utf8');
+const headerSource = readFileSync(join(root, 'components', 'profile', 'ProfileHeader.tsx'), 'utf8');
+const heroSource = readFileSync(join(root, 'components', 'profile', 'ProfileHeroCard.tsx'), 'utf8');
+const identitySource = readFileSync(join(root, 'components', 'profile', 'ProfileIdentitySummary.tsx'), 'utf8');
+const frameSource = readFileSync(join(root, 'components', 'profile', 'ProfileLunchmateFrame.tsx'), 'utf8');
+const roomSource = readFileSync(join(root, 'components', 'profile', 'PublicLunchmateRoom.tsx'), 'utf8');
+const foodieBuddySource = readFileSync(join(root, 'components', 'munchie', 'FoodieBuddy.tsx'), 'utf8');
+const userHookSource = readFileSync(join(root, 'hooks', 'useUser.ts'), 'utf8');
+const profileApiSource = readFileSync(join(root, 'services', 'profileApi.ts'), 'utf8');
+const appContextSource = readFileSync(join(root, 'contexts', 'AppContext.tsx'), 'utf8');
+
+describe('shared profile header and visitor Lunchmate room', () => {
+  it('keeps the title screen-centred for owner, guest and visitor action layouts', () => {
+    expect(myProfileSource.match(/<ProfileHeader/g)).toHaveLength(2);
+    expect(otherProfileSource).toContain('<ProfileHeader');
+    expect(headerSource).toContain('absolute left-0');
+    expect(headerSource).toContain('absolute right-0');
+    expect(headerSource).toContain('>프로필</h1>');
+    expect(headerSource).toContain("env(safe-area-inset-top, 0px)");
+  });
+
+  it('renders the viewed user query as a read-only room with safe states', () => {
+    expect(userHookSource).toContain("queryKey: ['user', userId]");
+    expect(otherProfileSource).toContain('lunchmate={remoteUser.data?.lunchmate}');
+    expect(roomSource).toContain('data-lunchmate-read-only="true"');
+    expect(roomSource).toContain("lunchmate?.visibility === 'private'");
+    expect(roomSource).toContain('아직 공개된 런치메이트 룸이 없어요.');
+    expect(roomSource).toContain('<LunchmateRoomRenderer');
+    expect(roomSource).toContain('<LunchmateCharacterRenderer');
+    expect(roomSource).not.toContain('onCustomize');
+    expect(roomSource).not.toContain('onClick=');
+    expect(roomSource).not.toContain('보기 전용');
+  });
+
+  it('uses the same integrated hero card composition for owner and visitor profiles', () => {
+    expect(heroSource).toContain('mx-4 mt-2 rounded-[30px] bg-[#F8DCD2] p-4 pb-5');
+    expect(myProfileSource).toContain('<ProfileHeroCard mode="owner">');
+    expect(myProfileSource).toContain('<ProfileHeroCard mode="guest">');
+    expect(otherProfileSource).toContain('<ProfileHeroCard mode="visitor">');
+    expect(myProfileSource).toContain('<ProfileIdentitySummary');
+    expect(otherProfileSource).toContain('<ProfileIdentitySummary');
+    expect(otherProfileSource.indexOf('<PublicLunchmateRoom')).toBeLessThan(
+      otherProfileSource.indexOf('<ProfileIdentitySummary'),
+    );
+    expect(identitySource).toContain('relative z-20 -mt-9 px-3');
+    expect(identitySource).toContain('text-[19px] font-black');
+    expect(identitySource).toContain('secondaryAction');
+    expect(identitySource).toContain("secondaryAction ? 'pr-[90px]' : ''");
+    expect(identitySource).toContain('className="absolute right-0 top-0"');
+    expect(otherProfileSource).toContain('size-[86px]');
+    expect(roomSource).not.toContain('Lunchmate Room</h2>');
+  });
+
+  it('shares the Room viewport and character geometry without exposing visitor controls', () => {
+    expect(frameSource).toContain("height: 'clamp(144px, 38vw, 150px)'");
+    expect(frameSource).toContain('rounded-3xl');
+    expect(frameSource).toContain('PROFILE_LUNCHMATE_CHARACTER_SIZE = 86');
+    expect(foodieBuddySource).toContain('<ProfileLunchmateFrame ref={profileMotion.stageRef}>');
+    expect(roomSource).toContain('<ProfileLunchmateFrame data-testid="public-lunchmate-room">');
+    expect(otherProfileSource).toContain('secondaryAction={remoteUser.data ? <FollowButton');
+    expect(otherProfileSource).not.toContain('onCustomize');
+  });
+
+  it('persists only presentation fields, never inventory or rewards', () => {
+    expect(profileApiSource).toContain("credentials: 'same-origin'");
+    expect(profileApiSource).toContain("visibility: profile.lunchmateVisibility ?? 'public'");
+    expect(profileApiSource).not.toContain('lunchmateOwnedItemIds');
+    expect(profileApiSource).not.toContain('lunchmateRewardClaims');
+    expect(profileApiSource).not.toContain('lunchboxInventory');
+  });
+
+  it('clears the previous account presentation before hydrating a changed session', () => {
+    expect(appContextSource).toContain('lastAuthUidRef.current !== initialAuthUserId');
+    expect(appContextSource).toContain('clearPublicLunchmatePresentation(authenticatedProfile)');
+    expect(appContextSource).toContain('localLunchmateFieldsFromPublic(serverLunchmate)');
+  });
+});

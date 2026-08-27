@@ -500,3 +500,46 @@
 - **이번 변경 범위 PASS**: Quick Match diff는 UI 인덱스 계산과 테스트만 변경하며 env·키·네트워크 경로를 건드리지 않는다. 클라이언트에서 서버 키 참조나 실제 Google 키 형태 리터럴이 새로 발견되지 않았고 `.env`, `.env.local`, `mobile/.env`, `.dev.vars`, `env.enc`는 현재 ignore 및 미추적 상태다.
 - **저장소 전체 종료 게이트 BLOCK**: `env.enc`가 과거 Git 이력에 존재하며, GCP 콘솔에서 현재 전체 키 목록과 실제 API/Application restriction을 전수 확인하지 못했다.
 - 미완료 보안 TODO: 모바일 키 iOS bundle ID 및 Android 패키지명+SHA-1 restriction, 웹 키 HTTP referrer restriction, 서버 키 Places API (New)+Directions 제한을 운영 콘솔에서 재확인하고 `env.enc` 역사 노출의 민감성 평가 및 필요 시 비밀값 교체·Git 이력 정리 승인을 받는다.
+
+---
+
+## 22. 타인 공개 Lunchmate 프로필·프로필 헤더 정합성 (2026-08-26)
+
+### 22.1 TRIAGE / RCA
+- 증상 태그: `data-state`, `auth`. Cloudflare 상태에 이 흐름을 막는 알려진 장애는 없었다.
+- 타인 프로필 route는 사용자·피드만 조회했고 Lunchmate 공개 표현 데이터 계약이 없었다. 내 프로필 헤더는 타인 프로필과 다른 구조여서 중앙 제목도 누락됐다.
+
+### 22.2 FIX
+- Cloudflare D1 `users`에 캐릭터·스킨·장착 아이템·룸 배치·공개 범위를 저장하는 additive migration을 추가했다. 공개 GET은 route의 사용자 ID로 조회하고 비공개 값은 서버에서 제거한다.
+- owner PATCH는 인증 세션의 사용자 ID에만 적용하며 inventory·보상·XP는 계약에서 제외했다. 계정 전환 시 이전 사용자의 로컬 표현 상태를 지운 뒤 서버 상태를 hydrate한다.
+- 타인 프로필은 기존 룸·캐릭터 renderer를 정적 읽기 전용으로 재사용하고 public/private/empty/error 상태를 분리했다. 양쪽 프로필은 화면 기준 중앙 정렬된 공용 `프로필` 헤더를 사용하며 기존 설정·뒤로가기 동작을 유지한다.
+
+### 22.3 VERIFY / GATE
+- Cloudflare API/데이터 계약 및 UI 집중 Vitest, TypeScript, production build를 통과했다. 모바일 Playwright에서 owner/visitor 헤더, 비로그인 공개 룸, 새로고침, private/empty 상태, B→C SPA 전환을 검증했다.
+- 공개 응답과 저장 payload에 inventory·보상·XP가 없고, 타인 화면은 방문자의 로컬 Lunchmate 상태를 참조하지 않으며 편집 핸들러를 노출하지 않는다. 신규 secret/env/Google 키는 없다.
+- 원격 D1 migration·Cloudflare preview 배포는 실행하지 않았다. 실제 검증 URL 제공과 폰 sign-off 전 상태는 `Human Verification` 이전으로 유지한다. 기존 GCP 키 restriction 및 Android SHA-1 제한 TODO는 이번 범위 밖으로 남아 있다.
+
+### 22.4 HUMAN VERIFICATION FOLLOW-UP
+- 첫 로컬 검증에서 visitor Room과 사용자 정보가 서로 다른 카드로 보여 owner 프로필과 시각 구조가 달랐다.
+- owner·guest·visitor가 같은 `ProfileHeroCard` 외곽을 사용하도록 통합하고, visitor도 Room 아래에 아바타와 사용자 정보가 겹치는 owner 구성을 따른다. visitor Room에는 `보기 전용` 상태만 남기고 편집 control은 계속 노출하지 않는다.
+- 로컬 Cloudflare Pages/D1 실제 화면과 390px 모바일 Playwright에서 통합 카드, 중앙 헤더, 공개·private·empty, 새로고침, B→C 전환을 재검증했다.
+
+### 22.5 PROFILE UI CONSISTENCY FOLLOW-UP
+- owner와 visitor가 `ProfileIdentitySummary`, `ProfileLunchmateFrame`, `ProfileHeroCard`, `ProfileHeader`, `ProfileStats`를 공유하도록 UI 구조를 정리했다. Room 높이·radius·캐릭터 크기/중앙 anchor와 avatar·name·badge·handle typography가 공용 정의를 따른다.
+- visitor Follow는 이름 첫 줄에서 분리해 handle 줄 우측에 배치하고, 선택적 location/bio는 compact typography와 최대 2줄로 제한했다. `보기 전용` 표시는 완전히 제거했지만 read-only attribute와 편집 control 미노출은 유지한다.
+- Follow/Auth/API/D1/Lunchmate data contract는 변경하지 않았다. 로컬 실제 화면, 관련 Vitest·TypeScript·production build와 모바일 owner/visitor E2E를 재검증했다.
+
+### 22.6 PROFILE BACK HISTORY FOLLOW-UP
+- Feed에서 타인 프로필을 연 뒤 history Back으로 복귀해도 `MunchieFeedPage`가 재마운트되며 filter/search/location UI가 기본값으로 돌아가고 첫 페이지를 다시 요청하는 상태 초기화를 재현했다. 기존 전역 Feed scroll fallback만으로는 history entry별 UI·pagination 의미를 보존하지 못했다.
+- Feed의 현재 browser history entry에 scrollTop과 filter/search/location view state를 저장한다. Feed 작성자 또는 사용자 검색 결과에서 타인 프로필로 들어갈 때 해당 entry를 복귀 대상으로 표시하고, Back 복귀 시 AppContext에 남아 있는 loaded items/cursor를 유지해 불필요한 전체 refresh를 생략한다.
+- 타인 프로필 상단 Back과 오류 상태의 복귀 버튼은 모두 `window.history.back()`을 사용한다. Follow/Profile/Lunchmate API와 데이터 계약은 변경하지 않았다.
+- 360×740 Playwright에서 12개 Feed를 아래로 스크롤한 뒤 타인 프로필 진입 → 브라우저 기본 Back 및 화면 상단 Back을 각각 실행해 동일 scrollTop, 접힌 filter 상태, 12개 loaded items와 Feed request 수가 유지됨을 확인했다. 전체 프로필 E2E 5/5와 관련 Vitest 16/16을 통과했다.
+
+### 22.7 PROFILE CARD PIXEL PARITY FOLLOW-UP
+- 동일 360×740 viewport 비교에서 visitor의 Follow 버튼이 username 행 높이에 참여해 owner보다 card·stats·feed title을 12.5px 아래로 밀었고, owner avatar는 테두리 포함 86px인 반면 visitor avatar는 78px였다.
+- owner 구조와 수치는 변경하지 않았다. visitor avatar를 86px로 맞추고 Follow를 공용 `ProfileIdentitySummary`의 username 행 우측에 absolute 배치해 새로운 row height를 만들지 않도록 했다. 긴 display name은 badge 앞에서 truncate되고 username은 Follow 폭 90px을 예약한다.
+- Playwright 픽셀 검증에서 hero card width/height, Room x/y/width/height, avatar x/y/size, display name·username baseline, stats y/height, feed title y가 owner/visitor 사이 1px 이내로 일치했다. `보기 전용` 미노출과 read-only 동작, Follow·Lunchmate·Feed API는 그대로 유지했다.
+
+### 22.8 OWNER SETTINGS BUTTON POSITION FOLLOW-UP
+- 내 프로필 설정 버튼만 기존 위치에서 2px 왼쪽으로 이동했다. 공용 `ProfileHeader`와 타인 프로필의 Back·Follow 배치는 변경하지 않았다.
+- 로그인 프로필과 로그인 전 미리보기의 설정 버튼 위치를 동일하게 맞췄다. 프로필 집중 Vitest 12/12, TypeScript, production build를 통과했다.

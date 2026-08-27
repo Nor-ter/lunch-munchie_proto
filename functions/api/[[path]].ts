@@ -35,6 +35,13 @@ import {
   googlePlacesErrorResponse,
 } from "./googlePlaces";
 import { feedItemMatchesLocation, parseFeedLocationFilter } from "./feedLocation";
+import {
+  lunchmateProfileFromRow,
+  normalizeLunchmatePatch,
+  publicLunchmateProfileFromRow,
+  serializeLunchmateLoadout,
+  serializeLunchmateRoomConfig,
+} from "./publicLunchmateProfile";
 
 export interface EnvBindings {
   DB: any;
@@ -340,12 +347,18 @@ app.get("/api/auth/session", async (c) => {
   const profile =
     session && hasPublicProfile
       ? await c.env.DB.prepare(
-          "SELECT id, username, handle, profile_image_url, bio, location FROM users WHERE id = ?",
+          `SELECT id, username, handle, profile_image_url, bio, location,
+            foodie_char, foodie_skin, lunchmate_loadout,
+            lunchmate_room_loadout, lunchmate_visibility
+          FROM users WHERE id = ?`,
         )
           .bind(session.sub)
           .first<any>()
       : null;
-  return c.json({ user: session, profile });
+  return c.json({
+    user: session,
+    profile: profile ? { ...profile, lunchmate: lunchmateProfileFromRow(profile) } : null,
+  });
 });
 app.post("/api/auth/logout", (c) => {
   c.header(
@@ -943,11 +956,17 @@ app.patch("/api/profile", async (c) => {
       { error: "로컬 사용자 스키마를 갱신한 뒤 프로필을 수정할 수 있습니다." },
       409,
     );
-  const body = await c.req.json<{ avatarUrl?: unknown; username?: unknown; handle?: unknown }>().catch(() => ({}));
+  const body = await c.req.json<{
+    avatarUrl?: unknown;
+    username?: unknown;
+    handle?: unknown;
+    lunchmate?: unknown;
+  }>().catch(() => ({}));
   const hasAvatarUrl = "avatarUrl" in body;
   const hasUsername = "username" in body;
   const hasHandle = "handle" in body;
-  if (!hasAvatarUrl && !hasUsername && !hasHandle)
+  const hasLunchmate = "lunchmate" in body;
+  if (!hasAvatarUrl && !hasUsername && !hasHandle && !hasLunchmate)
     return c.json({ error: "변경할 프로필 정보가 없습니다." }, 400);
 
   const statements: any[] = [];
@@ -996,6 +1015,42 @@ app.patch("/api/profile", async (c) => {
         .bind(handle, session.sub),
     );
   }
+
+  if (hasLunchmate) {
+    const lunchmate = normalizeLunchmatePatch(body.lunchmate);
+    if (!lunchmate)
+      return c.json({ error: "런치메이트 공개 설정이 올바르지 않습니다." }, 400);
+    if ("character" in lunchmate) {
+      statements.push(
+        c.env.DB.prepare("UPDATE users SET foodie_char = ? WHERE id = ?")
+          .bind(lunchmate.character, session.sub),
+      );
+    }
+    if ("skin" in lunchmate) {
+      statements.push(
+        c.env.DB.prepare("UPDATE users SET foodie_skin = ? WHERE id = ?")
+          .bind(lunchmate.skin, session.sub),
+      );
+    }
+    if ("loadout" in lunchmate) {
+      statements.push(
+        c.env.DB.prepare("UPDATE users SET lunchmate_loadout = ? WHERE id = ?")
+          .bind(serializeLunchmateLoadout(lunchmate.loadout ?? null), session.sub),
+      );
+    }
+    if ("roomConfig" in lunchmate) {
+      statements.push(
+        c.env.DB.prepare("UPDATE users SET lunchmate_room_loadout = ? WHERE id = ?")
+          .bind(serializeLunchmateRoomConfig(lunchmate.roomConfig ?? null), session.sub),
+      );
+    }
+    if ("visibility" in lunchmate) {
+      statements.push(
+        c.env.DB.prepare("UPDATE users SET lunchmate_visibility = ? WHERE id = ?")
+          .bind(lunchmate.visibility, session.sub),
+      );
+    }
+  }
   try {
     await c.env.DB.batch(statements);
   } catch (error) {
@@ -1004,11 +1059,16 @@ app.patch("/api/profile", async (c) => {
     throw error;
   }
   const profile = await c.env.DB.prepare(
-    "SELECT id, username, handle, profile_image_url, bio, location FROM users WHERE id = ?",
+    `SELECT id, username, handle, profile_image_url, bio, location,
+      foodie_char, foodie_skin, lunchmate_loadout,
+      lunchmate_room_loadout, lunchmate_visibility
+    FROM users WHERE id = ?`,
   )
     .bind(session.sub)
     .first<any>();
-  return c.json({ profile });
+  return c.json({
+    profile: profile ? { ...profile, lunchmate: lunchmateProfileFromRow(profile) } : null,
+  });
 });
 
 // 헬스 체크
@@ -1096,7 +1156,10 @@ app.get("/api/users/:id", async (c) => {
   if (!id || id.length > 256)
     return c.json({ error: "사용자 정보가 올바르지 않습니다." }, 400);
   const user = await c.env.DB.prepare(
-    "SELECT id, username, handle, profile_image_url, bio, location, created_at FROM users WHERE id = ?",
+    `SELECT id, username, handle, profile_image_url, bio, location, created_at,
+      foodie_char, foodie_skin, lunchmate_loadout,
+      lunchmate_room_loadout, lunchmate_visibility
+    FROM users WHERE id = ?`,
   )
     .bind(id)
     .first<any>();
@@ -1115,6 +1178,7 @@ app.get("/api/users/:id", async (c) => {
     location: user.location,
     created_at: user.created_at,
     public_post_count: Number(count?.count ?? 0),
+    lunchmate: publicLunchmateProfileFromRow(user),
   });
 });
 

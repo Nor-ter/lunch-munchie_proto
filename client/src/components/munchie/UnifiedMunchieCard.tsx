@@ -65,6 +65,7 @@ export default function UnifiedMunchieCard({
   detailOrigin = 'feed',
   profileReturnId,
   savedView,
+  onBeforeAuthorProfileNavigate,
 }: {
   post: FeedPost;
   compact?: boolean;
@@ -77,6 +78,7 @@ export default function UnifiedMunchieCard({
   detailOrigin?: 'feed' | 'saved' | 'profile';
   profileReturnId?: string;
   savedView?: SavedViewMode;
+  onBeforeAuthorProfileNavigate?: () => void;
 }) {
   const [, navigate] = useLocation();
   const {
@@ -173,6 +175,11 @@ export default function UnifiedMunchieCard({
   }, [post.courseId, post.id]);
 
   const go = (path: string) => interactive && navigate(path);
+  const goToAuthorProfile = () => {
+    if (!interactive) return;
+    onBeforeAuthorProfileNavigate?.();
+    navigate(authorProfilePath);
+  };
   const requireLogin = () => {
     if (!auth) {
       toast.error('로그인 상태를 확인 중이에요. 잠시 후 다시 시도해 주세요.');
@@ -329,8 +336,8 @@ export default function UnifiedMunchieCard({
       <>
       <article ref={cardRef} className={`relative overflow-hidden bg-[#FFFDFC] ${homeSummary ? 'rounded-[12px] border border-[#EFD0D4] shadow-[0_5px_14px_rgba(235,80,83,0.07)]' : 'rounded-[18px] border-2 border-[#EAD7CD] shadow-[0_7px_18px_rgba(123,76,53,0.1)]'}`} data-testid={`unified-munchie-card-${post.id}`}>
         <header className={`flex shrink-0 items-center gap-1 px-2 ${homeSummary ? 'h-9' : 'h-8'}`}>
-          <button type="button" onClick={() => go(authorProfilePath)} className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-white text-[9px] ${homeSummary ? 'border border-[#EB5053]' : 'border border-[#2F2926]'}`}>{post.authorEmoji}</button>
-          <button type="button" onClick={() => go(authorProfilePath)} className={`min-w-0 truncate text-left text-[10px] font-semibold ${homeSummary ? 'text-[#3E2922]' : 'text-[#342925]'}`}>{post.authorName}</button>
+          <button type="button" onClick={goToAuthorProfile} className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-white text-[9px] ${homeSummary ? 'border border-[#EB5053]' : 'border border-[#2F2926]'}`}>{post.authorEmoji}</button>
+          <button type="button" onClick={goToAuthorProfile} className={`min-w-0 truncate text-left text-[10px] font-semibold ${homeSummary ? 'text-[#3E2922]' : 'text-[#342925]'}`}>{post.authorName}</button>
           <span className={`shrink-0 text-[8px] font-medium ${homeSummary ? 'text-[#A36D6C]' : 'text-[#8B817B]'}`}>{timeAgo(post.createdAt)}</span>
           <span className="flex-1" />
           <button type="button" onClick={() => setShowPostMenu(value => !value)} aria-label="게시물 메뉴" className={`flex h-6 w-6 items-center justify-center ${homeSummary ? 'text-[#D94447]' : 'text-[#413733]'}`}><MoreHorizontal size={15} strokeWidth={3} /></button>
@@ -384,7 +391,7 @@ export default function UnifiedMunchieCard({
                 </>
               ) : (
                 <>
-                  <button type="button" onClick={() => { setShowPostMenu(false); go(authorProfilePath); }} className="block h-9 w-full px-3 text-left text-[10px] font-bold text-[#51443E]">작성자 보기</button>
+                  <button type="button" onClick={() => { setShowPostMenu(false); goToAuthorProfile(); }} className="block h-9 w-full px-3 text-left text-[10px] font-bold text-[#51443E]">작성자 보기</button>
                   <button type="button" disabled={postReported} onClick={reportPost} className="block h-9 w-full border-t border-[#EEE3DD] px-3 text-left text-[10px] font-bold text-[#D84D52] disabled:text-[#A99D97]">{postReported ? '신고 완료' : '게시물 신고'}</button>
                 </>
               )}
@@ -401,10 +408,10 @@ export default function UnifiedMunchieCard({
     <>
       <article ref={cardRef} className="relative overflow-hidden rounded-[20px] border border-[#E9D6CC] bg-[#FFFDFC] shadow-[0_10px_26px_rgba(117,73,51,0.09)]" data-testid={`unified-munchie-card-${post.id}`}>
         <header className="flex items-center gap-2.5 px-3 pb-2.5 pt-3">
-          <button type="button" onClick={() => go(authorProfilePath)} className="flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-full border border-[#F0BCAE] bg-[#FFF1EB] text-base">
+          <button type="button" onClick={goToAuthorProfile} className="flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-full border border-[#F0BCAE] bg-[#FFF1EB] text-base">
             <FeedAuthorAvatar post={post} className="h-full w-full" />
           </button>
-          <button type="button" onClick={() => go(authorProfilePath)} className="min-w-0 text-left">
+          <button type="button" onClick={goToAuthorProfile} className="min-w-0 text-left">
             <strong className="truncate text-[15px] font-semibold text-[#3E2922]">{post.authorName}</strong>
           </button>
           <span className="min-w-0 flex-1 truncate text-[11px] font-medium text-[#8C7B72]">{timeAgo(post.createdAt)}</span>
@@ -421,7 +428,7 @@ export default function UnifiedMunchieCard({
                 </>
               ) : (
                 <>
-                  <button type="button" onClick={() => { setShowPostMenu(false); go(authorProfilePath); }} className="block h-10 w-full px-3 text-left text-[11px] font-bold text-[#51443E]">작성자 보기</button>
+                  <button type="button" onClick={() => { setShowPostMenu(false); goToAuthorProfile(); }} className="block h-10 w-full px-3 text-left text-[11px] font-bold text-[#51443E]">작성자 보기</button>
                   <button type="button" disabled={postReported} onClick={reportPost} className="block h-10 w-full border-t border-[#EEE3DD] px-3 text-left text-[11px] font-bold text-[#D84D52] disabled:text-[#A99D97]">{postReported ? '신고 완료' : '게시물 신고'}</button>
                 </>
               )}
