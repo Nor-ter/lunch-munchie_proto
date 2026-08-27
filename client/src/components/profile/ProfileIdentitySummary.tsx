@@ -27,7 +27,10 @@ export default function ProfileIdentitySummary({
         {avatar}
         <div className="min-w-0 flex-1 pt-11">
           <div className="flex min-w-0 items-center gap-2 whitespace-nowrap">
-            <p className="min-w-0 truncate text-[19px] font-black text-[#3B2A22]">
+            <p
+              className="min-w-0 truncate text-[19px] font-black text-[#3B2A22]"
+              data-profile-display-name="true"
+            >
               {displayName}
             </p>
             <span className="shrink-0 rounded-full bg-white/80 px-1.5 py-0.5 text-[9px] font-bold text-[#C7864B]">
@@ -35,14 +38,18 @@ export default function ProfileIdentitySummary({
             </span>
           </div>
 
-          <div className="mt-1.5 flex min-w-0 items-center gap-3">
+          <div className="relative mt-1.5 min-w-0" data-profile-handle-row="true">
             <p
-              className="min-w-0 flex-1 truncate text-[13px] font-medium text-[#8A6E60]"
+              className={`min-w-0 truncate text-[13px] font-medium text-[#8A6E60] ${secondaryAction ? 'pr-[90px]' : ''}`}
               data-testid="profile-user-handle"
             >
               {handle ? `@${handle}` : handleFallback}
             </p>
-            {secondaryAction && <div className="shrink-0">{secondaryAction}</div>}
+            {secondaryAction && (
+              <div className="absolute right-0 top-0" data-profile-secondary-action="true">
+                {secondaryAction}
+              </div>
+            )}
           </div>
 
           {location && (

@@ -63,7 +63,7 @@ export default function OtherProfilePage() {
 
         <ProfileIdentitySummary
           avatar={(
-            <Avatar className="size-[78px] shrink-0 border-4 border-[#F8DCD2] bg-white shadow-md">
+            <Avatar className="size-[86px] shrink-0 border-4 border-[#F8DCD2] bg-white shadow-md">
               {user.profile_image_url && <AvatarImage src={user.profile_image_url} alt={`${user.username} 프로필`} />}
               <AvatarFallback className="bg-white/70 text-xl font-black">{avatarFallback}</AvatarFallback>
             </Avatar>

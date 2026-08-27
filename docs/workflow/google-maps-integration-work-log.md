@@ -511,3 +511,8 @@
 - Feed의 현재 browser history entry에 scrollTop과 filter/search/location view state를 저장한다. Feed 작성자 또는 사용자 검색 결과에서 타인 프로필로 들어갈 때 해당 entry를 복귀 대상으로 표시하고, Back 복귀 시 AppContext에 남아 있는 loaded items/cursor를 유지해 불필요한 전체 refresh를 생략한다.
 - 타인 프로필 상단 Back과 오류 상태의 복귀 버튼은 모두 `window.history.back()`을 사용한다. Follow/Profile/Lunchmate API와 데이터 계약은 변경하지 않았다.
 - 360×740 Playwright에서 12개 Feed를 아래로 스크롤한 뒤 타인 프로필 진입 → 브라우저 기본 Back 및 화면 상단 Back을 각각 실행해 동일 scrollTop, 접힌 filter 상태, 12개 loaded items와 Feed request 수가 유지됨을 확인했다. 전체 프로필 E2E 5/5와 관련 Vitest 16/16을 통과했다.
+
+### 21.7 PROFILE CARD PIXEL PARITY FOLLOW-UP
+- 동일 360×740 viewport 비교에서 visitor의 Follow 버튼이 username 행 높이에 참여해 owner보다 card·stats·feed title을 12.5px 아래로 밀었고, owner avatar는 테두리 포함 86px인 반면 visitor avatar는 78px였다.
+- owner 구조와 수치는 변경하지 않았다. visitor avatar를 86px로 맞추고 Follow를 공용 `ProfileIdentitySummary`의 username 행 우측에 absolute 배치해 새로운 row height를 만들지 않도록 했다. 긴 display name은 badge 앞에서 truncate되고 username은 Follow 폭 90px을 예약한다.
+- Playwright 픽셀 검증에서 hero card width/height, Room x/y/width/height, avatar x/y/size, display name·username baseline, stats y/height, feed title y가 owner/visitor 사이 1px 이내로 일치했다. `보기 전용` 미노출과 read-only 동작, Follow·Lunchmate·Feed API는 그대로 유지했다.

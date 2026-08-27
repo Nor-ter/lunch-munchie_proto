@@ -1,5 +1,11 @@
 import { expect, test, type Page } from 'playwright/test';
 
+async function requiredBox(locator: ReturnType<Page['locator']>) {
+  const box = await locator.boundingBox();
+  expect(box).not.toBeNull();
+  return box!;
+}
+
 const lunchmate = (skin: string) => ({
   visibility: 'public' as const,
   character: '🐥',
@@ -52,9 +58,16 @@ test('owner and visitor profiles share a centred mobile header', async ({ page }
   await expect(ownerTitle).toBeVisible();
   await expect(page.getByRole('button', { name: '프로필 설정' })).toBeVisible();
   const ownerBox = await ownerTitle.boundingBox();
-  const ownerStageBox = await page.locator('[data-profile-lunchmate-stage="true"]').first().boundingBox();
+  const ownerHero = page.locator('[data-profile-hero-card="owner"]');
+  const ownerIdentity = ownerHero.locator('[data-profile-identity-summary="true"]');
+  const ownerStageBox = await requiredBox(ownerHero.locator('[data-profile-lunchmate-stage="true"]'));
+  const ownerHeroBox = await requiredBox(ownerHero);
+  const ownerAvatarBox = await requiredBox(ownerIdentity.locator(':scope > div > :first-child'));
+  const ownerNameBox = await requiredBox(page.getByText('Owner', { exact: true }));
+  const ownerHandleBox = await requiredBox(ownerIdentity.getByTestId('profile-user-handle'));
+  const ownerStatsBox = await requiredBox(ownerHero.locator(':scope > div').last());
+  const ownerFeedTitleBox = await requiredBox(page.getByRole('heading', { name: '나의 피드 0' }));
   expect(ownerBox).not.toBeNull();
-  expect(ownerStageBox).not.toBeNull();
   expect(Math.abs((ownerBox!.x + ownerBox!.width / 2) - 180)).toBeLessThanOrEqual(1);
 
   await page.route('**/api/users/visitor-user', route => route.fulfill({
@@ -72,39 +85,74 @@ test('owner and visitor profiles share a centred mobile header', async ({ page }
   await expect(page.getByRole('button', { name: '뒤로 가기' })).toBeVisible();
   await expect(page.locator('[data-profile-hero-card="visitor"]')).toBeVisible();
   await expect(page.locator('[data-profile-hero-card="visitor"] [data-testid="public-lunchmate-room"]')).toBeVisible();
-  const visitorStageBox = await page.locator('[data-profile-lunchmate-stage="true"]').boundingBox();
-  expect(visitorStageBox).not.toBeNull();
-  expect(Math.abs(visitorStageBox!.width - ownerStageBox!.width)).toBeLessThanOrEqual(1);
-  expect(Math.abs(visitorStageBox!.height - ownerStageBox!.height)).toBeLessThanOrEqual(1);
+  const visitorHero = page.locator('[data-profile-hero-card="visitor"]');
+  const visitorIdentity = visitorHero.locator('[data-profile-identity-summary="true"]');
+  const visitorStageBox = await requiredBox(visitorHero.locator('[data-profile-lunchmate-stage="true"]'));
+  const visitorHeroBox = await requiredBox(visitorHero);
+  const visitorAvatarBox = await requiredBox(visitorIdentity.locator(':scope > div > :first-child'));
+  const visitorNameBox = await requiredBox(page.getByText('Visitor', { exact: true }));
+  const visitorHandleBox = await requiredBox(visitorIdentity.getByTestId('profile-user-handle'));
+  const visitorStatsBox = await requiredBox(visitorHero.locator(':scope > div').last());
+  const visitorFeedTitleBox = await requiredBox(page.getByRole('heading', { name: 'Visitor님의 피드' }));
+
+  for (const [ownerValue, visitorValue] of [
+    [ownerHeroBox.x, visitorHeroBox.x],
+    [ownerHeroBox.width, visitorHeroBox.width],
+    [ownerHeroBox.height, visitorHeroBox.height],
+    [ownerStageBox.x, visitorStageBox.x],
+    [ownerStageBox.y, visitorStageBox.y],
+    [ownerStageBox.width, visitorStageBox.width],
+    [ownerStageBox.height, visitorStageBox.height],
+    [ownerAvatarBox.x, visitorAvatarBox.x],
+    [ownerAvatarBox.y, visitorAvatarBox.y],
+    [ownerAvatarBox.width, visitorAvatarBox.width],
+    [ownerAvatarBox.height, visitorAvatarBox.height],
+    [ownerNameBox.x, visitorNameBox.x],
+    [ownerNameBox.y, visitorNameBox.y],
+    [ownerHandleBox.x, visitorHandleBox.x],
+    [ownerHandleBox.y, visitorHandleBox.y],
+    [ownerStatsBox.y, visitorStatsBox.y],
+    [ownerStatsBox.height, visitorStatsBox.height],
+    [ownerFeedTitleBox.y, visitorFeedTitleBox.y],
+  ]) {
+    expect(Math.abs(ownerValue - visitorValue)).toBeLessThanOrEqual(1);
+  }
 });
 
 test('anonymous visitor sees the viewed user public room without edit controls', async ({ page }) => {
   await mockBaseApis(page);
+  const longDisplayName = 'Public User With A Very Long Display Name';
   await page.route('**/api/users/public-user', route => route.fulfill({
     contentType: 'application/json',
     body: JSON.stringify({
-      id: 'public-user', username: 'Public User', handle: 'public_user', profile_image_url: null,
+      id: 'public-user', username: longDisplayName, handle: 'public_user', profile_image_url: null,
       bio: null, location: null, created_at: 1, lunchmate: lunchmate('blue-note'),
     }),
   }));
 
   await page.goto('/profile/public-user');
   await expect(page.getByTestId('public-lunchmate-room')).toBeVisible();
-  await expect(page.locator('[data-profile-hero-card="visitor"]')).toContainText('Public User');
+  await expect(page.locator('[data-profile-hero-card="visitor"]')).toContainText(longDisplayName);
   await expect(page.getByText('보기 전용')).toHaveCount(0);
   await expect(page.locator('[data-lunchmate-room-background="profile"]')).toBeVisible();
   await expect(page.locator('[data-lunchmate-artwork="chicken"]')).toBeVisible();
-  const publicNameBox = await page.getByText('Public User', { exact: true }).boundingBox();
-  const followBox = await page.getByTestId('follow-button').boundingBox();
-  expect(publicNameBox).not.toBeNull();
-  expect(followBox).not.toBeNull();
-  expect(followBox!.y).toBeGreaterThan(publicNameBox!.y);
+  const publicName = page.locator('[data-profile-display-name="true"]');
+  const publicNameBox = await requiredBox(publicName);
+  const handleBox = await requiredBox(page.getByTestId('profile-user-handle'));
+  const followBox = await requiredBox(page.getByTestId('follow-button'));
+  const nameOverflow = await publicName.evaluate(element => ({
+    clientWidth: element.clientWidth,
+    scrollWidth: element.scrollWidth,
+  }));
+  expect(nameOverflow.scrollWidth).toBeGreaterThan(nameOverflow.clientWidth);
+  expect(followBox.y).toBeGreaterThan(publicNameBox.y);
+  expect(Math.abs(followBox.y - handleBox.y)).toBeLessThanOrEqual(1);
   await expect(
     page.getByRole('region', { name: '읽기 전용 런치메이트 룸' }).getByRole('button'),
   ).toHaveCount(0);
 
   await page.reload();
-  await expect(page.getByText('Public User', { exact: true })).toBeVisible();
+  await expect(page.getByText(longDisplayName, { exact: true })).toBeVisible();
   await expect(page.getByTestId('public-lunchmate-room')).toBeVisible();
 });
 

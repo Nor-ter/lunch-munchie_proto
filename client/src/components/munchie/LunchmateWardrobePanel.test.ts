@@ -184,7 +184,8 @@ describe('Lunchmate wardrobe UI contracts', () => {
     expect(PROFILE_IDENTITY_SOURCE).toContain('className="flex min-w-0 items-start gap-4"');
     expect(PROFILE_IDENTITY_SOURCE).toContain('className="min-w-0 flex-1 pt-11"');
     expect(PROFILE_IDENTITY_SOURCE).toContain('className="flex min-w-0 items-center gap-2 whitespace-nowrap"');
-    expect(PROFILE_IDENTITY_SOURCE).toContain('className="mt-1.5 flex min-w-0 items-center gap-3"');
+    expect(PROFILE_IDENTITY_SOURCE).toContain('className="relative mt-1.5 min-w-0"');
+    expect(PROFILE_IDENTITY_SOURCE).toContain('className="absolute right-0 top-0"');
     expect(PROFILE_SOURCE).toContain('className="mt-5 grid grid-cols-3"');
   });
 

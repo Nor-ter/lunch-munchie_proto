@@ -51,6 +51,9 @@ describe('shared profile header and visitor Lunchmate room', () => {
     expect(identitySource).toContain('relative z-20 -mt-9 px-3');
     expect(identitySource).toContain('text-[19px] font-black');
     expect(identitySource).toContain('secondaryAction');
+    expect(identitySource).toContain("secondaryAction ? 'pr-[90px]' : ''");
+    expect(identitySource).toContain('className="absolute right-0 top-0"');
+    expect(otherProfileSource).toContain('size-[86px]');
     expect(roomSource).not.toContain('Lunchmate Room</h2>');
   });
 
