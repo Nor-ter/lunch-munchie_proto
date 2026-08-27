@@ -410,6 +410,7 @@ function ProfilePageContent() {
       <ProfileHeader
         rightAction={(
           <HeaderIconButton
+            className="-translate-x-0.5"
             onClick={() => { setEditName(profile.name); setEditHandle(profile.handle ?? ''); setActiveSheet('settings'); }}
             aria-label="프로필 설정"
           >
@@ -710,7 +711,7 @@ function ProfileGuestPreview() {
     <div className="min-h-dvh bg-[#FCF4EE] pb-24">
       <ProfileHeader
         rightAction={(
-          <HeaderIconButton onClick={goToLogin} aria-label="프로필 설정">
+          <HeaderIconButton className="-translate-x-0.5" onClick={goToLogin} aria-label="프로필 설정">
             <Settings size={18} color="#4A4A4A" />
           </HeaderIconButton>
         )}

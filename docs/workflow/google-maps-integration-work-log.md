@@ -516,3 +516,7 @@
 - 동일 360×740 viewport 비교에서 visitor의 Follow 버튼이 username 행 높이에 참여해 owner보다 card·stats·feed title을 12.5px 아래로 밀었고, owner avatar는 테두리 포함 86px인 반면 visitor avatar는 78px였다.
 - owner 구조와 수치는 변경하지 않았다. visitor avatar를 86px로 맞추고 Follow를 공용 `ProfileIdentitySummary`의 username 행 우측에 absolute 배치해 새로운 row height를 만들지 않도록 했다. 긴 display name은 badge 앞에서 truncate되고 username은 Follow 폭 90px을 예약한다.
 - Playwright 픽셀 검증에서 hero card width/height, Room x/y/width/height, avatar x/y/size, display name·username baseline, stats y/height, feed title y가 owner/visitor 사이 1px 이내로 일치했다. `보기 전용` 미노출과 read-only 동작, Follow·Lunchmate·Feed API는 그대로 유지했다.
+
+### 21.8 OWNER SETTINGS BUTTON POSITION FOLLOW-UP
+- 내 프로필 설정 버튼만 기존 위치에서 2px 왼쪽으로 이동했다. 공용 `ProfileHeader`와 타인 프로필의 Back·Follow 배치는 변경하지 않았다.
+- 로그인 프로필과 로그인 전 미리보기의 설정 버튼 위치를 동일하게 맞췄다. 프로필 집중 Vitest 12/12, TypeScript, production build를 통과했다.
