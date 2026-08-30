@@ -1,7 +1,7 @@
 /**
  * 코스맵 만들기 — 4단계 통합 플로우 (코스맵과 피드를 순차적으로 동시 작성)
  * ① 코스맵 정하기 — 해시태그·한줄평 + 숫자핀(최대 3) 지도검색 + 사진박스
- * ② 템플릿 선택·꾸미기 — 템플릿을 즉시 비교하며 사진 배치·크기·회전 조정
+ * ② 슬라이드 사진·정보 꾸미기 — 4:5 사진별 식당 귀속·순서·오버레이 조정
  * ③ 미리보기 — 게시 전 확인 (버튼 비활성)
  * ④ 포스팅 완료 — 랜덤 런치박스 음식 보상 지급
  */
@@ -45,10 +45,18 @@ import { getPlaceDetails } from '@/services/placesApi';
 import { mapGoogleRestaurant } from '@/lib/googlePlaces';
 import { replaceWithGoogleAuth, startGoogleAuth } from '@/services/authApi';
 import BackButton from '@/components/ui/BackButton';
+import FeedStoryEditor from '@/components/munchie/FeedStoryEditor';
+import {
+  MAX_FEED_STORY_SLIDES,
+  buildDefaultFeedStorySlides,
+  normalizeFeedStorySlides,
+  setFeedStorySlideRestaurant,
+  type FeedStorySlide,
+} from '@/lib/feedStory';
 
 const STEP_TITLES = [
   '코스맵을 정하세요',
-  '템플릿을 선택하고 꾸며 보아요',
+  '사진과 정보를 꾸며 보아요',
   '미리보기',
   '포스팅 완료!',
 ];
@@ -99,7 +107,7 @@ interface CoursePin {
   photo: string | null;
 }
 
-type PhotoAttribution = {
+export type PhotoAttribution = {
   classification: 'restaurant' | 'other';
   restaurantId?: string;
   source: 'gps_suggestion' | 'user_selected' | 'other';
@@ -471,6 +479,261 @@ function PinsStep({
 
 // ── ② 템플릿 꾸미기 (drag & drop) ─────────────────────────────────────────────
 
+export function moveStoryPhoto(
+  photos: PlacedPhoto[],
+  photoId: string,
+  direction: -1 | 1,
+) {
+  const currentIndex = photos.findIndex(photo => photo.id === photoId);
+  const nextIndex = currentIndex + direction;
+  if (currentIndex < 0 || nextIndex < 0 || nextIndex >= photos.length) return photos;
+  const next = [...photos];
+  [next[currentIndex], next[nextIndex]] = [next[nextIndex]!, next[currentIndex]!];
+  return next;
+}
+
+/** 신규 게시 흐름에서 사용하는 슬라이드 단위 사진 편집기. */
+export function StoryPhotoStep({
+  placed,
+  setPlaced,
+  restaurants = [],
+  photoAttributions = {},
+  onAddUpload,
+  onRemoveFromPool,
+  onUpdateAttribution = () => undefined,
+  onEditPhoto,
+}: {
+  placed: PlacedPhoto[];
+  setPlaced: React.Dispatch<React.SetStateAction<PlacedPhoto[]>>;
+  restaurants?: Restaurant[];
+  photoAttributions?: Record<string, PhotoAttribution>;
+  onAddUpload: (url: string, attribution: PhotoAttribution) => void;
+  onRemoveFromPool: (url: string) => void;
+  onUpdateAttribution?: (url: string, attribution: PhotoAttribution) => void;
+  onEditPhoto: (id: string) => void;
+}) {
+  const uploadRef = useRef<HTMLInputElement>(null);
+  const [selectedId, setSelectedId] = useState<string | null>(placed[0]?.id ?? null);
+  const activeIndex = placed.findIndex(photo => photo.id === selectedId);
+  const activePhoto = activeIndex >= 0 ? placed[activeIndex]! : null;
+  const activeSource = activePhoto ? activePhoto.originalSrc ?? activePhoto.src : '';
+  const activeAttribution = activeSource
+    ? photoAttributions[activeSource] ?? { classification: 'other' as const, source: 'other' as const }
+    : null;
+
+  useEffect(() => {
+    if (placed.length === 0) {
+      setSelectedId(null);
+      return;
+    }
+    if (!placed.some(photo => photo.id === selectedId)) setSelectedId(placed[0]!.id);
+  }, [placed, selectedId]);
+
+  const handleUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(event.target.files ?? []);
+    event.target.value = '';
+    if (files.length === 0) return;
+
+    const knownPhotos = new Set(placed.map(photo => photo.originalSrc ?? photo.src));
+    const additions: PlacedPhoto[] = [];
+    let duplicateFound = false;
+    const remainingSlots = Math.max(0, MAX_FEED_STORY_SLIDES - placed.length);
+
+    for (const file of files) {
+      if (additions.length >= remainingSlots) break;
+      try {
+        const gps = await readJpegGps(file).catch(() => null);
+        const suggestion = gps ? suggestPhotoRestaurant(gps, restaurants) : null;
+        const url = await fileToResizedDataUrl(file, 1200, 0.86);
+        if (knownPhotos.has(url)) {
+          duplicateFound = true;
+          continue;
+        }
+        knownPhotos.add(url);
+        const attribution: PhotoAttribution = suggestion
+          ? {
+              classification: 'restaurant',
+              restaurantId: suggestion.restaurantId,
+              source: 'gps_suggestion',
+              suggestedDistanceMetres: suggestion.distanceMetres,
+            }
+          : { classification: 'other', source: 'other' };
+        const id = `story_photo_${Date.now()}_${Math.round(Math.random() * 999_999)}`;
+        additions.push({
+          id,
+          src: url,
+          originalSrc: url,
+          x: 50,
+          y: 50,
+          w: 100,
+          h: 100,
+          zoom: 1,
+          rotate: 0,
+        });
+        onAddUpload(url, attribution);
+      } catch {
+        toast.error('사진을 불러오지 못했어요');
+      }
+    }
+
+    if (additions.length > 0) {
+      setPlaced(current => [...current, ...additions].slice(0, MAX_FEED_STORY_SLIDES));
+      setSelectedId(additions[additions.length - 1]!.id);
+    }
+    if (duplicateFound) toast.warning('이미 추가한 사진은 한 번만 보여줘요');
+    if (files.length > remainingSlots) {
+      toast.info(`피드 사진은 최대 ${MAX_FEED_STORY_SLIDES}장까지 추가할 수 있어요`);
+    }
+  };
+
+  const removeActivePhoto = () => {
+    if (!activePhoto) return;
+    const nextPhoto = placed[activeIndex + 1] ?? placed[activeIndex - 1] ?? null;
+    setPlaced(current => current.filter(photo => photo.id !== activePhoto.id));
+    onRemoveFromPool(activeSource);
+    setSelectedId(nextPhoto?.id ?? null);
+  };
+
+  const updateActiveAttribution = (restaurantId: string) => {
+    if (!activeSource) return;
+    onUpdateAttribution(activeSource, restaurantId === 'other'
+      ? { classification: 'other', source: 'other' }
+      : { classification: 'restaurant', restaurantId, source: 'user_selected' });
+  };
+
+  return (
+    <section aria-labelledby="story-photo-step-title" className="space-y-3">
+      <div className="flex items-center justify-between gap-3">
+        <div>
+          <h2 id="story-photo-step-title" className="text-[14px] font-black text-[#34241E]">슬라이드 사진</h2>
+          <p className="mt-0.5 text-[11px] font-semibold text-[#9A8175]">사진별로 4:5 화면과 정보를 꾸미는 방식이에요.</p>
+        </div>
+        <span className="shrink-0 rounded-full bg-[#FFF0EC] px-2.5 py-1 text-[11px] font-black text-[#D94D52]">
+          {placed.length}/{MAX_FEED_STORY_SLIDES}
+        </span>
+      </div>
+
+      <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-hide" aria-label="슬라이드 순서">
+        {placed.map((photo, index) => (
+          <button
+            key={photo.id}
+            type="button"
+            onClick={() => setSelectedId(photo.id)}
+            aria-label={`${index + 1}번 사진 선택`}
+            aria-current={photo.id === selectedId ? 'true' : undefined}
+            className={`relative h-16 w-[52px] shrink-0 overflow-hidden rounded-xl border-2 bg-white active:scale-95 ${photo.id === selectedId ? 'border-[#EB5053]' : 'border-[#E8DED4]'}`}
+          >
+            <img src={photo.src} alt="" className="h-full w-full object-cover" />
+            <span className="absolute left-1 top-1 flex h-5 min-w-5 items-center justify-center rounded-full bg-[#231915]/80 px-1 text-[9px] font-black text-white">
+              {index === 0 ? '대표' : index + 1}
+            </span>
+          </button>
+        ))}
+        {placed.length < MAX_FEED_STORY_SLIDES && (
+          <button
+            type="button"
+            onClick={() => uploadRef.current?.click()}
+            className="flex h-16 min-w-16 shrink-0 flex-col items-center justify-center rounded-xl border-2 border-dashed border-[#DCCBC0] bg-white text-[#A68D80] active:scale-95"
+            aria-label="슬라이드 사진 추가"
+          >
+            <Plus size={18} aria-hidden="true" />
+            <span className="mt-0.5 text-[9px] font-black">사진 추가</span>
+          </button>
+        )}
+        <input ref={uploadRef} type="file" accept="image/*" multiple className="hidden" onChange={handleUpload} />
+      </div>
+
+      {activePhoto ? (
+        <div className="rounded-2xl border border-[#EFE1D7] bg-white p-3 shadow-sm">
+          <div className="relative mx-auto aspect-[4/5] w-full max-w-[310px] overflow-hidden rounded-2xl bg-[#F4ECE6]">
+            <img src={activePhoto.src} alt={`${activeIndex + 1}번 슬라이드 미리보기`} className="h-full w-full object-cover" />
+            <span className="absolute left-3 top-3 rounded-full bg-black/65 px-2.5 py-1 text-[11px] font-black text-white">
+              {activeIndex === 0 ? '대표 사진' : `${activeIndex + 1}/${placed.length}`}
+            </span>
+          </div>
+
+          <div className="mt-3 grid grid-cols-[44px_44px_1fr_44px] gap-2">
+            <button
+              type="button"
+              onClick={() => setPlaced(current => moveStoryPhoto(current, activePhoto.id, -1))}
+              disabled={activeIndex <= 0}
+              aria-label="사진 앞으로 이동"
+              className="flex h-11 w-11 items-center justify-center rounded-xl bg-[#FFF2ED] text-[#D94D52] active:scale-90 disabled:opacity-35"
+            >
+              <ChevronLeft size={20} aria-hidden="true" />
+            </button>
+            <button
+              type="button"
+              onClick={() => setPlaced(current => moveStoryPhoto(current, activePhoto.id, 1))}
+              disabled={activeIndex < 0 || activeIndex >= placed.length - 1}
+              aria-label="사진 뒤로 이동"
+              className="flex h-11 w-11 items-center justify-center rounded-xl bg-[#FFF2ED] text-[#D94D52] active:scale-90 disabled:opacity-35"
+            >
+              <ChevronRight size={20} aria-hidden="true" />
+            </button>
+            <button
+              type="button"
+              onClick={() => onEditPhoto(activePhoto.id)}
+              className="flex h-11 min-w-0 items-center justify-center gap-1.5 rounded-xl bg-[#EB5053] px-3 text-[12px] font-black text-white active:scale-[0.98]"
+              aria-label="4:5 사진 자르기 및 편집"
+            >
+              <Crop size={16} aria-hidden="true" /> 4:5 자르기
+            </button>
+            <button
+              type="button"
+              onClick={removeActivePhoto}
+              aria-label="선택 사진 삭제"
+              className="flex h-11 w-11 items-center justify-center rounded-xl bg-[#FFF2ED] text-[#D94447] active:scale-90"
+            >
+              <Trash2 size={18} aria-hidden="true" />
+            </button>
+          </div>
+
+          <p role="note" className="mt-2 text-center text-[10px] font-bold text-[#8F786C]">
+            첫 번째 사진이 피드와 저장 목록의 대표 사진으로 보여요. 화살표로 순서를 바꿔보세요.
+          </p>
+
+          <label className="mt-3 block text-[11px] font-black text-[#6E5B50]" htmlFor={`story-photo-attribution-${activePhoto.id}`}>
+            이 사진은 어디에서 찍었나요?
+          </label>
+          <select
+            id={`story-photo-attribution-${activePhoto.id}`}
+            aria-label="선택 사진 식당 귀속"
+            value={activeAttribution?.classification === 'restaurant' ? activeAttribution.restaurantId : 'other'}
+            onChange={event => updateActiveAttribution(event.target.value)}
+            className="mt-1.5 h-11 w-full rounded-xl border border-[#E8DED4] bg-white px-3 text-[12px] font-bold text-[#3B2A23] outline-none focus:border-[#EB5053]"
+          >
+            <option value="other">기타 사진</option>
+            {restaurants.map(restaurant => (
+              <option key={restaurant.id} value={restaurant.id}>{restaurant.name}</option>
+            ))}
+          </select>
+          {activeAttribution?.source === 'gps_suggestion' && activeAttribution.restaurantId && (
+            <p role="status" className="mt-1.5 text-[10px] font-bold text-[#D94D52]">
+              사진 위치 기준으로 가까운 식당을 제안했어요. 확인 후 바꿔도 돼요.
+            </p>
+          )}
+        </div>
+      ) : (
+        <button
+          type="button"
+          onClick={() => uploadRef.current?.click()}
+          className="flex min-h-44 w-full flex-col items-center justify-center rounded-2xl border-2 border-dashed border-[#DCCBC0] bg-white px-4 text-center text-[#A68D80] active:scale-[0.99]"
+        >
+          <Plus size={24} aria-hidden="true" />
+          <span className="mt-2 text-[13px] font-black">대표 음식 사진을 추가해주세요</span>
+          <span className="mt-1 text-[10px] font-semibold">1장부터 최대 {MAX_FEED_STORY_SLIDES}장까지 넘겨보는 피드로 만들어요.</span>
+        </button>
+      )}
+
+      <p className="text-[10px] leading-relaxed text-[#A18C80]">
+        사진의 식당 귀속을 확인하면 코스 정보와 오버레이가 정확해져요. 사진 원본 위치 좌표는 저장하지 않아요.
+      </p>
+    </section>
+  );
+}
+
+// 레거시 템플릿 꾸미기 (FeedEditPage 호환): 기존 export를 유지한다.
 export function DecorateStep({
   template, templateIndex, setTemplateIndex, placed, setPlaced, canvasStrokes, setCanvasStrokes, photoPool, restaurants = [], photoAttributions = {}, onAddUpload, onRemoveFromPool, onUpdateAttribution = () => undefined, onEditPhoto,
 }: {
@@ -1636,12 +1899,11 @@ function CoursemapCreateContent() {
     sourceCourse ? sourceCourse.hashtags.map(tag => tag.replace(/^#/, '')) : [],
   );
   const [caption, setCaption] = useState('');
-  const [templateIndex, setTemplateIndex] = useState(0);
+  const templateIndex = 0;
   const [placed, setPlaced] = useState<PlacedPhoto[]>([]);
-  const [canvasStrokes, setCanvasStrokes] = useState<CoursemapCanvasStroke[]>([]);
-  const [uploads, setUploads] = useState<string[]>([]);
+  const canvasStrokes: CoursemapCanvasStroke[] = [];
+  const [storySlides, setStorySlides] = useState<FeedStorySlide[]>([]);
   const [photoAttributions, setPhotoAttributions] = useState<Record<string, PhotoAttribution>>({});
-  const [hiddenPhotoSources, setHiddenPhotoSources] = useState<string[]>([]);
   const [editingPhotoId, setEditingPhotoId] = useState<string | null>(null);
   const [reward, setReward] = useState<{
     food: LunchboxFoodDefinition;
@@ -1656,16 +1918,67 @@ function CoursemapCreateContent() {
 
   const filledPins = pins.filter((pin): pin is CoursePin => !!pin);
   const template = COURSEMAP_TEMPLATES[templateIndex]!;
-  const photoPool = useMemo(() => {
-    // Restaurant catalogue photos are recommendation context, never a stand-in
-    // for what this author actually uploaded to the public feed.
-    return Array.from(new Set(uploads)).filter(photo => !hiddenPhotoSources.includes(photo));
-  }, [hiddenPhotoSources, uploads]);
+  const storyStops = useMemo(() => filledPins.map(pin => ({
+    id: pin.restaurant.id,
+    name: pin.restaurant.name,
+    category: pin.restaurant.category,
+    address: pin.restaurant.address,
+  })), [filledPins]);
+  const storyStopKey = storyStops.map(stop => `${stop.id}:${stop.name}:${stop.category}:${stop.address}`).join('|');
+  const storyAttributionKey = placed.map(photo => {
+    const attribution = photoAttributions[photo.originalSrc ?? photo.src];
+    return `${photo.id}:${attribution?.classification ?? 'other'}:${attribution?.restaurantId ?? ''}`;
+  }).join('|');
+
+  useEffect(() => {
+    const seen = new Set<string>();
+    const storyPhotos = placed
+      .filter(photo => {
+        if (seen.has(photo.src)) return false;
+        seen.add(photo.src);
+        return true;
+      })
+      .slice(0, MAX_FEED_STORY_SLIDES);
+    const defaults = buildDefaultFeedStorySlides(
+      storyPhotos.map(photo => photo.src),
+      {
+        caption,
+        stops: storyStops,
+        photoRestaurantIds: storyPhotos.map(photo => {
+          const attribution = photoAttributions[photo.originalSrc ?? photo.src];
+          return attribution?.classification === 'restaurant' ? attribution.restaurantId : undefined;
+        }),
+      },
+    );
+    setStorySlides(current => {
+      const next = storyPhotos.map((photo, index) => {
+        const existing = current.find(slide => slide.id === photo.id)
+          ?? current.find(slide => slide.photo === photo.src || slide.photo === photo.originalSrc);
+        return existing
+          ? { ...existing, id: photo.id, photo: photo.src }
+          : { ...defaults[index]!, id: photo.id };
+      });
+      return JSON.stringify(next) === JSON.stringify(current) ? current : next;
+    });
+  }, [caption, placed, storyAttributionKey, storyStopKey]);
+
+  const updatePhotoAttribution = (url: string, attribution: PhotoAttribution) => {
+    setPhotoAttributions(previous => ({ ...previous, [url]: attribution }));
+    const photo = placed.find(item => (item.originalSrc ?? item.src) === url);
+    if (!photo) return;
+    const restaurant = attribution.classification === 'restaurant'
+      ? filledPins.find(pin => pin.restaurant.id === attribution.restaurantId)?.restaurant
+      : undefined;
+    setStorySlides(current => current.map(slide => {
+      if (slide.id !== photo.id && slide.photo !== photo.src && slide.photo !== photo.originalSrc) return slide;
+      return setFeedStorySlideRestaurant(slide, restaurant);
+    }));
+  };
   const previewCourse: Course = {
     id: '__munchie_preview__',
     title: caption.trim() || '새 먼치맵',
     description: caption.trim(),
-    heroImage: photoPool[0] ?? filledPins[0]?.restaurant.image ?? '',
+    heroImage: placed[0]?.src ?? filledPins[0]?.restaurant.image ?? '',
     tags: ['맛집'],
     hashtags,
     region: filledPins[0]?.restaurant.address ?? '',
@@ -1694,6 +2007,7 @@ function CoursemapCreateContent() {
     authorImage: profile.avatarPhoto,
     courseId: previewCourse.id,
     photos: placed.map(photo => photo.src),
+    storySlides,
     caption: caption.trim(),
     skinId: template.id,
     photoPlacements: toFeedPhotoPlacements(placed),
@@ -1734,12 +2048,12 @@ function CoursemapCreateContent() {
       const linked = filledPins.map(pin => pin.restaurant);
       const tagPool = Array.from(new Set(linked.flatMap(restaurant => restaurant.tags)));
       const title = `${linked[0]!.name}${linked.length > 1 ? ` 외 ${linked.length - 1}곳` : ''} 코스`;
-      const publishedPhotos = placed.slice(0, MAX_MUNCHIE_FEED_PHOTOS);
+      const publishedPhotos = placed.slice(0, MAX_FEED_STORY_SLIDES);
       const course: Course = {
         id: '',
         title,
         description: caption.trim(),
-        heroImage: photoPool[0] ?? linked[0]!.image ?? '',
+        heroImage: placed[0]?.src ?? linked[0]!.image ?? '',
         tags: (tagPool.length > 0 ? tagPool : ['맛집']).slice(0, 2) as Course['tags'],
         hashtags,
         region: linked[0]!.address.split(' ').slice(0, 2).join(' '),
@@ -1770,6 +2084,14 @@ function CoursemapCreateContent() {
       };
       const serverPlaced = await Promise.all(publishedPhotos.map(async photo => ({ ...photo, src: await persistPhoto(photo.src) })));
       const serverPhotos = Array.from(new Set(serverPlaced.map(photo => photo.src)));
+      const serverPhotoBySlideId = new Map(serverPlaced.map(photo => [photo.id, photo.src]));
+      const serverStorySlides = normalizeFeedStorySlides(
+        storySlides.map(slide => ({
+          ...slide,
+          photo: serverPhotoBySlideId.get(slide.id) ?? slide.photo,
+        })),
+        { allowedPhotos: serverPhotos },
+      );
       const serverAttributions = serverPlaced.map(photo => {
         const attribution = photoAttributions[photo.originalSrc ?? photo.src] ?? { classification: 'other' as const, source: 'other' as const };
         return {
@@ -1789,7 +2111,8 @@ function CoursemapCreateContent() {
           title: course.title, description: course.description, heroImage: serverPhotos[0] ?? course.heroImage,
           tags: course.tags, hashtags: course.hashtags, region: course.region,
           metadata: course.metadata, stops: course.stops, feedPhotos: serverPhotos,
-          feedDecor: serverPlaced, templateId: template.id, photoAttributions: serverAttributions,
+          feedDecor: serverPlaced, storySlides: serverStorySlides,
+          templateId: template.id, photoAttributions: serverAttributions,
           ...(sourceCourseId ? { sourceCourseId } : {}),
         }),
       });
@@ -1800,7 +2123,12 @@ function CoursemapCreateContent() {
         return;
       }
       if (!response.ok || !saved.id) throw new Error(saved.error ?? '코스를 저장하지 못했어요.');
-      const persistedCourse = { ...course, id: saved.id, creatorId: saved.authorId ?? profile.id };
+      const persistedCourse = {
+        ...course,
+        id: saved.id,
+        creatorId: saved.authorId ?? profile.id,
+        heroImage: serverPhotos[0] ?? '',
+      };
       addCourse(persistedCourse);
       await refreshFeedPosts();
       setTemplateForCourse(saved.id, template.id);
@@ -1879,34 +2207,38 @@ function CoursemapCreateContent() {
           )}
 
           {step === 1 && (
-            <DecorateStep
-                template={template}
-                templateIndex={templateIndex}
-                setTemplateIndex={setTemplateIndex}
+            <div className="space-y-5">
+              <div className="rounded-2xl border border-[#F0D8CD] bg-white px-4 py-3">
+                <p className="text-[13px] font-black text-[#34241E]">1. 대표 음식 사진을 추가하고 보정하세요</p>
+                <p className="mt-1 text-[11px] font-semibold leading-relaxed text-[#9A8175]">작성자가 직접 올린 사진만 피드 슬라이드에 사용돼요.</p>
+              </div>
+              <StoryPhotoStep
                 placed={placed}
                 setPlaced={setPlaced}
-                canvasStrokes={canvasStrokes}
-                setCanvasStrokes={setCanvasStrokes}
-                photoPool={photoPool}
                 restaurants={filledPins.map(pin => pin.restaurant)}
                 photoAttributions={photoAttributions}
                 onAddUpload={(url, attribution) => {
-                  setHiddenPhotoSources(prev => prev.filter(photo => photo !== url));
-                  setUploads(prev => prev.includes(url) ? prev : [...prev, url]);
                   setPhotoAttributions(prev => ({ ...prev, [url]: attribution }));
                 }}
                 onRemoveFromPool={url => {
-                  setHiddenPhotoSources(prev => prev.includes(url) ? prev : [...prev, url]);
-                  setUploads(prev => prev.filter(photo => photo !== url));
                   setPhotoAttributions(prev => {
                     const next = { ...prev };
                     delete next[url];
                     return next;
                   });
                 }}
-                onUpdateAttribution={(url, attribution) => setPhotoAttributions(prev => ({ ...prev, [url]: attribution }))}
+                onUpdateAttribution={updatePhotoAttribution}
                 onEditPhoto={id => setEditingPhotoId(id)}
               />
+              {storySlides.length > 0 && (
+                <FeedStoryEditor
+                  slides={storySlides}
+                  onChange={setStorySlides}
+                  stops={storyStops}
+                  restaurants={filledPins.map(pin => ({ id: pin.restaurant.id, name: pin.restaurant.name }))}
+                />
+              )}
+            </div>
           )}
 
           {step === 2 && (
@@ -2017,17 +2349,14 @@ function CoursemapCreateContent() {
       <AnimatePresence>
         {editingPhoto && (
           <PhotoEditorModal
-            originalSrc={editingPhoto.originalSrc ?? editingPhoto.src}
-            cropAspect={(editingPhoto.w * 3) / ((editingPhoto.h ?? editingPhoto.w) * 4)}
-            onBack={nextCropAspect => {
-              setPlaced(prev => prev.map(photo => photo.id === editingPhoto.id
-                ? { ...photo, ...photoFrameSizeForCropAspect(photo, nextCropAspect) }
-                : photo));
+            originalSrc={editingPhoto.src}
+            cropAspect={4 / 5}
+            onBack={() => {
               setEditingPhotoId(null);
             }}
-            onSave={(dataUrl, nextCropAspect) => {
+            onSave={dataUrl => {
               setPlaced(prev => prev.map(photo => photo.id === editingPhoto.id
-                ? { ...photo, src: dataUrl, zoom: 1, ...photoFrameSizeForCropAspect(photo, nextCropAspect) }
+                ? { ...photo, src: dataUrl, zoom: 1 }
                 : photo));
               setEditingPhotoId(null);
               toast.success('사진을 꾸몄어요 ✨');

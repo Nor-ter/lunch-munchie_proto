@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react';
+import { useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react';
 import { createPortal } from 'react-dom';
 import { AnimatePresence, motion } from 'framer-motion';
 import {
@@ -20,6 +20,7 @@ import { isFeedCommentHidden, type Course, type FeedPost, type Restaurant, useAp
 import type { CoursemapTemplate } from '@/constants/coursemapTemplates';
 import type { CoursemapCanvasStroke, PlacedPhoto } from '@/lib/coursemapDecor';
 import FoodHeroCourseOverlay, { type FoodHeroCourseStop } from '@/components/munchie/FoodHeroCourseOverlay';
+import { feedStoryRestaurantIdsForPhotos } from '@/lib/feedStory';
 import { acquireDocumentScrollLock } from '@/lib/documentScrollLock';
 import { resolveFeedAuthorId } from '@/lib/profileFeed';
 import { logCourseFeedImpression } from '@/lib/eventLogger';
@@ -103,6 +104,7 @@ export default function UnifiedMunchieCard({
   const [showPostMenu, setShowPostMenu] = useState(false);
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
   const lastArtworkTapAtRef = useRef(0);
+  const artworkPointerStartRef = useRef<{ pointerId: number; x: number; y: number } | null>(null);
   const [postReported, setPostReported] = useState(() => {
     try { return JSON.parse(localStorage.getItem('lm_reported_feed_ids') ?? '[]').includes(post.id); }
     catch { return false; }
@@ -124,7 +126,7 @@ export default function UnifiedMunchieCard({
   // 오래된 피드가 API 코스 목록에 없어도 작성자 사진과 한줄평은 게시물 자체에서 보존한다.
   const course: Course = linkedCourse ?? {
     id: post.courseId,
-    title: '',
+    title: post.title ?? '',
     description: post.caption,
     heroImage: '',
     tags: post.tags,
@@ -154,6 +156,12 @@ export default function UnifiedMunchieCard({
       address: restaurant?.address ?? embeddedStop?.address,
     };
   });
+  const photoRestaurantIds = useMemo(
+    () => post.photoAttributions?.length
+      ? feedStoryRestaurantIdsForPhotos(post.photos, post.photoAttributions)
+      : undefined,
+    [post.photoAttributions, post.photos],
+  );
   const visibleComments = post.comments.filter(item => !isFeedCommentHidden(item));
   const rootComments = visibleComments.filter(item => !item.parentId);
   const liked = likedFeedIds.includes(post.id);
@@ -281,8 +289,27 @@ export default function UnifiedMunchieCard({
       await copyShareLink();
     }
   };
+  const handleArtworkPointerDown = (event: ReactPointerEvent<HTMLDivElement>) => {
+    if (!interactive || event.button !== 0) return;
+    artworkPointerStartRef.current = {
+      pointerId: event.pointerId,
+      x: event.clientX,
+      y: event.clientY,
+    };
+  };
   const handleArtworkPointerUp = (event: ReactPointerEvent<HTMLDivElement>) => {
     if (!interactive || event.button !== 0) return;
+    const start = artworkPointerStartRef.current;
+    artworkPointerStartRef.current = null;
+    if (
+      !start
+      || start.pointerId !== event.pointerId
+      || Math.hypot(event.clientX - start.x, event.clientY - start.y) >= 8
+    ) {
+      // A carousel swipe or feed scroll must never be interpreted as a like.
+      lastArtworkTapAtRef.current = 0;
+      return;
+    }
     const tappedAt = Date.now();
     const elapsed = tappedAt - lastArtworkTapAtRef.current;
     if (elapsed >= 60 && elapsed <= 320) {
@@ -369,17 +396,18 @@ export default function UnifiedMunchieCard({
           <button type="button" onClick={() => setShowPostMenu(value => !value)} aria-label="게시물 메뉴" className={`flex h-6 w-6 items-center justify-center ${homeSummary ? 'text-[#D94447]' : 'text-[#413733]'}`}><MoreHorizontal size={15} strokeWidth={3} /></button>
         </header>
         <div className={`relative mx-2 mb-2 overflow-hidden rounded-[12px] border bg-[#F1E7DE] ${homeSummary ? 'border-[#F2B6AB]' : 'border-[#E8D6CC]'}`}>
-          <button type="button" onClick={() => go(compactDetailPath)} className="block w-full text-left" aria-label="피드 상세 보기">
-            <FoodHeroCourseOverlay
-              photos={post.missingOriginalMedia ? [] : post.photos}
-              title={course.title}
-              caption={post.caption}
-              stops={foodHeroStops}
-              placeCount={orderedStopIds.length || course.metadata.placeCount}
-              compact
-              eager
-            />
-          </button>
+          <FoodHeroCourseOverlay
+            photos={post.missingOriginalMedia ? [] : post.photos}
+            slides={post.storySlides}
+            photoRestaurantIds={photoRestaurantIds}
+            title={course.title}
+            caption={post.caption}
+            stops={foodHeroStops}
+            placeCount={orderedStopIds.length || course.metadata.placeCount}
+            compact
+            eager
+            onActivate={() => go(compactDetailPath)}
+          />
           {!homeSummary && (
             <div className="flex h-8 items-center justify-between border-t border-[#E8D6CC] bg-[#FFFDFC] px-2">
               <span className="flex items-center gap-0.5 text-[8px] font-black text-[#E76B68]"><ThumbsUp size={11} />{post.likes}</span>
@@ -454,11 +482,14 @@ export default function UnifiedMunchieCard({
 
         <div
           data-ui="munchie-food-hero-interaction"
+          onPointerDown={handleArtworkPointerDown}
           onPointerUp={handleArtworkPointerUp}
           className="relative mx-3 block touch-manipulation overflow-hidden rounded-[14px] border border-[#EED9D0] bg-[#F1E7DE]"
         >
           <FoodHeroCourseOverlay
             photos={post.missingOriginalMedia ? [] : post.photos}
+            slides={post.storySlides}
+            photoRestaurantIds={photoRestaurantIds}
             title={course.title}
             caption={post.caption}
             stops={foodHeroStops}

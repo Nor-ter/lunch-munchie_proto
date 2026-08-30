@@ -1,7 +1,18 @@
 import { describe, expect, it, vi } from "vitest";
 import { app, type EnvBindings } from "./[[path]]";
 
-function createEnv(): EnvBindings {
+function createEnv(
+  feedStory?: unknown,
+  attribution: {
+    restaurant_id: string | null;
+    classification: "restaurant" | "other";
+    attribution_source: "gps_suggestion" | "user_selected" | "other";
+  } = {
+    restaurant_id: "drv_0f86e92497c5",
+    classification: "restaurant",
+    attribution_source: "user_selected",
+  },
+): EnvBindings {
   const existingPhoto = "/photos/drv_0f86e92497c5/37299089e163.jpg";
   const db = {
     prepare: vi.fn((query: string) => {
@@ -36,6 +47,26 @@ function createEnv(): EnvBindings {
                   { id: "ok", src: existingPhoto, x: 0, y: 0, w: 1, h: 1, rotate: 0 },
                   { id: "missing", src: "/photos/drv_0f86e92497c5/cd023fe7cdca.jpg", x: 0, y: 0, w: 1, h: 1, rotate: 0 },
                 ]),
+                feed_story: JSON.stringify(feedStory ?? [{
+                  id: "existing-slide",
+                  photo: existingPhoto,
+                  overlays: [{
+                    id: "restaurant-name",
+                    kind: "restaurant_name",
+                    text: "CATALOGUE",
+                    restaurantId: "drv_0f86e92497c5",
+                    x: 50,
+                    y: 80,
+                    width: 90,
+                    tone: "light",
+                    size: "lg",
+                    align: "left",
+                  }],
+                }, {
+                  id: "missing-slide",
+                  photo: "/photos/drv_0f86e92497c5/cd023fe7cdca.jpg",
+                  overlays: [],
+                }]),
                 template_id: "pink-picnic",
                 tags: JSON.stringify(["카페"]),
                 likes_count: 0,
@@ -61,6 +92,12 @@ function createEnv(): EnvBindings {
           }
           if (query.includes("FROM course_media") || query.includes("FROM feed_comments")) {
             return { results: [] };
+          }
+          if (query.includes("FROM course_photo_attributions")) {
+            return { results: [{
+              r2_path: existingPhoto,
+              ...attribution,
+            }] };
           }
           return { results: [] };
         }),
@@ -94,8 +131,47 @@ describe("feed media", () => {
     expect(feed[0].decor).toEqual([
       expect.objectContaining({ src: "/photos/drv_0f86e92497c5/37299089e163.jpg" }),
     ]);
+    expect(feed[0].storySlides).toEqual([{
+      id: "existing-slide",
+      photo: "/photos/drv_0f86e92497c5/37299089e163.jpg",
+      overlays: [expect.objectContaining({
+        kind: "restaurant_name",
+        restaurantId: "drv_0f86e92497c5",
+      })],
+    }]);
+    expect(feed[0].photoAttributions).toEqual([{
+      r2Path: "/photos/drv_0f86e92497c5/37299089e163.jpg",
+      restaurantId: "drv_0f86e92497c5",
+      classification: "restaurant",
+      source: "user_selected",
+    }]);
     expect(feed[0].stops[0].restaurant.photos).toEqual([
       "/photos/drv_0f86e92497c5/37299089e163.jpg",
     ]);
+  });
+
+  it("keeps an empty legacy story empty so the client can build metadata-aware defaults", async () => {
+    const response = await app.request("http://localhost/api/feed", {}, createEnv([]));
+    const feed = await response.json<any[]>();
+
+    expect(response.status).toBe(200);
+    expect(feed[0].photos).toEqual(["/photos/drv_0f86e92497c5/37299089e163.jpg"]);
+    expect(feed[0].storySlides).toEqual([]);
+  });
+
+  it("canonicalizes non-restaurant photo attribution source to other", async () => {
+    const response = await app.request("http://localhost/api/feed", {}, createEnv([], {
+      restaurant_id: null,
+      classification: "other",
+      attribution_source: "gps_suggestion",
+    }));
+    const feed = await response.json<any[]>();
+
+    expect(response.status).toBe(200);
+    expect(feed[0].photoAttributions).toEqual([{
+      r2Path: "/photos/drv_0f86e92497c5/37299089e163.jpg",
+      classification: "other",
+      source: "other",
+    }]);
   });
 });

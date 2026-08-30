@@ -42,9 +42,11 @@ describe('merge4_v1_jp client connections', () => {
     const artworkSource = readClientSource('../components/munchie/FoodHeroCourseOverlay.tsx');
     const cardSource = readClientSource('../components/munchie/UnifiedMunchieCard.tsx');
     expect(artworkSource).toContain('getAuthorPhotoSources');
-    expect(artworkSource).toContain("data-state={activePhoto ? 'photo' : 'empty'}");
+    expect(artworkSource).toContain("data-state={activeSlide && !slideFailed ? 'photo' : 'empty'}");
     expect(artworkSource).toContain('작성자가 등록한 음식 사진이 없어요');
+    expect(artworkSource).toContain('다른 사진으로 자동 대체하지 않아요');
     expect(cardSource).toContain('photos={post.missingOriginalMedia ? [] : post.photos}');
+    expect(cardSource).toContain('slides={post.storySlides}');
     expect(cardSource).not.toContain('photoSources={post.photos}');
   });
 

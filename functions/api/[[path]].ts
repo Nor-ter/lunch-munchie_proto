@@ -172,6 +172,9 @@ async function drainR2MediaDeletionQueue(
       ).bind(error instanceof Error ? error.message.slice(0, 500) : "R2 delete failed", item.r2_path).run();
     }
   }
+  // Exact-path cleanup belongs to the current mutation. An unrelated backlog
+  // must not make this request report a false pending count.
+  if (preferredPaths.length) return pending;
   const remaining = await env.DB.prepare(
     "SELECT COUNT(*) AS count FROM r2_media_deletions",
   ).first<{ count: number }>();
@@ -760,6 +763,161 @@ export function rankMunchieFeedItems<T extends {
     .map(({ item }) => item);
 }
 const MAX_MUNCHIE_FEED_PHOTOS = 6;
+const MAX_FEED_STORY_SLIDES = 6;
+const MAX_FEED_STORY_OVERLAYS = 6;
+const MAX_FEED_STORY_TEXT_LENGTH = 120;
+const FEED_STORY_KINDS = new Set([
+  "course_map",
+  "food_name",
+  "restaurant_name",
+  "price",
+  "review",
+  "text",
+] as const);
+const FEED_STORY_TONES = new Set(["light", "dark", "accent"] as const);
+const FEED_STORY_SIZES = new Set(["sm", "md", "lg"] as const);
+const FEED_STORY_ALIGNS = new Set(["left", "center", "right"] as const);
+
+type FeedStoryKind = "course_map" | "food_name" | "restaurant_name" | "price" | "review" | "text";
+type FeedStoryTone = "light" | "dark" | "accent";
+type FeedStorySize = "sm" | "md" | "lg";
+type FeedStoryAlign = "left" | "center" | "right";
+
+export type FeedStoryOverlay = {
+  id: string;
+  kind: FeedStoryKind;
+  text?: string;
+  restaurantId?: string;
+  x: number;
+  y: number;
+  width: number;
+  tone: FeedStoryTone;
+  size: FeedStorySize;
+  align: FeedStoryAlign;
+};
+
+export type FeedStorySlide = {
+  id: string;
+  photo: string;
+  overlays: FeedStoryOverlay[];
+};
+
+const boundedStoryNumber = (
+  value: unknown,
+  fallback: number,
+  minimum: number,
+  maximum: number,
+) => {
+  const number = typeof value === "number" && Number.isFinite(value)
+    ? value
+    : fallback;
+  return Math.max(minimum, Math.min(maximum, number));
+};
+
+const boundedStoryText = (value: unknown, limit: number) => {
+  if (typeof value !== "string") return null;
+  return value.trim().slice(0, limit) || null;
+};
+
+function uniqueStoryId(
+  value: unknown,
+  fallback: string,
+  usedIds: Set<string>,
+) {
+  const base = boundedStoryText(value, 80) ?? fallback;
+  let candidate = base;
+  let suffix = 2;
+  while (usedIds.has(candidate)) {
+    const marker = `-${suffix}`;
+    candidate = `${base.slice(0, Math.max(1, 80 - marker.length))}${marker}`;
+    suffix += 1;
+  }
+  usedIds.add(candidate);
+  return candidate;
+}
+
+/**
+ * Treat the browser payload as untrusted presentation data. The server keeps
+ * only bounded tokens and references that are already owned by this course.
+ * Array order is significant: it is the persisted carousel/overlay order.
+ */
+export function sanitizeFeedStorySlides(
+  value: unknown,
+  allowedPhotoPaths: readonly string[],
+  allowedRestaurantIds: readonly string[],
+): FeedStorySlide[] {
+  if (!Array.isArray(value)) return [];
+  const allowedPhotos = new Set(allowedPhotoPaths);
+  const allowedRestaurants = new Set(allowedRestaurantIds);
+  const seenPhotos = new Set<string>();
+  const usedSlideIds = new Set<string>();
+  const usedOverlayIds = new Set<string>();
+  const slides: FeedStorySlide[] = [];
+
+  // The persisted result is tiny, and the validation scan is bounded as well
+  // so a hostile array of invalid objects cannot consume an entire request.
+  for (const rawValue of value.slice(0, MAX_FEED_STORY_SLIDES * 10)) {
+    if (slides.length >= MAX_FEED_STORY_SLIDES) break;
+    if (!rawValue || typeof rawValue !== "object") continue;
+    const raw = rawValue as Record<string, unknown>;
+    const photo = boundedStoryText(raw.photo, 512);
+    if (!photo || !allowedPhotos.has(photo) || seenPhotos.has(photo)) continue;
+
+    const slideIndex = slides.length;
+    const overlays: FeedStoryOverlay[] = [];
+    const requestedOverlays = Array.isArray(raw.overlays)
+      ? raw.overlays.slice(0, MAX_FEED_STORY_OVERLAYS * 10)
+      : [];
+    for (const requested of requestedOverlays) {
+      if (overlays.length >= MAX_FEED_STORY_OVERLAYS) break;
+      if (!requested || typeof requested !== "object") continue;
+      const overlay = requested as Record<string, unknown>;
+      if (typeof overlay.kind !== "string" || !FEED_STORY_KINDS.has(overlay.kind as FeedStoryKind))
+        continue;
+      const kind = overlay.kind as FeedStoryKind;
+      const text = boundedStoryText(overlay.text, MAX_FEED_STORY_TEXT_LENGTH);
+      const requestedRestaurantId = boundedStoryText(overlay.restaurantId, 160);
+      if (requestedRestaurantId && !allowedRestaurants.has(requestedRestaurantId))
+        continue;
+      if (kind !== "course_map" && !text && !(kind === "restaurant_name" && requestedRestaurantId))
+        continue;
+
+      const overlayIndex = overlays.length;
+      const id = uniqueStoryId(
+        overlay.id,
+        `overlay-${slideIndex}-${overlayIndex}`,
+        usedOverlayIds,
+      );
+      overlays.push({
+        id,
+        kind,
+        ...(text ? { text } : {}),
+        ...(requestedRestaurantId ? { restaurantId: requestedRestaurantId } : {}),
+        x: boundedStoryNumber(overlay.x, 50, 0, 100),
+        y: boundedStoryNumber(overlay.y, 50, 0, 100),
+        width: boundedStoryNumber(overlay.width, 72, 10, 100),
+        tone: typeof overlay.tone === "string" && FEED_STORY_TONES.has(overlay.tone as FeedStoryTone)
+          ? overlay.tone as FeedStoryTone
+          : "light",
+        size: typeof overlay.size === "string" && FEED_STORY_SIZES.has(overlay.size as FeedStorySize)
+          ? overlay.size as FeedStorySize
+          : "md",
+        align: typeof overlay.align === "string" && FEED_STORY_ALIGNS.has(overlay.align as FeedStoryAlign)
+          ? overlay.align as FeedStoryAlign
+          : "left",
+      });
+    }
+
+    seenPhotos.add(photo);
+    slides.push({
+      id: uniqueStoryId(raw.id, `slide-${slideIndex}`, usedSlideIds),
+      photo,
+      overlays,
+    });
+  }
+  return slides;
+}
+
 const nullableText = (value: unknown, max = 200) =>
   typeof value === "string" ? value.trim().slice(0, max) || null : null;
 const nullableNumber = (value: unknown) =>
@@ -1827,6 +1985,7 @@ type CourseDatabaseRow = {
   is_public: number;
   feed_photos: string | null;
   feed_decor: string | null;
+  feed_story: string | null;
   template_id: string | null;
   source_course_id?: string | null;
   source_stops_snapshot?: string | null;
@@ -1869,6 +2028,13 @@ type CourseMediaDatabaseRow = {
   width: number;
   height: number;
   rotation: number;
+};
+
+type CoursePhotoAttributionDatabaseRow = {
+  r2_path: string;
+  restaurant_id: string | null;
+  classification: "restaurant" | "other";
+  attribution_source: "gps_suggestion" | "user_selected" | "other";
 };
 
 type FeedCommentDatabaseRow = {
@@ -1991,7 +2157,11 @@ async function feedResponseForCourse(
   course: CourseDatabaseRow,
   stops: Awaited<ReturnType<typeof courseStops>>,
 ) {
-  const [{ results: mediaRows }, { results: commentRows }] = await Promise.all([
+  const [
+    { results: mediaRows },
+    { results: commentRows },
+    { results: attributionRows },
+  ] = await Promise.all([
     env.DB.prepare(
       "SELECT r2_path, owner_id, media_source, placement_index, x, y, width, height, rotation FROM course_media WHERE course_id = ? ORDER BY placement_index",
     )
@@ -2002,6 +2172,11 @@ async function feedResponseForCourse(
     )
       .bind(course.id)
       .all<FeedCommentDatabaseRow>(),
+    env.DB.prepare(
+      "SELECT r2_path, restaurant_id, classification, attribution_source FROM course_photo_attributions WHERE course_id = ? ORDER BY r2_path",
+    )
+      .bind(course.id)
+      .all<CoursePhotoAttributionDatabaseRow>(),
   ]);
   const canonicalMedia = mediaRows.filter((media) => mediaBelongsToCourse(course, media)).map((media) => ({
     id: `${course.id}:media:${media.placement_index}`,
@@ -2035,6 +2210,35 @@ async function feedResponseForCourse(
     return !src || photoSet.has(src);
   });
   const heroImage = photos[0] ?? "";
+  const stopRestaurantIds = stops.map((stop) => stop.placeId);
+  const storedStorySlides = sanitizeFeedStorySlides(
+    json<unknown>(course.feed_story, []),
+    photos,
+    stopRestaurantIds,
+  );
+  // Preserve an empty persisted story as empty. The browser owns the legacy
+  // presentation fallback because it also has the title, caption and stop
+  // labels needed to build useful default overlays. Returning empty-overlay
+  // slides here would look "persisted" to the client and suppress that fallback.
+  const storySlides = storedStorySlides;
+  const photoAttributions = attributionRows.flatMap((row) => {
+    if (!photoSet.has(row.r2_path)) return [];
+    if (
+      row.classification === "restaurant" &&
+      (!row.restaurant_id || !stopRestaurantIds.includes(row.restaurant_id))
+    ) return [];
+    return [{
+      r2Path: row.r2_path,
+      classification: row.classification === "restaurant" ? "restaurant" as const : "other" as const,
+      ...(row.classification === "restaurant" && row.restaurant_id
+        ? { restaurantId: row.restaurant_id }
+        : {}),
+      source: row.classification === "restaurant"
+        && (row.attribution_source === "gps_suggestion" || row.attribution_source === "user_selected")
+        ? row.attribution_source
+        : "other" as const,
+    }];
+  });
 
   return {
     id: `post_${course.id}`,
@@ -2047,6 +2251,8 @@ async function feedResponseForCourse(
     heroImage,
     photos,
     decor,
+    storySlides,
+    photoAttributions,
     templateId: course.template_id || null,
     tags: json<string[]>(course.tags, []),
     stops,
@@ -2310,12 +2516,13 @@ app.post("/api/courses", async (c) => {
 
   const findExistingPublication = async () => {
     return c.env.DB.prepare(
-      "SELECT id, author_id, created_at, publish_payload_hash FROM courses WHERE author_id = ? AND publish_idempotency_key = ? LIMIT 1",
+      "SELECT id, author_id, created_at, publish_payload_hash, feed_story FROM courses WHERE author_id = ? AND publish_idempotency_key = ? LIMIT 1",
     ).bind(session.sub, idempotencyKey).first<{
       id: string;
       author_id: string;
       created_at: number | string;
       publish_payload_hash: string | null;
+      feed_story: string | null;
     }>();
   };
 
@@ -2338,6 +2545,7 @@ app.post("/api/courses", async (c) => {
         id: existingPublication.id,
         authorId: existingPublication.author_id,
         createdAt: existingPublication.created_at,
+        storySlides: json<FeedStorySlide[]>(existingPublication.feed_story, []),
         idempotent: true,
       });
     }
@@ -2431,7 +2639,8 @@ app.post("/api/courses", async (c) => {
             if (
               !raw ||
               typeof raw !== "object" ||
-              !isAuthorUpload(raw.src)
+              !isAuthorUpload(raw.src) ||
+              !feedPhotos.includes(raw.src)
             )
               return [];
             const number = (
@@ -2459,12 +2668,35 @@ app.post("/api/courses", async (c) => {
             ];
           })
       : [];
-    if (!feedPhotos.length || !feedDecor.length) {
+    const decoratedPhotoPaths = new Set(feedDecor.map((photo) => photo.src));
+    if (
+      !feedPhotos.length ||
+      !feedDecor.length ||
+      feedPhotos.some((photo) => !decoratedPhotoPaths.has(photo))
+    ) {
       return c.json(
-        { error: "포스팅하려면 배치한 사진을 1장 이상 저장해야 합니다." },
+        { error: "피드 사진과 배치 정보를 모두 일치시켜 저장해주세요." },
         400,
       );
     }
+    const existingFeedPhotos = await filterExistingPhotos(c.env, feedPhotos);
+    if (existingFeedPhotos.length !== feedPhotos.length) {
+      return c.json(
+        { error: "업로드가 완료된 사진만 게시할 수 있습니다." },
+        400,
+      );
+    }
+    if (requestedHero && !feedPhotos.includes(requestedHero)) {
+      return c.json(
+        { error: "대표 사진은 이 게시물의 사진 중에서 선택해주세요." },
+        400,
+      );
+    }
+    const storySlides = sanitizeFeedStorySlides(
+      body.storySlides,
+      feedPhotos,
+      restaurantIds,
+    );
     const rawAttributions = Array.isArray(body.photoAttributions)
       ? body.photoAttributions
       : [];
@@ -2485,7 +2717,8 @@ app.post("/api/courses", async (c) => {
       if (classification === "restaurant" && !restaurantId) {
         return c.json({ error: "사진은 이 코스에 포함된 식당에만 연결할 수 있습니다." }, 400);
       }
-      const source = item.source === "gps_suggestion" || item.source === "user_selected"
+      const source = classification === "restaurant"
+        && (item.source === "gps_suggestion" || item.source === "user_selected")
         ? item.source
         : "other";
       attributionByPath.set(item.r2Path, { r2Path: item.r2Path, classification, restaurantId, source });
@@ -2521,7 +2754,7 @@ app.post("/api/courses", async (c) => {
         : null;
     const statements = [
       c.env.DB.prepare(
-        "INSERT INTO courses (id, author_id, title, description, hero_image, category, region, tags, hashtags, total_distance, total_duration, likes_count, saves_count, comments_count, is_public, feed_photos, feed_decor, template_id, source_course_id, source_stops_snapshot, publish_idempotency_key, publish_payload_hash, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, 0, 0, 1, ?, ?, ?, ?, ?, ?, ?, ?)",
+        "INSERT INTO courses (id, author_id, title, description, hero_image, category, region, tags, hashtags, total_distance, total_duration, likes_count, saves_count, comments_count, is_public, feed_photos, feed_decor, feed_story, template_id, source_course_id, source_stops_snapshot, publish_idempotency_key, publish_payload_hash, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, 0, 0, 1, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
       ).bind(
         id,
         session.sub,
@@ -2536,6 +2769,7 @@ app.post("/api/courses", async (c) => {
         duration,
         JSON.stringify(feedPhotos),
         JSON.stringify(feedDecor),
+        JSON.stringify(storySlides),
         templateId,
         sourceCourseId,
         JSON.stringify(sourceStopsSnapshot),
@@ -2591,7 +2825,7 @@ app.post("/api/courses", async (c) => {
     // Opportunistically advance any previous failed R2 cleanup. Every row is
     // reference-checked again after this publication has committed.
     await drainR2MediaDeletionQueue(c.env).catch(() => 0);
-    return c.json({ id, authorId: session.sub, createdAt }, 201);
+    return c.json({ id, authorId: session.sub, createdAt, storySlides }, 201);
   } catch (err: any) {
     const existing = await findExistingPublication();
     if (existing) {
@@ -2600,6 +2834,7 @@ app.post("/api/courses", async (c) => {
           id: existing.id,
           authorId: existing.author_id,
           createdAt: existing.created_at,
+          storySlides: json<FeedStorySlide[]>(existing.feed_story, []),
           idempotent: true,
         });
       }
@@ -3842,27 +4077,339 @@ app.patch("/api/feed-post", async (c) => {
     courseId?: string;
     caption?: string;
     heroImage?: string;
+    feedPhotos?: unknown;
+    feedDecor?: unknown;
+    templateId?: unknown;
+    storySlides?: unknown;
+    photoAttributions?: unknown;
   }>();
   const caption = body.caption?.trim().slice(0, 2_000);
   if (!body.courseId || !caption)
     return c.json({ error: "게시물과 한줄평을 입력해주세요." }, 400);
   const owned = await c.env.DB.prepare(
-    "SELECT id FROM courses WHERE id = ? AND author_id = ? AND is_public = 1",
+    "SELECT id, author_id, hero_image, feed_photos, feed_decor, feed_story, template_id FROM courses WHERE id = ? AND author_id = ? AND is_public = 1",
   )
     .bind(body.courseId, session.sub)
-    .first();
+    .first<Pick<
+      CourseDatabaseRow,
+      "id" | "author_id" | "hero_image" | "feed_photos" | "feed_decor" | "feed_story" | "template_id"
+    >>();
   if (!owned) return c.json({ error: "수정 권한이 없습니다." }, 403);
-  const heroImage =
-    typeof body.heroImage === "string" &&
-    body.heroImage.startsWith(`/photos/uploads/${session.sub}/`)
-      ? body.heroImage
+
+  const [
+    { results: mediaRows },
+    { results: stopRows },
+    { results: currentAttributionRows },
+  ] = await Promise.all([
+    c.env.DB.prepare(
+      "SELECT r2_path, owner_id, media_source, placement_index, x, y, width, height, rotation FROM course_media WHERE course_id = ? ORDER BY placement_index",
+    ).bind(body.courseId).all<CourseMediaDatabaseRow>(),
+    c.env.DB.prepare(
+      "SELECT restaurant_id FROM course_items WHERE course_id = ? ORDER BY order_index",
+    ).bind(body.courseId).all<{ restaurant_id: string }>(),
+    c.env.DB.prepare(
+      "SELECT r2_path, restaurant_id, classification, attribution_source FROM course_photo_attributions WHERE course_id = ? ORDER BY r2_path",
+    ).bind(body.courseId).all<CoursePhotoAttributionDatabaseRow>(),
+  ]);
+  const ownerPrefix = `/photos/uploads/${session.sub}/`;
+  const validAuthorPath = (value: unknown): value is string =>
+    typeof value === "string" && value.startsWith(ownerPrefix) && value.length <= 512;
+  const canonicalMediaRows = mediaRows.filter((media) => mediaBelongsToCourse(owned, media));
+  const canonicalMediaPaths = Array.from(new Set(canonicalMediaRows.map((media) => media.r2_path)));
+  const storedPhotoOrder = json<string[]>(owned.feed_photos, []);
+  const canonicalMediaSet = new Set(canonicalMediaPaths);
+  const currentPhotos = canonicalMediaRows.length > 0
+    ? Array.from(new Set([
+        ...storedPhotoOrder.filter((photo) => canonicalMediaSet.has(photo)),
+        ...canonicalMediaPaths.filter((photo) => !storedPhotoOrder.includes(photo)),
+      ])).slice(0, MAX_MUNCHIE_FEED_PHOTOS)
+    : Array.from(new Set(storedPhotoOrder.filter(validAuthorPath)))
+        .slice(0, MAX_MUNCHIE_FEED_PHOTOS);
+
+  const hasFeedPhotos = Object.prototype.hasOwnProperty.call(body, "feedPhotos");
+  const hasFeedDecor = Object.prototype.hasOwnProperty.call(body, "feedDecor");
+  if (hasFeedPhotos !== hasFeedDecor) {
+    return c.json({ error: "사진과 배치 정보는 함께 저장해야 합니다." }, 400);
+  }
+  const replacingMedia = hasFeedPhotos && hasFeedDecor;
+  let nextPhotos = currentPhotos;
+  let nextDecor = json<Array<{
+    id: string;
+    src: string;
+    x: number;
+    y: number;
+    w: number;
+    h: number;
+    rotate: number;
+  }>>(owned.feed_decor, []);
+  const attributionOriginByNextPhoto = new Map<string, string>();
+
+  if (replacingMedia) {
+    if (
+      !Array.isArray(body.feedPhotos) ||
+      !Array.isArray(body.feedDecor) ||
+      body.feedPhotos.length < 1 ||
+      body.feedPhotos.length > MAX_MUNCHIE_FEED_PHOTOS ||
+      body.feedDecor.length < 1 ||
+      body.feedDecor.length > MAX_MUNCHIE_FEED_PHOTOS
+    ) {
+      return c.json({ error: "사진은 1~6장까지 저장할 수 있습니다." }, 400);
+    }
+    const requestedPhotos = body.feedPhotos;
+    if (!requestedPhotos.every(validAuthorPath))
+      return c.json({ error: "본인이 업로드한 사진만 저장할 수 있습니다." }, 400);
+    nextPhotos = Array.from(new Set(requestedPhotos));
+    if (nextPhotos.length !== requestedPhotos.length)
+      return c.json({ error: "중복된 사진은 한 번만 저장해주세요." }, 400);
+    const nextPhotoSet = new Set(nextPhotos);
+    nextDecor = body.feedDecor.flatMap((raw, index) => {
+      if (!raw || typeof raw !== "object") return [];
+      const item = raw as Record<string, unknown>;
+      if (!validAuthorPath(item.src) || !nextPhotoSet.has(item.src)) return [];
+      if (
+        validAuthorPath(item.originalSrc) &&
+        canonicalMediaSet.has(item.originalSrc)
+      ) {
+        attributionOriginByNextPhoto.set(item.src, item.originalSrc);
+      }
+      return [{
+        id: boundedStoryText(item.id, 120) ?? `photo_${index}`,
+        src: item.src,
+        x: boundedStoryNumber(item.x, 50, 0, 100),
+        y: boundedStoryNumber(item.y, 50, 0, 100),
+        w: boundedStoryNumber(item.w, 40, 5, 100),
+        h: boundedStoryNumber(item.h, boundedStoryNumber(item.w, 40, 5, 100), 5, 100),
+        rotate: boundedStoryNumber(item.rotate, 0, -180, 180),
+      }];
+    });
+    const decoratedPaths = new Set(nextDecor.map((item) => item.src));
+    if (
+      nextDecor.length !== body.feedDecor.length ||
+      nextPhotos.some((photo) => !decoratedPaths.has(photo))
+    ) {
+      return c.json({ error: "피드 사진과 배치 정보가 일치하지 않습니다." }, 400);
+    }
+    const existingNextPhotos = await filterExistingPhotos(c.env, nextPhotos);
+    if (existingNextPhotos.length !== nextPhotos.length) {
+      return c.json({ error: "업로드가 완료된 사진만 저장할 수 있습니다." }, 400);
+    }
+  }
+  const removedCanonicalPhotoPaths = replacingMedia
+    ? canonicalMediaPaths.filter((photo) => (
+        validAuthorPath(photo) && !nextPhotos.includes(photo)
+      ))
+    : [];
+
+  const stopRestaurantIds = stopRows.map((row) => row.restaurant_id);
+  const stopRestaurantSet = new Set(stopRestaurantIds);
+  const attributionWasSupplied = Object.prototype.hasOwnProperty.call(
+    body,
+    "photoAttributions",
+  );
+  const replacingAttributions = replacingMedia || attributionWasSupplied;
+  let nextPhotoAttributions: Array<{
+    r2Path: string;
+    restaurantId: string | null;
+    classification: "restaurant" | "other";
+    source: "gps_suggestion" | "user_selected" | "other";
+  }> | null = null;
+  if (replacingAttributions) {
+    const currentAttributionByPath = new Map(
+      currentAttributionRows.map((row) => [row.r2_path, row]),
+    );
+    const suppliedAttributionByPath = new Map<string, {
+      r2Path: string;
+      restaurantId: string | null;
+      classification: "restaurant" | "other";
+      source: "gps_suggestion" | "user_selected" | "other";
+    }>();
+    if (attributionWasSupplied) {
+      if (
+        !Array.isArray(body.photoAttributions) ||
+        body.photoAttributions.length > MAX_MUNCHIE_FEED_PHOTOS
+      ) {
+        return c.json({ error: "사진 귀속 정보가 올바르지 않습니다." }, 400);
+      }
+      for (const raw of body.photoAttributions) {
+        if (!raw || typeof raw !== "object")
+          return c.json({ error: "사진 귀속 정보가 올바르지 않습니다." }, 400);
+        const item = raw as Record<string, unknown>;
+        if (!validAuthorPath(item.r2Path) || !nextPhotos.includes(item.r2Path))
+          return c.json({ error: "이 게시물의 사진만 식당에 연결할 수 있습니다." }, 400);
+        if (suppliedAttributionByPath.has(item.r2Path))
+          return c.json({ error: "사진 귀속 정보가 중복되었습니다." }, 400);
+        if (item.classification !== "restaurant" && item.classification !== "other")
+          return c.json({ error: "사진 분류 정보가 올바르지 않습니다." }, 400);
+        const classification = item.classification;
+        const restaurantId = classification === "restaurant"
+          && typeof item.restaurantId === "string"
+          && stopRestaurantSet.has(item.restaurantId)
+          ? item.restaurantId
+          : null;
+        if (classification === "restaurant" && !restaurantId) {
+          return c.json({ error: "사진은 이 코스에 포함된 식당에만 연결할 수 있습니다." }, 400);
+        }
+        const source = classification === "other"
+          ? "other" as const
+          : item.source === "gps_suggestion" || item.source === "user_selected"
+            ? item.source
+            : "other" as const;
+        suppliedAttributionByPath.set(item.r2Path, {
+          r2Path: item.r2Path,
+          restaurantId,
+          classification,
+          source,
+        });
+      }
+    }
+    nextPhotoAttributions = nextPhotos.map((r2Path) => {
+      const supplied = suppliedAttributionByPath.get(r2Path);
+      if (supplied) return supplied;
+      const originalPath = attributionOriginByNextPhoto.get(r2Path) ?? r2Path;
+      const existing = currentAttributionByPath.get(originalPath);
+      if (
+        existing?.classification === "restaurant" &&
+        existing.restaurant_id &&
+        stopRestaurantSet.has(existing.restaurant_id)
+      ) {
+        return {
+          r2Path,
+          restaurantId: existing.restaurant_id,
+          classification: "restaurant" as const,
+          source: existing.attribution_source,
+        };
+      }
+      return {
+        r2Path,
+        restaurantId: null,
+        classification: "other" as const,
+        source: "other" as const,
+      };
+    });
+  }
+  const storyWasSupplied = Object.prototype.hasOwnProperty.call(body, "storySlides");
+  const nextStorySlides = storyWasSupplied || replacingMedia
+    ? sanitizeFeedStorySlides(
+        storyWasSupplied ? body.storySlides : json<unknown>(owned.feed_story, []),
+        nextPhotos,
+        stopRestaurantIds,
+      )
+    : null;
+  let nextHeroImage = owned.hero_image;
+  if (Object.prototype.hasOwnProperty.call(body, "heroImage")) {
+    if (!validAuthorPath(body.heroImage) || !nextPhotos.includes(body.heroImage))
+      return c.json({ error: "대표 사진은 이 게시물의 사진 중에서 선택해주세요." }, 400);
+    nextHeroImage = body.heroImage;
+  } else if (replacingMedia && (!nextHeroImage || !nextPhotos.includes(nextHeroImage))) {
+    nextHeroImage = nextPhotos[0] ?? null;
+  }
+  let nextTemplateId = owned.template_id;
+  if (Object.prototype.hasOwnProperty.call(body, "templateId")) {
+    if (body.templateId !== null && typeof body.templateId !== "string")
+      return c.json({ error: "템플릿 정보가 올바르지 않습니다." }, 400);
+    nextTemplateId = typeof body.templateId === "string"
+      ? body.templateId.trim().slice(0, 80) || null
       : null;
-  await c.env.DB.prepare(
-    "UPDATE courses SET description = ?, hero_image = COALESCE(?, hero_image) WHERE id = ?",
-  )
-    .bind(caption, heroImage, body.courseId)
-    .run();
-  return c.json({ ok: true });
+  }
+
+  const statements = [
+    c.env.DB.prepare(
+      "UPDATE courses SET description = ?, hero_image = ?, feed_photos = ?, feed_decor = ?, feed_story = ?, template_id = ? WHERE id = ?",
+    ).bind(
+      caption,
+      nextHeroImage,
+      replacingMedia ? JSON.stringify(nextPhotos) : owned.feed_photos,
+      replacingMedia ? JSON.stringify(nextDecor) : owned.feed_decor,
+      nextStorySlides ? JSON.stringify(nextStorySlides) : owned.feed_story,
+      nextTemplateId,
+      body.courseId,
+    ),
+  ];
+  if (replacingMedia) {
+    statements.push(
+      c.env.DB.prepare("DELETE FROM course_media WHERE course_id = ?").bind(body.courseId),
+      ...nextDecor.map((photo, index) =>
+        c.env.DB.prepare(
+          "INSERT INTO course_media (id, course_id, r2_path, owner_id, media_source, placement_index, x, y, width, height, rotation, created_at) VALUES (?, ?, ?, ?, 'author_upload', ?, ?, ?, ?, ?, ?, ?)",
+        ).bind(
+          crypto.randomUUID(),
+          body.courseId,
+          photo.src,
+          session.sub,
+          index,
+          photo.x,
+          photo.y,
+          photo.w,
+          photo.h,
+          photo.rotate,
+          Date.now(),
+        ),
+      ),
+    );
+  }
+  if (nextPhotoAttributions) {
+    const attributionCreatedAt = Date.now();
+    statements.push(
+      c.env.DB.prepare(
+        "DELETE FROM course_photo_attributions WHERE course_id = ?",
+      ).bind(body.courseId),
+      ...nextPhotoAttributions.map((attribution) =>
+        c.env.DB.prepare(
+          "INSERT INTO course_photo_attributions (id, course_id, r2_path, restaurant_id, classification, attribution_source, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
+        ).bind(
+          crypto.randomUUID(),
+          body.courseId,
+          attribution.r2Path,
+          attribution.restaurantId,
+          attribution.classification,
+          attribution.source,
+          attributionCreatedAt,
+        ),
+      ),
+    );
+  }
+  const responsePhotoAttributions = nextPhotoAttributions ?? currentAttributionRows.flatMap((row) => {
+    if (!nextPhotos.includes(row.r2_path)) return [];
+    if (
+      row.classification === "restaurant" &&
+      (!row.restaurant_id || !stopRestaurantSet.has(row.restaurant_id))
+    ) return [];
+    return [{
+      r2Path: row.r2_path,
+      restaurantId: row.classification === "restaurant" ? row.restaurant_id : null,
+      classification: row.classification === "restaurant" ? "restaurant" as const : "other" as const,
+      source: row.classification === "restaurant" &&
+        (row.attribution_source === "gps_suggestion" || row.attribution_source === "user_selected")
+        ? row.attribution_source
+        : "other" as const,
+    }];
+  });
+  if (removedCanonicalPhotoPaths.length > 0) {
+    const queuedAt = Date.now();
+    statements.push(...removedCanonicalPhotoPaths.map((path) =>
+      c.env.DB.prepare(
+        "INSERT OR IGNORE INTO r2_media_deletions (r2_path, owner_id, attempts, created_at) VALUES (?, ?, 0, ?)",
+      ).bind(path, session.sub, queuedAt)
+    ));
+  }
+  await c.env.DB.batch(statements);
+  const mediaCleanupPending = removedCanonicalPhotoPaths.length > 0
+    ? await drainR2MediaDeletionQueue(c.env, removedCanonicalPhotoPaths)
+        .catch(() => removedCanonicalPhotoPaths.length)
+    : 0;
+  return c.json({
+    ok: true,
+    feedPhotos: nextPhotos,
+    feedDecor: nextDecor,
+    storySlides: nextStorySlides ?? sanitizeFeedStorySlides(
+      json<unknown>(owned.feed_story, []),
+      nextPhotos,
+      stopRestaurantIds,
+    ),
+    templateId: nextTemplateId,
+    photoAttributions: responsePhotoAttributions,
+    mediaCleanupPending,
+  });
 });
 
 // 이전 버전에서 브라우저에만 남아 있던 작성자 배치를 서버 원본으로 한 번 승계한다.

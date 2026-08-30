@@ -1,4 +1,5 @@
 import React from 'react';
+import { readFileSync } from 'node:fs';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
 import FoodHeroCourseOverlay, { getAuthorPhotoSources } from './FoodHeroCourseOverlay';
@@ -88,5 +89,68 @@ describe('FoodHeroCourseOverlay', () => {
       'https://images.example/a.jpg',
       'https://images.example/b.jpg',
     ]);
+  });
+
+  it('renders only the active photo custom overlays with accessible slide controls', () => {
+    const html = renderToStaticMarkup(
+      <FoodHeroCourseOverlay
+        photos={['/photos/uploads/author/first.jpg', '/photos/uploads/author/second.jpg']}
+        slides={[
+          {
+            id: 'first',
+            photo: '/photos/uploads/author/first.jpg',
+            overlays: [
+              { id: 'food', kind: 'food_name', text: '트러플 파스타', x: 50, y: 70, width: 80, tone: 'light', size: 'lg', align: 'left' },
+              { id: 'price', kind: 'price', text: '$24', x: 50, y: 82, width: 80, tone: 'accent', size: 'md', align: 'right' },
+            ],
+          },
+          {
+            id: 'second',
+            photo: '/photos/uploads/author/second.jpg',
+            overlays: [
+              { id: 'review', kind: 'review', text: '두 번째 사진만의 한줄평', x: 50, y: 88, width: 85, tone: 'dark', size: 'md', align: 'left' },
+            ],
+          },
+        ]}
+        title="저녁 코스"
+      />,
+    );
+
+    expect(html).toContain('src="/photos/uploads/author/first.jpg"');
+    expect(html).toContain('data-overlay-kind="food_name"');
+    expect(html).toContain('트러플 파스타');
+    expect(html).toContain('$24');
+    expect(html).not.toContain('두 번째 사진만의 한줄평');
+    expect(html).toContain('aria-label="이전 음식 사진"');
+    expect(html).toContain('aria-label="다음 음식 사진"');
+    expect(html).toContain('1 / 2');
+    expect(html).toContain('tabindex="0"');
+    expect(html).toContain('focus-visible:ring-4');
+  });
+
+  it('uses explicit photo attribution for legacy overlays instead of the stop index', () => {
+    const html = renderToStaticMarkup(
+      <FoodHeroCourseOverlay
+        photos={['/photos/uploads/author/cafe.jpg', '/photos/uploads/author/meal.jpg']}
+        slides={[]}
+        photoRestaurantIds={['cafe', 'meal']}
+        stops={[
+          { id: 'meal', name: '점심 식당' },
+          { id: 'cafe', name: '후식 카페' },
+        ]}
+      />,
+    );
+
+    expect(html).toMatch(/data-overlay-kind="restaurant_name"[^>]*><span>후식 카페<\/span>/);
+  });
+
+  it('keeps a failed slide in place and stops a real swipe before the parent like handler', () => {
+    const source = readFileSync(new URL('./FoodHeroCourseOverlay.tsx', import.meta.url), 'utf8');
+    expect(source).toContain("current.includes(activeSlide.id) ? current : [...current, activeSlide.id]");
+    expect(source).toContain('다른 사진으로 자동 대체하지 않아요');
+    expect(source).toContain('Math.abs(deltaX) >= 44');
+    expect(source).toContain('event.stopPropagation()');
+    expect(source).toContain("event.key === 'ArrowRight'");
+    expect(source).toContain('role="status" aria-live="polite" aria-atomic="true"');
   });
 });

@@ -1,6 +1,10 @@
 import { normalizeFoodTag } from '@/constants/foodTags';
 import type { FeedPost } from '@/contexts/AppContext';
 import { feedAuthorEmoji } from '@/lib/feedAuthor';
+import {
+  normalizeFeedStorySlides,
+  type FeedStoryPhotoAttribution,
+} from '@/lib/feedStory';
 import { isValidCoordinate } from '@shared/geo';
 
 export type FeedViewerIdentity = {
@@ -41,6 +45,29 @@ export function feedPostFromApi(value: unknown, viewer: FeedViewerIdentity): Fee
   const photos = (Array.isArray(feed.photos) ? feed.photos : [])
     .filter((photo: unknown): photo is string => typeof photo === 'string')
     .map(photo => photo.startsWith('http') || photo.startsWith('/') ? photo : `/photos/${photo}`);
+  const storySlides = normalizeFeedStorySlides(feed.storySlides, { allowedPhotos: photos });
+  const photoSet = new Set(photos);
+  const photoAttributions = Array.isArray(feed.photoAttributions)
+    ? feed.photoAttributions.flatMap((raw: unknown) => {
+        if (!raw || typeof raw !== 'object') return [];
+        const item = raw as Record<string, unknown>;
+        const r2Path = typeof item.r2Path === 'string'
+          ? (item.r2Path.startsWith('http') || item.r2Path.startsWith('/') ? item.r2Path : `/photos/${item.r2Path}`)
+          : '';
+        if (!r2Path || !photoSet.has(r2Path)) return [];
+        const classification = item.classification === 'restaurant' ? 'restaurant' as const : 'other' as const;
+        const restaurantId = classification === 'restaurant' && typeof item.restaurantId === 'string' && item.restaurantId
+          ? item.restaurantId
+          : undefined;
+        if (classification === 'restaurant' && !restaurantId) return [];
+        const source: FeedStoryPhotoAttribution['source'] = classification === 'other'
+          ? 'other'
+          : item.source === 'gps_suggestion' || item.source === 'user_selected'
+            ? item.source
+            : 'other';
+        return [{ r2Path, classification, ...(restaurantId ? { restaurantId } : {}), source }];
+      })
+    : [];
   const decor = Array.isArray(feed.decor) ? feed.decor : undefined;
   const fallbackName = creatorId === 'user_minji'
     ? '김민지'
@@ -62,7 +89,10 @@ export function feedPostFromApi(value: unknown, viewer: FeedViewerIdentity): Fee
     authorEmoji: feedAuthorEmoji(creatorId, authorName, viewer),
     authorImage: typeof feed.authorImage === 'string' ? feed.authorImage : undefined,
     courseId: String(feed.courseId ?? ''),
+    title: typeof feed.title === 'string' ? feed.title : undefined,
     photos,
+    storySlides,
+    photoAttributions,
     templateId: typeof feed.templateId === 'string' ? feed.templateId : undefined,
     decor,
     missingOriginalMedia: photos.length === 0 && (!decor || decor.length === 0),

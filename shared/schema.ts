@@ -103,6 +103,7 @@ export const courses = pgTable("courses", {
   share_image_url: text("share_image_url"),
   feed_photos: jsonb("feed_photos").$type<string[]>().notNull().default([]),
   feed_decor: jsonb("feed_decor").$type<unknown[]>().notNull().default([]),
+  feed_story: jsonb("feed_story").$type<unknown[]>().notNull().default([]),
   template_id: text("template_id"),
   comments_count: integer("comments_count").notNull().default(0),
   is_public: boolean("is_public").notNull().default(true),

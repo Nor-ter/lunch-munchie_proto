@@ -14,5 +14,7 @@ describe('CoursemapCreatePage saved course source', () => {
   it('publishes source lineage with a stable idempotency key', () => {
     expect(source).toContain("'Idempotency-Key': publishIdempotencyKeyRef.current");
     expect(source).toContain('...(sourceCourseId ? { sourceCourseId } : {})');
+    expect(source).toContain('storySlides: serverStorySlides');
+    expect(source).toContain('<FeedStoryEditor');
   });
 });

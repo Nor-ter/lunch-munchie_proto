@@ -1,3 +1,8 @@
+import type {
+  FeedStoryPhotoAttribution,
+  FeedStorySlide,
+} from "@/lib/feedStory";
+
 type RequestLike = (
   input: RequestInfo | URL,
   init?: RequestInit,
@@ -70,6 +75,8 @@ export type CanonicalFeedApiRecord = {
   heroImage: string;
   photos: string[];
   decor: Array<Record<string, unknown>>;
+  storySlides: FeedStorySlide[];
+  photoAttributions: FeedStoryPhotoAttribution[];
   templateId: string | null;
   tags: string[];
   stops: SavedCourseStop[];

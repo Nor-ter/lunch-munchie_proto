@@ -298,12 +298,18 @@ export interface FeedPost {
   authorLevel?: number;
   authorLevelName?: string;
   courseId: string;
+  /** Canonical course title retained even when the bounded course catalogue omits this post. */
+  title?: string;
   photos: string[];
   /** Original user media is absent on a legacy post; never substitute a restaurant cover. */
   missingOriginalMedia?: boolean;
   /** 서버에 보존한 템플릿·사진 배치. 다른 기기/다른 사용자도 같은 카드로 렌더링한다. */
   templateId?: string;
   decor?: import('@/lib/coursemapDecor').PlacedPhoto[];
+  /** 작성자 사진 한 장마다 독립적으로 저장되는 피드 슬라이드와 구조화 오버레이. */
+  storySlides?: import('@/lib/feedStory').FeedStorySlide[];
+  /** 사진별 코스 식당 귀속. 사진 순서로 식당을 추측하지 않는다. */
+  photoAttributions?: import('@/lib/feedStory').FeedStoryPhotoAttribution[];
   photoPlacements?: FeedPhotoPlacement[];
   canvasStrokes?: CoursemapCanvasStroke[];
   caption: string;
@@ -444,7 +450,7 @@ interface AppContextValue {
   hasMoreFeedPosts: boolean;
   isLoadingMoreFeedPosts: boolean;
   addFeedPost: (post: Omit<FeedPost, 'id' | 'likes' | 'shares' | 'saves' | 'comments' | 'createdAt'>) => FeedPost;
-  updateFeedPost: (postId: string, updates: Partial<Pick<FeedPost, 'courseId' | 'caption' | 'skinId' | 'photos' | 'photoPlacements' | 'canvasStrokes' | 'tags'>>) => void;
+  updateFeedPost: (postId: string, updates: Partial<Pick<FeedPost, 'courseId' | 'caption' | 'skinId' | 'templateId' | 'photos' | 'decor' | 'storySlides' | 'photoAttributions' | 'photoPlacements' | 'canvasStrokes' | 'tags'>>) => void;
   deleteFeedPost: (postId: string) => void;
   incrementFeedShare: (postId: string) => void;
   likedFeedIds: string[];
@@ -1292,7 +1298,7 @@ export function AppProvider({
     return full;
   }, []);
 
-  const updateFeedPost = useCallback((postId: string, updates: Partial<Pick<FeedPost, 'courseId' | 'caption' | 'skinId' | 'photos' | 'photoPlacements' | 'canvasStrokes' | 'tags'>>) => {
+  const updateFeedPost = useCallback((postId: string, updates: Partial<Pick<FeedPost, 'courseId' | 'caption' | 'skinId' | 'templateId' | 'photos' | 'decor' | 'storySlides' | 'photoAttributions' | 'photoPlacements' | 'canvasStrokes' | 'tags'>>) => {
     setFeedPosts(posts => posts.map(p => p.id === postId
       ? { ...p, ...updates, photos: (updates.photos ?? p.photos).slice(0, MAX_MUNCHIE_FEED_PHOTOS) }
       : p));

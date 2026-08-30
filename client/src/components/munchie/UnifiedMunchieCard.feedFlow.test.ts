@@ -9,14 +9,21 @@ describe('UnifiedMunchieCard feed flow', () => {
     expect(source).toContain("import FoodHeroCourseOverlay");
     expect(source).toContain('<FoodHeroCourseOverlay');
     expect(source).toContain('photos={post.missingOriginalMedia ? [] : post.photos}');
+    expect(source).toContain('slides={post.storySlides}');
+    expect(source).toContain('photoRestaurantIds={photoRestaurantIds}');
+    expect(source).toContain('feedStoryRestaurantIdsForPhotos(post.photos, post.photoAttributions)');
     expect(source).toContain('stops={foodHeroStops}');
     expect(source).not.toContain('<TemplateArtwork');
     expect(source).not.toContain('photoSources={post.photos}');
+    expect(source).not.toContain('<button type="button" onClick={() => go(compactDetailPath)}');
+    expect(source).toContain('onActivate={() => go(compactDetailPath)}');
   });
 
   it('saves an unliked feed reaction to the server when its food hero is double-tapped', () => {
     expect(source).toContain('const lastArtworkTapAtRef = useRef(0)');
     expect(source).toContain('onPointerUp={handleArtworkPointerUp}');
+    expect(source).toContain('onPointerDown={handleArtworkPointerDown}');
+    expect(source).toContain('Math.hypot(event.clientX - start.x, event.clientY - start.y) >= 8');
     expect(source).toContain('elapsed >= 60 && elapsed <= 320');
     expect(source).toContain("fetch('/api/feed-like'");
     expect(source).toContain('if (!liked) void togglePostLike()');
@@ -32,8 +39,12 @@ describe('UnifiedMunchieCard feed flow', () => {
   it('uses the same food-first course summary in compact Home and Profile cards', () => {
     expect(source).toContain('compactDetailPath');
     expect(source).toContain('caption={post.caption}');
-    expect(source).toContain('compact\n              eager');
+    expect(source).toMatch(/compact\s+eager\s+onActivate/);
     expect(source).not.toContain('compact-one-line-review');
+  });
+
+  it('retains the canonical post title when an older course is outside the bounded catalogue', () => {
+    expect(source).toContain("title: post.title ?? ''");
   });
 
   it('uses the author profile photo in place of the emoji when available', () => {
