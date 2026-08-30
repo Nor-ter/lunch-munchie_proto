@@ -60,6 +60,7 @@ export const SAVED_BOOKMARK_BUTTON_CLASS =
 export default function UnifiedMunchieCard({
   post,
   compact = false,
+  feedGrid = false,
   homeSummary = false,
   interactive = true,
   courseOverride,
@@ -70,6 +71,7 @@ export default function UnifiedMunchieCard({
 }: {
   post: FeedPost;
   compact?: boolean;
+  feedGrid?: boolean;
   homeSummary?: boolean;
   interactive?: boolean;
   courseOverride?: Course;
@@ -381,6 +383,119 @@ export default function UnifiedMunchieCard({
     </AnimatePresence>,
     document.body,
   );
+
+  if (feedGrid) {
+    return (
+      <>
+        <article
+          ref={cardRef}
+          data-testid={`unified-munchie-card-${post.id}`}
+          data-variant="feed-grid"
+          className="relative min-w-0"
+        >
+          <div
+            data-ui="munchie-food-hero-interaction"
+            onPointerDown={handleArtworkPointerDown}
+            onPointerUp={handleArtworkPointerUp}
+            className="relative touch-manipulation overflow-hidden rounded-[13px] bg-[#F1E7DE]"
+          >
+            <FoodHeroCourseOverlay
+              photos={post.missingOriginalMedia ? [] : post.photos}
+              slides={post.storySlides}
+              photoRestaurantIds={photoRestaurantIds}
+              title={course.title}
+              caption={post.caption}
+              stops={foodHeroStops}
+              placeCount={orderedStopIds.length || course.metadata.placeCount}
+              compact
+              eager
+            />
+          </div>
+
+          <div className="mt-1.5 min-w-0 px-0.5">
+            <div className="flex min-w-0 items-center gap-1 text-[10px] leading-none">
+              <button
+                type="button"
+                onClick={() => go(authorProfilePath)}
+                className="min-w-0 truncate font-black text-[#3E2922]"
+              >
+                {post.authorName}
+              </button>
+              <span className="shrink-0 text-[#A18C82]">· {timeAgo(post.createdAt)}</span>
+              <span className="min-w-0 flex-1" />
+              <button
+                type="button"
+                onClick={() => setShowPostMenu(value => !value)}
+                aria-label="게시물 메뉴"
+                className="flex h-5 w-5 shrink-0 items-center justify-center text-[#8E776D]"
+              >
+                <MoreHorizontal size={14} strokeWidth={2.5} />
+              </button>
+            </div>
+
+            <div className="mt-1 flex items-center gap-2.5 text-[9px] font-bold text-[#8E776D]">
+              <button
+                type="button"
+                onClick={() => void togglePostLike()}
+                aria-label="좋아요"
+                className={`flex items-center gap-0.5 ${liked ? 'text-[#D94E55]' : ''}`}
+              >
+                <ThumbsUp size={12} strokeWidth={2} fill={liked ? 'currentColor' : 'none'} />
+                <span>{post.likes}</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => interactive && setCommentExpanded(true)}
+                aria-label="댓글 보기"
+                className="flex items-center gap-0.5"
+              >
+                <MessageCircle size={12} strokeWidth={2} />
+                <span>{visibleComments.length}</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => void toggleCourseSaved()}
+                aria-label={saved ? '저장 해제' : '저장'}
+                className={`ml-auto flex min-w-0 items-center gap-0.5 ${saved ? 'text-[#D94E55]' : ''}`}
+              >
+                <Bookmark size={12} strokeWidth={2} fill={saved ? 'currentColor' : 'none'} />
+                <span>{saved ? '저장됨' : '저장'}</span>
+              </button>
+            </div>
+          </div>
+
+          <AnimatePresence>
+            {showPostMenu && (
+              <motion.div
+                initial={{ opacity: 0, y: 4 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: 4 }}
+                className="absolute bottom-9 right-0 z-30 w-[116px] overflow-hidden rounded-xl border border-[#DACBC3] bg-white shadow-[0_8px_22px_rgba(57,38,29,0.16)]"
+              >
+                {ownPost ? (
+                  <>
+                    <button type="button" onClick={editPost} className="flex h-9 w-full items-center gap-1.5 px-3 text-left text-[10px] font-bold text-[#51443E]"><Pencil size={12} />게시물 수정</button>
+                    <button type="button" onClick={requestPostDelete} className="flex h-9 w-full items-center gap-1.5 border-t border-[#EEE3DD] px-3 text-left text-[10px] font-bold text-[#D84D52]"><Trash2 size={12} />게시물 삭제</button>
+                  </>
+                ) : canDeletePost ? (
+                  <>
+                    <button type="button" onClick={() => { setShowPostMenu(false); go(authorProfilePath); }} className="block h-9 w-full px-3 text-left text-[10px] font-bold text-[#51443E]">작성자 보기</button>
+                    <button type="button" onClick={requestPostDelete} className="flex h-9 w-full items-center gap-1.5 border-t border-[#EEE3DD] px-3 text-left text-[10px] font-bold text-[#D84D52]"><Trash2 size={12} />관리자 삭제</button>
+                  </>
+                ) : (
+                  <>
+                    <button type="button" onClick={() => { setShowPostMenu(false); go(authorProfilePath); }} className="block h-9 w-full px-3 text-left text-[10px] font-bold text-[#51443E]">작성자 보기</button>
+                    <button type="button" disabled={postReported} onClick={reportPost} className="block h-9 w-full border-t border-[#EEE3DD] px-3 text-left text-[10px] font-bold text-[#D84D52] disabled:text-[#A99D97]">{postReported ? '신고 완료' : '게시물 신고'}</button>
+                  </>
+                )}
+              </motion.div>
+            )}
+          </AnimatePresence>
+        </article>
+        {deleteConfirmation}
+      </>
+    );
+  }
 
   if (compact) {
     return (

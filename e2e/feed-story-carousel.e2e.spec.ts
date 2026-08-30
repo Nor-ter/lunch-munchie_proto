@@ -189,6 +189,16 @@ async function dragLeft(page: Page, selector: Locator) {
   await page.mouse.up();
 }
 
+async function dragRight(page: Page, selector: Locator) {
+  const box = await selector.boundingBox();
+  expect(box).toBeTruthy();
+  if (!box) return;
+  await page.mouse.move(box.x + box.width * 0.25, box.y + box.height * 0.5);
+  await page.mouse.down();
+  await page.mouse.move(box.x + box.width * 0.75, box.y + box.height * 0.5, { steps: 5 });
+  await page.mouse.up();
+}
+
 test('feed, profile, and detail render the same persisted per-photo story', async ({ page }) => {
   await mockStoryApi(page);
   for (const url of ['/feed', `/profile/${AUTHOR_ID}`, `/feed/${POST_ID}`]) {
@@ -208,7 +218,7 @@ test('feed, profile, and detail render the same persisted per-photo story', asyn
     await carousel.press('ArrowLeft');
     await expect(carousel).toHaveAttribute('data-slide-index', '0');
 
-    if (url.includes('/profile/')) {
+    if (url === '/feed' || url.includes('/profile/')) {
       await expect(card.locator('button [data-ui="munchie-food-hero"]')).toHaveCount(0);
       await dragLeft(page, carousel);
     } else {
@@ -220,7 +230,7 @@ test('feed, profile, and detail render the same persisted per-photo story', asyn
   }
 });
 
-test('swipes and arrows change slides without becoming likes, while a stationary double tap likes once', async ({ page }) => {
+test('grid swipes change slides without becoming likes, while a stationary double tap likes once', async ({ page }) => {
   const api = await mockStoryApi(page);
   await page.goto('/feed');
   const card = page.getByTestId(`unified-munchie-card-${POST_ID}`);
@@ -230,8 +240,10 @@ test('swipes and arrows change slides without becoming likes, while a stationary
   await expect(carousel).toHaveAttribute('data-slide-index', '1');
   expect(api.likeRequests()).toBe(0);
 
-  await card.getByRole('button', { name: '이전 음식 사진' }).click();
-  await card.getByRole('button', { name: '다음 음식 사진' }).click();
+  await dragRight(page, carousel);
+  await expect(carousel).toHaveAttribute('data-slide-index', '0');
+  await dragLeft(page, carousel);
+  await expect(carousel).toHaveAttribute('data-slide-index', '1');
   expect(api.likeRequests()).toBe(0);
 
   const interaction = card.locator('[data-ui="munchie-food-hero-interaction"]');

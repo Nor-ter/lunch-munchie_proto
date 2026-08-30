@@ -43,6 +43,15 @@ describe('UnifiedMunchieCard feed flow', () => {
     expect(source).not.toContain('compact-one-line-review');
   });
 
+  it('renders the discovery feed as a borderless grid tile with two compact metadata rows', () => {
+    expect(source).toContain('data-variant="feed-grid"');
+    expect(source).toContain("if (feedGrid)");
+    expect(source).toContain("{post.authorName}");
+    expect(source).toContain("· {timeAgo(post.createdAt)}");
+    expect(source).toContain("{saved ? '저장됨' : '저장'}");
+    expect(source).not.toContain('data-variant="feed-grid" className="rounded');
+  });
+
   it('retains the canonical post title when an older course is outside the bounded catalogue', () => {
     expect(source).toContain("title: post.title ?? ''");
   });

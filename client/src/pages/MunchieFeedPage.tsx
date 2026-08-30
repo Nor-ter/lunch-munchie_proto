@@ -303,7 +303,7 @@ export default function MunchieFeedPage() {
         </AnimatePresence>}
       </header>
 
-      <main className="space-y-4 px-3 py-4">
+      <main className="px-2 py-3">
         {searchActive ? (
           <section aria-label="사용자 검색 결과" className="overflow-hidden rounded-[22px] border border-[#E9D8CF] bg-white shadow-[0_8px_24px_rgba(89,56,42,0.07)]">
             {auth.isLoading ? (
@@ -352,22 +352,24 @@ export default function MunchieFeedPage() {
             )}
           </section>
         ) : <>
-        <AnimatePresence mode="popLayout">
-          {filteredPosts.map(post => (
-            <motion.div
-              key={post.id}
-              layout
-              initial={{ opacity: 0, y: 18 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -12 }}
-            >
-              <UnifiedMunchieCard post={post} />
-            </motion.div>
-          ))}
-        </AnimatePresence>
+        <div data-ui="munchie-feed-grid" className="grid grid-cols-2 items-start gap-x-2 gap-y-4">
+          <AnimatePresence mode="popLayout">
+            {filteredPosts.map(post => (
+              <motion.div
+                key={post.id}
+                layout
+                initial={{ opacity: 0, y: 14 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -10 }}
+              >
+                <UnifiedMunchieCard post={post} feedGrid />
+              </motion.div>
+            ))}
+          </AnimatePresence>
+        </div>
 
         {filteredPosts.length === 0 && (
-          <div className="rounded-[26px] border border-dashed border-[#DCCBC0] bg-white px-6 py-16 text-center">
+          <div className="mt-4 rounded-[26px] border border-dashed border-[#DCCBC0] bg-white px-6 py-16 text-center">
             <div className="mb-3 text-5xl">🍽️</div>
             <p className="text-[16px] font-black text-[#2D211C]">{appliedLocation ? '이 반경에는 피드가 없어요' : '아직 Munchie 피드가 없어요'}</p>
             <p className="mt-1 text-[12px] font-semibold text-[#9A8579]">{appliedLocation ? '핀을 옮기거나 반경을 넓혀보세요' : '첫 번째 Munchie 피드를 만들어보세요'}</p>
@@ -378,7 +380,7 @@ export default function MunchieFeedPage() {
             type="button"
             onClick={() => { void loadMoreFeedPosts(); }}
             disabled={isLoadingMoreFeedPosts}
-            className="mx-auto block rounded-full border border-[#F1C2B6] bg-white px-5 py-3 text-[13px] font-black text-[#D95359] disabled:opacity-50"
+            className="mx-auto mt-5 block rounded-full border border-[#F1C2B6] bg-white px-5 py-3 text-[13px] font-black text-[#D95359] disabled:opacity-50"
           >
             {isLoadingMoreFeedPosts ? '다음 피드를 불러오는 중…' : '더 많은 Munchie 보기'}
           </button>
