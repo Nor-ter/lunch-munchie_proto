@@ -46,9 +46,7 @@ import StorySharePage from "./pages/StorySharePage";
 import LunchieWaitingCompanion from "./components/lunchie/LunchieWaitingCompanion";
 import { startGoogleAuth } from "./services/authApi";
 
-const NO_TABBAR = ['/onboarding', '/tour-mode', '/course/', '/coursemap', '/template/', '/templates', '/lunchie', '/session', '/join', '/feed/', '/explore/places', '/auth', '/admin'];
-const LUNCHIE_TABBAR_ROUTES = new Set(['/lunchie/settings', '/session/lobby']);
-
+const NO_TABBAR = ['/onboarding', '/legacy', '/tour-mode', '/course/', '/coursemap', '/template/', '/templates', '/lunchie', '/session', '/join', '/feed/', '/explore/places', '/auth', '/admin'];
 function CoursesRedirect() {
   const params = useParams<{ id: string }>();
   return <Redirect to={`/course/${params.id}`} />;
@@ -75,7 +73,7 @@ function RequireGoogleAuth({ userId, children }: { userId: string | null; childr
 
 function AppShell({ userId }: { userId: string | null }) {
   const [location] = useLocation();
-  const showTabBar = LUNCHIE_TABBAR_ROUTES.has(location) || !NO_TABBAR.some(p => location.startsWith(p));
+  const showTabBar = !NO_TABBAR.some(p => location.startsWith(p));
   const isAdminDashboard = location.startsWith('/admin');
   return (
     <div className={isAdminDashboard ? "app-shell app-shell--admin" : "app-shell"}>
@@ -87,7 +85,10 @@ function AppShell({ userId }: { userId: string | null }) {
             <Route path="/login">{() => <Redirect to="/auth/login" />}</Route>
             <Route path="/auth/login" component={AuthLoginPage} />
             <Route path="/auth/callback" component={AuthCallbackPage} />
-            <Route path="/" component={HomePage} />
+            {/* The production MVP starts at discovery instead of a second home dashboard. */}
+            <Route path="/">{() => <Redirect to="/feed" />}</Route>
+            {/* Preserve the retired dashboard for isolated QA while keeping it out of navigation. */}
+            <Route path="/legacy/home" component={HomePage} />
             {/* 기존 먼치모드(코스 탐색)는 Munchie Feed로 통합 */}
             <Route path="/explore">{() => <Redirect to="/feed" />}</Route>
             <Route path="/explore/places" component={PlaceExplorePage} />

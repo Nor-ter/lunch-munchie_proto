@@ -22,12 +22,12 @@ describe('LunchieMapPage persisted restaurant recovery', () => {
     expect(source).not.toContain('openstreetmap.org');
   });
 
-  it('uses the shared header back-button and returns to the saved Lunchie tab', () => {
+  it('uses the shared header back-button and returns to the unified saved list', () => {
     expect(source).toContain("import BackButton from '@/components/ui/BackButton'");
     expect(source).toContain('<BackButton');
-    expect(source).toContain('aria-label="Lunchie 런치픽으로 돌아가기"');
-    expect(source).toContain("const SAVED_LUNCHIE_PATH = '/saved?tab=restaurants'");
-    expect(source).toContain('navigate(SAVED_LUNCHIE_PATH)');
+    expect(source).toContain('aria-label="저장으로 돌아가기"');
+    expect(source).toContain("const SAVED_PATH = '/saved'");
+    expect(source).toContain('navigate(SAVED_PATH)');
     expect(source).not.toContain('window.history.back()');
     expect(source).not.toContain('식당 위치 안내');
     expect(source).toContain('tracking-[0.18em] text-[#E67E78]">Lunchie</p>');

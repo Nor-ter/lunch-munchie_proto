@@ -7,7 +7,7 @@ import { useApp, type MenuItem, type Restaurant } from '@/contexts/AppContext';
 import { getRestaurantById as fetchRestaurantById } from '@/services/restaurantsApi';
 
 const GOOGLE_MAPS_API_KEY = import.meta.env.VITE_GOOGLE_MAPS_API_KEY;
-const SAVED_LUNCHIE_PATH = '/saved?tab=restaurants';
+const SAVED_PATH = '/saved';
 
 function groupByCategory(items: MenuItem[]): [string, MenuItem[]][] {
   const order: string[] = [];
@@ -75,7 +75,7 @@ export default function LunchieMapPage() {
     return (
       <div className="min-h-dvh flex flex-col items-center justify-center px-5 text-center">
         <p role={restaurantLoadFailed ? 'alert' : undefined} className="text-[14px] text-[#9B9B9B] mb-4">식당 정보를 찾을 수 없습니다.</p>
-        <button onClick={() => navigate(SAVED_LUNCHIE_PATH)} className="lm-btn-primary px-6 py-3 flex items-center justify-center">
+        <button onClick={() => navigate(SAVED_PATH)} className="lm-btn-primary px-6 py-3 flex items-center justify-center">
           저장 목록으로
         </button>
       </div>
@@ -94,8 +94,8 @@ export default function LunchieMapPage() {
     <div className="mx-auto min-h-dvh max-w-[430px] bg-[#FFF8F3] pb-6">
       <header className="flex items-center justify-between px-5 pb-3 pt-[max(12px,env(safe-area-inset-top))]">
         <BackButton
-          onClick={() => navigate(SAVED_LUNCHIE_PATH)}
-          aria-label="Lunchie 런치픽으로 돌아가기"
+          onClick={() => navigate(SAVED_PATH)}
+          aria-label="저장으로 돌아가기"
           className="border border-[#EBD8CE] text-[#8B6A5D]"
         />
         <div className="text-center">

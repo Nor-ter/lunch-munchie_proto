@@ -8,7 +8,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useLocation } from 'wouter';
 import {
-  Settings, X, Camera, Upload,
+  Settings, X, Camera, Upload, Plus,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { useApp, type FeedPost } from '@/contexts/AppContext';
@@ -498,19 +498,26 @@ function ProfilePageContent({ authenticatedUserId }: { authenticatedUserId: stri
 
       {/* 나의 피드 */}
       <div className="px-4 mt-8">
-        <h2 className="font-black text-[18px] text-[#1A1A1A] mb-3">나의 피드 {myPosts.length}</h2>
+        <div className="mb-3 flex items-center justify-between gap-3">
+          <h2 className="font-black text-[18px] text-[#1A1A1A]">나의 피드 {myPosts.length}</h2>
+          <button
+            type="button"
+            onClick={() => navigate('/coursemap/new')}
+            className="inline-flex h-9 items-center gap-1.5 rounded-full bg-[#E85053] px-3.5 text-[12px] font-black text-white shadow-[0_4px_12px_rgba(232,80,83,0.2)] active:scale-95"
+            aria-label="새 게시물 작성"
+          >
+            <Plus size={15} strokeWidth={3} /> 게시
+          </button>
+        </div>
         {isProfileFeedLoading && myPosts.length === 0 ? (
           <div className="w-full rounded-2xl border-2 border-dashed border-[#E5CFC5] py-8 text-center">
             <p className="text-[13px] font-bold text-[#8A7A6C]">피드를 동기화하는 중…</p>
           </div>
         ) : myPosts.length === 0 ? (
-          <button
-            onClick={() => navigate('/coursemap/new')}
-            className="w-full rounded-2xl border-2 border-dashed border-[#E5CFC5] py-8 text-center"
-          >
+          <div className="w-full rounded-2xl border-2 border-dashed border-[#E5CFC5] py-8 text-center">
             <p className="text-3xl mb-1">📔</p>
-            <p className="text-[13px] font-bold text-[#8A7A6C]">첫 먼치 피드를 작성해보세요</p>
-          </button>
+            <p className="text-[13px] font-bold text-[#8A7A6C]">게시 버튼으로 첫 피드를 작성해보세요</p>
+          </div>
         ) : (
           <div className="grid grid-cols-2 items-start gap-3">
             {myPosts.map(post => (
@@ -703,11 +710,15 @@ function ProfilePageContent({ authenticatedUserId }: { authenticatedUserId: stri
 }
 
 const PROFILE_GOOGLE_LOGIN = '/api/auth/google/start?next=%2Fprofile';
+const POST_GOOGLE_LOGIN = '/api/auth/google/start?next=%2Fcoursemap%2Fnew';
 
 /** 익명 프리뷰 — 레이아웃은 로그인 프로필과 같되, 프로토타입 유저 데이터는 절대 그리지 않는다. */
 function ProfileGuestPreview() {
   const goToLogin = useCallback(() => {
     window.location.assign(PROFILE_GOOGLE_LOGIN);
+  }, []);
+  const goToPostLogin = useCallback(() => {
+    window.location.assign(POST_GOOGLE_LOGIN);
   }, []);
 
   return (
@@ -776,7 +787,17 @@ function ProfileGuestPreview() {
       </div>
 
       <div className="px-4 mt-8">
-        <h2 className="font-black text-[18px] text-[#1A1A1A] mb-3">나의 피드 0</h2>
+        <div className="mb-3 flex items-center justify-between gap-3">
+          <h2 className="font-black text-[18px] text-[#1A1A1A]">나의 피드 0</h2>
+          <button
+            type="button"
+            onClick={goToPostLogin}
+            className="inline-flex h-9 items-center gap-1.5 rounded-full bg-[#E85053] px-3.5 text-[12px] font-black text-white shadow-[0_4px_12px_rgba(232,80,83,0.2)] active:scale-95"
+            aria-label="로그인하고 게시물 작성"
+          >
+            <Plus size={15} strokeWidth={3} /> 게시
+          </button>
+        </div>
         <button
           type="button"
           onClick={goToLogin}

@@ -23,13 +23,15 @@ describe('merge4_v1_jp client connections', () => {
     expect(createSource).toContain('await refreshFeedPosts()');
   });
 
-  it('uses the server journey history while preserving the Saved map/list UI', () => {
+  it('uses server journey history in the unified Saved course list', () => {
     const source = readClientSource('SavedPage.tsx');
     expect(source).toContain("fetch('/api/journey?days=30'");
     expect(source).toContain('groupJourneyByDay');
-    expect(source).toContain('<SavedMunchieMap');
-    expect(source).toContain("['map', 'Map', MapIcon]");
-    expect(source).toContain("['list', 'List', LayoutList]");
+    expect(source).toContain('savedPosts.length + journeyStops.length');
+    expect(source).toContain('저장한 코스를 한곳에 모았어요');
+    expect(source).toContain('1곳 코스');
+    expect(source).not.toContain('Munchie 먼치픽');
+    expect(source).not.toContain('Lunchie 런치픽');
   });
 
   it('renders canonical feed media without substituting course covers', () => {

@@ -97,13 +97,13 @@ describe('Lunchie Quick Match presentation', () => {
     expect(swipeSource).toContain('다시 시도');
   });
 
-  it('keeps the Quick Match and lobby navigation bar flat like the home navigation', () => {
-    expect(tabBarSource).toContain('tab.path === "/lunchie/settings"');
-    expect(tabBarSource).toContain('location === "/session/lobby"');
+  it('keeps Quick Match outside the Munchie MVP navigation', () => {
+    expect(tabBarSource).not.toContain('{ path: "/lunchie/settings"');
+    expect(tabBarSource).not.toContain('location === "/session/lobby"');
     expect(tabBarSource).not.toContain('tab-bar--flat');
     expect(settingsSource).not.toContain('fixed inset-x-0 bottom-[var(--lm-tab-bar-height)]');
     expect(tabBarSource).toContain('src="/assets/Logo%20003%203.png"');
-    expect(tabBarSource).toContain('className="tab-profile-icon object-contain"');
+    expect(tabBarSource).toContain('tab-profile-icon h-[35px] w-[35px] object-contain');
   });
 
   it('returns from the lobby to settings and renders the personalized lunchmate instead of the legacy gif', () => {
