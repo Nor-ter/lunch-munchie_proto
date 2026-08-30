@@ -22,15 +22,20 @@ describe('SavedPage list bookmark presentation', () => {
     expect(savedSource).toContain('confirmUnsave');
   });
 
-  it('restores the selected map course from the selectedFeed query', () => {
-    expect(savedSource).toContain("get('selectedFeed')");
-    expect(savedSource).toContain('selectedFeedId={selectedMapFeedId}');
-    expect(savedSource).toContain('onSelectedFeedIdChange={selectSavedMapFeed}');
+  it('combines saved sources behind one restaurant and course filter', () => {
+    expect(savedSource).toContain('저장한 식당과 코스를 한곳에 모았어요');
+    expect(savedSource).toContain('aria-label="저장 항목 필터"');
+    expect(savedSource).toContain("['restaurant', '식당', Utensils]");
+    expect(savedSource).toContain("['course', '코스', MapIcon]");
+    expect(savedSource).toContain('savedPosts.length + journeyStops.length');
+    expect(savedSource).not.toContain('Munchie 먼치픽');
+    expect(savedSource).not.toContain('Lunchie 런치픽');
+    expect(savedSource).not.toContain('getSavedTabFromSearch');
   });
 
-  it('restores the Lunchie restaurant tab from navigation query state', () => {
-    expect(savedSource).toContain('getSavedTabFromSearch(search)');
-    expect(savedSource).toContain("get('tab') === 'restaurants'");
-    expect(savedSource).toContain('aria-pressed={tab === key}');
+  it('classifies one-stop posts as restaurants and multi-stop posts as courses', () => {
+    expect(savedSource).toContain("post.stops?.length === 1 ? 'restaurant' : 'course'");
+    expect(savedSource).toContain("getSavedPostKind(post) === 'restaurant' ? '식당' : '코스'");
+    expect(savedSource).toContain("activeFilter === 'course' ? [] : journeyStops");
   });
 });
