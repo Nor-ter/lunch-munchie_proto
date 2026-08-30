@@ -15,8 +15,7 @@ import {
   normalizeLunchieSessionAvatar,
 } from '@shared/lunchieAvatar';
 import { normalizeFoodTag, type TagType } from '@/constants/foodTags';
-import { DRIVE_COURSES, DRIVE_FEED_POSTS } from '@/data/driveFeed';
-import { demoAuthorIdFor } from '@/data/demoAuthors';
+import { DRIVE_COURSES } from '@/data/driveFeed';
 import { getCoursemapDecor, MAX_MUNCHIE_FEED_PHOTOS, type CoursemapCanvasStroke, type FeedPhotoPlacement } from '@/lib/coursemapDecor';
 import type { LunchmateProfileLoadout, LunchmateRoomLoadout } from '@/types/lunchmateCustomization';
 import type { LunchboxInventory } from '@/constants/lunchboxFoods';
@@ -832,16 +831,9 @@ export function AppProvider({
     catch { return []; }
   });
 
-  const [feedPosts, setFeedPosts] = useState<FeedPost[]>(() => {
-    // Feed ownership and deletion are server facts. Do not render an editable
-    // localStorage snapshot while the canonical first D1 page is loading.
-    // Anonymous offline fallback stays read-only and is replaced by the API.
-    return DRIVE_FEED_POSTS.map(post => ({
-      ...post,
-      authorId: post.authorId ?? demoAuthorIdFor(post.authorName),
-      photos: post.photos.slice(0, MAX_MUNCHIE_FEED_PHOTOS),
-    }));
-  });
+  // Feed ownership and deletion are server facts. Wait for the canonical first
+  // D1 page instead of flashing bundled demo posts during application boot.
+  const [feedPosts, setFeedPosts] = useState<FeedPost[]>([]);
 
   const [likedFeedIds, setLikedFeedIds] = useState<string[]>(() => {
     try { const s = localStorage.getItem('lm_feed_likes'); return s ? JSON.parse(s) : []; }

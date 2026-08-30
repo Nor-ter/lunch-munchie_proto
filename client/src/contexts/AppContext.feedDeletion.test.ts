@@ -8,6 +8,8 @@ describe('feed deletion cache safety', () => {
   it('treats the first D1 feed page as canonical instead of merging stale local posts', () => {
     expect(source).toContain('setFeedPosts(remoteFeeds)');
     expect(source).not.toContain('if (Array.isArray(initialFeedItems) && initialFeedItems.length > 0)');
+    expect(source).toContain('const [feedPosts, setFeedPosts] = useState<FeedPost[]>([])');
+    expect(source).not.toContain('DRIVE_FEED_POSTS');
   });
 
   it('does not let an in-flight response restore a confirmed deleted course', () => {
