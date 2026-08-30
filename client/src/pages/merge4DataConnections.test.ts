@@ -23,12 +23,13 @@ describe('merge4_v1_jp client connections', () => {
     expect(createSource).toContain('await refreshFeedPosts()');
   });
 
-  it('uses server journey history in the unified Saved restaurant/course list', () => {
+  it('uses server journey history in the unified Saved course list', () => {
     const source = readClientSource('SavedPage.tsx');
     expect(source).toContain("fetch('/api/journey?days=30'");
     expect(source).toContain('groupJourneyByDay');
     expect(source).toContain('savedPosts.length + journeyStops.length');
-    expect(source).toContain('저장한 식당과 코스를 한곳에 모았어요');
+    expect(source).toContain('저장한 코스를 한곳에 모았어요');
+    expect(source).toContain('1곳 코스');
     expect(source).not.toContain('Munchie 먼치픽');
     expect(source).not.toContain('Lunchie 런치픽');
   });

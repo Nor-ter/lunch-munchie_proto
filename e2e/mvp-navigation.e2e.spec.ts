@@ -51,7 +51,7 @@ test('profile create action enters the existing Google auth boundary', async ({ 
   expect(new URL(authStartUrl).searchParams.get('next')).toBe('/coursemap/new');
 });
 
-test('saved restaurants and courses share one source-neutral list', async ({ page }) => {
+test('saved restaurants and multi-stop items share one course model', async ({ page }) => {
   await page.route('**/api/auth/session', route => route.fulfill({
     contentType: 'application/json',
     body: JSON.stringify({
@@ -75,12 +75,11 @@ test('saved restaurants and courses share one source-neutral list', async ({ pag
   await page.goto('/saved?tab=restaurants');
 
   await expect(page.getByRole('heading', { name: '저장 🔖' })).toBeVisible();
-  await expect(page.getByText('저장한 식당과 코스를 한곳에 모았어요')).toBeVisible();
-  const filters = page.getByRole('group', { name: '저장 항목 필터' });
-  await expect(filters.getByRole('button', { name: '전체 1' })).toBeVisible();
-  await expect(filters.getByRole('button', { name: '식당 1' })).toBeVisible();
-  await expect(filters.getByRole('button', { name: '코스 0' })).toBeVisible();
-  await expect(page.getByRole('button', { name: /통합 식당 한식/ })).toBeVisible();
+  await expect(page.getByText('저장한 코스를 한곳에 모았어요 · 1개')).toBeVisible();
+  await expect(page.getByRole('group', { name: '저장 항목 필터' })).toHaveCount(0);
+  await expect(page.getByText('오늘의 런치픽 · 코스 1개')).toBeVisible();
+  await expect(page.getByText('1곳 코스')).toBeVisible();
+  await expect(page.getByRole('button', { name: /통합 식당.*1곳 코스.*한식/ })).toBeVisible();
   await expect(page.getByText('Munchie 먼치픽')).toHaveCount(0);
   await expect(page.getByText('Lunchie 런치픽')).toHaveCount(0);
 });

@@ -22,20 +22,21 @@ describe('SavedPage list bookmark presentation', () => {
     expect(savedSource).toContain('confirmUnsave');
   });
 
-  it('combines saved sources behind one restaurant and course filter', () => {
-    expect(savedSource).toContain('저장한 식당과 코스를 한곳에 모았어요');
-    expect(savedSource).toContain('aria-label="저장 항목 필터"');
-    expect(savedSource).toContain("['restaurant', '식당', Utensils]");
-    expect(savedSource).toContain("['course', '코스', MapIcon]");
+  it('presents every saved item as a course without restaurant/course filters', () => {
+    expect(savedSource).toContain('저장한 코스를 한곳에 모았어요');
     expect(savedSource).toContain('savedPosts.length + journeyStops.length');
+    expect(savedSource).toContain('{savedCourseCount}개');
+    expect(savedSource).not.toContain('aria-label="저장 항목 필터"');
+    expect(savedSource).not.toContain('SavedFilter');
     expect(savedSource).not.toContain('Munchie 먼치픽');
     expect(savedSource).not.toContain('Lunchie 런치픽');
     expect(savedSource).not.toContain('getSavedTabFromSearch');
   });
 
-  it('classifies one-stop posts as restaurants and multi-stop posts as courses', () => {
-    expect(savedSource).toContain("post.stops?.length === 1 ? 'restaurant' : 'course'");
-    expect(savedSource).toContain("getSavedPostKind(post) === 'restaurant' ? '식당' : '코스'");
-    expect(savedSource).toContain("activeFilter === 'course' ? [] : journeyStops");
+  it('treats one restaurant as a one-place course', () => {
+    expect(savedSource).toContain('Math.max(stops?.length ?? 0, 1)');
+    expect(savedSource).toContain('{getCoursePlaceCount(post.stops)}곳 코스');
+    expect(savedSource).toContain('1곳 코스');
+    expect(savedSource).not.toContain("'restaurant' ? '식당' : '코스'");
   });
 });

@@ -1,20 +1,18 @@
-/** Lunchie Munchie MVP — 저장한 식당과 코스를 출처 구분 없이 한곳에서 보여준다. */
+/** Lunchie Munchie MVP — 식당 한 곳도 하나의 코스로 보고 저장 항목을 코스로 통합한다. */
 import { useEffect, useMemo, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useLocation } from 'wouter';
-import { MapPin, Bookmark, Map as MapIcon, Utensils, X } from 'lucide-react';
-import { useApp, type FeedPost } from '@/contexts/AppContext';
+import { MapPin, Bookmark, X } from 'lucide-react';
+import { useApp } from '@/contexts/AppContext';
 import UnifiedMunchieCard, { SAVED_BOOKMARK_BUTTON_CLASS } from '@/components/munchie/UnifiedMunchieCard';
 import { useAuthStatus } from '@/hooks/useAuthStatus';
-
-type SavedFilter = 'all' | 'restaurant' | 'course';
 
 type JourneyStop = { restaurant_id: string; name: string; category: string | null; at: number };
 type JourneyDay = { key: string; label: string; stops: JourneyStop[] };
 
-export function getSavedPostKind(post: Pick<FeedPost, 'stops'>): Exclude<SavedFilter, 'all'> {
-  return post.stops?.length === 1 ? 'restaurant' : 'course';
+export function getCoursePlaceCount(stops: unknown[] | undefined): number {
+  return Math.max(stops?.length ?? 0, 1);
 }
 
 function groupJourneyByDay(stops: JourneyStop[]): JourneyDay[] {
@@ -41,7 +39,6 @@ export default function SavedPage() {
     feedPosts, savedCourseIds, unsaveCourse,
   } = useApp();
   const auth = useAuthStatus();
-  const [activeFilter, setActiveFilter] = useState<SavedFilter>('all');
   const [journeyStops, setJourneyStops] = useState<JourneyStop[]>([]);
   const [journeyLoading, setJourneyLoading] = useState(true);
   const [pendingUnsaveCourseId, setPendingUnsaveCourseId] = useState<string | null>(null);
@@ -78,21 +75,9 @@ export default function SavedPage() {
       }, new Map<string, (typeof feedPosts)[number]>())
       .values(),
   );
-  const restaurantPosts = savedPosts.filter(post => getSavedPostKind(post) === 'restaurant');
-  const coursePosts = savedPosts.filter(post => getSavedPostKind(post) === 'course');
-  const filteredPosts = activeFilter === 'restaurant'
-    ? restaurantPosts
-    : activeFilter === 'course'
-      ? coursePosts
-      : savedPosts;
-  const filteredJourneyStops = activeFilter === 'course' ? [] : journeyStops;
-  const journeyDays = useMemo(() => groupJourneyByDay(filteredJourneyStops), [filteredJourneyStops]);
-  const savedCounts: Record<SavedFilter, number> = {
-    all: savedPosts.length + journeyStops.length,
-    restaurant: restaurantPosts.length + journeyStops.length,
-    course: coursePosts.length,
-  };
-  const hasFilteredItems = filteredPosts.length > 0 || filteredJourneyStops.length > 0;
+  const journeyDays = useMemo(() => groupJourneyByDay(journeyStops), [journeyStops]);
+  const savedCourseCount = savedPosts.length + journeyStops.length;
+  const hasSavedCourses = savedCourseCount > 0;
   const confirmUnsave = () => {
     if (!pendingUnsaveCourseId) return;
     unsaveCourse(pendingUnsaveCourseId);
@@ -104,44 +89,17 @@ export default function SavedPage() {
       {/* Header */}
       <div className="px-5 pt-12 pb-4">
         <h1 className="mb-1 text-[22px] font-bold text-[#1A1A1A]">저장 🔖</h1>
-        <p className="mb-4 text-[12px] text-[#9B9B9B]">저장한 식당과 코스를 한곳에 모았어요</p>
-
-        <div className="grid grid-cols-3 gap-2" role="group" aria-label="저장 항목 필터">
-          {([
-            ['all', '전체', Bookmark],
-            ['restaurant', '식당', Utensils],
-            ['course', '코스', MapIcon],
-          ] as const).map(([key, label, Icon]) => (
-            <button
-              key={key}
-              type="button"
-              onClick={() => setActiveFilter(key)}
-              aria-pressed={activeFilter === key}
-              className="relative flex h-10 items-center justify-center rounded-full text-[13px] font-bold transition-colors"
-              style={{ color: activeFilter === key ? '#FFFFFF' : '#8A7A6C', background: activeFilter === key ? '#EB5053' : '#F5F0EA' }}
-            >
-              <span className="relative z-10 flex items-center gap-1.5">
-                <Icon size={13} /> {label}
-                <span
-                  className="rounded-full px-1.5 text-[10px] font-black"
-                  style={{ background: activeFilter === key ? '#FF8A80' : '#E8DED8' }}
-                >
-                  {savedCounts[key]}
-                </span>
-              </span>
-            </button>
-          ))}
-        </div>
+        <p className="text-[12px] text-[#9B9B9B]">저장한 코스를 한곳에 모았어요 · {savedCourseCount}개</p>
       </div>
 
       <div className="space-y-5 px-3 pb-10">
-        {filteredPosts.length > 0 && (
+        {savedPosts.length > 0 && (
           <motion.section initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
             <div className="grid grid-cols-2 items-start gap-3">
-              {filteredPosts.map(post => (
+              {savedPosts.map(post => (
                 <div key={post.id} className="relative min-w-0">
                   <span className="absolute left-2 top-2 z-20 rounded-full bg-[#30221C]/85 px-2 py-1 text-[9px] font-black text-white">
-                    {getSavedPostKind(post) === 'restaurant' ? '식당' : '코스'}
+                    {getCoursePlaceCount(post.stops)}곳 코스
                   </span>
                   <UnifiedMunchieCard post={post} compact homeSummary detailOrigin="saved" />
                   <button
@@ -162,7 +120,7 @@ export default function SavedPage() {
           <div className="space-y-4 px-2">
           {journeyDays.map(day => (
             <section key={day.key}>
-              <p className="mb-2 text-[12px] font-black text-[#B26A62]">{day.label} · 식당 {day.stops.length}곳</p>
+              <p className="mb-2 text-[12px] font-black text-[#B26A62]">{day.label} · 코스 {day.stops.length}개</p>
               <div className="space-y-2">
                 {day.stops.map((stop, index) => (
                   <button
@@ -172,7 +130,10 @@ export default function SavedPage() {
                     className="flex w-full items-center gap-3 rounded-2xl border border-[#F0E8E0] bg-white p-3 text-left active:scale-[0.98]"
                   >
                     <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[#F6B5AC] text-[11px] font-black text-white">{day.stops.length - index}</span>
-                    <span className="min-w-0 flex-1 truncate text-[14px] font-bold text-[#1A1A1A]">{stop.name}</span>
+                    <span className="min-w-0 flex-1">
+                      <span className="block truncate text-[14px] font-bold text-[#1A1A1A]">{stop.name}</span>
+                      <span className="mt-0.5 block text-[10px] font-black text-[#B26A62]">1곳 코스</span>
+                    </span>
                     <span className="flex items-center gap-1 text-[11px] font-semibold text-[#9B9B9B]"><MapPin size={11} />{stop.category ?? '맛집'}</span>
                   </button>
                 ))}
@@ -182,20 +143,18 @@ export default function SavedPage() {
           </div>
         )}
 
-        {!journeyLoading && !hasFilteredItems && (
+        {!journeyLoading && !hasSavedCourses && (
           <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="py-16 text-center">
             <div className="mb-3 text-5xl">🔖</div>
             <p className="mb-1 text-[16px] font-bold text-[#1A1A1A]">
-              {activeFilter === 'all' ? '아직 저장한 항목이 없어요' : `저장한 ${activeFilter === 'restaurant' ? '식당이' : '코스가'} 없어요`}
+              아직 저장한 코스가 없어요
             </p>
             <p className="mb-6 text-[13px] text-[#9B9B9B]">
-              {activeFilter === 'all' ? '발견에서 마음에 드는 식당과 코스를 저장해보세요' : '다른 필터를 선택해보세요'}
+              발견에서 마음에 드는 코스를 저장해보세요
             </p>
-            {activeFilter === 'all' && (
-              <button onClick={() => navigate('/feed')} className="lm-btn-primary inline-flex items-center justify-center px-6">
-                발견으로 이동
-              </button>
-            )}
+            <button onClick={() => navigate('/feed')} className="lm-btn-primary inline-flex items-center justify-center px-6">
+              발견으로 이동
+            </button>
           </motion.div>
         )}
       </div>
