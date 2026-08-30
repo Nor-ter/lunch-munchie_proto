@@ -172,7 +172,7 @@ export function createFeedStoryEditorOverlay(
     restaurant_name: { x: 70, y: 13, width: 38, tone: 'light', size: 'sm', align: 'center' },
     food_name: { x: 70, y: 23, width: 44, tone: 'light', size: 'lg', align: 'center' },
     price: { x: 70, y: 33, width: 38, tone: 'light', size: 'md', align: 'center' },
-    course_map: { x: 70, y: 47, width: 36, tone: 'light', size: 'sm', align: 'center' },
+    course_map: { x: 70, y: 47, width: 42, tone: 'light', size: 'sm', align: 'center' },
     review: { x: 70, y: 60, width: 42, tone: 'light', size: 'md', align: 'center' },
     text: { x: 70, y: 72, width: 44, tone: 'light', size: 'sm', align: 'center' },
   };

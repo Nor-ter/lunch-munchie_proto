@@ -296,7 +296,7 @@ export function buildDefaultFeedStorySlides(
         kind: 'course_map',
         x: 70,
         y: 47,
-        width: 36,
+        width: 42,
         tone: 'light',
         size: 'sm',
         align: 'center',

@@ -71,10 +71,17 @@ function gridOverlayLayout(overlay: FeedStoryOverlay, text: string | undefined) 
         : overlay.kind === 'price'
           ? 36
           : overlay.kind === 'course_map'
-            ? 44
+            ? 52
             : 50;
   const maximumWidth = overlay.kind === 'review' ? 72 : 68;
   const width = Math.min(maximumWidth, Math.max(overlay.width, minimumWidth));
+  const edge = 4;
+  const x = Math.min(100 - (width / 2) - edge, Math.max((width / 2) + edge, overlay.x));
+  return { width, x };
+}
+
+function defaultOverlayLayout(overlay: FeedStoryOverlay) {
+  const width = overlay.kind === 'course_map' ? Math.max(44, overlay.width) : overlay.width;
   const edge = 4;
   const x = Math.min(100 - (width / 2) - edge, Math.max((width / 2) + edge, overlay.x));
   return { width, x };
@@ -111,7 +118,7 @@ function StoryOverlayItem({
   );
   if (overlay.kind === 'course_map' && stops.length === 0) return null;
   if (overlay.kind !== 'course_map' && !text) return null;
-  const layout = grid ? gridOverlayLayout(overlay, text) : { width: overlay.width, x: overlay.x };
+  const layout = grid ? gridOverlayLayout(overlay, text) : defaultOverlayLayout(overlay);
 
   return (
     <div

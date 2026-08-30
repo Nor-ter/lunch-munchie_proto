@@ -109,7 +109,7 @@ describe('feed story model', () => {
 
     expect(slides).toHaveLength(2);
     expect(slides[0]?.overlays).toEqual(expect.arrayContaining([
-      expect.objectContaining({ kind: 'course_map', x: 70, y: 47, width: 36, size: 'sm' }),
+      expect.objectContaining({ kind: 'course_map', x: 70, y: 47, width: 42, size: 'sm' }),
       expect.objectContaining({ kind: 'restaurant_name', text: '첫 번째 식당', restaurantId: 'a', x: 70, y: 13, width: 38, size: 'sm' }),
       expect.objectContaining({ kind: 'review', text: '두 곳 모두 좋았어요', x: 70, y: 60, width: 42, size: 'md' }),
     ]));

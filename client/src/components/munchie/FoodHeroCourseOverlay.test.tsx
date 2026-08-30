@@ -55,6 +55,10 @@ describe('FoodHeroCourseOverlay', () => {
     expect(html).toContain('을지로 저녁 코스');
     expect(html).toContain('data-overlay-content="course-map"');
     expect(html).toContain('stroke="#FF6534"');
+    expect(html).toContain('h-[clamp(30px,10cqw,44px)]');
+    expect(html).toContain('stroke-linecap="round"');
+    expect(html).toMatch(/d="M [^"]+ C [^"]+"/);
+    expect(html).toContain('width:44%');
     expect(html).toContain('을지식당');
     expect(html).toContain('2시간 30분');
   });

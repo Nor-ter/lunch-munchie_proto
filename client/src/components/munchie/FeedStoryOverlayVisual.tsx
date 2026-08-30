@@ -1,5 +1,6 @@
 import React from 'react';
 import type { FeedStoryOverlay } from '@/lib/feedStory';
+import { getCurvedCourseSegments } from '@/lib/courseMapSync';
 
 export interface FeedStoryOverlayPlace {
   id: string;
@@ -85,28 +86,30 @@ function FeedStoryCourseMap({
   const visible = places.slice(0, 3);
   const points = visible.map((_, index) => ({
     x: visible.length === 1 ? 50 : 10 + (index * 80) / Math.max(visible.length - 1, 1),
-    y: index % 2 === 0 ? 10 : 22,
+    y: index % 2 === 0 ? 13 : 29,
   }));
-  const line = points.map(point => `${point.x},${point.y}`).join(' ');
+  const segments = getCurvedCourseSegments(points);
   const showLabels = !compact && size !== 'sm';
 
   return (
-    <span data-overlay-content="course-map" className="block w-full">
+    <span data-overlay-content="course-map" className="block w-full drop-shadow-[0_3px_8px_rgba(0,0,0,0.34)]">
       <svg
-        viewBox="0 0 100 32"
-        className={`${grid ? 'h-[clamp(12px,6cqw,18px)]' : 'h-[clamp(24px,8cqw,38px)]'} w-full overflow-visible`}
+        viewBox="0 0 100 42"
+        className={`${grid ? 'h-[clamp(18px,8cqw,26px)]' : 'h-[clamp(30px,10cqw,44px)]'} w-full overflow-visible`}
         aria-hidden="true"
       >
-        {points.length > 1 && (
-          <>
-            <polyline points={line} fill="none" stroke="rgba(255,255,255,0.72)" strokeWidth="5" strokeLinecap="round" strokeLinejoin="round" />
-            <polyline points={line} fill="none" stroke="#FF6534" strokeWidth="2.8" strokeLinecap="round" strokeLinejoin="round" />
-          </>
-        )}
+        {segments.map((segment, index) => (
+          <g key={`${visible[index]?.id}-${visible[index + 1]?.id}`}>
+            <path d={segment.path} fill="none" stroke="rgba(255,255,255,0.9)" strokeWidth="7" strokeLinecap="round" strokeLinejoin="round" />
+            <path d={segment.path} fill="none" stroke="#FF6534" strokeWidth="3.6" strokeLinecap="round" strokeLinejoin="round" />
+            <path d={segment.path} fill="none" stroke="rgba(255,255,255,0.72)" strokeWidth="0.9" strokeDasharray="4 4" strokeLinecap="round" />
+          </g>
+        ))}
         {points.map((point, index) => (
           <g key={visible[index]?.id ?? index}>
-            <circle cx={point.x} cy={point.y} r="4.3" fill="#FF6534" stroke="white" strokeWidth="1.5" />
-            <text x={point.x} y={point.y + 1.7} textAnchor="middle" fontSize="4.4" fontWeight="900" fill="white">
+            <circle cx={point.x} cy={point.y} r="6.4" fill="rgba(255,101,52,0.24)" />
+            <circle cx={point.x} cy={point.y} r="5" fill="#FF6534" stroke="white" strokeWidth="1.8" />
+            <text x={point.x} y={point.y + 1.8} textAnchor="middle" fontSize="4.8" fontWeight="900" fill="white">
               {index + 1}
             </text>
           </g>
