@@ -2,7 +2,7 @@ import React from 'react';
 import { readFileSync } from 'node:fs';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
-import FoodHeroCourseOverlay, { getAuthorPhotoSources } from './FoodHeroCourseOverlay';
+import FoodHeroCourseOverlay, { getAuthorPhotoSources, resolveGridStoryRatio } from './FoodHeroCourseOverlay';
 
 describe('FoodHeroCourseOverlay', () => {
   it('renders a one-stop course from the author photo with useful restaurant details', () => {
@@ -191,6 +191,30 @@ describe('FoodHeroCourseOverlay', () => {
     expect(html).toContain('width:58%');
     expect(html).not.toContain('1곳 코스');
     expect(html).not.toContain('aria-live="polite" aria-atomic="true" class="px-1 py-1"');
+  });
+
+  it('gives each grid story a stable height based on its maximum content density', () => {
+    const slide = (count: number, text = '한입') => [{
+      id: `slide-${count}`,
+      photo: `/photo-${count}.jpg`,
+      overlays: Array.from({ length: count }, (_, index) => ({
+        id: `overlay-${index}`,
+        kind: 'text' as const,
+        text,
+        x: 50,
+        y: 20 + index * 10,
+        width: 60,
+        tone: 'light' as const,
+        size: 'md' as const,
+        align: 'left' as const,
+      })),
+    }];
+
+    expect(resolveGridStoryRatio(slide(1))).toEqual({ label: '1:1', className: 'aspect-square' });
+    expect(resolveGridStoryRatio(slide(2))).toEqual({ label: '7:8', className: 'aspect-[7/8]' });
+    expect(resolveGridStoryRatio(slide(4))).toEqual({ label: '4:5', className: 'aspect-[4/5]' });
+    expect(resolveGridStoryRatio(slide(6, '한입 메뉴'))).toEqual({ label: '3:4', className: 'aspect-[3/4]' });
+    expect(resolveGridStoryRatio(slide(2, '내용이 아주 길어서 더 많은 세로 공간이 필요한 설명입니다'))).toEqual({ label: '4:5', className: 'aspect-[4/5]' });
   });
 
   it('keeps a failed slide in place and stops a real swipe before the parent like handler', () => {

@@ -4,6 +4,7 @@ import { describe, expect, it } from 'vitest';
 
 const feedDetailSource = readFileSync(join(import.meta.dirname, 'FeedDetailPage.tsx'), 'utf8');
 const courseFeedsSource = readFileSync(join(import.meta.dirname, 'course/CourseFeedsPage.tsx'), 'utf8');
+const munchieFeedSource = readFileSync(join(import.meta.dirname, 'MunchieFeedPage.tsx'), 'utf8');
 
 describe('Munchie feed viewing page layout', () => {
   it('keeps feed detail mobile-width while the course feed list uses the app shell width', () => {
@@ -11,5 +12,12 @@ describe('Munchie feed viewing page layout', () => {
     expect(feedDetailSource).toContain('pt-[max(12px,env(safe-area-inset-top))]');
     expect(feedDetailSource).toContain("import BackButton from '@/components/ui/BackButton'");
     expect(courseFeedsSource).not.toContain('mx-auto min-h-dvh max-w-[430px] bg-[#FCF4EE]');
+  });
+
+  it('stacks variable-height discovery posts in two independent columns', () => {
+    expect(munchieFeedSource).toContain('data-feed-column={column + 1}');
+    expect(munchieFeedSource).toContain('index % 2 === column');
+    expect(munchieFeedSource).toContain('flex min-w-0 flex-col gap-4');
+    expect(munchieFeedSource).not.toContain('gap-y-4');
   });
 });

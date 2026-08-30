@@ -80,6 +80,18 @@ function gridOverlayLayout(overlay: FeedStoryOverlay, text: string | undefined) 
   return { width, x };
 }
 
+export function resolveGridStoryRatio(slides: FeedStorySlide[]) {
+  const density = slides.reduce((maximum, slide) => {
+    const textLength = slide.overlays.reduce((total, overlay) => total + Array.from(overlay.text ?? '').length, 0);
+    return Math.max(maximum, (slide.overlays.length * 12) + textLength);
+  }, 0);
+
+  if (density >= 92) return { label: '3:4', className: 'aspect-[3/4]' } as const;
+  if (density >= 52) return { label: '4:5', className: 'aspect-[4/5]' } as const;
+  if (density >= 28) return { label: '7:8', className: 'aspect-[7/8]' } as const;
+  return { label: '1:1', className: 'aspect-square' } as const;
+}
+
 function StoryOverlayItem({
   overlay,
   stops,
@@ -200,6 +212,7 @@ export default function FoodHeroCourseOverlay({
   const hasPrevious = safeIndex > 0;
   const hasNext = safeIndex < storySlides.length - 1;
   const activeHasCourseMap = activeSlide?.overlays.some(overlay => overlay.kind === 'course_map') ?? false;
+  const gridStoryRatio = useMemo(() => resolveGridStoryRatio(storySlides), [storySlides]);
 
   const showPrevious = () => setActiveIndex(index => Math.max(0, index - 1));
   const showNext = () => setActiveIndex(index => Math.min(storySlides.length - 1, index + 1));
@@ -238,11 +251,11 @@ export default function FoodHeroCourseOverlay({
   return (
     <section
       data-ui="munchie-food-hero"
-      data-story-ratio="4:5"
+      data-story-ratio={grid ? gridStoryRatio.label : '4:5'}
       data-state={activeSlide && !slideFailed ? 'photo' : 'empty'}
       data-slide-index={safeIndex}
       data-presentation={grid ? 'grid' : 'default'}
-      className={`relative aspect-[4/5] w-full touch-pan-y select-none overflow-hidden bg-[#30211B] text-white outline-none [container-type:inline-size] focus-visible:ring-4 focus-visible:ring-inset focus-visible:ring-white/90 ${className}`}
+      className={`relative w-full touch-pan-y select-none overflow-hidden bg-[#30211B] text-white outline-none [container-type:inline-size] focus-visible:ring-4 focus-visible:ring-inset focus-visible:ring-white/90 ${grid ? gridStoryRatio.className : 'aspect-[4/5]'} ${className}`}
       aria-label={`${displayTitle} 사진 슬라이드${onActivate ? '. Enter 키로 피드 상세 보기' : ''}`}
       aria-roledescription="carousel"
       aria-keyshortcuts={onActivate ? 'ArrowLeft ArrowRight Enter Space' : 'ArrowLeft ArrowRight'}

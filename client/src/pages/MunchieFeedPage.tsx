@@ -352,20 +352,24 @@ export default function MunchieFeedPage() {
             )}
           </section>
         ) : <>
-        <div data-ui="munchie-feed-grid" className="grid grid-cols-2 items-start gap-x-2 gap-y-4">
-          <AnimatePresence mode="popLayout">
-            {filteredPosts.map(post => (
-              <motion.div
-                key={post.id}
-                layout
-                initial={{ opacity: 0, y: 14 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: -10 }}
-              >
-                <UnifiedMunchieCard post={post} feedGrid />
-              </motion.div>
-            ))}
-          </AnimatePresence>
+        <div data-ui="munchie-feed-grid" className="grid grid-cols-2 items-start gap-x-2">
+          {[0, 1].map(column => (
+            <div key={column} data-feed-column={column + 1} className="flex min-w-0 flex-col gap-4">
+              <AnimatePresence mode="popLayout">
+                {filteredPosts.filter((_, index) => index % 2 === column).map(post => (
+                  <motion.div
+                    key={post.id}
+                    layout
+                    initial={{ opacity: 0, y: 14 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: -10 }}
+                  >
+                    <UnifiedMunchieCard post={post} feedGrid />
+                  </motion.div>
+                ))}
+              </AnimatePresence>
+            </div>
+          ))}
         </div>
 
         {filteredPosts.length === 0 && (

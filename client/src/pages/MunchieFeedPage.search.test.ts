@@ -34,9 +34,10 @@ describe('Munchie Feed user search', () => {
     expect(source).not.toContain('aria-label="전체 템플릿 보기"');
   });
 
-  it('renders discovery posts in a low-padding two-column grid', () => {
+  it('renders discovery posts in low-padding independent columns', () => {
     expect(source).toContain('data-ui="munchie-feed-grid"');
-    expect(source).toContain('grid grid-cols-2 items-start gap-x-2 gap-y-4');
+    expect(source).toContain('grid grid-cols-2 items-start gap-x-2');
+    expect(source).toContain('data-feed-column={column + 1}');
     expect(source).toContain('<UnifiedMunchieCard post={post} feedGrid />');
     expect(source).toContain('<main className="px-2 py-3">');
   });
