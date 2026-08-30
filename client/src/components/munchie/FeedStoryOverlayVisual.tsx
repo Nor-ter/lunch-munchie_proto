@@ -18,10 +18,22 @@ const sizeClasses: Record<FeedStoryOverlay['size'], string> = {
   lg: 'text-[clamp(16px,7cqw,30px)] leading-[1.08]',
 };
 
-const gridSizeClasses: Record<FeedStoryOverlay['size'], string> = {
-  sm: 'text-[clamp(6px,2.3cqw,8px)] leading-[1.2]',
-  md: 'text-[clamp(7px,3.2cqw,10px)] leading-[1.16]',
-  lg: 'text-[clamp(9px,4.8cqw,13px)] leading-[1.05]',
+const gridSizeClasses: Record<FeedStoryOverlay['size'], Record<'short' | 'regular' | 'long', string>> = {
+  sm: {
+    short: 'text-[clamp(8px,3.2cqw,10px)] leading-[1.18]',
+    regular: 'text-[clamp(7px,2.8cqw,9px)] leading-[1.2]',
+    long: 'text-[clamp(6px,2.5cqw,8px)] leading-[1.22]',
+  },
+  md: {
+    short: 'text-[clamp(10px,4.8cqw,13px)] leading-[1.12]',
+    regular: 'text-[clamp(9px,4cqw,11px)] leading-[1.16]',
+    long: 'text-[clamp(8px,3.4cqw,10px)] leading-[1.18]',
+  },
+  lg: {
+    short: 'text-[clamp(13px,7cqw,17px)] leading-[1.02]',
+    regular: 'text-[clamp(11px,5.8cqw,15px)] leading-[1.06]',
+    long: 'text-[clamp(9px,4.8cqw,13px)] leading-[1.08]',
+  },
 };
 
 const gridToneClasses: Record<FeedStoryOverlay['tone'], string> = {
@@ -46,6 +58,18 @@ const kindClasses: Record<FeedStoryOverlay['kind'], string> = {
 };
 
 const cleanText = (value: string | null | undefined) => value?.trim() || undefined;
+
+function gridTextLength(value: string | undefined) {
+  return Array.from(value ?? '').reduce((length, character) => (
+    length + (/\s/.test(character) ? 0.35 : /[\x00-\x7F]/.test(character) ? 0.58 : 1)
+  ), 0);
+}
+
+function gridTextSizeClass(size: FeedStoryOverlay['size'], value: string | undefined) {
+  const length = gridTextLength(value);
+  const density = length <= 9 ? 'short' : length <= 20 ? 'regular' : 'long';
+  return gridSizeClasses[size][density];
+}
 
 function FeedStoryCourseMap({
   places,
@@ -123,13 +147,13 @@ export default function FeedStoryOverlayVisual({
     <span
       data-overlay-size={overlay.size}
       data-overlay-tone={overlay.tone}
-      className={`block w-full break-words ${grid ? gridToneClasses[overlay.tone] : toneClasses[overlay.tone]} ${grid ? gridSizeClasses[overlay.size] : sizeClasses[overlay.size]} ${alignClasses[overlay.align]} ${kindClasses[overlay.kind]}`}
+      className={`block w-full break-words ${grid ? gridToneClasses[overlay.tone] : toneClasses[overlay.tone]} ${grid ? gridTextSizeClass(overlay.size, text) : sizeClasses[overlay.size]} ${alignClasses[overlay.align]} ${kindClasses[overlay.kind]}`}
     >
       {overlay.kind === 'course_map'
         ? <FeedStoryCourseMap places={places} size={overlay.size} compact={compact} grid={grid} />
         : overlay.kind === 'review'
           ? <span className={`${grid ? 'line-clamp-3 border-l pl-1' : 'border-l-2 pl-2'} block border-[#FF8D82]`}>{text}</span>
-          : <span className={grid ? 'line-clamp-2' : undefined}>{text}</span>}
+          : <span className={grid ? overlay.kind === 'price' ? 'line-clamp-1' : 'line-clamp-2 text-balance' : undefined}>{text}</span>}
     </span>
   );
 }

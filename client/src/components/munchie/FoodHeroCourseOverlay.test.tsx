@@ -184,8 +184,11 @@ describe('FoodHeroCourseOverlay', () => {
     );
 
     expect(html).toContain('data-presentation="grid"');
-    expect(html).toContain('text-[clamp(9px,4.8cqw,13px)]');
+    expect(html).toContain('text-[clamp(11px,5.8cqw,15px)]');
+    expect(html).toContain('text-[clamp(9px,4cqw,11px)]');
     expect(html).toContain('line-clamp-3');
+    expect(html).toContain('left:67%');
+    expect(html).toContain('width:58%');
     expect(html).not.toContain('1곳 코스');
     expect(html).not.toContain('aria-live="polite" aria-atomic="true" class="px-1 py-1"');
   });

@@ -60,6 +60,26 @@ function formatDuration(minutes: number) {
   return remainder ? `${hours}시간 ${remainder}분` : `${hours}시간`;
 }
 
+function gridOverlayLayout(overlay: FeedStoryOverlay, text: string | undefined) {
+  const contentLength = Array.from(text ?? '').length;
+  const minimumWidth = overlay.kind === 'review'
+    ? (contentLength > 20 ? 62 : 54)
+    : overlay.kind === 'food_name'
+      ? (contentLength > 12 ? 58 : 48)
+      : overlay.kind === 'restaurant_name'
+        ? 48
+        : overlay.kind === 'price'
+          ? 36
+          : overlay.kind === 'course_map'
+            ? 44
+            : 50;
+  const maximumWidth = overlay.kind === 'review' ? 72 : 68;
+  const width = Math.min(maximumWidth, Math.max(overlay.width, minimumWidth));
+  const edge = 4;
+  const x = Math.min(100 - (width / 2) - edge, Math.max((width / 2) + edge, overlay.x));
+  return { width, x };
+}
+
 function StoryOverlayItem({
   overlay,
   stops,
@@ -79,15 +99,16 @@ function StoryOverlayItem({
   );
   if (overlay.kind === 'course_map' && stops.length === 0) return null;
   if (overlay.kind !== 'course_map' && !text) return null;
+  const layout = grid ? gridOverlayLayout(overlay, text) : { width: overlay.width, x: overlay.x };
 
   return (
     <div
       data-overlay-kind={overlay.kind}
-      className={`pointer-events-none absolute z-10 -translate-x-1/2 -translate-y-1/2 ${compact ? 'overflow-hidden' : ''} ${grid ? 'max-h-[22%]' : compact ? 'max-h-[28%]' : ''}`}
+      className={`pointer-events-none absolute z-10 -translate-x-1/2 -translate-y-1/2 ${compact ? 'overflow-hidden' : ''} ${grid ? 'max-h-[26%]' : compact ? 'max-h-[28%]' : ''}`}
       style={{
-        left: `${overlay.x}%`,
+        left: `${layout.x}%`,
         top: `${overlay.y}%`,
-        width: `${overlay.width}%`,
+        width: `${layout.width}%`,
         textAlign: overlay.align,
       }}
     >
