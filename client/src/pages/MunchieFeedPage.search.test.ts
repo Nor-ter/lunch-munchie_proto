@@ -26,4 +26,11 @@ describe('Munchie Feed user search', () => {
     expect(source).toContain('{!searchActive && <AnimatePresence');
     expect(source).toContain('{showFilters && (');
   });
+
+  it('keeps the feed header compact and focused on search and filters', () => {
+    expect(source).toContain('bg-[#FFFDFC] px-4 py-3');
+    expect(source).toContain('text-[22px] font-black');
+    expect(source).not.toContain('다녀온 맛집 Munchie 피드를 함께 공유해요');
+    expect(source).not.toContain('aria-label="전체 템플릿 보기"');
+  });
 });

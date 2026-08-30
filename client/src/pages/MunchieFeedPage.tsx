@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
-import { LoaderCircle, MapPin, Palette, RotateCcw, Search, SlidersHorizontal, X } from 'lucide-react';
+import { LoaderCircle, MapPin, RotateCcw, Search, SlidersHorizontal, X } from 'lucide-react';
 import { toast } from 'sonner';
 import { useLocation } from 'wouter';
 import { FOOD_FILTER_TAGS, hasFoodTag } from '@/constants/foodTags';
@@ -103,12 +103,9 @@ export default function MunchieFeedPage() {
 
   return (
     <div className="min-h-dvh bg-[#FFF7F2] pb-[calc(65px+43px+1rem)]">
-      <header className="sticky top-0 z-30 border-b border-[#EAD7CE] bg-[#FFFDFC] px-4 pb-3 pt-8">
-        <div className="flex items-start justify-between gap-4">
-          <div>
-            <h1 className="text-[25px] font-black leading-none tracking-[-0.03em] text-[#DB2837]">MUNCHIE FEED</h1>
-            <p className="mt-2 text-[11px] font-semibold text-[#8D776C]">다녀온 맛집 Munchie 피드를 함께 공유해요</p>
-          </div>
+      <header className="sticky top-0 z-30 border-b border-[#EAD7CE] bg-[#FFFDFC] px-4 py-3">
+        <div className="flex items-center justify-between gap-4">
+          <h1 className="text-[22px] font-black leading-none tracking-[-0.03em] text-[#DB2837]">MUNCHIE FEED</h1>
           <div className="flex gap-2">
             <button
               type="button"
@@ -121,24 +118,16 @@ export default function MunchieFeedPage() {
               }}
               aria-label={searchOpen ? '사용자 검색 닫기' : '사용자 검색 열기'}
               aria-expanded={searchOpen}
-              className={`flex h-10 w-10 items-center justify-center rounded-full border-2 active:scale-95 ${searchOpen ? 'border-[#E96A6D] bg-[#E96A6D] text-white' : 'border-[#E7CFC4] bg-[#FFF8F4] text-[#9A7468]'}`}
+              className={`flex h-9 w-9 items-center justify-center rounded-full border-2 active:scale-95 ${searchOpen ? 'border-[#E96A6D] bg-[#E96A6D] text-white' : 'border-[#E7CFC4] bg-[#FFF8F4] text-[#9A7468]'}`}
             >
               {searchOpen ? <X size={18} /> : <Search size={18} />}
-            </button>
-            <button
-              type="button"
-              onClick={() => navigate('/templates')}
-              aria-label="전체 템플릿 보기"
-              className="flex h-10 w-10 items-center justify-center rounded-full border-2 border-[#F0C2B5] bg-[#FFF4EE] text-[#DB6E67] active:scale-95"
-            >
-              <Palette size={18} />
             </button>
             <button
               type="button"
               onClick={() => setShowFilters(current => !current)}
               aria-label="필터 보기"
               aria-pressed={showFilters}
-              className={`flex h-10 w-10 items-center justify-center rounded-full border-2 active:scale-95 ${showFilters ? 'border-[#BFD7C8] bg-[#F1FAF4] text-[#4D7D63]' : 'border-[#D8E3DC] bg-[#F8FCFA] text-[#5F7A6B]'}`}
+              className={`flex h-9 w-9 items-center justify-center rounded-full border-2 active:scale-95 ${showFilters ? 'border-[#BFD7C8] bg-[#F1FAF4] text-[#4D7D63]' : 'border-[#D8E3DC] bg-[#F8FCFA] text-[#5F7A6B]'}`}
             >
               <SlidersHorizontal size={18} />
             </button>
