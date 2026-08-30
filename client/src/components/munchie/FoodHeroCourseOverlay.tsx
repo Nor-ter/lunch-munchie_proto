@@ -211,10 +211,10 @@ export default function FoodHeroCourseOverlay({
   return (
     <section
       data-ui="munchie-food-hero"
-      data-story-ratio={compact ? '4:5' : '9:16'}
+      data-story-ratio="4:5"
       data-state={activeSlide && !slideFailed ? 'photo' : 'empty'}
       data-slide-index={safeIndex}
-      className={`relative w-full touch-pan-y select-none overflow-hidden bg-[#30211B] text-white outline-none [container-type:inline-size] focus-visible:ring-4 focus-visible:ring-inset focus-visible:ring-white/90 ${compact ? 'aspect-[4/5]' : 'aspect-[9/16]'} ${className}`}
+      className={`relative aspect-[4/5] w-full touch-pan-y select-none overflow-hidden bg-[#30211B] text-white outline-none [container-type:inline-size] focus-visible:ring-4 focus-visible:ring-inset focus-visible:ring-white/90 ${className}`}
       aria-label={`${displayTitle} 사진 슬라이드${onActivate ? '. Enter 키로 피드 상세 보기' : ''}`}
       aria-roledescription="carousel"
       aria-keyshortcuts={onActivate ? 'ArrowLeft ArrowRight Enter Space' : 'ArrowLeft ArrowRight'}

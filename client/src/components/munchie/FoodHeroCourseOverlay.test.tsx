@@ -24,8 +24,8 @@ describe('FoodHeroCourseOverlay', () => {
     );
 
     expect(html).toContain('data-state="photo"');
-    expect(html).toContain('data-story-ratio="9:16"');
-    expect(html).toContain('aspect-[9/16]');
+    expect(html).toContain('data-story-ratio="4:5"');
+    expect(html).toContain('aspect-[4/5]');
     expect(html).toContain('src="https://images.example/author-bowl.jpg"');
     expect(html).toContain('1곳 코스');
     expect(html).toContain('담소국밥');

@@ -376,8 +376,8 @@ export default function FeedStoryEditor({
       <div
         ref={canvasRef}
         data-ui="feed-story-editor-canvas"
-        data-story-ratio="9:16"
-        className="relative mx-auto isolate aspect-[9/16] w-full max-w-[390px] touch-pan-y select-none overflow-hidden rounded-[22px] border border-[#E6D2C8] bg-[#30211B] shadow-[0_14px_34px_rgba(72,43,31,0.18)] [container-type:inline-size]"
+        data-story-ratio="4:5"
+        className="relative mx-auto isolate aspect-[4/5] w-full max-w-[390px] touch-pan-y select-none overflow-hidden rounded-[22px] border border-[#E6D2C8] bg-[#30211B] shadow-[0_14px_34px_rgba(72,43,31,0.18)] [container-type:inline-size]"
         role="group"
         aria-roledescription="편집 슬라이드"
         aria-label={`${selectedSlideIndex + 1} / ${slides.length} 사진`}

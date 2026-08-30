@@ -126,8 +126,8 @@ describe('FeedStoryEditor markup', () => {
     expect(html).toContain('aria-label="이전 사진"');
     expect(html).toContain('aria-label="다음 사진"');
     expect(html).toContain('aria-roledescription="편집 슬라이드"');
-    expect(html).toContain('data-story-ratio="9:16"');
-    expect(html).toContain('aspect-[9/16]');
+    expect(html).toContain('data-story-ratio="4:5"');
+    expect(html).toContain('aspect-[4/5]');
     expect(html).toContain('data-overlay-size="md"');
     expect(html).toContain('aria-label="1 / 2 사진"');
     expect(html).toContain('tabindex="0"');

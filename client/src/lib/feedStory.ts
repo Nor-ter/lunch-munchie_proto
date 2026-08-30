@@ -22,8 +22,8 @@ export type FeedStoryOverlayAlign = typeof FEED_STORY_OVERLAY_ALIGNS[number];
 
 /**
  * Feed overlay positions use the centre of the item as x/y, expressed as a
- * percentage of the canonical 9:16 story canvas. Compact cards may crop the
- * same positions into 4:5, while the editor and full feed preserve 9:16.
+ * percentage of the canonical 4:5 feed canvas. The editor, full feed, and
+ * compact cards share this ratio so saved overlays render consistently.
  * Presentation values are presets rather than arbitrary CSS from the API.
  */
 export interface FeedStoryOverlay {
