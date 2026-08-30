@@ -46,21 +46,6 @@ function BookmarkIcon({ active }: { active: boolean }) {
   );
 }
 
-function PlusIcon({ active }: { active: boolean }) {
-  return (
-    <svg
-      className="h-[28px] w-[28px]"
-      fill="none"
-      stroke={active ? "#FF1346" : "#E85053"}
-      strokeLinecap="round"
-      viewBox="0 0 40 40"
-      aria-hidden="true"
-    >
-      <path d="M20 9 V31 M9 20 H31" strokeWidth="3.2" />
-    </svg>
-  );
-}
-
 function FaceIcon({ active }: { active: boolean }) {
   return (
     <img
@@ -76,7 +61,6 @@ function FaceIcon({ active }: { active: boolean }) {
 const TABS = [
   { path: "/feed", label: "발견", Icon: MunchIcon },
   { path: "/saved", label: "저장", Icon: BookmarkIcon },
-  { path: "/coursemap/new", label: "게시", Icon: PlusIcon, action: true },
   { path: "/profile", label: "내 정보", Icon: FaceIcon },
 ] as const;
 
@@ -85,13 +69,10 @@ export default function TabBar() {
 
   return (
     <div className="tab-bar">
-      <nav aria-label="주요 메뉴" className="tab-bar-content grid grid-cols-4 items-center px-[18px]">
+      <nav aria-label="주요 메뉴" className="tab-bar-content grid grid-cols-3 items-center px-[30px]">
         {TABS.map((tab) => {
-          const isActive =
-            location === tab.path ||
-            (tab.path !== "/coursemap/new" && location.startsWith(tab.path));
+          const isActive = location === tab.path || location.startsWith(tab.path);
           const isProfile = tab.path === "/profile";
-          const isCreate = 'action' in tab && tab.action;
 
           return (
             <button
@@ -102,14 +83,14 @@ export default function TabBar() {
               className="flex h-[68px] min-w-[62px] flex-col items-center justify-center gap-0.5 justify-self-center transition-all active:scale-95"
             >
               <motion.div
-                className={isCreate ? 'flex h-11 w-11 items-center justify-center rounded-full bg-white shadow-[0_4px_12px_rgba(123,10,36,0.22)]' : isProfile ? 'flex h-9 w-9 items-center justify-center' : undefined}
+                className={isProfile ? 'flex h-9 w-9 items-center justify-center' : undefined}
                 animate={isActive && !isProfile ? { scale: 1.06 } : { scale: 1 }}
                 whileTap={{ scale: 0.92 }}
                 transition={{ type: "spring", stiffness: 400, damping: 20 }}
               >
                 <tab.Icon active={isActive} />
               </motion.div>
-              <span className={`text-[10px] font-black leading-none ${isActive || isCreate ? 'text-white' : 'text-[#FFD5DD]'}`}>
+              <span className={`text-[10px] font-black leading-none ${isActive ? 'text-white' : 'text-[#FFD5DD]'}`}>
                 {tab.label}
               </span>
             </button>
