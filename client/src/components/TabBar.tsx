@@ -46,33 +46,17 @@ function BookmarkIcon({ active }: { active: boolean }) {
   );
 }
 
-function HomeIcon({ active }: { active: boolean }) {
-  return (
-    <svg {...iconProps(active)} viewBox="0 0 40 40">
-      <path d="M8 19 L20 8 L32 19" strokeWidth="2.5" />
-      <path d="M11 18.5 V31.5 H29 V18.5" strokeWidth="2.5" />
-      <path
-        d="M16.5 31.5 V24.5 C16.5 22.3 18 21 20 21 C22 21 23.5 22.3 23.5 24.5 V31.5"
-        strokeWidth="2.5"
-      />
-    </svg>
-  );
-}
-
-function LightningIcon({ active }: { active: boolean }) {
+function PlusIcon({ active }: { active: boolean }) {
   return (
     <svg
-      className="h-[43px] w-[43px]"
+      className="h-[28px] w-[28px]"
       fill="none"
-      stroke={active ? ACTIVE_STROKE : INACTIVE_STROKE}
+      stroke={active ? "#FF1346" : "#E85053"}
       strokeLinecap="round"
-      strokeLinejoin="round"
       viewBox="0 0 40 40"
+      aria-hidden="true"
     >
-      <path
-        d="M22 4.5 L10 22 H19 L16 35.5 L31 17.5 H21.5 Z"
-        strokeWidth="2.4"
-      />
+      <path d="M20 9 V31 M9 20 H31" strokeWidth="3.2" />
     </svg>
   );
 }
@@ -83,18 +67,17 @@ function FaceIcon({ active }: { active: boolean }) {
       src="/assets/Logo%20003%203.png"
       alt=""
       aria-hidden="true"
-      className="tab-profile-icon object-contain"
+      className="tab-profile-icon h-[35px] w-[35px] object-contain"
       style={{ opacity: active ? 1 : 0.85 }}
     />
   );
 }
 
 const TABS = [
-  { path: "/", label: "홈", Icon: HomeIcon },
-  { path: "/feed", label: "먼치", Icon: MunchIcon },
-  { path: "/lunchie/settings", label: "런치", Icon: LightningIcon },
+  { path: "/feed", label: "발견", Icon: MunchIcon },
   { path: "/saved", label: "저장", Icon: BookmarkIcon },
-  { path: "/profile", label: "프로필", Icon: FaceIcon },
+  { path: "/coursemap/new", label: "게시", Icon: PlusIcon, action: true },
+  { path: "/profile", label: "내 정보", Icon: FaceIcon },
 ] as const;
 
 export default function TabBar() {
@@ -102,32 +85,37 @@ export default function TabBar() {
 
   return (
     <div className="tab-bar">
-      <div className="tab-bar-content grid grid-cols-5 items-center px-[18px]">
+      <nav aria-label="주요 메뉴" className="tab-bar-content grid grid-cols-4 items-center px-[18px]">
         {TABS.map((tab) => {
           const isActive =
             location === tab.path ||
-            (tab.path !== "/" && location.startsWith(tab.path)) ||
-            (tab.path === "/lunchie/settings" && location === "/session/lobby");
+            (tab.path !== "/coursemap/new" && location.startsWith(tab.path));
           const isProfile = tab.path === "/profile";
+          const isCreate = 'action' in tab && tab.action;
 
           return (
             <button
               key={tab.path}
               onClick={() => navigate(tab.path)}
               aria-label={tab.label}
-              className={`flex items-center justify-center justify-self-center transition-all active:scale-95 ${isProfile ? "h-14 w-14" : "h-[52px] w-[52px]"}`}
+              aria-current={isActive ? 'page' : undefined}
+              className="flex h-[68px] min-w-[62px] flex-col items-center justify-center gap-0.5 justify-self-center transition-all active:scale-95"
             >
               <motion.div
+                className={isCreate ? 'flex h-11 w-11 items-center justify-center rounded-full bg-white shadow-[0_4px_12px_rgba(123,10,36,0.22)]' : isProfile ? 'flex h-9 w-9 items-center justify-center' : undefined}
                 animate={isActive && !isProfile ? { scale: 1.06 } : { scale: 1 }}
                 whileTap={{ scale: 0.92 }}
                 transition={{ type: "spring", stiffness: 400, damping: 20 }}
               >
                 <tab.Icon active={isActive} />
               </motion.div>
+              <span className={`text-[10px] font-black leading-none ${isActive || isCreate ? 'text-white' : 'text-[#FFD5DD]'}`}>
+                {tab.label}
+              </span>
             </button>
           );
         })}
-      </div>
+      </nav>
     </div>
   );
 }

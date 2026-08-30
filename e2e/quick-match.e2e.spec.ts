@@ -192,7 +192,7 @@ test('participant lobby removes the retired logo and normalizes legacy member av
   await expect(page.getByLabel('2명 참여 중')).toContainText('😊🍜');
   await expect(page.locator('header')).toHaveCount(0);
   await expect(page.locator('main img[src="/assets/Logo%20003%203.png"]')).toHaveCount(0);
-  await expect(page.locator('.tab-bar img[src="/assets/Logo%20003%203.png"]')).toHaveCount(1);
+  await expect(page.locator('.tab-bar')).toHaveCount(0);
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth)).toBe(true);
   expect(browserErrors).toEqual([]);
 });

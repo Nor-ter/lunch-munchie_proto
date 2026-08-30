@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
-import { LoaderCircle, MapPin, Palette, Plus, RotateCcw, Search, SlidersHorizontal, X } from 'lucide-react';
+import { LoaderCircle, MapPin, Palette, RotateCcw, Search, SlidersHorizontal, X } from 'lucide-react';
 import { toast } from 'sonner';
 import { useLocation } from 'wouter';
 import { FOOD_FILTER_TAGS, hasFoodTag } from '@/constants/foodTags';
@@ -396,15 +396,6 @@ export default function MunchieFeedPage() {
         )}
         </>}
       </main>
-      <button
-        type="button"
-        onClick={() => navigate('/coursemap/new')}
-        aria-label="새 Munchie 피드 작성"
-        className="fixed right-6 z-40 flex h-16 w-16 items-center justify-center rounded-full border border-white/70 bg-[#F06F72] text-white shadow-[0_10px_22px_rgba(238,80,83,0.32)] active:scale-95"
-        style={{ bottom: 'calc(var(--lm-tab-bar-height, 76px) + 18px + env(safe-area-inset-bottom, 0px))' }}
-      >
-        <Plus size={34} strokeWidth={2.2} />
-      </button>
     </div>
   );
 }

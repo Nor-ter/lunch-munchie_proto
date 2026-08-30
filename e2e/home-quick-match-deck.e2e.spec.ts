@@ -27,7 +27,7 @@ async function swipeCard(page: Page, accessibleName: string, distanceX: number) 
 test('mobile Quick Match deck follows swipe direction and preserves tap, intent, and vertical pan', async ({ page }) => {
   await page.setViewportSize({ width: 372, height: 812 });
   await mockHomeApi(page);
-  await page.goto('/');
+  await page.goto('/legacy/home');
 
   const foodie = page.getByRole('button', { name: '밥 카드 (선택됨)' });
   await expect(foodie).toBeVisible();
