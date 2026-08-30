@@ -18,6 +18,18 @@ const sizeClasses: Record<FeedStoryOverlay['size'], string> = {
   lg: 'text-[clamp(16px,7cqw,30px)] leading-[1.08]',
 };
 
+const gridSizeClasses: Record<FeedStoryOverlay['size'], string> = {
+  sm: 'text-[clamp(6px,2.3cqw,8px)] leading-[1.2]',
+  md: 'text-[clamp(7px,3.2cqw,10px)] leading-[1.16]',
+  lg: 'text-[clamp(9px,4.8cqw,13px)] leading-[1.05]',
+};
+
+const gridToneClasses: Record<FeedStoryOverlay['tone'], string> = {
+  light: 'text-white [text-shadow:0_1px_5px_rgba(0,0,0,0.9)]',
+  dark: 'rounded-md border border-white/10 bg-black/55 px-1.5 py-1 text-white shadow backdrop-blur-sm',
+  accent: 'rounded-md border border-white/15 bg-[#F25055]/90 px-1.5 py-1 text-white shadow backdrop-blur-sm',
+};
+
 const alignClasses: Record<FeedStoryOverlay['align'], string> = {
   left: 'text-left',
   center: 'text-center',
@@ -39,10 +51,12 @@ function FeedStoryCourseMap({
   places,
   size,
   compact,
+  grid,
 }: {
   places: FeedStoryOverlayPlace[];
   size: FeedStoryOverlay['size'];
   compact: boolean;
+  grid: boolean;
 }) {
   const visible = places.slice(0, 3);
   const points = visible.map((_, index) => ({
@@ -56,7 +70,7 @@ function FeedStoryCourseMap({
     <span data-overlay-content="course-map" className="block w-full">
       <svg
         viewBox="0 0 100 32"
-        className="h-[clamp(24px,8cqw,38px)] w-full overflow-visible"
+        className={`${grid ? 'h-[clamp(12px,6cqw,18px)]' : 'h-[clamp(24px,8cqw,38px)]'} w-full overflow-visible`}
         aria-hidden="true"
       >
         {points.length > 1 && (
@@ -94,11 +108,13 @@ export default function FeedStoryOverlayVisual({
   overlay,
   places = [],
   compact = false,
+  grid = false,
   fallbackText,
 }: {
   overlay: FeedStoryOverlay;
   places?: FeedStoryOverlayPlace[];
   compact?: boolean;
+  grid?: boolean;
   fallbackText?: string;
 }) {
   const text = cleanText(overlay.text) ?? cleanText(fallbackText);
@@ -107,13 +123,13 @@ export default function FeedStoryOverlayVisual({
     <span
       data-overlay-size={overlay.size}
       data-overlay-tone={overlay.tone}
-      className={`block w-full break-words ${toneClasses[overlay.tone]} ${sizeClasses[overlay.size]} ${alignClasses[overlay.align]} ${kindClasses[overlay.kind]}`}
+      className={`block w-full break-words ${grid ? gridToneClasses[overlay.tone] : toneClasses[overlay.tone]} ${grid ? gridSizeClasses[overlay.size] : sizeClasses[overlay.size]} ${alignClasses[overlay.align]} ${kindClasses[overlay.kind]}`}
     >
       {overlay.kind === 'course_map'
-        ? <FeedStoryCourseMap places={places} size={overlay.size} compact={compact} />
+        ? <FeedStoryCourseMap places={places} size={overlay.size} compact={compact} grid={grid} />
         : overlay.kind === 'review'
-          ? <span className="block border-l-2 border-[#FF8D82] pl-2">{text}</span>
-          : <span>{text}</span>}
+          ? <span className={`${grid ? 'line-clamp-3 border-l pl-1' : 'border-l-2 pl-2'} block border-[#FF8D82]`}>{text}</span>
+          : <span className={grid ? 'line-clamp-2' : undefined}>{text}</span>}
     </span>
   );
 }

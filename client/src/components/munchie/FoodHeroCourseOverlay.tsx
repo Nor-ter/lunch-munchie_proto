@@ -28,6 +28,8 @@ interface FoodHeroCourseOverlayProps {
   distanceKm?: number | null;
   durationMinutes?: number | null;
   compact?: boolean;
+  /** Two-column discovery tiles use a smaller, collision-resistant overlay scale. */
+  grid?: boolean;
   eager?: boolean;
   className?: string;
   /** Compact cards use the carousel itself as the accessible detail action. */
@@ -62,10 +64,12 @@ function StoryOverlayItem({
   overlay,
   stops,
   compact,
+  grid,
 }: {
   overlay: FeedStoryOverlay;
   stops: FoodHeroCourseStop[];
   compact: boolean;
+  grid: boolean;
 }) {
   const referencedRestaurant = overlay.restaurantId
     ? stops.find(stop => stop.id === overlay.restaurantId)
@@ -79,7 +83,7 @@ function StoryOverlayItem({
   return (
     <div
       data-overlay-kind={overlay.kind}
-      className={`pointer-events-none absolute z-10 -translate-x-1/2 -translate-y-1/2 ${compact ? 'max-h-[28%] overflow-hidden' : ''}`}
+      className={`pointer-events-none absolute z-10 -translate-x-1/2 -translate-y-1/2 ${compact ? 'overflow-hidden' : ''} ${grid ? 'max-h-[22%]' : compact ? 'max-h-[28%]' : ''}`}
       style={{
         left: `${overlay.x}%`,
         top: `${overlay.y}%`,
@@ -91,6 +95,7 @@ function StoryOverlayItem({
         overlay={overlay}
         places={stops}
         compact={compact}
+        grid={grid}
         fallbackText={text}
       />
     </div>
@@ -121,6 +126,7 @@ export default function FoodHeroCourseOverlay({
   distanceKm,
   durationMinutes,
   compact = false,
+  grid = false,
   eager = false,
   className = '',
   onActivate,
@@ -214,6 +220,7 @@ export default function FoodHeroCourseOverlay({
       data-story-ratio="4:5"
       data-state={activeSlide && !slideFailed ? 'photo' : 'empty'}
       data-slide-index={safeIndex}
+      data-presentation={grid ? 'grid' : 'default'}
       className={`relative aspect-[4/5] w-full touch-pan-y select-none overflow-hidden bg-[#30211B] text-white outline-none [container-type:inline-size] focus-visible:ring-4 focus-visible:ring-inset focus-visible:ring-white/90 ${className}`}
       aria-label={`${displayTitle} 사진 슬라이드${onActivate ? '. Enter 키로 피드 상세 보기' : ''}`}
       aria-roledescription="carousel"
@@ -259,7 +266,7 @@ export default function FoodHeroCourseOverlay({
               />
               <div className="pointer-events-none absolute inset-0 bg-gradient-to-b from-black/20 via-transparent to-black/50" />
               {activeSlide.overlays.map(overlay => (
-                <StoryOverlayItem key={overlay.id} overlay={overlay} stops={stops} compact={compact} />
+                <StoryOverlayItem key={overlay.id} overlay={overlay} stops={stops} compact={compact} grid={grid} />
               ))}
             </>
           ) : (
@@ -283,14 +290,14 @@ export default function FoodHeroCourseOverlay({
         </div>
       )}
 
-      <div className="pointer-events-none absolute inset-x-0 top-0 z-20 flex items-center justify-between gap-2 p-3">
-        {resolvedPlaceCount && !activeHasCourseMap ? (
+      <div className={`pointer-events-none absolute inset-x-0 top-0 z-20 flex items-center justify-between gap-2 ${grid ? 'p-1.5' : 'p-3'}`}>
+        {resolvedPlaceCount && !activeHasCourseMap && !grid ? (
           <span className="flex h-7 items-center gap-1 rounded-full border border-white/15 bg-black/35 px-2.5 text-[10px] font-black backdrop-blur-sm">
             <Route size={12} aria-hidden="true" />
             {resolvedPlaceCount}곳 코스
           </span>
         ) : <span />}
-        {storySlides.length > 1 && (
+        {storySlides.length > 1 && !grid && (
           <span aria-live="polite" aria-atomic="true" className="px-1 py-1 text-[10px] font-black [text-shadow:0_1px_6px_rgba(0,0,0,0.85)]">
             {safeIndex + 1} / {storySlides.length}
           </span>

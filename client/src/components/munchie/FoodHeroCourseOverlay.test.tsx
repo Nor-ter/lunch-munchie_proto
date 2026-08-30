@@ -165,6 +165,31 @@ describe('FoodHeroCourseOverlay', () => {
     expect(html).toContain('text-[clamp(16px,7cqw,30px)]');
   });
 
+  it('uses a collision-resistant overlay scale and removes top chrome in discovery grid tiles', () => {
+    const html = renderToStaticMarkup(
+      <FoodHeroCourseOverlay
+        compact
+        grid
+        photos={['/photos/uploads/author/grid.jpg', '/photos/uploads/author/grid-2.jpg']}
+        slides={[{
+          id: 'grid',
+          photo: '/photos/uploads/author/grid.jpg',
+          overlays: [
+            { id: 'title', kind: 'food_name', text: 'Hand made dumplings', x: 76, y: 20, width: 42, tone: 'light', size: 'lg', align: 'center' },
+            { id: 'review', kind: 'review', text: 'Brunswick East에서 수제 만두로 시작', x: 71, y: 55, width: 48, tone: 'light', size: 'md', align: 'left' },
+          ],
+        }]}
+        placeCount={1}
+      />,
+    );
+
+    expect(html).toContain('data-presentation="grid"');
+    expect(html).toContain('text-[clamp(9px,4.8cqw,13px)]');
+    expect(html).toContain('line-clamp-3');
+    expect(html).not.toContain('1곳 코스');
+    expect(html).not.toContain('aria-live="polite" aria-atomic="true" class="px-1 py-1"');
+  });
+
   it('keeps a failed slide in place and stops a real swipe before the parent like handler', () => {
     const source = readFileSync(new URL('./FoodHeroCourseOverlay.tsx', import.meta.url), 'utf8');
     expect(source).toContain("current.includes(activeSlide.id) ? current : [...current, activeSlide.id]");

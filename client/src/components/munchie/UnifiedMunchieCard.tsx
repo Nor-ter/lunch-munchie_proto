@@ -408,6 +408,7 @@ export default function UnifiedMunchieCard({
               stops={foodHeroStops}
               placeCount={orderedStopIds.length || course.metadata.placeCount}
               compact
+              grid
               eager
             />
           </div>
