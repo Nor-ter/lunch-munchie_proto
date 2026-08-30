@@ -1,5 +1,6 @@
 import { Course, Restaurant } from '@/contexts/AppContext';
 import { CoursePlace } from '@/types/course';
+import { isValidCoordinate } from '@shared/geo';
 
 export type CourseMapPoint = { x: number; y: number };
 
@@ -111,13 +112,18 @@ export function getCoursePlacesFromStops(
 
 /** Feed stop coordinates let the course map render before the restaurant catalogue hydrates. */
 export function getCoursePlacesFromFeedStops(
-  feedStops: Array<{ placeId: string; latitude: number; longitude: number }>,
+  feedStops: Array<{ placeId: string; latitude?: number; longitude?: number }>,
   course: Course | undefined,
   getRestaurantById: (id: string) => Restaurant | undefined,
 ): CoursePlace[] {
   if (!feedStops.length) return [];
 
-  const stopById = new Map(feedStops.map((stop) => [stop.placeId, stop]));
+  const stopById = new Map(feedStops
+    .filter((stop): stop is { placeId: string; latitude: number; longitude: number } => (
+      isValidCoordinate(stop.latitude, stop.longitude)
+      && !(stop.latitude === 0 && stop.longitude === 0)
+    ))
+    .map((stop) => [stop.placeId, stop]));
   const orderedPlaceIds = course
     ? getOrderedCourseStops(course)
       .map((stop) => stop.placeId)

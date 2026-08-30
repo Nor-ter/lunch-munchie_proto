@@ -90,7 +90,21 @@ export async function signOutToAnonymous(): Promise<void> {
   const response = await fetch('/api/auth/logout', { method: 'POST', credentials: 'same-origin' });
   if (!response.ok) throw new Error('로그아웃하지 못했어요.');
   // 다른 사람이 같은 브라우저를 열었을 때 이전 계정의 방/투표 상태를 복원하지 않는다.
-  for (const key of ['lm_session', 'lm_swipes', 'lm_feed_likes', 'lm_feed_dislikes', 'lm_today_journey']) {
+  for (const key of [
+    'lm_session',
+    'lm_swipes',
+    'lm_feed_likes',
+    'lm_feed_dislikes',
+    'lm_today_journey',
+    'lm_courses',
+    'lm_feed_v3',
+    'lm_profile',
+    'lm_hidden_profile_templates',
+  ]) {
     localStorage.removeItem(key);
+  }
+  for (let index = localStorage.length - 1; index >= 0; index -= 1) {
+    const key = localStorage.key(index);
+    if (key?.startsWith('lm_courses:')) localStorage.removeItem(key);
   }
 }

@@ -1602,11 +1602,18 @@ function CoursemapCreateContent() {
   const search = useSearch();
   const sourceCourseId = new URLSearchParams(search).get('course');
   const {
-    profile, updateProfile, getCourseById, getRestaurantById, addCourse, refreshFeedPosts,
+    profile, updateProfile, getCourseById, getRestaurantById, savedCourseRecords,
+    addCourse, refreshFeedPosts,
   } = useApp();
 
-  // 복사해서 가져오기 — 기존 코스의 장소·해시태그를 초기값으로
-  const sourceCourse = sourceCourseId ? getCourseById(sourceCourseId) : undefined;
+  // 저장 코스는 계정 전용 서버 응답에만 존재할 수 있다. 작성기로 가져올 때
+  // 공개 전역 카탈로그가 아니라 저장 당시 코스·식당 스냅샷을 우선 사용한다.
+  const sourceSavedRecord = sourceCourseId
+    ? savedCourseRecords.find(record => record.courseId === sourceCourseId)
+    : undefined;
+  const sourceCourse = sourceCourseId
+    ? getCourseById(sourceCourseId) ?? sourceSavedRecord?.course
+    : undefined;
   const initialPins = useMemo<(CoursePin | null)[]>(() => {
     const slots: (CoursePin | null)[] = [null, null, null];
     if (sourceCourse) {
@@ -1614,13 +1621,14 @@ function CoursemapCreateContent() {
         .sort((a, b) => a.order - b.order)
         .slice(0, MAX_PINS)
         .forEach((stop, index) => {
-          const restaurant = getRestaurantById(stop.placeId);
+          const restaurant = sourceSavedRecord?.restaurants.find(item => item.id === stop.placeId)
+            ?? getRestaurantById(stop.placeId);
           if (restaurant) slots[index] = { restaurant, photo: restaurant.image ?? null };
         });
     }
     return slots;
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [sourceCourseId]);
+  }, [sourceCourseId, sourceSavedRecord]);
 
   const [step, setStep] = useState(0);
   const [pins, setPins] = useState<(CoursePin | null)[]>(initialPins);
@@ -1641,6 +1649,10 @@ function CoursemapCreateContent() {
   } | null>(null);
   const [publishedCourseId, setPublishedCourseId] = useState<string | null>(null);
   const [isPublishing, setIsPublishing] = useState(false);
+  const publishIdempotencyKeyRef = useRef(
+    globalThis.crypto?.randomUUID?.()
+      ?? `course-publish-${Date.now()}-${Math.random().toString(36).slice(2)}`,
+  );
 
   const filledPins = pins.filter((pin): pin is CoursePin => !!pin);
   const template = COURSEMAP_TEMPLATES[templateIndex]!;
@@ -1768,12 +1780,17 @@ function CoursemapCreateContent() {
         };
       });
       const response = await fetch('/api/courses', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Idempotency-Key': publishIdempotencyKeyRef.current,
+        },
         body: JSON.stringify({
           title: course.title, description: course.description, heroImage: serverPhotos[0] ?? course.heroImage,
           tags: course.tags, hashtags: course.hashtags, region: course.region,
           metadata: course.metadata, stops: course.stops, feedPhotos: serverPhotos,
           feedDecor: serverPlaced, templateId: template.id, photoAttributions: serverAttributions,
+          ...(sourceCourseId ? { sourceCourseId } : {}),
         }),
       });
       const saved = await response.json() as { id?: string; authorId?: string; error?: string; code?: string };

@@ -77,6 +77,7 @@ describe('saved feed map adapter', () => {
       courseId: 'course-1',
       latitude: 37.1,
       longitude: 127.1,
+      expectedStopCount: 2,
     });
   });
 
@@ -88,6 +89,36 @@ describe('saved feed map adapter', () => {
     });
 
     expect(points).toEqual([]);
+  });
+
+  it('rejects the legacy 0,0 placeholder instead of mapping it as a real stop', () => {
+    const points = buildSavedFeedMapPoints({
+      posts: [post],
+      getCourseById: () => course,
+      getRestaurantById: (id) => restaurant(id, '좌표 없는 식당', 0, 0),
+    });
+
+    expect(points).toEqual([]);
+  });
+
+  it('marks a course route incomplete when only part of its expected stops can be mapped', () => {
+    const points = buildSavedFeedMapPoints({
+      posts: [post],
+      getCourseById: () => course,
+      getRestaurantById: (id) => id === 'restaurant-1'
+        ? restaurant('restaurant-1', '첫 카페', 37.1, 127.1)
+        : undefined,
+    });
+
+    const groups = groupSavedFeedMapPointsByCourse(points);
+
+    expect(points).toHaveLength(1);
+    expect(points[0]?.expectedStopCount).toBe(2);
+    expect(groups).toHaveLength(1);
+    expect(groups[0]).toMatchObject({
+      expectedStopCount: 2,
+      routeComplete: false,
+    });
   });
 
   it('groups each saved course at the average position while preserving its ordered places', () => {
@@ -110,6 +141,8 @@ describe('saved feed map adapter', () => {
       courseId: 'course-1',
       latitude: 37.2,
       longitude: 127.3,
+      expectedStopCount: 2,
+      routeComplete: true,
     });
     expect(groups[0]?.points.map((point) => point.restaurantId)).toEqual([
       'restaurant-1',

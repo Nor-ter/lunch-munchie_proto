@@ -17,15 +17,17 @@ describe('SavedPage list bookmark presentation', () => {
     expect(savedSource).toContain('origin-bottom-right scale-[0.8]');
     expect(savedSource).toContain('<Bookmark size={20} strokeWidth={2} fill="currentColor" />');
     expect(savedSource).not.toContain('BookmarkX');
-    expect(savedSource).toContain('setPendingUnsaveCourseId(post.courseId)');
+    expect(savedSource).toContain('setPendingUnsaveCourseId(record.courseId)');
     expect(savedSource).toContain('저장을 취소할까요?');
     expect(savedSource).toContain('confirmUnsave');
   });
 
   it('presents every saved item as a course without restaurant/course filters', () => {
     expect(savedSource).toContain('저장한 코스를 한곳에 모았어요');
-    expect(savedSource).toContain('savedPosts.length + journeyStops.length');
-    expect(savedSource).toContain('{savedCourseCount}개');
+    expect(savedSource).toContain('{savedCourseRecords.length}개');
+    expect(savedSource).toContain('visibleRecords.map(record =>');
+    expect(savedSource).toContain('savedCourseRecords');
+    expect(savedSource).not.toContain("localStorage.getItem('lm_saved')");
     expect(savedSource).not.toContain('aria-label="저장 항목 필터"');
     expect(savedSource).not.toContain('SavedFilter');
     expect(savedSource).not.toContain('Munchie 먼치픽');
@@ -33,10 +35,18 @@ describe('SavedPage list bookmark presentation', () => {
     expect(savedSource).not.toContain('getSavedTabFromSearch');
   });
 
-  it('treats one restaurant as a one-place course', () => {
-    expect(savedSource).toContain('Math.max(stops?.length ?? 0, 1)');
-    expect(savedSource).toContain('{getCoursePlaceCount(post.stops)}곳 코스');
-    expect(savedSource).toContain('1곳 코스');
+  it('uses the canonical stop count and exposes missing place data honestly', () => {
+    expect(savedSource).toContain('return stops?.length ?? 0');
+    expect(savedSource).toContain('const placeCount = getCoursePlaceCount(record.course.stops)');
+    expect(savedSource).toContain('`${placeCount}곳 코스`');
+    expect(savedSource).toContain("'장소 정보 없음'");
     expect(savedSource).not.toContain("'restaurant' ? '식당' : '코스'");
+  });
+
+  it('requests location only for explicit nearby sorting and labels straight-line distance honestly', () => {
+    expect(savedSource).toContain('onClick={requestNearbySort}');
+    expect(savedSource).toContain('navigator.geolocation.getCurrentPosition');
+    expect(savedSource).toContain('첫 장소까지 직선거리');
+    expect(savedSource).not.toContain('도보거리');
   });
 });

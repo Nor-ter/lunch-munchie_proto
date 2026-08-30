@@ -43,4 +43,10 @@ describe('SavedMunchieMap course drill-down', () => {
     expect(source).toContain('restaurantId={selectedPlace.restaurantId}');
     expect(source).toContain('presentation="modal"');
   });
+
+  it('never substitutes a restaurant catalogue image for missing author media', () => {
+    expect(source).toContain('selectedCourse.post.missingOriginalMedia');
+    expect(source).toContain('작성자가 등록한 음식 사진 없음');
+    expect(source).not.toContain('selectedCourse.post.photos[0] ?? selectedCourse.points[0]?.imageUrl');
+  });
 });

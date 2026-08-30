@@ -95,6 +95,88 @@ async function filterExistingPhotos(
   const checks = await Promise.all(paths.map(async (path) => [path, await photoExists(env, path)] as const));
   return checks.filter(([, exists]) => exists).map(([path]) => path);
 }
+
+type PendingR2MediaDeletion = {
+  r2_path: string;
+  owner_id: string;
+};
+
+async function r2MediaReferenceCount(db: EnvBindings["DB"], r2Path: string) {
+  const row = await db.prepare(
+    `SELECT
+      (SELECT COUNT(*) FROM course_media WHERE r2_path = ?) +
+      (SELECT COUNT(*) FROM course_photo_attributions WHERE r2_path = ?) +
+      (SELECT COUNT(*) FROM users WHERE profile_image_url = ?) +
+      (SELECT COUNT(*) FROM courses WHERE hero_image = ? OR instr(COALESCE(feed_photos, ''), ?) > 0 OR instr(COALESCE(feed_decor, ''), ?) > 0)
+      AS count`,
+  ).bind(r2Path, r2Path, r2Path, r2Path, r2Path, r2Path).first<{ count: number }>();
+  return Number(row?.count ?? 0);
+}
+
+async function drainR2MediaDeletionQueue(
+  env: Pick<EnvBindings, "DB" | "PHOTOS_R2">,
+  preferredPaths: string[] = [],
+) {
+  let queue: PendingR2MediaDeletion[];
+  if (preferredPaths.length) {
+    const uniquePaths = Array.from(new Set(preferredPaths));
+    queue = [];
+    // D1 caps the number of bound parameters per statement. Chunk the exact
+    // paths instead of applying the background LIMIT 25: a large post must not
+    // report successful deletion while some of its own objects were skipped.
+    for (let offset = 0; offset < uniquePaths.length; offset += 50) {
+      const chunk = uniquePaths.slice(offset, offset + 50);
+      const placeholders = chunk.map(() => "?").join(",");
+      const { results } = await env.DB.prepare(
+        `SELECT r2_path, owner_id FROM r2_media_deletions WHERE r2_path IN (${placeholders}) ORDER BY created_at`,
+      ).bind(...chunk).all<PendingR2MediaDeletion>();
+      queue.push(...results);
+    }
+  } else {
+    const { results } = await env.DB.prepare(
+      "SELECT r2_path, owner_id FROM r2_media_deletions ORDER BY created_at LIMIT 25",
+    ).all<PendingR2MediaDeletion>();
+    queue = results;
+  }
+
+  let pending = 0;
+  for (const item of queue) {
+    const authorPrefix = `/photos/uploads/${item.owner_id}/`;
+    const key = photoPathToKey(item.r2_path);
+    if (!key || !item.r2_path.startsWith(authorPrefix)) {
+      await env.DB.prepare("DELETE FROM r2_media_deletions WHERE r2_path = ?")
+        .bind(item.r2_path)
+        .run();
+      continue;
+    }
+    if (await r2MediaReferenceCount(env.DB, item.r2_path)) {
+      // Keep the tombstone while another post/profile still references this
+      // asset. A later publication/deletion drain re-checks it, so the final
+      // reference removal can still clean the R2 object.
+      pending += 1;
+      continue;
+    }
+    if (typeof env.PHOTOS_R2?.delete !== "function") {
+      pending += 1;
+      continue;
+    }
+    try {
+      await env.PHOTOS_R2.delete(`photos/${key}`);
+      await env.DB.prepare("DELETE FROM r2_media_deletions WHERE r2_path = ?")
+        .bind(item.r2_path)
+        .run();
+    } catch (error) {
+      pending += 1;
+      await env.DB.prepare(
+        "UPDATE r2_media_deletions SET attempts = attempts + 1, last_error = ? WHERE r2_path = ?",
+      ).bind(error instanceof Error ? error.message.slice(0, 500) : "R2 delete failed", item.r2_path).run();
+    }
+  }
+  const remaining = await env.DB.prepare(
+    "SELECT COUNT(*) AS count FROM r2_media_deletions",
+  ).first<{ count: number }>();
+  return Number(remaining?.count ?? pending);
+}
 export const app = new Hono<{ Bindings: EnvBindings }>();
 
 type GoogleSession = {
@@ -1728,6 +1810,408 @@ app.get("/api/restaurants/:id", async (c) => {
   });
 });
 
+type CourseDatabaseRow = {
+  id: string;
+  author_id: string;
+  title: string;
+  description: string;
+  hero_image: string | null;
+  region: string | null;
+  tags: string | null;
+  hashtags: string | null;
+  total_distance: number | null;
+  total_duration: number | null;
+  likes_count: number | null;
+  saves_count: number | null;
+  comments_count: number | null;
+  is_public: number;
+  feed_photos: string | null;
+  feed_decor: string | null;
+  template_id: string | null;
+  source_course_id?: string | null;
+  source_stops_snapshot?: string | null;
+  publish_idempotency_key?: string | null;
+  created_at: number | string;
+  author_name?: string | null;
+  author_image?: string | null;
+};
+
+type CourseStopDatabaseRow = {
+  restaurant_id: string;
+  order_index: number;
+  start_time: string | null;
+  end_time: string | null;
+  is_bookmarked: number | null;
+  name: string;
+  category: string;
+  photos: string | null;
+  rating: number | null;
+  address: string | null;
+  review_count: number | null;
+  price_level: number | null;
+  short_description: string | null;
+  tags: string | null;
+  dietary_options: string | null;
+  menus: string | null;
+  phone_number: string | null;
+  business_hours: string | null;
+  latitude: number | null;
+  longitude: number | null;
+};
+
+type CourseMediaDatabaseRow = {
+  r2_path: string;
+  owner_id: string | null;
+  media_source: string | null;
+  placement_index: number;
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  rotation: number;
+};
+
+type FeedCommentDatabaseRow = {
+  id: string;
+  author_id: string;
+  author_name: string;
+  author_emoji: string;
+  parent_id: string | null;
+  body: string;
+  created_at: number | string;
+};
+
+type SavedCourseDatabaseRow = CourseDatabaseRow & {
+  saved_course_id: string;
+  saved_at: number | string;
+};
+
+const validCourseId = (value: unknown) => {
+  if (typeof value !== "string") return null;
+  const courseId = value.trim();
+  return courseId && courseId.length <= 128 ? courseId : null;
+};
+
+async function courseStops(
+  env: Pick<EnvBindings, "DB" | "MEDIA_ORIGIN" | "PHOTOS_R2">,
+  courseId: string,
+) {
+  const { results } = await env.DB.prepare(
+    "SELECT ci.*, r.name, r.category, r.address, r.photos, r.rating, r.review_count, r.price_level, r.short_description, r.tags, r.dietary_options, r.menus, r.phone_number, r.business_hours, r.latitude, r.longitude FROM course_items ci JOIN restaurants r ON ci.restaurant_id = r.id WHERE ci.course_id = ? ORDER BY ci.order_index",
+  )
+    .bind(courseId)
+    .all<CourseStopDatabaseRow>();
+
+  return Promise.all(
+    results.map(async (stop) => ({
+      placeId: stop.restaurant_id,
+      order: Number(stop.order_index),
+      startTime: stop.start_time || "",
+      endTime: stop.end_time || "",
+      isBookmarked: Boolean(stop.is_bookmarked),
+      restaurant: {
+        id: stop.restaurant_id,
+        name: stop.name,
+        category: stop.category,
+        photos: await filterExistingPhotos(
+          env,
+          json<string[]>(stop.photos, []),
+        ),
+        rating: stop.rating,
+        reviewCount: Number(stop.review_count ?? 0),
+        priceLevel: Math.max(1, Math.min(4, Number(stop.price_level ?? 2))),
+        address: stop.address || "",
+        description: stop.short_description || "",
+        tags: json<string[]>(stop.tags, []),
+        dietary: json<string[]>(stop.dietary_options, []),
+        menuItems: json<unknown[]>(stop.menus, []),
+        phone: stop.phone_number || null,
+        openHours: stop.business_hours || "",
+        latitude: stop.latitude == null ? null : Number(stop.latitude),
+        longitude: stop.longitude == null ? null : Number(stop.longitude),
+      },
+    })),
+  );
+}
+
+function mediaBelongsToCourse(
+  course: Pick<CourseDatabaseRow, "author_id">,
+  media: Pick<CourseMediaDatabaseRow, "owner_id" | "media_source" | "r2_path">,
+) {
+  if (!media.owner_id || media.owner_id !== course.author_id) return false;
+  const authorPrefix = `/photos/uploads/${course.author_id}/`;
+  if (media.media_source === "author_upload")
+    return media.r2_path.startsWith(authorPrefix);
+  // Curated team imports predate per-user upload paths. They remain explicit
+  // legacy imports, while ordinary user content must prove the owner in path.
+  return course.author_id === "team" || media.r2_path.startsWith(authorPrefix);
+}
+
+function legacyMediaBelongsToCourse(course: CourseDatabaseRow, path: unknown) {
+  if (typeof path !== "string" || !path.startsWith("/photos/")) return false;
+  return course.author_id === "team"
+    || path.startsWith(`/photos/uploads/${course.author_id}/`);
+}
+
+function courseResponse(
+  course: CourseDatabaseRow,
+  stops: Awaited<ReturnType<typeof courseStops>>,
+) {
+  return {
+    id: course.id,
+    title: course.title,
+    description: course.description,
+    heroImage: course.hero_image || "",
+    tags: json<string[]>(course.tags, []),
+    hashtags: json<string[]>(course.hashtags, []),
+    region: course.region,
+    metadata: {
+      distance: Number(course.total_distance ?? 0),
+      duration: Number(course.total_duration ?? 0),
+      placeCount: stops.length,
+    },
+    creatorId: course.author_id,
+    sourceCourseId: course.source_course_id || null,
+    sourceStopsSnapshot: json<Array<{
+      placeId: string;
+      order: number;
+      name: string;
+      category: string;
+      address: string;
+    }>>(course.source_stops_snapshot, []),
+    savedCount: Number(course.saves_count ?? 0),
+    isPublic: Boolean(course.is_public),
+    createdAt: isoDate(course.created_at),
+    stops,
+  };
+}
+
+async function feedResponseForCourse(
+  env: Pick<EnvBindings, "DB" | "MEDIA_ORIGIN" | "PHOTOS_R2">,
+  course: CourseDatabaseRow,
+  stops: Awaited<ReturnType<typeof courseStops>>,
+) {
+  const [{ results: mediaRows }, { results: commentRows }] = await Promise.all([
+    env.DB.prepare(
+      "SELECT r2_path, owner_id, media_source, placement_index, x, y, width, height, rotation FROM course_media WHERE course_id = ? ORDER BY placement_index",
+    )
+      .bind(course.id)
+      .all<CourseMediaDatabaseRow>(),
+    env.DB.prepare(
+      "SELECT id, author_id, author_name, author_emoji, parent_id, body, created_at FROM feed_comments WHERE course_id = ? AND status = 'visible' ORDER BY created_at ASC",
+    )
+      .bind(course.id)
+      .all<FeedCommentDatabaseRow>(),
+  ]);
+  const canonicalMedia = mediaRows.filter((media) => mediaBelongsToCourse(course, media)).map((media) => ({
+    id: `${course.id}:media:${media.placement_index}`,
+    src: media.r2_path,
+    x: Number(media.x),
+    y: Number(media.y),
+    w: Number(media.width),
+    h: Number(media.height),
+    rotate: Number(media.rotation),
+  }));
+  // Once canonical rows exist, owner/provenance validation is authoritative.
+  // Falling back after all canonical rows were rejected would resurrect the
+  // same untrusted path from legacy JSON.
+  const hasCanonicalMediaRows = mediaRows.length > 0;
+  const rawDecor = hasCanonicalMediaRows
+    ? canonicalMedia
+    : json<Array<{ src?: unknown } & Record<string, unknown>>>(
+        course.feed_decor,
+        [],
+      ).filter((item) => legacyMediaBelongsToCourse(course, item.src));
+  const rawPhotos = hasCanonicalMediaRows
+    ? Array.from(new Set(canonicalMedia.map((media) => media.src)))
+    : json<string[]>(course.feed_photos, []).filter((path) => legacyMediaBelongsToCourse(course, path));
+  const photos = await filterExistingPhotos(env, rawPhotos);
+  const photoSet = new Set(photos);
+  const decor = rawDecor.filter((item) => {
+    const src = typeof item.src === "string" ? item.src : null;
+    // Shape/stroke decor has no src and remains valid. Every bitmap src must
+    // be one of the owner-validated R2 files above; external/catalogue images
+    // cannot become an author's representative post media.
+    return !src || photoSet.has(src);
+  });
+  const heroImage = photos[0] ?? "";
+
+  return {
+    id: `post_${course.id}`,
+    courseId: course.id,
+    creatorId: course.author_id,
+    authorName: course.author_name || null,
+    authorImage: course.author_image || null,
+    title: course.title,
+    description: course.description,
+    heroImage,
+    photos,
+    decor,
+    templateId: course.template_id || null,
+    tags: json<string[]>(course.tags, []),
+    stops,
+    likesCount: Number(course.likes_count ?? 0),
+    savesCount: Number(course.saves_count ?? 0),
+    commentsCount: Number(course.comments_count ?? 0),
+    comments: commentRows.map((comment) => ({
+      id: comment.id,
+      authorId: comment.author_id,
+      authorName: comment.author_name,
+      authorEmoji: comment.author_emoji,
+      parentId: comment.parent_id,
+      text: comment.body,
+      createdAt: comment.created_at,
+    })),
+    createdAt: course.created_at,
+  };
+}
+
+async function visibleCourse(
+  db: EnvBindings["DB"],
+  courseId: string,
+  viewerId: string | null,
+) {
+  const course = await db
+    .prepare("SELECT * FROM courses WHERE id = ? LIMIT 1")
+    .bind(courseId)
+    .first<CourseDatabaseRow>();
+  if (!course) return null;
+  if (!Boolean(course.is_public) && course.author_id !== viewerId) return null;
+  return course;
+}
+
+async function visibleCourseWithAuthor(
+  env: Pick<EnvBindings, "DB">,
+  courseId: string,
+  viewerId: string | null,
+) {
+  const course = await visibleCourse(env.DB, courseId, viewerId);
+  if (!course) return null;
+  const columns = await userColumnNames(env.DB);
+  if (!columns.has("username") || !columns.has("profile_image_url"))
+    return course;
+  const author = await env.DB.prepare(
+    "SELECT username, profile_image_url FROM users WHERE id = ? LIMIT 1",
+  )
+    .bind(course.author_id)
+    .first<{ username: string | null; profile_image_url: string | null }>();
+  return {
+    ...course,
+    author_name: author?.username ?? null,
+    author_image: author?.profile_image_url ?? null,
+  };
+}
+
+const courseNotFound = () => ({
+  error: "코스를 찾을 수 없습니다.",
+  code: "COURSE_NOT_FOUND",
+});
+
+// D1 is the canonical saved-course store. Every operation is scoped to the
+// signed Google subject; callers cannot list or mutate another user's saves.
+app.get("/api/saved-courses", async (c) => {
+  const session = await readSession(c.req.raw, c.env.AUTH_SESSION_SECRET);
+  if (!session)
+    return c.json(
+      { error: "로그인이 필요합니다.", code: "AUTH_REQUIRED" },
+      401,
+    );
+  c.header("Cache-Control", "private, no-store");
+
+  const columns = await userColumnNames(c.env.DB);
+  const hasPublicProfiles =
+    columns.has("username") && columns.has("profile_image_url");
+  const authorFields = hasPublicProfiles
+    ? ", u.username AS author_name, u.profile_image_url AS author_image"
+    : "";
+  const authorJoin = hasPublicProfiles
+    ? " LEFT JOIN users u ON u.id = c.author_id"
+    : "";
+  const { results } = await c.env.DB.prepare(
+    `SELECT sc.course_id AS saved_course_id, sc.created_at AS saved_at, c.*${authorFields}
+     FROM saved_courses sc JOIN courses c ON c.id = sc.course_id${authorJoin}
+     WHERE sc.user_id = ? AND (c.is_public = 1 OR c.author_id = ?)
+     ORDER BY sc.created_at DESC, sc.course_id ASC`,
+  )
+    .bind(session.sub, session.sub)
+    .all<SavedCourseDatabaseRow>();
+
+  const items = await Promise.all(
+    results.map(async (row) => {
+      const stops = await courseStops(c.env, row.id);
+      const [course, post] = await Promise.all([
+        Promise.resolve(courseResponse(row, stops)),
+        feedResponseForCourse(c.env, row, stops),
+      ]);
+      return {
+        courseId: row.saved_course_id,
+        savedAt: isoDate(row.saved_at),
+        course,
+        post,
+      };
+    }),
+  );
+
+  return c.json({
+    items,
+    courseIds: items.map((item) => item.courseId),
+  });
+});
+
+app.put("/api/saved-courses", async (c) => {
+  const session = await readSession(c.req.raw, c.env.AUTH_SESSION_SECRET);
+  if (!session)
+    return c.json(
+      { error: "로그인이 필요합니다.", code: "AUTH_REQUIRED" },
+      401,
+    );
+
+  const body = await c.req.json<Record<string, unknown>>().catch(() => null);
+  const courseId = validCourseId(body?.courseId);
+  if (!courseId)
+    return c.json(
+      { error: "코스 정보가 올바르지 않습니다.", code: "INVALID_COURSE_ID" },
+      400,
+    );
+  if (!(await visibleCourse(c.env.DB, courseId, session.sub)))
+    return c.json(courseNotFound(), 404);
+
+  await c.env.DB.batch([
+    c.env.DB.prepare(
+      "INSERT OR IGNORE INTO saved_courses (user_id, course_id, created_at) VALUES (?, ?, ?)",
+    ).bind(session.sub, courseId, Date.now()),
+    c.env.DB.prepare(
+      "UPDATE courses SET saves_count = (SELECT COUNT(*) FROM saved_courses WHERE course_id = ?) WHERE id = ?",
+    ).bind(courseId, courseId),
+  ]);
+  return c.json({ courseId, saved: true });
+});
+
+app.delete("/api/saved-courses", async (c) => {
+  const session = await readSession(c.req.raw, c.env.AUTH_SESSION_SECRET);
+  if (!session)
+    return c.json(
+      { error: "로그인이 필요합니다.", code: "AUTH_REQUIRED" },
+      401,
+    );
+  const courseId = validCourseId(c.req.query("courseId"));
+  if (!courseId)
+    return c.json(
+      { error: "코스 정보가 올바르지 않습니다.", code: "INVALID_COURSE_ID" },
+      400,
+    );
+
+  await c.env.DB.batch([
+    c.env.DB.prepare(
+      "DELETE FROM saved_courses WHERE user_id = ? AND course_id = ?",
+    ).bind(session.sub, courseId),
+    c.env.DB.prepare(
+      "UPDATE courses SET saves_count = (SELECT COUNT(*) FROM saved_courses WHERE course_id = ?) WHERE id = ?",
+    ).bind(courseId, courseId),
+  ]);
+  return c.json({ courseId, saved: false });
+});
+
 // REST API — /api/courses (Munchie 코스 목록)
 app.get("/api/courses", async (c) => {
   try {
@@ -1789,6 +2273,22 @@ app.get("/api/courses", async (c) => {
   }
 });
 
+app.get("/api/courses/:id", async (c) => {
+  const courseId = validCourseId(c.req.param("id"));
+  if (!courseId)
+    return c.json(
+      { error: "코스 정보가 올바르지 않습니다.", code: "INVALID_COURSE_ID" },
+      400,
+    );
+  const session = await readSession(c.req.raw, c.env.AUTH_SESSION_SECRET);
+  const course = await visibleCourse(c.env.DB, courseId, session?.sub ?? null);
+  if (!course) return c.json(courseNotFound(), 404);
+  if (!Boolean(course.is_public))
+    c.header("Cache-Control", "private, no-store");
+  const stops = await courseStops(c.env, course.id);
+  return c.json(courseResponse(course, stops));
+});
+
 // 공개 코스의 원본은 브라우저 상태가 아니라 D1이다. 작성자 ID는 요청 본문이
 // 아니라 Google 세션에서만 취하므로 다른 사용자를 가장해 게시할 수 없다.
 app.post("/api/courses", async (c) => {
@@ -1799,8 +2299,48 @@ app.post("/api/courses", async (c) => {
       401,
     );
 
+  const rawIdempotencyKey = c.req.header("Idempotency-Key")?.trim() || "";
+  if (!rawIdempotencyKey || rawIdempotencyKey.length > 160) {
+    return c.json({
+      error: "게시 요청 식별자가 필요합니다.",
+      code: "IDEMPOTENCY_KEY_REQUIRED",
+    }, 400);
+  }
+  const idempotencyKey = rawIdempotencyKey;
+
+  const findExistingPublication = async () => {
+    return c.env.DB.prepare(
+      "SELECT id, author_id, created_at, publish_payload_hash FROM courses WHERE author_id = ? AND publish_idempotency_key = ? LIMIT 1",
+    ).bind(session.sub, idempotencyKey).first<{
+      id: string;
+      author_id: string;
+      created_at: number | string;
+      publish_payload_hash: string | null;
+    }>();
+  };
+
+  let payloadHash = "";
   try {
     const body = await c.req.json<Record<string, unknown>>();
+    payloadHash = toBase64Url(new Uint8Array(await crypto.subtle.digest(
+      "SHA-256",
+      encoder.encode(JSON.stringify(body)),
+    )));
+    const existingPublication = await findExistingPublication();
+    if (existingPublication) {
+      if (existingPublication.publish_payload_hash !== payloadHash) {
+        return c.json({
+          error: "같은 게시 요청 식별자를 다른 내용에 다시 사용할 수 없습니다.",
+          code: "IDEMPOTENCY_KEY_REUSED",
+        }, 409);
+      }
+      return c.json({
+        id: existingPublication.id,
+        authorId: existingPublication.author_id,
+        createdAt: existingPublication.created_at,
+        idempotent: true,
+      });
+    }
     const title =
       typeof body.title === "string" ? body.title.trim().slice(0, 120) : "";
     const description =
@@ -1818,12 +2358,41 @@ app.post("/api/courses", async (c) => {
       return c.json({ error: "장소 정보가 올바르지 않습니다." }, 400);
     const placeholders = restaurantIds.map(() => "?").join(",");
     const known = await c.env.DB.prepare(
-      `SELECT id, photos FROM restaurants WHERE id IN (${placeholders})`,
+      `SELECT id, name, category, address, photos FROM restaurants WHERE id IN (${placeholders})`,
     )
       .bind(...restaurantIds)
-      .all();
+      .all<{ id: string; name: string; category: string; address: string | null; photos: string | null }>();
     if ((known.results?.length ?? 0) !== restaurantIds.length)
       return c.json({ error: "존재하지 않는 장소가 포함되어 있습니다." }, 400);
+
+    const sourceCourseId = body.sourceCourseId == null
+      ? null
+      : validCourseId(body.sourceCourseId);
+    if (body.sourceCourseId != null && !sourceCourseId) {
+      return c.json({ error: "원본 코스 정보가 올바르지 않습니다." }, 400);
+    }
+    if (sourceCourseId) {
+      const visibleSource = await c.env.DB.prepare(
+        `SELECT c.id FROM courses c
+         LEFT JOIN saved_courses sc ON sc.course_id = c.id AND sc.user_id = ?
+         WHERE c.id = ? AND (c.is_public = 1 OR c.author_id = ? OR sc.user_id = ?)
+         LIMIT 1`,
+      ).bind(session.sub, sourceCourseId, session.sub, session.sub).first<{ id: string }>();
+      if (!visibleSource) {
+        return c.json({ error: "원본 코스를 사용할 권한이 없습니다." }, 403);
+      }
+    }
+    const knownById = new Map((known.results ?? []).map((row) => [row.id, row]));
+    const sourceStopsSnapshot = restaurantIds.map((restaurantId, index) => {
+      const restaurant = knownById.get(restaurantId);
+      return {
+        placeId: restaurantId,
+        order: index + 1,
+        name: restaurant?.name ?? "",
+        category: restaurant?.category ?? "",
+        address: restaurant?.address ?? "",
+      };
+    });
 
     const strings = (value: unknown, limit: number) =>
       Array.isArray(value)
@@ -1952,7 +2521,7 @@ app.post("/api/courses", async (c) => {
         : null;
     const statements = [
       c.env.DB.prepare(
-        "INSERT INTO courses (id, author_id, title, description, hero_image, category, region, tags, hashtags, total_distance, total_duration, likes_count, saves_count, comments_count, is_public, feed_photos, feed_decor, template_id, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, 0, 0, 1, ?, ?, ?, ?)",
+        "INSERT INTO courses (id, author_id, title, description, hero_image, category, region, tags, hashtags, total_distance, total_duration, likes_count, saves_count, comments_count, is_public, feed_photos, feed_decor, template_id, source_course_id, source_stops_snapshot, publish_idempotency_key, publish_payload_hash, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, 0, 0, 1, ?, ?, ?, ?, ?, ?, ?, ?)",
       ).bind(
         id,
         session.sub,
@@ -1968,15 +2537,20 @@ app.post("/api/courses", async (c) => {
         JSON.stringify(feedPhotos),
         JSON.stringify(feedDecor),
         templateId,
+        sourceCourseId,
+        JSON.stringify(sourceStopsSnapshot),
+        idempotencyKey,
+        payloadHash,
         createdAt,
       ),
       ...feedDecor.map((photo: any, index: number) =>
         c.env.DB.prepare(
-          "INSERT INTO course_media (id, course_id, r2_path, placement_index, x, y, width, height, rotation, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+          "INSERT INTO course_media (id, course_id, r2_path, owner_id, media_source, placement_index, x, y, width, height, rotation, created_at) VALUES (?, ?, ?, ?, 'author_upload', ?, ?, ?, ?, ?, ?, ?)",
         ).bind(
           crypto.randomUUID(),
           id,
           photo.src,
+          session.sub,
           index,
           photo.x,
           photo.y,
@@ -2014,8 +2588,28 @@ app.post("/api/courses", async (c) => {
       ),
     ];
     await c.env.DB.batch(statements);
+    // Opportunistically advance any previous failed R2 cleanup. Every row is
+    // reference-checked again after this publication has committed.
+    await drainR2MediaDeletionQueue(c.env).catch(() => 0);
     return c.json({ id, authorId: session.sub, createdAt }, 201);
   } catch (err: any) {
+    const existing = await findExistingPublication();
+    if (existing) {
+      if (existing.publish_payload_hash === payloadHash) {
+        return c.json({
+          id: existing.id,
+          authorId: existing.author_id,
+          createdAt: existing.created_at,
+          idempotent: true,
+        });
+      }
+      // This also covers the concurrent loser after the unique index rejects
+      // two different payloads racing with the same idempotency key.
+      return c.json({
+        error: "같은 게시 요청 키가 다른 내용에 재사용되었습니다.",
+        code: "IDEMPOTENCY_KEY_REUSED",
+      }, 409);
+    }
     return c.json({ error: err.message ?? "코스를 저장하지 못했습니다." }, 400);
   }
 });
@@ -3259,7 +3853,8 @@ app.patch("/api/feed-post", async (c) => {
     .first();
   if (!owned) return c.json({ error: "수정 권한이 없습니다." }, 403);
   const heroImage =
-    typeof body.heroImage === "string" && body.heroImage.startsWith("/photos/")
+    typeof body.heroImage === "string" &&
+    body.heroImage.startsWith(`/photos/uploads/${session.sub}/`)
       ? body.heroImage
       : null;
   await c.env.DB.prepare(
@@ -3296,7 +3891,8 @@ app.patch("/api/course-media", async (c) => {
     ? body.feedPhotos
         .filter(
           (value): value is string =>
-            typeof value === "string" && value.startsWith("/photos/"),
+            typeof value === "string" &&
+            value.startsWith(`/photos/uploads/${session.sub}/`),
         )
         .slice(0, MAX_MUNCHIE_FEED_PHOTOS)
     : [];
@@ -3308,7 +3904,7 @@ app.patch("/api/course-media", async (c) => {
             !raw ||
             typeof raw !== "object" ||
             typeof raw.src !== "string" ||
-            !raw.src.startsWith("/photos/")
+            !raw.src.startsWith(`/photos/uploads/${session.sub}/`)
           )
             return [];
           const number = (
@@ -3354,11 +3950,12 @@ app.patch("/api/course-media", async (c) => {
     ),
     ...decor.map((photo, index) =>
       c.env.DB.prepare(
-        "INSERT INTO course_media (id, course_id, r2_path, placement_index, x, y, width, height, rotation, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        "INSERT INTO course_media (id, course_id, r2_path, owner_id, media_source, placement_index, x, y, width, height, rotation, created_at) VALUES (?, ?, ?, ?, 'author_upload', ?, ?, ?, ?, ?, ?, ?)",
       ).bind(
         crypto.randomUUID(),
         body.courseId,
         photo.src,
+        session.sub,
         index,
         photo.x,
         photo.y,
@@ -3387,18 +3984,57 @@ app.delete("/api/feed-post", async (c) => {
   // not grant edit ownership.
   const isAdmin = isAdminEmail(session.email, c.env.ADMIN_EMAILS);
   const course = await c.env.DB.prepare(
-    "SELECT id, author_id FROM courses WHERE id = ?",
+    "SELECT id, author_id, hero_image, feed_photos, feed_decor FROM courses WHERE id = ?",
   )
     .bind(courseId)
-    .first<{ id: string; author_id: string }>();
-  if (!course || (!isAdmin && course.author_id !== session.sub))
+    .first<{
+      id: string;
+      author_id: string;
+      hero_image: string | null;
+      feed_photos: string | null;
+      feed_decor: string | null;
+    }>();
+  if (!course) {
+    const mediaCleanupPending = await drainR2MediaDeletionQueue(c.env).catch(() => 0);
+    return c.json({
+      ok: true,
+      deletedCourseId: courseId,
+      alreadyDeleted: true,
+      mediaCleanupPending,
+    });
+  }
+  if (!isAdmin && course.author_id !== session.sub)
     return c.json({ error: "이 게시물을 삭제할 권한이 없습니다." }, 403);
+  // Retry one bounded batch of older tombstones before enqueueing this post.
+  // The current post is then drained by exact path, so a backlog larger than
+  // 25 rows cannot starve its cleanup or produce a false zero response.
+  await drainR2MediaDeletionQueue(c.env).catch(() => 0);
   const { results: comments } = await c.env.DB.prepare(
     "SELECT id FROM feed_comments WHERE course_id = ?",
   )
     .bind(courseId)
     .all<{ id: string }>();
+  const { results: mediaRows } = await c.env.DB.prepare(
+    `SELECT r2_path FROM course_media WHERE course_id = ?
+     UNION
+     SELECT r2_path FROM course_photo_attributions WHERE course_id = ?`,
+  ).bind(courseId, courseId).all<{ r2_path: string }>();
+  const legacyDecorPaths = json<Array<{ src?: unknown }>>(course.feed_decor, [])
+    .map((item) => item.src)
+    .filter((path): path is string => typeof path === "string");
+  const authorMediaPaths = Array.from(new Set([
+    ...mediaRows.map((row) => row.r2_path),
+    course.hero_image,
+    ...json<string[]>(course.feed_photos, []),
+    ...legacyDecorPaths,
+  ].filter((path): path is string => (
+    typeof path === "string"
+    && path.startsWith(`/photos/uploads/${course.author_id}/`)
+  ))));
   const statements = [
+    ...authorMediaPaths.map((path) => c.env.DB.prepare(
+      "INSERT OR IGNORE INTO r2_media_deletions (r2_path, owner_id, attempts, created_at) VALUES (?, ?, 0, ?)",
+    ).bind(path, course.author_id, Date.now())),
     c.env.DB.prepare("DELETE FROM course_photo_attributions WHERE course_id = ?").bind(
       courseId,
     ),
@@ -3431,7 +4067,9 @@ app.delete("/api/feed-post", async (c) => {
     c.env.DB.prepare("DELETE FROM courses WHERE id = ?").bind(courseId),
   ];
   await c.env.DB.batch(statements);
-  return c.json({ ok: true, deletedCourseId: courseId });
+  const mediaCleanupPending = await drainR2MediaDeletionQueue(c.env, authorMediaPaths)
+    .catch(() => authorMediaPaths.length);
+  return c.json({ ok: true, deletedCourseId: courseId, mediaCleanupPending });
 });
 
 app.post("/api/feed-comment", async (c) => {
@@ -3520,6 +4158,28 @@ app.post("/api/reports", async (c) => {
   return c.json({ ok: true });
 });
 
+// A shared/saved detail must not depend on the viewer's first paginated feed
+// batch. The canonical D1 course, author and owner-validated R2 media are
+// returned together, with private courses visible only to their owner.
+app.get("/api/feed/:id", async (c) => {
+  const feedId = c.req.param("id");
+  const courseId = validCourseId(
+    feedId.startsWith("post_") ? feedId.slice("post_".length) : null,
+  );
+  if (!courseId)
+    return c.json({ error: "피드 정보가 올바르지 않습니다.", code: "INVALID_FEED_ID" }, 400);
+  const session = await readSession(c.req.raw, c.env.AUTH_SESSION_SECRET);
+  const course = await visibleCourseWithAuthor(c.env, courseId, session?.sub ?? null);
+  if (!course) return c.json({ error: "피드를 찾을 수 없습니다.", code: "FEED_NOT_FOUND" }, 404);
+  c.header("Cache-Control", "private, no-store");
+  const stops = await courseStops(c.env, course.id);
+  const [coursePayload, post] = await Promise.all([
+    Promise.resolve(courseResponse(course, stops)),
+    feedResponseForCourse(c.env, course, stops),
+  ]);
+  return c.json({ course: coursePayload, post });
+});
+
 // REST API — /api/feed (Munchie 피드 개인화 랭킹)
 app.get("/api/feed", async (c) => {
   try {
@@ -3560,91 +4220,8 @@ app.get("/api/feed", async (c) => {
 
     const feedItems = [];
     for (const course of courses as any[]) {
-      // Fetch course items for this course
-      const { results: stops } = await c.env.DB.prepare(
-        "SELECT ci.*, r.name, r.category, r.photos, r.rating, r.latitude, r.longitude FROM course_items ci JOIN restaurants r ON ci.restaurant_id = r.id WHERE ci.course_id = ? ORDER BY ci.order_index",
-      )
-        .bind(course.id)
-        .all();
-      const { results: mediaRows } = await c.env.DB.prepare(
-        "SELECT r2_path, placement_index, x, y, width, height, rotation FROM course_media WHERE course_id = ? ORDER BY placement_index",
-      )
-        .bind(course.id)
-        .all();
-      // 0005 backfills valid legacy user layouts. The JSON fields remain a
-      // compatibility fallback only until every old writer has upgraded.
-      const canonicalMedia = (mediaRows as any[]).map((media) => ({
-        id: `${course.id}:media:${media.placement_index}`,
-        src: media.r2_path,
-        x: Number(media.x),
-        y: Number(media.y),
-        w: Number(media.width),
-        h: Number(media.height),
-        rotate: Number(media.rotation),
-      }));
-      const decor = canonicalMedia.length
-        ? canonicalMedia
-        : json<any[]>(course.feed_decor, []);
-      const photos = canonicalMedia.length
-        ? Array.from(new Set(canonicalMedia.map((media) => media.src)))
-        : json<string[]>(course.feed_photos, []);
-      const availablePhotos = await filterExistingPhotos(c.env, photos);
-      const availablePhotoSet = new Set(availablePhotos);
-      const availableDecor = decor.filter((item) => {
-        const src = typeof item?.src === "string" ? item.src : null;
-        return !src?.startsWith("/photos/") || availablePhotoSet.has(src);
-      });
-      const heroImage =
-        typeof course.hero_image === "string" && course.hero_image.startsWith("/photos/")
-          ? (await photoExists(c.env, course.hero_image) ? course.hero_image : availablePhotos[0] ?? "")
-          : course.hero_image;
-      const feedStops = await Promise.all(stops.map(async (s: any) => ({
-        placeId: s.restaurant_id,
-        restaurant: {
-          id: s.restaurant_id,
-          name: s.name,
-          category: s.category,
-          photos: await filterExistingPhotos(c.env, json<string[]>(s.photos, [])),
-          rating: s.rating,
-          latitude: Number(s.latitude),
-          longitude: Number(s.longitude),
-        },
-      })));
-
-      feedItems.push({
-        id: `post_${course.id}`,
-        courseId: course.id,
-        creatorId: course.author_id,
-        authorName: hasPublicProfiles ? course.author_name || null : null,
-        authorImage: hasPublicProfiles ? course.author_image || null : null,
-        title: course.title,
-        description: course.description,
-        heroImage,
-        photos: availablePhotos,
-        decor: availableDecor,
-        templateId: course.template_id || null,
-        tags: json<string[]>(course.tags, []),
-        stops: feedStops,
-        likesCount: course.likes_count ?? 0,
-        savesCount: course.saves_count ?? 0,
-        commentsCount: course.comments_count ?? 0,
-        comments: (
-          await c.env.DB.prepare(
-            "SELECT id, author_id, author_name, author_emoji, parent_id, body, created_at FROM feed_comments WHERE course_id = ? AND status = 'visible' ORDER BY created_at ASC",
-          )
-            .bind(course.id)
-            .all()
-        ).results.map((comment: any) => ({
-          id: comment.id,
-          authorId: comment.author_id,
-          authorName: comment.author_name,
-          authorEmoji: comment.author_emoji,
-          parentId: comment.parent_id,
-          text: comment.body,
-          createdAt: comment.created_at,
-        })),
-        createdAt: course.created_at,
-      });
+      const stops = await courseStops(c.env, course.id);
+      feedItems.push(await feedResponseForCourse(c.env, course, stops));
     }
 
     // Preserve the legacy array response for initial/home hydration. The

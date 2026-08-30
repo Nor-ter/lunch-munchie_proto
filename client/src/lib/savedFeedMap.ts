@@ -1,4 +1,5 @@
 import type { Course, FeedPost, Restaurant } from '@/contexts/AppContext';
+import { isValidCoordinate } from '@shared/geo';
 
 export interface SavedFeedMapPoint {
   id: string;
@@ -11,6 +12,7 @@ export interface SavedFeedMapPoint {
   latitude: number;
   longitude: number;
   imageUrl: string;
+  expectedStopCount: number;
   post: FeedPost;
 }
 
@@ -21,6 +23,8 @@ export interface SavedFeedCourseMapGroup {
   latitude: number;
   longitude: number;
   points: SavedFeedMapPoint[];
+  expectedStopCount: number;
+  routeComplete: boolean;
   post: FeedPost;
 }
 
@@ -51,8 +55,8 @@ export function buildSavedFeedMapPoints({
         const restaurant = getRestaurantById(stop.placeId);
         if (
           !restaurant
-          || !Number.isFinite(restaurant.lat)
-          || !Number.isFinite(restaurant.lng)
+          || !isValidCoordinate(restaurant.lat, restaurant.lng)
+          || (restaurant.lat === 0 && restaurant.lng === 0)
         ) {
           return [];
         }
@@ -68,6 +72,7 @@ export function buildSavedFeedMapPoints({
           latitude: restaurant.lat,
           longitude: restaurant.lng,
           imageUrl: restaurant.image,
+          expectedStopCount: course.stops.length,
           post,
         }];
       });
@@ -97,6 +102,8 @@ export function groupSavedFeedMapPointsByCourse(
       latitude,
       longitude,
       points: coursePoints,
+      expectedStopCount: first.expectedStopCount,
+      routeComplete: coursePoints.length === first.expectedStopCount,
       post: first.post,
     };
   });

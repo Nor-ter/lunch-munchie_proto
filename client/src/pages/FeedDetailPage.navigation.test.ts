@@ -40,4 +40,12 @@ describe('FeedDetailPage saved view navigation', () => {
     expect(cardSource).toContain('const canDeletePost = ownPost || Boolean(auth?.isAdmin)');
     expect(cardSource).toContain('관리자 삭제');
   });
+
+  it('builds the Google Maps handoff from the canonical feed stop order', () => {
+    expect(source).toContain("import CourseDirectionsAction from '@/components/course/CourseDirectionsAction'");
+    expect(source).toContain('(post?.stops ?? []).map(stop =>');
+    expect(source).toContain('googlePlaceIdFromRestaurantId(stop.placeId)');
+    expect(source).toContain('href={directionsUrl}');
+    expect(source).toContain('onNavigate={handleDirectionsOpen}');
+  });
 });

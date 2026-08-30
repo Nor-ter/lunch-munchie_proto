@@ -23,29 +23,38 @@ describe('merge4_v1_jp client connections', () => {
     expect(createSource).toContain('await refreshFeedPosts()');
   });
 
-  it('uses server journey history in the unified Saved course list', () => {
-    const source = readClientSource('SavedPage.tsx');
-    expect(source).toContain("fetch('/api/journey?days=30'");
-    expect(source).toContain('groupJourneyByDay');
-    expect(source).toContain('savedPosts.length + journeyStops.length');
-    expect(source).toContain('저장한 코스를 한곳에 모았어요');
-    expect(source).toContain('1곳 코스');
-    expect(source).not.toContain('Munchie 먼치픽');
-    expect(source).not.toContain('Lunchie 런치픽');
+  it('uses the authenticated server collection as the canonical Saved course list', () => {
+    const savedSource = readClientSource('SavedPage.tsx');
+    const contextSource = readClientSource('../contexts/AppContext.tsx');
+    const apiSource = readClientSource('../services/savedCoursesApi.ts');
+    expect(contextSource).toContain('const response = await fetchSavedCourses()');
+    expect(contextSource).toContain('setSavedCourseRecords(records)');
+    expect(apiSource).toContain('"/api/saved-courses"');
+    expect(apiSource).toContain('credentials: "same-origin"');
+    expect(savedSource).toContain('savedCourseRecords');
+    expect(savedSource).toContain('저장한 코스를 한곳에 모았어요');
+    expect(savedSource).not.toContain("localStorage.getItem('lm_saved')");
+    expect(savedSource).not.toContain('Munchie 먼치픽');
+    expect(savedSource).not.toContain('Lunchie 런치픽');
   });
 
   it('renders canonical feed media without substituting course covers', () => {
-    const artworkSource = readClientSource('../components/munchie/TemplateArtwork.tsx');
+    const artworkSource = readClientSource('../components/munchie/FoodHeroCourseOverlay.tsx');
     const cardSource = readClientSource('../components/munchie/UnifiedMunchieCard.tsx');
-    expect(artworkSource).toContain('photoSources === undefined');
-    expect(artworkSource).toContain('Math.max(photos.length, 1)');
-    expect(cardSource).toContain('post.decor ?? embeddedDecor');
-    expect(cardSource).toContain('post.missingOriginalMedia');
+    expect(artworkSource).toContain('getAuthorPhotoSources');
+    expect(artworkSource).toContain("data-state={activePhoto ? 'photo' : 'empty'}");
+    expect(artworkSource).toContain('작성자가 등록한 음식 사진이 없어요');
+    expect(cardSource).toContain('photos={post.missingOriginalMedia ? [] : post.photos}');
+    expect(cardSource).not.toContain('photoSources={post.photos}');
   });
 
-  it('waits for template data and keeps deletion as a local archive', () => {
+  it('waits for template data, authenticates saves, and keeps profile removal as a local archive', () => {
     const source = readClientSource('TemplateDetailPage.tsx');
     expect(source).toContain('&& isLoading');
+    expect(source).toContain('startGoogleAuth(window.location.pathname + window.location.search)');
+    expect(source).toContain('const succeeded = isSaved');
+    expect(source).toContain('? await unsaveCourse(course.id)');
+    expect(source).toContain(': await saveCourse(course.id)');
     expect(source).toContain('deleteProfileTemplate(course.id)');
     expect(source).toContain('archiveTemplate');
     expect(source).not.toContain("method: 'DELETE'");

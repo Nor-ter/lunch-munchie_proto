@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { AdvancedMarker, Map, Polyline, useMap } from '@vis.gl/react-google-maps';
 import { AnimatePresence, motion } from 'framer-motion';
-import { ChevronRight, MapPin, X } from 'lucide-react';
+import { ChevronRight, ImageOff, MapPin, X } from 'lucide-react';
 import { useLocation } from 'wouter';
 import {
   groupSavedFeedMapPointsByCourse,
@@ -72,10 +72,10 @@ export function SavedMunchieMap({
     [courseGroups, selectedCourse],
   );
   const directionStops = useMemo(
-    () => selectedCourse?.points.map((point) => ({
+    () => selectedCourse?.routeComplete ? selectedCourse.points.map((point) => ({
       latitude: point.latitude,
       longitude: point.longitude,
-    })) ?? [],
+    })) : [],
     [selectedCourse],
   );
   const {
@@ -107,6 +107,9 @@ export function SavedMunchieMap({
     } : undefined,
     [selectedPlace],
   );
+  const selectedCourseAuthorPhoto = selectedCourse && !selectedCourse.post.missingOriginalMedia
+    ? selectedCourse.post.photos.find((photo) => Boolean(photo?.trim()))
+    : undefined;
 
   useEffect(() => {
     if (selectedFeedId && !courseGroups.some((course) => course.id === selectedFeedId)) {
@@ -151,7 +154,9 @@ export function SavedMunchieMap({
       data-ui="saved-course-map"
       data-mode={selectedCourse ? 'course-detail' : 'course-overview'}
       data-route-state={selectedCourse
-        ? isDirectionsError
+        ? !selectedCourse.routeComplete
+          ? 'incomplete'
+          : isDirectionsError
           ? 'error'
           : isDirectionsLoading
             ? 'loading'
@@ -254,6 +259,15 @@ export function SavedMunchieMap({
         </div>
       )}
 
+      {selectedCourse && !selectedCourse.routeComplete && (
+        <div
+          role="alert"
+          className="absolute right-3 top-3 max-w-[250px] rounded-[14px] border border-[#F2C7C3] bg-[#FFF7F5]/95 px-3 py-2 text-[11px] font-bold leading-4 text-[#B84D4D] shadow-md backdrop-blur"
+        >
+          {selectedCourse.expectedStopCount}곳 중 일부 장소의 위치 정보가 없어 경로를 열지 않았어요.
+        </div>
+      )}
+
       <AnimatePresence>
         {selectedCourse && (
           <>
@@ -279,14 +293,20 @@ export function SavedMunchieMap({
               className="absolute inset-x-3 bottom-[92px] overflow-hidden rounded-[20px] border border-[#E7D5CB] bg-[#FFFDFC]/95 p-3 shadow-[0_14px_34px_rgba(65,38,28,0.2)] backdrop-blur"
             >
               <div className="flex gap-3">
-                <img
-                  src={selectedCourse.post.photos[0] ?? selectedCourse.points[0]?.imageUrl}
-                  alt=""
-                  className="h-[72px] w-[72px] shrink-0 rounded-[14px] object-cover"
-                />
+                {selectedCourseAuthorPhoto ? (
+                  <img
+                    src={selectedCourseAuthorPhoto}
+                    alt={`${selectedCourse.post.authorName}님이 등록한 음식`}
+                    className="h-[72px] w-[72px] shrink-0 rounded-[14px] object-cover"
+                  />
+                ) : (
+                  <span className="flex h-[72px] w-[72px] shrink-0 items-center justify-center rounded-[14px] bg-[#3A2922] text-white/70" aria-label="작성자가 등록한 음식 사진 없음">
+                    <ImageOff size={22} aria-hidden="true" />
+                  </span>
+                )}
                 <div className="min-w-0 flex-1">
                   <span className="rounded-full bg-[#FFE4DE] px-2 py-0.5 text-[9px] font-black text-[#D85A59]">
-                    저장 코스 · {selectedCourse.points.length}곳
+                    저장 코스 · {selectedCourse.expectedStopCount}곳
                   </span>
                   <p className="mt-1 line-clamp-2 text-[13px] font-black leading-5 text-[#382820]">
                     {selectedCourse.post.caption}

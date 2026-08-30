@@ -7,7 +7,7 @@
 import React, { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
 import { normalizeDiet, isHardRestriction, isIngredientAvoidance, restaurantSatisfiesDietRestriction, type DietRestriction } from '@shared/const';
 import { categoryMatchesIntent, intentForHour, type Intent } from '@shared/intent';
-import { distanceMetres, isWithinRadius } from '@shared/geo';
+import { distanceMetres, isValidCoordinate, isWithinRadius } from '@shared/geo';
 import { normalizeQuickMatchPartySize } from '@shared/quickMatchParty';
 import { normalizeRestaurantPayload } from '@shared/restaurantContract';
 import {
@@ -30,6 +30,13 @@ import { logCourseSave, logFeedLike } from '@/lib/eventLogger';
 import { feedPostFromApi, normalizeFeedApiPage } from '@/lib/feedApi';
 import { isAuthenticatedContentOwner } from '@/lib/profileFeed';
 import { persistSessionSwipe } from '@/services/sessionApi';
+import {
+  fetchSavedCourses,
+  persistSavedCourse,
+  removeSavedCourse,
+  type SavedCourseItem,
+  type SavedCourseRestaurant,
+} from '@/services/savedCoursesApi';
 import { mergeCanonicalRestaurantPresentation } from '@/lib/restaurantPresentation';
 import {
   isActiveQuickMatchStatus,
@@ -309,7 +316,25 @@ export interface FeedPost {
   createdAt: string;
   tags: TagType[];
   /** 피드 위치 필터용 코스 장소 좌표. 서버가 공개 코스의 장소만 전달한다. */
-  stops?: Array<{ placeId: string; latitude: number; longitude: number }>;
+  stops?: Array<{
+    placeId: string;
+    latitude?: number;
+    longitude?: number;
+    name?: string;
+    category?: string;
+    address?: string;
+  }>;
+}
+
+/** D1 저장 원본을 현재 화면 모델로 정규화한 한 개의 저장 코스. */
+export interface SavedCourseRecord {
+  courseId: string;
+  savedAt: string;
+  course: Course;
+  post: FeedPost;
+  restaurantNames: string[];
+  restaurants: Restaurant[];
+  firstLocation?: { latitude: number; longitude: number };
 }
 
 export interface FeedLocationFilter {
@@ -363,8 +388,12 @@ const DEFAULT_PROFILE: UserProfile = {
 interface AppContextValue {
   courses: Course[];
   savedCourseIds: string[];
-  saveCourse: (courseId: string) => void;
-  unsaveCourse: (courseId: string) => void;
+  savedCourseRecords: SavedCourseRecord[];
+  isLoadingSavedCourses: boolean;
+  savedCoursesError: string | null;
+  refreshSavedCourses: () => Promise<boolean>;
+  saveCourse: (courseId: string) => Promise<boolean>;
+  unsaveCourse: (courseId: string) => Promise<boolean>;
   addCourse: (course: Course) => void;
   updateCourse: (courseId: string, updates: Partial<Course>) => void;
   deleteCourseWithFeed: (courseId: string) => void;
@@ -583,6 +612,119 @@ function readStoredProfileId(): string | null {
   }
 }
 
+function savedRestaurantFromApi(raw: SavedCourseRestaurant): Restaurant {
+  const latitude = raw.latitude;
+  const longitude = raw.longitude;
+  const hasLocation = isValidCoordinate(latitude, longitude)
+    && !(latitude === 0 && longitude === 0);
+  const photos = Array.isArray(raw.photos)
+    ? raw.photos.filter((photo): photo is string => typeof photo === 'string' && Boolean(photo.trim()))
+    : [];
+  const priceLevel = Math.max(1, Math.min(4, Number(raw.priceLevel) || 2)) as 1 | 2 | 3 | 4;
+  const menuItems: MenuItem[] = Array.isArray(raw.menuItems)
+    ? raw.menuItems.flatMap((value) => {
+        if (!value || typeof value !== 'object') return [];
+        const item = value as Record<string, unknown>;
+        if (typeof item.name !== 'string' || !item.name.trim()) return [];
+        return [{
+          name: item.name.trim(),
+          price: typeof item.price === 'number' && Number.isFinite(item.price) ? item.price : null,
+          ...(typeof item.category === 'string' ? { category: item.category } : {}),
+          ...(typeof item.description === 'string' ? { description: item.description } : {}),
+          ...(Array.isArray(item.dietary)
+            ? { dietary: item.dietary.filter((diet): diet is string => typeof diet === 'string') }
+            : {}),
+        }];
+      })
+    : [];
+  return {
+    id: raw.id,
+    name: raw.name,
+    category: raw.category || '기타',
+    tags: (Array.isArray(raw.tags) ? raw.tags : []).map(normalizeFoodTag),
+    rating: Number(raw.rating) || 0,
+    reviewCount: Number(raw.reviewCount) || 0,
+    distance: '',
+    address: raw.address || '',
+    image: photos[0] || '',
+    photos,
+    menuItems,
+    lat: hasLocation ? Number(latitude) : Number.NaN,
+    lng: hasLocation ? Number(longitude) : Number.NaN,
+    priceRange: priceLevel,
+    openHours: raw.openHours || '',
+    ...(raw.phone ? { phone: raw.phone } : {}),
+    dietary: Array.isArray(raw.dietary) ? raw.dietary : [],
+    description: raw.description || '',
+  };
+}
+
+export function savedCourseRecordFromApi(
+  item: SavedCourseItem,
+  viewer: { id: string; name: string; emoji: string },
+): SavedCourseRecord {
+  const rawStops = Array.isArray(item.course.stops) ? item.course.stops : [];
+  const stops = rawStops
+    .slice()
+    .sort((left, right) => left.order - right.order)
+    .map((stop, index) => ({
+      placeId: stop.placeId,
+      order: index + 1,
+      startTime: stop.startTime || '',
+      endTime: stop.endTime || '',
+      isBookmarked: Boolean(stop.isBookmarked),
+    }));
+  const restaurants = Array.from(new Map(
+    rawStops
+      .filter(stop => stop?.restaurant?.id)
+      .map(stop => {
+        const restaurant = savedRestaurantFromApi(stop.restaurant);
+        return [restaurant.id, restaurant] as const;
+      }),
+  ).values());
+  const firstRestaurant = rawStops
+    .slice()
+    .sort((left, right) => left.order - right.order)[0]?.restaurant;
+  const firstLocation = firstRestaurant
+    && isValidCoordinate(firstRestaurant.latitude, firstRestaurant.longitude)
+    && !(firstRestaurant.latitude === 0 && firstRestaurant.longitude === 0)
+    ? {
+        latitude: Number(firstRestaurant.latitude),
+        longitude: Number(firstRestaurant.longitude),
+      }
+    : undefined;
+  const course: Course = limitCourseToThreeStops({
+    id: item.course.id,
+    title: item.course.title,
+    description: item.course.description,
+    heroImage: item.course.heroImage || '',
+    tags: (Array.isArray(item.course.tags) ? item.course.tags : []).map(tag => normalizeFoodTag(tag)),
+    hashtags: Array.isArray(item.course.hashtags) ? item.course.hashtags : [],
+    region: item.course.region || '',
+    metadata: {
+      distance: Number(item.course.metadata.distance) || 0,
+      duration: Number(item.course.metadata.duration) || 0,
+      placeCount: stops.length,
+    },
+    creatorId: item.course.creatorId,
+    savedCount: Number(item.course.savedCount) || 0,
+    isPublic: Boolean(item.course.isPublic),
+    createdAt: item.course.createdAt,
+    stops,
+  });
+  return {
+    courseId: item.courseId,
+    savedAt: item.savedAt,
+    course,
+    post: feedPostFromApi(item.post, viewer),
+    restaurantNames: rawStops
+      .map(stop => stop.restaurant?.name?.trim())
+      .filter((name): name is string => Boolean(name)),
+    restaurants,
+    ...(firstLocation ? { firstLocation } : {}),
+  };
+}
+
 export function AppProvider({
   children,
   initialAuthUserId = null,
@@ -592,12 +734,15 @@ export function AppProvider({
 }) {
   const legacyProfileIdRef = useRef(readStoredProfileId());
   const lastAuthUidRef = useRef(localStorage.getItem(LAST_AUTH_UID_KEY));
+  const courseStorageKey = initialAuthUserId ? `lm_courses:${initialAuthUserId}` : null;
   // Prevent a render while an upload is in flight from creating duplicate R2 files.
   const legacyMediaMigrationRef = useRef(new Set<string>());
   const isFirstAuthAdoption = Boolean(initialAuthUserId && !lastAuthUidRef.current);
   const [courses, setCourses] = useState<Course[]>(() => {
     try {
-      const s = localStorage.getItem('lm_courses');
+      // Private drafts are account-partitioned. Never adopt the old global
+      // lm_courses cache because another Google account may have created it.
+      const s = courseStorageKey ? localStorage.getItem(courseStorageKey) : null;
       const stored = s ? JSON.parse(s) as Course[] : [];
       // 드라이브 실데이터 코스(피드 게시물이 참조) + 기존 샘플 코스
       const merged = new Map([...DRIVE_COURSES, ...MOCK_COURSES].map(course => [course.id, course]));
@@ -625,10 +770,14 @@ export function AppProvider({
   const [isLoading, setIsLoading] = useState(true);
   const [apiAvailable, setApiAvailable] = useState(false);
 
-  const [savedCourseIds, setSavedCourseIds] = useState<string[]>(() => {
-    try { const s = localStorage.getItem('lm_saved'); return s ? JSON.parse(s) : ['c1']; }
-    catch { return ['c1']; }
-  });
+  // 저장은 로그인 계정의 D1 `saved_courses`가 유일한 원본이다. 이전 브라우저
+  // localStorage 값은 계정 간 소유권을 섞을 수 있으므로 자동 승계하지 않는다.
+  const [savedCourseIds, setSavedCourseIds] = useState<string[]>([]);
+  const [savedCourseRecords, setSavedCourseRecords] = useState<SavedCourseRecord[]>([]);
+  const [isLoadingSavedCourses, setIsLoadingSavedCourses] = useState(Boolean(initialAuthUserId));
+  const [savedCoursesError, setSavedCoursesError] = useState<string | null>(null);
+  const savedCoursesRequestEpochRef = useRef(0);
+  const savedCoursesMutationEpochRef = useRef(0);
 
   const [hiddenTemplateCourseIds, setHiddenTemplateCourseIds] = useState<string[]>(() => {
     try { const s = localStorage.getItem('lm_hidden_profile_templates'); return s ? JSON.parse(s) : []; }
@@ -678,23 +827,9 @@ export function AppProvider({
   });
 
   const [feedPosts, setFeedPosts] = useState<FeedPost[]>(() => {
-    // v3: 데모 글을 첫 로그인 사용자에게 귀속시키던 v2 캐시는 신뢰할 수 없다.
-    // 로그인 사용자의 '나의 피드' 원본은 서버 author_id뿐이며, 로컬 값은 화면 캐시일 뿐이다.
-    try {
-      const s = localStorage.getItem('lm_feed_v3');
-      if (s) {
-        const parsed = JSON.parse(s) as FeedPost[];
-        return parsed.map(p => ({
-          ...p,
-          authorId: p.authorId ?? demoAuthorIdFor(p.authorName),
-          tags: p.tags.map(tag => normalizeFoodTag(tag)),
-          photos: p.photos.slice(0, MAX_MUNCHIE_FEED_PHOTOS),
-          comments: Array.isArray(p.comments) ? p.comments : [],
-          dislikes: p.dislikes ?? 0,
-        }));
-      }
-    } catch { /* fall through */ }
-    // 실데이터 피드: 팀이 다녀와 찍은 사진·메뉴로 생성(scripts/genDriveFeed.py).
+    // Feed ownership and deletion are server facts. Do not render an editable
+    // localStorage snapshot while the canonical first D1 page is loading.
+    // Anonymous offline fallback stays read-only and is replaced by the API.
     return DRIVE_FEED_POSTS.map(post => ({
       ...post,
       authorId: post.authorId ?? demoAuthorIdFor(post.authorName),
@@ -755,6 +890,49 @@ export function AppProvider({
   // Keep confirmed deletions out of every later state merge in this browser
   // session, even when that response was produced before the DELETE finished.
   const deletedCourseIdsRef = useRef(new Set<string>());
+
+  const refreshSavedCourses = useCallback(async () => {
+    const requestEpoch = ++savedCoursesRequestEpochRef.current;
+    const mutationEpoch = savedCoursesMutationEpochRef.current;
+    if (!initialAuthUserId) {
+      setSavedCourseIds([]);
+      setSavedCourseRecords([]);
+      setSavedCoursesError(null);
+      setIsLoadingSavedCourses(false);
+      return true;
+    }
+
+    setIsLoadingSavedCourses(true);
+    try {
+      const response = await fetchSavedCourses();
+      if (
+        requestEpoch !== savedCoursesRequestEpochRef.current
+        || mutationEpoch !== savedCoursesMutationEpochRef.current
+      ) return false;
+      const records = response.items.flatMap((item) => {
+        try { return [savedCourseRecordFromApi(item, profile)]; }
+        catch { return []; }
+      });
+      setSavedCourseIds(response.courseIds);
+      setSavedCourseRecords(records);
+      setSavedCoursesError(null);
+      return true;
+    } catch (error) {
+      if (requestEpoch === savedCoursesRequestEpochRef.current) {
+        // A transient GET failure must not erase the last known-good server
+        // list. Keep the stale view visible and make retry explicit.
+        setSavedCoursesError(error instanceof Error ? error.message : '저장한 코스를 불러오지 못했어요.');
+      }
+      return false;
+    } finally {
+      if (requestEpoch === savedCoursesRequestEpochRef.current)
+        setIsLoadingSavedCourses(false);
+    }
+  }, [initialAuthUserId, profile.emoji, profile.id, profile.name]);
+
+  useEffect(() => {
+    void refreshSavedCourses();
+  }, [refreshSavedCourses]);
 
   const readFeedBatch = useCallback(async (
     cursor: string,
@@ -983,8 +1161,16 @@ export function AppProvider({
       .catch(() => { /* profile fallback remains usable */ });
   }, []);
 
-  useEffect(() => { localStorage.setItem('lm_courses', JSON.stringify(courses)); }, [courses]);
-  useEffect(() => { localStorage.setItem('lm_saved', JSON.stringify(savedCourseIds)); }, [savedCourseIds]);
+  useEffect(() => {
+    if (!courseStorageKey) return;
+    localStorage.setItem(courseStorageKey, JSON.stringify(courses));
+  }, [courseStorageKey, courses]);
+  useEffect(() => {
+    // These pre-MVP caches were global to the browser and could contain a
+    // previous account's post/course snapshot. They are never read now.
+    localStorage.removeItem('lm_feed_v3');
+    localStorage.removeItem('lm_courses');
+  }, []);
   useEffect(() => { localStorage.setItem('lm_hidden_profile_templates', JSON.stringify(hiddenTemplateCourseIds)); }, [hiddenTemplateCourseIds]);
   useEffect(() => {
     if (currentSession) localStorage.setItem('lm_session', JSON.stringify(currentSession));
@@ -1004,28 +1190,57 @@ export function AppProvider({
     }
     localStorage.setItem('lm_profile', JSON.stringify(profile));
   }, [profile]);
-  useEffect(() => {
-    // 업로드 사진(data URL)이 크면 quota 초과가 날 수 있다 — 실패해도 앱은 계속 동작.
-    try { localStorage.setItem('lm_feed_v3', JSON.stringify(feedPosts)); } catch { /* noop */ }
-  }, [feedPosts]);
   useEffect(() => { localStorage.setItem('lm_feed_likes', JSON.stringify(likedFeedIds)); }, [likedFeedIds]);
   useEffect(() => { localStorage.setItem('lm_feed_dislikes', JSON.stringify(dislikedFeedIds)); }, [dislikedFeedIds]);
   useEffect(() => { localStorage.setItem('lm_course_skins', JSON.stringify(courseSkins)); }, [courseSkins]);
 
-  const saveCourse = useCallback((id: string) => {
-    setSavedCourseIds(prev => {
-      const exists = prev.includes(id);
-      if (!exists) logCourseSave(id);
-      return exists ? prev : [...prev, id];
-    });
-  }, []);
+  const saveCourse = useCallback(async (id: string) => {
+    if (!initialAuthUserId) return false;
+    if (savedCourseIds.includes(id)) return true;
+    savedCoursesMutationEpochRef.current += 1;
+    setSavedCourseIds(previous => [...previous, id]);
+    setSavedCoursesError(null);
+    try {
+      await persistSavedCourse(id);
+      logCourseSave(id);
+      void refreshSavedCourses();
+      return true;
+    } catch (error) {
+      setSavedCourseIds(previous => previous.filter(courseId => courseId !== id));
+      setSavedCoursesError(error instanceof Error ? error.message : '코스를 저장하지 못했어요.');
+      return false;
+    }
+  }, [initialAuthUserId, refreshSavedCourses, savedCourseIds]);
 
-  const unsaveCourse = useCallback((id: string) => {
-    setSavedCourseIds(prev => prev.filter(i => i !== id));
-  }, []);
+  const unsaveCourse = useCallback(async (id: string) => {
+    if (!initialAuthUserId) return false;
+    savedCoursesMutationEpochRef.current += 1;
+    const previousRecord = savedCourseRecords.find(record => record.courseId === id);
+    setSavedCourseIds(previous => previous.filter(courseId => courseId !== id));
+    setSavedCourseRecords(previous => previous.filter(record => record.courseId !== id));
+    setSavedCoursesError(null);
+    try {
+      await removeSavedCourse(id);
+      // Re-assert the mutation after the network boundary. Any GET started
+      // before this DELETE is ignored by the mutation epoch above.
+      setSavedCourseIds(previous => previous.filter(courseId => courseId !== id));
+      setSavedCourseRecords(previous => previous.filter(record => record.courseId !== id));
+      return true;
+    } catch (error) {
+      setSavedCourseIds(previous => previous.includes(id) ? previous : [...previous, id]);
+      if (previousRecord) {
+        setSavedCourseRecords(previous => previous.some(record => record.courseId === id)
+          ? previous
+          : [...previous, previousRecord].sort((left, right) => right.savedAt.localeCompare(left.savedAt)));
+      }
+      setSavedCoursesError(error instanceof Error ? error.message : '저장을 해제하지 못했어요.');
+      return false;
+    }
+  }, [initialAuthUserId, savedCourseRecords]);
 
   const addCourse = useCallback((course: Course) => {
-    setCourses(prev => [limitCourseToThreeStops(course), ...prev]);
+    const normalized = limitCourseToThreeStops(course);
+    setCourses(prev => [normalized, ...prev.filter(item => item.id !== normalized.id)]);
   }, []);
 
   const updateCourse = useCallback((courseId: string, updates: Partial<Course>) => {
@@ -1042,6 +1257,7 @@ export function AppProvider({
     const removedPostIds = new Set(feedPosts.filter(post => post.courseId === courseId).map(post => post.id));
     setCourses(previous => previous.filter(course => course.id !== courseId));
     setSavedCourseIds(previous => previous.filter(id => id !== courseId));
+    setSavedCourseRecords(previous => previous.filter(record => record.courseId !== courseId));
     setHiddenTemplateCourseIds(previous => previous.filter(id => id !== courseId));
     setCourseSkins(previous => {
       if (!(courseId in previous)) return previous;
@@ -1579,7 +1795,8 @@ export function AppProvider({
 
   return (
     <AppContext.Provider value={{
-      courses, savedCourseIds, saveCourse, unsaveCourse, addCourse, updateCourse, deleteCourseWithFeed,
+      courses, savedCourseIds, savedCourseRecords, isLoadingSavedCourses, savedCoursesError,
+      refreshSavedCourses, saveCourse, unsaveCourse, addCourse, updateCourse, deleteCourseWithFeed,
       hiddenTemplateCourseIds, deleteProfileTemplate,
       currentSession, setCurrentSession, createSession, joinSession, fetchSession, toggleReady, startSession, cancelSession, leaveSession,
       swipeRecords, addSwipe, clearSessionSwipes, rerollSession, likedRestaurantIds,

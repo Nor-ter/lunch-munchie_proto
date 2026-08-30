@@ -10,12 +10,15 @@ import TemplateInfoSheet from '@/components/munchie/TemplateInfoSheet';
 import OneLineReviewBox from '@/components/munchie/OneLineReviewBox';
 import { fromFeedPhotoPlacements } from '@/lib/coursemapDecor';
 import BackButton from '@/components/ui/BackButton';
+import { useAuthStatus } from '@/hooks/useAuthStatus';
+import { startGoogleAuth } from '@/services/authApi';
 
 export default function TemplateDetailPage() {
   const { templateId } = useParams<{ templateId: string }>();
   const search = useSearch();
   const [, navigate] = useLocation();
   const [infoOpen, setInfoOpen] = useState(false);
+  const auth = useAuthStatus();
   const {
     getCourseById,
     deleteProfileTemplate,
@@ -76,10 +79,21 @@ export default function TemplateDetailPage() {
     navigate('/profile', { replace: true });
   };
 
-  const toggleSave = () => {
+  const toggleSave = async () => {
     if (!course) return;
-    isSaved ? unsaveCourse(course.id) : saveCourse(course.id);
-    toast.success(isSaved ? '저장을 해제했어요' : '코스를 저장했어요');
+    if (!auth.data) {
+      toast.error('로그인 상태를 확인 중이에요. 잠시 후 다시 시도해 주세요.');
+      return;
+    }
+    if (auth.data.isAnonymous) {
+      startGoogleAuth(window.location.pathname + window.location.search);
+      return;
+    }
+    const succeeded = isSaved
+      ? await unsaveCourse(course.id)
+      : await saveCourse(course.id);
+    if (succeeded) toast.success(isSaved ? '저장을 해제했어요' : '코스를 저장했어요');
+    else toast.error(isSaved ? '저장을 해제하지 못했어요.' : '코스를 저장하지 못했어요.');
   };
 
   if ((!template || !course) && isLoading) {
@@ -194,7 +208,7 @@ export default function TemplateDetailPage() {
 
       <div className="page-bottom-action-bar page-bottom-bar">
         <button
-          onClick={toggleSave}
+          onClick={() => void toggleSave()}
           aria-label={isSaved ? '코스 저장 해제' : '코스 저장'}
           className="page-bottom-action-secondary"
         >

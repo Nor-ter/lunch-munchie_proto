@@ -39,8 +39,14 @@ import { useAuthStatus } from '@/hooks/useAuthStatus';
 import { getLunchmateLevelIcon } from '@/constants/lunchmateLevelIcons';
 import { getLunchmateProgressSnapshot } from '@/utils/lunchmateProgress';
 import { lunchmateTotalXpFromProfile } from '@/utils/lunchmateProfile';
-import { logCourseOpen } from '@/lib/eventLogger';
+import { logCourseOpen, logNavigate } from '@/lib/eventLogger';
 import BackButton from '@/components/ui/BackButton';
+import CourseDirectionsAction from '@/components/course/CourseDirectionsAction';
+import {
+  buildGoogleMapsDirectionsUrl,
+  googlePlaceIdFromRestaurantId,
+} from '@/lib/googleMapsDirections';
+import { startGoogleAuth } from '@/services/authApi';
 
 type FromMode = 'explore' | 'saved' | 'feed' | 'template' | 'template-detail' | 'profile';
 
@@ -297,6 +303,7 @@ export default function CourseDetailPage() {
     toggleFeedLike,
     incrementFeedShare,
     savedCourseIds,
+    savedCourseRecords,
     saveCourse,
     unsaveCourse,
     restaurants,
@@ -316,20 +323,26 @@ export default function CourseDetailPage() {
   const isProfileTemplateCourse = from === 'template-detail' && templateFrom === 'profile';
   const backPath = resolveCourseDetailBackPath(from, templateFrom, requestedPostId, savedView);
 
-  const appCourse = id ? getAppCourseById(id) : undefined;
+  const savedRecord = id ? savedCourseRecords.find(record => record.courseId === id) : undefined;
+  const appCourse = id ? getAppCourseById(id) ?? savedRecord?.course : undefined;
+  const resolvedRestaurantById = (restaurantId: string) => (
+    savedRecord?.restaurants.find(restaurant => restaurant.id === restaurantId)
+    ?? getRestaurantById(restaurantId)
+  );
   const orphanPost = id
     ? feedPosts.find(post => post.id === requestedPostId && post.courseId === id)
       ?? feedPosts.find(post => post.courseId === id)
+      ?? savedRecord?.post
     : undefined;
   const syncedPlaces = useMemo(
-    () => (appCourse ? getCoursePlacesFromStops(appCourse, getRestaurantById) : []),
-    [appCourse, getRestaurantById],
+    () => (appCourse ? getCoursePlacesFromStops(appCourse, resolvedRestaurantById) : []),
+    [appCourse, getRestaurantById, savedRecord],
   );
   const feedGeoPlaces = useMemo(
     () => (orphanPost?.stops?.length
-      ? getCoursePlacesFromFeedStops(orphanPost.stops, appCourse, getRestaurantById)
+      ? getCoursePlacesFromFeedStops(orphanPost.stops, appCourse, resolvedRestaurantById)
       : []),
-    [orphanPost, appCourse, getRestaurantById],
+    [orphanPost, appCourse, getRestaurantById, savedRecord],
   );
   const resolvedPlaces = syncedPlaces.length > 0 ? syncedPlaces : feedGeoPlaces;
   const legacyPhotoPlaces: CoursePlace[] = useMemo(
@@ -391,6 +404,16 @@ export default function CourseDetailPage() {
   const [editingPlaceIndex, setEditingPlaceIndex] = useState<number | 'new' | null>(null);
   const [detailsLoadingId, setDetailsLoadingId] = useState<string | null>(null);
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
+  const expectedDirectionsStopCount = appCourse?.stops.length ?? orphanPost?.stops?.length ?? 0;
+  const directionsUrl = useMemo(() => {
+    if (!expectedDirectionsStopCount || places.length !== expectedDirectionsStopCount) return null;
+    return buildGoogleMapsDirectionsUrl(places.map(place => ({
+      googlePlaceId: googlePlaceIdFromRestaurantId(place.id),
+      address: place.address ?? place.name,
+      latitude: place.latitude,
+      longitude: place.longitude,
+    })));
+  }, [expectedDirectionsStopCount, places]);
   const mapGeoPlaces = places.filter(
     (place) => typeof place.latitude === 'number' && typeof place.longitude === 'number',
   );
@@ -451,14 +474,32 @@ export default function CourseDetailPage() {
     }
   };
 
-  const toggleCourseSaved = () => {
+  const handleDirectionsOpen = () => {
+    const firstStop = places[0];
+    if (!firstStop) return;
+    logNavigate(firstStop.id, {
+      course_id: id,
+      context: { surface: 'course_detail', stop_count: places.length },
+    });
+  };
+
+  const toggleCourseSaved = async () => {
     if (!id) return;
+    if (!auth.data) {
+      toast.error('로그인 상태를 확인 중이에요. 잠시 후 다시 시도해 주세요.');
+      return;
+    }
+    if (auth.data.isAnonymous) {
+      toast.error('코스 저장은 로그인 후 사용할 수 있어요.');
+      startGoogleAuth(window.location.pathname + window.location.search);
+      return;
+    }
     if (isCourseSaved) {
-      unsaveCourse(id);
-      toast.success('저장을 해제했어요.');
+      const succeeded = await unsaveCourse(id);
+      toast[succeeded ? 'success' : 'error'](succeeded ? '저장을 해제했어요.' : '저장을 해제하지 못했어요.');
     } else {
-      saveCourse(id);
-      toast.success('코스를 저장했어요.');
+      const succeeded = await saveCourse(id);
+      toast[succeeded ? 'success' : 'error'](succeeded ? '코스를 저장했어요.' : '코스를 저장하지 못했어요.');
     }
   };
 
@@ -823,6 +864,12 @@ export default function CourseDetailPage() {
         </AnimatePresence>
       </div>
 
+      <CourseDirectionsAction
+        href={directionsUrl}
+        stopCount={places.length}
+        onNavigate={handleDirectionsOpen}
+      />
+
       {/* Time / spots */}
       <div
         data-ui="course-meta"
@@ -940,7 +987,7 @@ export default function CourseDetailPage() {
               onClick={() => navigate(`/coursemap/new?course=${id}`)}
               className="page-bottom-action-primary"
             >
-              복사해서 편집
+              방문 일지 만들기
             </button>
           </>
         ) : (
@@ -959,7 +1006,7 @@ export default function CourseDetailPage() {
             </button>
             <button
               type="button"
-              onClick={toggleCourseSaved}
+              onClick={() => void toggleCourseSaved()}
               aria-label={isCourseSaved ? '저장 해제' : '저장하기'}
               className="page-bottom-action-primary gap-2"
             >

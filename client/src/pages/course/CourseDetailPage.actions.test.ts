@@ -9,7 +9,7 @@ describe('CourseDetailPage origin-specific actions', () => {
     expect(source).toContain('onClick={handleCourseShare}');
     expect(source).toContain("from === 'feed' || isSavedOrigin");
     expect(source).toContain('aria-label="코스 공유하기"');
-    expect(source).toContain('onClick={toggleCourseSaved}');
+    expect(source).toContain('onClick={() => void toggleCourseSaved()}');
     expect(source).toContain("{isCourseSaved ? '저장됨' : '저장하기'}");
     expect(source).toContain('className="page-bottom-action-primary gap-2"');
     expect(source).not.toContain("!bg-[#A96A61]");
@@ -17,9 +17,10 @@ describe('CourseDetailPage origin-specific actions', () => {
     expect(source).toContain('navigator.clipboard.writeText(shareUrl)');
   });
 
-  it('shows copy-to-edit only in the saved-origin bottom action branch', () => {
+  it('starts a visit journal from the saved-origin bottom action branch', () => {
     expect(source).toContain(') : isSavedOrigin ? (');
-    expect(source).toContain('복사해서 편집');
+    expect(source).toContain('방문 일지 만들기');
+    expect(source).toContain('navigate(`/coursemap/new?course=${id}`)');
     expect(source).toContain("return from === 'saved'");
   });
 
@@ -32,5 +33,19 @@ describe('CourseDetailPage origin-specific actions', () => {
     expect(shareAction).toBeGreaterThan(savedBranch);
     expect(followBranch).toBeGreaterThan(shareAction);
     expect(source.slice(savedBranch, followBranch)).not.toContain('공유\n');
+  });
+
+  it('offers an ordered Google Maps handoff and explains unavailable route data', () => {
+    expect(source).toContain("import CourseDirectionsAction from '@/components/course/CourseDirectionsAction'");
+    expect(source).toContain('buildGoogleMapsDirectionsUrl(places.map');
+    expect(source).toContain('googlePlaceIdFromRestaurantId(place.id)');
+    expect(source).toContain('href={directionsUrl}');
+    expect(source).toContain('onNavigate={handleDirectionsOpen}');
+  });
+
+  it('requires Google login and waits for the server before confirming a save', () => {
+    expect(source).toContain("startGoogleAuth(window.location.pathname + window.location.search)");
+    expect(source).toContain('const succeeded = await saveCourse(id)');
+    expect(source).toContain('const succeeded = await unsaveCourse(id)');
   });
 });

@@ -5,13 +5,16 @@ import { describe, expect, it } from 'vitest';
 const source = readFileSync(join(import.meta.dirname, 'UnifiedMunchieCard.tsx'), 'utf8');
 
 describe('UnifiedMunchieCard feed flow', () => {
-  it('keeps the feed template artwork static instead of using it as navigation', () => {
-    expect(source).toContain('data-ui="munchie-template-artwork"');
-    expect(source).not.toContain('const courseDetailPath');
-    expect(source).not.toContain('onClick={() => go(courseDetailPath)}');
+  it('renders only the author-upload food hero and course overlay in the feed body', () => {
+    expect(source).toContain("import FoodHeroCourseOverlay");
+    expect(source).toContain('<FoodHeroCourseOverlay');
+    expect(source).toContain('photos={post.missingOriginalMedia ? [] : post.photos}');
+    expect(source).toContain('stops={foodHeroStops}');
+    expect(source).not.toContain('<TemplateArtwork');
+    expect(source).not.toContain('photoSources={post.photos}');
   });
 
-  it('saves an unliked feed reaction to the server when its template is double-tapped', () => {
+  it('saves an unliked feed reaction to the server when its food hero is double-tapped', () => {
     expect(source).toContain('const lastArtworkTapAtRef = useRef(0)');
     expect(source).toContain('onPointerUp={handleArtworkPointerUp}');
     expect(source).toContain('elapsed >= 60 && elapsed <= 320');
@@ -26,11 +29,11 @@ describe('UnifiedMunchieCard feed flow', () => {
     expect(source).toContain('onClick={() => go(courseMapPath)}');
   });
 
-  it('places the compact Home and Profile review over the bottom of the template', () => {
-    expect(source).toContain('data-ui="compact-one-line-review"');
-    expect(source).toContain("homeSummary ? 'bottom-2' : 'bottom-9'");
-    expect(source).toContain('!bg-[#FFF8F4]/46');
-    expect(source).toContain('pointer-events-none absolute inset-x-2');
+  it('uses the same food-first course summary in compact Home and Profile cards', () => {
+    expect(source).toContain('compactDetailPath');
+    expect(source).toContain('caption={post.caption}');
+    expect(source).toContain('compact\n              eager');
+    expect(source).not.toContain('compact-one-line-review');
   });
 
   it('uses the author profile photo in place of the emoji when available', () => {
@@ -48,16 +51,16 @@ describe('UnifiedMunchieCard feed flow', () => {
     expect(source).not.toContain('/share?post=');
   });
 
-  it('shows a translucent one-line review that gains a shaded backdrop when pressed', () => {
-    expect(source).toContain('const [reviewRevealed, setReviewRevealed] = useState(false)');
-    expect(source).toContain('setReviewRevealed(value => !value)');
-    expect(source).toContain('aria-pressed={reviewRevealed}');
-    expect(source).toContain("animate={{ opacity: reviewRevealed ? 1 : 0 }}");
-    expect(source).toContain('bg-gradient-to-t from-[#241712]/85 via-[#241712]/45 to-transparent');
-    expect(source).toContain('<OneLineReviewBox');
-    expect(source).toContain('backdrop-blur-[1px]');
-    expect(source).toContain('!bg-[#FFF8F4]/46 !text-[#3B2A23]');
-    expect(source).toContain('line-clamp-1');
-    expect(source).toContain('{post.caption}');
+  it('requires login before mutating saved state and preserves the OAuth return path', () => {
+    expect(source).toContain('if (!interactive || !requireLogin()) return;');
+    expect(source).toContain('? await unsaveCourse(course.id)');
+    expect(source).toContain(': await saveCourse(course.id)');
+    expect(source).toContain('if (!succeeded)');
+    expect(source).toContain('startGoogleAuth(window.location.pathname + window.location.search)');
+  });
+
+  it('does not present unverified distance or duration as course facts', () => {
+    expect(source).not.toContain('distanceKm={course.metadata.distance}');
+    expect(source).not.toContain('durationMinutes={course.metadata.duration}');
   });
 });

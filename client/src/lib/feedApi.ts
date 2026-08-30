@@ -1,6 +1,7 @@
 import { normalizeFoodTag } from '@/constants/foodTags';
 import type { FeedPost } from '@/contexts/AppContext';
 import { feedAuthorEmoji } from '@/lib/feedAuthor';
+import { isValidCoordinate } from '@shared/geo';
 
 export type FeedViewerIdentity = {
   id: string;
@@ -87,11 +88,18 @@ export function feedPostFromApi(value: unknown, viewer: FeedViewerIdentity): Fee
       ? feed.tags.filter((tag: unknown): tag is string => typeof tag === 'string').map(normalizeFoodTag)
       : [],
     stops: Array.isArray(feed.stops) ? feed.stops.flatMap((stop: any) => {
-      const latitude = Number(stop?.restaurant?.latitude);
-      const longitude = Number(stop?.restaurant?.longitude);
-      return typeof stop?.placeId === 'string' && Number.isFinite(latitude) && Number.isFinite(longitude)
-        ? [{ placeId: stop.placeId, latitude, longitude }]
-        : [];
+      if (typeof stop?.placeId !== 'string') return [];
+      const rawLatitude = stop?.restaurant?.latitude;
+      const rawLongitude = stop?.restaurant?.longitude;
+      const hasLocation = isValidCoordinate(rawLatitude, rawLongitude)
+        && !(rawLatitude === 0 && rawLongitude === 0);
+      return [{
+        placeId: stop.placeId,
+        ...(hasLocation ? { latitude: rawLatitude, longitude: rawLongitude } : {}),
+        ...(typeof stop?.restaurant?.name === 'string' ? { name: stop.restaurant.name } : {}),
+        ...(typeof stop?.restaurant?.category === 'string' ? { category: stop.restaurant.category } : {}),
+        ...(typeof stop?.restaurant?.address === 'string' ? { address: stop.restaurant.address } : {}),
+      }];
     }) : [],
     createdAt: feed.createdAt || new Date(0).toISOString(),
   };

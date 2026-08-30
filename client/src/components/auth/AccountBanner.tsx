@@ -89,6 +89,10 @@ export function AccountLogoutButton({ onLoggedOut }: { onLoggedOut?: () => void 
       await queryClient.invalidateQueries({ queryKey: ['authStatus'] });
       onLoggedOut?.();
       toast.success('로그아웃했어요. 익명 모드로 계속 사용할 수 있어요.');
+      // AuthBootstrap reads the signed cookie once per app mount. A hard
+      // navigation prevents the previous account's in-memory context from
+      // surviving after the cookie has been removed.
+      window.location.replace('/feed');
     } catch (cause) {
       toast.error(cause instanceof Error ? cause.message : '로그아웃하지 못했어요.');
     } finally {
