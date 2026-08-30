@@ -24,6 +24,8 @@ describe('FoodHeroCourseOverlay', () => {
     );
 
     expect(html).toContain('data-state="photo"');
+    expect(html).toContain('data-story-ratio="9:16"');
+    expect(html).toContain('aspect-[9/16]');
     expect(html).toContain('src="https://images.example/author-bowl.jpg"');
     expect(html).toContain('1곳 코스');
     expect(html).toContain('담소국밥');
@@ -49,11 +51,11 @@ describe('FoodHeroCourseOverlay', () => {
       />,
     );
 
-    expect(html).toContain('3곳 코스');
+    expect(html).not.toContain('3곳 코스');
     expect(html).toContain('을지로 저녁 코스');
-    expect(html).toContain('1. 을지식당');
-    expect(html).toContain('2. 골목 디저트');
-    expect(html).toContain('3. 밤 카페');
+    expect(html).toContain('data-overlay-content="course-map"');
+    expect(html).toContain('stroke="#FF6534"');
+    expect(html).toContain('을지식당');
     expect(html).toContain('2시간 30분');
   });
 
@@ -141,7 +143,26 @@ describe('FoodHeroCourseOverlay', () => {
       />,
     );
 
-    expect(html).toMatch(/data-overlay-kind="restaurant_name"[^>]*><span>후식 카페<\/span>/);
+    expect(html).toMatch(/data-overlay-kind="restaurant_name"[\s\S]*?후식 카페/);
+  });
+
+  it('keeps compact cards at 4:5 while preserving the responsive type hierarchy', () => {
+    const html = renderToStaticMarkup(
+      <FoodHeroCourseOverlay
+        compact
+        photos={['/photos/uploads/author/compact.jpg']}
+        slides={[{
+          id: 'compact',
+          photo: '/photos/uploads/author/compact.jpg',
+          overlays: [{ id: 'title', kind: 'food_name', text: '큰 음식명', x: 70, y: 23, width: 44, tone: 'light', size: 'lg', align: 'center' }],
+        }]}
+      />,
+    );
+
+    expect(html).toContain('data-story-ratio="4:5"');
+    expect(html).toContain('aspect-[4/5]');
+    expect(html).toContain('data-overlay-size="lg"');
+    expect(html).toContain('text-[clamp(16px,7cqw,30px)]');
   });
 
   it('keeps a failed slide in place and stops a real swipe before the parent like handler', () => {

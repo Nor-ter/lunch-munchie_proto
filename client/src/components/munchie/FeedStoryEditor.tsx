@@ -30,6 +30,7 @@ import {
   type FeedStoryOverlayTone,
   type FeedStorySlide,
 } from '@/lib/feedStory';
+import FeedStoryOverlayVisual from './FeedStoryOverlayVisual';
 
 export interface FeedStoryEditorStop {
   id?: string;
@@ -87,67 +88,9 @@ const ALIGN_OPTIONS: Array<{
   { value: 'right', label: '오른쪽 정렬', Icon: AlignRight },
 ];
 
-const toneClass: Record<FeedStoryOverlayTone, string> = {
-  light: 'border-white/45 bg-white/88 text-[#2F211C] shadow-[0_5px_18px_rgba(28,18,14,0.16)]',
-  dark: 'border-white/15 bg-black/60 text-white shadow-[0_5px_18px_rgba(0,0,0,0.24)]',
-  accent: 'border-[#FFBBB5]/60 bg-[#E94D55]/90 text-white shadow-[0_5px_18px_rgba(111,24,31,0.24)]',
-};
-
-const sizeClass: Record<FeedStoryOverlaySize, string> = {
-  sm: 'text-[11px] leading-[1.25]',
-  md: 'text-[14px] leading-[1.3]',
-  lg: 'text-[20px] leading-[1.2]',
-};
-
-const alignClass: Record<FeedStoryOverlayAlign, string> = {
-  left: 'text-left',
-  center: 'text-center',
-  right: 'text-right',
-};
-
 const overlayKindLabel = (kind: FeedStoryOverlayKind) => (
   OVERLAY_CHOICES.find(choice => choice.kind === kind)?.label ?? '정보'
 );
-
-function EditorCourseMapPreview({ restaurants }: { restaurants: Array<{ id: string; name: string }> }) {
-  const visible = restaurants.slice(0, 3);
-  const points = visible.map((_, index) => ({
-    x: visible.length === 1 ? 50 : 10 + (index * 80) / Math.max(visible.length - 1, 1),
-    y: index % 2 === 0 ? 10 : 22,
-  }));
-
-  return (
-    <span className="block w-full" data-overlay-content="course-map">
-      <svg viewBox="0 0 100 32" className="h-9 w-full overflow-visible" aria-hidden="true">
-        {points.length > 1 && (
-          <polyline
-            points={points.map(point => `${point.x},${point.y}`).join(' ')}
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="2.3"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          />
-        )}
-        {points.map((point, index) => (
-          <g key={visible[index]?.id ?? index}>
-            <circle cx={point.x} cy={point.y} r="4.8" fill="currentColor" stroke="white" strokeWidth="1.5" />
-            <text x={point.x} y={point.y + 1.8} textAnchor="middle" fontSize="4.5" fontWeight="900" fill="#30211B">
-              {index + 1}
-            </text>
-          </g>
-        ))}
-      </svg>
-      <span className="flex min-w-0 items-center gap-1 overflow-hidden text-[9px]">
-        {visible.length > 0
-          ? visible.map((restaurant, index) => (
-              <span key={restaurant.id} className="min-w-0 truncate">{index + 1}. {restaurant.name}</span>
-            ))
-          : <span>코스 장소를 먼저 선택해 주세요</span>}
-      </span>
-    </span>
-  );
-}
 
 const stopRestaurantId = (stop: FeedStoryEditorStop) => (
   stop.restaurantId ?? stop.placeId ?? stop.id ?? ''
@@ -215,30 +158,32 @@ export function clampFeedStoryOverlay(
     ...(typeof patch.text === 'string' ? { text: cleanEditorText(patch.text) } : {}),
     width,
     x: Math.max(width / 2, Math.min(100 - width / 2, xValue)),
-    y: Math.max(6, Math.min(94, yValue)),
+    y: Math.max(10, Math.min(92, yValue)),
   };
 }
 
 export function createFeedStoryEditorOverlay(
   kind: FeedStoryOverlayKind,
   restaurants: Array<{ id: string; name: string }> = [],
-  existingCount = 0,
+  _existingCount = 0,
   id = createEditorId('overlay'),
 ): FeedStoryOverlay {
-  const isLarge = kind === 'food_name' || kind === 'restaurant_name';
-  const width = kind === 'course_map' ? 88 : isLarge ? 78 : 68;
+  const preset: Record<FeedStoryOverlayKind, Pick<FeedStoryOverlay, 'x' | 'y' | 'width' | 'tone' | 'size' | 'align'>> = {
+    restaurant_name: { x: 70, y: 13, width: 38, tone: 'light', size: 'sm', align: 'center' },
+    food_name: { x: 70, y: 23, width: 44, tone: 'light', size: 'lg', align: 'center' },
+    price: { x: 70, y: 33, width: 38, tone: 'light', size: 'md', align: 'center' },
+    course_map: { x: 70, y: 47, width: 36, tone: 'light', size: 'sm', align: 'center' },
+    review: { x: 70, y: 60, width: 42, tone: 'light', size: 'md', align: 'center' },
+    text: { x: 70, y: 72, width: 44, tone: 'light', size: 'sm', align: 'center' },
+  };
+  const placement = preset[kind];
   const restaurantId = kind === 'restaurant_name' ? restaurants[0]?.id : undefined;
   return clampFeedStoryOverlay({
     id,
     kind,
     text: defaultOverlayText(kind, restaurants),
     ...(restaurantId ? { restaurantId } : {}),
-    x: 50,
-    y: Math.min(88, 20 + existingCount * 11),
-    width,
-    tone: kind === 'course_map' ? 'light' : 'dark',
-    size: isLarge ? 'lg' : 'md',
-    align: kind === 'course_map' ? 'left' : 'center',
+    ...placement,
   });
 }
 
@@ -431,7 +376,8 @@ export default function FeedStoryEditor({
       <div
         ref={canvasRef}
         data-ui="feed-story-editor-canvas"
-        className="relative mx-auto isolate aspect-[4/5] w-full max-w-[390px] touch-pan-y select-none overflow-hidden rounded-[22px] border border-[#E6D2C8] bg-[#30211B] shadow-[0_14px_34px_rgba(72,43,31,0.18)]"
+        data-story-ratio="9:16"
+        className="relative mx-auto isolate aspect-[9/16] w-full max-w-[390px] touch-pan-y select-none overflow-hidden rounded-[22px] border border-[#E6D2C8] bg-[#30211B] shadow-[0_14px_34px_rgba(72,43,31,0.18)] [container-type:inline-size]"
         role="group"
         aria-roledescription="편집 슬라이드"
         aria-label={`${selectedSlideIndex + 1} / ${slides.length} 사진`}
@@ -457,7 +403,7 @@ export default function FeedStoryEditor({
           className="absolute inset-0 h-full w-full object-cover"
           draggable={false}
         />
-        <div className="pointer-events-none absolute inset-0 bg-gradient-to-b from-black/10 via-transparent to-black/35" aria-hidden="true" />
+        <div className="pointer-events-none absolute inset-0 bg-gradient-to-b from-black/20 via-transparent to-black/50" aria-hidden="true" />
         {selectedSlide.overlays.map((overlay) => (
           <button
             key={overlay.id}
@@ -468,7 +414,7 @@ export default function FeedStoryEditor({
             onClick={event => { event.stopPropagation(); setSelectedOverlayId(overlay.id); }}
             aria-label={`${overlayKindLabel(overlay.kind)} 오버레이 이동 및 편집`}
             aria-pressed={selectedOverlayId === overlay.id}
-            className={`absolute z-10 touch-none cursor-grab rounded-xl border px-3 py-2 font-black backdrop-blur-sm active:cursor-grabbing ${toneClass[overlay.tone]} ${sizeClass[overlay.size]} ${alignClass[overlay.align]} ${selectedOverlayId === overlay.id ? 'ring-2 ring-[#FFE16A] ring-offset-2 ring-offset-black/20' : ''}`}
+            className={`absolute z-10 touch-none cursor-grab border-0 bg-transparent p-0 active:cursor-grabbing ${selectedOverlayId === overlay.id ? 'rounded-xl ring-2 ring-[#FFE16A] ring-offset-2 ring-offset-black/20' : ''}`}
             style={{
               left: `${overlay.x}%`,
               top: `${overlay.y}%`,
@@ -476,9 +422,11 @@ export default function FeedStoryEditor({
               transform: 'translate(-50%, -50%)',
             }}
           >
-            {overlay.kind === 'course_map'
-              ? <EditorCourseMapPreview restaurants={restaurantOptions} />
-              : <span className="line-clamp-3 block break-words">{overlay.text || overlayKindLabel(overlay.kind)}</span>}
+            <FeedStoryOverlayVisual
+              overlay={overlay}
+              places={restaurantOptions}
+              fallbackText={overlayKindLabel(overlay.kind)}
+            />
           </button>
         ))}
       </div>

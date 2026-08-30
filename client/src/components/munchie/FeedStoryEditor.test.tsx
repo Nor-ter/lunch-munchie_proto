@@ -46,9 +46,12 @@ describe('FeedStoryEditor helpers', () => {
       kind: 'restaurant_name',
       restaurantId: 'restaurant-1',
       text: '담소식당',
-      tone: 'dark',
-      size: 'lg',
+      tone: 'light',
+      size: 'sm',
       align: 'center',
+      x: 70,
+      y: 13,
+      width: 38,
     }));
     expect(created).not.toHaveProperty('html');
     expect(created).not.toHaveProperty('css');
@@ -85,7 +88,7 @@ describe('FeedStoryEditor helpers', () => {
     expect(clamped.id).toBe('moving');
     expect(clamped.width).toBe(92);
     expect(clamped.x).toBe(54);
-    expect(clamped.y).toBe(6);
+    expect(clamped.y).toBe(10);
     expect(clamped.text).not.toContain('\u0000');
     expect(clamped.text).toHaveLength(MAX_FEED_STORY_TEXT_LENGTH);
   });
@@ -123,6 +126,9 @@ describe('FeedStoryEditor markup', () => {
     expect(html).toContain('aria-label="이전 사진"');
     expect(html).toContain('aria-label="다음 사진"');
     expect(html).toContain('aria-roledescription="편집 슬라이드"');
+    expect(html).toContain('data-story-ratio="9:16"');
+    expect(html).toContain('aspect-[9/16]');
+    expect(html).toContain('data-overlay-size="md"');
     expect(html).toContain('aria-label="1 / 2 사진"');
     expect(html).toContain('tabindex="0"');
     expect(html).toContain('src="/photos/uploads/author/a.jpg"');

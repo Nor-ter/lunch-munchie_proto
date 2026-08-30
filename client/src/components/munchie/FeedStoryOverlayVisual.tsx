@@ -1,0 +1,119 @@
+import React from 'react';
+import type { FeedStoryOverlay } from '@/lib/feedStory';
+
+export interface FeedStoryOverlayPlace {
+  id: string;
+  name?: string | null;
+}
+
+const toneClasses: Record<FeedStoryOverlay['tone'], string> = {
+  light: 'text-white [text-shadow:0_2px_10px_rgba(0,0,0,0.78)]',
+  dark: 'rounded-xl border border-white/10 bg-black/55 px-3 py-2 text-white shadow-lg backdrop-blur-sm',
+  accent: 'rounded-xl border border-white/15 bg-[#F25055]/90 px-3 py-2 text-white shadow-lg backdrop-blur-sm',
+};
+
+const sizeClasses: Record<FeedStoryOverlay['size'], string> = {
+  sm: 'text-[clamp(9px,2.8cqw,12px)] leading-[1.35]',
+  md: 'text-[clamp(11px,4cqw,17px)] leading-[1.28]',
+  lg: 'text-[clamp(16px,7cqw,30px)] leading-[1.08]',
+};
+
+const alignClasses: Record<FeedStoryOverlay['align'], string> = {
+  left: 'text-left',
+  center: 'text-center',
+  right: 'text-right',
+};
+
+const kindClasses: Record<FeedStoryOverlay['kind'], string> = {
+  course_map: 'font-bold',
+  food_name: 'font-black tracking-[-0.035em]',
+  restaurant_name: 'font-extrabold tracking-[0.025em]',
+  price: 'font-black tabular-nums tracking-[-0.02em]',
+  review: 'font-semibold',
+  text: 'font-bold',
+};
+
+const cleanText = (value: string | null | undefined) => value?.trim() || undefined;
+
+function FeedStoryCourseMap({
+  places,
+  size,
+  compact,
+}: {
+  places: FeedStoryOverlayPlace[];
+  size: FeedStoryOverlay['size'];
+  compact: boolean;
+}) {
+  const visible = places.slice(0, 3);
+  const points = visible.map((_, index) => ({
+    x: visible.length === 1 ? 50 : 10 + (index * 80) / Math.max(visible.length - 1, 1),
+    y: index % 2 === 0 ? 10 : 22,
+  }));
+  const line = points.map(point => `${point.x},${point.y}`).join(' ');
+  const showLabels = !compact && size !== 'sm';
+
+  return (
+    <span data-overlay-content="course-map" className="block w-full">
+      <svg
+        viewBox="0 0 100 32"
+        className="h-[clamp(24px,8cqw,38px)] w-full overflow-visible"
+        aria-hidden="true"
+      >
+        {points.length > 1 && (
+          <>
+            <polyline points={line} fill="none" stroke="rgba(255,255,255,0.72)" strokeWidth="5" strokeLinecap="round" strokeLinejoin="round" />
+            <polyline points={line} fill="none" stroke="#FF6534" strokeWidth="2.8" strokeLinecap="round" strokeLinejoin="round" />
+          </>
+        )}
+        {points.map((point, index) => (
+          <g key={visible[index]?.id ?? index}>
+            <circle cx={point.x} cy={point.y} r="4.3" fill="#FF6534" stroke="white" strokeWidth="1.5" />
+            <text x={point.x} y={point.y + 1.7} textAnchor="middle" fontSize="4.4" fontWeight="900" fill="white">
+              {index + 1}
+            </text>
+          </g>
+        ))}
+      </svg>
+      {showLabels && (
+        <span className="flex min-w-0 items-center gap-1 overflow-hidden text-[clamp(8px,2.3cqw,10px)] leading-tight" aria-label="코스 순서">
+          {visible.length > 0
+            ? visible.map((place, index) => (
+                <span key={place.id} className="min-w-0 max-w-[46%] truncate">
+                  {index + 1}. {cleanText(place.name) ?? '장소'}
+                </span>
+              ))
+            : <span>코스 장소를 먼저 선택해 주세요</span>}
+          {places.length > visible.length && <span className="shrink-0">+{places.length - visible.length}</span>}
+        </span>
+      )}
+    </span>
+  );
+}
+
+export default function FeedStoryOverlayVisual({
+  overlay,
+  places = [],
+  compact = false,
+  fallbackText,
+}: {
+  overlay: FeedStoryOverlay;
+  places?: FeedStoryOverlayPlace[];
+  compact?: boolean;
+  fallbackText?: string;
+}) {
+  const text = cleanText(overlay.text) ?? cleanText(fallbackText);
+
+  return (
+    <span
+      data-overlay-size={overlay.size}
+      data-overlay-tone={overlay.tone}
+      className={`block w-full break-words ${toneClasses[overlay.tone]} ${sizeClasses[overlay.size]} ${alignClasses[overlay.align]} ${kindClasses[overlay.kind]}`}
+    >
+      {overlay.kind === 'course_map'
+        ? <FeedStoryCourseMap places={places} size={overlay.size} compact={compact} />
+        : overlay.kind === 'review'
+          ? <span className="block border-l-2 border-[#FF8D82] pl-2">{text}</span>
+          : <span>{text}</span>}
+    </span>
+  );
+}

@@ -22,7 +22,8 @@ export type FeedStoryOverlayAlign = typeof FEED_STORY_OVERLAY_ALIGNS[number];
 
 /**
  * Feed overlay positions use the centre of the item as x/y, expressed as a
- * percentage of the 4:5 story canvas. `width` is also a canvas percentage.
+ * percentage of the canonical 9:16 story canvas. Compact cards may crop the
+ * same positions into 4:5, while the editor and full feed preserve 9:16.
  * Presentation values are presets rather than arbitrary CSS from the API.
  */
 export interface FeedStoryOverlay {
@@ -239,17 +240,18 @@ function defaultTextOverlay(
   text: string,
   y: number,
   size: FeedStoryOverlaySize,
+  placement: Partial<Pick<FeedStoryOverlay, 'x' | 'width' | 'tone' | 'align'>> = {},
 ): FeedStoryOverlay {
   return {
     id,
     kind,
     text,
-    x: 50,
+    x: placement.x ?? 70,
     y,
-    width: 88,
-    tone: 'light',
+    width: placement.width ?? 44,
+    tone: placement.tone ?? 'light',
     size,
-    align: 'left',
+    align: placement.align ?? 'center',
   };
 }
 
@@ -292,15 +294,15 @@ export function buildDefaultFeedStorySlides(
       overlays.push({
         id: `slide-${slideIndex}-course-map`,
         kind: 'course_map',
-        x: 50,
-        y: 18,
-        width: 88,
+        x: 70,
+        y: 47,
+        width: 36,
         tone: 'light',
         size: 'sm',
-        align: 'left',
+        align: 'center',
       });
       if (title) {
-        overlays.push(defaultTextOverlay(`slide-${slideIndex}-course-title`, 'text', title, 61, 'lg'));
+        overlays.push(defaultTextOverlay(`slide-${slideIndex}-course-title`, 'text', title, 23, 'lg'));
       }
     }
     overlays.push({
@@ -308,16 +310,17 @@ export function buildDefaultFeedStorySlides(
         `slide-${slideIndex}-title`,
         'restaurant_name',
         displayTitle,
-        stops.length > 1 ? 72 : (caption ? 72 : 80),
-        stops.length > 1 ? 'md' : 'lg',
+        stops.length > 1 ? 13 : 23,
+        stops.length > 1 ? 'sm' : 'lg',
+        { x: 70, width: stops.length > 1 ? 38 : 44 },
       ),
       ...(stop?.id ? { restaurantId: stop.id } : {}),
     });
     if (details) {
-      overlays.push(defaultTextOverlay(`slide-${slideIndex}-details`, 'text', details, caption ? 81 : 90, 'sm'));
+      overlays.push(defaultTextOverlay(`slide-${slideIndex}-details`, 'text', details, 34, 'sm', { width: 42 }));
     }
     if (caption) {
-      overlays.push(defaultTextOverlay(`slide-${slideIndex}-review`, 'review', caption, 91, 'md'));
+      overlays.push(defaultTextOverlay(`slide-${slideIndex}-review`, 'review', caption, 60, 'md', { width: 42 }));
     }
 
     return { id: `slide-${slideIndex}`, photo, overlays: overlays.slice(0, MAX_FEED_STORY_OVERLAYS) };
