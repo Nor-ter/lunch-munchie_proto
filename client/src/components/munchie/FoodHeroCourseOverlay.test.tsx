@@ -169,7 +169,7 @@ describe('FoodHeroCourseOverlay', () => {
     expect(html).toContain('text-[clamp(16px,7cqw,30px)]');
   });
 
-  it('uses a collision-resistant overlay scale and removes top chrome in discovery grid tiles', () => {
+  it('uses a collision-resistant overlay scale with compact, visible slide controls in discovery tiles', () => {
     const html = renderToStaticMarkup(
       <FoodHeroCourseOverlay
         compact
@@ -194,7 +194,11 @@ describe('FoodHeroCourseOverlay', () => {
     expect(html).toContain('left:67%');
     expect(html).toContain('width:58%');
     expect(html).not.toContain('1곳 코스');
-    expect(html).not.toContain('aria-live="polite" aria-atomic="true" class="px-1 py-1"');
+    expect(html).toContain('aria-live="polite" aria-atomic="true"');
+    expect(html).toContain('>1 / 2</span>');
+    expect(html).toContain('aria-label="이전 음식 사진"');
+    expect(html).toContain('aria-label="다음 음식 사진"');
+    expect(html).toContain('right-1 h-7 w-7');
   });
 
   it('gives each grid post its own stable height based on maximum content density', () => {

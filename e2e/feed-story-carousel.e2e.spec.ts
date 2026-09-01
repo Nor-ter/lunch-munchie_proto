@@ -236,10 +236,14 @@ test('grid swipes change slides without becoming likes, while a stationary doubl
   const card = page.getByTestId(`unified-munchie-card-${POST_ID}`);
   const carousel = card.locator('[data-ui="munchie-food-hero"]');
 
-  await dragLeft(page, carousel);
+  await card.getByRole('button', { name: '다음 음식 사진' }).click();
   await expect(carousel).toHaveAttribute('data-slide-index', '1');
   expect(api.likeRequests()).toBe(0);
+  await card.getByRole('button', { name: '이전 음식 사진' }).click();
+  await expect(carousel).toHaveAttribute('data-slide-index', '0');
 
+  await dragLeft(page, carousel);
+  await expect(carousel).toHaveAttribute('data-slide-index', '1');
   await dragRight(page, carousel);
   await expect(carousel).toHaveAttribute('data-slide-index', '0');
   await dragLeft(page, carousel);

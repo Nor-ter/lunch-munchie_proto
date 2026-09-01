@@ -347,14 +347,14 @@ export default function FoodHeroCourseOverlay({
             {resolvedPlaceCount}곳 코스
           </span>
         ) : <span />}
-        {storySlides.length > 1 && !grid && (
+        {storySlides.length > 1 && (
           <span aria-live="polite" aria-atomic="true" className="px-1 py-1 text-[10px] font-black [text-shadow:0_1px_6px_rgba(0,0,0,0.85)]">
             {safeIndex + 1} / {storySlides.length}
           </span>
         )}
       </div>
 
-      {!compact && storySlides.length > 1 && (
+      {storySlides.length > 1 && (!compact || grid) && (
         <>
           <button
             type="button"
@@ -362,9 +362,9 @@ export default function FoodHeroCourseOverlay({
             disabled={!hasPrevious}
             onPointerUp={event => event.stopPropagation()}
             onClick={event => { event.stopPropagation(); showPrevious(); }}
-            className="absolute left-2 top-1/2 z-30 flex h-9 w-9 -translate-y-1/2 items-center justify-center rounded-full border border-white/15 bg-black/20 text-white backdrop-blur-sm disabled:opacity-20"
+            className={`absolute top-1/2 z-30 flex -translate-y-1/2 items-center justify-center rounded-full border border-white/15 bg-black/25 text-white backdrop-blur-sm disabled:opacity-20 ${grid ? 'left-1 h-7 w-7' : 'left-2 h-9 w-9'}`}
           >
-            <ChevronLeft size={19} />
+            <ChevronLeft size={grid ? 15 : 19} />
           </button>
           <button
             type="button"
@@ -372,13 +372,13 @@ export default function FoodHeroCourseOverlay({
             disabled={!hasNext}
             onPointerUp={event => event.stopPropagation()}
             onClick={event => { event.stopPropagation(); showNext(); }}
-            className="absolute right-2 top-1/2 z-30 flex h-9 w-9 -translate-y-1/2 items-center justify-center rounded-full border border-white/15 bg-black/20 text-white backdrop-blur-sm disabled:opacity-20"
+            className={`absolute top-1/2 z-30 flex -translate-y-1/2 items-center justify-center rounded-full border border-white/15 bg-black/25 text-white backdrop-blur-sm disabled:opacity-20 ${grid ? 'right-1 h-7 w-7' : 'right-2 h-9 w-9'}`}
           >
-            <ChevronRight size={19} />
+            <ChevronRight size={grid ? 15 : 19} />
           </button>
-          <div className="pointer-events-none absolute inset-x-0 bottom-2 z-20 flex justify-center gap-1.5" aria-hidden="true">
+          <div className={`pointer-events-none absolute inset-x-0 z-20 flex justify-center ${grid ? 'bottom-1 gap-1' : 'bottom-2 gap-1.5'}`} aria-hidden="true">
             {storySlides.map((slide, index) => (
-              <span key={slide.id} className={`h-1.5 rounded-full bg-white shadow ${index === safeIndex ? 'w-5' : 'w-1.5 opacity-55'}`} />
+              <span key={slide.id} className={`${grid ? 'h-1' : 'h-1.5'} rounded-full bg-white shadow ${index === safeIndex ? (grid ? 'w-3' : 'w-5') : (grid ? 'w-1 opacity-55' : 'w-1.5 opacity-55')}`} />
             ))}
           </div>
         </>
