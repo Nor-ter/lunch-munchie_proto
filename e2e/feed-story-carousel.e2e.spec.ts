@@ -301,6 +301,18 @@ test('compact profile swipe stays on the profile and the next ordinary tap opens
   await expect(page).toHaveURL(new RegExp(`/feed/${POST_ID}`));
 });
 
+test('clicking non-control profile card chrome opens the same dedicated detail', async ({ page }) => {
+  await page.setViewportSize({ width: 320, height: 720 });
+  await mockStoryApi(page);
+  await page.goto(`/profile/${AUTHOR_ID}`);
+  const card = page.getByTestId(`unified-munchie-card-${POST_ID}`);
+
+  await card.locator('[data-ui="munchie-card-open-area"]').click({ position: { x: 105, y: 16 } });
+
+  await expect(page).toHaveURL(new RegExp(`/feed/${POST_ID}`));
+  await expect(page.locator('[data-ui="feed-detail-story"]')).toBeVisible();
+});
+
 test('a broken slide stays explicit and can be left and revisited without photo substitution', async ({ page }) => {
   await mockStoryApi(page, { breakFirstPhoto: true });
   await page.goto('/feed');

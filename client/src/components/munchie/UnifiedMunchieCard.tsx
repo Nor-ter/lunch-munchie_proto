@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react';
+import { useEffect, useMemo, useRef, useState, type MouseEvent as ReactMouseEvent, type PointerEvent as ReactPointerEvent } from 'react';
 import { createPortal } from 'react-dom';
 import { AnimatePresence, motion } from 'framer-motion';
 import {
@@ -225,6 +225,14 @@ export default function UnifiedMunchieCard({
       go(compactDetailPath);
     }, 330);
   };
+  const openDetailFromCardChrome = (event: ReactMouseEvent<HTMLElement>) => {
+    if (!interactive) return;
+    const target = event.target as HTMLElement;
+    // The carousel owns tap/swipe and nested controls own their own actions.
+    // Only the otherwise inert card chrome should inherit detail navigation.
+    if (target.closest?.('button, a, input, select, textarea, [data-ui="munchie-food-hero"]')) return;
+    go(compactDetailPath);
+  };
   const requireLogin = () => {
     if (!auth) {
       toast.error('로그인 상태를 확인 중이에요. 잠시 후 다시 시도해 주세요.');
@@ -418,7 +426,8 @@ export default function UnifiedMunchieCard({
           ref={cardRef}
           data-testid={`unified-munchie-card-${post.id}`}
           data-variant="feed-grid"
-          className="relative min-w-0"
+          onClick={openDetailFromCardChrome}
+          className="relative min-w-0 cursor-pointer"
         >
           <div
             data-ui="munchie-food-hero-interaction"
@@ -441,7 +450,7 @@ export default function UnifiedMunchieCard({
             />
           </div>
 
-          <div className="mt-1.5 min-w-0 px-0.5">
+          <div data-ui="munchie-card-open-area" className="mt-1.5 min-w-0 px-0.5">
             <div className="flex min-w-0 items-center gap-1 text-[10px] leading-none">
               <button
                 type="button"
@@ -529,8 +538,8 @@ export default function UnifiedMunchieCard({
   if (compact) {
     return (
       <>
-      <article ref={cardRef} className={`relative overflow-hidden bg-[#FFFDFC] ${homeSummary ? 'rounded-[12px] border border-[#EFD0D4] shadow-[0_5px_14px_rgba(235,80,83,0.07)]' : 'rounded-[18px] border-2 border-[#EAD7CD] shadow-[0_7px_18px_rgba(123,76,53,0.1)]'}`} data-testid={`unified-munchie-card-${post.id}`}>
-        <header className={`flex shrink-0 items-center gap-1 px-2 ${homeSummary ? 'h-9' : 'h-8'}`}>
+      <article ref={cardRef} onClick={openDetailFromCardChrome} className={`relative cursor-pointer overflow-hidden bg-[#FFFDFC] ${homeSummary ? 'rounded-[12px] border border-[#EFD0D4] shadow-[0_5px_14px_rgba(235,80,83,0.07)]' : 'rounded-[18px] border-2 border-[#EAD7CD] shadow-[0_7px_18px_rgba(123,76,53,0.1)]'}`} data-testid={`unified-munchie-card-${post.id}`}>
+        <header data-ui="munchie-card-open-area" className={`flex shrink-0 items-center gap-1 px-2 ${homeSummary ? 'h-9' : 'h-8'}`}>
           <button type="button" onClick={() => go(authorProfilePath)} className={`flex h-5 w-5 shrink-0 items-center justify-center overflow-hidden rounded-full bg-white text-[9px] ${homeSummary ? 'border border-[#EB5053]' : 'border border-[#2F2926]'}`}>
             <FeedAuthorAvatar post={post} className="flex h-full w-full items-center justify-center" />
           </button>

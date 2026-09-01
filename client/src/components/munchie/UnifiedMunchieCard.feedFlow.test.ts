@@ -38,6 +38,9 @@ describe('UnifiedMunchieCard feed flow', () => {
 
   it('uses the same food-first course summary in compact Home and Profile cards', () => {
     expect(source).toContain('compactDetailPath');
+    expect(source).toContain('openDetailFromCardChrome');
+    expect(source).toContain('data-ui="munchie-card-open-area"');
+    expect(source).toContain('[data-ui="munchie-food-hero"]');
     expect(source).toContain('caption={post.caption}');
     expect(source).toMatch(/compact\s+eager\s+onActivate/);
     expect(source).not.toContain('compact-one-line-review');
