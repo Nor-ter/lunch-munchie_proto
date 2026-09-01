@@ -197,7 +197,7 @@ describe('FoodHeroCourseOverlay', () => {
     expect(html).not.toContain('aria-live="polite" aria-atomic="true" class="px-1 py-1"');
   });
 
-  it('gives each grid story a stable height based on its maximum content density', () => {
+  it('gives each grid post its own stable height based on maximum content density', () => {
     const slide = (count: number, text = '한입') => [{
       id: `slide-${count}`,
       photo: `/photo-${count}.jpg`,
@@ -214,11 +214,20 @@ describe('FoodHeroCourseOverlay', () => {
       })),
     }];
 
-    expect(resolveGridStoryRatio(slide(1))).toEqual({ label: '1:1', className: 'aspect-square' });
-    expect(resolveGridStoryRatio(slide(2))).toEqual({ label: '7:8', className: 'aspect-[7/8]' });
-    expect(resolveGridStoryRatio(slide(4))).toEqual({ label: '4:5', className: 'aspect-[4/5]' });
-    expect(resolveGridStoryRatio(slide(6, '한입 메뉴'))).toEqual({ label: '3:4', className: 'aspect-[3/4]' });
-    expect(resolveGridStoryRatio(slide(2, '내용이 아주 길어서 더 많은 세로 공간이 필요한 설명입니다'))).toEqual({ label: '4:5', className: 'aspect-[4/5]' });
+    const ratios = [
+      resolveGridStoryRatio(slide(1)),
+      resolveGridStoryRatio(slide(2)),
+      resolveGridStoryRatio(slide(4)),
+      resolveGridStoryRatio(slide(6, '한입 메뉴')),
+      resolveGridStoryRatio(slide(2, '내용이 아주 길어서 더 많은 세로 공간이 필요한 설명입니다')),
+    ];
+
+    expect(new Set(ratios.map(item => item.aspectRatio)).size).toBe(ratios.length);
+    expect(ratios[0].aspectRatio).toBeGreaterThan(ratios[1].aspectRatio);
+    expect(ratios[1].aspectRatio).toBeGreaterThan(ratios[2].aspectRatio);
+    expect(ratios[2].aspectRatio).toBeGreaterThan(ratios[3].aspectRatio);
+    expect(ratios[4].aspectRatio).toBeLessThan(ratios[1].aspectRatio);
+    expect(ratios[0].label).not.toBe(ratios[1].label);
   });
 
   it('keeps a failed slide in place and stops a real swipe before the parent like handler', () => {

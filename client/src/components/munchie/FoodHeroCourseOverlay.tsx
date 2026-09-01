@@ -92,11 +92,18 @@ export function resolveGridStoryRatio(slides: FeedStorySlide[]) {
     const textLength = slide.overlays.reduce((total, overlay) => total + Array.from(overlay.text ?? '').length, 0);
     return Math.max(maximum, (slide.overlays.length * 12) + textLength);
   }, 0);
-
-  if (density >= 92) return { label: '3:4', className: 'aspect-[3/4]' } as const;
-  if (density >= 52) return { label: '4:5', className: 'aspect-[4/5]' } as const;
-  if (density >= 28) return { label: '7:8', className: 'aspect-[7/8]' } as const;
-  return { label: '1:1', className: 'aspect-square' } as const;
+  // The discovery grid is a masonry feed, so posts do not need to share one
+  // of a few preset heights. Keep a post stable while its carousel advances,
+  // but continuously expand it as its densest slide needs more vertical room.
+  const boundedDensity = Math.min(280, Math.max(12, density));
+  const contentProgress = (boundedDensity - 12) / 268;
+  const heightPerWidth = 1 + (contentProgress * 0.45);
+  const aspectRatio = Number((1 / heightPerWidth).toFixed(3));
+  return {
+    density,
+    aspectRatio,
+    label: `${Math.round(heightPerWidth * 100)}h`,
+  } as const;
 }
 
 function StoryOverlayItem({
@@ -259,10 +266,12 @@ export default function FoodHeroCourseOverlay({
     <section
       data-ui="munchie-food-hero"
       data-story-ratio={grid ? gridStoryRatio.label : '4:5'}
+      data-story-density={grid ? gridStoryRatio.density : undefined}
       data-state={activeSlide && !slideFailed ? 'photo' : 'empty'}
       data-slide-index={safeIndex}
       data-presentation={grid ? 'grid' : 'default'}
-      className={`relative w-full touch-pan-y select-none overflow-hidden bg-[#30211B] text-white outline-none [container-type:inline-size] focus-visible:ring-4 focus-visible:ring-inset focus-visible:ring-white/90 ${grid ? gridStoryRatio.className : 'aspect-[4/5]'} ${className}`}
+      className={`relative w-full touch-pan-y select-none overflow-hidden bg-[#30211B] text-white outline-none [container-type:inline-size] focus-visible:ring-4 focus-visible:ring-inset focus-visible:ring-white/90 ${grid ? '' : 'aspect-[4/5]'} ${className}`}
+      style={grid ? { aspectRatio: gridStoryRatio.aspectRatio } : undefined}
       aria-label={`${displayTitle} 사진 슬라이드${onActivate ? '. Enter 키로 피드 상세 보기' : ''}`}
       aria-roledescription="carousel"
       aria-keyshortcuts={onActivate ? 'ArrowLeft ArrowRight Enter Space' : 'ArrowLeft ArrowRight'}
