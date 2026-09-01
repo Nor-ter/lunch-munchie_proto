@@ -43,9 +43,19 @@ describe('FeedDetailPage saved view navigation', () => {
 
   it('builds the Google Maps handoff from the canonical feed stop order', () => {
     expect(source).toContain("import CourseDirectionsAction from '@/components/course/CourseDirectionsAction'");
-    expect(source).toContain('(post?.stops ?? []).map(stop =>');
-    expect(source).toContain('googlePlaceIdFromRestaurantId(stop.placeId)');
+    expect(source).toContain('routePlaces.map(place =>');
+    expect(source).toContain('googlePlaceIdFromRestaurantId(place.id)');
     expect(source).toContain('href={directionsUrl}');
     expect(source).toContain('onNavigate={handleDirectionsOpen}');
+  });
+
+  it('renders a dedicated story, copy, ordered course map, and directions flow', () => {
+    expect(source).toContain('data-ui="feed-detail-story"');
+    expect(source).toContain('<FoodHeroCourseOverlay');
+    expect(source).toContain('data-ui="feed-detail-copy"');
+    expect(source).toContain('data-ui="feed-detail-course-map"');
+    expect(source).toContain('<FeedCourseMap places={routePlaces}');
+    expect(source).toContain('routePlaces.map((place, index) =>');
+    expect(source).toContain('hideHero');
   });
 });

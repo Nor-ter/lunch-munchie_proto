@@ -204,7 +204,9 @@ test('feed, profile, and detail render the same persisted per-photo story', asyn
   for (const url of ['/feed', `/profile/${AUTHOR_ID}`, `/feed/${POST_ID}`]) {
     await page.goto(url);
     const card = page.getByTestId(`unified-munchie-card-${POST_ID}`);
-    const carousel = card.locator('[data-ui="munchie-food-hero"]');
+    const carousel = url === `/feed/${POST_ID}`
+      ? page.locator('[data-ui="feed-detail-story"] [data-ui="munchie-food-hero"]')
+      : card.locator('[data-ui="munchie-food-hero"]');
     await expect(carousel).toHaveAttribute('tabindex', '0');
     await carousel.focus();
     await expect(carousel).toBeFocused();
@@ -222,7 +224,7 @@ test('feed, profile, and detail render the same persisted per-photo story', asyn
       await expect(card.locator('button [data-ui="munchie-food-hero"]')).toHaveCount(0);
       await dragLeft(page, carousel);
     } else {
-      await card.getByRole('button', { name: '다음 음식 사진' }).click();
+      await carousel.getByRole('button', { name: '다음 음식 사진' }).click();
     }
     await expect(carousel).toHaveAttribute('data-slide-index', '1');
     await expect(carousel.locator('img')).toHaveAttribute('src', SECOND_PHOTO);
@@ -266,6 +268,20 @@ test('grid swipes change slides without becoming likes, while a stationary doubl
   await page.mouse.move(point.x + 10, point.y, { steps: 2 });
   await page.mouse.up();
   expect(api.likeRequests()).toBe(1);
+});
+
+test('a stationary grid tap opens the dedicated feed detail with story, copy, map, and directions', async ({ page }) => {
+  await mockStoryApi(page);
+  await page.goto('/feed');
+  const card = page.getByTestId(`unified-munchie-card-${POST_ID}`);
+  const carousel = card.locator('[data-ui="munchie-food-hero"]');
+
+  await carousel.click({ position: { x: 90, y: 90 } });
+  await expect(page).toHaveURL(`/feed/${POST_ID}?from=feed`);
+  await expect(page.locator('[data-ui="feed-detail-story"]')).toBeVisible();
+  await expect(page.locator('[data-ui="feed-detail-copy"]')).toContainText('오버레이 코스');
+  await expect(page.locator('[data-ui="feed-detail-course-map"]')).toContainText('첫 식당');
+  await expect(page.getByRole('link', { name: 'Google 지도에서 길찾기' })).toBeVisible();
 });
 
 test('compact profile swipe stays on the profile and the next ordinary tap opens detail', async ({ page }) => {

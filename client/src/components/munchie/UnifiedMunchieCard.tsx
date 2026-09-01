@@ -63,6 +63,7 @@ export default function UnifiedMunchieCard({
   feedGrid = false,
   homeSummary = false,
   interactive = true,
+  hideHero = false,
   courseOverride,
   restaurantOverrides = [],
   detailOrigin = 'feed',
@@ -74,6 +75,8 @@ export default function UnifiedMunchieCard({
   feedGrid?: boolean;
   homeSummary?: boolean;
   interactive?: boolean;
+  /** Detail pages can render the story hero above the metadata/actions card. */
+  hideHero?: boolean;
   courseOverride?: Course;
   restaurantOverrides?: Restaurant[];
   templateOverride?: CoursemapTemplate;
@@ -107,6 +110,8 @@ export default function UnifiedMunchieCard({
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
   const lastArtworkTapAtRef = useRef(0);
   const artworkPointerStartRef = useRef<{ pointerId: number; x: number; y: number } | null>(null);
+  const detailNavigationTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const suppressDetailActivationRef = useRef(false);
   const [postReported, setPostReported] = useState(() => {
     try { return JSON.parse(localStorage.getItem('lm_reported_feed_ids') ?? '[]').includes(post.id); }
     catch { return false; }
@@ -125,6 +130,9 @@ export default function UnifiedMunchieCard({
     if (!deleteConfirmOpen) return;
     return acquireDocumentScrollLock({ inertSelector: '.app-shell' });
   }, [deleteConfirmOpen]);
+  useEffect(() => () => {
+    if (detailNavigationTimerRef.current) clearTimeout(detailNavigationTimerRef.current);
+  }, []);
   // 오래된 피드가 API 코스 목록에 없어도 작성자 사진과 한줄평은 게시물 자체에서 보존한다.
   const course: Course = linkedCourse ?? {
     id: post.courseId,
@@ -203,6 +211,20 @@ export default function UnifiedMunchieCard({
   }, [post.courseId, post.id]);
 
   const go = (path: string) => interactive && navigate(path);
+  const openFeedDetail = () => {
+    if (!interactive) return;
+    if (suppressDetailActivationRef.current) {
+      suppressDetailActivationRef.current = false;
+      return;
+    }
+    if (detailNavigationTimerRef.current) clearTimeout(detailNavigationTimerRef.current);
+    // Give the existing double-tap-like gesture time to claim the interaction.
+    // A normal single tap still opens the detail page after this short window.
+    detailNavigationTimerRef.current = setTimeout(() => {
+      detailNavigationTimerRef.current = null;
+      go(compactDetailPath);
+    }, 330);
+  };
   const requireLogin = () => {
     if (!auth) {
       toast.error('로그인 상태를 확인 중이에요. 잠시 후 다시 시도해 주세요.');
@@ -316,6 +338,11 @@ export default function UnifiedMunchieCard({
     const elapsed = tappedAt - lastArtworkTapAtRef.current;
     if (elapsed >= 60 && elapsed <= 320) {
       lastArtworkTapAtRef.current = 0;
+      if (detailNavigationTimerRef.current) {
+        clearTimeout(detailNavigationTimerRef.current);
+        detailNavigationTimerRef.current = null;
+      }
+      suppressDetailActivationRef.current = true;
       if (!liked) void togglePostLike();
       return;
     }
@@ -410,6 +437,7 @@ export default function UnifiedMunchieCard({
               compact
               grid
               eager
+              onActivate={openFeedDetail}
             />
           </div>
 
@@ -596,23 +624,25 @@ export default function UnifiedMunchieCard({
           )}
         </AnimatePresence>
 
-        <div
-          data-ui="munchie-food-hero-interaction"
-          onPointerDown={handleArtworkPointerDown}
-          onPointerUp={handleArtworkPointerUp}
-          className="relative mx-3 block touch-manipulation overflow-hidden rounded-[14px] border border-[#EED9D0] bg-[#F1E7DE]"
-        >
-          <FoodHeroCourseOverlay
-            photos={post.missingOriginalMedia ? [] : post.photos}
-            slides={post.storySlides}
-            photoRestaurantIds={photoRestaurantIds}
-            title={course.title}
-            caption={post.caption}
-            stops={foodHeroStops}
-            placeCount={orderedStopIds.length || course.metadata.placeCount}
-            eager
-          />
-        </div>
+        {!hideHero && (
+          <div
+            data-ui="munchie-food-hero-interaction"
+            onPointerDown={handleArtworkPointerDown}
+            onPointerUp={handleArtworkPointerUp}
+            className="relative mx-3 block touch-manipulation overflow-hidden rounded-[14px] border border-[#EED9D0] bg-[#F1E7DE]"
+          >
+            <FoodHeroCourseOverlay
+              photos={post.missingOriginalMedia ? [] : post.photos}
+              slides={post.storySlides}
+              photoRestaurantIds={photoRestaurantIds}
+              title={course.title}
+              caption={post.caption}
+              stops={foodHeroStops}
+              placeCount={orderedStopIds.length || course.metadata.placeCount}
+              eager
+            />
+          </div>
+        )}
 
         <div className="mx-3 flex items-center justify-between py-2.5 text-[#A27469]">
           <div className="flex items-center gap-2">

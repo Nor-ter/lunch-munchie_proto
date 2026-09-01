@@ -52,7 +52,9 @@ export function useDirections(points: LatLng[], mode: TravelMode = 'walking') {
   });
 
   const coordinates = useMemo(
-    () => (query.data ? decodePolyline(query.data.polyline) : []),
+    () => (typeof query.data?.polyline === 'string' && query.data.polyline.length > 0
+      ? decodePolyline(query.data.polyline)
+      : []),
     [query.data],
   );
 

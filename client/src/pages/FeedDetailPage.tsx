@@ -1,17 +1,22 @@
 import { useEffect, useMemo, useState } from 'react';
+import { MapPin, Route } from 'lucide-react';
 import { useLocation, useParams, useSearch } from 'wouter';
 import { savedCourseRecordFromApi, useApp, type SavedCourseRecord } from '@/contexts/AppContext';
 import UnifiedMunchieCard from '@/components/munchie/UnifiedMunchieCard';
+import FoodHeroCourseOverlay, { type FoodHeroCourseStop } from '@/components/munchie/FoodHeroCourseOverlay';
 import BackButton from '@/components/ui/BackButton';
 import CourseDirectionsAction from '@/components/course/CourseDirectionsAction';
+import { FeedCourseMap } from '@/components/feed/FeedCourseMap';
 import { getSavedReturnPath } from '@/lib/savedNavigation';
 import { useProfileFeed } from '@/hooks/useProfileFeed';
+import { feedStoryRestaurantIdsForPhotos } from '@/lib/feedStory';
 import {
   buildGoogleMapsDirectionsUrl,
   googlePlaceIdFromRestaurantId,
 } from '@/lib/googleMapsDirections';
 import { logNavigate } from '@/lib/eventLogger';
 import { fetchFeedDetailById } from '@/services/savedCoursesApi';
+import type { CoursePlace } from '@/types/course';
 
 export default function FeedDetailPage() {
   const { id } = useParams<{ id: string }>();
@@ -87,17 +92,54 @@ export default function FeedDetailPage() {
         ? getSavedReturnPath(search, id)
         : '/feed?tab=feed';
   const backLabel = fromNotifications ? '알림으로 돌아가기' : fromProfile ? '프로필로 돌아가기' : fromSaved ? '저장목록으로 돌아가기' : '먼치피드로 돌아가기';
+  const orderedPlaceIds = useMemo(() => {
+    const courseStopIds = detailRecord?.course.stops
+      .slice()
+      .sort((a, b) => a.order - b.order)
+      .map(stop => stop.placeId) ?? [];
+    const postStopIds = post?.stops?.map(stop => stop.placeId) ?? [];
+    return Array.from(new Set((courseStopIds.length ? courseStopIds : postStopIds).filter(Boolean)));
+  }, [detailRecord?.course.stops, post?.stops]);
+  const routePlaces = useMemo<CoursePlace[]>(() => orderedPlaceIds.map((placeId, index) => {
+    const embeddedStop = post?.stops?.find(stop => stop.placeId === placeId);
+    const restaurant = detailRecord?.restaurants.find(item => item.id === placeId)
+      ?? getRestaurantById(placeId);
+    return {
+      id: placeId,
+      name: restaurant?.name ?? embeddedStop?.name ?? `코스 장소 ${index + 1}`,
+      rating: restaurant?.rating ?? 0,
+      distance: restaurant?.distance ?? '',
+      category: restaurant?.category ?? embeddedStop?.category ?? '코스 장소',
+      priceLevel: restaurant?.priceRange ?? 1,
+      imageUrl: restaurant?.image,
+      coords: { x: 20 + (index * 30), y: index % 2 === 0 ? 38 : 66 },
+      latitude: embeddedStop?.latitude ?? restaurant?.lat,
+      longitude: embeddedStop?.longitude ?? restaurant?.lng,
+      address: restaurant?.address ?? embeddedStop?.address,
+    };
+  }), [detailRecord?.restaurants, getRestaurantById, orderedPlaceIds, post?.stops]);
+  const storyStops = useMemo<FoodHeroCourseStop[]>(() => routePlaces.map(place => ({
+    id: place.id,
+    name: place.name,
+    category: place.category,
+    address: place.address,
+  })), [routePlaces]);
+  const photoRestaurantIds = useMemo(() => (
+    post?.photoAttributions?.length
+      ? feedStoryRestaurantIdsForPhotos(post.photos, post.photoAttributions)
+      : undefined
+  ), [post?.photoAttributions, post?.photos]);
   const directionsUrl = useMemo(() => buildGoogleMapsDirectionsUrl(
-    (post?.stops ?? []).map(stop => {
-      const restaurant = getRestaurantById(stop.placeId);
+    routePlaces.map(place => {
       return {
-        googlePlaceId: googlePlaceIdFromRestaurantId(stop.placeId),
-        address: restaurant?.address ?? stop.address ?? stop.name,
-        latitude: stop.latitude ?? restaurant?.lat,
-        longitude: stop.longitude ?? restaurant?.lng,
+        googlePlaceId: googlePlaceIdFromRestaurantId(place.id),
+        address: place.address ?? place.name,
+        latitude: place.latitude,
+        longitude: place.longitude,
       };
     }),
-  ), [getRestaurantById, post?.stops]);
+  ), [routePlaces]);
+  const displayTags = Array.from(new Set(post?.tags ?? []));
 
   const handleDirectionsOpen = () => {
     const firstStop = post?.stops?.[0];
@@ -130,20 +172,91 @@ export default function FeedDetailPage() {
         <p className="text-center text-[15px] font-black text-[#2D211C]">Munchie Feed</p>
         <span className="h-10 w-10" aria-hidden="true" />
       </header>
-      <CourseDirectionsAction
-        href={directionsUrl}
-        stopCount={post.stops?.length ?? 0}
-        onNavigate={handleDirectionsOpen}
-      />
-      <section className="px-4 pt-2">
+
+      <section data-ui="feed-detail-story" className="mx-4 overflow-hidden rounded-[24px] bg-[#30211B] shadow-[0_14px_32px_rgba(76,42,30,0.16)]">
+        <FoodHeroCourseOverlay
+          photos={post.missingOriginalMedia ? [] : post.photos}
+          slides={post.storySlides}
+          photoRestaurantIds={photoRestaurantIds}
+          title={detailRecord?.course.title ?? post.title}
+          caption={post.caption}
+          stops={storyStops}
+          placeCount={routePlaces.length}
+          distanceKm={detailRecord?.course.metadata.distance}
+          durationMinutes={detailRecord?.course.metadata.duration}
+          eager
+        />
+      </section>
+
+      <section className="px-4 pt-3">
         <UnifiedMunchieCard
           post={post}
           courseOverride={detailRecord?.course}
           restaurantOverrides={detailRecord?.restaurants}
           detailOrigin={detailOrigin}
           savedView={savedView}
+          hideHero
         />
       </section>
+
+      <section data-ui="feed-detail-copy" className="px-5 pb-2 pt-6">
+        <p className="text-[10px] font-black uppercase tracking-[0.18em] text-[#E56B68]">Munchie Course</p>
+        <h1 className="mt-1 text-[24px] font-black leading-tight tracking-[-0.035em] text-[#30221C]">
+          {detailRecord?.course.title ?? post.title ?? '나만의 Munchie 코스'}
+        </h1>
+        {post.caption.trim() && (
+          <p className="mt-3 whitespace-pre-wrap text-[14px] font-semibold leading-6 text-[#5F4B42]">{post.caption}</p>
+        )}
+        {detailRecord?.course.description?.trim()
+          && detailRecord.course.description.trim() !== post.caption.trim() && (
+            <p className="mt-2 whitespace-pre-wrap text-[13px] leading-6 text-[#89756B]">{detailRecord.course.description}</p>
+          )}
+        {displayTags.length > 0 && (
+          <div className="mt-4 flex flex-wrap gap-1.5">
+            {displayTags.map(tag => <span key={tag} className="rounded-full bg-[#FCE5DE] px-2.5 py-1 text-[10px] font-black text-[#C75B58]">#{tag}</span>)}
+          </div>
+        )}
+      </section>
+
+      <section data-ui="feed-detail-course-map" className="mx-4 mt-5 overflow-hidden rounded-[24px] border border-[#E8D5CB] bg-[#FFFDFC] shadow-[0_10px_26px_rgba(117,73,51,0.08)]">
+        <div className="flex items-center justify-between px-4 pb-3 pt-4">
+          <div>
+            <p className="flex items-center gap-1.5 text-[15px] font-black text-[#382820]"><Route size={17} className="text-[#E85053]" />코스맵</p>
+            <p className="mt-1 text-[10px] font-semibold text-[#9A8579]">게시물에 저장된 순서대로 이동 경로를 보여줘요.</p>
+          </div>
+          <span className="rounded-full bg-[#FFF0EB] px-2.5 py-1 text-[10px] font-black text-[#D95A59]">{routePlaces.length}곳</span>
+        </div>
+
+        <div className="mx-3 h-[260px] overflow-hidden rounded-[18px] bg-[#F3EDE8]">
+          {routePlaces.some(place => typeof place.latitude === 'number' && typeof place.longitude === 'number') ? (
+            <FeedCourseMap places={routePlaces} />
+          ) : (
+            <div className="flex h-full items-center justify-center px-8 text-center text-[12px] font-semibold text-[#9A8579]">이 게시물에는 지도에 표시할 코스 장소가 없어요.</div>
+          )}
+        </div>
+
+        {routePlaces.length > 0 && (
+          <ol className="space-y-2 px-4 py-4">
+            {routePlaces.map((place, index) => (
+              <li key={place.id} className="flex items-start gap-3 rounded-[14px] bg-[#FFF7F3] px-3 py-2.5">
+                <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-[#E85053] text-[11px] font-black text-white">{index + 1}</span>
+                <span className="min-w-0">
+                  <strong className="block truncate text-[12px] font-black text-[#3B2B24]">{place.name}</strong>
+                  <span className="mt-0.5 flex items-center gap-1 truncate text-[10px] font-semibold text-[#927D73]"><MapPin size={10} />{place.address ?? place.category}</span>
+                </span>
+              </li>
+            ))}
+          </ol>
+        )}
+      </section>
+
+      <div className="mt-4">
+        <CourseDirectionsAction
+          href={directionsUrl}
+          stopCount={routePlaces.length}
+          onNavigate={handleDirectionsOpen}
+        />
+      </div>
     </main>
   );
 }
