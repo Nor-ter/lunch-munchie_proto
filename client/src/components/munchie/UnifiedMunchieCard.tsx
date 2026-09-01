@@ -452,13 +452,9 @@ export default function UnifiedMunchieCard({
 
           <div data-ui="munchie-card-open-area" className="mt-1.5 min-w-0 px-0.5">
             <div className="flex min-w-0 items-center gap-1 text-[10px] leading-none">
-              <button
-                type="button"
-                onClick={() => go(authorProfilePath)}
-                className="min-w-0 truncate font-black text-[#3E2922]"
-              >
+              <span className="min-w-0 truncate font-black text-[#3E2922]">
                 {post.authorName}
-              </button>
+              </span>
               <span className="shrink-0 text-[#A18C82]">· {timeAgo(post.createdAt)}</span>
               <span className="min-w-0 flex-1" />
               <button

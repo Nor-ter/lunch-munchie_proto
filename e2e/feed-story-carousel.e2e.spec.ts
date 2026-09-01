@@ -284,6 +284,17 @@ test('a stationary grid tap opens the dedicated feed detail with story, copy, ma
   await expect(page.getByRole('link', { name: 'Google 지도에서 길찾기' })).toBeVisible();
 });
 
+test('clicking the discovery post author row opens post detail instead of the profile', async ({ page }) => {
+  await mockStoryApi(page);
+  await page.goto('/feed');
+  const card = page.getByTestId(`unified-munchie-card-${POST_ID}`);
+
+  await card.getByText(post.authorName, { exact: true }).click();
+
+  await expect(page).toHaveURL(`/feed/${POST_ID}?from=feed`);
+  await expect(page.locator('[data-ui="feed-detail-story"]')).toBeVisible();
+});
+
 test('compact profile swipe stays on the profile and the next ordinary tap opens detail', async ({ page }) => {
   await page.setViewportSize({ width: 320, height: 720 });
   await mockStoryApi(page);
