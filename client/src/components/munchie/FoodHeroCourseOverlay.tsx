@@ -324,8 +324,8 @@ export default function FoodHeroCourseOverlay({
               <span className="flex h-16 w-16 items-center justify-center rounded-full border border-white/20 bg-white/10">
                 <ImageOff size={28} aria-hidden="true" />
               </span>
-              <strong className="mt-4 text-[15px] font-black">이 음식 사진을 표시할 수 없어요</strong>
-              <span className="mt-1 text-[11px] font-semibold text-white/65">다른 사진으로 자동 대체하지 않아요</span>
+              <strong className="mt-4 text-[16px] font-black">이 음식 사진을 표시할 수 없어요</strong>
+              <span className="mt-1 text-[12px] font-semibold text-white/65">다른 사진으로 자동 대체하지 않아요</span>
             </div>
           )}
         </div>
@@ -334,21 +334,21 @@ export default function FoodHeroCourseOverlay({
           <span className="flex h-16 w-16 items-center justify-center rounded-full border border-white/20 bg-white/10">
             <ImageOff size={28} aria-hidden="true" />
           </span>
-          <strong className="mt-4 text-[15px] font-black">작성자가 등록한 음식 사진이 없어요</strong>
-          <span className="mt-2 max-w-full truncate text-[13px] font-black text-white/90">{displayTitle}</span>
-          <span className="mt-1 text-[11px] font-semibold text-white/65">코스 정보만 확인할 수 있어요</span>
+          <strong className="mt-4 text-[16px] font-black">작성자가 등록한 음식 사진이 없어요</strong>
+          <span className="mt-2 max-w-full truncate text-[14px] font-black text-white/90">{displayTitle}</span>
+          <span className="mt-1 text-[12px] font-semibold text-white/65">코스 정보만 확인할 수 있어요</span>
         </div>
       )}
 
       <div className={`pointer-events-none absolute inset-x-0 top-0 z-20 flex items-center justify-between gap-2 ${grid ? 'p-1.5' : 'p-3'}`}>
         {resolvedPlaceCount && !activeHasCourseMap && !grid ? (
-          <span className="flex h-7 items-center gap-1 rounded-full border border-white/15 bg-black/35 px-2.5 text-[10px] font-black backdrop-blur-sm">
+          <span className="flex h-7 items-center gap-1 rounded-full border border-white/15 bg-black/35 px-2.5 text-[12px] font-black backdrop-blur-sm">
             <Route size={12} aria-hidden="true" />
             {resolvedPlaceCount}곳 코스
           </span>
         ) : <span />}
         {storySlides.length > 1 && (
-          <span aria-live="polite" aria-atomic="true" className="px-1 py-1 text-[10px] font-black [text-shadow:0_1px_6px_rgba(0,0,0,0.85)]">
+          <span aria-live="polite" aria-atomic="true" className="px-1 py-1 text-[12px] font-black [text-shadow:0_1px_6px_rgba(0,0,0,0.85)]">
             {safeIndex + 1} / {storySlides.length}
           </span>
         )}
@@ -362,7 +362,7 @@ export default function FoodHeroCourseOverlay({
             disabled={!hasPrevious}
             onPointerUp={event => event.stopPropagation()}
             onClick={event => { event.stopPropagation(); showPrevious(); }}
-            className={`absolute top-1/2 z-30 flex -translate-y-1/2 items-center justify-center rounded-full border border-white/15 bg-black/25 text-white backdrop-blur-sm disabled:opacity-20 ${grid ? 'left-1 h-7 w-7' : 'left-2 h-9 w-9'}`}
+            className={`absolute top-1/2 z-20 flex -translate-y-1/2 items-center justify-center rounded-full border border-white/15 bg-black/25 text-white backdrop-blur-sm disabled:opacity-20 ${grid ? 'left-1 h-7 w-7' : 'left-2 h-9 w-9'}`}
           >
             <ChevronLeft size={grid ? 15 : 19} />
           </button>
@@ -372,7 +372,7 @@ export default function FoodHeroCourseOverlay({
             disabled={!hasNext}
             onPointerUp={event => event.stopPropagation()}
             onClick={event => { event.stopPropagation(); showNext(); }}
-            className={`absolute top-1/2 z-30 flex -translate-y-1/2 items-center justify-center rounded-full border border-white/15 bg-black/25 text-white backdrop-blur-sm disabled:opacity-20 ${grid ? 'right-1 h-7 w-7' : 'right-2 h-9 w-9'}`}
+            className={`absolute top-1/2 z-20 flex -translate-y-1/2 items-center justify-center rounded-full border border-white/15 bg-black/25 text-white backdrop-blur-sm disabled:opacity-20 ${grid ? 'right-1 h-7 w-7' : 'right-2 h-9 w-9'}`}
           >
             <ChevronRight size={grid ? 15 : 19} />
           </button>

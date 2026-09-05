@@ -86,7 +86,6 @@ test('saved restaurant uses its configured map and returns to the unified saved 
 
   await page.getByRole('button', { name: '저장으로 돌아가기' }).click();
   await expect(page).toHaveURL('/saved');
-  await expect(page.getByText(/저장한 코스를 한곳에 모았어요/)).toBeVisible();
   await expect(page.getByRole('group', { name: '저장 항목 필터' })).toHaveCount(0);
   await expect(page.getByText('Munchie 먼치픽')).toHaveCount(0);
   await expect(page.getByText('Lunchie 런치픽')).toHaveCount(0);

@@ -140,29 +140,20 @@ test('deleting from the feed menu permanently removes the server post and stale 
   expect(cachedIds).not.toContain(POST_ID);
 });
 
-test('feed detail centers its simplified header while owner actions remain in the card menu', async ({ page }) => {
+test('feed detail uses a floating back action while owner actions remain in the card menu', async ({ page }) => {
   await mockFeedApi(page);
   await page.goto(`/feed/${POST_ID}`);
 
-  const header = page.locator('main > header').filter({ hasText: 'Munchie Feed' });
-  const main = header.locator('..');
+  const main = page.locator('main');
   const card = page.getByTestId(`unified-munchie-card-${POST_ID}`);
 
   await expect(main).toBeVisible();
-  await expect(header.getByRole('button', { name: '먼치피드로 돌아가기' })).toBeVisible();
-  await expect(header.getByRole('button', { name: '피드 수정' })).toHaveCount(0);
-  await expect(header.getByRole('button', { name: '피드 삭제' })).toHaveCount(0);
+  await expect(main.getByRole('button', { name: '먼치피드로 돌아가기' })).toBeVisible();
+  await expect(main.getByRole('button', { name: '피드 수정' })).toHaveCount(0);
+  await expect(main.getByRole('button', { name: '피드 삭제' })).toHaveCount(0);
 
-  const layout = await header.evaluate((element) => {
-    const headerBox = element.getBoundingClientRect();
-    const titleBox = element.querySelector('p')!.getBoundingClientRect();
-    return {
-      centerDelta: Math.abs((titleBox.left + titleBox.width / 2) - (headerBox.left + headerBox.width / 2)),
-      mainWidth: element.parentElement!.getBoundingClientRect().width,
-    };
-  });
-  expect(layout.centerDelta).toBeLessThanOrEqual(1);
-  expect(layout.mainWidth).toBeLessThanOrEqual(430);
+  const mainWidth = await main.evaluate(element => element.getBoundingClientRect().width);
+  expect(mainWidth).toBeLessThanOrEqual(430);
 
   await card.getByRole('button', { name: '게시물 메뉴' }).click();
   await expect(card.getByRole('button', { name: '게시물 수정' })).toBeVisible();

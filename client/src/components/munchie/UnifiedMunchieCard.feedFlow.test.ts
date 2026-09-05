@@ -70,7 +70,7 @@ describe('UnifiedMunchieCard feed flow', () => {
 
   it('uses the source compact identity styling and native feed sharing action', () => {
     expect(source).toContain('<FeedAuthorAvatar post={post} className="flex h-full w-full items-center justify-center" />');
-    expect(source).toContain('text-[10px] font-semibold');
+    expect(source).toContain('text-[11px] font-semibold');
     expect(source).toContain('const shareFeedPost = async () =>');
     expect(source).toContain('void shareFeedPost()');
     expect(source).not.toContain('/share?post=');

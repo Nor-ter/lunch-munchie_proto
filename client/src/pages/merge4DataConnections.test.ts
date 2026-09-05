@@ -32,7 +32,6 @@ describe('merge4_v1_jp client connections', () => {
     expect(apiSource).toContain('"/api/saved-courses"');
     expect(apiSource).toContain('credentials: "same-origin"');
     expect(savedSource).toContain('savedCourseRecords');
-    expect(savedSource).toContain('저장한 코스를 한곳에 모았어요');
     expect(savedSource).not.toContain("localStorage.getItem('lm_saved')");
     expect(savedSource).not.toContain('Munchie 먼치픽');
     expect(savedSource).not.toContain('Lunchie 런치픽');

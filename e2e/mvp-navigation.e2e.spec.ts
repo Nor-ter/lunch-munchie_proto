@@ -25,7 +25,7 @@ test('Munchie MVP opens on discovery with a focused three-action navigation', as
   await page.goto('/');
 
   await expect(page).toHaveURL(/\/feed$/);
-  await expect(page.getByRole('heading', { name: 'MUNCHIE FEED' })).toBeVisible();
+  await expect(page.getByRole('button', { name: '사용자 검색 열기' })).toBeVisible();
   const navigation = page.getByRole('navigation', { name: '주요 메뉴' });
   await expect(navigation.getByRole('button', { name: '발견' })).toHaveAttribute('aria-current', 'page');
   await expect(navigation.getByRole('button', { name: '저장' })).toBeVisible();
@@ -98,8 +98,7 @@ test('saved restaurants and multi-stop items share one course model', async ({ p
 
   await page.goto('/saved?tab=restaurants');
 
-  await expect(page.getByRole('heading', { name: '저장 🔖' })).toBeVisible();
-  await expect(page.getByText('저장한 코스를 한곳에 모았어요 · 1개')).toBeVisible();
+  await expect(page.getByRole('textbox', { name: '저장 코스 검색' })).toBeVisible();
   await expect(page.getByRole('group', { name: '저장 항목 필터' })).toHaveCount(0);
   await expect(page.getByText('통합 식당')).toBeVisible();
   await expect(page.getByText('1곳 코스').first()).toBeVisible();

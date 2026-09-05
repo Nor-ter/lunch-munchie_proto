@@ -91,7 +91,6 @@ export default function FeedDetailPage() {
       : fromSaved
         ? getSavedReturnPath(search, id)
         : '/feed?tab=feed';
-  const backLabel = fromNotifications ? '알림으로 돌아가기' : fromProfile ? '프로필로 돌아가기' : fromSaved ? '저장목록으로 돌아가기' : '먼치피드로 돌아가기';
   const orderedPlaceIds = useMemo(() => {
     const courseStopIds = detailRecord?.course.stops
       .slice()
@@ -141,6 +140,8 @@ export default function FeedDetailPage() {
   ), [routePlaces]);
   const displayTags = Array.from(new Set(post?.tags ?? []));
 
+  const detailTitle = detailRecord?.course.title ?? post?.title ?? '나만의 Munchie 코스';
+
   const handleDirectionsOpen = () => {
     const firstStop = post?.stops?.[0];
     if (!firstStop) return;
@@ -167,11 +168,12 @@ export default function FeedDetailPage() {
 
   return (
     <main className="mx-auto min-h-dvh max-w-[430px] bg-[#FCF4EE] pb-8">
-      <header className="sticky top-0 z-30 grid grid-cols-[40px_1fr_40px] items-center bg-[#FCF4EE]/95 px-5 pb-3 pt-[max(12px,env(safe-area-inset-top))] backdrop-blur">
-        <BackButton onClick={() => navigate(backPath)} aria-label={backLabel} />
-        <p className="text-center text-[15px] font-black text-[#2D211C]">Munchie Feed</p>
-        <span className="h-10 w-10" aria-hidden="true" />
-      </header>
+      <div className="fixed left-4 top-[max(12px,env(safe-area-inset-top))] z-30">
+        <BackButton
+          onClick={() => navigate(backPath)}
+          aria-label={fromNotifications ? '알림으로 돌아가기' : fromProfile ? '프로필로 돌아가기' : fromSaved ? '저장목록으로 돌아가기' : '먼치피드로 돌아가기'}
+        />
+      </div>
 
       <section data-ui="feed-detail-story" className="mx-4 overflow-hidden rounded-[24px] bg-[#30211B] shadow-[0_14px_32px_rgba(76,42,30,0.16)]">
         <FoodHeroCourseOverlay
@@ -199,32 +201,34 @@ export default function FeedDetailPage() {
         />
       </section>
 
-      <section data-ui="feed-detail-copy" className="px-5 pb-2 pt-6">
-        <p className="text-[10px] font-black uppercase tracking-[0.18em] text-[#E56B68]">Munchie Course</p>
-        <h1 className="mt-1 text-[24px] font-black leading-tight tracking-[-0.035em] text-[#30221C]">
-          {detailRecord?.course.title ?? post.title ?? '나만의 Munchie 코스'}
-        </h1>
-        {post.caption.trim() && (
-          <p className="mt-3 whitespace-pre-wrap text-[14px] font-semibold leading-6 text-[#5F4B42]">{post.caption}</p>
-        )}
-        {detailRecord?.course.description?.trim()
-          && detailRecord.course.description.trim() !== post.caption.trim() && (
-            <p className="mt-2 whitespace-pre-wrap text-[13px] leading-6 text-[#89756B]">{detailRecord.course.description}</p>
+      <section className="mx-4 mt-4 rounded-[20px] border border-[#E6D1C6] bg-[#FFFDFC] px-5 pb-4 pt-4 shadow-[0_10px_24px_rgba(105,74,59,0.08)]">
+        <div data-ui="feed-detail-copy" className="space-y-2">
+          <p className="text-[11px] font-black uppercase tracking-[0.18em] text-[#E56B68]">Munchie Course</p>
+          <h1 className="mt-1 text-[24px] font-black leading-tight tracking-[-0.035em] text-[#30221C]">
+            {detailTitle}
+          </h1>
+          {post.caption.trim() && (
+            <p className="whitespace-pre-wrap text-[14px] font-semibold leading-6 text-[#5F4B42]">{post.caption}</p>
           )}
-        {displayTags.length > 0 && (
-          <div className="mt-4 flex flex-wrap gap-1.5">
-            {displayTags.map(tag => <span key={tag} className="rounded-full bg-[#FCE5DE] px-2.5 py-1 text-[10px] font-black text-[#C75B58]">#{tag}</span>)}
-          </div>
-        )}
+          {detailRecord?.course.description?.trim()
+            && detailRecord.course.description.trim() !== post.caption.trim() && (
+              <p className="whitespace-pre-wrap text-[13px] leading-6 text-[#89756B]">{detailRecord.course.description}</p>
+            )}
+          {displayTags.length > 0 && (
+            <div className="pt-1.5 flex flex-wrap gap-1.5">
+              {displayTags.map(tag => <span key={tag} className="rounded-full bg-[#FCE5DE] px-2.5 py-1 text-[11px] font-black text-[#C75B58]">#{tag}</span>)}
+            </div>
+          )}
+        </div>
       </section>
 
       <section data-ui="feed-detail-course-map" className="mx-4 mt-5 overflow-hidden rounded-[24px] border border-[#E8D5CB] bg-[#FFFDFC] shadow-[0_10px_26px_rgba(117,73,51,0.08)]">
         <div className="flex items-center justify-between px-4 pb-3 pt-4">
           <div>
             <p className="flex items-center gap-1.5 text-[15px] font-black text-[#382820]"><Route size={17} className="text-[#E85053]" />코스맵</p>
-            <p className="mt-1 text-[10px] font-semibold text-[#9A8579]">게시물에 저장된 순서대로 이동 경로를 보여줘요.</p>
+            <p className="mt-1 text-[11px] font-semibold text-[#9A8579]">게시물에 저장된 순서대로 이동 경로를 보여줘요.</p>
           </div>
-          <span className="rounded-full bg-[#FFF0EB] px-2.5 py-1 text-[10px] font-black text-[#D95A59]">{routePlaces.length}곳</span>
+          <span className="rounded-full bg-[#FFF0EB] px-2.5 py-1 text-[11px] font-black text-[#D95A59]">{routePlaces.length}곳</span>
         </div>
 
         <div className="mx-3 h-[260px] overflow-hidden rounded-[18px] bg-[#F3EDE8]">
@@ -242,7 +246,7 @@ export default function FeedDetailPage() {
                 <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-[#E85053] text-[11px] font-black text-white">{index + 1}</span>
                 <span className="min-w-0">
                   <strong className="block truncate text-[12px] font-black text-[#3B2B24]">{place.name}</strong>
-                  <span className="mt-0.5 flex items-center gap-1 truncate text-[10px] font-semibold text-[#927D73]"><MapPin size={10} />{place.address ?? place.category}</span>
+                  <span className="mt-0.5 flex items-center gap-1 truncate text-[11px] font-semibold text-[#927D73]"><MapPin size={10} />{place.address ?? place.category}</span>
                 </span>
               </li>
             ))}

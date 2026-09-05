@@ -142,10 +142,7 @@ export default function SavedPage() {
 
   return (
     <div className="min-h-dvh bg-[#FCF4EE] pb-24">
-      <header className="px-5 pb-4 pt-12">
-        <h1 className="mb-1 text-[22px] font-bold text-[#1A1A1A]">저장 🔖</h1>
-        <p className="text-[12px] text-[#9B9B9B]">저장한 코스를 한곳에 모았어요 · {savedCourseRecords.length}개</p>
-      </header>
+      <div className="px-5 pb-4 pt-12" aria-hidden="true" />
 
       {!isAnonymous && (
         <section className="space-y-3 px-4 pb-4" aria-label="저장 코스 검색과 정렬">

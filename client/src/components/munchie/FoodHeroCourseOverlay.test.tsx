@@ -166,7 +166,7 @@ describe('FoodHeroCourseOverlay', () => {
     expect(html).toContain('data-story-ratio="4:5"');
     expect(html).toContain('aspect-[4/5]');
     expect(html).toContain('data-overlay-size="lg"');
-    expect(html).toContain('text-[clamp(16px,7cqw,30px)]');
+    expect(html).toContain('text-[clamp(17px,7.2cqw,31px)]');
   });
 
   it('uses a collision-resistant overlay scale with compact, visible slide controls in discovery tiles', () => {
@@ -188,8 +188,8 @@ describe('FoodHeroCourseOverlay', () => {
     );
 
     expect(html).toContain('data-presentation="grid"');
-    expect(html).toContain('text-[clamp(11px,5.8cqw,15px)]');
-    expect(html).toContain('text-[clamp(9px,4cqw,11px)]');
+    expect(html).toContain('text-[clamp(12px,6.2cqw,16px)]');
+    expect(html).toContain('text-[clamp(10px,4.3cqw,12px)]');
     expect(html).toContain('line-clamp-3');
     expect(html).toContain('left:67%');
     expect(html).toContain('width:58%');

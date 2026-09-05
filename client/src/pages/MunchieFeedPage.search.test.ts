@@ -28,8 +28,8 @@ describe('Munchie Feed user search', () => {
   });
 
   it('keeps the feed header compact and focused on search and filters', () => {
-    expect(source).toContain('bg-[#FFFDFC] px-4 py-3');
-    expect(source).toContain('text-[22px] font-black');
+    expect(source).toContain('fixed right-3 top-[calc(env(safe-area-inset-top)+12px)]');
+    expect(source).toContain("aria-label={searchOpen ? '사용자 검색 닫기' : '사용자 검색 열기'}");
     expect(source).not.toContain('다녀온 맛집 Munchie 피드를 함께 공유해요');
     expect(source).not.toContain('aria-label="전체 템플릿 보기"');
   });
@@ -39,6 +39,6 @@ describe('Munchie Feed user search', () => {
     expect(source).toContain('grid grid-cols-2 items-start gap-x-2');
     expect(source).toContain('data-feed-column={column + 1}');
     expect(source).toContain('<UnifiedMunchieCard post={post} feedGrid />');
-    expect(source).toContain('<main className="px-2 py-3">');
+    expect(source).toContain("searchActive ? 'pt-32' : 'pt-16'");
   });
 });

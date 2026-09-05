@@ -14,26 +14,26 @@ const toneClasses: Record<FeedStoryOverlay['tone'], string> = {
 };
 
 const sizeClasses: Record<FeedStoryOverlay['size'], string> = {
-  sm: 'text-[clamp(9px,2.8cqw,12px)] leading-[1.35]',
-  md: 'text-[clamp(11px,4cqw,17px)] leading-[1.28]',
-  lg: 'text-[clamp(16px,7cqw,30px)] leading-[1.08]',
+  sm: 'text-[clamp(10px,3.2cqw,13px)] leading-[1.34]',
+  md: 'text-[clamp(12px,4.4cqw,18px)] leading-[1.26]',
+  lg: 'text-[clamp(17px,7.2cqw,31px)] leading-[1.07]',
 };
 
 const gridSizeClasses: Record<FeedStoryOverlay['size'], Record<'short' | 'regular' | 'long', string>> = {
   sm: {
-    short: 'text-[clamp(8px,3.2cqw,10px)] leading-[1.18]',
-    regular: 'text-[clamp(7px,2.8cqw,9px)] leading-[1.2]',
-    long: 'text-[clamp(6px,2.5cqw,8px)] leading-[1.22]',
+    short: 'text-[clamp(9px,3.6cqw,11px)] leading-[1.18]',
+    regular: 'text-[clamp(8px,3.1cqw,10px)] leading-[1.2]',
+    long: 'text-[clamp(7px,2.8cqw,9px)] leading-[1.22]',
   },
   md: {
-    short: 'text-[clamp(10px,4.8cqw,13px)] leading-[1.12]',
-    regular: 'text-[clamp(9px,4cqw,11px)] leading-[1.16]',
-    long: 'text-[clamp(8px,3.4cqw,10px)] leading-[1.18]',
+    short: 'text-[clamp(11px,5.1cqw,14px)] leading-[1.12]',
+    regular: 'text-[clamp(10px,4.3cqw,12px)] leading-[1.16]',
+    long: 'text-[clamp(9px,3.7cqw,11px)] leading-[1.18]',
   },
   lg: {
-    short: 'text-[clamp(13px,7cqw,17px)] leading-[1.02]',
-    regular: 'text-[clamp(11px,5.8cqw,15px)] leading-[1.06]',
-    long: 'text-[clamp(9px,4.8cqw,13px)] leading-[1.08]',
+    short: 'text-[clamp(14px,7.5cqw,18px)] leading-[1.02]',
+    regular: 'text-[clamp(12px,6.2cqw,16px)] leading-[1.06]',
+    long: 'text-[clamp(10px,5.1cqw,14px)] leading-[1.08]',
   },
 };
 
@@ -116,7 +116,7 @@ function FeedStoryCourseMap({
         ))}
       </svg>
       {showLabels && (
-        <span className="flex min-w-0 items-center gap-1 overflow-hidden text-[clamp(8px,2.3cqw,10px)] leading-tight" aria-label="코스 순서">
+          <span className="flex min-w-0 items-center gap-1 overflow-hidden text-[clamp(9px,2.8cqw,11px)] leading-tight" aria-label="코스 순서">
           {visible.length > 0
             ? visible.map((place, index) => (
                 <span key={place.id} className="min-w-0 max-w-[46%] truncate">

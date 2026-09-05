@@ -5,7 +5,7 @@ import {
   type RequestAuthVerifier,
 } from "./auth/requestAuth.js";
 import { users, sessions, restaurants, swipes, courses, courseItems, sessionMembers } from "../shared/schema.js";
-import { eq, and, inArray } from "drizzle-orm";
+import { desc, eq, and, inArray } from "drizzle-orm";
 import { nanoid } from "nanoid";
 import { MOCK_RESTAURANTS, MOCK_COURSES } from "./melbourneData.js";
 import { buildSlate, buildControlSlate, assignVariant } from "./engine/scorer.js";
@@ -310,6 +310,70 @@ function mockCoursesResponse() {
     creatorId: c.author_id,
     savedCount: 0,
   }));
+}
+
+function toIsoDate(input: unknown): string {
+  if (!input) return new Date(0).toISOString();
+  if (input instanceof Date) return input.toISOString();
+  try { return new Date(input as string | number | Date).toISOString(); } catch {
+    return new Date(0).toISOString();
+  }
+}
+
+function normalizeFeedItemPayload(
+  course: {
+    id: string;
+    author_id?: string | null;
+    creatorId?: string | null;
+    title?: string | null;
+    description?: string | null;
+    hero_image?: string | null;
+    feed_photos?: string[] | null;
+    feed_decor?: unknown[] | null;
+    feed_story?: unknown[] | null;
+    template_id?: string | null;
+    likes_count?: number | null;
+    saves_count?: number | null;
+    comments_count?: number | null;
+    tags?: string[] | null;
+    hashtags?: string[] | null;
+    created_at?: Date | string | null;
+  },
+  options: {
+    authorName?: string | null;
+    authorImage?: string | null;
+    stops?: unknown[];
+  },
+) {
+  const photos = Array.isArray(course.feed_photos) ? course.feed_photos.filter((photo): photo is string => typeof photo === "string") : [];
+  const storySlides = Array.isArray(course.feed_story) ? course.feed_story : [];
+  const decor = Array.isArray(course.feed_decor) ? course.feed_decor : [];
+  const normalizedPhotos = photos.length > 0 ? photos : (course.hero_image ? [course.hero_image] : []);
+  const tags = Array.isArray(course.tags) ? course.tags : [];
+  const courseId = course.id;
+  const creatorId = course.creatorId ?? course.author_id ?? "";
+
+  return {
+    id: `feed:${course.id}`,
+    creatorId,
+    courseId,
+    title: course.title ?? "",
+    description: course.description ?? "",
+    photos: normalizedPhotos,
+    storySlides,
+    decor,
+    templateId: course.template_id ?? undefined,
+    likesCount: Number(course.likes_count) || 0,
+    savesCount: Number(course.saves_count) || 0,
+    dislikes: 0,
+    comments: [],
+    tags,
+    stops: options.stops ?? [],
+    createdAt: toIsoDate(course.created_at ?? undefined),
+    authorName: options.authorName ?? undefined,
+    authorImage: options.authorImage ?? undefined,
+    commentsCount: Number(course.comments_count) || 0,
+  };
 }
 
 // Users
@@ -858,6 +922,186 @@ router.get("/courses", async (req: any, res: any) => {
     return res.json(formattedCourses.length > 0 ? formattedCourses : mockCoursesResponse());
   }
   res.json(mockCoursesResponse());
+});
+
+router.get("/feed", async (req: any, res: any) => {
+  const fallbackFeed = () => {
+    const all = mockCoursesResponse();
+    const pageSize = Number.parseInt(String(req.query.limit ?? "8"), 10);
+    const limit = Number.isFinite(pageSize) && pageSize > 0 ? Math.min(pageSize, 50) : 8;
+    const cursor = Number.parseInt(String(req.query.cursor ?? "0"), 10);
+    const start = Number.isFinite(cursor) && cursor >= 0 ? cursor : 0;
+    const paged = all.slice(start, start + limit);
+    const nextCursor = paged.length < all.length ? String(start + paged.length) : null;
+    const items = paged.map(course => normalizeFeedItemPayload(course, {
+      stops: course.stops
+        .map(stop => ({
+          placeId: stop.placeId,
+          restaurant: {
+            name: `Restaurant ${stop.placeId}`,
+            latitude: 0,
+            longitude: 0,
+            category: "기타",
+            address: "",
+          },
+          startTime: stop.startTime,
+          endTime: stop.endTime,
+        })),
+      authorName: "Lunchie 사용자",
+    }));
+    return res.json({
+      items,
+      nextCursor,
+      hasMore: Boolean(nextCursor),
+      policyVersion: ENGINE_MODEL_VERSION,
+    });
+  };
+
+  const rawLimit = Number.parseInt(String(req.query.limit ?? "8"), 10);
+  const limit = Number.isFinite(rawLimit) && rawLimit > 0 ? Math.min(rawLimit, 50) : 8;
+  const rawCursor = Number.parseInt(String(req.query.cursor ?? "0"), 10);
+  const cursor = Number.isFinite(rawCursor) && rawCursor >= 0 ? rawCursor : 0;
+
+  const dbRes = await tryDb(async () => {
+    const rows = await db
+      .select({
+        id: courses.id,
+        author_id: courses.author_id,
+        title: courses.title,
+        description: courses.description,
+        hero_image: courses.hero_image,
+        feed_photos: courses.feed_photos,
+        feed_decor: courses.feed_decor,
+        feed_story: courses.feed_story,
+        template_id: courses.template_id,
+        likes_count: courses.likes_count,
+        saves_count: courses.saves_count,
+        comments_count: courses.comments_count,
+        created_at: courses.created_at,
+        is_public: courses.is_public,
+        tags: courses.tags,
+        hashtags: courses.hashtags,
+      })
+      .from(courses)
+      .where(eq(courses.is_public, true))
+      .orderBy(desc(courses.created_at))
+      .offset(cursor)
+      .limit(limit + 1);
+
+    const page = rows.slice(0, limit);
+    if (page.length === 0) {
+      return { items: [] as any[], hasMore: false, nextCursor: null as string | null };
+    }
+    const pageCourseIds = page.map(row => row.id);
+    const [courseItemsRows, authorRows] = await Promise.all([
+      db
+        .select()
+        .from(courseItems)
+        .where(inArray(courseItems.course_id, pageCourseIds)),
+      (async () => {
+        const authorIds = Array.from(new Set(page.map(row => row.author_id).filter(Boolean)));
+        if (!authorIds.length) return [] as Array<{ id: string; username: string | null; profile_image_url: string | null; }>;
+        return db
+          .select({
+            id: users.id,
+            username: users.username,
+            profile_image_url: users.profile_image_url,
+          })
+          .from(users)
+          .where(inArray(users.id, authorIds));
+      })(),
+    ]);
+
+    const restaurantIds = Array.from(new Set(courseItemsRows.map(item => item.restaurant_id)));
+    const restaurantRows = restaurantIds.length
+      ? await db
+        .select({
+          id: restaurants.id,
+          name: restaurants.name,
+          category: restaurants.category,
+          address: restaurants.address,
+          latitude: restaurants.latitude,
+          longitude: restaurants.longitude,
+        })
+        .from(restaurants)
+        .where(inArray(restaurants.id, restaurantIds))
+      : [];
+
+    const itemsByCourse = new Map<string, typeof courseItemsRows>();
+    for (const item of courseItemsRows) {
+      const list = itemsByCourse.get(item.course_id) ?? [];
+      list.push(item);
+      itemsByCourse.set(item.course_id, list);
+    }
+    itemsByCourse.forEach(stops => {
+      stops.sort((a: (typeof courseItemsRows)[number], b: (typeof courseItemsRows)[number]) =>
+        a.order_index - b.order_index);
+    });
+    const authorsById = new Map<string, { name: string; image?: string | null }>();
+    for (const author of authorRows as any[]) {
+      authorsById.set(author.id, {
+        name: typeof author.username === "string" ? author.username : "Lunchie 사용자",
+        image: author.profile_image_url ?? null,
+      });
+    }
+
+    const restaurantsById = new Map<string, {
+      name: string;
+      category: string;
+      address: string;
+      latitude: number;
+      longitude: number;
+    }>();
+    for (const restaurant of restaurantRows as any[]) {
+      restaurantsById.set(restaurant.id, restaurant);
+    }
+
+    const items = page.map(row => {
+      const stops = itemsByCourse.get(row.id)?.map(item => ({
+        placeId: item.restaurant_id,
+        ...(restaurantsById.get(item.restaurant_id)
+          ? {
+            restaurant: {
+              name: restaurantsById.get(item.restaurant_id)!.name,
+              latitude: restaurantsById.get(item.restaurant_id)!.latitude,
+              longitude: restaurantsById.get(item.restaurant_id)!.longitude,
+              category: restaurantsById.get(item.restaurant_id)!.category,
+              address: restaurantsById.get(item.restaurant_id)!.address,
+            },
+          }
+          : {}),
+        startTime: item.start_time ?? undefined,
+        endTime: item.end_time ?? undefined,
+      }));
+      const authorInfo = authorsById.get(row.author_id) ?? { name: "Lunchie 사용자", image: null };
+      return normalizeFeedItemPayload(row as any, {
+        stops,
+        authorName: authorInfo.name,
+        authorImage: authorInfo.image,
+      });
+    });
+
+    const hasMore = rows.length > limit;
+    return {
+      items,
+      hasMore,
+      nextCursor: hasMore ? String(cursor + limit) : null,
+    };
+  });
+
+  if (!dbRes.ok) {
+    return fallbackFeed();
+  }
+
+  if (dbRes.value.items.length === 0) {
+    return fallbackFeed();
+  }
+  return res.json({
+    items: dbRes.value.items,
+    nextCursor: dbRes.value.nextCursor,
+    hasMore: Boolean(dbRes.value.hasMore),
+    policyVersion: ENGINE_MODEL_VERSION,
+  });
 });
 
 // Swipes

@@ -23,8 +23,6 @@ describe('SavedPage list bookmark presentation', () => {
   });
 
   it('presents every saved item as a course without restaurant/course filters', () => {
-    expect(savedSource).toContain('저장한 코스를 한곳에 모았어요');
-    expect(savedSource).toContain('{savedCourseRecords.length}개');
     expect(savedSource).toContain('visibleRecords.map(record =>');
     expect(savedSource).toContain('savedCourseRecords');
     expect(savedSource).not.toContain("localStorage.getItem('lm_saved')");

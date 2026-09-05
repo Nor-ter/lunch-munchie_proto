@@ -18,11 +18,13 @@ describe('FeedDetailPage saved view navigation', () => {
     expect(source).toContain('profileFeed.posts.find(item => item.id === id)');
   });
 
-  it('centers the header title without owner edit and delete actions', () => {
-    expect(source).toContain('grid grid-cols-[40px_1fr_40px] items-center');
-    expect(source).toContain('text-center text-[15px] font-black');
+  it('uses a floating back button without the detail header wrapper', () => {
+    expect(source).toContain('fixed left-4 top-[max(12px,env(safe-area-inset-top))] z-30');
+    expect(source).toContain('<BackButton');
     expect(source).toContain("import BackButton from '@/components/ui/BackButton'");
-    expect(source).toContain('pt-[max(12px,env(safe-area-inset-top))]');
+    expect(source).not.toContain('grid grid-cols-[40px_1fr_40px] items-center');
+    expect(source).not.toContain('text-center text-[15px] font-black');
+    expect(source).not.toContain('Munchie Feed');
     expect(source).not.toContain('aria-label="피드 수정"');
     expect(source).not.toContain('aria-label="피드 삭제"');
     expect(source).not.toContain('deletePost');

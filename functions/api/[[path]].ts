@@ -4765,11 +4765,14 @@ app.get("/api/feed", async (c) => {
       ? await courseStatement.bind(requestedAuthorId).all()
       : await courseStatement.all();
 
-    const feedItems = [];
-    for (const course of courses as any[]) {
+    // Each course is independent. Building these sequentially made the local
+    // feed look empty for several seconds while D1 queries ran one course at a
+    // time. Keep the canonical result order while resolving course media and
+    // engagement metadata concurrently.
+    const feedItems = await Promise.all((courses as any[]).map(async (course) => {
       const stops = await courseStops(c.env, course.id);
-      feedItems.push(await feedResponseForCourse(c.env, course, stops));
-    }
+      return feedResponseForCourse(c.env, course, stops);
+    }));
 
     // Preserve the legacy array response for initial/home hydration. The
     // Munchie page opts into a stable, personalised page contract with

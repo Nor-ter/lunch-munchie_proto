@@ -103,35 +103,32 @@ export default function MunchieFeedPage() {
 
   return (
     <div className="min-h-dvh bg-[#FFF7F2] pb-[calc(65px+43px+1rem)]">
-      <header className="sticky top-0 z-30 border-b border-[#EAD7CE] bg-[#FFFDFC] px-4 py-3">
-        <div className="flex items-center justify-between gap-4">
-          <h1 className="text-[22px] font-black leading-none tracking-[-0.03em] text-[#DB2837]">MUNCHIE FEED</h1>
-          <div className="flex gap-2">
-            <button
-              type="button"
-              onClick={() => {
-                if (searchOpen) {
-                  setSearchInput('');
-                  setSearchTerm('');
-                }
-                setSearchOpen(open => !open);
-              }}
-              aria-label={searchOpen ? '사용자 검색 닫기' : '사용자 검색 열기'}
-              aria-expanded={searchOpen}
-              className={`flex h-9 w-9 items-center justify-center rounded-full border-2 active:scale-95 ${searchOpen ? 'border-[#E96A6D] bg-[#E96A6D] text-white' : 'border-[#E7CFC4] bg-[#FFF8F4] text-[#9A7468]'}`}
-            >
-              {searchOpen ? <X size={18} /> : <Search size={18} />}
-            </button>
-            <button
-              type="button"
-              onClick={() => setShowFilters(current => !current)}
-              aria-label="필터 보기"
-              aria-pressed={showFilters}
-              className={`flex h-9 w-9 items-center justify-center rounded-full border-2 active:scale-95 ${showFilters ? 'border-[#BFD7C8] bg-[#F1FAF4] text-[#4D7D63]' : 'border-[#D8E3DC] bg-[#F8FCFA] text-[#5F7A6B]'}`}
-            >
-              <SlidersHorizontal size={18} />
-            </button>
-          </div>
+      <div className="fixed right-3 top-[calc(env(safe-area-inset-top)+12px)] z-40 flex w-[min(84vw,360px)] flex-col items-end gap-2 px-1">
+        <div className="flex justify-end gap-2">
+          <button
+            type="button"
+            onClick={() => {
+              if (searchOpen) {
+                setSearchInput('');
+                setSearchTerm('');
+              }
+              setSearchOpen(open => !open);
+            }}
+            aria-label={searchOpen ? '사용자 검색 닫기' : '사용자 검색 열기'}
+            aria-expanded={searchOpen}
+            className={`flex h-9 w-9 items-center justify-center rounded-full border-2 active:scale-95 ${searchOpen ? 'border-[#E96A6D] bg-[#E96A6D] text-white' : 'border-[#E7CFC4] bg-[#FFF8F4] text-[#9A7468]'}`}
+          >
+            {searchOpen ? <X size={18} /> : <Search size={18} />}
+          </button>
+          <button
+            type="button"
+            onClick={() => setShowFilters(current => !current)}
+            aria-label="필터 보기"
+            aria-pressed={showFilters}
+            className={`flex h-9 w-9 items-center justify-center rounded-full border-2 active:scale-95 ${showFilters ? 'border-[#BFD7C8] bg-[#F1FAF4] text-[#4D7D63]' : 'border-[#D8E3DC] bg-[#F8FCFA] text-[#5F7A6B]'}`}
+          >
+            <SlidersHorizontal size={18} />
+          </button>
         </div>
 
         {searchOpen && <div className="relative mt-3">
@@ -174,7 +171,7 @@ export default function MunchieFeedPage() {
                       type="button"
                       key={filter.value}
                       onClick={() => setActiveFilter(filter.value)}
-                      className="h-8 shrink-0 rounded-[10px] px-3 text-[10px] font-black transition-transform active:scale-95"
+                      className="h-8 shrink-0 rounded-[10px] px-3 text-[11px] font-black transition-transform active:scale-95"
                       style={filter.value === 'all'
                         ? activeFilter === filter.value
                           ? { background: '#EE7775', color: '#FFFFFF' }
@@ -195,7 +192,7 @@ export default function MunchieFeedPage() {
                       <motion.span
                         initial={{ opacity: 0, scale: 0.9 }}
                         animate={{ opacity: 1, scale: 1 }}
-                        className="shrink-0 rounded-full bg-[#EAF5EE] px-2.5 py-1 text-[10px] font-black text-[#4D7D63]"
+                        className="shrink-0 rounded-full bg-[#EAF5EE] px-2.5 py-1 text-[11px] font-black text-[#4D7D63]"
                       >
                         {appliedLocation.radiusKm}km 적용 중
                       </motion.span>
@@ -301,9 +298,9 @@ export default function MunchieFeedPage() {
             </motion.div>
           )}
         </AnimatePresence>}
-      </header>
+      </div>
 
-      <main className="px-2 py-3">
+      <main className={`px-2 py-3 ${searchActive ? 'pt-32' : 'pt-16'}`}>
         {searchActive ? (
           <section aria-label="사용자 검색 결과" className="overflow-hidden rounded-[22px] border border-[#E9D8CF] bg-white shadow-[0_8px_24px_rgba(89,56,42,0.07)]">
             {auth.isLoading ? (
@@ -352,7 +349,15 @@ export default function MunchieFeedPage() {
             )}
           </section>
         ) : <>
-        <div data-ui="munchie-feed-grid" className="grid grid-cols-2 items-start gap-x-2">
+        {isLoadingMoreFeedPosts && feedPosts.length === 0 ? (
+          <div
+            role="status"
+            className="flex min-h-[45vh] items-center justify-center gap-2 text-[13px] font-bold text-[#907A70]"
+          >
+            <LoaderCircle className="size-5 animate-spin" />
+            Munchie 피드를 불러오는 중…
+          </div>
+        ) : <div data-ui="munchie-feed-grid" className="grid grid-cols-2 items-start gap-x-2">
           {[0, 1].map(column => (
             <div key={column} data-feed-column={column + 1} className="flex min-w-0 flex-col gap-4">
               <AnimatePresence mode="popLayout">
@@ -370,9 +375,9 @@ export default function MunchieFeedPage() {
               </AnimatePresence>
             </div>
           ))}
-        </div>
+        </div>}
 
-        {filteredPosts.length === 0 && (
+        {!isLoadingMoreFeedPosts && filteredPosts.length === 0 && (
           <div className="mt-4 rounded-[26px] border border-dashed border-[#DCCBC0] bg-white px-6 py-16 text-center">
             <div className="mb-3 text-5xl">🍽️</div>
             <p className="text-[16px] font-black text-[#2D211C]">{appliedLocation ? '이 반경에는 피드가 없어요' : '아직 Munchie 피드가 없어요'}</p>

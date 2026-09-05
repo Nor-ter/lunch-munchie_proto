@@ -11,7 +11,7 @@ test('feed page starts with filter options closed', async ({ page }) => {
   }));
 
   await page.goto('/feed');
-  await expect(page.getByRole('heading', { name: 'MUNCHIE FEED' })).toBeVisible();
+  await expect(page.getByRole('button', { name: '사용자 검색 열기' })).toBeVisible();
   await expect(page.getByRole('button', { name: '필터 보기' })).toHaveAttribute('aria-pressed', 'false');
   await expect(page.getByText('근처 피드')).toHaveCount(0);
 
