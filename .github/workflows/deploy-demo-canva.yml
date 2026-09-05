@@ -1,0 +1,43 @@
+name: Deploy Cloudflare demo-canva
+
+on:
+  push:
+    branches: [demo-canva]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cloudflare-demo-canva
+  cancel-in-progress: true
+
+jobs:
+  verify-and-deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: corepack enable
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm exec playwright install --with-deps chromium
+
+      # Never publish a demo commit that fails the repository quality gate.
+      - run: npm run test:precommit
+
+      # The demo reuses the already-provisioned Lunchie bindings. Database
+      # migrations and the state Worker remain production-workflow concerns.
+      - name: Build and deploy demo Pages
+        run: |
+          pnpm exec vite build
+          pnpm exec wrangler pages deploy dist/public \
+            --project-name=lunchie-munchie-demo-canva \
+            --branch=demo-canva \
+            --commit-hash="${{ github.sha }}"
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_WORKER_DEPLOY_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          VITE_GOOGLE_MAPS_API_KEY: ${{ secrets.VITE_GOOGLE_MAPS_API_KEY || vars.VITE_GOOGLE_MAPS_API_KEY || secrets.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY || vars.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY }}
+          NEXT_PUBLIC_GOOGLE_MAPS_API_KEY: ${{ secrets.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY || vars.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY }}

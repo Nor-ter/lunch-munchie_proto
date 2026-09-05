@@ -15,6 +15,7 @@ const selfTest = process.argv.includes("--self-test");
 
 const APPROVED_WRANGLER_PATHS = new Set([
   ".github/workflows/deploy-cloudflare.yml",
+  ".github/workflows/deploy-demo-canva.yml",
   "package.json",
   "scripts/configureGoogleAuthSecrets.mjs",
   "scripts/uploadPhotosR2.ts",
@@ -132,6 +133,28 @@ export function validateFile(file, content) {
     }
     if (/\bwrangler\s+r2\b/.test(content) || /\bwrangler\s+d1\s+execute\b/.test(content)) {
       errors.push(`${file}: CI는 R2 작업이나 임의 D1 SQL을 실행할 수 없습니다.`);
+    }
+    for (const secret of content.matchAll(/secrets\.([A-Z0-9_]+)/g)) {
+      if (!APPROVED_SECRET_NAMES.has(secret[1])) {
+        errors.push(`${file}: 승인되지 않은 Cloudflare Actions secret '${secret[1]}'입니다.`);
+      }
+    }
+  }
+
+  if (file === ".github/workflows/deploy-demo-canva.yml") {
+    const required = [
+      "branches: [demo-canva]",
+      "wrangler pages deploy dist/public",
+      "--project-name=lunchie-munchie-demo-canva",
+      "--branch=demo-canva",
+    ];
+    for (const command of required) {
+      if (!content.includes(command)) {
+        errors.push(`${file}: 승인된 데모 배포 설정이 변경·누락됐습니다: ${command}`);
+      }
+    }
+    if (/\bwrangler\s+(?:d1|r2|deploy)\b/.test(content) || /pages\s+secret\s+(?:put|delete|bulk)\b/.test(content)) {
+      errors.push(`${file}: 데모 CI는 Pages 정적/Functions 배포 외 Cloudflare 리소스를 변경할 수 없습니다.`);
     }
     for (const secret of content.matchAll(/secrets\.([A-Z0-9_]+)/g)) {
       if (!APPROVED_SECRET_NAMES.has(secret[1])) {

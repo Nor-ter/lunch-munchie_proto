@@ -9,8 +9,9 @@ Cloudflare에서 이 정책이 허용하는 리소스는 아래뿐이다. 이름
 
 | 구분 | 허용 리소스 | 허용 목적 |
 | --- | --- | --- |
-| GitHub | `PlanJoker/lunch-munchie_proto` | 코드 검토, 품질 검사, 운영 배포 자동화 |
+| GitHub | `Nor-ter/lunch-munchie_proto` | 코드 검토, 품질 검사, 운영·데모 배포 자동화 |
 | Pages | 프로젝트 `lunchie-munchie` / `lunchie-munchie.pages.dev` | `main`의 공개 운영 사이트 배포 |
+| Pages 데모 | 프로젝트 `lunchie-munchie-demo-canva` / `lunchie-munchie-demo-canva.pages.dev` | `demo-canva` 브랜치의 격리된 UI 데모 배포 |
 | D1 | `lunchie-db` (`7d0e2717-d86d-42f8-9104-e02f33797695`) | 커밋된 마이그레이션 적용 및 앱 런타임 데이터 저장 |
 | Worker / Durable Objects | 스크립트 `lunchie-munchie-state` | `USER_DO`, `SESSION_DO` 상태 객체 배포·실행 |
 | R2 | 버킷 `lunchie-photos` | 앱이 소유권 확인을 거친 게시물 사진 저장·조회·삭제 |
@@ -39,7 +40,7 @@ Cloudflare UI가 특정 권한을 리소스 단위로 좁힐 수 있으면 반�
 | GitHub Secret | 필요한 Cloudflare 권한 | 사용할 수 있는 명령 / 대상 | 명시적 제외 |
 | --- | --- | --- | --- |
 | `CLOUDFLARE_D1_MIGRATIONS_TOKEN` | D1 Edit — `lunchie-db`만 | `wrangler d1 migrations apply lunchie-db --remote` | 다른 DB, 임의 SQL·데이터 내보내기, R2, Pages, Worker, DNS, 멤버, 결제 |
-| `CLOUDFLARE_WORKER_DEPLOY_TOKEN` | Workers Scripts Edit — `lunchie-munchie-state`; Durable Objects Edit — 해당 스크립트; Pages Edit — `lunchie-munchie` | `wrangler deploy --config wrangler.state.toml`, `wrangler pages secret put GOOGLE_MAPS_SERVER_API_KEY …`, `wrangler pages deploy … --project-name=lunchie-munchie --branch=main` | D1, R2, 다른 런타임 비밀값 읽기/변경, DNS, Access/Zero Trust, 멤버, 결제, 다른 Worker/Pages |
+| `CLOUDFLARE_WORKER_DEPLOY_TOKEN` | Workers Scripts Edit — `lunchie-munchie-state`; Durable Objects Edit — 해당 스크립트; Pages Edit — `lunchie-munchie`, `lunchie-munchie-demo-canva` | 운영 Worker/Pages 명령과 `wrangler pages deploy … --project-name=lunchie-munchie-demo-canva --branch=demo-canva` | D1, R2, 데모 CI의 런타임 비밀값 변경, DNS, Access/Zero Trust, 멤버, 결제, 그 밖의 Worker/Pages |
 | `CLOUDFLARE_ACCOUNT_ID` | 권한 없음(식별자) | 위 두 명령의 대상 계정 지정 | 인증 수단으로 사용 금지 |
 | `VITE_GOOGLE_MAPS_API_KEY` | Cloudflare 권한 없음(브라우저용 Google API 키) | GitHub `production` 환경에서 Pages 운영 번들을 빌드할 때만 `VITE_GOOGLE_MAPS_API_KEY`로 주입 | 서버용 Google API, OAuth, 다른 저장소·환경, 로컬 기본값으로 사용 금지 |
 | `NEXT_PUBLIC_GOOGLE_MAPS_API_KEY` | Cloudflare 권한 없음(브라우저용 Google API 키) | 향후 Next.js 클라이언트 빌드 호환용으로 동일한 GitHub `production` 환경에서만 주입 | 서버용 Google API, OAuth, 다른 저장소·환경, 로컬 기본값으로 사용 금지 |
@@ -54,13 +55,17 @@ Cloudflare Pages 런타임 Secrets는 원칙적으로 GitHub에 복제하지 않
 ```text
 feature branch → Pull Request → quality.yml 통과 → main 병합
  → D1 migrations → state Worker/DO → Pages 지도 서버 secret → Pages production
+
+demo-canva push → 동일한 전체 quality gate → Pages demo-canva
+  (D1 migration·Worker 배포·Pages secret 변경 없음)
 ```
 
 1. `.github/workflows/quality.yml`은 PR과 브랜치 푸시에서 타입 검사, Vitest, 로컬 Playwright E2E, Pages 빌드를 실행한다.
 2. `.github/workflows/deploy-cloudflare.yml`은 `main` push에서만 실행된다. 작업 순서는 **D1 마이그레이션 → Durable Object Worker → Pages 지도 서버 secret 동기화 → Pages**로 고정한다. 서버 키가 없으면 Pages 배포 전에 실패해야 한다.
-3. 일반 개발자는 `wrangler … --remote`, `wrangler deploy`, `wrangler pages deploy`를 운영 대상으로 직접 실행하지 않는다.
-4. `--no-verify`, 강제 푸시, CI 우회, GitHub secret을 로컬/코드에 복사하는 행위는 금지한다.
-5. `main`에는 PR·필수 quality check·최소 1명 리뷰를 요구한다. GitHub `production` Environment 승인 규칙을 켰다면 승인 후에만 배포한다.
+3. `.github/workflows/deploy-demo-canva.yml`은 `demo-canva` push에서 전체 품질 검사를 통과한 커밋만 별도 데모 Pages에 배포한다. 이 워크플로는 D1 마이그레이션, Worker 배포, Pages secret 변경을 실행하지 않는다.
+4. 일반 개발자는 `wrangler … --remote`, `wrangler deploy`, `wrangler pages deploy`를 운영 대상으로 직접 실행하지 않는다.
+5. `--no-verify`, 강제 푸시, CI 우회, GitHub secret을 로컬/코드에 복사하는 행위는 금지한다.
+6. `main`에는 PR·필수 quality check·최소 1명 리뷰를 요구한다. GitHub `production` Environment 승인 규칙을 켰다면 승인 후에만 배포한다.
 
 ## 5. 데이터·마이그레이션 안전 규칙
 
@@ -87,7 +92,7 @@ feature branch → Pull Request → quality.yml 통과 → main 병합
 `.githooks/pre-commit`은 `check:cloudflare-policy:staged`를 가장 먼저 실행한다. 다음 항목이 staged 변경에 들어오면 품질 검사 전에 커밋을 차단한다.
 
 - `.env`, `.dev.vars` 또는 Cloudflare/OAuth 비밀값 리터럴
-- 승인된 배포 workflow·운영 도구 밖의 Wrangler 사용
+- 승인된 운영·데모 배포 workflow와 운영 도구 밖의 Wrangler 사용
 - `lunchie-db`, `lunchie-photos`, `lunchie-munchie-state` 외의 D1/R2/Worker 리소스
 - CI workflow의 임의 D1 SQL, R2 작업, 또는 승인되지 않은 GitHub Actions secret
 
