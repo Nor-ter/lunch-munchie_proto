@@ -126,10 +126,11 @@ test('mobile settings keeps the timer and vertical people wheel synchronized wit
   await expect(groupSize).toHaveAttribute('aria-valuetext', '혼자');
   await expect(page.getByRole('button', { name: '같이', exact: true })).toHaveCount(0);
 
+  await page.getByRole('button', { name: /식단 요구 사항/ }).click();
   const pescatarian = page.getByRole('button', { name: '🐟 Pescatarian', exact: true });
   await pescatarian.click();
   await expect(pescatarian).toHaveAttribute('aria-pressed', 'true');
-  await page.getByRole('button', { name: /Ingredients to avoid/ }).click();
+  await page.getByRole('button', { name: /피하고 싶은 재료/ }).click();
   const nuts = page.getByRole('button', { name: '🥜 Nuts', exact: true });
   await nuts.click();
   await expect(nuts).toHaveAttribute('aria-pressed', 'true');
@@ -219,9 +220,10 @@ test('solo start sends the new member credential and opens the restaurant deck',
   await page.goto('/lunchie/settings');
 
   await page.getByRole('option', { name: '혼자', exact: true }).click();
+  await page.getByRole('button', { name: /식단 요구 사항/ }).click();
   await page.getByRole('button', { name: '🥬 Vegetarian', exact: true }).click();
   await page.getByRole('button', { name: '🌾 Gluten-free', exact: true }).click();
-  await page.getByRole('button', { name: /Ingredients to avoid/ }).click();
+  await page.getByRole('button', { name: /피하고 싶은 재료/ }).click();
   await page.getByRole('button', { name: '🥛 Dairy', exact: true }).click();
   await page.getByRole('button', { name: '🥚 Eggs', exact: true }).click();
   await page.getByRole('button', { name: '🐟 Seafood', exact: true }).click();
