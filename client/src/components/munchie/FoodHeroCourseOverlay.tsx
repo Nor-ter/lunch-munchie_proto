@@ -227,6 +227,13 @@ export default function FoodHeroCourseOverlay({
   const hasNext = safeIndex < storySlides.length - 1;
   const activeHasCourseMap = activeSlide?.overlays.some(overlay => overlay.kind === 'course_map') ?? false;
   const gridStoryRatio = useMemo(() => resolveGridStoryRatio(storySlides), [storySlides]);
+  const layoutVariant = safeIndex % 4;
+  const slideScrims = [
+    'bg-gradient-to-b from-black/25 via-transparent to-black/45',
+    'bg-gradient-to-tr from-black/65 via-transparent to-transparent',
+    'bg-gradient-to-bl from-black/15 via-transparent to-black/60',
+    'bg-[linear-gradient(180deg,transparent_45%,rgba(28,17,12,0.68)_100%)]',
+  ];
 
   const showPrevious = () => setActiveIndex(index => Math.max(0, index - 1));
   const showNext = () => setActiveIndex(index => Math.min(storySlides.length - 1, index + 1));
@@ -269,6 +276,7 @@ export default function FoodHeroCourseOverlay({
       data-story-density={grid ? gridStoryRatio.density : undefined}
       data-state={activeSlide && !slideFailed ? 'photo' : 'empty'}
       data-slide-index={safeIndex}
+      data-layout-variant={`variant-${layoutVariant + 1}`}
       data-presentation={grid ? 'grid' : 'default'}
       className={`relative w-full touch-pan-y select-none overflow-hidden bg-[#30211B] text-white outline-none [container-type:inline-size] focus-visible:ring-4 focus-visible:ring-inset focus-visible:ring-white/90 ${grid ? '' : 'aspect-[4/5]'} ${className}`}
       style={grid ? { aspectRatio: gridStoryRatio.aspectRatio } : undefined}
@@ -314,7 +322,16 @@ export default function FoodHeroCourseOverlay({
                 className="absolute inset-0 h-full w-full object-cover"
                 draggable={false}
               />
-              <div className="pointer-events-none absolute inset-0 bg-gradient-to-b from-black/20 via-transparent to-black/50" />
+              <div className={`pointer-events-none absolute inset-0 ${slideScrims[layoutVariant]}`} />
+              {layoutVariant === 1 && (
+                <div className="pointer-events-none absolute bottom-[8%] left-[6%] top-[8%] w-px bg-white/75 shadow-[0_0_10px_rgba(255,255,255,0.45)]" />
+              )}
+              {layoutVariant === 2 && (
+                <div className="pointer-events-none absolute inset-x-[7%] bottom-[7%] h-px bg-white/70 shadow-[0_0_10px_rgba(255,255,255,0.35)]" />
+              )}
+              {layoutVariant === 3 && (
+                <div className="pointer-events-none absolute left-[6%] top-[7%] h-3 w-3 border-l-2 border-t-2 border-white/85" />
+              )}
               {activeSlide.overlays.map(overlay => (
                 <StoryOverlayItem key={overlay.id} overlay={overlay} stops={stops} compact={compact} grid={grid} />
               ))}

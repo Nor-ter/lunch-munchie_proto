@@ -136,7 +136,9 @@ describe('feed story model', () => {
     expect(slides[0]?.overlays).toEqual(expect.arrayContaining([
       expect.objectContaining({ kind: 'restaurant_name', text: 'Thai Town 코스' }),
     ]));
-    expect(slides[1]?.overlays).toEqual([]);
+    expect(slides[1]?.overlays).toEqual([
+      expect.objectContaining({ kind: 'text', text: 'MOMENT 02', x: 24, y: 78, tone: 'accent', align: 'left' }),
+    ]);
     expect(slides[2]?.overlays).toEqual([
       expect.objectContaining({ kind: 'review', text: '즐거운 저녁', x: 36, y: 74, tone: 'dark' }),
     ]);

@@ -297,6 +297,7 @@ export function buildDefaultFeedStorySlides(
       && slideStops.findIndex(item => item?.id === stop?.id) === slideIndex;
     const showIdentity = isFirstSlide || isFirstForStop;
     const contentX = slideIndex % 2 === 0 ? 70 : 30;
+    const isUnclassifiedMoment = !stop && !isFirstSlide && !isLastSlide;
 
     if (stops.length > 1 && isFirstSlide) {
       overlays.push({
@@ -336,6 +337,22 @@ export function buildDefaultFeedStorySlides(
         width: 42,
         tone: isFirstSlide ? 'light' : 'dark',
       }));
+    }
+    if (isUnclassifiedMoment) {
+      const momentPlacements = [
+        { x: 24, y: 78, align: 'left' as const, tone: 'accent' as const },
+        { x: 76, y: 22, align: 'right' as const, tone: 'dark' as const },
+        { x: 50, y: 82, align: 'center' as const, tone: 'light' as const },
+      ];
+      const placement = momentPlacements[(slideIndex - 1) % momentPlacements.length];
+      overlays.push(defaultTextOverlay(
+        `slide-${slideIndex}-moment`,
+        'text',
+        `MOMENT ${String(slideIndex + 1).padStart(2, '0')}`,
+        placement.y,
+        'sm',
+        { x: placement.x, width: 34, tone: placement.tone, align: placement.align },
+      ));
     }
     if (caption && (uniquePhotos.length === 1 || isLastSlide)) {
       overlays.push(defaultTextOverlay(`slide-${slideIndex}-review`, 'review', caption, isLastSlide ? 74 : 60, 'md', {
