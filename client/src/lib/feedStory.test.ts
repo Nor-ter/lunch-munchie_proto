@@ -111,11 +111,37 @@ describe('feed story model', () => {
     expect(slides[0]?.overlays).toEqual(expect.arrayContaining([
       expect.objectContaining({ kind: 'course_map', x: 70, y: 47, width: 42, size: 'sm' }),
       expect.objectContaining({ kind: 'restaurant_name', text: '첫 번째 식당', restaurantId: 'a', x: 70, y: 13, width: 38, size: 'sm' }),
-      expect.objectContaining({ kind: 'review', text: '두 곳 모두 좋았어요', x: 70, y: 60, width: 42, size: 'md' }),
+    ]));
+    expect(slides[0]?.overlays).not.toEqual(expect.arrayContaining([
+      expect.objectContaining({ kind: 'review', text: '두 곳 모두 좋았어요' }),
     ]));
     expect(slides[1]?.overlays).toEqual(expect.arrayContaining([
-      expect.objectContaining({ kind: 'restaurant_name', text: '두 번째 식당', restaurantId: 'b' }),
+      expect.objectContaining({ kind: 'restaurant_name', text: '두 번째 식당', restaurantId: 'b', x: 30, tone: 'dark' }),
+      expect.objectContaining({ kind: 'review', text: '두 곳 모두 좋았어요', x: 36, y: 74, width: 60, tone: 'dark', align: 'left' }),
     ]));
+  });
+
+  it('does not repeat one legacy title and caption across unclassified photos', () => {
+    const slides = buildDefaultFeedStorySlides([
+      '/photos/uploads/author/first.jpg',
+      '/photos/uploads/author/middle.jpg',
+      '/photos/uploads/author/last.jpg',
+    ], {
+      title: 'Thai Town 코스',
+      caption: '즐거운 저녁',
+      stops: [{ id: 'thai-town', name: 'Thai Town', category: '타이' }],
+      photoRestaurantIds: [undefined, undefined, undefined],
+    });
+
+    expect(slides[0]?.overlays).toEqual(expect.arrayContaining([
+      expect.objectContaining({ kind: 'restaurant_name', text: 'Thai Town 코스' }),
+    ]));
+    expect(slides[1]?.overlays).toEqual([]);
+    expect(slides[2]?.overlays).toEqual([
+      expect.objectContaining({ kind: 'review', text: '즐거운 저녁', x: 36, y: 74, tone: 'dark' }),
+    ]);
+    expect(slides.flatMap(slide => slide.overlays).filter(item => item.text === 'Thai Town 코스')).toHaveLength(1);
+    expect(slides.flatMap(slide => slide.overlays).filter(item => item.text === '즐거운 저녁')).toHaveLength(1);
   });
 
   it('uses explicit photo attribution before photo index when choosing restaurant overlays', () => {

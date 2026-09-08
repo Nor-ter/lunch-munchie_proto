@@ -277,20 +277,28 @@ export function buildDefaultFeedStorySlides(
   const duration = cleanText(context.durationLabel, 40);
   const hasExplicitPhotoAttribution = Array.isArray(context.photoRestaurantIds);
 
-  return uniquePhotos.map(({ photo, originalIndex }, slideIndex) => {
+  const slideStops = uniquePhotos.map(({ originalIndex }, slideIndex) => {
     const attributedRestaurantId = cleanText(context.photoRestaurantIds?.[originalIndex], 160);
-    const stop = stops.find(item => item.id === attributedRestaurantId)
-      ?? (hasExplicitPhotoAttribution
-        ? undefined
-        : (stops[slideIndex] ?? stops[0]));
+    return stops.find(item => item.id === attributedRestaurantId)
+      ?? (hasExplicitPhotoAttribution ? undefined : (stops[slideIndex] ?? stops[0]));
+  });
+
+  return uniquePhotos.map(({ photo }, slideIndex) => {
+    const stop = slideStops[slideIndex];
     const stopName = cleanText(stop?.name);
     const displayTitle = stopName ?? title ?? '나만의 Munchie 코스';
     const details = [cleanText(stop?.category), cleanText(stop?.address), distance, duration]
       .filter((value): value is string => Boolean(value))
       .join(' · ');
     const overlays: FeedStoryOverlay[] = [];
+    const isFirstSlide = slideIndex === 0;
+    const isLastSlide = slideIndex === uniquePhotos.length - 1;
+    const isFirstForStop = Boolean(stop?.id)
+      && slideStops.findIndex(item => item?.id === stop?.id) === slideIndex;
+    const showIdentity = isFirstSlide || isFirstForStop;
+    const contentX = slideIndex % 2 === 0 ? 70 : 30;
 
-    if (stops.length > 1) {
+    if (stops.length > 1 && isFirstSlide) {
       overlays.push({
         id: `slide-${slideIndex}-course-map`,
         kind: 'course_map',
@@ -305,22 +313,37 @@ export function buildDefaultFeedStorySlides(
         overlays.push(defaultTextOverlay(`slide-${slideIndex}-course-title`, 'text', title, 23, 'lg'));
       }
     }
-    overlays.push({
-      ...defaultTextOverlay(
-        `slide-${slideIndex}-title`,
-        'restaurant_name',
-        displayTitle,
-        stops.length > 1 ? 13 : 23,
-        stops.length > 1 ? 'sm' : 'lg',
-        { x: 70, width: stops.length > 1 ? 38 : 44 },
-      ),
-      ...(stop?.id ? { restaurantId: stop.id } : {}),
-    });
-    if (details) {
-      overlays.push(defaultTextOverlay(`slide-${slideIndex}-details`, 'text', details, 34, 'sm', { width: 42 }));
+    if (showIdentity) {
+      overlays.push({
+        ...defaultTextOverlay(
+          `slide-${slideIndex}-title`,
+          'restaurant_name',
+          displayTitle,
+          stops.length > 1 ? 13 : 23,
+          stops.length > 1 ? 'sm' : 'lg',
+          {
+            x: contentX,
+            width: stops.length > 1 ? 38 : 44,
+            tone: isFirstSlide ? 'light' : 'dark',
+          },
+        ),
+        ...(stop?.id ? { restaurantId: stop.id } : {}),
+      });
     }
-    if (caption) {
-      overlays.push(defaultTextOverlay(`slide-${slideIndex}-review`, 'review', caption, 60, 'md', { width: 42 }));
+    if (details && showIdentity) {
+      overlays.push(defaultTextOverlay(`slide-${slideIndex}-details`, 'text', details, 34, 'sm', {
+        x: contentX,
+        width: 42,
+        tone: isFirstSlide ? 'light' : 'dark',
+      }));
+    }
+    if (caption && (uniquePhotos.length === 1 || isLastSlide)) {
+      overlays.push(defaultTextOverlay(`slide-${slideIndex}-review`, 'review', caption, isLastSlide ? 74 : 60, 'md', {
+        x: isLastSlide && !isFirstSlide ? 36 : 70,
+        width: isLastSlide && !isFirstSlide ? 60 : 42,
+        tone: isLastSlide && !isFirstSlide ? 'dark' : 'light',
+        align: isLastSlide && !isFirstSlide ? 'left' : 'center',
+      }));
     }
 
     return { id: `slide-${slideIndex}`, photo, overlays: overlays.slice(0, MAX_FEED_STORY_OVERLAYS) };
