@@ -134,12 +134,21 @@ describe('FeedStoryEditor markup', () => {
     expect(html).toContain('src="/photos/uploads/author/a.jpg"');
     expect(html).toContain('첫 사진 정보');
     expect(html).not.toContain('둘째 사진 정보');
+    expect(html).toContain('1번 사진만 편집 중');
     expect(html).toContain('1번째 사진 선택');
     expect(html).toContain('2번째 사진 선택');
     for (const label of ['코스맵', '음식명', '식당명', '가격', '한줄평', '자유텍스트']) {
       expect(html).toContain(label);
     }
     expect(html).toContain('h-11 w-11');
+    expect(html).toContain('디자인');
+    expect(html).toContain('심플');
+    expect(html).toContain('반투명');
+    expect(html).toContain('빠른 위치');
+    expect(html).toContain('왼쪽 위에 배치');
+    expect(html).toContain('정가운데에 배치');
+    expect(html).toContain('오른쪽 아래에 배치');
+    expect(html).toContain('이 사진에만 저장돼요');
     expect(html).not.toContain('type="file"');
     expect(html).not.toContain('dangerouslySetInnerHTML');
   });

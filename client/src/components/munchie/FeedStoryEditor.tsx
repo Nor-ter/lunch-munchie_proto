@@ -67,10 +67,22 @@ const OVERLAY_CHOICES: Array<{
 ];
 
 const TONE_OPTIONS: Array<{ value: FeedStoryOverlayTone; label: string }> = [
-  { value: 'light', label: '밝게' },
-  { value: 'dark', label: '어둡게' },
+  { value: 'light', label: '심플' },
+  { value: 'dark', label: '반투명' },
   { value: 'accent', label: '포인트' },
 ];
+
+const POSITION_OPTIONS = [
+  { x: 18, y: 16, label: '왼쪽 위' },
+  { x: 50, y: 16, label: '가운데 위' },
+  { x: 82, y: 16, label: '오른쪽 위' },
+  { x: 18, y: 50, label: '왼쪽 가운데' },
+  { x: 50, y: 50, label: '정가운데' },
+  { x: 82, y: 50, label: '오른쪽 가운데' },
+  { x: 18, y: 84, label: '왼쪽 아래' },
+  { x: 50, y: 84, label: '가운데 아래' },
+  { x: 82, y: 84, label: '오른쪽 아래' },
+] as const;
 
 const SIZE_OPTIONS: Array<{ value: FeedStoryOverlaySize; label: string }> = [
   { value: 'sm', label: '작게' },
@@ -233,7 +245,9 @@ export default function FeedStoryEditor({
   className = '',
 }: FeedStoryEditorProps) {
   const [selectedSlideIndex, setSelectedSlideIndex] = useState(0);
-  const [selectedOverlayId, setSelectedOverlayId] = useState<string | null>(null);
+  const [selectedOverlayId, setSelectedOverlayId] = useState<string | null>(
+    () => slides[0]?.overlays[0]?.id ?? null,
+  );
   const canvasRef = useRef<HTMLDivElement | null>(null);
   const dragRef = useRef<{
     pointerId: number;
@@ -263,7 +277,7 @@ export default function FeedStoryEditor({
     if (slides.length === 0) return;
     const nextIndex = (index + slides.length) % slides.length;
     setSelectedSlideIndex(nextIndex);
-    setSelectedOverlayId(null);
+    setSelectedOverlayId(slides[nextIndex]?.overlays[0]?.id ?? null);
   };
 
   const addOverlay = (kind: FeedStoryOverlayKind) => {
@@ -358,7 +372,7 @@ export default function FeedStoryEditor({
           <ChevronLeft size={20} />
         </button>
         <div className="min-w-0 text-center">
-          <p className="text-[13px] font-black text-[#3C2A23]">사진별 오버레이 편집</p>
+          <p className="text-[13px] font-black text-[#3C2A23]">{selectedSlideIndex + 1}번 사진만 편집 중</p>
           <p className="mt-0.5 text-[10px] font-bold text-[#9B8277]" aria-live="polite" aria-atomic="true">
             {selectedSlideIndex + 1} / {slides.length} 사진
           </p>
@@ -442,7 +456,8 @@ export default function FeedStoryEditor({
               className={`relative h-14 w-14 overflow-hidden rounded-xl border-2 bg-[#EEE2DA] active:scale-95 ${index === selectedSlideIndex ? 'border-[#E94D55]' : 'border-white'}`}
             >
               <img src={slide.photo} alt="" className="h-full w-full object-cover" draggable={false} />
-              <span className="absolute bottom-0 right-0 rounded-tl-lg bg-black/60 px-1.5 py-0.5 text-[9px] font-black text-white">{index + 1}</span>
+              <span className="absolute bottom-0 left-0 rounded-tr-lg bg-black/60 px-1.5 py-0.5 text-[9px] font-black text-white">{index + 1}</span>
+              <span className="absolute right-0 top-0 rounded-bl-lg bg-[#E94D55]/90 px-1.5 py-0.5 text-[8px] font-black text-white">{slide.overlays.length}</span>
             </button>
           </li>
         ))}
@@ -523,7 +538,7 @@ export default function FeedStoryEditor({
 
           <div className="mt-3 grid gap-3 sm:grid-cols-2">
             <fieldset>
-              <legend className="text-[10px] font-black text-[#816B60]">톤</legend>
+              <legend className="text-[10px] font-black text-[#816B60]">디자인</legend>
               <div className="mt-1 grid grid-cols-3 gap-1">
                 {TONE_OPTIONS.map(option => (
                   <button
@@ -551,6 +566,23 @@ export default function FeedStoryEditor({
               </div>
             </fieldset>
           </div>
+
+          <fieldset className="mt-3">
+            <legend className="text-[10px] font-black text-[#816B60]">빠른 위치</legend>
+            <div className="mt-1 grid grid-cols-3 gap-1 rounded-xl bg-[#F8F0EB] p-1.5">
+              {POSITION_OPTIONS.map(position => (
+                <button
+                  key={position.label}
+                  type="button"
+                  onClick={() => updateSelected({ x: position.x, y: position.y })}
+                  aria-label={`${position.label}에 배치`}
+                  className="flex min-h-10 items-center justify-center rounded-lg bg-white text-[9px] font-black text-[#806B60] shadow-sm active:scale-95"
+                >
+                  {position.label}
+                </button>
+              ))}
+            </div>
+          </fieldset>
 
           <fieldset className="mt-3">
             <legend className="text-[10px] font-black text-[#816B60]">정렬</legend>
@@ -581,7 +613,7 @@ export default function FeedStoryEditor({
               aria-label="오버레이 너비"
             />
           </label>
-          <p className="mt-2 text-[10px] font-semibold leading-relaxed text-[#9C857A]">캔버스에서 정보를 드래그하거나 방향키로 이동할 수 있어요. Shift+방향키는 더 크게 움직여요.</p>
+          <p className="mt-2 rounded-xl bg-[#FFF6EF] px-3 py-2 text-[10px] font-semibold leading-relaxed text-[#8A7165]">지금 변경한 문구·코스맵·디자인·위치는 이 사진에만 저장돼요. 캔버스에서 드래그하거나 방향키로 더 세밀하게 이동할 수 있어요.</p>
         </section>
       )}
     </section>
