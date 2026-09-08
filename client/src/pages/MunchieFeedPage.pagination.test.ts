@@ -4,11 +4,15 @@ import { describe, expect, it } from 'vitest';
 const source = readFileSync(new URL('./MunchieFeedPage.tsx', import.meta.url), 'utf8');
 
 describe('MunchieFeedPage pagination', () => {
-  it('requests a fresh personalised batch and gives the user an explicit next-page control', () => {
+  it('requests a fresh personalised batch and automatically loads the next page near the bottom', () => {
     expect(source).toContain('refreshFeedPosts');
     expect(source).toContain('loadMoreFeedPosts');
     expect(source).toContain('hasMoreFeedPosts');
-    expect(source).toContain('더 많은 Munchie 보기');
+    expect(source).toContain('loadMoreSentinelRef');
+    expect(source).toContain('new IntersectionObserver');
+    expect(source).toContain("rootMargin: '400px 0px'");
+    expect(source).toContain('data-ui="feed-load-more-sentinel"');
+    expect(source).not.toContain('더 많은 Munchie 보기');
   });
 
   it('lets the user pin a map center, choose a kilometre radius, apply it, and clear it', () => {

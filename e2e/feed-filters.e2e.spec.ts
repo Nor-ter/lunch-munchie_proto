@@ -77,3 +77,53 @@ test('feed waits for the canonical first page instead of flashing bundled demo p
   await expect(page.getByTestId(`unified-munchie-card-${postId}`)).toBeVisible();
   await expect(page.locator('[data-testid^="unified-munchie-card-"]')).toHaveCount(1);
 });
+
+test('scrolling near the end automatically loads the next Munchie batch', async ({ page }) => {
+  const post = (index: number) => ({
+    id: `post-infinite-${index}`,
+    courseId: `course-infinite-${index}`,
+    creatorId: 'infinite-author',
+    authorName: '자동 로딩 테스트',
+    title: `자동 피드 ${index}`,
+    description: '스크롤 페이지네이션 검증',
+    heroImage: '',
+    photos: [],
+    decor: [],
+    templateId: null,
+    tags: ['맛집'],
+    stops: [],
+    likesCount: 0,
+    savesCount: 0,
+    commentsCount: 0,
+    comments: [],
+    createdAt: new Date(Date.now() - index * 1_000).toISOString(),
+  });
+  let nextPageRequests = 0;
+
+  await page.route('**/api/**', async route => {
+    const url = new URL(route.request().url());
+    if (url.pathname === '/api/feed') {
+      const cursor = url.searchParams.get('cursor') ?? '0';
+      if (cursor === '8') nextPageRequests += 1;
+      await route.fulfill({
+        contentType: 'application/json',
+        body: JSON.stringify(cursor === '8'
+          ? { items: [post(9)], nextCursor: null, hasMore: false }
+          : { items: Array.from({ length: 8 }, (_, index) => post(index + 1)), nextCursor: '8', hasMore: true }),
+      });
+      return;
+    }
+    if (url.pathname === '/api/auth/session') {
+      await route.fulfill({ contentType: 'application/json', body: JSON.stringify({ user: null }) });
+      return;
+    }
+    await route.fulfill({ contentType: 'application/json', body: '[]' });
+  });
+
+  await page.goto('/feed');
+  await expect(page.getByTestId('unified-munchie-card-post-infinite-8')).toBeVisible();
+  await expect(page.getByText('더 많은 Munchie 보기')).toHaveCount(0);
+  await page.locator('[data-ui="feed-load-more-sentinel"]').scrollIntoViewIfNeeded();
+  await expect(page.getByTestId('unified-munchie-card-post-infinite-9')).toBeVisible();
+  expect(nextPageRequests).toBe(1);
+});

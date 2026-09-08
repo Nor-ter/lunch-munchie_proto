@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { LoaderCircle, MapPin, RotateCcw, Search, SlidersHorizontal, X } from 'lucide-react';
 import { toast } from 'sonner';
@@ -32,6 +32,7 @@ export default function MunchieFeedPage() {
   const [appliedLocation, setAppliedLocation] = useState<FeedLocationFilter | null>(null);
   const [isApplyingLocation, setIsApplyingLocation] = useState(false);
   const [locationDetailsLoadingId, setLocationDetailsLoadingId] = useState<string | null>(null);
+  const loadMoreSentinelRef = useRef<HTMLDivElement | null>(null);
   const locationSearch = useLocationSearch(draftCenter ?? undefined);
   const hasMapsKey = Boolean(import.meta.env.VITE_GOOGLE_MAPS_API_KEY);
   useEffect(() => { void refreshFeedPosts(null).catch(() => undefined); }, [refreshFeedPosts]);
@@ -51,6 +52,25 @@ export default function MunchieFeedPage() {
         appliedLocation.radiusKm * 1_000,
       )))
     : categoryPosts;
+  useEffect(() => {
+    const sentinel = loadMoreSentinelRef.current;
+    if (
+      !sentinel
+      || activeFilter !== 'all'
+      || !hasMoreFeedPosts
+      || isLoadingMoreFeedPosts
+      || typeof IntersectionObserver === 'undefined'
+    ) return;
+
+    const observer = new IntersectionObserver(([entry]) => {
+      if (!entry?.isIntersecting) return;
+      void loadMoreFeedPosts().catch(error => {
+        toast.error(error instanceof Error ? error.message : '다음 피드를 불러오지 못했어요');
+      });
+    }, { rootMargin: '400px 0px' });
+    observer.observe(sentinel);
+    return () => observer.disconnect();
+  }, [activeFilter, filteredPosts.length, hasMoreFeedPosts, isLoadingMoreFeedPosts, loadMoreFeedPosts]);
   const searchActive = searchInput.trim().length > 0;
   const searchPending = searchActive
     && (searchTerm !== searchInput.trim() || userSearch.isLoading || userSearch.isFetching);
@@ -385,14 +405,14 @@ export default function MunchieFeedPage() {
           </div>
         )}
         {activeFilter === 'all' && filteredPosts.length > 0 && hasMoreFeedPosts && (
-          <button
-            type="button"
-            onClick={() => { void loadMoreFeedPosts(); }}
-            disabled={isLoadingMoreFeedPosts}
-            className="mx-auto mt-5 block rounded-full border border-[#F1C2B6] bg-white px-5 py-3 text-[13px] font-black text-[#D95359] disabled:opacity-50"
+          <div
+            ref={loadMoreSentinelRef}
+            data-ui="feed-load-more-sentinel"
+            aria-live="polite"
+            className="flex min-h-16 items-center justify-center py-5 text-[13px] font-black text-[#A97A70]"
           >
-            {isLoadingMoreFeedPosts ? '다음 피드를 불러오는 중…' : '더 많은 Munchie 보기'}
-          </button>
+            {isLoadingMoreFeedPosts && <><LoaderCircle className="mr-2 size-4 animate-spin" />다음 피드를 불러오는 중…</>}
+          </div>
         )}
         </>}
       </main>
