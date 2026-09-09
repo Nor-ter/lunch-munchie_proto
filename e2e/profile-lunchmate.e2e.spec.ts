@@ -262,6 +262,9 @@ test('returning from another profile preserves the Munchie Feed history entry', 
   await filterToggle.click();
   await expect(filterToggle).toHaveAttribute('aria-pressed', 'false');
 
+  // aria-pressed changes before AnimatePresence finishes collapsing the header.
+  // Capture scrollTop only after the filter leaves the DOM and stops shifting it.
+  await expect(categoryFilter).toHaveCount(0);
   await feedScroller.evaluate(element => element.scrollTo({ top: 1_200 }));
   const firstProfileLink = page.locator('main article').nth(4).getByRole('button', { name: 'Feed User', exact: true });
   await firstProfileLink.scrollIntoViewIfNeeded();
@@ -282,6 +285,7 @@ test('returning from another profile preserves the Munchie Feed history entry', 
   await filterToggle.click();
   await expect(filterToggle).toHaveAttribute('aria-pressed', 'false');
 
+  await expect(categoryFilter).toHaveCount(0);
   await feedScroller.evaluate(element => element.scrollTo({ top: 1_600 }));
   const secondProfileLink = page.locator('main article').nth(6).getByRole('button', { name: 'Feed User', exact: true });
   await secondProfileLink.scrollIntoViewIfNeeded();

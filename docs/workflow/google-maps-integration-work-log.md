@@ -577,3 +577,16 @@
 - Processing의 secondary 문구 전환 뒤 preview가 깨지고 다음 화면으로 넘어가지 않는 증상을 재현했다. Blob URL이 Processing DOM보다 먼저 revoke될 수 있었고, Processing 진입·이탈 사이에 `AnimatePresence` mode를 동적으로 바꾸면서 exiting child와 다음 phase가 대기 상태에 남는 경로가 함께 있었다.
 - preview object URL을 ref로 소유하고 Processing section의 실제 exit 완료 또는 component unmount에서만 revoke한다. 기본 `AnimatePresence mode="wait"`는 유지하되 Capture→Processing과 Processing→다음 phase의 exit만 즉시 완료해 transition 교착을 제거했다. 75ms paint yield와 MediaPipe·Tank·feeding 로직은 변경하지 않았다.
 - 실제 Pages URL에서 lazy MediaPipe chunk를 6초 지연한 E2E로 같은 preview `src`와 유효한 `naturalWidth`가 secondary 문구 이후에도 유지되고, 실패 후 manual retry로 전환되며 원본 fallback이 Reveal/Auto Drop을 완료하는 것을 확인했다. Processing E2E 3/3, 관련 Vitest 69/69, TypeScript, production build를 통과했다.
+
+### Vitest discovery excludes generated copies (2026-09-10)
+- Root cause: repository-wide test/spec includes combined with root-only e2e exclusions collected copied Playwright specs under outputs/profile-lunchmate-fix.
+- Scoped Vitest includes to client/server/functions and retained configDefaults.exclude, adding recursive outputs/e2e/e2e-harness exclusions. Root Playwright testDir remains ./e2e.
+- Validation: actual git hook run pre-commit exited 0 without committing or bypassing hooks: policy checks, tsc --noEmit, Vitest 95 files / 642 tests passed, Playwright 22 tests passed, Vite build passed. Separate pnpm build (Vite + server esbuild) passed. Sandbox esbuild directory access errors required rerunning outside the sandbox.
+- All 95 Vitest file results were under client/server/functions; no outputs paths were collected. Generated copy retained; Munchie Tank source and existing staged changes untouched. No commit/push performed.
+
+### Feed history scroll assertion timing (2026-09-10)
+- Unmodified isolated Playwright test: repeat-each=5, workers=1, 5/5 passed. The reported 32px mismatch is intermittent, not a constant restoration offset.
+- Preserved original trace in the system temp directory before rerunning tests. At after@call@487 (48722.601ms), scrollTop was 3138 and the exiting filter panel still had height 31.2996px. At input@call@491 (48860.235ms), before navigating to the profile, scrollTop was already 3106; Playwright had retried the click because the element was not stable. At after@call@503 (49432.501ms), returning to the feed restored 3106 correctly.
+- Root cause: aria-pressed=false precedes AnimatePresence filter DOM removal; the test captured an intermediate layout position. This evidence locates the shift before navigation, not during return-time font/image loading. Recent ProfilePage/FoodieBuddy changes add the owner Tank entry; App adds specific Tank/prototype routes. None changes this feed filter or restoration path; no product regression identified.
+- Changed only e2e/profile-lunchmate.e2e.spec.ts: await categoryFilter.toHaveCount(0) before both scroll-position captures. Exact equality assertions remain; no tolerance, timeout sleep, or product logic changes.
+- Validation: fixed isolation 5/5; full pnpm exec playwright test 22/22 (exit 0); git hook run pre-commit exit 0, including policy checks, TypeScript, Vitest 95 files / 642 tests, Playwright 22/22, and Vite build. No commit/push; Tank, segmentation, Hatch Queue and Snack Time source untouched.

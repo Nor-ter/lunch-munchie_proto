@@ -1,5 +1,5 @@
 import path from "node:path";
-import { defineConfig } from "vitest/config";
+import { configDefaults, defineConfig } from "vitest/config";
 
 export default defineConfig({
   resolve: {
@@ -12,9 +12,14 @@ export default defineConfig({
   test: {
     globals: true,
     setupFiles: ["./test/setup.ts"],
-    include: ["**/*.test.ts", "**/*.test.tsx", "**/*.spec.ts", "**/*.spec.tsx"],
-    // Playwright live tests intentionally share the `*.spec.ts` suffix but
-    // must only run through `playwright.live.config.ts`, never Vitest.
-    exclude: ["e2e/**", "e2e-harness/**", "mobile/**", "**/node_modules/**", "dist/**"],
+    include: ["{client,server,functions}/**/*.{test,spec}.{ts,tsx}"],
+    // Keep generated copies and Playwright specs out of unit/integration runs.
+    exclude: [
+      ...configDefaults.exclude,
+      "**/outputs/**",
+      "**/e2e/**",
+      "**/e2e-harness/**",
+      "mobile/**",
+    ],
   },
 });
