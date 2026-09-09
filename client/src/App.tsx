@@ -43,10 +43,12 @@ import TemplatesBrowsePage from "./pages/TemplatesBrowsePage";
 import CourseFeedsPage from "./pages/course/CourseFeedsPage";
 import PlaceExplorePage from "./pages/PlaceExplorePage";
 import StorySharePage from "./pages/StorySharePage";
+import MunchieCapturePrototypePage from "./pages/MunchieCapturePrototypePage";
+import MunchieSegmentationTestPage from "./pages/MunchieSegmentationTestPage";
 import LunchieWaitingCompanion from "./components/lunchie/LunchieWaitingCompanion";
 import { startGoogleAuth } from "./services/authApi";
 
-const NO_TABBAR = ['/onboarding', '/tour-mode', '/course/', '/coursemap', '/template/', '/templates', '/lunchie', '/session', '/join', '/feed/', '/explore/places', '/auth', '/admin'];
+const NO_TABBAR = ['/onboarding', '/tour-mode', '/course/', '/coursemap', '/template/', '/templates', '/lunchie', '/session', '/join', '/feed/', '/explore/places', '/auth', '/admin', '/prototype'];
 const LUNCHIE_TABBAR_ROUTES = new Set(['/lunchie/settings', '/session/lobby']);
 
 function CoursesRedirect() {
@@ -106,6 +108,7 @@ function AppShell({ userId }: { userId: string | null }) {
             <Route path="/course/:id" component={NewCourseDetailPage} />
             <Route path="/saved" component={SavedPage} />
             <Route path="/profile/foodie-room" component={FoodieRoomPage} />
+            <Route path="/profile/munchie-tank" component={MunchieCapturePrototypePage} />
             <Route path="/profile" component={ProfilePage} />
             <Route path="/profile/:id" component={OtherProfilePage} />
             {/* Lunchie 그룹 세션 플로우 (data-jp) */}
@@ -119,6 +122,8 @@ function AppShell({ userId }: { userId: string | null }) {
             <Route path="/admin" component={AdminDashboardPage} />
             <Route path="/tour-map" component={TourMapPage} />
             <Route path="/tour-mode" component={TourModePage} />
+            <Route path="/prototype/munchie-capture" component={MunchieCapturePrototypePage} />
+            <Route path="/prototype/munchie-segmentation-test" component={MunchieSegmentationTestPage} />
             <Route path="/404" component={NotFound} />
             <Route component={NotFound} />
           </Switch>

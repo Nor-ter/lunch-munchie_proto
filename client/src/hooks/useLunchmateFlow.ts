@@ -55,7 +55,7 @@ interface UseLunchmateFlowOptions {
   initialState?: FoodieBuddyUiState;
   initialTotalXp?: number;
   onTotalXpChange: (totalXp: number) => void;
-  onFoodConsumed: (item: LunchboxFoodItem) => void;
+  onFoodConsumed: (item: LunchboxFoodItem) => void | Promise<void>;
   onSuccessClose: () => void;
 }
 
@@ -138,10 +138,10 @@ export function useLunchmateFlow({
         previewXpRef.current,
         result.xpGained,
       );
+      await onFoodConsumed(item);
       previewXpRef.current = progressUpdate.nextTotalXp;
       setPreviousPreviewXp(progressUpdate.previousTotalXp);
       setPreviewXp(progressUpdate.nextTotalXp);
-      onFoodConsumed(item);
       onTotalXpChange(progressUpdate.nextTotalXp);
       setLastXpGain(result.xpGained);
       setResultMessage(result.message);

@@ -266,6 +266,8 @@ export interface FoodieBuddyProps {
   loadout?: LunchmateLoadout;
   /** 런치메이트룸 진입 동작. 생략하면 기존 onCustomize로 폴백한다. */
   onFoodieRoomOpen?: () => void;
+  /** Profile의 기존 Lunchbox와 분리된 Munchie Tank 진입 동작 */
+  onMunchieTankOpen?: () => void;
   /** Pointer feeding의 캐릭터 drop target bounds를 공유한다. */
   foodDropTargetRef?: Ref<HTMLDivElement>;
   isLunchboxOpen?: boolean;
@@ -299,6 +301,7 @@ export default function FoodieBuddy({
   levelUpActive = false,
   loadout,
   onFoodieRoomOpen,
+  onMunchieTankOpen,
   foodDropTargetRef,
   isLunchboxOpen = false,
   isFoodDragging = false,
@@ -626,6 +629,23 @@ export default function FoodieBuddy({
         >
           <HangerIcon />
         </button>
+
+        {onMunchieTankOpen && (
+          <button
+            type="button"
+            onClick={(event) => {
+              event.stopPropagation();
+              if (profileMotion.grab.isActive) return;
+              onMunchieTankOpen();
+            }}
+            disabled={profileMotion.grab.isActive}
+            className="absolute right-12 top-2.5 z-20 flex h-8 items-center justify-center rounded-full border border-white/70 bg-white/85 px-3 text-[10px] font-black shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white disabled:cursor-default"
+            style={{ color: skin.sub }}
+            aria-label="Munchie Tank 열기"
+          >
+            Munchie Tank
+          </button>
+        )}
 
         {/* 런치박스 영역 — 새 음식 상태와 Sheet 진입점을 기존 배너 안에 겹쳐 표시한다. */}
         <motion.button

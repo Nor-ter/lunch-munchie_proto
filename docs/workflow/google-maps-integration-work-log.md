@@ -543,3 +543,37 @@
 ### 22.8 OWNER SETTINGS BUTTON POSITION FOLLOW-UP
 - 내 프로필 설정 버튼만 기존 위치에서 2px 왼쪽으로 이동했다. 공용 `ProfileHeader`와 타인 프로필의 Back·Follow 배치는 변경하지 않았다.
 - 로그인 프로필과 로그인 전 미리보기의 설정 버튼 위치를 동일하게 맞췄다. 프로필 집중 Vitest 12/12, TypeScript, production build를 통과했다.
+
+---
+
+## 23. Local Pages auth session 500 조사 (2026-09-05)
+
+### 23.1 TRIAGE / RCA
+- 증상 태그: `auth`, `data-state`, `build`. 광범위한 Google Cloud 장애나 이 local Workers 경로와 관련된 Cloudflare 장애는 확인되지 않았다.
+- cookie 없는 guest와 잘못 서명된 cookie는 `/api/auth/session`에서 모두 `200 { user: null, profile: null }`을 반환했다. 유효한 local session만 `users`의 공개 Lunchmate 컬럼 조회로 진행했다.
+- local D1에 `0021_public_lunchmate_profiles.sql`만 미적용되어 `foodie_char` 등 다섯 컬럼이 없었고, 유효 session 요청은 `D1_ERROR: no such column: foodie_char`로 500을 반환했다.
+- 동일 500 직후 guest 요청은 다시 200을 반환해 request 예외가 Wrangler process를 종료시키지 않음을 확인했다. `ERR_CONNECTION_REFUSED`는 별도의 dev process 종료/중단 상태이며 이 D1 예외와 인과관계가 재현되지 않았다.
+
+### 23.2 FIX / VERIFY / GATE
+- source·cookie·production auth 정책은 변경하지 않고 기존 additive migration을 local D1에만 적용했다. 이후 migration pending 없음과 다섯 컬럼 존재를 확인했다.
+- `pnpm dev:pages`에서 guest, malformed cookie, 유효 session, restaurants 요청이 모두 200이고 Wrangler가 계속 listening 상태임을 확인했다.
+- OAuth server secret 세 key와 DB binding 존재를 값 노출 없이 확인했다. Cloudflare policy, auth 관련 Vitest 16/16, TypeScript, production build를 통과했고 `.dev.vars`, `.env`, `.env.local` ignore 상태를 확인했다. 원격 migration·secret·production 설정은 변경하지 않았다.
+
+---
+
+## 24. Munchie Processing 정적 화면 visibility 복구 (2026-09-05)
+
+### 24.1 RCA / FIX / VERIFY
+- `setPhase('processing')` 뒤 두 animation frame을 양보했지만, 상위 `AnimatePresence mode="wait"`가 이전 Capture section의 exit 완료 전 Processing DOM mount를 막았다. 두 frame이 먼저 끝나 동기 CPU segmentation이 main thread를 점유하면 상단 header만 남고 중앙 content가 아직 없는 상태가 유지될 수 있었다.
+- Processing 진입에만 `popLayout` mode를 사용해 exiting section을 layout에서 분리하고 Processing section을 같은 React commit에 mount한다. 기존 두-frame paint yield와 정적 preview/text는 유지하며 MediaPipe, Tank, Hatch Queue, Snack Time, inventory, XP, Profile/auth는 변경하지 않았다.
+- product와 prototype route 모두 Chromium에서 파일 선택 후 Processing DOM이 visible이고 opacity·visibility·bounds와 두 안내 문구가 유효함을 확인했다. 관련 Vitest 34/34, Processing Playwright 2/2, TypeScript, production build를 통과했다.
+
+### 24.2 FIRST-PAINT FOLLOW-UP
+- 실제 cached-model CPU 경로에서는 Processing section이 `initial opacity: 0`으로 mount된 직후 두 번째 `requestAnimationFrame` 콜백의 microtask가 segmentation을 시작해, opacity 1 프레임이 paint되기 전에 main thread가 장시간 점유될 수 있음을 확인했다. 모델 요청을 지연한 기존 E2E는 이 timing을 가렸다.
+- Processing section만 첫 mount부터 visible하도록 `initial={false}`로 변경하고, 중첩 animation frame 뒤 75ms task yield를 추가해 CPU 작업 전에 정적 preview와 안내 문구가 실제 paint될 기회를 보장했다. MediaPipe와 나머지 product flow는 변경하지 않았다.
+- DOM 첫 삽입 순간의 computed opacity와 text를 검증하도록 E2E를 보강했다. 실제 Pages URL `127.0.0.1:8788`에서 product/prototype route 2/2, 관련 Vitest 69/69, TypeScript, production build를 통과했다.
+
+### 24.3 PREVIEW LIFETIME / PROCESSING EXIT FOLLOW-UP
+- Processing의 secondary 문구 전환 뒤 preview가 깨지고 다음 화면으로 넘어가지 않는 증상을 재현했다. Blob URL이 Processing DOM보다 먼저 revoke될 수 있었고, Processing 진입·이탈 사이에 `AnimatePresence` mode를 동적으로 바꾸면서 exiting child와 다음 phase가 대기 상태에 남는 경로가 함께 있었다.
+- preview object URL을 ref로 소유하고 Processing section의 실제 exit 완료 또는 component unmount에서만 revoke한다. 기본 `AnimatePresence mode="wait"`는 유지하되 Capture→Processing과 Processing→다음 phase의 exit만 즉시 완료해 transition 교착을 제거했다. 75ms paint yield와 MediaPipe·Tank·feeding 로직은 변경하지 않았다.
+- 실제 Pages URL에서 lazy MediaPipe chunk를 6초 지연한 E2E로 같은 preview `src`와 유효한 `naturalWidth`가 secondary 문구 이후에도 유지되고, 실패 후 manual retry로 전환되며 원본 fallback이 Reveal/Auto Drop을 완료하는 것을 확인했다. Processing E2E 3/3, 관련 Vitest 69/69, TypeScript, production build를 통과했다.

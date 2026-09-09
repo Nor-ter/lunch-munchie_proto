@@ -295,6 +295,12 @@ function ProfilePageContent() {
       } satisfies FoodieRoomNavigationState,
     });
   }, [lunchmateFlow.progressSnapshot, navigate]);
+  const openMunchieTank = useCallback(() => {
+    setActiveSheet(null);
+    navigate('/profile/munchie-tank', {
+      state: { fromProfile: true },
+    });
+  }, [navigate]);
 
   useEffect(() => {
     const levelUpEvent = lunchmateFlow.levelUpEvent;
@@ -438,6 +444,7 @@ function ProfilePageContent() {
           roomLoadout={profile.lunchmateRoomLoadout}
           loadout={lunchmateLoadout}
           onCustomize={openFoodieRoom}
+          onMunchieTankOpen={openMunchieTank}
           uiState={lunchmateFlow.state}
           unseenFoodCount={unseenFoodCount}
           onLunchboxOpen={openLunchbox}
