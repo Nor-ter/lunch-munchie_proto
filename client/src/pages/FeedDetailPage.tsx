@@ -25,7 +25,7 @@ export default function FeedDetailPage() {
     : undefined;
   const detailOrigin = fromProfile ? 'profile' : fromSaved ? 'saved' : 'feed';
   const backPath = fromNotifications
-    ? '/?notifications=1'
+    ? '/home?notifications=1'
     : fromProfile
       ? profileReturnId ? `/profile/${profileReturnId}` : '/profile'
       : fromSaved

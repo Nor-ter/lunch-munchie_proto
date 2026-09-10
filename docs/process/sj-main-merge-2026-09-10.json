@@ -1,0 +1,155 @@
+{
+  "features": [
+    {
+      "name": "Quick Match accordion UI with main party size and localization",
+      "intent": "combine",
+      "paths": [
+        "client/src/pages/LunchieSettingsPage.tsx"
+      ],
+      "acceptance": {
+        "entrypoint": "/lunchie/settings",
+        "preconditions": [
+          "local synthetic identity"
+        ],
+        "actions": [
+          "expand panels",
+          "select 30 people",
+          "clear diet and exclusions independently",
+          "reload"
+        ],
+        "observables": [
+          "30-person option works",
+          "other selection group preserved",
+          "selected values persist"
+        ],
+        "edge_cases": [
+          "collapsed panels after reload"
+        ]
+      },
+      "validation": {
+        "status": "passed",
+        "evidence": [
+          "npm run test:precommit: exit 0; 663 unit tests; 24 local mocked E2E; build passed",
+          "e2e/quick-match.e2e.spec.ts"
+        ]
+      }
+    },
+    {
+      "name": "Four tabs and Quick Match default with reachable home",
+      "intent": "combine",
+      "paths": [
+        "client/src/App.tsx",
+        "client/src/components/TabBar.tsx"
+      ],
+      "acceptance": {
+        "entrypoint": "/",
+        "preconditions": [
+          "local mocked API"
+        ],
+        "actions": [
+          "open root",
+          "follow home button",
+          "swipe home deck",
+          "start cafe match"
+        ],
+        "observables": [
+          "root opens settings",
+          "four tabs",
+          "home deck accessible",
+          "cafe intent retained"
+        ],
+        "edge_cases": [
+          "navigation after transition"
+        ]
+      },
+      "validation": {
+        "status": "passed",
+        "evidence": [
+          "npm run test:precommit: exit 0; 663 unit tests; 24 local mocked E2E; build passed",
+          "e2e/home-quick-match-deck.e2e.spec.ts"
+        ]
+      }
+    },
+    {
+      "name": "Main session, photo and swipe fixes",
+      "intent": "retain",
+      "paths": [
+        "client/src/contexts/AppContext.tsx",
+        "client/src/pages/LunchieSwipePage.tsx",
+        "client/src/components/lunchie/QuickMatchRestaurantDetailSheet.tsx",
+        "shared/quickMatchParty.ts",
+        "shared/lunchieAvatar.ts"
+      ],
+      "acceptance": {
+        "entrypoint": "/lunchie/settings and /session/lobby",
+        "preconditions": [
+          "synthetic session fixtures"
+        ],
+        "actions": [
+          "start solo",
+          "open details",
+          "tap photos rapidly",
+          "replace group session"
+        ],
+        "observables": [
+          "member credentials retained",
+          "detail closes independently",
+          "rotation serialized",
+          "group replaced safely"
+        ],
+        "edge_cases": [
+          "empty catalogue",
+          "results arrive while browsing"
+        ]
+      },
+      "validation": {
+        "status": "passed",
+        "evidence": [
+          "npm run test:precommit: exit 0; 663 unit tests; 24 local mocked E2E; build passed",
+          "e2e/quick-match.e2e.spec.ts"
+        ]
+      }
+    },
+    {
+      "name": "Main maps feed profile and admin functionality",
+      "intent": "retain",
+      "paths": [
+        "functions/api/[[path]].ts",
+        "client/src/pages/LunchieMapPage.tsx",
+        "client/src/pages/ProfilePage.tsx",
+        "client/src/pages/OtherProfilePage.tsx",
+        "client/src/pages/SavedPage.tsx",
+        "client/src/pages/course/CourseDetailPage.tsx",
+        "client/src/pages/HomePage.tsx"
+      ],
+      "acceptance": {
+        "entrypoint": "/saved /feed /profile /admin",
+        "preconditions": [
+          "synthetic data and mocked APIs"
+        ],
+        "actions": [
+          "open saved map",
+          "open feed detail",
+          "delete own and admin post",
+          "visit profile"
+        ],
+        "observables": [
+          "map route preserved",
+          "canonical ownership enforced",
+          "profile timeline synchronized"
+        ],
+        "edge_cases": [
+          "stale caches",
+          "unauthorized edits"
+        ]
+      },
+      "validation": {
+        "status": "passed",
+        "evidence": [
+          "npm run test:precommit: exit 0; 663 unit tests; 24 local mocked E2E; build passed",
+          "e2e/lunchie-map.e2e.spec.ts; e2e/feed-deletion.e2e.spec.ts; e2e/profile-feed-sync.e2e.spec.ts; e2e/admin-photo-review.e2e.spec.ts"
+        ]
+      }
+    }
+  ]
+}

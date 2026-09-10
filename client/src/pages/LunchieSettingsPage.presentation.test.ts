@@ -16,6 +16,7 @@ describe('Lunchie Quick Match presentation', () => {
     expect(settingsSource).toContain('/assets/characters/quick-match/dessert.png');
     expect(settingsSource).toContain("label: '랜덤'");
     expect(settingsSource).toContain('aria-pressed={selected}');
+    expect(settingsSource).not.toContain('-rotate-2 rounded-full bg-[#FFD5D1]');
   });
 
   it('uses a vertical people wheel plus direct distance and dietary controls without a budget section', () => {
@@ -69,8 +70,9 @@ describe('Lunchie Quick Match presentation', () => {
     expect(preferenceSource).toContain("value: 'NO_SEAFOOD'");
     expect(preferenceSource).not.toContain("label: 'Carnivore'");
     expect(preferenceSource).not.toContain("label: 'Small Appetite'");
-    expect(settingsSource).toContain('선택한 재료 없음');
-    expect(settingsSource).toContain('aria-controls="dietary-exclusion-menu"');
+    expect(settingsSource).toContain('선택 초기화');
+    expect(settingsSource).not.toContain('No ingredients selected');
+    expect(settingsSource).not.toContain('dietary-exclusion-menu');
     expect(settingsSource).not.toContain('Not available');
     expect(settingsSource).not.toContain('>Soon</span>');
     expect(settingsSource).not.toContain('For severe allergies');

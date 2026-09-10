@@ -46,19 +46,6 @@ function BookmarkIcon({ active }: { active: boolean }) {
   );
 }
 
-function HomeIcon({ active }: { active: boolean }) {
-  return (
-    <svg {...iconProps(active)} viewBox="0 0 40 40">
-      <path d="M8 19 L20 8 L32 19" strokeWidth="2.5" />
-      <path d="M11 18.5 V31.5 H29 V18.5" strokeWidth="2.5" />
-      <path
-        d="M16.5 31.5 V24.5 C16.5 22.3 18 21 20 21 C22 21 23.5 22.3 23.5 24.5 V31.5"
-        strokeWidth="2.5"
-      />
-    </svg>
-  );
-}
-
 function LightningIcon({ active }: { active: boolean }) {
   return (
     <svg
@@ -90,9 +77,8 @@ function FaceIcon({ active }: { active: boolean }) {
 }
 
 const TABS = [
-  { path: "/", label: "홈", Icon: HomeIcon },
-  { path: "/feed", label: "먼치", Icon: MunchIcon },
-  { path: "/lunchie/settings", label: "런치", Icon: LightningIcon },
+  { path: "/lunchie/settings", label: "Quick Match", Icon: LightningIcon },
+  { path: "/feed", label: "피드", Icon: MunchIcon },
   { path: "/saved", label: "저장", Icon: BookmarkIcon },
   { path: "/profile", label: "프로필", Icon: FaceIcon },
 ] as const;
@@ -102,11 +88,11 @@ export default function TabBar() {
 
   return (
     <div className="tab-bar">
-      <div className="tab-bar-content grid grid-cols-5 items-center px-[18px]">
+      <div className="tab-bar-content grid grid-cols-4 items-center px-[18px]">
         {TABS.map((tab) => {
           const isActive =
             location === tab.path ||
-            (tab.path !== "/" && location.startsWith(tab.path)) ||
+            location.startsWith(`${tab.path}/`) ||
             (tab.path === "/lunchie/settings" && location === "/session/lobby");
           const isProfile = tab.path === "/profile";
 

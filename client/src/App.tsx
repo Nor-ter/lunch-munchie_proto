@@ -87,7 +87,8 @@ function AppShell({ userId }: { userId: string | null }) {
             <Route path="/login">{() => <Redirect to="/auth/login" />}</Route>
             <Route path="/auth/login" component={AuthLoginPage} />
             <Route path="/auth/callback" component={AuthCallbackPage} />
-            <Route path="/" component={HomePage} />
+            <Route path="/">{() => <Redirect to="/lunchie/settings" />}</Route>
+            <Route path="/home" component={HomePage} />
             {/* 기존 먼치모드(코스 탐색)는 Munchie Feed로 통합 */}
             <Route path="/explore">{() => <Redirect to="/feed" />}</Route>
             <Route path="/explore/places" component={PlaceExplorePage} />

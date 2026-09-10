@@ -129,6 +129,7 @@ test('mobile settings keeps the timer and vertical people wheel synchronized wit
   await expect(groupSize).toHaveAttribute('aria-valuetext', '혼자');
   await expect(page.getByRole('button', { name: '같이', exact: true })).toHaveCount(0);
 
+  await page.getByRole('button', { name: /식단 요구 사항/ }).click();
   const pescatarian = page.getByRole('button', { name: '🐟 페스코 채식', exact: true });
   await pescatarian.click();
   await expect(pescatarian).toHaveAttribute('aria-pressed', 'true');
@@ -139,6 +140,24 @@ test('mobile settings keeps the timer and vertical people wheel synchronized wit
   const eggs = page.getByRole('button', { name: '🥚 달걀', exact: true });
   await eggs.click();
   await expect(eggs).toHaveAttribute('aria-pressed', 'true');
+
+  const dietPanel = page.locator('#quick-match-dietary-options');
+  const avoidancePanel = page.locator('#quick-match-ingredient-avoidance-options');
+  await dietPanel.getByRole('button', { name: '선택 초기화' }).click();
+  await expect(pescatarian).toHaveAttribute('aria-pressed', 'false');
+  await expect(nuts).toHaveAttribute('aria-pressed', 'true');
+  await pescatarian.click();
+  await avoidancePanel.getByRole('button', { name: '선택 초기화' }).click();
+  await expect(nuts).toHaveAttribute('aria-pressed', 'false');
+  await expect(eggs).toHaveAttribute('aria-pressed', 'false');
+  await expect(pescatarian).toHaveAttribute('aria-pressed', 'true');
+  await nuts.click();
+  await page.reload();
+  await expect(page.getByRole('button', { name: /식단 요구 사항/ })).toHaveAttribute('aria-expanded', 'false');
+  await page.getByRole('button', { name: /식단 요구 사항/ }).click();
+  await page.getByRole('button', { name: /피하고 싶은 재료/ }).click();
+  await expect(pescatarian).toHaveAttribute('aria-pressed', 'true');
+  await expect(nuts).toHaveAttribute('aria-pressed', 'true');
 
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth)).toBe(true);
   expect(browserErrors).toEqual([]);
@@ -335,6 +354,7 @@ test('solo start sends the new member credential and opens the restaurant deck',
   await page.goto('/lunchie/settings');
 
   await page.getByRole('option', { name: '혼자', exact: true }).click();
+  await page.getByRole('button', { name: /식단 요구 사항/ }).click();
   await page.getByRole('button', { name: '🥬 채식', exact: true }).click();
   await page.getByRole('button', { name: '🌾 글루텐 프리', exact: true }).click();
   await page.getByRole('button', { name: /피하고 싶은 재료/ }).click();

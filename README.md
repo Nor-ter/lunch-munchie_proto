@@ -9,7 +9,7 @@
 [![Vitest](https://img.shields.io/badge/Vitest-2-6E9F18?logo=vitest)](https://vitest.dev/)
 [![Cloudflare](https://img.shields.io/badge/Cloudflare-Pages%20%2B%20D1-F38020?logo=cloudflare)](https://www.cloudflare.com/)
 
-> **README 최종 업데이트: 2026-08-23** · **최신 코드 반영: 2026-08-22** (`c1d12bc4`)
+> **README 최종 업데이트: 2026-09-06** · **최신 코드 반영: 2026-09-06** (로컬 UI 작업)
 
 ---
 
@@ -81,9 +81,9 @@ Lunchie Munchie는 두 가지 핵심 경험을 하나의 앱으로 제공합니�
 
 | 항목 | 값 |
 | --- | --- |
-| README 최종 업데이트 | **2026-08-23** |
+| README 최종 업데이트 | **2026-09-06** |
 | 최신 코드 커밋일 | **2026-08-22** |
-| 최신 커밋 | [`c1d12bc4`](https://github.com/Nor-ter/lunch-munchie_proto/commit/c1d12bc476d7ec8b372a20b9468cc377ea642990) |
+| 최신 커밋 | [`c1d12bc4`](https://github.com/Nor-ter/lunch-munchie_proto/commit/c1d12bc476d7ec8b372a20b9468cc377ea642990) + 2026-09-06 로컬 UI 작업 |
 | 운영 URL | <https://lunchie-munchie.pages.dev> |
 | 배포·통합 브랜치 | `main`, `production` 모두 `c1d12bc4`로 동기화 |
 | 운영 런타임 | Cloudflare Pages Functions + D1 + R2 + Durable Objects |
@@ -111,11 +111,16 @@ Lunchie Munchie는 두 가지 핵심 경험을 하나의 앱으로 제공합니�
 - **검색 거리** — 1km, 2km, 3km, 4km, 5km+ 체계
   - 250m 간격의 눈금자형 범위 컨트롤
   - 프로필의 Lunchmate 캐릭터가 선택 방향에 따라 좌우 보행 모션으로 이동
-- **취향 선택** — `COFFEE`, `FOODIE`, `DESSERT`, `RANDOM` 카드 (현재 선택 강조)
-- **분위기 태그** — 설명과 아이콘이 포함된 직접 선택 카드
-- **Dietary preferences** — 영어 선택 카드
-  - Vegan, Vegetarian, Gluten-Free, Halal, Carnivore, Small Appetite, Buffet, Asian
-  - `No` 드롭다운에서 Beef, Seafood, Lamb, Pork, Nuts 복수 제외 가능
+- **오늘의 빠른 매칭** — `COFFEE`, `FOODIE`, `DESSERT`, `RANDOM` 카드 (현재 선택 강조)
+  - 선택 카드 하단 강조선은 기울어진 pill 장식이 아닌 straight line으로 표시
+- **분위기 태그** — 설명과 아이콘이 포함된 아코디언 선택 카드
+- **식단 요구 사항** — 영어 선택 카드
+  - Vegan, Vegetarian, Pescatarian, Gluten-Free, Halal, Buffet, Asian 등 canonical dietary filter 지원
+  - `Clear requirements` 버튼으로 식단 요구 사항 선택값만 초기화
+- **피하고 싶은 재료** — 식단 요구 사항과 별도 아코디언으로 분리
+  - Beef, Seafood, Shellfish, Lamb, Pork, Nuts, Dairy, Eggs 등 재료 회피 옵션을 바로 노출
+  - 내부 추가 드롭다운/중첩 아코디언과 `Ingredients to avoid / No ingredients selected` 요약 줄 제거
+  - `Clear requirements` 버튼으로 피하고 싶은 재료 선택값만 초기화
 - 사용자에게 노출되던 평점 및 1인 예산 설정은 제거
   - 기존 세션 API 호환을 위해 예산 필드는 내부 기본값으로 계속 전달
 - `세션 만들고 초대하기` 버튼은 floating이 아닌 Dietary 카드 다음의 일반 문서 흐름에 배치
@@ -701,7 +706,15 @@ pnpm cf:auth:secrets
 
 # 8. 변경 이력 (주요 업데이트 · 최신순)
 
-> 최신 코드 반영일은 **2026-08-22**입니다. 주요 기능을 최신순으로 정리하며 SHA 단위 기록은 9장에서 확인합니다.
+> 최신 코드 반영일은 **2026-09-06**입니다. 주요 기능을 최신순으로 정리하며 SHA 단위 기록은 9장에서 확인합니다.
+
+## 2026-09-06 — Quick Match 설정 UI 정리
+
+- Quick Match 설정 화면을 로컬에서 실행하고 Vite HMR로 변경 사항을 확인했습니다.
+- `오늘의 빠른 매칭` 선택 카드의 하단 핑크 강조선을 기울어진 pill 형태에서 straight line으로 정리했습니다.
+- `피하고 싶은 재료` 섹션을 `식단 요구 사항`과 별도 아코디언으로 분리하고, 내부 중첩 드롭다운을 제거해 재료 옵션이 바로 보이도록 했습니다.
+- `피하고 싶은 재료` 안의 `Ingredients to avoid / No ingredients selected` 요약 줄을 제거하고, `Clear requirements` 버튼으로 재료 회피 선택값만 초기화하도록 맞췄습니다.
+- 관련 프레젠테이션 테스트와 TypeScript 타입 체크를 통과했습니다.
 
 ## 2026-08-22 — 프로필 조작·지도 기반 Munchie 기능 복구
 

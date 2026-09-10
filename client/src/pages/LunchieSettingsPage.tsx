@@ -120,6 +120,48 @@ function CardTitle({ icon, children, badge }: { icon: ReactNode; children: React
   );
 }
 
+function CollapsibleOptionPanel({
+  title,
+  icon,
+  summary,
+  open,
+  onToggle,
+  controlsId,
+  children,
+}: {
+  title: string;
+  icon: ReactNode;
+  summary: string;
+  open: boolean;
+  onToggle: () => void;
+  controlsId: string;
+  children: ReactNode;
+}) {
+  return (
+    <section className="rounded-[18px] bg-white p-2 shadow-[0_2px_10px_rgba(180,140,130,0.10)]">
+      <button
+        type="button"
+        onClick={onToggle}
+        aria-expanded={open}
+        aria-controls={controlsId}
+        className="flex min-h-12 w-full items-center gap-2 rounded-[14px] bg-[#FFF8F6] px-3 text-left"
+      >
+        <span className="flex size-8 shrink-0 items-center justify-center rounded-full bg-[#FFE4E3] text-[#F4515E]">{icon}</span>
+        <span className="min-w-0 flex-1">
+          <strong className="block text-[12px] font-extrabold text-[#3E373B]">{title}</strong>
+          <span className="mt-0.5 block truncate text-[10px] font-semibold text-[#8A8084]">{summary}</span>
+        </span>
+        <ChevronDown size={16} className={`shrink-0 text-[#8A8084] transition-transform ${open ? 'rotate-180' : ''}`} />
+      </button>
+      {open && (
+        <div id={controlsId} className="mt-2">
+          {children}
+        </div>
+      )}
+    </section>
+  );
+}
+
 function DeadlineDial({ minutes, onChange }: { minutes: number; onChange: (minutes: number) => void }) {
   const radius = 70;
   const center = 88;
@@ -523,47 +565,44 @@ function GroupSizeRuler({ value, onChange }: { value: number; onChange: (value: 
   );
 }
 
-function IngredientAvoidancePicker({ selected, onToggle }: { selected: string[]; onToggle: (value: string) => void }) {
-  const [open, setOpen] = useState(false);
-  const selectedLabels = INGREDIENT_AVOIDANCES.filter(option => selected.includes(option.value)).map(option => option.label);
-
+function IngredientAvoidancePicker({
+  selected,
+  onToggle,
+  onClear,
+}: {
+  selected: string[];
+  onToggle: (value: string) => void;
+  onClear: () => void;
+}) {
   return (
-    <div className="relative">
-      <button
-        type="button"
-        onClick={() => setOpen(current => !current)}
-        aria-expanded={open}
-        aria-controls="dietary-exclusion-menu"
-        className={`flex min-h-11 w-full items-center rounded-[12px] border px-3 text-left transition-colors ${selectedLabels.length ? 'border-[#55A964] bg-[#EDF8EE]' : 'border-transparent bg-[#F8F5F3]'}`}
-      >
-        <span className="mr-2 text-base">🚫</span>
-        <strong className="text-[11px] text-[#514A4D]">피하고 싶은 재료</strong>
-        <span className="ml-2 min-w-0 flex-1 truncate text-[10px] font-semibold text-[#7B7276]">
-          {selectedLabels.length ? selectedLabels.join(', ') : '선택한 재료 없음'}
-        </span>
-        {selectedLabels.length > 0 && <span className="mr-2 rounded-full bg-[#55A964] px-1.5 py-0.5 text-[9px] font-bold text-white">{selectedLabels.length}</span>}
-        <ChevronDown size={15} className={`shrink-0 text-[#8A8084] transition-transform ${open ? 'rotate-180' : ''}`} />
-      </button>
-      {open && (
-        <div id="dietary-exclusion-menu" className="mt-1 max-h-[156px] overflow-y-auto rounded-[14px] border border-[#E8DFDC] bg-white p-1.5 shadow-[0_10px_24px_rgba(92,69,62,0.14)]">
-          {INGREDIENT_AVOIDANCES.map(option => {
-            const isSelected = selected.includes(option.value);
-            return (
-              <button
-                key={option.label}
-                type="button"
-                onClick={() => onToggle(option.value)}
-                aria-pressed={isSelected}
-                className={`flex min-h-10 w-full items-center rounded-[10px] px-2.5 text-left ${isSelected ? 'bg-[#EDF8EE]' : 'hover:bg-[#F8F5F3]'}`}
-              >
-                <span className="mr-2 text-base">{option.icon}</span>
-                <span className="text-[11px] font-bold text-[#514A4D]">{option.label}</span>
-                <span className={`ml-auto flex size-4 items-center justify-center rounded border ${isSelected ? 'border-[#55A964] bg-[#55A964] text-white' : 'border-[#D8CFCC] text-transparent'}`}><Check size={10} strokeWidth={3} /></span>
-              </button>
-            );
-          })}
-        </div>
-      )}
+    <div>
+      <div className="mb-2 flex items-center justify-end">
+        <button
+          type="button"
+          onClick={onClear}
+          className="min-h-9 rounded-lg px-2 text-[10px] font-bold text-[#C43B47] outline-none focus-visible:ring-2 focus-visible:ring-[#F4515E]"
+        >
+          선택 초기화
+        </button>
+      </div>
+      <div className="grid grid-cols-2 gap-1.5">
+        {INGREDIENT_AVOIDANCES.map(option => {
+          const isSelected = selected.includes(option.value);
+          return (
+            <button
+              key={option.label}
+              type="button"
+              onClick={() => onToggle(option.value)}
+              aria-pressed={isSelected}
+              className={`flex min-h-10 w-full items-center rounded-[10px] px-2.5 text-left ${isSelected ? 'bg-[#EDF8EE]' : 'bg-[#F8F5F3] hover:bg-[#F1ECE9]'}`}
+            >
+              <span className="mr-2 text-base">{option.icon}</span>
+              <span className="truncate text-[11px] font-bold text-[#514A4D]">{option.label}</span>
+              <span className={`ml-auto flex size-4 shrink-0 items-center justify-center rounded border ${isSelected ? 'border-[#55A964] bg-[#55A964] text-white' : 'border-[#D8CFCC] bg-white text-transparent'}`}><Check size={10} strokeWidth={3} /></span>
+            </button>
+          );
+        })}
+      </div>
     </div>
   );
 }
@@ -600,7 +639,7 @@ function PreferenceCard({ option, selected, onClick }: {
         )}
       </span>
       <span className="relative z-10 mt-1.5 block text-[10px] font-black tracking-[0.8px] text-[#F4515E]">{option.label}</span>
-      {selected && <span className="absolute bottom-1.5 left-[18%] z-0 h-2 w-[64%] -rotate-2 rounded-full bg-[#FFD5D1] opacity-80" />}
+      {selected && <span className="absolute bottom-1.5 left-[18%] z-0 h-2 w-[64%] rounded-sm bg-[#FFD5D1] opacity-80" />}
     </motion.button>
   );
 }
@@ -738,6 +777,9 @@ export default function LunchieSettingsPage() {
   const [intent, setIntent] = useState<Intent | null>(initialIntent ?? storedSettings.intent);
   const [tags, setTags] = useState<string[]>(storedSettings.tags);
   const [dietary, setDietary] = useState<string[]>(storedSettings.dietary);
+  const [moodOptionsOpen, setMoodOptionsOpen] = useState(false);
+  const [dietaryOptionsOpen, setDietaryOptionsOpen] = useState(false);
+  const [avoidanceOptionsOpen, setAvoidanceOptionsOpen] = useState(false);
   const [isCreating, setIsCreating] = useState(false);
   const [origin, setOrigin] = useState<LocationFix | null>(null);
   const [originLabel, setOriginLabel] = useState<string | null>(null);
@@ -757,7 +799,13 @@ export default function LunchieSettingsPage() {
 
   const isSolo = partySize === 1;
   const budget = 2 as const;
-  const chosenCount = tags.length + dietary.length + 1;
+  const selectedPreferenceLabel = PREFERENCE_CARDS.find(option => option.value === intent)?.label ?? '랜덤';
+  const dietaryRequirementCount = dietary.filter(value => (
+    DIETARY_REQUIREMENTS.some(option => option.value === value)
+  )).length;
+  const ingredientAvoidanceCount = dietary.filter(value => (
+    INGREDIENT_AVOIDANCES.some(option => option.value === value)
+  )).length;
   const hasActiveSession = Boolean(
     activeSessionVerified
     && currentSession
@@ -972,14 +1020,14 @@ export default function LunchieSettingsPage() {
   return (
     <div className="min-h-dvh bg-[#FFF6F2] pb-6">
       <header className="sticky top-0 z-20 flex items-start gap-3 bg-[#FFF6F2]/95 px-5 pb-3 pt-[max(12px,env(safe-area-inset-top))] backdrop-blur">
-        <BackButton onClick={() => navigate('/')} aria-label="홈으로 돌아가기" />
+        <BackButton onClick={() => navigate('/home')} aria-label="홈으로 돌아가기" />
         <div>
           <h1 className="text-[19px] font-extrabold leading-none tracking-[-0.4px] text-[#F4515E]">Lunchie</h1>
           <p className="mt-1 text-[10px] font-bold tracking-[0.7px] text-[#9B959A]">빠른 매칭</p>
         </div>
       </header>
 
-      <main className="mx-auto max-w-[480px] space-y-3 px-4 pb-32">
+      <main className="mx-auto max-w-[480px] space-y-2.5 px-4 pb-28">
         {sessionCheckFailed && currentSession && (
           <section role="alert" className="rounded-[20px] border border-[#F2C6C1] bg-white p-4 shadow-sm">
             <h2 className="text-[14px] font-black text-[#302B2E]">진행 중인 빠른 매칭을 확인하지 못했어요</h2>
@@ -1021,25 +1069,98 @@ export default function LunchieSettingsPage() {
         )}
 
         <Card>
-          <CardTitle icon={<Clock3 size={16} />}>마감</CardTitle>
-          <div className="flex flex-col items-center">
-            <DeadlineDial minutes={deadlineMin} onChange={setDeadlineMin} />
+          <CardTitle icon={<UtensilsCrossed size={16} />} badge={selectedPreferenceLabel}>오늘의 빠른 매칭</CardTitle>
+          <div className="grid grid-cols-4 gap-2">
+            {PREFERENCE_CARDS.map(option => (
+              <PreferenceCard key={option.label} option={option} selected={intent === option.value} onClick={() => setIntent(option.value)} />
+            ))}
           </div>
         </Card>
 
-        <Card>
-          <div className="mb-3 flex items-center gap-2 text-[14px] font-extrabold text-[#26232A]">
-            <Users size={17} className="text-[#F4515E]" />
-            <span>인원</span>
-            <span className="ml-auto rounded-full bg-[#FFE4E3] px-2.5 py-1 text-[11px] text-[#D83C49]">
-              {partySize === 1 ? '혼자' : `${partySize}명`}
-            </span>
+        <CollapsibleOptionPanel
+          title="어떤 분위기인가요?"
+          icon={<Sparkles size={15} />}
+          summary={tags.length ? tags.join(', ') : '선택하지 않음'}
+          open={moodOptionsOpen}
+          onToggle={() => setMoodOptionsOpen(current => !current)}
+          controlsId="quick-match-mood-options"
+        >
+          <div className="grid grid-cols-2 gap-2">
+            {FOOD_TAGS.map(tag => {
+              const selected = tags.includes(tag);
+              const meta = TAG_META[tag];
+              return (
+                <motion.button
+                  key={tag}
+                  type="button"
+                  onClick={() => toggleMany(tag, setTags)}
+                  whileTap={{ scale: 0.97 }}
+                  aria-pressed={selected}
+                  className={`flex min-h-[54px] items-center gap-2 rounded-[15px] border px-3 text-left transition-all ${selected ? 'border-[#F4515E] bg-[#FFF0EE]' : 'border-[#EEE7E4] bg-white'}`}
+                >
+                  <span className="text-xl">{meta?.icon}</span>
+                  <span className="min-w-0">
+                    <strong className="block text-[12px] text-[#3E373B]">{tag}</strong>
+                    <span className="block truncate text-[9px] font-semibold text-[#A39A9E]">{meta?.hint}</span>
+                  </span>
+                  <span className={`ml-auto flex size-4 shrink-0 items-center justify-center rounded-full border ${selected ? 'border-[#F4515E] bg-[#F4515E] text-white' : 'border-[#D9D0CD] text-transparent'}`}><Check size={10} strokeWidth={3} /></span>
+                </motion.button>
+              );
+            })}
           </div>
-          <GroupSizeRuler value={partySize} onChange={setGroupSize} />
-          <p className="mt-2 text-center text-[10px] font-semibold text-[#948A8E]">
-            최대 {QUICK_MATCH_PARTY_SIZE_MAX}명까지 함께 선택할 수 있어요.
-          </p>
-        </Card>
+        </CollapsibleOptionPanel>
+
+        <CollapsibleOptionPanel
+          title="식단 요구 사항"
+          icon={<UtensilsCrossed size={15} />}
+          summary={dietaryRequirementCount ? `${dietaryRequirementCount}개 선택됨` : '선택하지 않음'}
+          open={dietaryOptionsOpen}
+          onToggle={() => setDietaryOptionsOpen(current => !current)}
+          controlsId="quick-match-dietary-options"
+        >
+          <div className="mb-2 flex items-center justify-end">
+            <button
+              type="button"
+              onClick={() => setDietary(current => current.filter(value => !DIETARY_REQUIREMENTS.some(option => option.value === value)))}
+              className="min-h-9 rounded-lg px-2 text-[10px] font-bold text-[#C43B47] outline-none focus-visible:ring-2 focus-visible:ring-[#F4515E]"
+            >
+              선택 초기화
+            </button>
+          </div>
+          <div className="grid grid-cols-2 gap-1.5">
+            {DIETARY_REQUIREMENTS.map(option => {
+              const selected = dietary.includes(option.value);
+              return (
+                <button
+                  key={option.label}
+                  type="button"
+                  onClick={() => toggleMany(option.value, setDietary)}
+                  aria-pressed={selected}
+                  className={`flex min-h-11 w-full items-center rounded-[12px] px-2.5 text-left transition-colors ${selected ? 'bg-[#EDF8EE]' : 'bg-[#F8F5F3] hover:bg-[#F1ECE9]'}`}
+                >
+                  <span className="mr-2 text-base">{option.icon}</span>
+                  <span className="truncate text-[11px] font-bold text-[#514A4D]">{option.label}</span>
+                  <span className={`ml-auto flex size-4 shrink-0 items-center justify-center rounded border ${selected ? 'border-[#55A964] bg-[#55A964] text-white' : 'border-[#D8CFCC] bg-white text-transparent'}`}><Check size={10} strokeWidth={3} /></span>
+                </button>
+              );
+            })}
+          </div>
+        </CollapsibleOptionPanel>
+
+        <CollapsibleOptionPanel
+          title="피하고 싶은 재료"
+          icon={<span className="text-base">🚫</span>}
+          summary={ingredientAvoidanceCount ? `${ingredientAvoidanceCount}개 선택됨` : '선택하지 않음'}
+          open={avoidanceOptionsOpen}
+          onToggle={() => setAvoidanceOptionsOpen(current => !current)}
+          controlsId="quick-match-ingredient-avoidance-options"
+        >
+          <IngredientAvoidancePicker
+            selected={dietary}
+            onToggle={value => toggleMany(value, setDietary)}
+            onClear={() => setDietary(current => current.filter(value => !INGREDIENT_AVOIDANCES.some(option => option.value === value)))}
+          />
+        </CollapsibleOptionPanel>
 
         <Card>
           <div className="mb-3 flex items-center justify-between gap-2">
@@ -1071,77 +1192,23 @@ export default function LunchieSettingsPage() {
         </Card>
 
         <Card>
-          <CardTitle icon={<UtensilsCrossed size={16} />} badge={`${chosenCount} 선택`}>오늘의 빠른 매칭</CardTitle>
-          <div className="grid grid-cols-4 gap-2">
-            {PREFERENCE_CARDS.map(option => (
-              <PreferenceCard key={option.label} option={option} selected={intent === option.value} onClick={() => setIntent(option.value)} />
-            ))}
+          <div className="mb-3 flex items-center gap-2 text-[14px] font-extrabold text-[#26232A]">
+            <Users size={17} className="text-[#F4515E]" />
+            <span>인원</span>
+            <span className="ml-auto rounded-full bg-[#FFE4E3] px-2.5 py-1 text-[11px] text-[#D83C49]">{partySize === 1 ? '혼자' : `${partySize}명`}</span>
           </div>
+          <GroupSizeRuler value={partySize} onChange={setGroupSize} />
+          <p className="mt-2 text-center text-[10px] font-semibold text-[#948A8E]">최대 {QUICK_MATCH_PARTY_SIZE_MAX}명까지 함께 선택할 수 있어요.</p>
+        </Card>
 
-          <div className="my-4 h-px bg-[#F0EAE8]" />
-          <div className="mb-2 flex items-center gap-2">
-            <Sparkles size={15} className="text-[#F4515E]" />
-            <p className="text-[12px] font-extrabold text-[#524B4F]">어떤 분위기인가요?</p>
-          </div>
-          <div className="grid grid-cols-2 gap-2">
-            {FOOD_TAGS.map(tag => {
-              const selected = tags.includes(tag);
-              const meta = TAG_META[tag];
-              return (
-                <motion.button
-                  key={tag}
-                  type="button"
-                  onClick={() => toggleMany(tag, setTags)}
-                  whileTap={{ scale: 0.97 }}
-                  aria-pressed={selected}
-                  className={`flex min-h-[58px] items-center gap-2 rounded-[15px] border px-3 text-left transition-all ${selected ? 'border-[#F4515E] bg-[#FFF0EE]' : 'border-[#EEE7E4] bg-white'}`}
-                >
-                  <span className="text-xl">{meta?.icon}</span>
-                  <span className="min-w-0">
-                    <strong className="block text-[12px] text-[#3E373B]">{tag}</strong>
-                    <span className="block truncate text-[9px] font-semibold text-[#A39A9E]">{meta?.hint}</span>
-                  </span>
-                  <span className={`ml-auto flex size-4 shrink-0 items-center justify-center rounded-full border ${selected ? 'border-[#F4515E] bg-[#F4515E] text-white' : 'border-[#D9D0CD] text-transparent'}`}><Check size={10} strokeWidth={3} /></span>
-                </motion.button>
-              );
-            })}
-          </div>
-
-          <div className="my-3 h-px bg-[#F0EAE8]" />
-          <div className="mb-2 flex items-center justify-between gap-3">
-            <p className="text-[12px] font-extrabold text-[#524B4F]">식단 요구 사항</p>
-            <button
-              type="button"
-              onClick={() => setDietary(current => current.filter(value => !DIETARY_REQUIREMENTS.some(option => option.value === value)))}
-              className="min-h-9 rounded-lg px-2 text-[10px] font-bold text-[#C43B47] outline-none focus-visible:ring-2 focus-visible:ring-[#F4515E]"
-            >
-              선택 초기화
-            </button>
-          </div>
-          <div className="grid grid-cols-2 gap-1.5">
-            {DIETARY_REQUIREMENTS.map(option => {
-              const selected = dietary.includes(option.value);
-              return (
-                <button
-                  key={option.label}
-                  type="button"
-                  onClick={() => toggleMany(option.value, setDietary)}
-                  aria-pressed={selected}
-                  className={`flex min-h-11 w-full items-center rounded-[12px] px-2.5 text-left transition-colors ${selected ? 'bg-[#EDF8EE]' : 'bg-[#F8F5F3] hover:bg-[#F1ECE9]'}`}
-                >
-                  <span className="mr-2 text-base">{option.icon}</span>
-                  <span className="truncate text-[11px] font-bold text-[#514A4D]">{option.label}</span>
-                  <span className={`ml-auto flex size-4 shrink-0 items-center justify-center rounded border ${selected ? 'border-[#55A964] bg-[#55A964] text-white' : 'border-[#D8CFCC] bg-white text-transparent'}`}><Check size={10} strokeWidth={3} /></span>
-                </button>
-              );
-            })}
-          </div>
-          <div className="mt-3 border-t border-[#F0EAE8] pt-3">
-            <IngredientAvoidancePicker selected={dietary} onToggle={value => toggleMany(value, setDietary)} />
+        <Card>
+          <CardTitle icon={<Clock3 size={16} />}>마감</CardTitle>
+          <div className="flex flex-col items-center">
+            <DeadlineDial minutes={deadlineMin} onChange={setDeadlineMin} />
           </div>
         </Card>
 
-        <div className="pb-3 pt-1">
+        <div className="pb-1 pt-0.5">
           <motion.button
             type="button"
             onClick={() => void handleStart()}
@@ -1160,6 +1227,7 @@ export default function LunchieSettingsPage() {
                 : isSolo ? '카드 선택 시작하기' : '세션 만들고 초대하기'}
           </motion.button>
         </div>
+
       </main>
 
       <AlertDialog open={replacementOpen} onOpenChange={open => !replacementBusy && setReplacementOpen(open)}>
