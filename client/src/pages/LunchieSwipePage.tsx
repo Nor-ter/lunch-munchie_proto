@@ -1041,11 +1041,10 @@ function WinnerScreen({ selectedWinner, onReset }: { selectedWinner?: Restaurant
             </button>
           </div>
 
-          {/* 하루 여정 씨앗 — 다음 스톱 '인지'만. 실제 결정은 이따 홈 '오늘의 여정'에서. */}
           <div className="mt-3 rounded-xl px-3 py-2.5 text-[12px] leading-relaxed"
                style={{ background: '#FFF3D6', color: '#8A5A0B' }}>
             🌱 다 드시고 나서 — <b>커피·디저트</b>도 근처에 있어요.
-            <br />이따 홈 <b>'오늘의 여정'</b>에서 다음 코스를 골라요.
+            <br /><b>퀵매치</b>에서 커피·디저트를 선택해 다시 찾아보세요.
           </div>
 
           {/* Share Card Button */}
@@ -1068,10 +1067,10 @@ function WinnerScreen({ selectedWinner, onReset }: { selectedWinner?: Restaurant
           <Link2 size={14} /> 주소 복사
         </button>
         <button
-          onClick={() => navigate('/home')}
+          onClick={() => navigate('/lunchie/settings')}
           className="flex-1 py-3 rounded-2xl font-bold text-[13px] flex items-center justify-center gap-1.5 bg-white border border-[#E5E5E5] text-[#4A4A4A] active:scale-[0.98] transition-all"
         >
-          <Home size={14} /> 홈으로
+          <Home size={14} /> 퀵매치로
         </button>
       </div>
 

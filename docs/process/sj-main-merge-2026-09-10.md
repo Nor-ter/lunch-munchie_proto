@@ -1,5 +1,11 @@
 # sj_branch UI integration into main
 
+## Superseding user decision: remove legacy Home
+
+The user clarified that removing Home from navigation was intentional. The home-preservation decisions below are historical and superseded: remove the settings body Home button, `/home` route/import and Home slide transitions. Winner/join and legacy notification-origin return controls now lead to Quick Match with matching labels. Remove the obsolete winner guidance pointing to “오늘의 여정”. The unused HomePage source is not mounted; no shared journey data or backend logic is deleted.
+
+Acceptance: `/` enters Quick Match with four tabs and no home/back control; tab round-trip and reload do not restore Home. `e2e/quick-match-entry.e2e.spec.ts` replaces the retired Home deck journey, and route unit tests cover removal of Home animation while retaining session transitions. Local synthetic fixtures only; no deployment or database changes. Rollback by reverting this follow-up commit, not the source merge.
+
 Target-before: `19aceff21ad23f9b054c675e67835ad447c4d410`.
 Source: `d25ca9253b06cef604fafec2dceb9e3d72740f14`.
 Merge base: `92846a0c`.

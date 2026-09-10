@@ -14,7 +14,6 @@ import AuthBootstrap from "./components/auth/AuthBootstrap";
 import { MapProvider } from "./components/map/MapProvider";
 import TabBar from "./components/TabBar";
 import OnboardingPage from "./pages/OnboardingPage";
-import HomePage from "./pages/HomePage";
 import MunchieFeedPage from "./pages/MunchieFeedPage";
 import FeedDetailPage from "./pages/FeedDetailPage";
 import FeedEditPage from "./pages/FeedEditPage";
@@ -88,7 +87,6 @@ function AppShell({ userId }: { userId: string | null }) {
             <Route path="/auth/login" component={AuthLoginPage} />
             <Route path="/auth/callback" component={AuthCallbackPage} />
             <Route path="/">{() => <Redirect to="/lunchie/settings" />}</Route>
-            <Route path="/home" component={HomePage} />
             {/* 기존 먼치모드(코스 탐색)는 Munchie Feed로 통합 */}
             <Route path="/explore">{() => <Redirect to="/feed" />}</Route>
             <Route path="/explore/places" component={PlaceExplorePage} />

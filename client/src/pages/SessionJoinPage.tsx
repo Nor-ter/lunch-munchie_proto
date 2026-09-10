@@ -117,7 +117,7 @@ export default function SessionJoinPage() {
     <div className="min-h-dvh bg-[#FCF4EE] flex flex-col px-5 pb-[calc(24px+env(safe-area-inset-bottom))] pt-[max(12px,env(safe-area-inset-top))]">
       {/* Header */}
       <div className="flex items-center gap-3">
-        <BackButton onClick={() => navigate('/home')} aria-label="홈으로 돌아가기" />
+        <BackButton onClick={() => navigate('/lunchie/settings')} aria-label="퀵매치로 돌아가기" />
         <div>
           <h1 className="font-bold text-[18px] text-[#1A1A1A]">점심 세션 참여하기</h1>
           <p className="text-[12px] text-[#9B9B9B]">친구들과 맛집 결정을 함께해요</p>

@@ -1026,9 +1026,6 @@ export default function LunchieSettingsPage() {
       </header>
 
       <main className="mx-auto max-w-[480px] space-y-2.5 px-4 pb-28">
-        <button type="button" onClick={() => navigate('/home')} className="min-h-11 rounded-xl bg-white px-4 text-[12px] font-bold text-[#C43B47]">
-          홈 · 오늘의 여정
-        </button>
         {sessionCheckFailed && currentSession && (
           <section role="alert" className="rounded-[20px] border border-[#F2C6C1] bg-white p-4 shadow-sm">
             <h2 className="text-[14px] font-black text-[#302B2E]">진행 중인 빠른 매칭을 확인하지 못했어요</h2>

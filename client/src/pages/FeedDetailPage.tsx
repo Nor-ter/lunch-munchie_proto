@@ -25,13 +25,13 @@ export default function FeedDetailPage() {
     : undefined;
   const detailOrigin = fromProfile ? 'profile' : fromSaved ? 'saved' : 'feed';
   const backPath = fromNotifications
-    ? '/home?notifications=1'
+    ? '/lunchie/settings'
     : fromProfile
       ? profileReturnId ? `/profile/${profileReturnId}` : '/profile'
       : fromSaved
         ? getSavedReturnPath(search, id)
         : '/feed?tab=feed';
-  const backLabel = fromNotifications ? '알림으로 돌아가기' : fromProfile ? '프로필로 돌아가기' : fromSaved ? '저장목록으로 돌아가기' : '먼치피드로 돌아가기';
+  const backLabel = fromNotifications ? '퀵매치로 돌아가기' : fromProfile ? '프로필로 돌아가기' : fromSaved ? '저장목록으로 돌아가기' : '먼치피드로 돌아가기';
 
   if (!post && (isLoading || profileFeed.isLoading)) {
     return <main className="flex min-h-dvh items-center justify-center bg-[#FCF4EE] text-sm font-bold text-[#9A8579]">피드를 불러오는 중이에요…</main>;

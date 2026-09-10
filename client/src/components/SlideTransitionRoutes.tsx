@@ -19,8 +19,6 @@ function usePrevious<T>(value: T): T | undefined {
 
 // 슬라이드 방향: +1 = 앞으로(오른쪽에서 들어옴), -1 = 뒤로(왼쪽에서 들어옴), 0 = 전환 없음
 export function getSlideDirection(from: string | undefined, to: string): number {
-  if (from === "/home" && to === "/lunchie/settings") return 1;
-  if (from === "/lunchie/settings" && to === "/home") return -1;
   if (from === "/lunchie/settings" && to === "/session/lobby") return 1;
   if (from === "/session/lobby" && to === "/lunchie/settings") return -1;
   if (from === "/session/lobby" && to === "/lunchie/swipe") return 1;

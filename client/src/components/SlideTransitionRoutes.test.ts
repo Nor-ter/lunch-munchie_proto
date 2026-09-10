@@ -1,12 +1,10 @@
 import { describe, expect, it } from "vitest";
 import { getSlideDirection, isFeedListLocation } from "./SlideTransitionRoutes";
 
-describe("home route slide transitions", () => {
-  it("supports repeated home/settings round trips", () => {
-    for (let index = 0; index < 3; index += 1) {
-      expect(getSlideDirection("/home", "/lunchie/settings")).toBe(1);
-      expect(getSlideDirection("/lunchie/settings", "/home")).toBe(-1);
-    }
+describe("Quick Match route slide transitions", () => {
+  it("does not animate the removed home route", () => {
+    expect(getSlideDirection("/home", "/lunchie/settings")).toBe(0);
+    expect(getSlideDirection("/lunchie/settings", "/home")).toBe(0);
   });
   it("does not animate the default redirect and preserves session transitions", () => {
     expect(getSlideDirection("/", "/lunchie/settings")).toBe(0);
