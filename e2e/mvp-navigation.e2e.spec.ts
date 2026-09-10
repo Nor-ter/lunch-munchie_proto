@@ -1,13 +1,13 @@
 import { expect, test, type Page } from 'playwright/test';
 
-async function mockDiscoveryApi(page: Page) {
+async function mockDiscoveryApi(page: Page, feedItems: unknown[] = []) {
   await page.route('**/api/auth/session', route => route.fulfill({
     contentType: 'application/json',
     body: JSON.stringify({ user: null }),
   }));
   await page.route('**/api/feed**', route => route.fulfill({
     contentType: 'application/json',
-    body: JSON.stringify({ items: [], nextCursor: null, hasMore: false }),
+    body: JSON.stringify({ items: feedItems, nextCursor: null, hasMore: false }),
   }));
   await page.route('**/api/restaurants**', route => route.fulfill({
     contentType: 'application/json',
@@ -33,7 +33,46 @@ test('Munchie MVP opens on discovery with a focused three-action navigation', as
   await expect(navigation.getByRole('button', { name: '내 정보' })).toBeVisible();
   await expect(navigation.getByRole('button', { name: '홈' })).toHaveCount(0);
   await expect(navigation.getByRole('button', { name: '런치' })).toHaveCount(0);
-  await expect(page.getByRole('button', { name: '새 Munchie 피드 작성' })).toHaveCount(0);
+  await expect(page.getByRole('button', { name: '코스 만들기' })).toBeVisible();
+  await expect(page.getByText('아직 Munchie 피드가 없어요')).toBeVisible();
+});
+
+test('discovery course FAB stays above the tab bar at mobile widths while the feed scrolls', async ({ page }) => {
+  const createdAt = new Date().toISOString();
+  await mockDiscoveryApi(page, [{
+    id: 'fab-post', courseId: 'fab-course', creatorId: 'fab-author',
+    authorName: 'FAB 작성자', authorImage: null, title: 'FAB가 보이는 피드',
+    description: '스크롤 고정 확인', heroImage: '', photos: [], decor: [],
+    templateId: null, tags: ['맛집'], stops: [], likesCount: 0,
+    savesCount: 0, commentsCount: 0, comments: [], createdAt,
+  }]);
+
+  for (const width of [360, 390, 430]) {
+    await page.setViewportSize({ width, height: 740 });
+    await page.goto('/feed');
+    await expect(page.getByText('FAB가 보이는 피드')).toBeVisible();
+    const fab = page.getByRole('button', { name: '코스 만들기' });
+    const navigation = page.getByRole('navigation', { name: '주요 메뉴' });
+    const before = await fab.boundingBox();
+    const navBox = await navigation.boundingBox();
+    expect(before).not.toBeNull();
+    expect(navBox).not.toBeNull();
+    expect(Math.round(before!.width)).toBe(64);
+    expect(Math.round(width - before!.x - before!.width)).toBe(18);
+    expect(Math.round(navBox!.y - before!.y - before!.height)).toBe(14);
+
+    await page.locator('main').evaluate(main => {
+      const spacer = document.createElement('div');
+      spacer.style.height = '2000px';
+      main.append(spacer);
+    });
+    const scroller = page.locator('[data-scroll-route="/feed"]');
+    await scroller.evaluate(element => element.scrollTo({ top: 900 }));
+    await expect.poll(() => scroller.evaluate(element => element.scrollTop)).toBeGreaterThan(800);
+    const after = await fab.boundingBox();
+    expect(after).not.toBeNull();
+    expect(Math.round(after!.y)).toBe(Math.round(before!.y));
+  }
 });
 
 test('profile create action enters the existing Google auth boundary', async ({ page }) => {

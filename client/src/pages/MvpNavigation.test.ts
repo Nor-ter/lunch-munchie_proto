@@ -14,7 +14,7 @@ describe('Munchie-first MVP navigation', () => {
     expect(appSource).toContain('<RequireGoogleAuth userId={userId}><CoursemapCreatePage /></RequireGoogleAuth>');
   });
 
-  it('keeps creation in profile and exposes only discovery, saved, and profile in primary navigation', () => {
+  it('keeps the three-tab navigation and exposes course creation as a discovery FAB', () => {
     expect(tabBarSource).toContain('{ path: "/feed", label: "발견"');
     expect(tabBarSource).toContain('{ path: "/saved", label: "저장"');
     expect(tabBarSource).toContain('{ path: "/profile", label: "내 정보"');
@@ -23,7 +23,11 @@ describe('Munchie-first MVP navigation', () => {
     expect(tabBarSource).toContain('aria-label="주요 메뉴"');
     expect(tabBarSource).not.toContain('{ path: "/", label: "홈"');
     expect(tabBarSource).not.toContain('{ path: "/lunchie/settings"');
-    expect(feedSource).not.toContain('aria-label="새 Munchie 피드 작성"');
+    expect(feedSource).toContain('aria-label="코스 만들기"');
+    expect(feedSource).toContain("onClick={() => navigate('/coursemap/new')}");
+    expect(feedSource).toContain('fixed bottom-[calc(var(--lm-tab-bar-height)+14px)]');
+    expect(feedSource).toContain('createPortal(');
+    expect(feedSource).toContain('document.body');
     expect(profileSource).toContain('aria-label="새 게시물 작성"');
     expect(profileSource).toContain("onClick={() => navigate('/coursemap/new')}");
     expect(profileSource).toContain('aria-label="로그인하고 게시물 작성"');

@@ -500,3 +500,12 @@
 - **이번 변경 범위 PASS**: Quick Match diff는 UI 인덱스 계산과 테스트만 변경하며 env·키·네트워크 경로를 건드리지 않는다. 클라이언트에서 서버 키 참조나 실제 Google 키 형태 리터럴이 새로 발견되지 않았고 `.env`, `.env.local`, `mobile/.env`, `.dev.vars`, `env.enc`는 현재 ignore 및 미추적 상태다.
 - **저장소 전체 종료 게이트 BLOCK**: `env.enc`가 과거 Git 이력에 존재하며, GCP 콘솔에서 현재 전체 키 목록과 실제 API/Application restriction을 전수 확인하지 못했다.
 - 미완료 보안 TODO: 모바일 키 iOS bundle ID 및 Android 패키지명+SHA-1 restriction, 웹 키 HTTP referrer restriction, 서버 키 Places API (New)+Directions 제한을 운영 콘솔에서 재확인하고 `env.enc` 역사 노출의 민감성 평가 및 필요 시 비밀값 교체·Git 이력 정리 승인을 받는다.
+
+### 22.1 DISCOVERY FAB / PROFILE SETTINGS IA (sk_branch2)
+- 발견 2열 피드·검색·필터·카드·하단 3탭을 유지하면서 52px primary-red 원형 FAB를 viewport에 고정했다. 기존 Google 인증 경계가 있는 `/coursemap/new`를 재사용하고, 360/390/430px에서 우측 18px·tab bar 위 14px 및 스크롤 전후 위치 고정을 검증했다.
+
+### 22.2 SETTINGS / FAB REFINEMENT (sk_branch2)
+- FAB 자체는 feed data 조건 밖에 있었지만 transform을 사용하는 route transition/scroll layer의 fixed containing block 안에 놓여 있었다. `document.body` portal로 옮겨 empty/populated feed와 route scroll 모두에서 viewport 고정을 보장했고, 기존 `/coursemap/new` Google 인증 경계는 유지했다.
+
+### 22.3 SETTINGS VISUAL POLISH (sk_branch2)
+- Discover FAB의 body portal, 우측 18px, tab bar 위 14px, `/coursemap/new`, 접근성 label은 유지하면서 64px coral 90% 배경, 12px backdrop blur, white translucent border와 soft layered shadow로 floating compose 스타일을 적용했다.

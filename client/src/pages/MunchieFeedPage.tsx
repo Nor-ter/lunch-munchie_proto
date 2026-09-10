@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { AnimatePresence, motion } from 'framer-motion';
-import { LoaderCircle, MapPin, RotateCcw, Search, SlidersHorizontal, X } from 'lucide-react';
+import { LoaderCircle, MapPin, Plus, RotateCcw, Search, SlidersHorizontal, X } from 'lucide-react';
 import { toast } from 'sonner';
 import { useLocation } from 'wouter';
 import { FOOD_FILTER_TAGS, hasFoodTag } from '@/constants/foodTags';
@@ -74,6 +75,17 @@ export default function MunchieFeedPage() {
   const searchActive = searchInput.trim().length > 0;
   const searchPending = searchActive
     && (searchTerm !== searchInput.trim() || userSearch.isLoading || userSearch.isFetching);
+  const courseCreationFab = typeof document === 'undefined' ? null : createPortal(
+    <button
+      type="button"
+      onClick={() => navigate('/coursemap/new')}
+      aria-label="코스 만들기"
+      className="fixed bottom-[calc(var(--lm-tab-bar-height)+14px)] right-[max(18px,calc((100vw-480px)/2+18px))] z-40 flex size-16 items-center justify-center rounded-full border border-white/20 bg-[rgba(232,80,83,0.9)] text-white shadow-[0_10px_28px_rgba(119,35,45,0.24),0_2px_8px_rgba(119,35,45,0.12)] backdrop-blur-[12px] transition-[transform,background-color,box-shadow] hover:bg-[rgba(218,66,71,0.94)] hover:shadow-[0_13px_32px_rgba(119,35,45,0.28),0_3px_10px_rgba(119,35,45,0.14)] active:scale-95 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-[#FFB6C5]"
+    >
+      <Plus size={30} strokeWidth={2.6} aria-hidden="true" />
+    </button>,
+    document.body,
+  );
 
   const pickLocation = async (placeId: string) => {
     if (locationDetailsLoadingId) return;
@@ -416,6 +428,8 @@ export default function MunchieFeedPage() {
         )}
         </>}
       </main>
+
+      {courseCreationFab}
     </div>
   );
 }
