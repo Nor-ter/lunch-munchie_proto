@@ -1068,7 +1068,7 @@ function WinnerScreen({ selectedWinner, onReset }: { selectedWinner?: Restaurant
           <Link2 size={14} /> 주소 복사
         </button>
         <button
-          onClick={() => navigate('/')}
+          onClick={() => navigate('/home')}
           className="flex-1 py-3 rounded-2xl font-bold text-[13px] flex items-center justify-center gap-1.5 bg-white border border-[#E5E5E5] text-[#4A4A4A] active:scale-[0.98] transition-all"
         >
           <Home size={14} /> 홈으로

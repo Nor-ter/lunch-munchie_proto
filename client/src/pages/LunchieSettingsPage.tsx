@@ -19,7 +19,6 @@ import {
 } from 'lucide-react';
 import { useApp } from '@/contexts/AppContext';
 import LunchmateCharacterRenderer from '@/components/munchie/LunchmateCharacterRenderer';
-import BackButton from '@/components/ui/BackButton';
 import { FOOD_TAGS } from '@/constants/foodTags';
 import { lunchmateLoadoutFromProfile } from '@/utils/lunchmateProfile';
 import { toast } from 'sonner';
@@ -1019,8 +1018,7 @@ export default function LunchieSettingsPage() {
 
   return (
     <div className="min-h-dvh bg-[#FFF6F2] pb-6">
-      <header className="sticky top-0 z-20 flex items-start gap-3 bg-[#FFF6F2]/95 px-5 pb-3 pt-[max(12px,env(safe-area-inset-top))] backdrop-blur">
-        <BackButton onClick={() => navigate('/home')} aria-label="홈으로 돌아가기" />
+      <header className="sticky top-0 z-20 bg-[#FFF6F2]/95 px-5 pb-2 pt-[max(12px,env(safe-area-inset-top))] backdrop-blur">
         <div>
           <h1 className="text-[19px] font-extrabold leading-none tracking-[-0.4px] text-[#F4515E]">Lunchie</h1>
           <p className="mt-1 text-[10px] font-bold tracking-[0.7px] text-[#9B959A]">빠른 매칭</p>
@@ -1028,6 +1026,9 @@ export default function LunchieSettingsPage() {
       </header>
 
       <main className="mx-auto max-w-[480px] space-y-2.5 px-4 pb-28">
+        <button type="button" onClick={() => navigate('/home')} className="min-h-11 rounded-xl bg-white px-4 text-[12px] font-bold text-[#C43B47]">
+          홈 · 오늘의 여정
+        </button>
         {sessionCheckFailed && currentSession && (
           <section role="alert" className="rounded-[20px] border border-[#F2C6C1] bg-white p-4 shadow-sm">
             <h2 className="text-[14px] font-black text-[#302B2E]">진행 중인 빠른 매칭을 확인하지 못했어요</h2>

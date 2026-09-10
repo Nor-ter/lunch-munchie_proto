@@ -30,7 +30,8 @@ test('mobile Quick Match deck follows swipe direction and preserves tap, intent,
   await page.goto('/');
   await expect(page).toHaveURL('/lunchie/settings');
   await expect(page.locator('.tab-bar button')).toHaveCount(4);
-  await page.getByRole('button', { name: '홈으로 돌아가기' }).click();
+  await expect(page.locator('header').getByRole('button', { name: '홈으로 돌아가기' })).toHaveCount(0);
+  await page.getByRole('button', { name: '홈 · 오늘의 여정' }).click();
   await expect(page).toHaveURL('/home');
 
   const foodie = page.getByRole('button', { name: '밥 카드 (선택됨)' });
