@@ -8,6 +8,8 @@ const VITE_CONFIG_SOURCE = readFileSync(new URL('../../../vite.config.ts', impor
 const CALLBACK_SOURCE = readFileSync(new URL('./AuthCallbackPage.tsx', import.meta.url), 'utf8');
 const LOGIN_SOURCE = readFileSync(new URL('./AuthLoginPage.tsx', import.meta.url), 'utf8');
 const PROFILE_SOURCE = readFileSync(new URL('./ProfilePage.tsx', import.meta.url), 'utf8');
+const SETTINGS_SOURCE = readFileSync(new URL('./SettingsPage.tsx', import.meta.url), 'utf8');
+const ACCOUNT_BANNER_SOURCE = readFileSync(new URL('../components/auth/AccountBanner.tsx', import.meta.url), 'utf8');
 const AVATAR_SOURCE = readFileSync(new URL('../components/ui/avatar.tsx', import.meta.url), 'utf8');
 
 describe('web auth routes and integration boundaries', () => {
@@ -39,10 +41,15 @@ describe('web auth routes and integration boundaries', () => {
     expect(LOGIN_SOURCE).toContain('오류 코드: {authError}');
   });
 
-  it('adds auth controls only inside the existing Profile settings sheet', () => {
-    expect(PROFILE_SOURCE).toContain("activeSheet === 'settings'");
-    expect(PROFILE_SOURCE).toContain('Google로 로그인');
-    expect(PROFILE_SOURCE).toContain('<AccountLogoutButton');
+  it('separates the guest login entry from authenticated account actions', () => {
+    expect(PROFILE_SOURCE).not.toContain("activeSheet === 'settings'");
+    expect(SETTINGS_SOURCE).toContain('<AccountBanner variant="settings-entry" />');
+    expect(SETTINGS_SOURCE).toContain('<AccountLogoutButton');
+    expect(SETTINGS_SOURCE).toContain('useAuthStatus()');
+    expect(SETTINGS_SOURCE).toContain('const authenticatedUser = auth.data && !auth.data.isAnonymous');
+    expect(ACCOUNT_BANNER_SOURCE).toContain("sessionStorage.setItem('lm_logout_feedback', 'true')");
+    expect(ACCOUNT_BANNER_SOURCE).toContain("window.location.replace('/settings')");
+    expect(SETTINGS_SOURCE).toContain("toast.success('로그아웃되었습니다')");
   });
 
   it('does not clear the local preview profile during sign-out', () => {

@@ -235,6 +235,8 @@ export interface UserProfile {
   emoji: string;
   /** 업로드한 프로필 사진(data URL) — 있으면 emoji 대신 이 사진을 아바타로 보여준다 */
   avatarPhoto?: string;
+  /** 설정 화면에서 고른 음식 카테고리. 서버 스키마 없이 로컬 프로필에만 저장한다. */
+  favoriteFoods?: string[];
   dietary: string[];
   categoryPrefs: { category: string; score: number; rank: number }[];
   totalSwipes: number;
@@ -373,6 +375,7 @@ const DEFAULT_PROFILE: UserProfile = {
   id: 'me',
   name: '사용자',
   emoji: '😊',
+  favoriteFoods: [],
   dietary: [],
   categoryPrefs: [
     { category: '카페', score: 0.9, rank: 1 },

@@ -6,6 +6,7 @@ const appSource = readFileSync(join(import.meta.dirname, '..', 'App.tsx'), 'utf8
 const tabBarSource = readFileSync(join(import.meta.dirname, '..', 'components', 'TabBar.tsx'), 'utf8');
 const feedSource = readFileSync(join(import.meta.dirname, 'MunchieFeedPage.tsx'), 'utf8');
 const profileSource = readFileSync(join(import.meta.dirname, 'ProfilePage.tsx'), 'utf8');
+const settingsSource = readFileSync(join(import.meta.dirname, 'SettingsPage.tsx'), 'utf8');
 
 describe('Munchie-first MVP navigation', () => {
   it('opens discovery from the root and keeps creation behind Google auth', () => {
@@ -32,5 +33,43 @@ describe('Munchie-first MVP navigation', () => {
     expect(profileSource).toContain("onClick={() => navigate('/coursemap/new')}");
     expect(profileSource).toContain('aria-label="로그인하고 게시물 작성"');
     expect(profileSource).toContain("const POST_GOOGLE_LOGIN = '/api/auth/google/start?next=%2Fcoursemap%2Fnew'");
+  });
+
+  it('opens profile settings as full pages without the primary tab bar', () => {
+    expect(appSource).toContain('<Route path="/settings/profile">{() => <RequireGoogleAuth userId={userId}><ProfileEditSettingsPage /></RequireGoogleAuth>}</Route>');
+    expect(appSource).toContain('<Route path="/settings/food-preferences" component={FoodPreferencesSettingsPage} />');
+    expect(appSource).toContain('<Route path="/settings/notifications">{() => <RequireGoogleAuth userId={userId}><NotificationSettingsPage /></RequireGoogleAuth>}</Route>');
+    expect(appSource).toContain('<Route path="/settings" component={SettingsPage} />');
+    expect(appSource).toContain("'/settings'");
+    expect(profileSource).toContain("onClick={() => navigate('/settings')}");
+    expect(profileSource).not.toContain('data-testid="profile-settings-sheet"');
+    expect(settingsSource).toContain('title="프로필 편집"');
+    expect(settingsSource).toContain('title="음식 취향"');
+    expect(settingsSource).toContain('title="알림"');
+    expect(settingsSource).toContain('title="좋아하는 음식"');
+    expect(settingsSource).toContain('전체 해제');
+    expect(settingsSource).toContain('PreferenceCategoryCard');
+    expect(settingsSource).toContain('summarizeSelections');
+    expect(settingsSource).toContain('favoriteFoods: normalizeFavoriteFoods(favoriteFoods)');
+    expect(settingsSource).toContain('data-testid="settings-save-bar"');
+    expect(settingsSource).not.toContain('<Section label="프로필">');
+    expect(settingsSource).toContain('현재 계정 삭제 기능은 아직 제공되지 않습니다.');
+    expect(settingsSource).not.toContain("navigate('/profile?avatar=edit')");
+    expect(settingsSource).not.toContain('사진 변경');
+    expect(settingsSource).toContain('data-testid="profile-edit-avatar-preview"');
+    expect(settingsSource).toContain('<AccountBanner variant="settings-entry" />');
+    expect(settingsSource).toContain('auth.data.isAnonymous');
+    expect(settingsSource).toContain('<Section label="일반">');
+    expect(settingsSource).toContain('label="언어" detail="한국어"');
+    expect(settingsSource).toContain('label="테마" detail="시스템 설정"');
+    expect(settingsSource).toContain('label="문의 및 피드백"');
+    expect(settingsSource).toContain('label="개인정보 처리방침"');
+    expect(settingsSource).toContain('label="이용약관"');
+    expect(settingsSource).toContain("const APP_VERSION = '1.0.0'");
+    expect(settingsSource).not.toContain('SupportInfoSettingsPage');
+    expect(profileSource).toContain("get('avatar') === 'edit' ? 'avatar' : null");
+    expect(profileSource).toContain("const goToSettings = useCallback(() => {");
+    expect(profileSource).toContain("navigate('/settings');");
+    expect(profileSource).toContain('<HeaderIconButton onClick={goToSettings} aria-label="프로필 설정">');
   });
 });

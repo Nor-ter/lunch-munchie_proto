@@ -503,9 +503,47 @@
 
 ### 22.1 DISCOVERY FAB / PROFILE SETTINGS IA (sk_branch2)
 - 발견 2열 피드·검색·필터·카드·하단 3탭을 유지하면서 52px primary-red 원형 FAB를 viewport에 고정했다. 기존 Google 인증 경계가 있는 `/coursemap/new`를 재사용하고, 360/390/430px에서 우측 18px·tab bar 위 14px 및 스크롤 전후 위치 고정을 검증했다.
+- Profile의 대형 설정 sheet를 제거하고 `/settings`, `/settings/profile`, `/settings/food-preferences`를 추가했다. 설정 route는 bottom nav를 숨기며, 기존 `/api/profile` PATCH, `updateProfile`, `profile.dietary`, `useAuthStatus`, `AccountLogoutButton`, avatar upload sheet를 재사용한다.
+- 실제 persistence가 없는 좋아하는 음식·알림·개인정보 토글·계정 삭제·지원/법률 링크는 작동하는 것처럼 노출하지 않았다. 식단 항목은 기존 canonical dietary taxonomy만 제공하며 AppContext/localStorage에 저장되어 추천·그룹 선택에 반영된다. 서버 프로필 dietary 컬럼/API는 추가하지 않았다.
+- 검증: TypeScript PASS, 관련 Vitest 19/19 PASS, 실제 소스 전체 Vitest 122 files / 779 tests PASS (`outputs/**` 제외), production build PASS, 최종 UI E2E 5/5 PASS, 전체 Playwright 38/38 PASS. 실제 pre-commit은 sk_branch2의 기존 Vitest discovery가 `outputs/profile-lunchmate-fix/**` 복사본을 수집해 exit 1(15 files failed, root actual suite 별도 PASS)로 종료했다.
+- 변경 범위 보안 게이트 PASS: backend, DB, migration, env, auth endpoint, Google key 경계를 변경하지 않았고 클라이언트에 새 키/secret을 추가하지 않았다. 기존 저장소 전체 키 restriction 및 `env.enc` 이력 TODO는 이전 21.4 GATE와 동일하다. commit/push/merge/PR 없음.
 
 ### 22.2 SETTINGS / FAB REFINEMENT (sk_branch2)
 - FAB 자체는 feed data 조건 밖에 있었지만 transform을 사용하는 route transition/scroll layer의 fixed containing block 안에 놓여 있었다. `document.body` portal로 옮겨 empty/populated feed와 route scroll 모두에서 viewport 고정을 보장했고, 기존 `/coursemap/new` Google 인증 경계는 유지했다.
+- Settings 상단 summary card를 유일한 Profile Edit 진입점으로 만들고 중복 row를 제거했다. 좋아하는 음식 9종은 DB/API 없이 기존 `UserProfile`의 localStorage persistence에 선택 필드로 저장하며, 전체 해제는 draft state만 비우고 저장 버튼에서만 반영한다. 식단/회피 chip도 emoji를 제거하고 선택 색·테두리·check를 명확히 했다.
+- 알림은 backend가 없어 `/settings/notifications` 안내 화면만 추가했다. 계정 삭제도 endpoint가 없어 확인 dialog 뒤 미제공 안내만 표시하며 실제 삭제 요청이나 성공 상태를 만들지 않았다. Profile Edit와 Food Preferences는 safe-area를 포함한 공용 sticky 저장 영역을 사용한다.
+- 검증: TypeScript PASS, 관련 Vitest 4 files / 19 tests PASS (`outputs/**`만 CLI exclude), 전체 Playwright 38/38 PASS, production build PASS, `git diff --check` PASS. 360/390/430px에서 empty/populated/scroll FAB와 두 detail page sticky save를 자동 검증했다. Vitest config, DB/backend, Munchie Tank/segmentation/Hatch Queue/Snack Time은 변경하지 않았고 commit/push/merge/PR도 실행하지 않았다.
+- 변경 범위 보안 게이트 PASS: env·key·secret·인증 endpoint 변경 없음, `.env`/`.dev.vars`/`env.enc` ignore 유지. 저장소 전체 미완료 보안 TODO는 21.4 GATE와 동일하다.
 
 ### 22.3 SETTINGS VISUAL POLISH (sk_branch2)
 - Discover FAB의 body portal, 우측 18px, tab bar 위 14px, `/coursemap/new`, 접근성 label은 유지하면서 64px coral 90% 배경, 12px backdrop blur, white translucent border와 soft layered shadow로 floating compose 스타일을 적용했다.
+- Settings identity card는 56px avatar와 peach gradient/elevation으로 강조했다. 인증 영역은 `로그인 및 보안`으로 명명하고 Google identity card와 line-icon logout card를 10px 간격의 독립 surface로 분리했다. 도움말은 정직한 placeholder page로 연결했고 account delete는 전체 content 최하단 standalone action으로 옮겼다.
+- Profile Edit에서는 photo edit entry를 제거하고 80px read-only preview만 표시한다. 기존 `/profile` camera icon/upload flow는 변경하지 않았다. Food Preferences는 summary card 세 개와 한 번에 하나만 열리는 compact selection panel로 바꿨고, 내부 canonical dietary value는 한국어 option label로 요약한다. 전체 해제와 save-only persistence는 유지한다.
+- 검증: 360/390/430px screenshot 9개를 `outputs/settings-polish/`에 생성하고 직접 확인했다. TypeScript PASS, 관련 Vitest 4 files / 19 tests PASS (`outputs/**` CLI exclude), 전체 Playwright 38/38 PASS, production build PASS, `git diff --check` PASS. test config/backend/DB/Munchie Tank 관련 로직은 변경하지 않았고 commit/push/merge/PR도 실행하지 않았다.
+- 변경 범위 보안 게이트 PASS: 새 네트워크 경로·인증 API·env·key·secret 없음, `.env`/`.dev.vars`/`env.enc` ignore 유지. 저장소 전체 미완료 보안 TODO는 21.4 GATE와 동일하다.
+
+### 22.4 SETTINGS GENERAL / SUPPORT IA (sk_branch2)
+- 저장소·Cloudflare 설정에 실제 support/contact destination, privacy policy, Terms page/URL이 없음을 확인했다. 임의 주소나 법률 내용을 만들지 않고 `문의 및 피드백`, `개인정보 처리방침`, `이용약관`을 line-icon `준비 중` 비활성 row로 분리했다. root `package.json`과 mobile metadata의 실제 버전 `1.0.0`은 non-navigation row로 표시한다.
+- i18n/translation system은 없고 현재 ThemeProvider는 `switchable=false`인 light-only 구조다. 전체 앱이 실제로 바뀌는 것처럼 보이지 않도록 `일반`의 언어(한국어)와 테마(시스템 설정)는 chevron/action 없는 `준비 중` row로 추가했으며 preference persistence나 route는 만들지 않았다.
+- Food Preferences summary는 canonical 값 `VEGAN`/`NO_NUTS` 대신 기존 option label `비건`/`견과류`를 사용하도록 통일했다. Profile/FAB/auth flow, DB/API, 계정 삭제 위치는 변경하지 않았다.
+- 검증: 360/390/430px 상단/하단 Settings screenshots를 직접 확인해 긴 한국어 label, status badge, version, standalone delete, safe-area 간격에 overflow가 없음을 확인했다. TypeScript PASS, 관련 Vitest 4 files / 19 tests PASS (`outputs/**` CLI exclude), Settings E2E 1/1 PASS, production build PASS. commit/push/merge/PR 없음.
+- 변경 범위 보안 게이트 PASS: 새 URL·email·legal text·network route·env·secret 없음. `.env`/`.dev.vars`/`env.enc` ignore 유지, 저장소 전체 미완료 보안 TODO는 21.4 GATE와 동일하다.
+
+### 22.5 SETTINGS AUTH GATING (sk_branch2)
+- `/settings`와 Settings row에 공통 인증 guard는 없었다. 실제 원인은 익명 세션에서도 AppContext의 local 기본 profile이 존재하고, Settings가 auth 상태를 구분하지 않은 채 그 profile을 로그인 identity와 계정 action으로 렌더링한 것이었다.
+- guest에서는 profile identity 대신 기존 Google login flow를 호출하는 로그인 card를 표시하고, 알림·Google 계정·로그아웃·계정 삭제를 숨겼다. `/settings/profile`과 `/settings/notifications` 직접 접근만 기존 `RequireGoogleAuth` 경계로 보호했다. `/settings`와 `/settings/food-preferences`는 공개 route로 유지했다.
+- 음식 취향은 guest도 기존 `lm_profile`/AppContext persistence를 그대로 사용하며 reload 후 유지된다. 로그인 후 account merge는 추가하지 않았다. 언어·테마·문의·개인정보·약관은 인증과 무관한 기존 `준비 중` 상태로 유지하고 인증 flow를 호출하지 않는다.
+- 검증: branch `sk_branch2`, TypeScript PASS, 관련 Vitest 4 files / 19 tests PASS (`outputs/**` CLI exclude), Settings/navigation Playwright 7/7 PASS, production build 및 `git diff --check` PASS. test config, backend/API/DB, auth system endpoint는 변경하지 않았고 commit/push/merge/PR도 실행하지 않았다.
+- 변경 범위 보안 게이트 PASS: 새 인증 endpoint·env·key·secret·DB 변경 없음. 공개 route와 계정 전용 route의 기존 인증 경계를 기능별로 분리했으며, 저장소 전체 미완료 보안 TODO는 21.4 GATE와 동일하다.
+
+### 22.6 GUEST PROFILE SETTINGS ENTRY (sk_branch2)
+- `/settings` route는 공개였지만 guest 전용 `ProfileGuestPreview`의 gear가 프로필 로그인 callback을 직접 사용하고 있었다. 로그인 사용자 gear와 동일하게 client-side `/settings` navigation을 사용하도록 해당 handler만 분리했다.
+- guest 프로필의 Google 로그인 버튼, avatar/Lunchmate 계정 action, 게시 작성 인증, `/settings/profile` 및 기타 account-only 인증 경계는 변경하지 않았다.
+- 검증: TypeScript PASS, 관련 Vitest 3 files / 17 tests PASS, navigation/Settings Playwright 8/8 PASS. 새 E2E는 guest `/profile` gear → `/settings` 동안 OAuth 요청이 없고, 이후 Settings 로그인 card 클릭에서만 기존 Google OAuth가 시작됨을 확인한다. `git diff --check` PASS, commit/push 없음.
+- 변경 범위 보안 게이트 PASS: route handler와 회귀 테스트만 변경했으며 backend/API/DB/env/key/secret 변경 없음. 저장소 전체 미완료 보안 TODO는 21.4 GATE와 동일하다.
+
+### 22.7 SETTINGS LOGOUT DESTINATION (sk_branch2)
+- Settings logout의 기존 `/api/auth/logout`, local/session clear, auth query invalidation과 stale in-memory account 제거용 hard navigation은 유지하고 목적지만 `/feed`에서 `/settings`로 변경했다.
+- hard navigation 뒤에도 feedback이 보이도록 session-scoped one-time marker를 Settings가 소비해 `로그아웃되었습니다` toast를 표시한다. reload 직후 동일 `/settings`에서 guest 로그인 card가 렌더링되고 계정 identity 및 로그인·보안 section은 제거된다.
+- 검증: TypeScript PASS, 관련 Vitest 2 files / 11 tests PASS, 로그인 Settings → logout POST → `/settings` guest UI 및 toast focused Playwright 1/1 PASS, `git diff --check` PASS. commit/push 없음.
+- 변경 범위 보안 게이트 PASS: logout endpoint와 clearing 대상은 변경하지 않았고 backend/API/DB/env/key/secret 변경 없음. 저장소 전체 미완료 보안 TODO는 21.4 GATE와 동일하다.
