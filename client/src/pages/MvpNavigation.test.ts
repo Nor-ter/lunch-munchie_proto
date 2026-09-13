@@ -55,7 +55,11 @@ describe('Munchie-first MVP navigation', () => {
     expect(settingsSource).not.toContain('<Section label="프로필">');
     expect(settingsSource).toContain('현재 계정 삭제 기능은 아직 제공되지 않습니다.');
     expect(settingsSource).not.toContain("navigate('/profile?avatar=edit')");
-    expect(settingsSource).not.toContain('사진 변경');
+    expect(settingsSource).toContain('사진 변경');
+    expect(profileSource).not.toContain('aria-label="아바타 변경"');
+    expect(profileSource).not.toContain('/api/uploads');
+    expect(settingsSource).toContain('/api/uploads');
+    expect(settingsSource).not.toContain('label="음식 취향"');
     expect(settingsSource).toContain('data-testid="profile-edit-avatar-preview"');
     expect(settingsSource).toContain('<AccountBanner variant="settings-entry" />');
     expect(settingsSource).toContain('auth.data.isAnonymous');
@@ -67,7 +71,7 @@ describe('Munchie-first MVP navigation', () => {
     expect(settingsSource).toContain('label="이용약관"');
     expect(settingsSource).toContain("const APP_VERSION = '1.0.0'");
     expect(settingsSource).not.toContain('SupportInfoSettingsPage');
-    expect(profileSource).toContain("get('avatar') === 'edit' ? 'avatar' : null");
+    expect(profileSource).not.toContain("get('avatar')");
     expect(profileSource).toContain("const goToSettings = useCallback(() => {");
     expect(profileSource).toContain("navigate('/settings');");
     expect(profileSource).toContain('<HeaderIconButton onClick={goToSettings} aria-label="프로필 설정">');

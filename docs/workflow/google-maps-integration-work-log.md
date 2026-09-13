@@ -547,3 +547,14 @@
 - hard navigation 뒤에도 feedback이 보이도록 session-scoped one-time marker를 Settings가 소비해 `로그아웃되었습니다` toast를 표시한다. reload 직후 동일 `/settings`에서 guest 로그인 card가 렌더링되고 계정 identity 및 로그인·보안 section은 제거된다.
 - 검증: TypeScript PASS, 관련 Vitest 2 files / 11 tests PASS, 로그인 Settings → logout POST → `/settings` guest UI 및 toast focused Playwright 1/1 PASS, `git diff --check` PASS. commit/push 없음.
 - 변경 범위 보안 게이트 PASS: logout endpoint와 clearing 대상은 변경하지 않았고 backend/API/DB/env/key/secret 변경 없음. 저장소 전체 미완료 보안 TODO는 21.4 GATE와 동일하다.
+
+### PR #75 UI feedback — sk_branch2 (2026-09-12)
+- 요청 4건: Discover FAB 58px / plus 25px / stroke 2, Google account+logout을 Settings Profile로 이동, avatar editor/upload를 Settings Profile로 이동하고 Profile은 표시 전용, Settings 음식 취향 진입점 숨김.
+- 기존 /api/uploads, /api/profile PATCH, AccountLogoutButton, RequireGoogleAuth, guest Settings 및 course creation auth boundary를 재사용. backend/DB/migration/auth endpoint와 Lunchie/Lunchmate 동작 변경 없음.
+- 검증: TypeScript 통과. 현재 프로젝트 Vitest 122 files / 779 tests 통과 (npx vitest run --exclude "outputs/**"). 전체 Playwright 첫 실행 36 passed / 6 timeout; 부하 종료 후 --last-failed --workers=2로 6 passed, 전체 42개 통과 확인. vite build 통과.
+- npm run test:precommit은 기존 outputs/profile-lunchmate-fix 복사본의 잘못된 테스트 수집으로 Vitest 단계 실패 (15 failed files, 실패 모두 outputs 하위). 테스트 설정과 기존 복사본은 변경하지 않음.
+- 360/390/430 x 740에서 Settings/Profile edit/FAB 캡처 육안 확인. FAB 우측 18px, nav 위 14px, 스크롤 고정 및 가로 overflow 없음 확인. 사진 upload→PATCH→reload 유지→삭제와 logout, guest 인증 경계를 mock API E2E로 검증.
+- 메인 에이전트 변경 범위 검토 1회: 새 key/secret/env/endpoint 없음, .env 및 env.enc ignore 유지. 운영 키 restriction은 이번 UI 작업에서 조회하지 않음. 기존 21.4의 key restriction/Android SHA-1/env.enc 이력 TODO 유지. 사용자 지시에 따라 서브에이전트, commit/push 없음.
+
+- PR #75 추가 UI 피드백: Settings Profile 연결 계정 카드의 authenticatedUser.picture 분기를 제거하고 GoogleMark를 항상 표시. 앱 프로필 사진 및 auth/session/API 동작 변경 없음. 메인 에이전트 변경 검토 1회, 새 key/secret/env 변경 없음. commit/push 없음.
+- 최종 전달: 계정 삭제 이동은 사용자 요청으로 취소하여 Settings 메인에 유지. sk_branch2의 피드백 관련 6개 파일만 commit/push 대상으로 선택. 전체 commit hook 검증 동안 기존 outputs 복사본을 node_modules 하위 임시 경로로 옮겨 수집에서 제외하고 finally에서 원위치 복원한다.

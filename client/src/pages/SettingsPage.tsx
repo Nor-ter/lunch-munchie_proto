@@ -1,5 +1,7 @@
-import { useEffect, useState, type ReactNode } from 'react';
-import { Bell, Check, ChevronDown, ChevronRight, FileText, Globe2, LoaderCircle, MessageCircle, Palette, ShieldCheck, Trash2, Utensils } from 'lucide-react';
+import { motion, AnimatePresence } from 'framer-motion';
+import { fileToResizedDataUrl } from '@/lib/imageUtils';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
+import { Bell, Check, ChevronDown, ChevronRight, FileText, Globe2, LoaderCircle, MessageCircle, Palette, ShieldCheck, Trash2, Upload, X } from 'lucide-react';
 import { toast } from 'sonner';
 import { useLocation } from 'wouter';
 import { AccountBanner, AccountLogoutButton } from '@/components/auth/AccountBanner';
@@ -15,6 +17,8 @@ import {
   GOOGLE_PROFILE_IMPORT_PARAM,
   markGoogleProfilePrompted,
 } from '@/services/authApi';
+
+const EMOJIS = ['😊', '🍱', '🍜', '🍣', '🥩', '🍕', '🌮', '🍔', '🥗', '☕', '🎂', '🍰'];
 
 const FAVORITE_FOOD_OPTIONS = [
   { value: '한식', label: '한식' },
@@ -162,8 +166,6 @@ export default function SettingsPage() {
   const auth = useAuthStatus();
   const authenticatedUser = auth.data && !auth.data.isAnonymous ? auth.data : null;
   const isAuthenticated = Boolean(authenticatedUser);
-  const dietaryCount = normalizeDietaryPreferences(profile.dietary).length;
-  const preferenceCount = dietaryCount + normalizeFavoriteFoods(profile.favoriteFoods).length;
 
   useEffect(() => {
     if (sessionStorage.getItem('lm_logout_feedback') !== 'true') return;
@@ -201,22 +203,14 @@ export default function SettingsPage() {
           </button>
         )}
 
-        <Section label="개인화">
+        {isAuthenticated && <Section label="개인화">
           <SettingsRow
-            icon={<Utensils size={17} />}
-            label="음식 취향"
-            detail={preferenceCount ? `${preferenceCount}개 선택됨` : '선택한 항목 없음'}
-            onClick={() => navigate('/settings/food-preferences')}
+            icon={<Bell size={17} />}
+            label="알림"
+            detail="알림 설정 안내"
+            onClick={() => navigate('/settings/notifications')}
           />
-          {isAuthenticated && <div className="border-t border-[#F0E3DD]">
-            <SettingsRow
-              icon={<Bell size={17} />}
-              label="알림"
-              detail="알림 설정 안내"
-              onClick={() => navigate('/settings/notifications')}
-            />
-          </div>}
-        </Section>
+        </Section>}
 
         <Section label="일반">
           <SettingsUnavailableRow icon={<Globe2 size={17} />} label="언어" detail="한국어" />
@@ -224,28 +218,6 @@ export default function SettingsPage() {
             <SettingsUnavailableRow icon={<Palette size={17} />} label="테마" detail="시스템 설정" />
           </div>
         </Section>
-
-        {authenticatedUser && <section>
-          <h2 className="mb-2 px-1 text-[11px] font-black tracking-[0.04em] text-[#9A8175]">로그인 및 보안</h2>
-          <div className="space-y-2.5">
-            <div data-testid="google-account-card" className="flex min-h-[68px] items-center gap-3 rounded-[16px] border border-[#EADDD6] bg-white px-4 shadow-[0_2px_8px_rgba(70,45,35,0.06)]">
-              {authenticatedUser.picture ? (
-                <img src={authenticatedUser.picture} alt="Google 프로필" className="size-9 shrink-0 rounded-full object-cover" referrerPolicy="no-referrer" />
-              ) : (
-                <span className="flex size-9 shrink-0 items-center justify-center rounded-full bg-[#F8F8F8]"><GoogleMark /></span>
-              )}
-              <span className="min-w-0 flex-1">
-                <span className="block text-[14px] font-semibold text-[#33251F]">Google 계정</span>
-                <span className="mt-1 block truncate text-[11px] font-normal text-[#A08D84]">{authenticatedUser.email ?? authenticatedUser.name ?? '계정 정보 없음'}</span>
-              </span>
-              <span className="shrink-0 rounded-full bg-[#EEF4FF] px-2.5 py-1 text-[10px] font-bold text-[#4285F4]">연결됨</span>
-            </div>
-            <AccountLogoutButton
-              className="mt-0 h-16 justify-start rounded-[16px] border border-[#EADDD6] bg-white px-4 text-[14px] font-semibold text-[#33251F] shadow-[0_2px_8px_rgba(70,45,35,0.06)] hover:bg-[#FFF9F6]"
-              iconContainerClassName="flex size-8 shrink-0 items-center justify-center rounded-[10px] bg-[#FFF0EC] text-[#D94D55]"
-            />
-          </div>
-        </section>}
 
         <Section label="지원 및 정보">
           <SettingsUnavailableRow icon={<MessageCircle size={17} />} label="문의 및 피드백" />
@@ -280,6 +252,45 @@ export function ProfileEditSettingsPage() {
   const { profile, updateProfile } = useApp();
   const [name, setName] = useState(profile.name);
   const [handle, setHandle] = useState(profile.handle ?? '');
+  const auth = useAuthStatus();
+  const authenticatedUser = auth.data && !auth.data.isAnonymous ? auth.data : null;
+  const [avatarOpen, setAvatarOpen] = useState(false);
+  const avatarFileRef = useRef<HTMLInputElement>(null);
+  const closeAvatar = () => setAvatarOpen(false);
+  const pickEmoji = (e: string) => {
+    updateProfile({ emoji: e, avatarPhoto: undefined });
+    void fetch('/api/profile', {
+      method: 'PATCH', credentials: 'same-origin', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ avatarUrl: null }),
+    });
+    toast.success('아바타를 변경했어요! ' + e);
+  };
+
+  const handleAvatarUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (!file) return;
+    try {
+      const dataUrl = await fileToResizedDataUrl(file, 400, 0.85);
+      const uploadResponse = await fetch('/api/uploads', {
+        method: 'POST', credentials: 'same-origin', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ dataUrl }),
+      });
+      const upload = await uploadResponse.json().catch(() => ({})) as { url?: string; error?: string };
+      if (!uploadResponse.ok || !upload.url) throw new Error(upload.error || '사진 업로드에 실패했어요.');
+      const profileResponse = await fetch('/api/profile', {
+        method: 'PATCH', credentials: 'same-origin', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ avatarUrl: upload.url }),
+      });
+      const saved = await profileResponse.json().catch(() => ({})) as { profile?: { profile_image_url?: string | null }; error?: string };
+      if (!profileResponse.ok) throw new Error(saved.error || '프로필 사진을 저장하지 못했어요.');
+      updateProfile({ avatarPhoto: saved.profile?.profile_image_url ?? upload.url });
+      toast.success('프로필 사진을 업데이트했어요! 📸');
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : '사진을 불러오지 못했어요');
+    }
+  };
+
   const [saving, setSaving] = useState(false);
 
   const saveProfile = async () => {
@@ -325,11 +336,19 @@ export function ProfileEditSettingsPage() {
     <main className="flex min-h-dvh flex-col bg-[#FCF4EE] text-[#30231E]">
       <SettingsHeader title="프로필 편집" backTo="/settings" />
       <div className="flex min-h-0 flex-1 flex-col px-5 pt-6">
-        <div className="mb-8 flex flex-col items-center">
+        <div className="mb-6 flex flex-col items-center">
           <div data-testid="profile-edit-avatar-preview">
             <SettingsAvatar photo={profile.avatarPhoto} emoji={profile.emoji} size="preview" />
           </div>
-          <p className="mt-3 text-[10px] font-medium text-[#A08D84]">사진은 내 정보에서 변경할 수 있어요</p>
+          <button type="button" onClick={() => setAvatarOpen(true)} className="mt-2 min-h-11 rounded-full px-4 text-[12px] font-bold text-[#D94D55] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#F28A8D]">사진 변경</button>
+        {/* 설정 프로필 사진 업로드 */}
+        <input
+          ref={avatarFileRef}
+          type="file"
+          accept="image/*"
+          className="hidden"
+          onChange={handleAvatarUpload}
+        />
         </div>
 
         <div className="space-y-5">
@@ -360,6 +379,24 @@ export function ProfileEditSettingsPage() {
           </label>
         </div>
 
+        {authenticatedUser && <section className="mt-6">
+          <h2 className="mb-2 px-1 text-[11px] font-black tracking-[0.04em] text-[#9A8175]">연결된 계정</h2>
+          <div className="space-y-2.5">
+            <div data-testid="google-account-card" className="flex min-h-[68px] items-center gap-3 rounded-[16px] border border-[#EADDD6] bg-white px-4 shadow-[0_2px_8px_rgba(70,45,35,0.06)]">
+              <span className="flex size-9 shrink-0 items-center justify-center rounded-full bg-[#F8F8F8]"><GoogleMark /></span>
+              <span className="min-w-0 flex-1">
+                <span className="block text-[14px] font-semibold text-[#33251F]">Google 계정</span>
+                <span className="mt-1 block truncate text-[11px] font-normal text-[#A08D84]">{authenticatedUser.email ?? authenticatedUser.name ?? '계정 정보 없음'}</span>
+              </span>
+              <span className="shrink-0 rounded-full bg-[#EEF4FF] px-2.5 py-1 text-[10px] font-bold text-[#4285F4]">연결됨</span>
+            </div>
+            <AccountLogoutButton
+              className="mt-0 h-16 justify-start rounded-[16px] border border-[#EADDD6] bg-white px-4 text-[14px] font-semibold text-[#33251F] shadow-[0_2px_8px_rgba(70,45,35,0.06)] hover:bg-[#FFF9F6]"
+              iconContainerClassName="flex size-8 shrink-0 items-center justify-center rounded-[10px] bg-[#FFF0EC] text-[#D94D55]"
+            />
+          </div>
+        </section>}
+
         <SettingsSaveBar>
           <button
             type="button"
@@ -371,7 +408,79 @@ export function ProfileEditSettingsPage() {
             저장하기
           </button>
         </SettingsSaveBar>
+
       </div>
+      {/* 아바타 변경 시트 — 사진 업로드 또는 기본 이모지 중 선택, 즉시 반영 */}
+      <AnimatePresence>
+        {avatarOpen && (
+          <>
+            <motion.div
+              className="fixed inset-0 bg-black/40 z-50"
+              initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+              onClick={closeAvatar}
+            />
+            <motion.div
+              className="fixed bottom-0 left-0 right-0 mx-auto w-full max-w-[430px] bg-white rounded-t-3xl z-50 px-5 pt-4 pb-8 max-h-[80dvh] overflow-y-auto"
+              initial={{ y: '100%' }} animate={{ y: 0 }} exit={{ y: '100%' }}
+              transition={{ type: 'tween', ease: [0.32, 0.72, 0, 1], duration: 0.3 }}
+            >
+              <div className="mx-auto mb-4 h-1 w-10 rounded-full bg-gray-200" />
+              <div className="mb-4 flex items-center justify-between">
+                <p className="font-bold text-[16px]">아바타 변경</p>
+                <button type="button" aria-label="사진 변경 닫기" onClick={closeAvatar}><X size={18} className="text-gray-400" /></button>
+              </div>
+
+              <div className="mb-5 flex flex-col items-center">
+                <SettingsAvatar photo={profile.avatarPhoto} emoji={profile.emoji} size="preview" />
+                <button
+                  onClick={() => avatarFileRef.current?.click()}
+                  className="mt-3 flex items-center gap-1.5 rounded-full bg-[#EB5053] text-white px-4 h-9 text-[12px] font-bold active:scale-95 transition-transform"
+                >
+                  <Upload size={13} /> 사진 업로드
+                </button>
+                {profile.avatarPhoto && (
+                  <button
+                    onClick={() => {
+                      updateProfile({ avatarPhoto: undefined });
+                      void fetch('/api/profile', {
+                        method: 'PATCH', credentials: 'same-origin', headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ avatarUrl: null }),
+                      });
+                      toast('사진을 지웠어요 — 이모지로 돌아가요');
+                    }}
+                    className="mt-2 text-[11px] font-semibold text-[#B0A090] underline underline-offset-2"
+                  >
+                    사진 삭제하고 이모지로
+                  </button>
+                )}
+              </div>
+
+              <p className="mb-2 text-[12px] font-semibold text-[#9B9B9B]">기본 이모지</p>
+              <div className="flex flex-wrap gap-2">
+                {EMOJIS.map(e => {
+                  const active = !profile.avatarPhoto && profile.emoji === e;
+                  return (
+                    <button
+                      key={e}
+                      onClick={() => pickEmoji(e)}
+                      className={`text-xl p-1.5 rounded-xl transition-all ${active ? 'bg-[#FFF5F5] ring-2 ring-[#EB5053] scale-110' : 'bg-[#F5F5F5]'}`}
+                    >
+                      {e}
+                    </button>
+                  );
+                })}
+              </div>
+
+              <button
+                onClick={closeAvatar}
+                className="mt-6 w-full h-12 rounded-2xl bg-[#E85053] text-white font-bold text-[14px]"
+              >
+                완료
+              </button>
+            </motion.div>
+          </>
+        )}
+      </AnimatePresence>
     </main>
   );
 }

@@ -80,9 +80,9 @@ export default function MunchieFeedPage() {
       type="button"
       onClick={() => navigate('/coursemap/new')}
       aria-label="코스 만들기"
-      className="fixed bottom-[calc(var(--lm-tab-bar-height)+14px)] right-[max(18px,calc((100vw-480px)/2+18px))] z-40 flex size-16 items-center justify-center rounded-full border border-white/20 bg-[rgba(232,80,83,0.9)] text-white shadow-[0_10px_28px_rgba(119,35,45,0.24),0_2px_8px_rgba(119,35,45,0.12)] backdrop-blur-[12px] transition-[transform,background-color,box-shadow] hover:bg-[rgba(218,66,71,0.94)] hover:shadow-[0_13px_32px_rgba(119,35,45,0.28),0_3px_10px_rgba(119,35,45,0.14)] active:scale-95 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-[#FFB6C5]"
+      className="fixed bottom-[calc(var(--lm-tab-bar-height)+14px)] right-[max(18px,calc((100vw-480px)/2+18px))] z-40 flex size-[58px] items-center justify-center rounded-full border border-white/20 bg-[rgba(232,80,83,0.9)] text-white shadow-[0_10px_28px_rgba(119,35,45,0.24),0_2px_8px_rgba(119,35,45,0.12)] backdrop-blur-[12px] transition-[transform,background-color,box-shadow] hover:bg-[rgba(218,66,71,0.94)] hover:shadow-[0_13px_32px_rgba(119,35,45,0.28),0_3px_10px_rgba(119,35,45,0.14)] active:scale-95 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-[#FFB6C5]"
     >
-      <Plus size={30} strokeWidth={2.6} aria-hidden="true" />
+      <Plus size={25} strokeWidth={2} aria-hidden="true" />
     </button>,
     document.body,
   );
