@@ -54,6 +54,30 @@ async function prepareAuthenticatedProfile(page: Page) {
   }, USER_ID);
 }
 
+async function readGrabLayerAndShadowRects(page: Page) {
+  return page.evaluate(() => {
+    const layer = document.querySelector<HTMLElement>(
+      '[data-lunchmate-profile-grab-position="true"]',
+    );
+    const shadow = document.querySelector<HTMLElement>(
+      '[data-lunchmate-profile-moving-shadow="true"]',
+    );
+
+    if (!layer || !shadow) {
+      throw new Error('Expected the profile grab layer and its moving shadow to be rendered');
+    }
+
+    // Read both rects synchronously so an animation frame cannot advance between them.
+    const layerRect = layer.getBoundingClientRect();
+    const shadowRect = shadow.getBoundingClientRect();
+
+    return {
+      layer: { x: layerRect.x, centerX: layerRect.x + (layerRect.width / 2) },
+      shadow: { x: shadowRect.x, centerX: shadowRect.x + (shadowRect.width / 2) },
+    };
+  });
+}
+
 test('character grabs on a short move and carries its shadow with it', async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await prepareAuthenticatedProfile(page);
@@ -85,30 +109,20 @@ test('character grabs on a short move and carries its shadow with it', async ({ 
   await expect(character).toHaveAttribute('data-lunchmate-profile-expression', 'surprised');
   await expect(character).toHaveAttribute('aria-label', '놀란 런치메이트 캐릭터, 드래그 중');
 
-  const [layerBefore, shadowBefore] = await Promise.all([
-    movingLayer.boundingBox(),
-    shadow.boundingBox(),
-  ]);
-  expect(layerBefore).not.toBeNull();
-  expect(shadowBefore).not.toBeNull();
+  const before = await readGrabLayerAndShadowRects(page);
 
   await page.mouse.move(startX + 76, startY - 34, { steps: 4 });
   await expect.poll(async () => (await movingLayer.boundingBox())?.x ?? 0).toBeGreaterThan(
-    layerBefore!.x + 30,
+    before.layer.x + 30,
   );
   await expect.poll(async () => (await shadow.boundingBox())?.x ?? 0).toBeGreaterThan(
-    shadowBefore!.x + 30,
+    before.shadow.x + 30,
   );
 
-  const [layerAfter, shadowAfter] = await Promise.all([
-    movingLayer.boundingBox(),
-    shadow.boundingBox(),
-  ]);
+  const after = await readGrabLayerAndShadowRects(page);
   // 그림자는 잡는 동안 scaleX가 줄어드므로 left가 아니라 중심 이동을 비교한다.
-  const layerDeltaX = (layerAfter!.x + (layerAfter!.width / 2))
-    - (layerBefore!.x + (layerBefore!.width / 2));
-  const shadowDeltaX = (shadowAfter!.x + (shadowAfter!.width / 2))
-    - (shadowBefore!.x + (shadowBefore!.width / 2));
+  const layerDeltaX = after.layer.centerX - before.layer.centerX;
+  const shadowDeltaX = after.shadow.centerX - before.shadow.centerX;
   expect(Math.abs(layerDeltaX - shadowDeltaX)).toBeLessThan(2);
 
   await page.mouse.up();

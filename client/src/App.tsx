@@ -43,10 +43,11 @@ import TemplatesBrowsePage from "./pages/TemplatesBrowsePage";
 import CourseFeedsPage from "./pages/course/CourseFeedsPage";
 import PlaceExplorePage from "./pages/PlaceExplorePage";
 import StorySharePage from "./pages/StorySharePage";
+import SettingsPage, { FoodPreferencesSettingsPage, NotificationSettingsPage, ProfileEditSettingsPage } from "./pages/SettingsPage";
 import LunchieWaitingCompanion from "./components/lunchie/LunchieWaitingCompanion";
 import { startGoogleAuth } from "./services/authApi";
 
-const NO_TABBAR = ['/onboarding', '/legacy', '/tour-mode', '/course/', '/coursemap', '/template/', '/templates', '/lunchie', '/session', '/join', '/feed/', '/explore/places', '/auth', '/admin'];
+const NO_TABBAR = ['/onboarding', '/legacy', '/tour-mode', '/course/', '/coursemap', '/template/', '/templates', '/lunchie', '/session', '/join', '/feed/', '/explore/places', '/auth', '/admin', '/settings'];
 function CoursesRedirect() {
   const params = useParams<{ id: string }>();
   return <Redirect to={`/course/${params.id}`} />;
@@ -109,6 +110,10 @@ function AppShell({ userId }: { userId: string | null }) {
             <Route path="/profile/foodie-room" component={FoodieRoomPage} />
             <Route path="/profile" component={ProfilePage} />
             <Route path="/profile/:id" component={OtherProfilePage} />
+            <Route path="/settings/profile">{() => <RequireGoogleAuth userId={userId}><ProfileEditSettingsPage /></RequireGoogleAuth>}</Route>
+            <Route path="/settings/food-preferences" component={FoodPreferencesSettingsPage} />
+            <Route path="/settings/notifications">{() => <RequireGoogleAuth userId={userId}><NotificationSettingsPage /></RequireGoogleAuth>}</Route>
+            <Route path="/settings" component={SettingsPage} />
             {/* Lunchie 그룹 세션 플로우 (data-jp) */}
             <Route path="/lunchie/settings" component={LunchieSettingsPage} />
             <Route path="/session/lobby" component={SessionLobbyPage} />
