@@ -3,6 +3,7 @@ import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 
 const profileSource = readFileSync(join(import.meta.dirname, 'ProfilePage.tsx'), 'utf8');
+const settingsSource = readFileSync(join(import.meta.dirname, 'SettingsPage.tsx'), 'utf8');
 const contextSource = readFileSync(join(import.meta.dirname, '..', 'contexts', 'AppContext.tsx'), 'utf8');
 const buddySource = readFileSync(join(import.meta.dirname, '..', 'components', 'munchie', 'FoodieBuddy.tsx'), 'utf8');
 const progressSource = readFileSync(join(import.meta.dirname, '..', 'components', 'munchie', 'LunchmateProgressSheet.tsx'), 'utf8');
@@ -10,8 +11,8 @@ const progressSource = readFileSync(join(import.meta.dirname, '..', 'components'
 describe('Profile information and level synchronization', () => {
   it('keeps the sk profile copy and compact badge presentation', () => {
     expect(profileSource).not.toContain('value={editBio}');
-    expect(profileSource).toContain("body: JSON.stringify({ username, handle })");
-    expect(profileSource).toContain("updateProfile({ name: saved.profile.username, handle: saved.profile.handle })");
+    expect(settingsSource).toContain("body: JSON.stringify({ username, handle: normalizedHandle })");
+    expect(settingsSource).toContain("updateProfile({ name: saved.profile.username, handle: saved.profile.handle })");
     expect(profileSource).toContain('오늘도 맛있는 하루를 위해');
     expect(profileSource).toContain('🏅 배지');
   });

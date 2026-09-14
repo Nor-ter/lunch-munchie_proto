@@ -5,21 +5,17 @@
  * - 나의 피드: 홈과 동일한 요약 카드, 상세 화면에서 댓글·수정 관리
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
 import { useLocation } from 'wouter';
 import {
-  Settings, X, Camera, Upload, Plus,
+  Settings, Plus,
 } from 'lucide-react';
-import { toast } from 'sonner';
 import { useApp, type FeedPost } from '@/contexts/AppContext';
 import { useAuthStatus } from '@/hooks/useAuthStatus';
 import { useProfileFeed } from '@/hooks/useProfileFeed';
-import { fileToResizedDataUrl } from '@/lib/imageUtils';
 import UnifiedMunchieCard from '@/components/munchie/UnifiedMunchieCard';
 import FoodieBuddy, { type FoodieBuddyUiState } from '@/components/munchie/FoodieBuddy';
 import { ProfileStats } from '@/components/follow/ProfileStats';
 import { FollowerListSheet, type FollowListMode } from '@/components/follow/FollowerListSheet';
-import { AccountBanner, AccountLogoutButton } from '@/components/auth/AccountBanner';
 import {
   GOOGLE_PROFILE_IMPORT_PARAM, GOOGLE_PROFILE_PROMPTED_KEY, IDENTITY_CONFLICT_CODE,
 } from '@/services/authApi';
@@ -45,9 +41,6 @@ import {
   lunchmateTotalXpFromProfile,
   resolveLunchmateLevelRewardGrant,
 } from '@/utils/lunchmateProfile';
-
-const EMOJIS = ['😊', '🍱', '🍜', '🍣', '🥩', '🍕', '🌮', '🍔', '🥗', '☕', '🎂', '🍰'];
-const DIETARY_OPTIONS = ['비건', '채식', '글루텐프리', '할랄', '유제품 제외', '견과류 알러지', '해산물 제외'];
 
 /** 로그인 전 프로필 미리보기에서만 사용하는 fixture. */
 const LUNCHMATE_PREVIEW_FIXTURE = {
@@ -88,7 +81,7 @@ const LUNCHMATE_PREVIEW_FIXTURE = {
   foodItems: readonly LunchboxFoodItem[];
 };
 
-type ProfileSheet = 'settings' | 'avatar' | 'lunchbox' | 'progress' | 'levelUp';
+type ProfileSheet = 'lunchbox' | 'progress' | 'levelUp';
 
 /** 프로필 아바타 — 업로드 사진이 있으면 사진, 없으면 이모지. 공통 렌더링으로 항상 최신 profile을 반영한다 */
 function Avatar({ photo, emoji, size }: { photo?: string; emoji: string; size: number }) {
@@ -143,24 +136,23 @@ function ProfilePageContent({ authenticatedUserId }: { authenticatedUserId: stri
     [lunchboxFoodItems],
   );
 
-  const [activeSheet, setActiveSheet] = useState<ProfileSheet | null>(() => {
+  const [activeSheet, setActiveSheet] = useState<ProfileSheet | null>(null);
+  useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const firstGoogleProfilePrompt = params.get(GOOGLE_PROFILE_IMPORT_PARAM) === 'ask'
       && localStorage.getItem(GOOGLE_PROFILE_PROMPTED_KEY) !== 'true';
+    if (firstGoogleProfilePrompt || params.get('error_code') === IDENTITY_CONFLICT_CODE) {
+      navigate(`/settings/profile${window.location.search}`, { replace: true });
+      return;
+    }
     if (params.get(GOOGLE_PROFILE_IMPORT_PARAM) === 'ask' && !firstGoogleProfilePrompt) {
       const url = new URL(window.location.href);
       url.searchParams.delete(GOOGLE_PROFILE_IMPORT_PARAM);
       window.history.replaceState({}, '', `${url.pathname}${url.search}${url.hash}`);
     }
-    return firstGoogleProfilePrompt || params.get('error_code') === IDENTITY_CONFLICT_CODE
-      ? 'settings'
-      : null;
-  });
+  }, [navigate]);
   const [followListMode, setFollowListMode] = useState<FollowListMode | null>(null);
   const [levelUpRewardItem, setLevelUpRewardItem] = useState<LunchmateLayerItem | null>(null);
-  const [editName, setEditName] = useState(profile.name);
-  const [editHandle, setEditHandle] = useState(profile.handle ?? '');
-  const avatarFileRef = useRef<HTMLInputElement>(null);
   const lunchboxButtonRef = useRef<HTMLButtonElement>(null);
   const foodieDropTargetRef = useRef<HTMLDivElement>(null);
   const progressButtonRef = useRef<HTMLButtonElement>(null);
@@ -169,7 +161,9 @@ function ProfilePageContent({ authenticatedUserId }: { authenticatedUserId: stri
   const activeFoodDragIdRef = useRef<string | null>(null);
   const [draggedFoodId, setDraggedFoodId] = useState<string | null>(null);
   const [isFoodDragOver, setIsFoodDragOver] = useState(false);
-  const closeActiveSheet = useCallback(() => setActiveSheet(null), []);
+  const closeActiveSheet = useCallback(() => {
+    setActiveSheet(null);
+  }, []);
   const lunchmateTotalXp = lunchmateTotalXpFromProfile(profile);
   const persistLunchmateTotalXp = useCallback((nextTotalXp: number) => {
     updateProfile({ lunchmateTotalXp: nextTotalXp });
@@ -330,91 +324,17 @@ function ProfilePageContent({ authenticatedUserId }: { authenticatedUserId: stri
   // 성장점수: 코스맵 + 피드가 쌓일수록 푸디 캐릭터가 진화한다
   const foodieScore = courses.length + myPosts.length;
 
-
-  const saveSettings = async () => {
-    const username = editName.trim();
-    const handle = editHandle.trim().replace(/^@/, '').toLowerCase();
-    if (!username) {
-      toast.error('이름을 입력해 주세요.');
-      return;
-    }
-    if (!/^[a-z0-9_]{3,20}$/.test(handle)) {
-      toast.error('아이디는 영문 소문자, 숫자, 밑줄로 3~20자까지 입력해 주세요.');
-      return;
-    }
-    try {
-      const response = await fetch('/api/profile', {
-        method: 'PATCH', credentials: 'same-origin', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ username, handle }),
-      });
-      const saved = await response.json().catch(() => ({})) as { profile?: { username?: string; handle?: string }; error?: string };
-      if (!response.ok || !saved.profile?.username || !saved.profile.handle) throw new Error(saved.error || '프로필을 저장하지 못했어요.');
-      updateProfile({ name: saved.profile.username, handle: saved.profile.handle });
-      setActiveSheet(null);
-      toast.success('프로필 업데이트 완료! ✅');
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : '이름을 저장하지 못했어요.');
-    }
-  };
-
-  const toggleDiet = (d: string) => {
-    const current = profile.dietary;
-    updateProfile({ dietary: current.includes(d) ? current.filter(x => x !== d) : [...current, d] });
-  };
-
-  const pickEmoji = (e: string) => {
-    updateProfile({ emoji: e, avatarPhoto: undefined });
-    void fetch('/api/profile', {
-      method: 'PATCH', credentials: 'same-origin', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ avatarUrl: null }),
-    });
-    toast.success('아바타를 변경했어요! ' + e);
-  };
-
-  const handleAvatarUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    e.target.value = '';
-    if (!file) return;
-    try {
-      const dataUrl = await fileToResizedDataUrl(file, 400, 0.85);
-      const uploadResponse = await fetch('/api/uploads', {
-        method: 'POST', credentials: 'same-origin', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ dataUrl }),
-      });
-      const upload = await uploadResponse.json().catch(() => ({})) as { url?: string; error?: string };
-      if (!uploadResponse.ok || !upload.url) throw new Error(upload.error || '사진 업로드에 실패했어요.');
-      const profileResponse = await fetch('/api/profile', {
-        method: 'PATCH', credentials: 'same-origin', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ avatarUrl: upload.url }),
-      });
-      const saved = await profileResponse.json().catch(() => ({})) as { profile?: { profile_image_url?: string | null }; error?: string };
-      if (!profileResponse.ok) throw new Error(saved.error || '프로필 사진을 저장하지 못했어요.');
-      updateProfile({ avatarPhoto: saved.profile?.profile_image_url ?? upload.url });
-      toast.success('프로필 사진을 업데이트했어요! 📸');
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : '사진을 불러오지 못했어요');
-    }
-  };
-
   return (
     <div className="min-h-dvh bg-[#FCF4EE] pb-24">
       {/* 상단 메뉴 */}
       <HeaderActionRow className="header-action-row--raised">
         <HeaderIconButton
-          onClick={() => { setEditName(profile.name); setEditHandle(profile.handle ?? ''); setActiveSheet('settings'); }}
+          onClick={() => navigate('/settings')}
           aria-label="프로필 설정"
         >
           <Settings size={18} color="#4A4A4A" />
         </HeaderIconButton>
 
-        {/* 아바타 업로드용 숨은 파일 입력 — 헤더 아바타 탭 시트/설정 시트 공용 */}
-        <input
-          ref={avatarFileRef}
-          type="file"
-          accept="image/*"
-          className="hidden"
-          onChange={handleAvatarUpload}
-        />
       </HeaderActionRow>
 
       {/* 핑크 프로필 카드 */}
@@ -451,16 +371,9 @@ function ProfilePageContent({ authenticatedUserId }: { authenticatedUserId: stri
         />
         <div className="relative z-20 -mt-9 px-3">
           <div className="flex items-start gap-4">
-            <button
-              onClick={() => setActiveSheet('avatar')}
-              className="relative shrink-0 rounded-full border-4 border-[#F8DCD2] shadow-md active:scale-95 transition-transform"
-              aria-label="아바타 변경"
-            >
+            <div className="relative shrink-0 rounded-full border-4 border-[#F8DCD2] shadow-md">
               <Avatar photo={profile.avatarPhoto} emoji={profile.emoji} size={78} />
-              <span className="absolute bottom-0 right-0 w-6 h-6 rounded-full bg-[#EB5053] border-2 border-white flex items-center justify-center">
-                <Camera size={11} color="white" />
-              </span>
-            </button>
+            </div>
             <div className="min-w-0 flex-1 pt-11">
               <div className="flex min-w-0 items-center gap-2 whitespace-nowrap">
                 <p className="min-w-0 truncate text-[19px] font-black text-[#3B2A22]">
@@ -559,152 +472,6 @@ function ProfilePageContent({ authenticatedUserId }: { authenticatedUserId: stri
         onAfterClose={() => lunchboxButtonRef.current?.focus()}
       />
 
-      {/* 프로필 설정 시트 (이름/이모지/식단) */}
-      <AnimatePresence>
-        {activeSheet === 'settings' && (
-          <>
-            <motion.div
-              className="fixed inset-0 bg-black/40 z-50"
-              initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-              onClick={() => setActiveSheet(null)}
-            />
-            <motion.div
-              data-testid="profile-settings-sheet"
-              className="fixed bottom-0 left-0 right-0 mx-auto w-full max-w-[430px] bg-white rounded-t-3xl z-50 px-5 pt-4 pb-8 max-h-[80dvh] overflow-y-auto"
-              initial={{ y: '100%' }} animate={{ y: 0 }} exit={{ y: '100%' }}
-              transition={{ type: 'tween', ease: [0.32, 0.72, 0, 1], duration: 0.3 }}
-            >
-              <div className="mx-auto mb-4 h-1 w-10 rounded-full bg-gray-200" />
-              <p className="mb-4 font-bold text-[16px]">프로필 설정</p>
-
-              <div className="mb-5">
-                 <p className="mb-1.5 text-[12px] font-semibold text-[#9B9B9B]">계정</p>
-                 {/* Google 계정 정보를 설정 화면에서 바로 확인한다. */}
-                 <AccountBanner />
-              </div>
-
-              <p className="mb-1.5 text-[12px] font-semibold text-[#9B9B9B]">이름</p>
-              <input
-                value={editName}
-                onChange={e => setEditName(e.target.value)}
-                className="w-full h-11 rounded-xl bg-[#FAF6F1] border border-[#F0E8E0] px-3 text-[14px] font-bold outline-none focus:border-[#E85053]"
-              />
-
-              <p className="mt-4 mb-1.5 text-[12px] font-semibold text-[#9B9B9B]">아이디</p>
-              <div className="flex h-11 items-center rounded-xl border border-[#F0E8E0] bg-[#FAF6F1] px-3 focus-within:border-[#E85053]">
-                <span className="mr-1 text-[14px] font-bold text-[#9B887C]">@</span>
-                <input
-                  value={editHandle}
-                  onChange={event => setEditHandle(event.target.value.replace(/[^a-zA-Z0-9_]/g, '').toLowerCase().slice(0, 20))}
-                  autoCapitalize="none"
-                  autoCorrect="off"
-                  spellCheck={false}
-                  placeholder="lunchie_id"
-                  className="min-w-0 flex-1 bg-transparent text-[14px] font-bold outline-none"
-                />
-              </div>
-              <p className="mt-1 text-[10px] font-medium text-[#AA978C]">영문 소문자, 숫자, 밑줄 · 3~20자</p>
-
-              <p className="mt-4 mb-1.5 text-[12px] font-semibold text-[#9B9B9B]">식단 제한 (그룹 세션에 자동 적용)</p>
-              <div className="flex flex-wrap gap-2">
-                {DIETARY_OPTIONS.map(d => (
-                  <button
-                    key={d}
-                    onClick={() => toggleDiet(d)}
-                    className={`px-3 py-1.5 rounded-full text-[12px] font-semibold transition-all active:scale-95 ${
-                      profile.dietary.includes(d) ? 'text-white' : 'bg-[#F5F5F5] text-[#4A4A4A]'
-                    }`}
-                    style={profile.dietary.includes(d) ? { background: '#EB5053' } : {}}
-                  >
-                    {d}
-                  </button>
-                ))}
-              </div>
-
-              <button
-                onClick={saveSettings}
-                className="mt-6 w-full h-12 rounded-2xl bg-[#E85053] text-white font-bold text-[14px]"
-              >
-                저장하기
-              </button>
-
-              <AccountLogoutButton onLoggedOut={() => setActiveSheet(null)} />
-            </motion.div>
-          </>
-        )}
-      </AnimatePresence>
-
-      {/* 아바타 변경 시트 — 사진 업로드 또는 기본 이모지 중 선택, 즉시 반영 */}
-      <AnimatePresence>
-        {activeSheet === 'avatar' && (
-          <>
-            <motion.div
-              className="fixed inset-0 bg-black/40 z-50"
-              initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-              onClick={() => setActiveSheet(null)}
-            />
-            <motion.div
-              className="fixed bottom-0 left-0 right-0 mx-auto w-full max-w-[430px] bg-white rounded-t-3xl z-50 px-5 pt-4 pb-8 max-h-[80dvh] overflow-y-auto"
-              initial={{ y: '100%' }} animate={{ y: 0 }} exit={{ y: '100%' }}
-              transition={{ type: 'tween', ease: [0.32, 0.72, 0, 1], duration: 0.3 }}
-            >
-              <div className="mx-auto mb-4 h-1 w-10 rounded-full bg-gray-200" />
-              <div className="mb-4 flex items-center justify-between">
-                <p className="font-bold text-[16px]">아바타 변경</p>
-                <button onClick={() => setActiveSheet(null)}><X size={18} className="text-gray-400" /></button>
-              </div>
-
-              <div className="mb-5 flex flex-col items-center">
-                <Avatar photo={profile.avatarPhoto} emoji={profile.emoji} size={88} />
-                <button
-                  onClick={() => avatarFileRef.current?.click()}
-                  className="mt-3 flex items-center gap-1.5 rounded-full bg-[#EB5053] text-white px-4 h-9 text-[12px] font-bold active:scale-95 transition-transform"
-                >
-                  <Upload size={13} /> 사진 업로드
-                </button>
-                {profile.avatarPhoto && (
-                  <button
-                    onClick={() => {
-                      updateProfile({ avatarPhoto: undefined });
-                      void fetch('/api/profile', {
-                        method: 'PATCH', credentials: 'same-origin', headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ avatarUrl: null }),
-                      });
-                      toast('사진을 지웠어요 — 이모지로 돌아가요');
-                    }}
-                    className="mt-2 text-[11px] font-semibold text-[#B0A090] underline underline-offset-2"
-                  >
-                    사진 삭제하고 이모지로
-                  </button>
-                )}
-              </div>
-
-              <p className="mb-2 text-[12px] font-semibold text-[#9B9B9B]">기본 이모지</p>
-              <div className="flex flex-wrap gap-2">
-                {EMOJIS.map(e => {
-                  const active = !profile.avatarPhoto && profile.emoji === e;
-                  return (
-                    <button
-                      key={e}
-                      onClick={() => pickEmoji(e)}
-                      className={`text-xl p-1.5 rounded-xl transition-all ${active ? 'bg-[#FFF5F5] ring-2 ring-[#EB5053] scale-110' : 'bg-[#F5F5F5]'}`}
-                    >
-                      {e}
-                    </button>
-                  );
-                })}
-              </div>
-
-              <button
-                onClick={() => setActiveSheet(null)}
-                className="mt-6 w-full h-12 rounded-2xl bg-[#E85053] text-white font-bold text-[14px]"
-              >
-                완료
-              </button>
-            </motion.div>
-          </>
-        )}
-      </AnimatePresence>
     </div>
   );
 }
@@ -714,6 +481,10 @@ const POST_GOOGLE_LOGIN = '/api/auth/google/start?next=%2Fcoursemap%2Fnew';
 
 /** 익명 프리뷰 — 레이아웃은 로그인 프로필과 같되, 프로토타입 유저 데이터는 절대 그리지 않는다. */
 function ProfileGuestPreview() {
+  const [, navigate] = useLocation();
+  const goToSettings = useCallback(() => {
+    navigate('/settings');
+  }, [navigate]);
   const goToLogin = useCallback(() => {
     window.location.assign(PROFILE_GOOGLE_LOGIN);
   }, []);
@@ -724,7 +495,7 @@ function ProfileGuestPreview() {
   return (
     <div className="min-h-dvh bg-[#FCF4EE] pb-24">
       <HeaderActionRow className="header-action-row--raised">
-        <HeaderIconButton onClick={goToLogin} aria-label="프로필 설정">
+        <HeaderIconButton onClick={goToSettings} aria-label="프로필 설정">
           <Settings size={18} color="#4A4A4A" />
         </HeaderIconButton>
       </HeaderActionRow>
@@ -740,17 +511,9 @@ function ProfileGuestPreview() {
         />
         <div className="relative z-20 -mt-9 px-3">
           <div className="flex items-start gap-4">
-            <button
-              type="button"
-              onClick={goToLogin}
-              className="relative shrink-0 rounded-full border-4 border-[#F8DCD2] shadow-md active:scale-95 transition-transform"
-              aria-label="아바타 변경"
-            >
+            <div className="relative shrink-0 rounded-full border-4 border-[#F8DCD2] shadow-md">
               <Avatar emoji="😊" size={78} />
-              <span className="absolute bottom-0 right-0 w-6 h-6 rounded-full bg-[#EB5053] border-2 border-white flex items-center justify-center">
-                <Camera size={11} color="white" />
-              </span>
-            </button>
+            </div>
             <div className="min-w-0 flex-1 pt-11">
               <h1 className="text-[19px] font-black text-[#3B2A22]">로그인이 필요해요</h1>
               <p className="mt-1.5 text-[13px] font-medium leading-5 text-[#8A6E60]">

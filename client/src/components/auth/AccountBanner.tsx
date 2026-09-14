@@ -1,14 +1,15 @@
 import { useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
-import { LoaderCircle, LogOut, UserRound } from 'lucide-react';
+import { ChevronRight, LoaderCircle, LogOut, UserRound } from 'lucide-react';
 import { toast } from 'sonner';
 import { useApp } from '@/contexts/AppContext';
 import { useAuthStatus } from '@/hooks/useAuthStatus';
+import { cn } from '@/lib/utils';
 import {
   linkIdentityWithGoogle, signOutToAnonymous,
 } from '@/services/authApi';
 
-export function AccountBanner() {
+export function AccountBanner({ variant = 'default' }: { variant?: 'default' | 'settings-entry' }) {
   const auth = useAuthStatus();
   const [signingIn, setSigningIn] = useState(false);
 
@@ -24,6 +25,28 @@ export function AccountBanner() {
         toast.error(cause instanceof Error ? cause.message : 'Google 로그인을 시작하지 못했어요.');
       }
     };
+
+    if (variant === 'settings-entry') {
+      return (
+        <button
+          type="button"
+          data-testid="settings-login-card"
+          onClick={startGoogleLogin}
+          disabled={signingIn}
+          className="flex min-h-[88px] w-full items-center gap-4 rounded-[20px] border border-[#F0D8CE] bg-[linear-gradient(135deg,#FFF9F5_0%,#FFF0EA_100%)] px-5 text-left shadow-[0_6px_18px_rgba(91,57,44,0.09)] transition-[transform,box-shadow] hover:shadow-[0_8px_22px_rgba(91,57,44,0.11)] active:scale-[0.99] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#F28A8D] disabled:opacity-60"
+          aria-label="로그인"
+        >
+          <span className="flex size-12 shrink-0 items-center justify-center rounded-full bg-white/75 text-[#D94D55] shadow-sm">
+            {signingIn ? <LoaderCircle className="size-5 animate-spin" /> : <UserRound size={21} />}
+          </span>
+          <span className="min-w-0 flex-1">
+            <span className="block text-[16px] font-black text-[#30221C]">로그인</span>
+            <span className="mt-1 block text-[11px] font-normal text-[#9A8175]">Google 계정으로 계속하기</span>
+          </span>
+          <ChevronRight size={18} className="shrink-0 text-[#B9AAA2]" aria-hidden="true" />
+        </button>
+      );
+    }
 
     return (
       <>
@@ -74,8 +97,16 @@ export function AccountBanner() {
   );
 }
 
-/** 설정 시트 하단에 놓는 독립 로그아웃 동작. */
-export function AccountLogoutButton({ onLoggedOut }: { onLoggedOut?: () => void }) {
+/** 설정 화면에서 재사용하는 독립 로그아웃 동작. */
+export function AccountLogoutButton({
+  onLoggedOut,
+  className,
+  iconContainerClassName,
+}: {
+  onLoggedOut?: () => void;
+  className?: string;
+  iconContainerClassName?: string;
+}) {
   const queryClient = useQueryClient();
   const { setCurrentSession } = useApp();
   const [signingOut, setSigningOut] = useState(false);
@@ -88,11 +119,11 @@ export function AccountLogoutButton({ onLoggedOut }: { onLoggedOut?: () => void 
       setCurrentSession(null);
       await queryClient.invalidateQueries({ queryKey: ['authStatus'] });
       onLoggedOut?.();
-      toast.success('로그아웃했어요. 익명 모드로 계속 사용할 수 있어요.');
+      sessionStorage.setItem('lm_logout_feedback', 'true');
       // AuthBootstrap reads the signed cookie once per app mount. A hard
       // navigation prevents the previous account's in-memory context from
       // surviving after the cookie has been removed.
-      window.location.replace('/feed');
+      window.location.replace('/settings');
     } catch (cause) {
       toast.error(cause instanceof Error ? cause.message : '로그아웃하지 못했어요.');
     } finally {
@@ -105,9 +136,16 @@ export function AccountLogoutButton({ onLoggedOut }: { onLoggedOut?: () => void 
       type="button"
       onClick={logout}
       disabled={signingOut}
-      className="mt-8 flex h-12 w-full items-center justify-center gap-2 rounded-2xl border border-[#E5DCD2] bg-white text-sm font-bold text-[#6F625A] disabled:opacity-50"
+      className={cn(
+        'mt-8 flex h-12 w-full items-center justify-center gap-2 rounded-2xl border border-[#E5DCD2] bg-white text-sm font-bold text-[#6F625A] disabled:opacity-50',
+        className,
+      )}
     >
-      {signingOut ? <LoaderCircle className="size-4 animate-spin" /> : <LogOut size={16} />}
+      {iconContainerClassName ? (
+        <span className={iconContainerClassName}>
+          {signingOut ? <LoaderCircle className="size-4 animate-spin" /> : <LogOut size={17} />}
+        </span>
+      ) : signingOut ? <LoaderCircle className="size-4 animate-spin" /> : <LogOut size={16} />}
       로그아웃
     </button>
   );
