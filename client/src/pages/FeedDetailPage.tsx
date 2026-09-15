@@ -31,18 +31,18 @@ export default function FeedDetailPage() {
       : fromSaved
         ? getSavedReturnPath(search, id)
         : '/feed?tab=feed';
-  const backLabel = fromNotifications ? '알림으로 돌아가기' : fromProfile ? '프로필로 돌아가기' : fromSaved ? '저장목록으로 돌아가기' : '먼치피드로 돌아가기';
+  const backLabel = fromNotifications ? 'Back to notifications' : fromProfile ? 'Back to profile' : fromSaved ? 'Back to saved' : 'Back to Munchie Feed';
 
   if (!post && (isLoading || profileFeed.isLoading)) {
-    return <main className="flex min-h-dvh items-center justify-center bg-[#FCF4EE] text-sm font-bold text-[#9A8579]">피드를 불러오는 중이에요…</main>;
+    return <main className="flex min-h-dvh items-center justify-center bg-[#FCF4EE] text-sm font-bold text-[#9A8579]">Loading post…</main>;
   }
 
   if (!post) {
     return (
       <main className="flex min-h-dvh items-center justify-center bg-[#FCF4EE] px-6 text-center">
         <div>
-          <p className="font-bold text-[#2D211C]">피드를 찾을 수 없어요</p>
-          <button onClick={() => navigate(backPath)} className="mt-4 rounded-full bg-[#E85053] px-6 py-3 text-sm font-bold text-white">돌아가기</button>
+          <p className="font-bold text-[#2D211C]">Post not found</p>
+          <button onClick={() => navigate(backPath)} className="mt-4 rounded-full bg-[#E85053] px-6 py-3 text-sm font-bold text-white">Go back</button>
         </div>
       </main>
     );

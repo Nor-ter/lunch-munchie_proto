@@ -1,7 +1,15 @@
+import { countLabel } from '@/lib/countLabel';
 import type { GroupSession, SessionMember } from '@/contexts/AppContext';
 import { normalizeLunchieSessionAvatar } from '@shared/lunchieAvatar';
 
 type LobbySession = Pick<GroupSession, 'filters' | 'hostId' | 'members' | 'status'>;
+
+export function sessionDisplayName(session: Pick<GroupSession, 'name' | 'hostId' | 'members'>): string {
+  const hostName = session.members.find(member => member.id === session.hostId)?.name;
+  return hostName && (session.name === `${hostName}'s lunch session` || session.name === 'Lunch session')
+    ? `Lunch with ${hostName}`
+    : session.name;
+}
 
 export interface LobbyMemberPresentation {
   id: string;
@@ -22,7 +30,7 @@ export interface LobbyPresentation {
   isWaiting: boolean;
   canStart: boolean;
   hostName: string;
-  statusLabel: '대기 중' | '진행 중';
+  statusLabel: 'Waiting' | 'In progress';
   statusCopy: string;
   ctaLabel: string;
   disabledReason: string | null;
@@ -76,7 +84,7 @@ export function getLobbyPresentation({
   const isWaiting = session.status === 'waiting';
   const canStart = isWaiting && isHost && memberCount >= minParticipants;
   const members = session.members.map(member => memberPresentation(member, session.hostId, currentUserId));
-  const hostName = members.find(member => member.isHost)?.name ?? '호스트';
+  const hostName = members.find(member => member.isHost)?.name ?? 'Host';
 
   const previousIds = previousMemberIds ? new Set(previousMemberIds) : null;
   const recentlyJoinedName = previousIds
@@ -85,28 +93,28 @@ export function getLobbyPresentation({
 
   let statusCopy: string;
   if (!isWaiting) {
-    statusCopy = '투표가 시작됐어요. 친구들과 함께 선택해 주세요.';
+    statusCopy = 'The vote is open. Have your say.';
   } else if (recentlyJoinedName) {
-    statusCopy = `${recentlyJoinedName}님이 참여했어요!`;
+    statusCopy = `${recentlyJoinedName} joined!`;
   } else if (isFull) {
-    statusCopy = '모두 모였어요. 이제 투표를 시작할 수 있어요.';
+    statusCopy = 'Everyone\'s here. Let\'s vote.';
   } else if (capacity === 1) {
-    statusCopy = '준비가 끝났어요. 바로 투표를 시작할 수 있어요.';
+    statusCopy = 'Ready when you are.';
   } else {
-    statusCopy = `참여자를 기다리고 있어요. 현재 ${memberCount}명 참여 중`;
+    statusCopy = `${memberCount} joined. Waiting for ${remainingSlots} more.`;
   }
 
   let ctaLabel: string;
   let disabledReason: string | null = null;
   if (!isWaiting) {
-    ctaLabel = '스와이핑 시작하기';
+    ctaLabel = 'Start voting';
   } else if (!isHost) {
-    ctaLabel = '호스트를 기다리는 중';
-    disabledReason = `${hostName}님만 투표를 시작할 수 있어요.`;
+    ctaLabel = 'Waiting for host';
+    disabledReason = `${hostName} will start the vote.`;
   } else {
-    ctaLabel = '투표 시작하기';
+    ctaLabel = 'Start voting';
     if (memberCount < minParticipants) {
-      disabledReason = `투표를 시작하려면 최소 ${minParticipants}명이 필요해요.`;
+      disabledReason = `You'll need at least ${countLabel(minParticipants, 'person', 'people')} to start.`;
     }
   }
 
@@ -120,7 +128,7 @@ export function getLobbyPresentation({
     isWaiting,
     canStart,
     hostName,
-    statusLabel: isWaiting ? '대기 중' : '진행 중',
+    statusLabel: isWaiting ? 'Waiting' : 'In progress',
     statusCopy,
     ctaLabel,
     disabledReason,

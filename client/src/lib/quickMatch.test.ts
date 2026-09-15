@@ -21,12 +21,12 @@ describe('Quick Match state normalization', () => {
   it('enables every visible dietary control and normalizes its legacy aliases', () => {
     expect([...DIETARY_REQUIREMENTS, ...INGREDIENT_AVOIDANCES].every(option => option.supported)).toBe(true);
     expect(normalizeDietaryPreferences([
-      '비건',
+      'Vegan',
       'Gluten-Free',
-      '해산물 제외',
+      'No seafood',
       'Pescetarian',
       'No Beef',
-      '견과류 제외',
+      'No nuts',
       'Dairy Free',
       'Egg Free',
       'Carnivore',

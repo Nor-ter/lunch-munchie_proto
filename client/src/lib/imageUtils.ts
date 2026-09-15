@@ -138,7 +138,7 @@ function loadCanvasImage(src: string): Promise<HTMLImageElement> {
       image.crossOrigin = "anonymous";
     image.onload = () => resolve(image);
     image.onerror = () =>
-      reject(new Error("이미지를 편집용으로 불러오지 못했습니다."));
+      reject(new Error("Couldn't load the image for editing."));
     image.src = src;
   });
 }
@@ -165,7 +165,7 @@ export async function cropImageToDataUrl(
   canvas.width = Math.max(1, Math.round(source.width * outputScale));
   canvas.height = Math.max(1, Math.round(source.height * outputScale));
   const context = canvas.getContext("2d");
-  if (!context) throw new Error("사진 편집을 지원하지 않는 브라우저입니다.");
+  if (!context) throw new Error("This browser doesn't support photo editing.");
   context.drawImage(
     image,
     source.x,

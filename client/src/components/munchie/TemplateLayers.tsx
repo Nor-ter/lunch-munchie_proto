@@ -106,7 +106,7 @@ export function TemplateBackgroundLayer({ template, loading = 'lazy' }: LayerIma
   return (
     <img
       src={template.image}
-      alt={`${template.name} Munchie 피드 배경`}
+      alt={`${template.name} Munchie Feed background`}
       data-template-layer="background"
       className="pointer-events-none absolute inset-0 z-0 h-full w-full select-none object-cover"
       draggable={false}

@@ -1,3 +1,4 @@
+import { dietaryLabel } from '@/lib/dietaryLabel';
 /**
  * Lunchie Munchie — Onboarding / Splash Page
  * Design: Soft Coral (Option 8)
@@ -55,23 +56,23 @@ export default function OnboardingPage() {
         className="mt-8"
       >
         <h1 className="text-[28px] font-bold leading-tight text-[#1A1A1A]">
-          오늘 뭐 먹지?
+          What's for lunch?
         </h1>
         <h1 className="text-[28px] font-bold leading-tight" style={{ color: BRAND.primary }}>
-          점심 메뉴 추천
+          Find your next favourite place
         </h1>
         <p className="mt-3 text-[13px] text-[#4A4A4A] leading-relaxed">
-          취향과 상황에 딱 맞는<br />점심을 추천해드릴게요!
+          Find somewhere you'll love,<br />whatever you're craving.
         </p>
         <div className="mt-5 rounded-2xl bg-[#FFF6F3] p-3">
-          <p className="text-[12px] font-bold text-[#3D302C]">먹지 않는 음식이 있나요? <span className="font-normal text-[#7D6D67]">나중에 바꿀 수 있어요</span></p>
+          <p className="text-[12px] font-bold text-[#3D302C]">Any foods you avoid? <span className="font-normal text-[#7D6D67]">You can change this later</span></p>
           <div className="mt-2 flex flex-wrap gap-1.5">
             {DIETARY_OPTIONS.map(option => {
               const selected = dietary.includes(option);
-              return <button key={option} type="button" onClick={() => setDietary(values => selected ? values.filter(value => value !== option) : [...values, option])} className={`rounded-full px-2.5 py-1 text-[11px] font-semibold ${selected ? 'bg-[#EB5053] text-white' : 'bg-white text-[#65524B]'}`}>{option}</button>;
+              return <button key={option} type="button" onClick={() => setDietary(values => selected ? values.filter(value => value !== option) : [...values, option])} className={`rounded-full px-2.5 py-1 text-[11px] font-semibold ${selected ? 'bg-[#EB5053] text-white' : 'bg-white text-[#65524B]'}`}>{dietaryLabel(option)}</button>;
             })}
           </div>
-          <p className="mt-2 text-[10px] leading-relaxed text-[#8A7770]">현재 위치는 점심 추천을 요청할 때만 사용하며, 가입 단계에서 저장하지 않아요.</p>
+          <p className="mt-2 text-[10px] leading-relaxed text-[#8A7770]">Your location helps us find food nearby. We don't save it when you sign up.</p>
         </div>
       </motion.div>
 
@@ -100,13 +101,13 @@ export default function OnboardingPage() {
           onClick={handleStart}
           className="lm-btn-primary w-full flex items-center justify-center font-semibold text-[15px]"
         >
-          추천 받기 시작하기
+          Find my lunch
         </button>
         <button
           onClick={handleLogin}
           className="lm-btn-outline w-full flex items-center justify-center font-semibold text-[15px]"
         >
-          로그인 · 회원가입
+          Sign in or join
         </button>
       </motion.div>
     </div>

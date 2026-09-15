@@ -1,3 +1,5 @@
+import { categoryLabel } from '@/lib/categoryLabel';
+import { foodTagLabel } from '@/constants/foodTags';
 import { useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { AnimatePresence, motion } from 'framer-motion';
@@ -49,7 +51,7 @@ export default function QuickMatchRestaurantDetailSheet({
           <motion.button
             key="quick-match-restaurant-backdrop"
             type="button"
-            aria-label="식당 상세정보 닫기"
+            aria-label="Close restaurant details"
             className="fixed inset-0 z-[90] bg-[#211511]/55 backdrop-blur-[1px]"
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
@@ -65,7 +67,7 @@ export default function QuickMatchRestaurantDetailSheet({
             key="quick-match-restaurant-sheet"
             role="dialog"
             aria-modal="true"
-            aria-label={`${detail.name} 상세정보`}
+            aria-label={`${detail.name} Details`}
             data-ui="quick-match-restaurant-detail-sheet"
             drag="y"
             dragConstraints={{ top: 0, bottom: 0 }}
@@ -87,12 +89,12 @@ export default function QuickMatchRestaurantDetailSheet({
                 <div className="min-w-0">
                   <p className="text-[10px] font-black uppercase tracking-[0.16em] text-[#E67E78]">Lunchie Pick</p>
                   <h2 className="mt-0.5 truncate text-[21px] font-black text-[#342620]">{detail.name}</h2>
-                  <p className="mt-1 text-[10px] font-semibold text-[#9A8176]">아래로 내려 닫거나 뒤로가기를 사용할 수 있어요</p>
+                  <p className="mt-1 text-[10px] font-semibold text-[#9A8176]">Swipe down or go back to close</p>
                 </div>
                 <button
                   type="button"
                   onClick={onClose}
-                  aria-label="상세정보 닫기"
+                  aria-label="Close details"
                   className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[#F3E7E1] text-[#80675C] active:scale-90"
                 >
                   <X size={17} />
@@ -102,7 +104,7 @@ export default function QuickMatchRestaurantDetailSheet({
 
             <div className="min-h-0 flex-1 overflow-y-auto border-t border-[#EEDFD7] px-5 pb-[max(1.5rem,env(safe-area-inset-bottom))] pt-4">
               <div className="flex flex-wrap items-center gap-2">
-                <span className="rounded-full bg-[#EB5053] px-2.5 py-1 text-[11px] font-black text-white">{detail.category}</span>
+                <span className="rounded-full bg-[#EB5053] px-2.5 py-1 text-[11px] font-black text-white">{categoryLabel(detail.category)}</span>
                 {detail.rating > 0 && (
                   <span className="flex items-center gap-1 rounded-full bg-white px-2.5 py-1 text-[11px] font-black text-[#4A3730] shadow-sm">
                     <Star size={12} fill="#EB5053" color="#EB5053" />
@@ -116,7 +118,7 @@ export default function QuickMatchRestaurantDetailSheet({
               </div>
 
               <section className="mt-4">
-                <h3 className="text-[11px] font-black tracking-[0.12em] text-[#AE9185]">상세 정보</h3>
+                <h3 className="text-[11px] font-black tracking-[0.12em] text-[#AE9185]">Details</h3>
                 <p className="mt-2 whitespace-pre-line text-[14px] font-semibold leading-6 text-[#493A34]">{summary}</p>
               </section>
 
@@ -144,7 +146,7 @@ export default function QuickMatchRestaurantDetailSheet({
               {(detail.tags ?? []).length > 0 && (
                 <div className="mt-5 flex flex-wrap gap-1.5">
                   {(detail.tags ?? []).map(tag => (
-                    <span key={tag} className="rounded-full bg-[#F5EAE4] px-2.5 py-1 text-[10px] font-black text-[#8B6D61]">#{tag}</span>
+                    <span key={tag} className="rounded-full bg-[#F5EAE4] px-2.5 py-1 text-[10px] font-black text-[#8B6D61]">#{foodTagLabel(tag)}</span>
                   ))}
                 </div>
               )}
@@ -157,7 +159,7 @@ export default function QuickMatchRestaurantDetailSheet({
               )}
 
               {isLoading && !canonicalRestaurant && (
-                <p role="status" className="mt-5 text-center text-[10px] font-bold text-[#AD958B]">최신 식당 정보를 확인하는 중…</p>
+                <p role="status" className="mt-5 text-center text-[10px] font-bold text-[#AD958B]">Checking restaurant details…</p>
               )}
             </div>
           </motion.aside>

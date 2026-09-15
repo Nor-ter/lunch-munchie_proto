@@ -1,5 +1,5 @@
 import type { GroupSession, SessionMember } from '../contexts/AppContext';
-import { getLobbyPresentation } from './lobbyPresentation';
+import { getLobbyPresentation, sessionDisplayName } from './lobbyPresentation';
 
 const host: SessionMember = {
   id: 'host-id',
@@ -39,6 +39,21 @@ function session(
 }
 
 describe('getLobbyPresentation', () => {
+  it('shows the remaining headcount in waiting copy', () => {
+    expect(getLobbyPresentation({ session: session(2, [host]), currentUserId: host.id }).statusCopy)
+      .toBe('1 joined. Waiting for 1 more.');
+    expect(getLobbyPresentation({ session: session(4, [host]), currentUserId: host.id }).statusCopy)
+      .toBe('1 joined. Waiting for 3 more.');
+  });
+
+  it('only reformats the known generated title and preserves names and data', () => {
+    const room = { ...session(2, [host]), name: "지민's lunch session" };
+    expect(sessionDisplayName(room)).toBe('Lunch with 지민');
+    expect(room.name).toBe("지민's lunch session");
+    expect(sessionDisplayName({ ...room, name: '우리 점심 모임' })).toBe('우리 점심 모임');
+    expect(sessionDisplayName({ ...room, members: [] })).toBe("지민's lunch session");
+  });
+
   it('solo 방은 한 명으로 시작할 수 있다', () => {
     const state = getLobbyPresentation({ session: session(1, [host]), currentUserId: host.id });
 
@@ -54,7 +69,7 @@ describe('getLobbyPresentation', () => {
     expect(state.minParticipants).toBe(2);
     expect(state.canStart).toBe(false);
     expect(state.remainingSlots).toBe(3);
-    expect(state.disabledReason).toContain('최소 2명');
+    expect(state.disabledReason).toContain("You'll need at least 2 people to start.");
   });
 
   it('그룹 방의 호스트는 두 명부터 시작할 수 있고 ready는 gate가 아니다', () => {
@@ -69,8 +84,8 @@ describe('getLobbyPresentation', () => {
 
     expect(state.isHost).toBe(false);
     expect(state.canStart).toBe(false);
-    expect(state.ctaLabel).toBe('호스트를 기다리는 중');
-    expect(state.disabledReason).toContain('지민님만');
+    expect(state.ctaLabel).toBe('Waiting for host');
+    expect(state.disabledReason).toContain('지민 will start the vote.');
   });
 
   it('새 참여자를 감지하고 정원이 차면 남은 자리를 0으로 제한한다', () => {
@@ -81,7 +96,7 @@ describe('getLobbyPresentation', () => {
     });
 
     expect(state.recentlyJoinedName).toBe('수아');
-    expect(state.statusCopy).toBe('수아님이 참여했어요!');
+    expect(state.statusCopy).toBe('수아 joined!');
     expect(state.isFull).toBe(true);
     expect(state.remainingSlots).toBe(0);
   });

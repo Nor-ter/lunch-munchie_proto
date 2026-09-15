@@ -11,7 +11,7 @@ describe('RestaurantDetailSheet presentation', () => {
     expect(source).toContain('inset-x-[10%] inset-y-[10dvh]');
     expect(source).toContain("aria-modal={isModal || undefined}");
     expect(source).toContain("isModal ? 'h-[160px]' : 'h-[220px]'");
-    expect(source).toContain("aria-label={isModal ? '상세정보 닫기' : '뒤로가기'}");
+    expect(source).toContain("aria-label={isModal ? 'Close details' : 'Go back'}");
     expect(source).toContain('<BackButton');
     expect(source).toContain('onClick={onClose}');
     expect(source).toContain('isModal ? <X size={18} aria-hidden="true" /> : undefined');
@@ -21,13 +21,13 @@ describe('RestaurantDetailSheet presentation', () => {
     expect(source).toContain('fetchRestaurantById(restaurantId)');
     expect(source).toContain('heroSrc ? (');
     expect(source).not.toContain('<img src={restaurant.image}');
-    expect(source).toContain('등록된 메뉴 사진이 없어요.');
+    expect(source).toContain('No menu photos yet.');
   });
 
   it('accepts the active Quick Match restaurant as a safe detail fallback', () => {
     expect(source).toContain('fallbackRestaurant?: Restaurant');
     expect(source).toContain('matchingRestaurant ?? fallbackRestaurant ??');
-    expect(source).toContain("restaurant.address || '주소 정보 없음'");
-    expect(source).toContain("restaurant.openHours || '영업시간 정보 없음'");
+    expect(source).toContain("restaurant.address || 'No address available'");
+    expect(source).toContain("restaurant.openHours || 'No opening hours available'");
   });
 });

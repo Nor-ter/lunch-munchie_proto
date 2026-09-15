@@ -32,7 +32,7 @@ const gingham = (color: string, size = 13, base = '#FFFFFF') =>
 export const MUNCHIE_SKINS: MunchieSkin[] = [
   {
     id: 'pink-picnic',
-    name: '핑크 피크닉',
+    name: 'Pink picnic',
     emoji: '🍒',
     frame: gingham('rgba(244, 143, 160, 0.5)'),
     paper: '#FFF7F5',
@@ -43,7 +43,7 @@ export const MUNCHIE_SKINS: MunchieSkin[] = [
   },
   {
     id: 'yellow-munchtray',
-    name: '옐로우 먼치트레이',
+    name: 'Yellow Munchie tray',
     emoji: '🌼',
     frame: gingham('rgba(240, 180, 60, 0.45)', 13, '#FFFDF2'),
     paper: '#FFFCF0',
@@ -54,7 +54,7 @@ export const MUNCHIE_SKINS: MunchieSkin[] = [
   },
   {
     id: 'vintage-frame',
-    name: '빈티지 프레임',
+    name: 'Vintage frame',
     emoji: '🎞️',
     frame: 'linear-gradient(160deg, #5E3026 0%, #46211A 55%, #63352A 100%)',
     frameShadow:
@@ -68,7 +68,7 @@ export const MUNCHIE_SKINS: MunchieSkin[] = [
   },
   {
     id: 'blue-note',
-    name: '블루 노트',
+    name: 'Blue note',
     emoji: '📘',
     frame: gingham('rgba(110, 152, 214, 0.42)', 12, '#F7FAFF'),
     paper: '#FDFEFF',
@@ -79,7 +79,7 @@ export const MUNCHIE_SKINS: MunchieSkin[] = [
   },
   {
     id: 'flower-garden',
-    name: '플라워 가든',
+    name: 'Flower garden',
     emoji: '🌷',
     frame: gingham('rgba(126, 190, 120, 0.42)', 13, '#F6FFF4'),
     paper: '#FCFFF9',
@@ -90,7 +90,7 @@ export const MUNCHIE_SKINS: MunchieSkin[] = [
   },
   {
     id: 'modern-minimal',
-    name: '모던 미니멀',
+    name: 'Modern minimal',
     emoji: '◻️',
     frame: 'linear-gradient(180deg, #F4F2EF 0%, #EAE7E2 100%)',
     frameShadow: 'inset 0 0 0 1.5px rgba(26,26,26,0.14)',

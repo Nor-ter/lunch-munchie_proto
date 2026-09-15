@@ -20,11 +20,11 @@ export function normalizeFeedApiPage(payload: unknown): FeedApiPage {
     return { items: payload, nextCursor: null, hasMore: false };
   }
   if (!payload || typeof payload !== 'object') {
-    throw new Error('피드 형식이 올바르지 않아요.');
+    throw new Error('Couldn\'t read this feed.');
   }
   const page = payload as Record<string, unknown>;
   if (!Array.isArray(page.items)) {
-    throw new Error('피드 형식이 올바르지 않아요.');
+    throw new Error('Couldn\'t read this feed.');
   }
   return {
     items: page.items,
@@ -47,7 +47,7 @@ export function feedPostFromApi(value: unknown, viewer: FeedViewerIdentity): Fee
       ? '제니'
       : creatorId === 'user_minsu'
         ? '민수'
-        : 'Lunchie 사용자';
+        : 'Lunchie user';
   const authorName = typeof feed.authorName === 'string' && feed.authorName.trim()
     ? feed.authorName
     : creatorId === viewer.id
@@ -73,7 +73,7 @@ export function feedPostFromApi(value: unknown, viewer: FeedViewerIdentity): Fee
     comments: Array.isArray(feed.comments) ? feed.comments.map((comment: any) => ({
       id: String(comment.id ?? ''),
       authorId: typeof comment.authorId === 'string' ? comment.authorId : undefined,
-      authorName: typeof comment.authorName === 'string' ? comment.authorName : 'Lunchie 사용자',
+      authorName: typeof comment.authorName === 'string' ? comment.authorName : 'Lunchie user',
       authorEmoji: typeof comment.authorEmoji === 'string' ? comment.authorEmoji : '🐳',
       parentId: typeof comment.parentId === 'string' ? comment.parentId : undefined,
       text: typeof comment.text === 'string' ? comment.text : '',

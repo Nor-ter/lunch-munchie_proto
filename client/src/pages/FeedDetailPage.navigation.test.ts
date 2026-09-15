@@ -33,11 +33,11 @@ describe('FeedDetailPage saved view navigation', () => {
   });
 
   it('keeps owner edit and delete actions in the card menu', () => {
-    expect(cardSource).toContain('aria-label="게시물 메뉴"');
-    expect(cardSource).toContain('게시물 수정');
-    expect(cardSource).toContain('게시물 삭제');
+    expect(cardSource).toContain('aria-label="Post menu"');
+    expect(cardSource).toContain('Edit post');
+    expect(cardSource).toContain('Delete post');
     expect(cardSource).toContain('confirmPostDelete');
     expect(cardSource).toContain('const canDeletePost = ownPost || Boolean(auth?.isAdmin)');
-    expect(cardSource).toContain('관리자 삭제');
+    expect(cardSource).toContain('Delete as admin');
   });
 });

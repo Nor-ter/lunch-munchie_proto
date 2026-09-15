@@ -50,9 +50,9 @@ const StravaClassicTemplate = forwardRef<HTMLDivElement, TemplateProps>(
           }}
         >
           {[
-            { label: '거리', value: `${course.distanceKm} km` },
-            { label: '시간', value: `${course.durationHours} h` },
-            { label: '스팟', value: `${course.places.length}` },
+            { label: 'Distance', value: `${course.distanceKm} km` },
+            { label: 'hours', value: `${course.durationHours} h` },
+            { label: 'Stop', value: `${course.places.length}` },
           ].map((s) => (
             <div
               key={s.label}

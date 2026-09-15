@@ -67,7 +67,7 @@ export default function FeedEditPage() {
   if (!post || !course || !isMyPost(post)) {
     return (
       <main className="flex min-h-dvh items-center justify-center bg-[#FCF4EE] text-center">
-        <div><p className="font-bold">수정할 수 없는 피드예요.</p><button onClick={() => navigate('/profile')} className="mt-4 rounded-full bg-[#E85053] px-6 py-3 text-sm font-bold text-white">프로필로</button></div>
+        <div><p className="font-bold">You can't edit this post.</p><button onClick={() => navigate('/profile')} className="mt-4 rounded-full bg-[#E85053] px-6 py-3 text-sm font-bold text-white">Go to profile</button></div>
       </main>
     );
   }
@@ -79,7 +79,7 @@ export default function FeedEditPage() {
       method: 'PATCH', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ courseId: course.id, caption: caption.trim(), heroImage: nextPlaced[0]?.src }),
     });
-    if (!response.ok) { toast.error('서버에서 수정 권한을 확인하지 못했어요.'); return; }
+    if (!response.ok) { toast.error('Couldn\'t verify editing access.'); return; }
     updateFeedPost(post.id, {
       photos: nextPlaced.map(photo => photo.src),
       photoPlacements: toFeedPhotoPlacements(nextPlaced),
@@ -88,23 +88,23 @@ export default function FeedEditPage() {
       skinId: template.id,
     });
     saveCoursemapDecor(post.courseId, nextPlaced, canvasStrokes);
-    toast.success('Munchie 피드를 수정했어요.');
+    toast.success('Post updated.');
     navigate(detailPath, { replace: true });
   };
 
   return (
     <main className="min-h-dvh bg-[#FCF4EE] pb-28">
       <header className="sticky top-0 z-20 flex items-center justify-between bg-[#FCF4EE]/95 px-5 pb-3 pt-[max(12px,env(safe-area-inset-top))] backdrop-blur">
-        <BackButton onClick={() => navigate(detailPath)} aria-label="뒤로" />
-        <p className="text-[16px] font-black">Munchie 피드 수정</p>
+        <BackButton onClick={() => navigate(detailPath)} aria-label="Back" />
+        <p className="text-[16px] font-black">Edit post</p>
         <span className="w-9" />
       </header>
 
       <section className="px-4 pt-4">
         <div className="mb-3 rounded-2xl border border-[#E9DAD0] bg-white px-4 py-3">
-          <p className="text-[11px] font-bold text-[#9A8579]">연결된 코스맵</p>
+          <p className="text-[11px] font-bold text-[#9A8579]">Linked Course Map</p>
           <p className="mt-1 truncate text-[14px] font-black text-[#2D211C]">{course.title}</p>
-          <p className="mt-1 text-[11px] text-[#9A8579]">기존에 게시한 피드에서 시작해 사진·템플릿·그림을 모두 다시 꾸밀 수 있어요. 연결된 코스는 그대로 유지돼요.</p>
+          <p className="mt-1 text-[11px] text-[#9A8579]">Update your photos, template and drawings. The linked course stays the same.</p>
         </div>
         <DecorateStep
           template={template}
@@ -126,12 +126,12 @@ export default function FeedEditPage() {
           onEditPhoto={photoId => setEditingPhotoId(photoId)}
         />
         <OneLineReviewBox compact className="mt-4">
-          <textarea value={caption} onChange={event => setCaption(event.target.value)} rows={2} placeholder="한줄평을 입력하세요" className="w-full resize-none bg-transparent text-[13px] font-semibold text-[#3B2A23] outline-none placeholder:text-[#C9ADA3]" />
+          <textarea value={caption} onChange={event => setCaption(event.target.value)} rows={2} placeholder="Write a quick review" className="w-full resize-none bg-transparent text-[13px] font-semibold text-[#3B2A23] outline-none placeholder:text-[#C9ADA3]" />
         </OneLineReviewBox>
       </section>
 
       <div className="page-bottom-bar fixed bottom-4 left-1/2 z-30 w-[calc(100%-32px)] max-w-[398px] -translate-x-1/2">
-        <button onClick={() => void save()} disabled={!caption.trim() || placed.length === 0} className="h-[52px] w-full rounded-2xl bg-[#EB5053] font-bold text-white shadow-lg disabled:bg-[#E5CFC5]">수정 완료</button>
+        <button onClick={() => void save()} disabled={!caption.trim() || placed.length === 0} className="h-[52px] w-full rounded-2xl bg-[#EB5053] font-bold text-white shadow-lg disabled:bg-[#E5CFC5]">Save changes</button>
       </div>
 
       <AnimatePresence>
@@ -153,7 +153,7 @@ export default function FeedEditPage() {
                   ? { ...photo, src: dataUrl, zoom: 1, ...photoFrameSizeForCropAspect(photo, nextCropAspect) }
                   : photo));
                 setEditingPhotoId(null);
-                toast.success('사진을 꾸몄어요 ✨');
+                toast.success('Photo decorated ✨');
               }}
             />
           );

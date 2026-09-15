@@ -1,3 +1,5 @@
+import { categoryLabel } from '@/lib/categoryLabel';
+import { uiErrorMessage } from '@/lib/uiErrorMessage';
 /**
  * 코스맵 만들기 — 4단계 통합 플로우 (코스맵과 피드를 순차적으로 동시 작성)
  * ① 코스맵 정하기 — 해시태그·한줄평 + 숫자핀(최대 3) 지도검색 + 사진박스
@@ -47,10 +49,10 @@ import { replaceWithGoogleAuth, startGoogleAuth } from '@/services/authApi';
 import BackButton from '@/components/ui/BackButton';
 
 const STEP_TITLES = [
-  '코스맵을 정하세요',
-  '템플릿을 선택하고 꾸며 보아요',
-  '미리보기',
-  '포스팅 완료!',
+  'Plan your course',
+  'Make it yours',
+  'Preview',
+  'Posted!',
 ];
 
 const MAX_PINS = 3;
@@ -152,15 +154,15 @@ function PinMap({ pins, activeBubble, isPickingPlace, onMarkerTap, onMapPlaceTap
             className="pointer-events-none absolute inset-x-3 top-3 z-10 rounded-xl bg-[#3B2A23]/90 px-3 py-2 text-center text-[11px] font-bold text-white shadow-lg backdrop-blur-sm"
           >
             {isPickingPlace
-              ? '장소 정보를 불러오는 중…'
-              : `지도 위 장소 아이콘을 누르면 ${activeBubble + 1}번 장소로 선택돼요`}
+              ? 'Loading place details…'
+              : `Tap a place on the map to select stop ${activeBubble + 1} on your course`}
           </p>
         )}
         {points.length === 0 && (
           <p className="pointer-events-none absolute inset-x-4 top-1/2 -translate-y-1/2 rounded-xl bg-white/90 px-3 py-2 text-center text-[12px] font-semibold text-[#8F8175] shadow-sm backdrop-blur-sm">
             {activeBubble === null
-              ? <>아래 숫자 마커를 먼저 눌러주세요<br />지도 또는 검색으로 장소를 고를 수 있어요 🗺️</>
-              : <>지도에 표시된 장소 아이콘을 누르거나<br />아래 검색창에서 장소를 찾아보세요</>}
+              ? <>Choose a stop below first<br />Search for a place or tap the map.</>
+              : <>Find a place on the map or<br />search by name below.</>}
           </p>
         )}
       </div>
@@ -179,7 +181,7 @@ function PinMap({ pins, activeBubble, isPickingPlace, onMarkerTap, onMapPlaceTap
         ))}
       </svg>
       <p className="absolute inset-x-4 top-1/2 -translate-y-1/2 text-center text-[12px] font-semibold text-[#B4A79A]">
-        Google 지도 설정을 확인해 주세요.
+        The map isn't available right now.
       </p>
     </div>
   );
@@ -224,7 +226,7 @@ function PinsStep({
 
   const pickRestaurant = (slot: number, restaurant: Restaurant) => {
     if (pins.some((pin, i) => i !== slot && pin?.restaurant.id === restaurant.id)) {
-      toast.info('이미 코스에 담긴 장소예요');
+      toast.info('This place is already on your course');
       return false;
     }
     setPins(prev => prev.map((pin, i) =>
@@ -246,7 +248,7 @@ function PinsStep({
       resetSearch();
       pickRestaurant(slot, restaurant);
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : '식당 정보를 가져오지 못했어요');
+      toast.error(uiErrorMessage(error instanceof Error ? error.message : 'Couldn\'t load restaurant details'));
     } finally {
       setDetailsLoadingId(null);
     }
@@ -273,7 +275,7 @@ function PinsStep({
 
   const handleMapPlaceTap = (placeId: string) => {
     if (bubbleSlot === null) {
-      toast.info('먼저 아래 번호 마커를 눌러주세요');
+      toast.info('Choose a stop below first');
       return;
     }
     void handlePickGoogle(bubbleSlot, placeId);
@@ -289,7 +291,7 @@ function PinsStep({
     <div className="space-y-4">
       {/* 해시태그 */}
       <div>
-        <p className="mb-1.5 text-xs text-gray-400">해시태그 <span className="text-[#E85053]">+ 추가</span></p>
+        <p className="mb-1.5 text-xs text-gray-400">Hashtags <span className="text-[#E85053]">+ Add</span></p>
         <div className="flex flex-wrap gap-1.5">
           {hashtags.map(tag => (
             <span key={tag} className="flex items-center gap-1 rounded-full border border-gray-200 bg-white px-2.5 py-1 text-xs">
@@ -304,7 +306,7 @@ function PinsStep({
             onChange={e => setNewTag(e.target.value)}
             onKeyDown={e => e.key === 'Enter' && commitTag()}
             onBlur={commitTag}
-            placeholder="#태그"
+            placeholder="#tag"
             className="w-20 rounded-full border border-dashed border-gray-300 px-2.5 py-1 text-xs outline-none focus:border-[#E85053]"
           />
         </div>
@@ -312,12 +314,12 @@ function PinsStep({
 
       {/* 한줄평 */}
       <div>
-        <p className="mb-1.5 text-xs text-gray-400">한줄평</p>
+        <p className="mb-1.5 text-xs text-gray-400">Quick review</p>
         <OneLineReviewBox>
           <textarea
             value={caption}
             onChange={e => setCaption(e.target.value)}
-            placeholder="한줄평 입력하기"
+            placeholder="Write a quick review"
             rows={2}
             className="w-full resize-none bg-transparent text-[13px] font-semibold text-[#3B2A23] outline-none placeholder:text-[#C9ADA3]"
           />
@@ -326,7 +328,7 @@ function PinsStep({
 
       {/* 코스맵 지도 */}
       <div>
-        <p className="mb-1.5 text-xs text-gray-400">코스맵</p>
+        <p className="mb-1.5 text-xs text-gray-400">Course Map</p>
         <PinMap
           pins={pins}
           activeBubble={bubbleSlot}
@@ -338,7 +340,7 @@ function PinsStep({
 
       {/* 코스 순서 — 숫자핀 슬롯 (최대 3개) */}
       <div>
-        <p className="mb-2 text-xs text-gray-400">코스 순서 <span className="text-[10px]">(최대 {MAX_PINS}곳)</span></p>
+        <p className="mb-2 text-xs text-gray-400">Your stops <span className="text-[10px]">(up to {MAX_PINS} places)</span></p>
         <div className="space-y-2">
           {pins.map((pin, slot) => (
             <div key={slot}>
@@ -350,7 +352,7 @@ function PinsStep({
                   type="button"
                   onClick={() => toggleBubble(slot)}
                   className="shrink-0 active:scale-90"
-                  aria-label={`${slot + 1}번 장소 검색`}
+                  aria-label={`Find a place for stop ${slot + 1}`}
                 >
                   <CourseSequenceMarker index={slot} selected={bubbleSlot === slot} />
                 </button>
@@ -359,13 +361,13 @@ function PinsStep({
                   <>
                     <div className="min-w-0 flex-1">
                       <p className="truncate text-sm font-medium">{pin.restaurant.name}</p>
-                      <p className="truncate text-[11px] text-gray-400">{pin.restaurant.category} · {pin.restaurant.address}</p>
+                      <p className="truncate text-[11px] text-gray-400">{categoryLabel(pin.restaurant.category)} · {pin.restaurant.address}</p>
                     </div>
                     <button
                       type="button"
                       onClick={() => setPins(prev => prev.map((p, i) => i === slot ? null : p))}
                       className="shrink-0 text-gray-300"
-                      aria-label="장소 삭제"
+                      aria-label="Remove place"
                     >
                       <X size={16} />
                     </button>
@@ -376,7 +378,7 @@ function PinsStep({
                     onClick={() => toggleBubble(slot)}
                     className="flex-1 py-1.5 text-left text-[12px] text-gray-400"
                   >
-                    번호를 눌러 장소를 검색해보세요
+                    Tap to choose a place
                   </button>
                 )}
               </div>
@@ -403,22 +405,22 @@ function PinsStep({
                           autoFocus
                           value={query}
                           onChange={e => setQuery(e.target.value)}
-                          placeholder="지도검색 — 장소 이름"
+                          placeholder="Search for a place"
                           className="flex-1 bg-transparent text-[13px] outline-none"
                         />
                       </div>
                       <div className="mt-2 space-y-1.5">
                         {query.trim().length >= 2 && (
                           <div>
-                            <p className="mb-1 px-2 text-[10px] font-bold text-gray-400">Google 장소</p>
+                            <p className="mb-1 px-2 text-[10px] font-bold text-gray-400">Search results</p>
                             {isGoogleLoading && (
-                              <p className="py-2 text-center text-[11px] text-gray-400">검색 중…</p>
+                              <p className="py-2 text-center text-[11px] text-gray-400">Searching…</p>
                             )}
                             {isGoogleError && (
-                              <p className="py-2 text-center text-[11px] text-red-500">Google 장소 검색에 실패했어요</p>
+                              <p className="py-2 text-center text-[11px] text-red-500">Couldn't search places. Please try again.</p>
                             )}
                             {!isGoogleLoading && !isGoogleError && suggestions.length === 0 && (
-                              <p className="py-2 text-center text-[11px] text-gray-400">Google 검색 결과가 없어요</p>
+                              <p className="py-2 text-center text-[11px] text-gray-400">No places found</p>
                             )}
                             {suggestions.map(suggestion => (
                               <button
@@ -436,7 +438,7 @@ function PinsStep({
                           </div>
                         )}
                         {query.trim().length >= 1 && results.length > 0 && (
-                          <p className="px-2 pt-1 text-[10px] font-bold text-gray-400">저장된 식당</p>
+                          <p className="px-2 pt-1 text-[10px] font-bold text-gray-400">Saved restaurants</p>
                         )}
                         {results.map(r => (
                           <button
@@ -454,7 +456,7 @@ function PinsStep({
                           </button>
                         ))}
                         {query.trim().length === 1 && results.length === 0 && (
-                          <p className="py-2 text-center text-[11px] text-gray-400">두 글자 이상 입력하면 Google 장소도 검색해요</p>
+                          <p className="py-2 text-center text-[11px] text-gray-400">Type at least 2 characters to search.</p>
                         )}
                       </div>
                     </div>
@@ -610,7 +612,7 @@ export function DecorateStep({
       return;
     }
     if (placed.length >= MAX_MUNCHIE_FEED_PHOTOS) {
-      toast.info(`Munchie 피드 사진은 최대 ${MAX_MUNCHIE_FEED_PHOTOS}장까지 사용할 수 있어요`);
+      toast.info(`Add up to ${MAX_MUNCHIE_FEED_PHOTOS} photos to your Munchie post`);
       return;
     }
     const id = `placed_${Date.now()}_${Math.round(Math.random() * 999)}`;
@@ -716,10 +718,10 @@ export function DecorateStep({
           : { classification: 'other', source: 'other' });
         await addToCanvas(url);
       } catch {
-        toast.error('사진을 불러오지 못했어요');
+        toast.error('Couldn\'t load the photo');
       }
     }
-    if (duplicateFound) toast.warning('사진이 이미 목록에 있습니다, 목록에서 추가해주세요');
+    if (duplicateFound) toast.warning('This photo is already added. Choose it below.');
   };
 
   const selected = placed.find(photo => photo.id === selectedId) ?? null;
@@ -735,7 +737,7 @@ export function DecorateStep({
       <div className="mb-2 flex items-end justify-between px-1">
         <div className="min-w-0">
           <div className="flex min-w-0 items-center gap-3">
-            <p className="shrink-0 text-[13px] font-bold text-[#3B2A22]">템플릿에서 바로 편집</p>
+            <p className="shrink-0 text-[13px] font-bold text-[#3B2A22]">Arrange your photos</p>
             <span className="truncate text-[11px] font-bold text-[#EB5053]">{template.name}</span>
           </div>
         </div>
@@ -743,24 +745,24 @@ export function DecorateStep({
 
       <div className="mx-auto mb-1 w-full max-w-[330px] rounded-2xl border border-[#EFE1D7] bg-white px-2 py-2 shadow-sm">
         <div className="flex items-center justify-center gap-2">
-          <button type="button" title="사진 선택·이동" onClick={() => { setCanvasTool('pointer'); }} aria-label="사진 선택 및 이동" aria-pressed={canvasTool === 'pointer'} className={`flex h-9 w-9 items-center justify-center rounded-full active:scale-90 ${canvasTool === 'pointer' ? 'bg-[#3B2A22] text-white' : 'bg-[#FFF2ED] text-[#D94D52]'}`}><MousePointer2 size={16} /></button>
-          <button type="button" title="포토에디터" onClick={() => { if (selected) onEditPhoto(selected.id); else toast.info('편집할 사진을 먼저 선택해주세요'); }} aria-label="포토에디터 열기" disabled={!selected} className="flex h-9 w-9 items-center justify-center rounded-full bg-[#FFF2ED] text-[#D94D52] active:scale-90 disabled:opacity-35"><Crop size={16} /></button>
-          <button type="button" title="그리기" onClick={() => { setCanvasTool('pen'); setSelectedId(null); }} aria-label="템플릿 전체에 그리기" aria-pressed={canvasTool === 'pen'} className={`flex h-9 w-9 items-center justify-center rounded-full border-2 active:scale-90 ${canvasTool === 'pen' ? '' : 'border-transparent bg-[#FFF2ED] text-[#D94D52]'}`} style={canvasTool === 'pen' ? { backgroundColor: canvasPenColor, borderColor: canvasPenIsWhite ? '#111111' : canvasPenColor, color: canvasPenUsesDarkIcon ? '#111111' : '#FFFFFF' } : undefined}><Pencil size={16} /></button>
-          <button type="button" title="하이라이터" onClick={() => { setCanvasTool('highlight'); setSelectedId(null); }} aria-label="템플릿 하이라이터" aria-pressed={canvasTool === 'highlight'} className={`flex h-9 w-9 items-center justify-center rounded-full border-2 active:scale-90 ${canvasTool === 'highlight' ? '' : 'border-transparent bg-[#FFF2ED] text-[#D94D52]'}`} style={canvasTool === 'highlight' ? { backgroundColor: canvasHighlightColor, borderColor: canvasHighlightIsWhite ? '#111111' : canvasHighlightColor, color: canvasHighlightUsesDarkIcon ? '#111111' : '#FFFFFF' } : undefined}><Highlighter size={16} /></button>
-          <button type="button" title="지우개" onClick={() => { setCanvasTool('eraser'); setSelectedId(null); }} aria-label="템플릿 지우개" aria-pressed={canvasTool === 'eraser'} className={`flex h-9 w-9 items-center justify-center rounded-full active:scale-90 ${canvasTool === 'eraser' ? 'bg-[#3B2A22] text-white' : 'bg-[#FFF2ED] text-[#D94D52]'}`}><Eraser size={16} /></button>
-          <button type="button" title="한 획 되돌리기" onClick={() => setCanvasStrokes(current => current.slice(0, -1))} aria-label="전체 그림 한 획 되돌리기" disabled={canvasStrokes.length === 0} className="flex h-9 w-9 items-center justify-center rounded-full bg-[#FFF2ED] text-[#6E5B50] active:scale-90 disabled:opacity-35"><Undo2 size={16} /></button>
+          <button type="button" title="Select &amp; move" onClick={() => { setCanvasTool('pointer'); }} aria-label="Select and move photo" aria-pressed={canvasTool === 'pointer'} className={`flex h-9 w-9 items-center justify-center rounded-full active:scale-90 ${canvasTool === 'pointer' ? 'bg-[#3B2A22] text-white' : 'bg-[#FFF2ED] text-[#D94D52]'}`}><MousePointer2 size={16} /></button>
+          <button type="button" title="Photo editor" onClick={() => { if (selected) onEditPhoto(selected.id); else toast.info('Select a photo to edit first'); }} aria-label="Open photo editor" disabled={!selected} className="flex h-9 w-9 items-center justify-center rounded-full bg-[#FFF2ED] text-[#D94D52] active:scale-90 disabled:opacity-35"><Crop size={16} /></button>
+          <button type="button" title="Draw" onClick={() => { setCanvasTool('pen'); setSelectedId(null); }} aria-label="Draw on template" aria-pressed={canvasTool === 'pen'} className={`flex h-9 w-9 items-center justify-center rounded-full border-2 active:scale-90 ${canvasTool === 'pen' ? '' : 'border-transparent bg-[#FFF2ED] text-[#D94D52]'}`} style={canvasTool === 'pen' ? { backgroundColor: canvasPenColor, borderColor: canvasPenIsWhite ? '#111111' : canvasPenColor, color: canvasPenUsesDarkIcon ? '#111111' : '#FFFFFF' } : undefined}><Pencil size={16} /></button>
+          <button type="button" title="Highlighter" onClick={() => { setCanvasTool('highlight'); setSelectedId(null); }} aria-label="Template highlighter" aria-pressed={canvasTool === 'highlight'} className={`flex h-9 w-9 items-center justify-center rounded-full border-2 active:scale-90 ${canvasTool === 'highlight' ? '' : 'border-transparent bg-[#FFF2ED] text-[#D94D52]'}`} style={canvasTool === 'highlight' ? { backgroundColor: canvasHighlightColor, borderColor: canvasHighlightIsWhite ? '#111111' : canvasHighlightColor, color: canvasHighlightUsesDarkIcon ? '#111111' : '#FFFFFF' } : undefined}><Highlighter size={16} /></button>
+          <button type="button" title="Eraser" onClick={() => { setCanvasTool('eraser'); setSelectedId(null); }} aria-label="Template eraser" aria-pressed={canvasTool === 'eraser'} className={`flex h-9 w-9 items-center justify-center rounded-full active:scale-90 ${canvasTool === 'eraser' ? 'bg-[#3B2A22] text-white' : 'bg-[#FFF2ED] text-[#D94D52]'}`}><Eraser size={16} /></button>
+          <button type="button" title="Undo stroke" onClick={() => setCanvasStrokes(current => current.slice(0, -1))} aria-label="Undo last template stroke" disabled={canvasStrokes.length === 0} className="flex h-9 w-9 items-center justify-center rounded-full bg-[#FFF2ED] text-[#6E5B50] active:scale-90 disabled:opacity-35"><Undo2 size={16} /></button>
         </div>
         {canvasTool === 'pen' && (
-          <div className="mt-2 flex items-center justify-center gap-2" aria-label="템플릿 펜 색상 선택">
+          <div className="mt-2 flex items-center justify-center gap-2" aria-label="Choose template pen colour">
             {['#FF424B', '#2B211D', '#FFFFFF', '#2E8BFF', '#35B96F', '#FFE24A'].map(color => (
-              <button key={color} type="button" onClick={() => setCanvasPenColor(color)} aria-label={`펜 색상 ${color}`} className={`h-6 w-6 rounded-full border-2 ${canvasPenColor === color ? 'scale-110 border-[#FF424B]' : 'border-[#E9D8CF]'}`} style={{ backgroundColor: color }} />
+              <button key={color} type="button" onClick={() => setCanvasPenColor(color)} aria-label={`Pen colour ${color}`} className={`h-6 w-6 rounded-full border-2 ${canvasPenColor === color ? 'scale-110 border-[#FF424B]' : 'border-[#E9D8CF]'}`} style={{ backgroundColor: color }} />
             ))}
           </div>
         )}
         {canvasTool === 'highlight' && (
-          <div className="mt-2 flex items-center justify-center gap-2" aria-label="템플릿 하이라이터 색상 선택">
+          <div className="mt-2 flex items-center justify-center gap-2" aria-label="Choose template highlighter colour">
             {['#FFE24A', '#FF8FB1', '#8FE3B0', '#79C7FF', '#C6A0FF', '#FFAD66'].map(color => (
-              <button key={color} type="button" onClick={() => setCanvasHighlightColor(color)} aria-label={`하이라이터 색상 ${color}`} className={`h-6 w-6 rounded-full border-2 ${canvasHighlightColor === color ? 'scale-110 border-[#D94D52]' : 'border-[#E9D8CF]'}`} style={{ backgroundColor: color }} />
+              <button key={color} type="button" onClick={() => setCanvasHighlightColor(color)} aria-label={`Highlighter colour ${color}`} className={`h-6 w-6 rounded-full border-2 ${canvasHighlightColor === color ? 'scale-110 border-[#D94D52]' : 'border-[#E9D8CF]'}`} style={{ backgroundColor: color }} />
             ))}
           </div>
         )}
@@ -776,8 +778,8 @@ export function DecorateStep({
           <TemplateBackgroundLayer template={nextTemplate} loading="eager" />
           <TemplateFrameLayer template={nextTemplate} loading="eager" />
         </div>
-        <button type="button" onClick={() => changeTemplate(-1)} aria-label="이전 템플릿" className="absolute -left-1 top-1/2 z-20 flex h-7 w-7 -translate-y-1/2 items-center justify-center rounded-full border border-[#F2D8CC] bg-white/95 text-[#E35355] shadow-md active:scale-90"><ChevronLeft size={16} /></button>
-        <button type="button" onClick={() => changeTemplate(1)} aria-label="다음 템플릿" className="absolute -right-1 top-1/2 z-20 flex h-7 w-7 -translate-y-1/2 items-center justify-center rounded-full border border-[#F2D8CC] bg-white/95 text-[#E35355] shadow-md active:scale-90"><ChevronRight size={16} /></button>
+        <button type="button" onClick={() => changeTemplate(-1)} aria-label="Previous template" className="absolute -left-1 top-1/2 z-20 flex h-7 w-7 -translate-y-1/2 items-center justify-center rounded-full border border-[#F2D8CC] bg-white/95 text-[#E35355] shadow-md active:scale-90"><ChevronLeft size={16} /></button>
+        <button type="button" onClick={() => changeTemplate(1)} aria-label="Next template" className="absolute -right-1 top-1/2 z-20 flex h-7 w-7 -translate-y-1/2 items-center justify-center rounded-full border border-[#F2D8CC] bg-white/95 text-[#E35355] shadow-md active:scale-90"><ChevronRight size={16} /></button>
         <motion.div
           key={template.id}
           ref={canvasRef}
@@ -789,7 +791,7 @@ export function DecorateStep({
           onAnimationComplete={() => setCanvasSwipeFeedback(null)}
           className="relative isolate z-10 mx-auto w-[calc(100%_-_28px)] max-w-[330px] touch-none select-none overflow-hidden rounded-2xl border-2 border-white shadow-[0_10px_26px_rgba(75,46,32,0.24)]"
           style={{ aspectRatio: '3/4' }}
-          aria-label="템플릿 편집 캔버스"
+          aria-label="Template editing canvas"
           data-template-index={templateIndex}
           data-swipe-feedback={canvasSwipeFeedback ? 'active' : 'idle'}
           onPointerDown={handleTemplateSwipeStart}
@@ -854,7 +856,7 @@ export function DecorateStep({
         ))}
         {placed.length === 0 && (
           <p className="pointer-events-none absolute inset-x-6 top-1/2 -translate-y-1/2 rounded-xl bg-white/75 px-3 py-2.5 text-center text-[11.5px] font-semibold text-[#8D776C] backdrop-blur-sm">
-            아래 사진을 눌러 템플릿 위에 올린 뒤<br />drag & drop으로 꾸며보세요
+            Tap a photo to add it,<br />then drag it into place.
           </p>
         )}
         <TemplateFrameLayer template={template} loading="eager" />
@@ -866,7 +868,7 @@ export function DecorateStep({
         {canvasTool !== 'pointer' && (
           <div
             className={`absolute inset-0 z-40 touch-none ${canvasTool === 'eraser' ? 'cursor-cell' : 'cursor-crosshair'}`}
-            aria-label={canvasTool === 'eraser' ? '템플릿 그림 지우기 영역' : canvasTool === 'highlight' ? '템플릿 하이라이터 영역' : '템플릿 전체 그리기 영역'}
+            aria-label={canvasTool === 'eraser' ? 'Template eraser area' : canvasTool === 'highlight' ? 'Template highlighter area' : 'Template drawing area'}
             onPointerDown={startCanvasStroke}
             onPointerMove={moveCanvasStroke}
             onPointerUp={() => { activeCanvasStrokeRef.current = null; canvasErasingRef.current = false; }}
@@ -886,17 +888,17 @@ export function DecorateStep({
             className="mx-auto mt-3 w-full max-w-[330px] rounded-2xl border border-[#EFE3D8] bg-white px-3 py-2.5 shadow-sm"
           >
             <div className="flex items-center justify-center gap-1.5">
-              <button type="button" onClick={() => updateSelected(p => ({ rotate: p.rotate - 15 }))} aria-label="사진 반시계 방향 회전" className="flex h-8 w-8 items-center justify-center rounded-full bg-[#FFF4EF] text-[#3B2A22] active:scale-90"><RotateCcw size={14} /></button>
-              <button type="button" onClick={() => updateSelected(p => ({ rotate: p.rotate + 15 }))} aria-label="사진 시계 방향 회전" className="flex h-8 w-8 items-center justify-center rounded-full bg-[#FFF4EF] text-[#3B2A22] active:scale-90"><RotateCw size={14} /></button>
-              <button type="button" onClick={() => onEditPhoto(selected.id)} className="flex h-8 items-center gap-1 rounded-full bg-[#FF424B] px-3 text-[11px] font-black text-white active:scale-95"><Wand2 size={12} /> 포토 에디터</button>
-              <button type="button" onClick={() => { returnToPointerTool(); setPlaced(prev => prev.filter(p => p.id !== selected.id)); setSelectedId(null); }} aria-label="삭제" className="flex h-8 w-8 items-center justify-center rounded-full bg-[#FFF4EF] text-[#D94447] active:scale-90"><Trash2 size={14} /></button>
+              <button type="button" onClick={() => updateSelected(p => ({ rotate: p.rotate - 15 }))} aria-label="Rotate photo anticlockwise" className="flex h-8 w-8 items-center justify-center rounded-full bg-[#FFF4EF] text-[#3B2A22] active:scale-90"><RotateCcw size={14} /></button>
+              <button type="button" onClick={() => updateSelected(p => ({ rotate: p.rotate + 15 }))} aria-label="Rotate photo clockwise" className="flex h-8 w-8 items-center justify-center rounded-full bg-[#FFF4EF] text-[#3B2A22] active:scale-90"><RotateCw size={14} /></button>
+              <button type="button" onClick={() => onEditPhoto(selected.id)} className="flex h-8 items-center gap-1 rounded-full bg-[#FF424B] px-3 text-[11px] font-black text-white active:scale-95"><Wand2 size={12} /> Photo editor</button>
+              <button type="button" onClick={() => { returnToPointerTool(); setPlaced(prev => prev.filter(p => p.id !== selected.id)); setSelectedId(null); }} aria-label="Delete" className="flex h-8 w-8 items-center justify-center rounded-full bg-[#FFF4EF] text-[#D94447] active:scale-90"><Trash2 size={14} /></button>
             </div>
           </motion.div>
         )}
       </AnimatePresence>
 
       {/* 업로드한 사진목록 */}
-      <p className="mt-4 mb-1.5 text-xs text-gray-400">업로드한 사진목록 — 눌러서 템플릿에 올리기 (최대 {MAX_MUNCHIE_FEED_PHOTOS}장)</p>
+      <p className="mt-4 mb-1.5 text-xs text-gray-400">Tap a photo to add it (up to {MAX_MUNCHIE_FEED_PHOTOS} photos)</p>
       <div className="flex gap-2 overflow-x-auto pb-1.5 scrollbar-hide">
         {photoPool.map(src => {
           const attribution = photoAttributions[src] ?? { classification: 'other' as const, source: 'other' as const };
@@ -909,9 +911,9 @@ export function DecorateStep({
           >
             <img src={src} alt="" className="h-full w-full object-cover" draggable={false} />
           </button>
-          <button type="button" onClick={() => { returnToPointerTool(); onRemoveFromPool(src); setPlaced(prev => prev.filter(photo => photo.src !== src && photo.originalSrc !== src)); }} aria-label="사진 목록에서 삭제" className="absolute right-1 top-1 flex h-5 w-5 items-center justify-center rounded-full border border-white/80 bg-[#D94447] text-white shadow"><X size={11} /></button>
+          <button type="button" onClick={() => { returnToPointerTool(); onRemoveFromPool(src); setPlaced(prev => prev.filter(photo => photo.src !== src && photo.originalSrc !== src)); }} aria-label="Remove photo from list" className="absolute right-1 top-1 flex h-5 w-5 items-center justify-center rounded-full border border-white/80 bg-[#D94447] text-white shadow"><X size={11} /></button>
           <select
-            aria-label="사진 식당 분류"
+            aria-label="Match photos to restaurants"
             value={attribution.classification === 'restaurant' ? attribution.restaurantId : 'other'}
             onChange={event => {
               const restaurantId = event.target.value;
@@ -921,11 +923,11 @@ export function DecorateStep({
             }}
             className="absolute bottom-0 left-0 z-10 h-6 w-24 rounded border border-[#E8DED4] bg-white px-1 text-[8px] font-bold text-[#6E5B50]"
           >
-            <option value="other">기타 사진</option>
+            <option value="other">Other photos</option>
             {restaurants.map(restaurant => <option key={restaurant.id} value={restaurant.id}>{restaurant.name}</option>)}
           </select>
           {attribution.source === 'gps_suggestion' && attribution.restaurantId && (
-            <span title={`사진 GPS 기준 ${attribution.suggestedDistanceMetres}m`} className="absolute bottom-7 left-[68px] rounded-full bg-[#FFF0EC] px-1 py-0.5 text-[7px] font-black text-[#D94D52]">GPS</span>
+            <span title={`Based on photo location ${attribution.suggestedDistanceMetres}m`} className="absolute bottom-7 left-[68px] rounded-full bg-[#FFF0EC] px-1 py-0.5 text-[7px] font-black text-[#D94D52]">GPS</span>
           )}
           </div>
           );
@@ -937,12 +939,12 @@ export function DecorateStep({
             className="flex h-16 w-16 shrink-0 flex-col items-center justify-center gap-0.5 rounded-xl border-2 border-dashed border-[#E0D2C6] text-[#B0A090] active:scale-95"
           >
             <Plus size={18} />
-            <span className="text-[8px] font-bold">사진 추가</span>
+            <span className="text-[8px] font-bold">Add photo</span>
           </button>
         )}
         <input ref={uploadRef} type="file" accept="image/*" multiple className="hidden" onChange={handleUpload} />
       </div>
-      <p className="mt-9 text-[10px] text-gray-400">사진마다 식당을 확인해 선택하세요. JPEG 위치 정보가 식당 가까이 있으면 제안만 표시하며, 정확한 좌표는 저장하지 않아요.</p>
+      <p className="mt-9 text-[10px] text-gray-400">Match each photo to a restaurant. Photo locations help us suggest a match; exact coordinates aren't saved.</p>
     </div>
   );
 }
@@ -950,12 +952,12 @@ export function DecorateStep({
 // ── ④ 사진 에디터 ─────────────────────────────────────────────────────────────
 
 const FILTER_PRESETS = [
-  { id: 'none', name: '원본', css: 'none' },
-  { id: 'bright', name: '밝게', css: 'brightness(1.15) saturate(1.08)' },
-  { id: 'vintage', name: '빈티지', css: 'sepia(0.38) contrast(0.95) brightness(1.02)' },
-  { id: 'mono', name: '흑백', css: 'grayscale(1) contrast(1.05)' },
-  { id: 'warm', name: '따뜻', css: 'sepia(0.2) saturate(1.25) brightness(1.05)' },
-  { id: 'cool', name: '시원', css: 'hue-rotate(-12deg) saturate(1.1) brightness(1.04)' },
+  { id: 'none', name: 'Original', css: 'none' },
+  { id: 'bright', name: 'Bright', css: 'brightness(1.15) saturate(1.08)' },
+  { id: 'vintage', name: 'Vintage', css: 'sepia(0.38) contrast(0.95) brightness(1.02)' },
+  { id: 'mono', name: 'B&W', css: 'grayscale(1) contrast(1.05)' },
+  { id: 'warm', name: 'Warm', css: 'sepia(0.2) saturate(1.25) brightness(1.05)' },
+  { id: 'cool', name: 'Cool', css: 'hue-rotate(-12deg) saturate(1.1) brightness(1.04)' },
 ] as const;
 
 type EditorTool = 'pointer' | 'crop' | 'pen' | 'highlight' | 'text' | 'eraser';
@@ -1340,7 +1342,7 @@ export function PhotoEditorModal({ originalSrc, cropAspect, onSave, onBack }: {
       outputContext.drawImage(canvas, cropX, cropY, cropW, cropH, 0, 0, outputCanvas.width, outputCanvas.height);
       onSave(outputCanvas.toDataURL('image/jpeg', 0.85), safeCropAspect);
     } catch {
-      toast.error('사진을 저장하지 못했어요');
+      toast.error('Couldn\'t save the photo');
     } finally {
       setSaving(false);
     }
@@ -1356,17 +1358,17 @@ export function PhotoEditorModal({ originalSrc, cropAspect, onSave, onBack }: {
       {/* 헤더 — Back / Reset / Save */}
       <div className="relative flex items-center justify-between px-5 pb-2 pt-[max(12px,env(safe-area-inset-top))]">
         <div className="flex items-center gap-1.5">
-          <BackButton onClick={() => onBack(safeCropAspect)} aria-label="사진 편집 뒤로가기" title="뒤로가기" />
-          <button type="button" onClick={resetEdits} aria-label="사진 편집 초기화" title="초기화" className="flex h-9 w-9 items-center justify-center rounded-full border border-white/25 text-white/85 active:scale-90"><RotateCcw size={16} /></button>
+          <BackButton onClick={() => onBack(safeCropAspect)} aria-label="Back from photo editor" title="Go back" />
+          <button type="button" onClick={resetEdits} aria-label="Reset photo edits" title="Reset" className="flex h-9 w-9 items-center justify-center rounded-full border border-white/25 text-white/85 active:scale-90"><RotateCcw size={16} /></button>
         </div>
-        <p className="pointer-events-none absolute left-1/2 -translate-x-1/2 text-[13px] font-black text-white">포토에디터</p>
+        <p className="pointer-events-none absolute left-1/2 -translate-x-1/2 text-[13px] font-black text-white">Photo editor</p>
         <button
           type="button"
           onClick={handleSave}
           disabled={saving}
           className="rounded-full bg-[#FF424B] px-4 py-1.5 text-[12px] font-black text-white active:scale-95 disabled:opacity-50"
         >
-          {saving ? '저장 중…' : 'Save'}
+          {saving ? 'Saving…' : 'Save'}
         </button>
       </div>
 
@@ -1422,7 +1424,7 @@ export function PhotoEditorModal({ originalSrc, cropAspect, onSave, onBack }: {
               key={text.id}
               role="button"
               tabIndex={0}
-              aria-label={`${text.value} 텍스트 위치 이동`}
+              aria-label={`${text.value} Move text`}
               className={`absolute z-20 -translate-x-1/2 -translate-y-1/2 touch-none select-none text-[22px] font-black text-[#2B211D] ${tool === 'eraser' ? 'cursor-crosshair' : canTransformPhoto ? 'cursor-move' : 'cursor-default'}`}
               style={{ left: `${text.x}%`, top: `${text.y}%`, textShadow: '0 0 6px white, 0 0 6px white' }}
               onPointerDown={event => {
@@ -1444,7 +1446,7 @@ export function PhotoEditorModal({ originalSrc, cropAspect, onSave, onBack }: {
             </span>
           ))}
           <div
-            aria-label="템플릿에 표시되는 사진 영역"
+            aria-label="Photo area shown in template"
             data-crop-aspect={safeCropAspect.toFixed(4)}
             className={`pointer-events-none absolute z-30 -translate-x-1/2 -translate-y-1/2 rounded-[5px] border-2 border-white/90 ${canTransformPhoto ? 'shadow-[0_0_0_1px_rgba(0,0,0,0.22)]' : ''}`}
             style={{
@@ -1457,10 +1459,10 @@ export function PhotoEditorModal({ originalSrc, cropAspect, onSave, onBack }: {
           />
           {canTransformPhoto && (
             <>
-              <button type="button" aria-label="크롭 영역 위쪽 크기 조절" className="absolute z-50 h-3 w-12 -translate-x-1/2 -translate-y-1/2 cursor-ns-resize touch-none rounded-full border-2 border-[#2B211D]/35 bg-white shadow" style={{ left: `${50 + cropGuideOffset.x}%`, top: `${50 + cropGuideOffset.y - cropGuide.height / 2}%` }} onPointerDown={event => startGuideResize(event, 'top')} onPointerMove={moveGuideResize} onPointerUp={endGuideResize} onPointerCancel={endGuideResize} />
-              <button type="button" aria-label="크롭 영역 오른쪽 크기 조절" className="absolute z-50 h-12 w-3 -translate-x-1/2 -translate-y-1/2 cursor-ew-resize touch-none rounded-full border-2 border-[#2B211D]/35 bg-white shadow" style={{ left: `${50 + cropGuideOffset.x + cropGuide.width / 2}%`, top: `${50 + cropGuideOffset.y}%` }} onPointerDown={event => startGuideResize(event, 'right')} onPointerMove={moveGuideResize} onPointerUp={endGuideResize} onPointerCancel={endGuideResize} />
-              <button type="button" aria-label="크롭 영역 아래쪽 크기 조절" className="absolute z-50 h-3 w-12 -translate-x-1/2 -translate-y-1/2 cursor-ns-resize touch-none rounded-full border-2 border-[#2B211D]/35 bg-white shadow" style={{ left: `${50 + cropGuideOffset.x}%`, top: `${50 + cropGuideOffset.y + cropGuide.height / 2}%` }} onPointerDown={event => startGuideResize(event, 'bottom')} onPointerMove={moveGuideResize} onPointerUp={endGuideResize} onPointerCancel={endGuideResize} />
-              <button type="button" aria-label="크롭 영역 왼쪽 크기 조절" className="absolute z-50 h-12 w-3 -translate-x-1/2 -translate-y-1/2 cursor-ew-resize touch-none rounded-full border-2 border-[#2B211D]/35 bg-white shadow" style={{ left: `${50 + cropGuideOffset.x - cropGuide.width / 2}%`, top: `${50 + cropGuideOffset.y}%` }} onPointerDown={event => startGuideResize(event, 'left')} onPointerMove={moveGuideResize} onPointerUp={endGuideResize} onPointerCancel={endGuideResize} />
+              <button type="button" aria-label="Resize top crop edge" className="absolute z-50 h-3 w-12 -translate-x-1/2 -translate-y-1/2 cursor-ns-resize touch-none rounded-full border-2 border-[#2B211D]/35 bg-white shadow" style={{ left: `${50 + cropGuideOffset.x}%`, top: `${50 + cropGuideOffset.y - cropGuide.height / 2}%` }} onPointerDown={event => startGuideResize(event, 'top')} onPointerMove={moveGuideResize} onPointerUp={endGuideResize} onPointerCancel={endGuideResize} />
+              <button type="button" aria-label="Resize right crop edge" className="absolute z-50 h-12 w-3 -translate-x-1/2 -translate-y-1/2 cursor-ew-resize touch-none rounded-full border-2 border-[#2B211D]/35 bg-white shadow" style={{ left: `${50 + cropGuideOffset.x + cropGuide.width / 2}%`, top: `${50 + cropGuideOffset.y}%` }} onPointerDown={event => startGuideResize(event, 'right')} onPointerMove={moveGuideResize} onPointerUp={endGuideResize} onPointerCancel={endGuideResize} />
+              <button type="button" aria-label="Resize bottom crop edge" className="absolute z-50 h-3 w-12 -translate-x-1/2 -translate-y-1/2 cursor-ns-resize touch-none rounded-full border-2 border-[#2B211D]/35 bg-white shadow" style={{ left: `${50 + cropGuideOffset.x}%`, top: `${50 + cropGuideOffset.y + cropGuide.height / 2}%` }} onPointerDown={event => startGuideResize(event, 'bottom')} onPointerMove={moveGuideResize} onPointerUp={endGuideResize} onPointerCancel={endGuideResize} />
+              <button type="button" aria-label="Resize left crop edge" className="absolute z-50 h-12 w-3 -translate-x-1/2 -translate-y-1/2 cursor-ew-resize touch-none rounded-full border-2 border-[#2B211D]/35 bg-white shadow" style={{ left: `${50 + cropGuideOffset.x - cropGuide.width / 2}%`, top: `${50 + cropGuideOffset.y}%` }} onPointerDown={event => startGuideResize(event, 'left')} onPointerMove={moveGuideResize} onPointerUp={endGuideResize} onPointerCancel={endGuideResize} />
             </>
           )}
         </div>
@@ -1480,10 +1482,10 @@ export function PhotoEditorModal({ originalSrc, cropAspect, onSave, onBack }: {
               value={textDraft}
               onChange={event => setTextDraft(event.target.value)}
               onKeyDown={event => event.key === 'Enter' && commitText()}
-              placeholder="텍스트 입력"
+              placeholder="Enter text"
               className="flex-1 bg-transparent text-[14px] font-bold text-white outline-none placeholder:text-white/40"
             />
-            <button type="button" onClick={commitText} className="rounded-full bg-white px-3 py-1 text-[11px] font-black text-[#2B211D]">추가</button>
+            <button type="button" onClick={commitText} className="rounded-full bg-white px-3 py-1 text-[11px] font-black text-[#2B211D]">Add</button>
           </motion.div>
         )}
       </AnimatePresence>
@@ -1491,14 +1493,14 @@ export function PhotoEditorModal({ originalSrc, cropAspect, onSave, onBack }: {
       {/* 사진 꾸미기 도구 */}
       <div className="px-6 pb-2">
         <div className="mb-2 flex items-center gap-3">
-          <p className="text-[10px] font-bold uppercase tracking-wider text-white/45">사진 꾸미기</p>
+          <p className="text-[10px] font-bold uppercase tracking-wider text-white/45">Decorate photo</p>
         </div>
         <div className="flex justify-center gap-2">
           <button
             type="button"
             onClick={() => selectTool('pointer')}
             className={`flex h-9 w-9 items-center justify-center rounded-xl active:scale-90 ${tool === 'pointer' ? 'bg-white text-[#2B211D]' : 'bg-white/12 text-white/75'}`}
-            aria-label="사진 선택 및 이동"
+            aria-label="Select and move photo"
             aria-pressed={tool === 'pointer'}
           >
             <MousePointer2 size={15} />
@@ -1507,7 +1509,7 @@ export function PhotoEditorModal({ originalSrc, cropAspect, onSave, onBack }: {
             type="button"
             onClick={() => selectTool(tool === 'crop' ? 'pointer' : 'crop')}
             className={`flex h-9 w-9 items-center justify-center rounded-xl active:scale-90 ${tool === 'crop' ? 'bg-white text-[#2B211D]' : 'bg-white/12 text-white/75'}`}
-            aria-label="자르기"
+            aria-label="Crop"
             aria-pressed={tool === 'crop'}
           >
             <Crop size={15} />
@@ -1517,7 +1519,7 @@ export function PhotoEditorModal({ originalSrc, cropAspect, onSave, onBack }: {
             onClick={() => selectTool(tool === 'pen' ? 'pointer' : 'pen')}
             className={`flex h-9 w-9 items-center justify-center rounded-xl border-2 active:scale-90 ${tool === 'pen' ? '' : 'border-transparent bg-white/12 text-white/75'}`}
             style={tool === 'pen' ? { backgroundColor: penColor, borderColor: penIsWhite ? '#111111' : penColor, color: penUsesDarkIcon ? '#111111' : '#FFFFFF' } : undefined}
-            aria-label="그리기"
+            aria-label="Draw"
             aria-pressed={tool === 'pen'}
           >
             <Pencil size={15} />
@@ -1527,7 +1529,7 @@ export function PhotoEditorModal({ originalSrc, cropAspect, onSave, onBack }: {
             onClick={() => selectTool(tool === 'highlight' ? 'pointer' : 'highlight')}
             className={`flex h-9 w-9 items-center justify-center rounded-xl border-2 active:scale-90 ${tool === 'highlight' ? '' : 'border-transparent bg-white/12 text-white/75'}`}
             style={tool === 'highlight' ? { backgroundColor: highlightColor, borderColor: highlightIsWhite ? '#111111' : highlightColor, color: highlightUsesDarkIcon ? '#111111' : '#FFFFFF' } : undefined}
-            aria-label="하이라이터"
+            aria-label="Highlighter"
             aria-pressed={tool === 'highlight'}
           >
             <Highlighter size={15} />
@@ -1536,7 +1538,7 @@ export function PhotoEditorModal({ originalSrc, cropAspect, onSave, onBack }: {
             type="button"
             onClick={() => selectTool(tool === 'text' ? 'pointer' : 'text')}
             className={`flex h-9 w-9 items-center justify-center rounded-xl active:scale-90 ${tool === 'text' ? 'bg-white text-[#2B211D]' : 'bg-white/12 text-white/75'}`}
-            aria-label="텍스트"
+            aria-label="Text"
             aria-pressed={tool === 'text'}
           >
             <Type size={15} />
@@ -1545,23 +1547,23 @@ export function PhotoEditorModal({ originalSrc, cropAspect, onSave, onBack }: {
             type="button"
             onClick={() => selectTool(tool === 'eraser' ? 'pointer' : 'eraser')}
             className={`flex h-9 w-9 items-center justify-center rounded-xl active:scale-90 ${tool === 'eraser' ? 'bg-white text-[#2B211D]' : 'bg-white/12 text-white/75'}`}
-            aria-label="지우개"
+            aria-label="Eraser"
             aria-pressed={tool === 'eraser'}
           >
             <Eraser size={15} />
           </button>
         </div>
         {tool === 'pen' && (
-          <div className="mt-2 flex items-center justify-center gap-2" aria-label="펜 색상 선택">
+          <div className="mt-2 flex items-center justify-center gap-2" aria-label="Choose pen colour">
             {['#FF424B', '#2B211D', '#FFFFFF', '#2E8BFF', '#35B96F', '#FFE24A'].map(color => (
-              <button key={color} type="button" onClick={() => setPenColor(color)} aria-label={`펜 색상 ${color}`} className={`h-6 w-6 rounded-full border-2 ${penColor === color ? 'scale-110 border-[#FF424B]' : 'border-white/40'}`} style={{ backgroundColor: color }} />
+              <button key={color} type="button" onClick={() => setPenColor(color)} aria-label={`Pen colour ${color}`} className={`h-6 w-6 rounded-full border-2 ${penColor === color ? 'scale-110 border-[#FF424B]' : 'border-white/40'}`} style={{ backgroundColor: color }} />
             ))}
           </div>
         )}
         {tool === 'highlight' && (
-          <div className="mt-2 flex items-center justify-center gap-2" aria-label="하이라이터 색상 선택">
+          <div className="mt-2 flex items-center justify-center gap-2" aria-label="Choose highlighter colour">
             {['#FFE24A', '#FF8FB1', '#8FE3B0', '#79C7FF', '#C6A0FF', '#FFAD66'].map(color => (
-              <button key={color} type="button" onClick={() => setHighlightColor(color)} aria-label={`하이라이터 색상 ${color}`} className={`h-6 w-6 rounded-full border-2 ${highlightColor === color ? 'scale-110 border-white' : 'border-white/40'}`} style={{ backgroundColor: color }} />
+              <button key={color} type="button" onClick={() => setHighlightColor(color)} aria-label={`Highlighter colour ${color}`} className={`h-6 w-6 rounded-full border-2 ${highlightColor === color ? 'scale-110 border-white' : 'border-white/40'}`} style={{ backgroundColor: color }} />
             ))}
           </div>
         )}
@@ -1569,7 +1571,7 @@ export function PhotoEditorModal({ originalSrc, cropAspect, onSave, onBack }: {
 
       {/* 필터효과 */}
       <div className="px-6 pb-9">
-        <p className="mb-1.5 text-[10px] font-bold uppercase tracking-wider text-white/45">필터효과</p>
+        <p className="mb-1.5 text-[10px] font-bold uppercase tracking-wider text-white/45">Filters</p>
         <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-hide">
           {FILTER_PRESETS.map(preset => (
             <button
@@ -1651,7 +1653,7 @@ function CoursemapCreateContent() {
   }, [hiddenPhotoSources, uploads]);
   const previewCourse: Course = {
     id: '__munchie_preview__',
-    title: caption.trim() || '새 먼치맵',
+    title: caption.trim() || 'New Course Map',
     description: caption.trim(),
     heroImage: photoPool[0] ?? filledPins[0]?.restaurant.image ?? '',
     tags: ['맛집'],
@@ -1700,20 +1702,20 @@ function CoursemapCreateContent() {
     true;
 
   const nextLabel =
-    step === 0 ? '다음 →' :
-    step === 1 ? '미리보기' :
-    step === 2 ? '포스팅' : '';
+    step === 0 ? 'Next →' :
+    step === 1 ? 'Preview' :
+    step === 2 ? 'Post' : '';
 
   const nextHint =
-    step === 0 && filledPins.length === 0 ? '장소를 1곳 이상 찍어주세요' :
-    step === 0 && !caption.trim() ? '한줄평을 입력해주세요' :
-    step === 1 && placed.length === 0 ? '사진을 1장 이상 올려주세요' :
+    step === 0 && filledPins.length === 0 ? 'Choose at least one place' :
+    step === 0 && !caption.trim() ? 'Write a quick review' :
+    step === 1 && placed.length === 0 ? 'Add at least one photo' :
     null;
 
   const publish = async () => {
     if (isPublishing) return;
     if (filledPins.length === 0 || placed.length === 0) {
-      toast.error('장소와 사진을 확인한 뒤 다시 포스팅해주세요');
+      toast.error('Check your places and photos, then try posting again');
       return;
     }
 
@@ -1721,7 +1723,7 @@ function CoursemapCreateContent() {
     try {
       const linked = filledPins.map(pin => pin.restaurant);
       const tagPool = Array.from(new Set(linked.flatMap(restaurant => restaurant.tags)));
-      const title = `${linked[0]!.name}${linked.length > 1 ? ` 외 ${linked.length - 1}곳` : ''} 코스`;
+      const title = `${linked[0]!.name}${linked.length > 1 ? ` and ${linked.length - 1} places` : ''} course`;
       const publishedPhotos = placed.slice(0, MAX_MUNCHIE_FEED_PHOTOS);
       const course: Course = {
         id: '',
@@ -1753,7 +1755,7 @@ function CoursemapCreateContent() {
         if (!src.startsWith('data:image/')) return src;
         const uploaded = await fetch('/api/uploads', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ dataUrl: src }) });
         const payload = await uploaded.json() as { url?: string; error?: string };
-        if (!uploaded.ok || !payload.url) throw new Error(payload.error ?? '사진을 업로드하지 못했어요.');
+        if (!uploaded.ok || !payload.url) throw new Error(payload.error ?? 'Couldn\'t upload photos.');
         return payload.url;
       };
       const serverPlaced = await Promise.all(publishedPhotos.map(async photo => ({ ...photo, src: await persistPhoto(photo.src) })));
@@ -1778,11 +1780,11 @@ function CoursemapCreateContent() {
       });
       const saved = await response.json() as { id?: string; authorId?: string; error?: string; code?: string };
       if (response.status === 401 || saved.code === 'AUTH_REQUIRED') {
-        toast.error('포스팅하려면 Google 로그인이 필요해요.');
+        toast.error('Sign in with Google to post.');
         startGoogleAuth('/coursemap/new');
         return;
       }
-      if (!response.ok || !saved.id) throw new Error(saved.error ?? '코스를 저장하지 못했어요.');
+      if (!response.ok || !saved.id) throw new Error(saved.error ?? 'Couldn\'t save the course.');
       const persistedCourse = { ...course, id: saved.id, creatorId: saved.authorId ?? profile.id };
       addCourse(persistedCourse);
       await refreshFeedPosts();
@@ -1797,7 +1799,7 @@ function CoursemapCreateContent() {
       setStep(3);
     } catch (error) {
       console.error('[CoursemapCreatePage] 포스팅 실패', error);
-      toast.error(error instanceof Error ? error.message : '포스팅에 실패했어요. 잠시 후 다시 시도해주세요');
+      toast.error(uiErrorMessage(error instanceof Error ? error.message : 'Couldn\'t post. Try again shortly.'));
     } finally {
       setIsPublishing(false);
     }
@@ -1805,7 +1807,7 @@ function CoursemapCreateContent() {
 
   const goNext = () => {
     if (!canNext) {
-      if (nextHint) toast.error(nextHint);
+      if (nextHint) toast.error(uiErrorMessage(nextHint));
       return;
     }
     if (step === 2) { void publish(); return; }
@@ -1824,11 +1826,11 @@ function CoursemapCreateContent() {
       {/* 헤더 */}
       <div className="sticky top-0 z-20 bg-[#FCF4EE]/95 px-5 pb-3 pt-[max(12px,env(safe-area-inset-top))] backdrop-blur">
         <div className="flex items-center justify-between">
-          <BackButton onClick={goBack} aria-label="뒤로">
+          <BackButton onClick={goBack} aria-label="Back">
             {step === 3 ? <X size={18} aria-hidden="true" /> : undefined}
           </BackButton>
           <div className="text-center">
-            <p className="text-[11px] font-bold uppercase tracking-[0.16em] text-[#F25055]">Munchie 코스맵 만들기</p>
+            <p className="text-[11px] font-bold uppercase tracking-[0.16em] text-[#F25055]">Create course</p>
             <p className="mt-0.5 text-[15px] font-bold text-[#1F1713]">{step + 1}. {STEP_TITLES[step]}</p>
           </div>
           <span className="w-9" />
@@ -1895,8 +1897,8 @@ function CoursemapCreateContent() {
           {step === 2 && (
             <div>
               <div className="mb-4 text-center">
-                <p className="text-[16px] font-bold text-[#1A1A1A]">이대로 포스팅할까요?</p>
-                <p className="mt-1 text-[11.5px] text-gray-400">피드에 이렇게 올라가요 · 미리보기에서는 버튼이 눌리지 않아요</p>
+                <p className="text-[16px] font-bold text-[#1A1A1A]">Ready to post?</p>
+                <p className="mt-1 text-[11.5px] text-gray-400">Here's how your post will look. Preview buttons are just for show.</p>
               </div>
               {/* 실제 게시물과 동일한 카드 — 미리보기에서는 상호작용만 비활성 */}
               <div className="pointer-events-none select-none">
@@ -1921,8 +1923,8 @@ function CoursemapCreateContent() {
               >
                 🎉
               </motion.div>
-              <p className="mt-3 text-[20px] font-black text-[#1A1A1A]">포스팅 완료!</p>
-              <p className="mt-1 text-[12.5px] text-gray-400">먼치 피드에 코스맵이 올라갔어요</p>
+              <p className="mt-3 text-[20px] font-black text-[#1A1A1A]">Posted!</p>
+              <p className="mt-1 text-[12.5px] text-gray-400">Your course is ready to explore.</p>
 
               {/* 보상 — 랜덤 음식 획득 */}
               <motion.div
@@ -1939,11 +1941,11 @@ function CoursemapCreateContent() {
                   {reward?.food.placeholder ?? '🍱'}
                 </motion.div>
                 <p className="mt-2 text-[15px] font-black text-[#FF424B]">
-                  {reward ? `${reward.food.name} +1 획득!` : '랜덤 음식 +1 획득!'}
+                  {reward ? `${reward.food.name} +1 earned!` : '+1 surprise snack!'}
                 </p>
                 <p className="mt-1 text-[11.5px] leading-relaxed text-[#8D776C]">
-                  프로필의 나의 런치박스에 바로 담았어요
-                  {reward && <><br />보유 {reward.food.name} <b className="text-[#3B2A22]">{reward.quantity}개</b></>}
+                  Waiting in your lunchbox.
+                  {reward && <><br />Owned {reward.food.name} <b className="text-[#3B2A22]">{reward.quantity} items</b></>}
                 </p>
               </motion.div>
 
@@ -1953,7 +1955,7 @@ function CoursemapCreateContent() {
                   onClick={() => navigate('/feed')}
                   className="h-12 flex-1 rounded-2xl border border-[#E8D8CF] bg-white text-[13px] font-black text-[#6E5B50] active:scale-95"
                 >
-                  먼치 홈으로
+                  Back to feed
                 </button>
                 <button
                   type="button"
@@ -1961,7 +1963,7 @@ function CoursemapCreateContent() {
                   disabled={!publishedCourseId}
                   className="h-12 flex-1 rounded-2xl bg-[#EB5053] text-[13px] font-black text-white active:scale-95"
                 >
-                  <span className="inline-flex items-center gap-1.5"><Share2 size={15} /> 공유하기</span>
+                  <span className="inline-flex items-center gap-1.5"><Share2 size={15} /> Share</span>
                 </button>
               </div>
             </div>
@@ -1979,7 +1981,7 @@ function CoursemapCreateContent() {
                 onClick={goBack}
                 className="h-[52px] flex-1 rounded-2xl border border-[#E8D8CF] bg-white text-[14px] font-bold text-[#6E5B50] active:scale-[0.98]"
               >
-                ← 이전
+                ← Previous
               </button>
             )}
             <motion.button
@@ -1990,7 +1992,7 @@ function CoursemapCreateContent() {
               className="h-[52px] flex-[1.6] rounded-2xl text-[14px] font-black text-white shadow-lg transition-colors"
               style={{ background: canNext ? '#EB5053' : '#E5CFC5' }}
             >
-              {isPublishing ? '저장 중…' : nextLabel}
+              {isPublishing ? 'Saving…' : nextLabel}
             </motion.button>
           </div>
         </div>
@@ -2013,7 +2015,7 @@ function CoursemapCreateContent() {
                 ? { ...photo, src: dataUrl, zoom: 1, ...photoFrameSizeForCropAspect(photo, nextCropAspect) }
                 : photo));
               setEditingPhotoId(null);
-              toast.success('사진을 꾸몄어요 ✨');
+              toast.success('Photo decorated ✨');
             }}
           />
         )}
@@ -2037,9 +2039,9 @@ export default function CoursemapCreatePage() {
   if (auth.isError) {
     return (
       <main className="flex min-h-dvh flex-col items-center justify-center gap-3 bg-[#FCF4EE] px-6 text-center">
-        <p className="text-sm font-bold text-[#8C7D74]">로그인 상태를 확인하지 못했어요.</p>
+        <p className="text-sm font-bold text-[#8C7D74]">Couldn't check your sign-in.</p>
         <button type="button" className="lm-btn-primary px-5" onClick={() => auth.refetch()}>
-          다시 시도
+          Try again
         </button>
       </main>
     );
@@ -2048,7 +2050,7 @@ export default function CoursemapCreatePage() {
   if (auth.isLoading || !auth.data || auth.data.isAnonymous) {
     return (
       <main className="flex min-h-dvh items-center justify-center bg-[#FCF4EE] px-6 text-center">
-        <p className="text-sm font-bold text-[#8C7D74]">로그인 확인 중…</p>
+        <p className="text-sm font-bold text-[#8C7D74]">Checking sign-in…</p>
       </main>
     );
   }

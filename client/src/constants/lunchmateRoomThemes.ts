@@ -69,39 +69,39 @@ function categoryItem(
 }
 
 export const LUNCHMATE_ROOM_WALLPAPERS = [
-  categoryItem('wallpapers', 'wallpaper_pink_blush', '블러시 핑크', 'pink-picnic'),
-  categoryItem('wallpapers', 'wallpaper_butter_tile', '버터 타일', 'yellow-lunch-tray'),
-  categoryItem('wallpapers', 'wallpaper_vintage_pin_dot', '빈티지 핀도트', 'vintage-frame'),
-  categoryItem('wallpapers', 'wallpaper_blue_note', '파우더 블루', 'blue-note'),
-  categoryItem('wallpapers', 'wallpaper_garden_ivory', '가든 아이보리', 'flower-garden'),
-  categoryItem('wallpapers', 'wallpaper_modern_lilac', '모던 라일락', 'modern-minimal'),
+  categoryItem('wallpapers', 'wallpaper_pink_blush', 'Blush pink', 'pink-picnic'),
+  categoryItem('wallpapers', 'wallpaper_butter_tile', 'Butter tiles', 'yellow-lunch-tray'),
+  categoryItem('wallpapers', 'wallpaper_vintage_pin_dot', 'Vintage pindots', 'vintage-frame'),
+  categoryItem('wallpapers', 'wallpaper_blue_note', 'Powder blue', 'blue-note'),
+  categoryItem('wallpapers', 'wallpaper_garden_ivory', 'Garden ivory', 'flower-garden'),
+  categoryItem('wallpapers', 'wallpaper_modern_lilac', 'Modern lilac', 'modern-minimal'),
 ] as const;
 
 export const LUNCHMATE_ROOM_FLOORS = [
-  categoryItem('floors', 'floor_pale_wood', '피치 우드', 'pink-picnic'),
-  categoryItem('floors', 'floor_honey_wood', '허니 우드', 'yellow-lunch-tray'),
-  categoryItem('floors', 'floor_walnut', '월넛 우드', 'vintage-frame'),
-  categoryItem('floors', 'floor_light_wood', '라이트 우드', 'blue-note'),
-  categoryItem('floors', 'floor_sunroom_stone', '선룸 스톤', 'flower-garden'),
-  categoryItem('floors', 'floor_minimal_wood', '크림 우드', 'modern-minimal'),
+  categoryItem('floors', 'floor_pale_wood', 'Peach wood', 'pink-picnic'),
+  categoryItem('floors', 'floor_honey_wood', 'Honey wood', 'yellow-lunch-tray'),
+  categoryItem('floors', 'floor_walnut', 'Walnut wood', 'vintage-frame'),
+  categoryItem('floors', 'floor_light_wood', 'Light wood', 'blue-note'),
+  categoryItem('floors', 'floor_sunroom_stone', 'Sunroom stone', 'flower-garden'),
+  categoryItem('floors', 'floor_minimal_wood', 'Cream wood', 'modern-minimal'),
 ] as const;
 
 export const LUNCHMATE_ROOM_FURNITURE = [
-  categoryItem('furniture', 'furniture_picnic_cabinet', '피크닉 수납장', 'pink-picnic'),
-  categoryItem('furniture', 'furniture_yellow_kitchenette', '미니 키친', 'yellow-lunch-tray'),
-  categoryItem('furniture', 'furniture_vintage_record_cabinet', '레코드 수납장', 'vintage-frame'),
-  categoryItem('furniture', 'furniture_blue_study_desk', '블루 공부책상', 'blue-note'),
-  categoryItem('furniture', 'furniture_garden_shelf_chair', '가든 쉼터', 'flower-garden'),
-  categoryItem('furniture', 'furniture_minimal_console', '미니멀 콘솔', 'modern-minimal'),
+  categoryItem('furniture', 'furniture_picnic_cabinet', 'Picnic cabinet', 'pink-picnic'),
+  categoryItem('furniture', 'furniture_yellow_kitchenette', 'Mini kitchen', 'yellow-lunch-tray'),
+  categoryItem('furniture', 'furniture_vintage_record_cabinet', 'Record cabinet', 'vintage-frame'),
+  categoryItem('furniture', 'furniture_blue_study_desk', 'Blue study desk', 'blue-note'),
+  categoryItem('furniture', 'furniture_garden_shelf_chair', 'Garden retreat', 'flower-garden'),
+  categoryItem('furniture', 'furniture_minimal_console', 'Minimal console', 'modern-minimal'),
 ] as const;
 
 export const LUNCHMATE_ROOM_PROPS = [
-  categoryItem('props', 'props_pink_picnic', '핑크 피크닉', 'pink-picnic'),
-  categoryItem('props', 'props_yellow_lunch', '옐로우 런치', 'yellow-lunch-tray'),
-  categoryItem('props', 'props_vintage_frames', '빈티지 프레임', 'vintage-frame'),
-  categoryItem('props', 'props_blue_note', '블루 노트', 'blue-note'),
-  categoryItem('props', 'props_flower_garden', '플라워 가든', 'flower-garden'),
-  categoryItem('props', 'props_modern_minimal', '모던 미니멀', 'modern-minimal'),
+  categoryItem('props', 'props_pink_picnic', 'Pink picnic', 'pink-picnic'),
+  categoryItem('props', 'props_yellow_lunch', 'Yellow lunch', 'yellow-lunch-tray'),
+  categoryItem('props', 'props_vintage_frames', 'Vintage frame', 'vintage-frame'),
+  categoryItem('props', 'props_blue_note', 'Blue note', 'blue-note'),
+  categoryItem('props', 'props_flower_garden', 'Flower garden', 'flower-garden'),
+  categoryItem('props', 'props_modern_minimal', 'Modern minimal', 'modern-minimal'),
 ] as const;
 
 function presetThumbnail(assetKey: LunchmateRoomThemeAssetKey): LunchmateRoomAssetSource {
@@ -124,37 +124,37 @@ function roomTheme(
 
 /** Existing foodieSkin IDs intentionally stay separate from customization asset keys. */
 export const LUNCHMATE_ROOM_THEMES: readonly LunchmateRoomTheme[] = [
-  roomTheme('pink-picnic', 'pink-picnic', '핑크 피크닉', '#F46B72', {
+  roomTheme('pink-picnic', 'pink-picnic', 'Pink picnic', '#F46B72', {
     wallpaperId: 'wallpaper_pink_blush',
     floorId: 'floor_pale_wood',
     furnitureId: 'furniture_picnic_cabinet',
     propsId: 'props_pink_picnic',
   }),
-  roomTheme('yellow-munchtray', 'yellow-lunch-tray', '옐로우 런치트레이', '#F0B94E', {
+  roomTheme('yellow-munchtray', 'yellow-lunch-tray', 'Yellow lunch tray', '#F0B94E', {
     wallpaperId: 'wallpaper_butter_tile',
     floorId: 'floor_honey_wood',
     furnitureId: 'furniture_yellow_kitchenette',
     propsId: 'props_yellow_lunch',
   }),
-  roomTheme('vintage-frame', 'vintage-frame', '빈티지 프레임', '#8C5A3A', {
+  roomTheme('vintage-frame', 'vintage-frame', 'Vintage frame', '#8C5A3A', {
     wallpaperId: 'wallpaper_vintage_pin_dot',
     floorId: 'floor_walnut',
     furnitureId: 'furniture_vintage_record_cabinet',
     propsId: 'props_vintage_frames',
   }),
-  roomTheme('blue-note', 'blue-note', '블루 노트', '#6C98C7', {
+  roomTheme('blue-note', 'blue-note', 'Blue note', '#6C98C7', {
     wallpaperId: 'wallpaper_blue_note',
     floorId: 'floor_light_wood',
     furnitureId: 'furniture_blue_study_desk',
     propsId: 'props_blue_note',
   }),
-  roomTheme('flower-garden', 'flower-garden', '플라워 가든', '#7FA66C', {
+  roomTheme('flower-garden', 'flower-garden', 'Flower garden', '#7FA66C', {
     wallpaperId: 'wallpaper_garden_ivory',
     floorId: 'floor_sunroom_stone',
     furnitureId: 'furniture_garden_shelf_chair',
     propsId: 'props_flower_garden',
   }),
-  roomTheme('modern-minimal', 'modern-minimal', '모던 미니멀', '#A991BD', {
+  roomTheme('modern-minimal', 'modern-minimal', 'Modern minimal', '#A991BD', {
     wallpaperId: 'wallpaper_modern_lilac',
     floorId: 'floor_minimal_wood',
     furnitureId: 'furniture_minimal_console',

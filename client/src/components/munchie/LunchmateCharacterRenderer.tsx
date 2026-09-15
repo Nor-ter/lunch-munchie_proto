@@ -83,15 +83,15 @@ export function shouldUseLunchmateChickenFaceSystem(
 }
 
 const STATE_ALT: Record<LunchmateStateAssetKey, string> = {
-  default: '편안하게 서 있는 런치메이트',
-  happy: '행복한 런치메이트',
-  excited: '신이 난 런치메이트',
-  surprised: '새 음식에 놀란 런치메이트',
-  sad: '속상한 런치메이트',
-  thinking: '어떤 음식을 고를지 생각하는 런치메이트',
-  eating: '한입을 기다리며 행복해하는 런치메이트',
-  like: '한입을 받고 기뻐하는 런치메이트',
-  jump: '레벨업을 기뻐하며 점프하는 런치메이트',
+  default: 'Lunchiken standing calmly',
+  happy: 'Happy Lunchiken',
+  excited: 'Excited Lunchiken',
+  surprised: 'Lunchiken surprised by a new snack',
+  sad: 'Sad Lunchiken',
+  thinking: 'Lunchiken choosing a snack',
+  eating: 'Lunchiken waiting for a bite',
+  like: 'Lunchiken enjoying a bite',
+  jump: 'Lunchiken jumping after a level-up',
 };
 
 const assetLoadCache = new Map<string, Promise<boolean>>();
@@ -406,7 +406,7 @@ export default function LunchmateCharacterRenderer({
           <img
             src={chickenBaseAsset.src}
             srcSet={chickenBaseAsset.srcSet}
-            alt={alt ?? '편안하게 서 있는 치킨 런치메이트'}
+            alt={alt ?? 'Lunchiken standing calmly'}
             width={size}
             height={size}
             data-lunchmate-layer="chicken-base"
@@ -422,7 +422,7 @@ export default function LunchmateCharacterRenderer({
             <span
               className="absolute inset-0 flex h-full w-full items-center justify-center"
               role="img"
-              aria-label="런치메이트 이미지 대체 표시"
+              aria-label="Lunchiken fallback image"
               data-lunchmate-layer="legacy-fallback"
             >
               {fallback ?? '🙂'}

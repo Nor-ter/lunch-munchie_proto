@@ -1,3 +1,5 @@
+import { countLabel } from '@/lib/countLabel';
+import { foodTagLabel } from '@/constants/foodTags';
 import { useState } from 'react';
 import { motion } from 'framer-motion';
 import { useLocation, useParams, useSearch } from 'wouter';
@@ -31,10 +33,10 @@ export default function TemplateDetailPage() {
   const source = sourceParam === 'profile' || sourceParam === 'saved' ? sourceParam : 'feed';
   const backPath = source === 'profile' ? '/profile' : source === 'saved' ? '/saved' : '/feed?tab=template';
   const backLabel = source === 'profile'
-    ? '프로필로 돌아가기'
+    ? 'Back to profile'
     : source === 'saved'
-      ? '저장목록으로 돌아가기'
-      : '템플릿 목록으로 돌아가기';
+      ? 'Back to saved'
+      : 'Back to templates';
   const linkedPost = courseId ? feedPosts.find(post => post.courseId === courseId) : undefined;
   const linkedCourse = courseId ? getCourseById(courseId) : undefined;
   const fallbackCourse: Course | undefined = courseId && linkedPost ? {
@@ -44,7 +46,7 @@ export default function TemplateDetailPage() {
     heroImage: linkedPost.photos[0] ?? '',
     tags: linkedPost.tags,
     hashtags: [],
-    region: 'Munchie 커뮤니티',
+    region: 'Munchie community',
     metadata: { distance: 0, duration: 0, placeCount: Math.min(linkedPost.photos.length, 3) },
     stops: [],
     createdAt: linkedPost.createdAt,
@@ -70,16 +72,16 @@ export default function TemplateDetailPage() {
 
   const archiveTemplate = () => {
     if (!course) return;
-    if (!window.confirm('이 템플릿을 나의 프로필에서 보관 처리할까요? 원본 코스와 피드는 그대로 유지돼요.')) return;
+    if (!window.confirm('Archive this template on your profile? Your original course and post will stay.')) return;
     deleteProfileTemplate(course.id);
-    toast.success('템플릿을 나의 프로필에서 보관 처리했어요');
+    toast.success('Template archived on your profile');
     navigate('/profile', { replace: true });
   };
 
   const toggleSave = () => {
     if (!course) return;
     isSaved ? unsaveCourse(course.id) : saveCourse(course.id);
-    toast.success(isSaved ? '저장을 해제했어요' : '코스를 저장했어요');
+    toast.success(isSaved ? 'Removed from saved' : 'Course saved');
   };
 
   if ((!template || !course) && isLoading) {
@@ -87,7 +89,7 @@ export default function TemplateDetailPage() {
       <main className="flex min-h-dvh items-center justify-center bg-[#FCF4EE] px-6 text-center">
         <div>
           <span className="mx-auto block h-8 w-8 animate-spin rounded-full border-4 border-[#F3D4CA] border-t-[#E85053]" aria-hidden="true" />
-          <p className="mt-3 text-sm font-bold text-[#9A8579]">게시물 원본을 불러오는 중이에요…</p>
+          <p className="mt-3 text-sm font-bold text-[#9A8579]">Loading original post…</p>
         </div>
       </main>
     );
@@ -97,12 +99,12 @@ export default function TemplateDetailPage() {
     return (
       <main className="flex min-h-dvh items-center justify-center bg-[#FCF4EE] px-6">
         <div className="text-center">
-          <p className="text-[17px] font-bold text-[#2D211C]">템플릿을 찾을 수 없어요</p>
+          <p className="text-[17px] font-bold text-[#2D211C]">Template not found</p>
           <button
             onClick={() => navigate(backPath)}
             className="mt-4 h-11 rounded-full bg-[#E85053] px-6 text-[14px] font-bold text-white"
           >
-            {source === 'profile' ? '프로필로' : source === 'saved' ? '저장목록으로' : '템플릿 목록으로'}
+            {source === 'profile' ? 'Go to profile' : source === 'saved' ? 'Go to saved' : 'Go to templates'}
           </button>
         </div>
       </main>
@@ -123,10 +125,10 @@ export default function TemplateDetailPage() {
         <button
           type="button"
           onClick={() => setInfoOpen(true)}
-          aria-label={`${template.name} 템플릿 기본 양식 보기`}
+          aria-label={`${template.name} View blank template`}
           className="rounded-xl px-3 py-1 text-center active:bg-white/70"
         >
-          <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-[#B09A8C]">Munchie Template</p>
+          <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-[#B09A8C]">Munchie template</p>
           <span className="mt-0.5 flex items-center justify-center gap-1 text-[15px] font-bold text-[#2D211C]">
             {template.name} <ChevronDown size={14} color="#9D887C" />
           </span>
@@ -136,7 +138,7 @@ export default function TemplateDetailPage() {
             <button
               type="button"
               onClick={editTemplate}
-              aria-label="템플릿 수정"
+              aria-label="Edit template"
               className="flex h-9 w-9 items-center justify-center rounded-full bg-white text-[#6C574C] shadow-sm"
             >
               <Pencil size={16} />
@@ -144,7 +146,7 @@ export default function TemplateDetailPage() {
             <button
               type="button"
               onClick={archiveTemplate}
-              aria-label="템플릿 보관"
+              aria-label="Archive template"
               className="flex h-9 w-9 items-center justify-center rounded-full bg-[#FFF0F0] text-[#D94447] shadow-sm"
             >
               <Archive size={16} />
@@ -167,14 +169,14 @@ export default function TemplateDetailPage() {
           <div className="flex flex-wrap gap-1.5">
             {course.tags.map((tag) => (
               <span key={tag} className="rounded-full bg-[#FDE1E1] px-2.5 py-1 text-[11px] font-bold text-[#D94447]">
-                {tag}
+                {foodTagLabel(tag)}
               </span>
             ))}
           </div>
         )}
         <div className={`${course.tags.length > 0 ? 'mt-3' : ''} flex flex-nowrap items-center justify-start gap-3 border-y border-[#EADFD8] py-3 text-[12px] font-semibold text-[#5E4B42]`}>
-          <span className="flex shrink-0 items-center gap-1.5"><Clock3 size={14} color="#E85053" />{Math.floor(course.metadata.duration / 60)}시간</span>
-          <span className="flex shrink-0 items-center gap-1" aria-label={`스팟 ${course.metadata.placeCount}개`}>
+          <span className="flex shrink-0 items-center gap-1.5"><Clock3 size={14} color="#E85053" />{Math.floor(course.metadata.duration / 60)} hours</span>
+          <span className="flex shrink-0 items-center gap-1" aria-label={countLabel(course.metadata.placeCount ?? 0, 'stop')}>
             <MapPin size={14} color="#E85053" aria-hidden="true" />
             {course.metadata.placeCount}
           </span>
@@ -185,7 +187,7 @@ export default function TemplateDetailPage() {
 
       {authorReview && (
         <section data-ui="template-author-review" className="px-3 pt-1">
-          <p className="mb-1.5 text-[10px] font-black tracking-[0.08em] text-[#B89E91]">작성자의 한줄평</p>
+          <p className="mb-1.5 text-[10px] font-black tracking-[0.08em] text-[#B89E91]">Author's quick review</p>
           <OneLineReviewBox compact className="!min-h-[40px] !px-6 !py-2">
             <p className="break-words text-[13px] font-bold leading-5 text-[#3B2A23]">{authorReview}</p>
           </OneLineReviewBox>
@@ -195,7 +197,7 @@ export default function TemplateDetailPage() {
       <div className="page-bottom-action-bar page-bottom-bar">
         <button
           onClick={toggleSave}
-          aria-label={isSaved ? '코스 저장 해제' : '코스 저장'}
+          aria-label={isSaved ? 'Unsave course' : 'Course saves'}
           className="page-bottom-action-secondary"
         >
           <Bookmark size={19} fill={isSaved ? 'currentColor' : 'none'} />
@@ -204,7 +206,7 @@ export default function TemplateDetailPage() {
           onClick={() => navigate(`/course/${course.id}?from=template-detail&template=${template.id}&templateFrom=${source}`)}
           className="page-bottom-action-primary"
         >
-          상세 코스 보기
+          View course details
         </button>
       </div>
       <TemplateInfoSheet template={infoOpen ? template : null} onClose={() => setInfoOpen(false)} />

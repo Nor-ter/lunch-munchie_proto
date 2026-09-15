@@ -34,9 +34,9 @@ function groupJourneyByDay(stops: JourneyStop[]): JourneyDay[] {
     const key = `${date.getFullYear()}-${date.getMonth()}-${date.getDate()}`;
     const today = new Date();
     const yesterday = new Date(); yesterday.setDate(today.getDate() - 1);
-    const label = date.toDateString() === today.toDateString() ? '오늘의 런치픽'
-      : date.toDateString() === yesterday.toDateString() ? '어제의 런치픽'
-        : new Intl.DateTimeFormat('ko-KR', { month: 'long', day: 'numeric', weekday: 'short' }).format(date);
+    const label = date.toDateString() === today.toDateString() ? 'Today\'s Lunchie Pick'
+      : date.toDateString() === yesterday.toDateString() ? 'Yesterday\'s Lunchie Pick'
+        : new Intl.DateTimeFormat('en-AU', { month: 'long', day: 'numeric', weekday: 'short' }).format(date);
     const day = days.get(key) ?? { key, label, stops: [] };
     day.stops.push(stop);
     days.set(key, day);
@@ -118,16 +118,16 @@ export default function SavedPage() {
     <div className="min-h-dvh bg-[#FCF4EE] pb-24">
       {/* Header */}
       <div className="px-5 pt-12 pb-4">
-        <h1 className="font-bold text-[22px] text-[#1A1A1A] mb-1">저장 목록 🔖</h1>
+        <h1 className="font-bold text-[22px] text-[#1A1A1A] mb-1">Saved</h1>
         <p className="text-[12px] text-[#9B9B9B] mb-4">
-          {tab === 'coursemaps' ? '마음에 든 한줄평과 코스맵을 함께 모아봤어요' : 'Quick Match에서 확정한 런치픽 여정이에요'}
+          {tab === 'coursemaps' ? 'Everything you’ve saved for later.' : 'Your past Quick Match winners.'}
         </p>
 
         {/* 모드 세그먼트 */}
-        <div className="flex rounded-full bg-[#F5F0EA] p-1" role="group" aria-label="저장 목록 탭">
+        <div className="flex rounded-full bg-[#F5F0EA] p-1" role="group" aria-label="Saved tabs">
           {([
-            ['coursemaps', 'Munchie 먼치픽', MapIcon, savedPosts.length],
-            ['restaurants', 'Lunchie 런치픽', Zap, journeyStops.length],
+            ['coursemaps', 'Munchie Picks', MapIcon, savedPosts.length],
+            ['restaurants', 'Lunchie Picks', Zap, journeyStops.length],
           ] as const).map(([key, label, Icon, count]) => (
             <button
               key={key}
@@ -198,7 +198,7 @@ export default function SavedPage() {
                         type="button"
                         onClick={() => setPendingUnsaveCourseId(post.courseId)}
                         className={`absolute bottom-1.5 right-1.5 origin-bottom-right scale-[0.8] shadow-sm ${SAVED_BOOKMARK_BUTTON_CLASS}`}
-                        aria-label="먼치픽 저장 취소"
+                        aria-label="Remove saved post"
                       >
                         <Bookmark size={20} strokeWidth={2} fill="currentColor" />
                       </button>
@@ -225,14 +225,14 @@ export default function SavedPage() {
             <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="text-center py-16">
               <div className="text-5xl mb-3">🔖</div>
               <p className="font-bold text-[16px] text-[#1A1A1A] mb-1">
-                {activeFilter === 'all' ? '아직 저장한 먼치픽이 없어요!' : '해당 카테고리 먼치픽이 없어요'}
+                {activeFilter === 'all' ? 'Save something for later' : 'Nothing saved in this category'}
               </p>
               <p className="text-[13px] text-[#9B9B9B] mb-6">
-                {activeFilter === 'all' ? 'Munchie Feed에서 마음에 드는 한줄평과 코스맵을 저장해보세요' : '다른 필터를 선택해보세요'}
+                {activeFilter === 'all' ? 'Find a post you love and tap Save.' : 'Try another filter'}
               </p>
               {activeFilter === 'all' && (
                 <button onClick={() => navigate('/feed')} className="lm-btn-primary px-6 inline-flex items-center justify-center">
-                  Munchie Feed 둘러보기
+                  Browse Munchie Feed
                 </button>
               )}
             </motion.div>
@@ -245,7 +245,7 @@ export default function SavedPage() {
         <div className="px-5 space-y-3">
           {journeyDays.map(day => (
             <section key={day.key}>
-              <p className="mb-2 text-[12px] font-black text-[#B26A62]">{day.label} · {day.stops.length}곳</p>
+              <p className="mb-2 text-[12px] font-black text-[#B26A62]">{day.label} · {day.stops.length} places</p>
               <div className="space-y-2">
                 {day.stops.map((stop, index) => (
                   <button
@@ -256,7 +256,7 @@ export default function SavedPage() {
                   >
                     <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[#F6B5AC] text-[11px] font-black text-white">{day.stops.length - index}</span>
                     <span className="min-w-0 flex-1 truncate text-[14px] font-bold text-[#1A1A1A]">{stop.name}</span>
-                    <span className="flex items-center gap-1 text-[11px] font-semibold text-[#9B9B9B]"><MapPin size={11} />{stop.category ?? '맛집'}</span>
+                    <span className="flex items-center gap-1 text-[11px] font-semibold text-[#9B9B9B]"><MapPin size={11} />{stop.category ?? 'Good food'}</span>
                   </button>
                 ))}
               </div>
@@ -266,12 +266,12 @@ export default function SavedPage() {
           {!journeyLoading && journeyStops.length === 0 && (
             <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="text-center py-16">
               <div className="text-5xl mb-3">⚡</div>
-              <p className="font-bold text-[16px] text-[#1A1A1A] mb-1">아직 확정한 런치픽이 없어요!</p>
+              <p className="font-bold text-[16px] text-[#1A1A1A] mb-1">Your next lunch starts here</p>
               <p className="text-[13px] text-[#9B9B9B] mb-6">
-                Quick Match로 점심을 정하면 날짜별 여정으로 자동 기록돼요
+                Decide with Quick Match. We'll keep your winners here.
               </p>
               <button onClick={() => navigate('/lunchie/settings')} className="lm-btn-primary px-6 inline-flex items-center justify-center">
-                Quick Match 시작하기
+                Start Quick Match
               </button>
             </motion.div>
           )}
@@ -287,7 +287,7 @@ export default function SavedPage() {
             transform: 'translateX(-50%)',
           }}
           role="group"
-          aria-label="저장 먼치픽 보기 방식"
+          aria-label="Saved Munchie Picks view"
         >
           {([
             ['map', 'Map', MapIcon],
@@ -324,15 +324,15 @@ export default function SavedPage() {
         <AnimatePresence>
           {pendingUnsaveCourseId && (
             <motion.div className="fixed inset-0 z-[100] flex items-center justify-center px-5" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
-              <button type="button" aria-label="저장 취소 확인 닫기" className="absolute inset-0 bg-[#2A1A14]/40" onClick={() => setPendingUnsaveCourseId(null)} />
+              <button type="button" aria-label="Close unsave confirmation" className="absolute inset-0 bg-[#2A1A14]/40" onClick={() => setPendingUnsaveCourseId(null)} />
               <motion.section role="dialog" aria-modal="true" aria-labelledby="unsave-confirm-title" className="relative w-full max-w-[320px] rounded-[24px] bg-white p-5 shadow-[0_20px_50px_rgba(48,28,20,0.24)]" initial={{ scale: 0.94, y: 12 }} animate={{ scale: 1, y: 0 }} exit={{ scale: 0.94, y: 12 }}>
-                <button type="button" aria-label="저장 취소 확인 닫기" onClick={() => setPendingUnsaveCourseId(null)} className="absolute right-3 top-3 flex h-8 w-8 items-center justify-center rounded-full bg-[#F8ECE6] text-[#876E63]"><X size={16} /></button>
+                <button type="button" aria-label="Close unsave confirmation" onClick={() => setPendingUnsaveCourseId(null)} className="absolute right-3 top-3 flex h-8 w-8 items-center justify-center rounded-full bg-[#F8ECE6] text-[#876E63]"><X size={16} /></button>
                 <span className="flex h-11 w-11 items-center justify-center rounded-full bg-[#FFE8E3] text-[#D94E55]"><Bookmark size={21} fill="currentColor" /></span>
-                <h2 id="unsave-confirm-title" className="mt-3 text-[17px] font-black text-[#30221C]">저장을 취소할까요?</h2>
-                <p className="mt-1.5 text-[12px] font-semibold leading-5 text-[#8A746A]">저장 목록에서 이 먼치픽이 사라져요.</p>
+                <h2 id="unsave-confirm-title" className="mt-3 text-[17px] font-black text-[#30221C]">Remove from saved?</h2>
+                <p className="mt-1.5 text-[12px] font-semibold leading-5 text-[#8A746A]">You can save this post again anytime.</p>
                 <div className="mt-5 grid grid-cols-2 gap-2.5">
-                  <button type="button" onClick={() => setPendingUnsaveCourseId(null)} className="h-11 rounded-[14px] border border-[#DFD0C8] bg-white text-[13px] font-black text-[#69564D]">취소</button>
-                  <button type="button" onClick={confirmUnsave} className="h-11 rounded-[14px] bg-[#E85053] text-[13px] font-black text-white">저장 취소</button>
+                  <button type="button" onClick={() => setPendingUnsaveCourseId(null)} className="h-11 rounded-[14px] border border-[#DFD0C8] bg-white text-[13px] font-black text-[#69564D]">Cancel</button>
+                  <button type="button" onClick={confirmUnsave} className="h-11 rounded-[14px] bg-[#E85053] text-[13px] font-black text-white">Unsave</button>
                 </div>
               </motion.section>
             </motion.div>

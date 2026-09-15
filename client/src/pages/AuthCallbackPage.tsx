@@ -41,8 +41,8 @@ export default function AuthCallbackPage() {
         {!showFailure && !isUnauthenticated ? (
           <>
             <LoaderCircle size={30} className="mx-auto animate-spin text-[#E85053]" />
-            <h1 className="mt-5 text-[19px] font-extrabold text-[#342C28]">로그인을 확인하고 있어요</h1>
-            <p className="mt-2 text-[13px] text-[#8C7D74]">잠시만 기다려 주세요.</p>
+            <h1 className="mt-5 text-[19px] font-extrabold text-[#342C28]">Checking your sign-in</h1>
+            <p className="mt-2 text-[13px] text-[#8C7D74]">Just a moment.</p>
           </>
         ) : (
           <>
@@ -50,24 +50,24 @@ export default function AuthCallbackPage() {
               !
             </div>
             <h1 className="mt-4 text-[19px] font-extrabold text-[#342C28]">
-              로그인을 완료하지 못했어요
+              Couldn't finish signing in
             </h1>
             <p role={showFailure ? 'alert' : undefined} className="mt-2 text-[13px] leading-5 text-[#8C7D74]">
-              Google 로그인을 다시 시작해 주세요.
+              Please try signing in with Google again.
             </p>
             <button
                 type="button"
                 onClick={goToLogin}
                 className="mt-6 h-11 w-full rounded-2xl bg-[#E85053] text-[14px] font-bold text-white active:scale-[0.98]"
               >
-                로그인 페이지로 돌아가기
+                Back to sign-in
             </button>
             <button
               type="button"
               onClick={() => navigate('/profile', { replace: true })}
               className="mt-4 text-[12px] font-semibold text-[#8C7D74] underline underline-offset-4"
             >
-              프로필로 돌아가기
+              Back to profile
             </button>
           </>
         )}

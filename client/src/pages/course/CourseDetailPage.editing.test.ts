@@ -45,15 +45,15 @@ describe('CourseDetailPage course editing', () => {
 
   it('exposes numbered replacement search plus add and delete controls', () => {
     const source = readFileSync(join(import.meta.dirname, 'CourseDetailPage.tsx'), 'utf8');
-    expect(source).toContain('번 장소 검색 및 변경');
-    expect(source).toContain('새 장소 추가');
+    expect(source).toContain('Change stop ${index + 1}');
+    expect(source).toContain('Add a place');
     expect(source).toContain('onRemove={removeCoursePlace}');
     expect(source).toContain("updateCourse(appCourse.id");
     expect(source).toContain('replacementActive={isEditing && editingPlaceIndex === i}');
     expect(source).toContain('border-l-2 border-dashed');
     expect(source).toContain('fromSaved && isEditing');
-    expect(source).toContain('게시물을 삭제하시겠습니까?');
-    expect(source).toContain('코스맵과 먼치 피드 같이 삭제되며');
+    expect(source).toContain('Delete this post?');
+    expect(source).toContain('The Course Map and Munchie post will both be deleted.');
     expect(source).toContain("fetch(`/api/feed-post?courseId=${encodeURIComponent(id)}`");
     expect(source).toContain("method: 'DELETE'");
     expect(source).toContain("credentials: 'same-origin'");

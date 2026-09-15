@@ -90,11 +90,11 @@ function FaceIcon({ active }: { active: boolean }) {
 }
 
 const TABS = [
-  { path: "/", label: "홈", Icon: HomeIcon },
-  { path: "/feed", label: "먼치", Icon: MunchIcon },
-  { path: "/lunchie/settings", label: "런치", Icon: LightningIcon },
-  { path: "/saved", label: "저장", Icon: BookmarkIcon },
-  { path: "/profile", label: "프로필", Icon: FaceIcon },
+  { path: "/", label: "Home", Icon: HomeIcon },
+  { path: "/feed", label: "Munchie", Icon: MunchIcon },
+  { path: "/lunchie/settings", label: "Lunchie", Icon: LightningIcon },
+  { path: "/saved", label: "Saved", Icon: BookmarkIcon },
+  { path: "/profile", label: "Profile", Icon: FaceIcon },
 ] as const;
 
 export default function TabBar() {

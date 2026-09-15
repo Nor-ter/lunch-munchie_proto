@@ -1,3 +1,4 @@
+import { foodTagLabel } from '@/constants/foodTags';
 /**
  * Lunchie Munchie — Explore (Course List) Page
  * Design: Soft Coral (Option 8)
@@ -39,7 +40,7 @@ function CourseListCard({ course, onTap }: { course: Course; onTap: () => void }
         <div className="absolute bottom-3 left-3 z-30 flex gap-1.5 flex-wrap">
           {course.tags.slice(0, 2).map(tag => (
             <span key={tag} className="tag" style={getCourseTagStyle(tag)}>
-              {tag}
+              {foodTagLabel(tag)}
             </span>
           ))}
         </div>
@@ -56,10 +57,10 @@ function CourseListCard({ course, onTap }: { course: Course; onTap: () => void }
             <MapPin size={11} /> {course.metadata.distance}km
           </span>
           <span className="flex items-center gap-1 text-[12px]">
-            <Clock size={11} /> {Math.floor(course.metadata.duration / 60)}시간
+            <Clock size={11} /> {Math.floor(course.metadata.duration / 60)} hours
           </span>
           <span className="flex items-center gap-1 text-[12px]">
-            📍 {course.metadata.placeCount}개 장소
+            📍 {course.metadata.placeCount} places
           </span>
           <span className="flex items-center gap-1 text-[12px] ml-auto">
             <Bookmark size={11} /> {course.savedCount}
@@ -95,7 +96,7 @@ export default function ExplorePage() {
                 <circle cx="20" cy="11.8" r="2.4" fill="#FF3E4D" strokeWidth="0" />
               </svg>
             </div>
-            <p className="text-[12px] mt-0.5" style={{ color: '#9B9B9B' }}>코스를 탐색해보아요</p>
+            <p className="text-[12px] mt-0.5" style={{ color: '#9B9B9B' }}>Explore some courses</p>
           </div>
           <div className="flex gap-2">
             <button
@@ -149,8 +150,8 @@ export default function ExplorePage() {
         {filtered.length === 0 && (
           <div className="text-center py-16">
             <div className="text-5xl mb-3">🔍</div>
-            <p className="font-bold text-[16px] text-[#1A1A1A] mb-1">코스가 없어요</p>
-            <p className="text-[13px] text-[#9B9B9B]">다른 필터를 선택해보세요</p>
+            <p className="font-bold text-[16px] text-[#1A1A1A] mb-1">No courses yet</p>
+            <p className="text-[13px] text-[#9B9B9B]">Try another filter</p>
           </div>
         )}
       </div>
@@ -167,7 +168,7 @@ export default function ExplorePage() {
         transition={{ type: 'spring', stiffness: 300, damping: 20, delay: 0.2 }}
       >
         <Plus size={18} />
-        새 코스 만들기
+        Create course
       </motion.button>
     </div>
   );

@@ -27,11 +27,11 @@ function clearLunchieWaitingCompanion(): void {
 }
 
 function remainingLabel(deadlineAt: string | null, now: number): string {
-  if (!deadlineAt) return '마감 전';
+  if (!deadlineAt) return 'Time left';
   const seconds = Math.max(0, Math.ceil((new Date(deadlineAt).getTime() - now) / 1000));
-  if (seconds < 60) return `${seconds}초`;
+  if (seconds < 60) return `${seconds}s`;
   const minutes = Math.ceil(seconds / 60);
-  return `${minutes}분`;
+  return `${minutes}min`;
 }
 
 export default function LunchieWaitingCompanion() {
@@ -117,22 +117,22 @@ export default function LunchieWaitingCompanion() {
 
   const primaryCopy = interactionCopy ?? (
     phase === 'DONE'
-      ? 'Lunchie 결과가 나왔어요!'
+      ? 'Your winner is ready'
       : phase === 'NO_CONSENSUS'
-        ? '이번에는 합의가 어려웠어요'
+        ? 'No match this time'
         : needsFinalVote
-      ? '결승전 투표가 열렸어요!'
+      ? 'The final vote is open!'
       : isReroll
-        ? '새로운 후보가 도착했어요!'
+        ? 'New restaurants to try'
         : phase === 'FINAL'
-          ? '친구들의 결승 선택을 모으는 중이에요'
-          : `런치 투표 ${countdown} 남았어요`
+          ? 'Waiting for the final votes'
+          : `Lunchie vote ${countdown} left`
   );
   const secondaryCopy = hasFinalOutcome
-    ? '눌러서 결과를 확인해요'
+    ? 'See the winner'
     : needsFinalVote || isReroll
-      ? '눌러서 투표 페이지로 돌아가요'
-    : '친구들이 고르는 동안 먼치피드를 둘러봐요';
+      ? 'Tap to return to voting'
+    : 'Browse Munchie while your friends vote.';
 
   useEffect(() => {
     if (location === '/lunchie/swipe' && hasFinalOutcome && activeSessionId) {
@@ -147,7 +147,7 @@ export default function LunchieWaitingCompanion() {
 
   const handleCharacterTap = () => {
     setIsHappy(true);
-    setInteractionCopy('콕! 런치 투표는 내가 지켜보고 있어요');
+    setInteractionCopy('I\'ll let you know when the votes are in.');
     if (interactionTimerRef.current) clearTimeout(interactionTimerRef.current);
     interactionTimerRef.current = setTimeout(() => {
       setIsHappy(false);
@@ -180,7 +180,7 @@ export default function LunchieWaitingCompanion() {
           <motion.button
             type="button"
             onClick={handleCharacterTap}
-            aria-label="기다림 도우미 런치킨과 상호작용"
+            aria-label="Play with Lunchiken while you wait"
             className="pointer-events-auto flex size-[86px] shrink-0 items-center justify-center rounded-[27px] bg-[#FFF7F1] shadow-[0_12px_32px_rgba(218,82,78,0.2)]"
             animate={isHappy ? { y: [0, -12, 0], rotate: [0, -8, 8, 0], scale: [1, 1.08, 1] } : { y: [0, -4, 0] }}
             transition={isHappy ? { duration: 0.65 } : { duration: 2, repeat: Infinity, ease: 'easeInOut' }}
@@ -194,7 +194,7 @@ export default function LunchieWaitingCompanion() {
               loadout={loadout}
               size={80}
               renderSize="compact"
-              alt="런치 투표를 알려주는 런치킨"
+              alt="Lunchiken with a voting update"
             />
           </motion.button>
         </motion.aside>

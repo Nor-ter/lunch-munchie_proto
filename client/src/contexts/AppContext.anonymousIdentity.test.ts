@@ -9,7 +9,7 @@ describe('anonymous profile identity', () => {
       source.indexOf('const DEFAULT_PROFILE'),
       source.indexOf('// ─── Context'),
     );
-    expect(profileBlock).toContain("name: '사용자'");
+    expect(profileBlock).toContain("name: 'User'");
     expect(profileBlock).not.toContain("name: '지민'");
   });
 });

@@ -46,28 +46,28 @@ export default function AuthLoginPage() {
 
   if (authError) {
     const message = authError === 'oauth_config'
-      ? '로컬 Google 로그인 설정이 없어요. 프로젝트 루트의 .dev.vars에 Google OAuth 설정을 복구한 뒤 개발 서버를 다시 시작해 주세요.'
+      ? 'Google sign-in isn\'t available right now. Please try again later.'
       : authError === 'oauth_profile'
-      ? 'Google 계정 정보를 읽지 못했어요. 계정에 이름이나 프로필 사진이 없어도 로그인은 가능해야 하므로, 다시 시도해도 반복되면 이 오류 코드를 알려주세요.'
+      ? 'Couldn\'t access your Google account. Try again, or contact us with the error code below.'
       : authError === 'oauth_exchange'
-        ? 'Google 인증 코드를 앱 세션으로 바꾸지 못했어요.'
-        : 'Google 로그인 상태 확인이 만료됐어요.';
+        ? 'Couldn\'t finish Google sign-in.'
+        : 'Your Google sign-in request expired.';
 
     return (
       <main className="flex min-h-dvh flex-col items-center justify-center bg-[#FCF4EE] px-8 text-center">
         <div className="flex h-14 w-14 items-center justify-center rounded-full bg-[#FFF0EB] text-xl font-black text-[#E85053]">
           !
         </div>
-        <h1 className="mt-5 text-xl font-black text-[#342C28]">로그인을 완료하지 못했어요</h1>
+        <h1 className="mt-5 text-xl font-black text-[#342C28]">Couldn't finish signing in</h1>
         <p className="mt-2 text-sm leading-6 text-[#8C7D74]">{message}</p>
-        <p className="mt-2 text-xs font-semibold text-[#B08B80]">오류 코드: {authError}</p>
+        <p className="mt-2 text-xs font-semibold text-[#B08B80]">Error code: {authError}</p>
         <button
           type="button"
           onClick={handleGoogleSignIn}
           disabled={submitting}
           className="mt-6 h-12 rounded-2xl bg-[#E85053] px-6 text-sm font-bold text-white disabled:opacity-60"
         >
-          Google 로그인 다시 시도
+          Try signing in
         </button>
       </main>
     );

@@ -500,3 +500,30 @@
 - **이번 변경 범위 PASS**: Quick Match diff는 UI 인덱스 계산과 테스트만 변경하며 env·키·네트워크 경로를 건드리지 않는다. 클라이언트에서 서버 키 참조나 실제 Google 키 형태 리터럴이 새로 발견되지 않았고 `.env`, `.env.local`, `mobile/.env`, `.dev.vars`, `env.enc`는 현재 ignore 및 미추적 상태다.
 - **저장소 전체 종료 게이트 BLOCK**: `env.enc`가 과거 Git 이력에 존재하며, GCP 콘솔에서 현재 전체 키 목록과 실제 API/Application restriction을 전수 확인하지 못했다.
 - 미완료 보안 TODO: 모바일 키 iOS bundle ID 및 Android 패키지명+SHA-1 restriction, 웹 키 HTTP referrer restriction, 서버 키 Places API (New)+Directions 제한을 운영 콘솔에서 재확인하고 `env.enc` 역사 노출의 민감성 평가 및 필요 시 비밀값 교체·Git 이력 정리 승인을 받는다.
+
+## 22. [Build #1] first-prototype English UI (2026-09-15)
+
+- Scope: presentation web client English UI only; current first-prototype used directly. No branch creation, merge/rebase, commit/push, deployment, backend/DB/migration/API or env changes. Existing debug.log preserved.
+- Inventory before code changes: 2,086 Korean literals/text nodes, 1,581 unique. Translated UI and demo copy; preserved names, places, user content, tag/dietary values and developer material. Final remaining-literal classification and complete file list: [English UI review](first-prototype-english-ui-review.md).
+- Layout: 360/390/430px Chromium; profile settings bottom scroll padding adjusted to keep Save above navigation. Real Maps/Places and physical phones remain for human verification.
+- Validation: TypeScript PASS; current-source Vitest 661 PASS; Playwright 27 PASS; production build PASS; Cloudflare policy and diff whitespace PASS. test:precommit fails on the pre-existing outputs/profile-lunchmate-fix archived checkout, which is untouched.
+- Scope gate reviewed by the main agent: no backend, network contract, dependency, key or env changes; existing .env/env.enc ignore rules remain. No sub-agent used. Remote key restrictions were not re-audited for this UI-only ticket.
+- Delivery: uncommitted local review at http://localhost:5173/. Separate Expo mobile app remains outside the presentation web implementation.
+
+## 23. [Build #1] Whole-product English copy audit (2026-09-15)
+
+- Audited the presentation client's routes, components, constants, demo copy and accessibility strings before editing. Collected 8,977 source candidates across 239 files; this includes internal/data candidates, not just visible copy. Presented screen mappings and terminology first.
+- Refined existing English alongside Korean review: friendly Australian/global tone, vote/winner, post/course/stop terminology, numeric people shortcuts, count-aware labels, concise errors and accurate saved-result descriptions. Preserved user/place names and all API values/contracts. Additional changes: 57 product files and 24 test files.
+- Main-agent scope review: no backend/DB/migration/dependency/env changes or new network behavior. No sub-agents. Existing security settings were not changed; remote key restrictions were not re-audited for copy-only work.
+- Validation: TypeScript PASS; current-source 662 Vitest cases verified (final two files: 68 PASS); Playwright 27 PASS; final build PASS; Cloudflare policy and whitespace PASS. Precommit fails only in the existing outputs/profile-lunchmate-fix archive (17 suites / 6 tests). Audit snapshots use a non-test .snapshot extension.
+- 360/390/430px web UI checked; no additional layout change. Live Maps, physical phones and separate Expo mobile app remain outside this verification.
+- Handoff: [copy audit and full inventory links](first-prototype-copy-audit.md). Branch first-prototype; no commit, push, merge, rebase or deployment.
+
+## 24. [Build #1] Direct consumer copy refinement (2026-09-15)
+
+- Confirmed first-prototype and preserved the existing uncommitted tree. Collected 8,980 current copy candidates across 240 files before implementation and presented screen mappings after checking the force/results CTA actions.
+- Applied the user's exact Home direction; removed food-adventure/Just-me wording; clarified lobby capacity, Round 1/2, waiting, result/details and Saved/Feed copy. Display-only session titles and known category labels preserve original names, custom data and API payloads. Changed 31 product files and 4 test files.
+- Verification: TypeScript PASS; current-source Vitest 666 PASS; Playwright 30 PASS, including populated lobby/swipe/waiting/result/details at 360/390/430px; production build PASS. No CSS redesign. Added literal progress-word spacing for accessibility.
+- Precommit fails solely in the existing outputs/profile-lunchmate-fix archive (17 suites / 6 tests). Current source passes; archived assertions/configuration untouched. Cloudflare policy and diff whitespace PASS.
+- Main-agent scope check: no backend/DB/migration/API/dependency/env changes; no sub-agents. Live services, physical phones and separate Expo mobile remain outside this web copy verification. No commit/push/merge/rebase/deployment.
+- Latest handoff: [consumer copy refinement](first-prototype-copy-refinement.md), including complete inventory, mappings, changed files and screenshots.

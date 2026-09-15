@@ -26,7 +26,7 @@ const DarkStoryTemplate = forwardRef<HTMLDivElement, TemplateProps>(({ course },
         {course.title}
       </p>
       <p style={{ fontSize: 11, color: '#aaa', margin: '0 0 12px' }}>
-        {course.distanceKm}km · {course.durationHours}h · {course.places.length}곳
+        {course.distanceKm}km · {course.durationHours}h · {course.places.length} places
       </p>
       <div style={{ borderRadius: 12, overflow: 'hidden', border: '1px solid #333' }}>
         <CourseMap places={course.places} width={200} height={200} />

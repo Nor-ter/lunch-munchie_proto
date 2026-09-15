@@ -20,14 +20,14 @@ interface PhotoCropEditorProps {
 const INITIAL_CROP: CropArea = { x: 0.1, y: 0.1, width: 0.8, height: 0.8 };
 const FULL_CROP: CropArea = { x: 0, y: 0, width: 1, height: 1 };
 const HANDLE_LABELS: Record<Exclude<CropHandle, "move">, string> = {
-  n: "위쪽 크롭 경계 조절",
-  ne: "오른쪽 위 크롭 모서리 조절",
-  e: "오른쪽 크롭 경계 조절",
-  se: "오른쪽 아래 크롭 모서리 조절",
-  s: "아래쪽 크롭 경계 조절",
-  sw: "왼쪽 아래 크롭 모서리 조절",
-  w: "왼쪽 크롭 경계 조절",
-  nw: "왼쪽 위 크롭 모서리 조절",
+  n: "Resize top crop edge",
+  ne: "Resize top-right crop corner",
+  e: "Resize right crop edge",
+  se: "Resize bottom-right crop corner",
+  s: "Resize bottom crop edge",
+  sw: "Resize bottom-left crop corner",
+  w: "Resize left crop edge",
+  nw: "Resize top-left crop corner",
 };
 
 const HANDLE_STYLES: Record<Exclude<CropHandle, "move">, string> = {
@@ -122,7 +122,7 @@ export default function PhotoCropEditor({
       onSave(await cropImageToDataUrl(src, crop), crop);
     } catch {
       setError(
-        "이 사진은 보안 설정 때문에 크롭 결과를 저장할 수 없어요. 직접 업로드한 사진을 사용해주세요.",
+        "We can't crop this photo. Try uploading it from your device.",
       );
       setSaving(false);
     }
@@ -140,7 +140,7 @@ export default function PhotoCropEditor({
           <button
             type="button"
             onClick={onCancel}
-            aria-label="사진 편집 취소"
+            aria-label="Cancel photo editing"
             className="flex h-9 w-9 items-center justify-center rounded-full bg-white text-[#6E5B50] shadow-sm"
           >
             <X size={18} />
@@ -150,19 +150,19 @@ export default function PhotoCropEditor({
               id="photo-crop-title"
               className="flex items-center gap-1.5 text-[16px] font-bold text-[#1A1A1A]"
             >
-              <Crop size={16} /> 사진 크롭
+              <Crop size={16} /> Crop photo
             </p>
             <p className="mt-0.5 text-[11px] text-[#9B9B9B]">
-              프레임을 놓으면 선택 영역이 확대돼요
+              Let go to zoom in on your crop.
             </p>
           </div>
           <button
             type="button"
             onClick={reset}
-            aria-label="원본 크기로 되돌리기"
+            aria-label="Reset to original size"
             className="flex h-9 items-center justify-center gap-1 rounded-full bg-white px-3 text-[11px] font-bold text-[#6E5B50] shadow-sm"
           >
-            <RotateCcw size={14} /> 원본
+            <RotateCcw size={14} /> Original
           </button>
         </div>
 
@@ -228,7 +228,7 @@ export default function PhotoCropEditor({
           {imageBounds && (
             <img
               src={src}
-              alt="크롭할 사진"
+              alt="Photo to crop"
               draggable={false}
               data-testid="crop-image"
               className={`pointer-events-none absolute max-w-none ${isInteracting ? "" : "transition-[left,top,width,height] duration-300 ease-out"}`}
@@ -255,7 +255,7 @@ export default function PhotoCropEditor({
           {cropStyle && (
             <div
               data-crop-action="move"
-              aria-label="크롭 영역 이동"
+              aria-label="Move crop area"
               className={`absolute cursor-move border-2 border-white shadow-[0_0_0_9999px_rgba(0,0,0,0.58)] ${isInteracting ? "" : "transition-[left,top,width,height] duration-300 ease-out"}`}
               style={cropStyle}
             >
@@ -283,7 +283,7 @@ export default function PhotoCropEditor({
         </div>
 
         <div className="mt-3 flex items-center justify-between rounded-2xl bg-white px-4 py-3 text-[12px]">
-          <span className="font-semibold text-[#6E5B50]">자유 비율</span>
+          <span className="font-semibold text-[#6E5B50]">Freeform</span>
           <span className="font-bold text-[#E85053]">
             {cropRatio.toFixed(2)} : 1
           </span>
@@ -305,7 +305,7 @@ export default function PhotoCropEditor({
           className="mt-4 flex h-[52px] w-full items-center justify-center gap-2 rounded-2xl bg-[#EB5053] text-[15px] font-bold text-white shadow-lg disabled:bg-[#E5CFC5]"
         >
           <Check size={18} strokeWidth={3} />{" "}
-          {saving ? "사진 적용 중..." : "크롭 적용"}
+          {saving ? "Applying photo…" : "Apply crop"}
         </button>
       </div>
     </div>
