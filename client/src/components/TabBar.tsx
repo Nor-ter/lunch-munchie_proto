@@ -91,8 +91,8 @@ function FaceIcon({ active }: { active: boolean }) {
 
 const TABS = [
   { path: "/", label: "Home", Icon: HomeIcon },
-  { path: "/lunchie/settings", label: "Quick Match", Icon: LightningIcon },
   { path: "/feed", label: "Feed", Icon: MunchIcon },
+  { path: "/lunchie/settings", label: "Quick Match", Icon: LightningIcon },
   { path: "/saved", label: "Saved", Icon: BookmarkIcon },
   { path: "/profile", label: "Profile", Icon: FaceIcon },
 ] as const;
