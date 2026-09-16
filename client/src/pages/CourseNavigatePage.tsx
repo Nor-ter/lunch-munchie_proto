@@ -46,7 +46,7 @@ export default function CourseNavigatePage() {
     return (
       <div className="min-h-dvh flex items-center justify-center">
         <button onClick={() => navigate('/courses/feeds')} className="lm-btn-primary px-6 flex items-center justify-center">
-          코스 탐색
+          Discover courses
         </button>
       </div>
     );
@@ -71,12 +71,12 @@ export default function CourseNavigatePage() {
     <div className="min-h-dvh bg-[#FCF4EE] flex flex-col">
       {/* Header */}
       <div className="flex items-center justify-between bg-white px-5 pb-3 pt-[max(12px,env(safe-area-inset-top))] z-10">
-        <BackButton onClick={() => navigate(`/course/${params.id}`)} aria-label="코스 상세로 돌아가기" />
-        <span className="font-semibold text-[15px] text-[#1A1A1A]">코스 따라가기</span>
+        <BackButton onClick={() => navigate(`/course/${params.id}`)} aria-label="Back to course" />
+        <span className="font-semibold text-[15px] text-[#1A1A1A]">Follow course</span>
         <button
           onClick={() => navigate(`/course/${params.id}/share`)}
           className="w-9 h-9 rounded-full bg-[#FFF5F5] flex items-center justify-center active:scale-95"
-          title="코스맵 공유"
+          title="Share Course Map"
         >
           <span className="text-[16px]">🗺️</span>
         </button>
@@ -135,7 +135,7 @@ export default function CourseNavigatePage() {
 
       {/* Next Place Card */}
       <div className="bg-white px-5 py-4" style={{ boxShadow: '0 -4px 16px rgba(0,0,0,0.08)' }}>
-        <p className="text-[11px] text-[#9B9B9B] font-medium mb-2">다음 장소</p>
+        <p className="text-[11px] text-[#9B9B9B] font-medium mb-2">Next stop</p>
         {currentRestaurant && (
           <div className="flex items-center gap-3 mb-4">
             <img
@@ -150,7 +150,7 @@ export default function CourseNavigatePage() {
                 <p className="text-[12px] text-[#9B9B9B] truncate">{currentRestaurant.address}</p>
               </div>
               <p className="text-[12px] text-[#EB5053] font-semibold mt-0.5">
-                지금 위치에서 약 {currentRestaurant.distance}
+                From here, about {currentRestaurant.distance}
               </p>
             </div>
           </div>
@@ -162,7 +162,7 @@ export default function CourseNavigatePage() {
               onClick={() => setCurrentStopIndex(i => i - 1)}
               className="lm-btn-outline flex items-center justify-center flex-[3]"
             >
-              이전
+              Previous
             </button>
           )}
           <button
@@ -173,7 +173,7 @@ export default function CourseNavigatePage() {
             }}
           >
             <Navigation size={16} />
-            {currentStopIndex < stops.length - 1 ? '다음 장소로' : '코스맵 공유 🗺️'}
+            {currentStopIndex < stops.length - 1 ? 'Next stop' : 'Share Course Map 🗺️'}
           </button>
         </div>
       </div>

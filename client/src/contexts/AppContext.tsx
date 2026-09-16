@@ -106,7 +106,7 @@ function formatSessionDistance(metres: number) {
   const rounded = metres < 1_000
     ? `${Math.round(metres / 10) * 10}m`
     : `${(metres / 1_000).toFixed(metres < 10_000 ? 1 : 0)}km`;
-  return `직선거리 ${rounded}`;
+  return `Straight-line distance ${rounded}`;
 }
 
 function withSessionDistances(
@@ -325,10 +325,10 @@ export const MOCK_COURSES: Course[] = [];
 export const MOCK_FEED_POSTS: FeedPost[] = [];
 
 const THEMES = [
-  { id: 'date', label: '데이트코스', emoji: '💕', color: '#EB5053', tag: '데이트코스' as TagType },
-  { id: 'solo', label: '혼밥 코스', emoji: '🍚', color: '#D94447', tag: '혼밥' as TagType },
-  { id: 'budget', label: '가성비 맛집', emoji: '💰', color: '#3CBA44', tag: '가성비' as TagType },
-  { id: 'special', label: '펍나이트', emoji: '🍸', color: '#3E719B', tag: '펍나이트' as TagType },
+  { id: 'date', label: 'Date spots', emoji: '💕', color: '#EB5053', tag: '데이트코스' as TagType },
+  { id: 'solo', label: 'Dining for one', emoji: '🍚', color: '#D94447', tag: '혼밥' as TagType },
+  { id: 'budget', label: 'Budget-friendly spots', emoji: '💰', color: '#3CBA44', tag: '가성비' as TagType },
+  { id: 'special', label: 'Pub night', emoji: '🍸', color: '#3E719B', tag: '펍나이트' as TagType },
 ];
 
 export { THEMES };
@@ -341,7 +341,7 @@ function generateUserId() {
 
 const DEFAULT_PROFILE: UserProfile = {
   id: 'me',
-  name: '사용자',
+  name: 'User',
   emoji: '😊',
   dietary: [],
   categoryPrefs: [
@@ -768,7 +768,7 @@ export function AppProvider({
       params.set('radiusKm', String(locationFilter.radiusKm));
     }
     const response = await fetch(`/api/feed?${params.toString()}`);
-    if (!response.ok) throw new Error('피드를 불러오지 못했어요.');
+    if (!response.ok) throw new Error('Couldn\'t load the feed.');
     const page = normalizeFeedApiPage(await response.json());
     const remoteFeeds = page.items
       .map(feed => feedPostFromApi(feed, profile))
@@ -1236,7 +1236,7 @@ export function AppProvider({
           }),
         });
         const data = await res.json().catch(() => ({})) as { session?: { id: string }; token?: string; memberKey?: string; error?: string };
-        if (!res.ok || !data.session?.id || !data.token || !data.memberKey) throw new Error(data.error ?? '세션을 서버에 저장하지 못했어요.');
+        if (!res.ok || !data.session?.id || !data.token || !data.memberKey) throw new Error(data.error ?? 'Couldn\'t save the session.');
         const session: GroupSession = {
             id: data.session.id,
             name,
@@ -1338,7 +1338,7 @@ export function AppProvider({
     const members = Array.isArray(data.members) ? data.members : [];
     const session: GroupSession = {
       id: data.session.id,
-      name: '점심 세션',
+      name: 'Lunch session',
       inviteCode: token,
       hostId: data.session.host_user_id,
       members: members.map((m: { user_id: string; user_name: string; emoji: string; is_ready: boolean }) => ({
@@ -1387,8 +1387,8 @@ export function AppProvider({
       }),
     });
     const payload = await response.json().catch(() => ({})) as { error?: string; memberKey?: string };
-    if (!response.ok) throw new Error(payload.error ?? '세션에 참가하지 못했어요.');
-    if (!payload.memberKey) throw new Error('세션 자격 증명을 받지 못했어요.');
+    if (!response.ok) throw new Error(payload.error ?? 'Couldn\'t join the session.');
+    if (!payload.memberKey) throw new Error('Couldn\'t get session access.');
     const fetched = await fetchSession(token);
     const joined = { ...fetched, memberKey: payload.memberKey };
     setCurrentSession(joined);
@@ -1408,7 +1408,7 @@ export function AppProvider({
       }),
     });
     const payload = await response.json().catch(() => ({})) as { error?: string };
-    if (!response.ok) throw new Error(payload.error ?? '준비 상태를 바꾸지 못했어요.');
+    if (!response.ok) throw new Error(payload.error ?? 'Couldn\'t update your ready status.');
     return fetchSession(token);
   }, [profile, fetchSession]);
 
@@ -1431,7 +1431,7 @@ export function AppProvider({
     });
     const payload = await res.json().catch(() => ({})) as { error?: string; code?: string };
     if (!res.ok) {
-      const error = new Error(payload.error ?? '세션을 시작하지 못했어요.') as Error & { code?: string; status?: number };
+      const error = new Error(payload.error ?? 'Couldn\'t start the session.') as Error & { code?: string; status?: number };
       error.code = payload.code;
       error.status = res.status;
       throw error;
@@ -1464,13 +1464,13 @@ export function AppProvider({
       const isInvalidCredential = response.status === 403 && (
         payload.code === 'INVALID_MEMBER_CREDENTIAL'
         || payload.error === 'invalid_member_credential'
-        || (typeof payload.error === 'string' && payload.error.includes('자격 증명을 확인할 수 없습니다'))
+        || (typeof payload.error === 'string' && payload.error.includes('Couldn\'t verify session access'))
       );
       if (isInvalidCredential) {
         setCurrentSession(null);
         return;
       }
-      const error = new Error(payload.error ?? '세션 상태를 바꾸지 못했어요.') as Error & { code?: string; status?: number };
+      const error = new Error(payload.error ?? 'Couldn\'t update the session.') as Error & { code?: string; status?: number };
       error.code = payload.code;
       error.status = response.status;
       throw error;

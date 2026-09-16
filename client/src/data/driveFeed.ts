@@ -7,13 +7,13 @@ export const DRIVE_COURSES: Course[] = [
   {
     "id": "dc_81d06d96e1",
     "title": "DODAM",
-    "description": "DODAM 다녀왔어요. dumplings · tteokbokki 진짜 맛있었다 👍",
+    "description": "Dumplings and tteokbokki at DODAM. Exactly what I was craving.",
     "heroImage": "/photos/drv_e0f56a7a445b/9dd505cac119.jpg",
     "tags": [
       "맛집"
     ],
     "hashtags": [
-      "맛집"
+      "Good food"
     ],
     "region": "Melbourne",
     "metadata": {
@@ -38,13 +38,13 @@ export const DRIVE_COURSES: Course[] = [
   {
     "id": "dc_7f84d023a4",
     "title": "Time after time",
-    "description": "Time after time 다녀왔어요. latte · cappuccino 진짜 맛있었다 👍",
+    "description": "A slow coffee catch-up at Time after time.",
     "heroImage": "/photos/osm_node_13523348331/c964b98914a9.jpg",
     "tags": [
       "카페"
     ],
     "hashtags": [
-      "카페"
+      "Café"
     ],
     "region": "Melbourne",
     "metadata": {
@@ -69,13 +69,13 @@ export const DRIVE_COURSES: Course[] = [
   {
     "id": "dc_f74a669404",
     "title": "O3 Brunswick",
-    "description": "O3 Brunswick 다녀왔어요. cinnamon roll · almond croissant 진짜 맛있었다 👍",
+    "description": "The cinnamon roll and almond croissant at O3 Brunswick made my morning.",
     "heroImage": "/photos/drv_acec433af625/95aca7780aa0.jpg",
     "tags": [
       "카페"
     ],
     "hashtags": [
-      "카페"
+      "Café"
     ],
     "region": "Melbourne",
     "metadata": {
@@ -100,13 +100,13 @@ export const DRIVE_COURSES: Course[] = [
   {
     "id": "dc_2c6f347c1e",
     "title": "trbl. Coffee",
-    "description": "trbl. Coffee 다녀왔어요. coffee · croissant 진짜 맛있었다 👍",
+    "description": "Coffee, a croissant and no plans to rush. Thanks, trbl. Coffee.",
     "heroImage": "/photos/drv_bdd0383fc975/2080b2eed644.jpg",
     "tags": [
       "카페"
     ],
     "hashtags": [
-      "카페"
+      "Café"
     ],
     "region": "Melbourne",
     "metadata": {
@@ -131,13 +131,13 @@ export const DRIVE_COURSES: Course[] = [
   {
     "id": "dc_a692bc65a2",
     "title": "CATALOGUE",
-    "description": "CATALOGUE 다녀왔어요. latte · coffee 진짜 맛있었다 👍",
+    "description": "Found my afternoon coffee stop at CATALOGUE.",
     "heroImage": "/photos/drv_0f86e92497c5/37299089e163.jpg",
     "tags": [
       "카페"
     ],
     "hashtags": [
-      "카페"
+      "Café"
     ],
     "region": "Melbourne",
     "metadata": {
@@ -162,13 +162,13 @@ export const DRIVE_COURSES: Course[] = [
   {
     "id": "dc_290e6cda51",
     "title": "Brunetti Classico",
-    "description": "Brunetti Classico 다녀왔어요. desserts · cakes 진짜 맛있었다 👍",
+    "description": "Couldn't choose just one cake at Brunetti Classico.",
     "heroImage": "/photos/drv_601ccdf0764f/f5acf508f9ac.jpg",
     "tags": [
       "디저트"
     ],
     "hashtags": [
-      "디저트"
+      "Dessert"
     ],
     "region": "Melbourne",
     "metadata": {
@@ -193,13 +193,13 @@ export const DRIVE_COURSES: Course[] = [
   {
     "id": "dc_0a76d248ca",
     "title": "seoul tiger",
-    "description": "seoul tiger 다녀왔어요. burger · fries 진짜 맛있었다 👍",
+    "description": "Burger and fries at seoul tiger. Lunch sorted.",
     "heroImage": "/photos/drv_8ccf91976bb9/4eea9c521300.jpg",
     "tags": [
       "맛집"
     ],
     "hashtags": [
-      "맛집"
+      "Good food"
     ],
     "region": "Melbourne",
     "metadata": {
@@ -224,13 +224,13 @@ export const DRIVE_COURSES: Course[] = [
   {
     "id": "dc_a813c620e3",
     "title": "Leonardo's Pizza Palace",
-    "description": "Leonardo's Pizza Palace 다녀왔어요. pizza 진짜 맛있었다 👍",
+    "description": "Pizza night at Leonardo's Pizza Palace. Worth gathering the crew for.",
     "heroImage": "/photos/osm_node_676533299/b40ecb2592a0.jpg",
     "tags": [
       "맛집"
     ],
     "hashtags": [
-      "맛집"
+      "Good food"
     ],
     "region": "Melbourne",
     "metadata": {
@@ -255,13 +255,13 @@ export const DRIVE_COURSES: Course[] = [
   {
     "id": "dc_8daaab4cec",
     "title": "GAMJA HOTTEOK",
-    "description": "GAMJA HOTTEOK 다녀왔어요. hotteok 진짜 맛있었다 👍",
+    "description": "Warm hotteok from GAMJA HOTTEOK. A very good detour.",
     "heroImage": "/photos/drv_276b5402dbed/f28342dfea48.jpg",
     "tags": [
       "맛집"
     ],
     "hashtags": [
-      "맛집"
+      "Good food"
     ],
     "region": "Melbourne",
     "metadata": {
@@ -286,13 +286,13 @@ export const DRIVE_COURSES: Course[] = [
   {
     "id": "dc_433d4e2966",
     "title": "Good Measure",
-    "description": "Good Measure 다녀왔어요. grilled meat · bread 진짜 맛있었다 👍",
+    "description": "Grilled meat, good bread and good company at Good Measure.",
     "heroImage": "/photos/drv_4bf1bb8a34ed/fadd20de4915.jpg",
     "tags": [
       "카페"
     ],
     "hashtags": [
-      "카페"
+      "Café"
     ],
     "region": "Melbourne",
     "metadata": {
@@ -317,13 +317,13 @@ export const DRIVE_COURSES: Course[] = [
   {
     "id": "dc_12af5bb82b",
     "title": "OMI380",
-    "description": "OMI380 다녀왔어요. waffle · matcha_ice_cream 진짜 맛있었다 👍",
+    "description": "Waffles and matcha ice cream at OMI380. Yes to both.",
     "heroImage": "/photos/osm_node_13783937905/27f78d645025.jpg",
     "tags": [
       "디저트"
     ],
     "hashtags": [
-      "디저트"
+      "Dessert"
     ],
     "region": "Melbourne",
     "metadata": {
@@ -348,13 +348,13 @@ export const DRIVE_COURSES: Course[] = [
   {
     "id": "dc_babf6b76f8",
     "title": "ANGUS & BON",
-    "description": "ANGUS & BON 다녀왔어요. steak · pasta 진짜 맛있었다 👍",
+    "description": "Steak and pasta at ANGUS & BON. A lovely way to end the day.",
     "heroImage": "/photos/drv_c53673358150/914b79215c5d.jpg",
     "tags": [
       "맛집"
     ],
     "hashtags": [
-      "맛집"
+      "Good food"
     ],
     "region": "Melbourne",
     "metadata": {
@@ -389,7 +389,7 @@ export const DRIVE_FEED_POSTS: FeedPost[] = [
       "/photos/drv_e0f56a7a445b/6f4a9fef390d.jpg",
       "/photos/drv_e0f56a7a445b/8975f58d361d.jpg"
     ],
-    "caption": "DODAM 다녀왔어요. dumplings · tteokbokki 진짜 맛있었다 👍",
+    "caption": "Dumplings and tteokbokki at DODAM. Exactly what I was craving.",
     "skinId": "pink-picnic",
     "likes": 32,
     "saves": 18,
@@ -409,7 +409,7 @@ export const DRIVE_FEED_POSTS: FeedPost[] = [
       "/photos/osm_node_13523348331/fa65da91ccf0.jpg",
       "/photos/osm_node_13523348331/5f663e38893c.jpg"
     ],
-    "caption": "Time after time 다녀왔어요. latte · cappuccino 진짜 맛있었다 👍",
+    "caption": "A slow coffee catch-up at Time after time.",
     "skinId": "pink-picnic",
     "likes": 33,
     "saves": 15,
@@ -429,7 +429,7 @@ export const DRIVE_FEED_POSTS: FeedPost[] = [
       "/photos/drv_acec433af625/70cf91f29ecb.jpg",
       "/photos/drv_acec433af625/461910ee1603.jpg"
     ],
-    "caption": "O3 Brunswick 다녀왔어요. cinnamon roll · almond croissant 진짜 맛있었다 👍",
+    "caption": "The cinnamon roll and almond croissant at O3 Brunswick made my morning.",
     "skinId": "pink-picnic",
     "likes": 36,
     "saves": 19,
@@ -449,7 +449,7 @@ export const DRIVE_FEED_POSTS: FeedPost[] = [
       "/photos/drv_bdd0383fc975/18dcaff3d496.jpg",
       "/photos/drv_bdd0383fc975/367e07544ac7.jpg"
     ],
-    "caption": "trbl. Coffee 다녀왔어요. coffee · croissant 진짜 맛있었다 👍",
+    "caption": "Coffee, a croissant and no plans to rush. Thanks, trbl. Coffee.",
     "skinId": "pink-picnic",
     "likes": 16,
     "saves": 6,
@@ -469,7 +469,7 @@ export const DRIVE_FEED_POSTS: FeedPost[] = [
       "/photos/drv_0f86e92497c5/cd023fe7cdca.jpg",
       "/photos/drv_0f86e92497c5/80a83cdcf278.jpg"
     ],
-    "caption": "CATALOGUE 다녀왔어요. latte · coffee 진짜 맛있었다 👍",
+    "caption": "Found my afternoon coffee stop at CATALOGUE.",
     "skinId": "pink-picnic",
     "likes": 36,
     "saves": 16,
@@ -489,7 +489,7 @@ export const DRIVE_FEED_POSTS: FeedPost[] = [
       "/photos/drv_601ccdf0764f/417a912b6d91.jpg",
       "/photos/drv_601ccdf0764f/6f9737d3a058.jpg"
     ],
-    "caption": "Brunetti Classico 다녀왔어요. desserts · cakes 진짜 맛있었다 👍",
+    "caption": "Couldn't choose just one cake at Brunetti Classico.",
     "skinId": "pink-picnic",
     "likes": 15,
     "saves": 4,
@@ -509,7 +509,7 @@ export const DRIVE_FEED_POSTS: FeedPost[] = [
       "/photos/drv_8ccf91976bb9/d2623f68b1a0.jpg",
       "/photos/drv_8ccf91976bb9/d18ff9b281d2.jpg"
     ],
-    "caption": "seoul tiger 다녀왔어요. burger · fries 진짜 맛있었다 👍",
+    "caption": "Burger and fries at seoul tiger. Lunch sorted.",
     "skinId": "pink-picnic",
     "likes": 32,
     "saves": 10,
@@ -529,7 +529,7 @@ export const DRIVE_FEED_POSTS: FeedPost[] = [
       "/photos/osm_node_676533299/0e2ac514bfbd.jpg",
       "/photos/osm_node_676533299/0cf399997a57.jpg"
     ],
-    "caption": "Leonardo's Pizza Palace 다녀왔어요. pizza 진짜 맛있었다 👍",
+    "caption": "Pizza night at Leonardo's Pizza Palace. Worth gathering the crew for.",
     "skinId": "pink-picnic",
     "likes": 13,
     "saves": 3,
@@ -549,7 +549,7 @@ export const DRIVE_FEED_POSTS: FeedPost[] = [
       "/photos/drv_276b5402dbed/6407a98a3666.jpg",
       "/photos/drv_276b5402dbed/8b9adcfbe47c.jpg"
     ],
-    "caption": "GAMJA HOTTEOK 다녀왔어요. hotteok 진짜 맛있었다 👍",
+    "caption": "Warm hotteok from GAMJA HOTTEOK. A very good detour.",
     "skinId": "pink-picnic",
     "likes": 38,
     "saves": 2,
@@ -569,7 +569,7 @@ export const DRIVE_FEED_POSTS: FeedPost[] = [
       "/photos/drv_4bf1bb8a34ed/b569bab4f47e.jpg",
       "/photos/drv_4bf1bb8a34ed/8555b6ccee66.jpg"
     ],
-    "caption": "Good Measure 다녀왔어요. grilled meat · bread 진짜 맛있었다 👍",
+    "caption": "Grilled meat, good bread and good company at Good Measure.",
     "skinId": "pink-picnic",
     "likes": 29,
     "saves": 15,
@@ -589,7 +589,7 @@ export const DRIVE_FEED_POSTS: FeedPost[] = [
       "/photos/osm_node_13783937905/2d622b9dd4af.jpg",
       "/photos/osm_node_13783937905/45fe901a9871.jpg"
     ],
-    "caption": "OMI380 다녀왔어요. waffle · matcha_ice_cream 진짜 맛있었다 👍",
+    "caption": "Waffles and matcha ice cream at OMI380. Yes to both.",
     "skinId": "pink-picnic",
     "likes": 14,
     "saves": 20,
@@ -609,7 +609,7 @@ export const DRIVE_FEED_POSTS: FeedPost[] = [
       "/photos/drv_c53673358150/0b95b6bcb3a2.jpg",
       "/photos/drv_c53673358150/dca6c578542a.jpg"
     ],
-    "caption": "ANGUS & BON 다녀왔어요. steak · pasta 진짜 맛있었다 👍",
+    "caption": "Steak and pasta at ANGUS & BON. A lovely way to end the day.",
     "skinId": "pink-picnic",
     "likes": 4,
     "saves": 17,

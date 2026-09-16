@@ -49,7 +49,7 @@ const FoodCourseStoryTemplate = forwardRef<HTMLDivElement, TemplateProps>(({ cou
             textTransform: 'uppercase',
           }}
         >
-          Food Course Map
+          Course Map
         </p>
         <h1
           style={{

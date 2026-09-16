@@ -12,7 +12,7 @@ import {
 
 describe('sanitizeLunchieFilenamePart', () => {
   it('removes portable-filename hazards while preserving readable text', () => {
-    expect(sanitizeLunchieFilenamePart('  김밥/라면: 오늘?  ')).toBe('김밥-라면-오늘');
+    expect(sanitizeLunchieFilenamePart('  김Meal/라면: Today?  ')).toBe('김Meal-라면-Today');
     expect(sanitizeLunchieFilenamePart('CON')).toBe('CON-pick');
     expect(sanitizeLunchieFilenamePart(' \\ / : * ? " < > | ')).toBe('lunchie-pick');
   });
@@ -26,19 +26,19 @@ describe('sanitizeLunchieFilenamePart', () => {
 
 describe('share-card fallbacks', () => {
   it('handles empty participants without inventing names', () => {
-    expect(getLunchieParticipantLabel([])).toBe('참여자 정보 없음');
+    expect(getLunchieParticipantLabel([])).toBe("Names unavailable");
   });
 
   it('selects the first usable menu name and has an explicit fallback', () => {
     expect(getRepresentativeMenuLabel([{ name: ' ' }, { name: 'Truffle Pasta' }])).toBe('Truffle Pasta');
-    expect(getRepresentativeMenuLabel([])).toBe('대표 메뉴 정보 준비 중');
+    expect(getRepresentativeMenuLabel([])).toBe("Menu unavailable");
   });
 
   it('formats location and date labels with non-fabricated fallbacks', () => {
     expect(getLunchieLocationLabel('  Fitzroy, Melbourne  ')).toBe('Fitzroy, Melbourne');
-    expect(getLunchieLocationLabel('')).toBe('지역 정보 준비 중');
+    expect(getLunchieLocationLabel('')).toBe('Location unavailable');
     expect(formatLunchieDateLabel(new Date(2026, 6, 14))).toBe('2026.07.14');
-    expect(formatLunchieDateLabel('not-a-date')).toBe('날짜 정보 준비 중');
+    expect(formatLunchieDateLabel('not-a-date')).toBe('Date unavailable');
   });
 });
 
@@ -50,17 +50,17 @@ describe('getLunchieVoteLabel', () => {
       finalVotedCount: 4,
       likeCount: 4,
       totalMembers: 4,
-    })).toBe('3 / 4명 최종 투표');
+    })).toBe('3 / 4 final votes');
   });
 
   it('falls back to preliminary likes when final votes are absent', () => {
-    expect(getLunchieVoteLabel({ likeCount: 2, totalMembers: 3 })).toBe('2 / 3명 LIKE');
+    expect(getLunchieVoteLabel({ likeCount: 2, totalMembers: 3 })).toBe('2 / 3 likes');
   });
 
   it('uses honest nonnumeric labels when match data is absent or malformed', () => {
-    expect(getLunchieVoteLabel({ isSolo: true })).toBe('나의 최종 선택');
-    expect(getLunchieVoteLabel({ isSolo: false })).toBe('친구들과 함께 고른 최종 선택');
-    expect(getLunchieVoteLabel({ likeCount: 5, totalMembers: 2 })).toBe('친구들과 함께 고른 최종 선택');
+    expect(getLunchieVoteLabel({ isSolo: true })).toBe('My lunch choice');
+    expect(getLunchieVoteLabel({ isSolo: false })).toBe('Our lunch choice');
+    expect(getLunchieVoteLabel({ likeCount: 5, totalMembers: 2 })).toBe('Our lunch choice');
   });
 });
 

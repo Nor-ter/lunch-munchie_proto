@@ -16,7 +16,7 @@ export default function ShareTemplateInfoSheet({
         <>
           <motion.button
             type="button"
-            aria-label="템플릿 미리보기 닫기"
+            aria-label="Close template preview"
             className="fixed inset-0 z-[70] bg-black/45"
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
@@ -42,7 +42,7 @@ export default function ShareTemplateInfoSheet({
               <button
                 type="button"
                 onClick={onClose}
-                aria-label="닫기"
+                aria-label="Close"
                 className="flex h-9 w-9 items-center justify-center rounded-full bg-white text-[#6C574C] shadow-sm"
               >
                 <X size={18} />
@@ -51,7 +51,7 @@ export default function ShareTemplateInfoSheet({
             <div className={`mx-auto flex items-center justify-center rounded-[24px] bg-white p-2 shadow-[0_14px_35px_rgba(91,57,42,0.15)] ${template.aspect === '9:16' ? 'h-[62dvh] max-h-[560px] w-full max-w-[250px]' : 'w-full max-w-[285px]'}`}>
               <img
                 src={template.background}
-                alt={`${template.name} 기본 디자인`}
+                alt={`${template.name} Original design`}
                 className={template.aspect === '9:16'
                   ? 'max-h-full max-w-full rounded-[18px] object-contain'
                   : 'aspect-[3/4] w-full rounded-[18px] object-contain'}
@@ -59,7 +59,7 @@ export default function ShareTemplateInfoSheet({
             </div>
             <div className="mt-5 flex items-center justify-between rounded-2xl bg-white px-4 py-3">
               <span className="flex items-center gap-1.5 text-[12px] font-bold text-[#D94447]">
-                <ImageIcon size={13} /> 사진 위치 편집 가능
+                <ImageIcon size={13} /> Adjustable photo layout
               </span>
               <span className="text-[12px] font-semibold text-[#8C776B]">{template.aspect}</span>
             </div>

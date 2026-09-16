@@ -18,7 +18,7 @@ describe('SavedPage list bookmark presentation', () => {
     expect(savedSource).toContain('<Bookmark size={20} strokeWidth={2} fill="currentColor" />');
     expect(savedSource).not.toContain('BookmarkX');
     expect(savedSource).toContain('setPendingUnsaveCourseId(post.courseId)');
-    expect(savedSource).toContain('저장을 취소할까요?');
+    expect(savedSource).toContain('Remove from saved?');
     expect(savedSource).toContain('confirmUnsave');
   });
 

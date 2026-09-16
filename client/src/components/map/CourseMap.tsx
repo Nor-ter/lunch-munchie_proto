@@ -110,7 +110,7 @@ export function CourseMap({ points, width, height, onPressPoint, onPressPlaceId,
               zIndex={selected ? 10 : 1}
             >
               <div
-                aria-label={`${point.name}${selected ? ', 선택됨' : ''}`}
+                aria-label={`${point.name}${selected ? ', selected' : ''}`}
                 data-selected={selected ? 'true' : 'false'}
                 style={{
                   width: size,

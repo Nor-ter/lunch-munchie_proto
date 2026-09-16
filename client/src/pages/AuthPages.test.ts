@@ -36,12 +36,12 @@ describe('web auth routes and integration boundaries', () => {
 
   it('keeps OAuth errors visible instead of immediately restarting login', () => {
     expect(LOGIN_SOURCE).toContain('if (authError) return;');
-    expect(LOGIN_SOURCE).toContain('오류 코드: {authError}');
+    expect(LOGIN_SOURCE).toContain('Error code: {authError}');
   });
 
   it('adds auth controls only inside the existing Profile settings sheet', () => {
     expect(PROFILE_SOURCE).toContain("activeSheet === 'settings'");
-    expect(PROFILE_SOURCE).toContain('Google로 로그인');
+    expect(PROFILE_SOURCE).toContain('Sign in with Google');
     expect(PROFILE_SOURCE).toContain('<AccountLogoutButton');
   });
 

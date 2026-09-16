@@ -1,3 +1,5 @@
+import { uiErrorMessage } from '@/lib/uiErrorMessage';
+import { dietaryLabel } from '@/lib/dietaryLabel';
 /**
  * Lunchie Munchie — My Profile
  * 스크랩북 프로필: 내가 만든 코스맵 템플릿 + 내가 쓴 피드를 한눈에 보고 관리한다.
@@ -56,29 +58,29 @@ const LUNCHMATE_PREVIEW_FIXTURE = {
   foodItems: [
     {
       id: 'preview-onigiri',
-      name: '참치마요 주먹밥',
+      name: 'Tuna mayo rice ball',
       placeholder: '🍙',
       quantity: 2,
       unseenQuantity: 1,
-      sourceLabel: '코스 기록 완료 보상',
+      sourceLabel: 'Earned by creating a course',
       xpPreview: 5,
     },
     {
       id: 'preview-strawberry-cake',
-      name: '딸기 한입 케이크',
+      name: 'Strawberry mini cake',
       placeholder: '🍰',
       quantity: 1,
       unseenQuantity: 1,
-      sourceLabel: '먼치 피드 기록 보상',
+      sourceLabel: 'Earned by posting',
       xpPreview: 8,
     },
     {
       id: 'preview-ramen',
-      name: '따끈한 라멘',
+      name: 'Steaming ramen',
       placeholder: '🍜',
       quantity: 0,
       unseenQuantity: 0,
-      sourceLabel: '다음 기록에서 획득 가능',
+      sourceLabel: 'Unlock with your next post',
       xpPreview: 6,
     },
   ],
@@ -335,11 +337,11 @@ function ProfilePageContent({ authenticatedUserId }: { authenticatedUserId: stri
     const username = editName.trim();
     const handle = editHandle.trim().replace(/^@/, '').toLowerCase();
     if (!username) {
-      toast.error('이름을 입력해 주세요.');
+      toast.error('Enter your name.');
       return;
     }
     if (!/^[a-z0-9_]{3,20}$/.test(handle)) {
-      toast.error('아이디는 영문 소문자, 숫자, 밑줄로 3~20자까지 입력해 주세요.');
+      toast.error('Use 3–20 lowercase letters, numbers or underscores for your username.');
       return;
     }
     try {
@@ -348,12 +350,12 @@ function ProfilePageContent({ authenticatedUserId }: { authenticatedUserId: stri
         body: JSON.stringify({ username, handle }),
       });
       const saved = await response.json().catch(() => ({})) as { profile?: { username?: string; handle?: string }; error?: string };
-      if (!response.ok || !saved.profile?.username || !saved.profile.handle) throw new Error(saved.error || '프로필을 저장하지 못했어요.');
+      if (!response.ok || !saved.profile?.username || !saved.profile.handle) throw new Error(saved.error || 'Couldn\'t save your profile.');
       updateProfile({ name: saved.profile.username, handle: saved.profile.handle });
       setActiveSheet(null);
-      toast.success('프로필 업데이트 완료! ✅');
+      toast.success('Profile updated.');
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : '이름을 저장하지 못했어요.');
+      toast.error(uiErrorMessage(error instanceof Error ? error.message : 'Couldn\'t save your name.'));
     }
   };
 
@@ -368,7 +370,7 @@ function ProfilePageContent({ authenticatedUserId }: { authenticatedUserId: stri
       method: 'PATCH', credentials: 'same-origin', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ avatarUrl: null }),
     });
-    toast.success('아바타를 변경했어요! ' + e);
+    toast.success('Avatar updated. ' + e);
   };
 
   const handleAvatarUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -382,17 +384,17 @@ function ProfilePageContent({ authenticatedUserId }: { authenticatedUserId: stri
         body: JSON.stringify({ dataUrl }),
       });
       const upload = await uploadResponse.json().catch(() => ({})) as { url?: string; error?: string };
-      if (!uploadResponse.ok || !upload.url) throw new Error(upload.error || '사진 업로드에 실패했어요.');
+      if (!uploadResponse.ok || !upload.url) throw new Error(upload.error || 'Photo upload failed.');
       const profileResponse = await fetch('/api/profile', {
         method: 'PATCH', credentials: 'same-origin', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ avatarUrl: upload.url }),
       });
       const saved = await profileResponse.json().catch(() => ({})) as { profile?: { profile_image_url?: string | null }; error?: string };
-      if (!profileResponse.ok) throw new Error(saved.error || '프로필 사진을 저장하지 못했어요.');
+      if (!profileResponse.ok) throw new Error(saved.error || 'Couldn\'t save your profile photo.');
       updateProfile({ avatarPhoto: saved.profile?.profile_image_url ?? upload.url });
-      toast.success('프로필 사진을 업데이트했어요! 📸');
+      toast.success('Profile photo updated.');
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : '사진을 불러오지 못했어요');
+      toast.error(uiErrorMessage(error instanceof Error ? error.message : 'Couldn\'t load the photo'));
     }
   };
 
@@ -402,7 +404,7 @@ function ProfilePageContent({ authenticatedUserId }: { authenticatedUserId: stri
       <HeaderActionRow className="header-action-row--raised">
         <HeaderIconButton
           onClick={() => { setEditName(profile.name); setEditHandle(profile.handle ?? ''); setActiveSheet('settings'); }}
-          aria-label="프로필 설정"
+          aria-label="Profile settings"
         >
           <Settings size={18} color="#4A4A4A" />
         </HeaderIconButton>
@@ -454,7 +456,7 @@ function ProfilePageContent({ authenticatedUserId }: { authenticatedUserId: stri
             <button
               onClick={() => setActiveSheet('avatar')}
               className="relative shrink-0 rounded-full border-4 border-[#F8DCD2] shadow-md active:scale-95 transition-transform"
-              aria-label="아바타 변경"
+              aria-label="Change avatar"
             >
               <Avatar photo={profile.avatarPhoto} emoji={profile.emoji} size={78} />
               <span className="absolute bottom-0 right-0 w-6 h-6 rounded-full bg-[#EB5053] border-2 border-white flex items-center justify-center">
@@ -467,11 +469,11 @@ function ProfilePageContent({ authenticatedUserId }: { authenticatedUserId: stri
                   {profile.name}
                 </p>
                 <span className="shrink-0 rounded-full bg-white/80 px-1.5 py-0.5 text-[9px] font-bold text-[#C7864B]">
-                  🏅 배지
+                  🏅 Badges
                 </span>
               </div>
               <p className="mt-1.5 whitespace-nowrap text-[13px] font-medium text-[#8A6E60]">
-                {profile.handle ? `@${profile.handle}` : '오늘도 맛있는 하루를 위해'}
+                {profile.handle ? `@${profile.handle}` : 'Here\'s to another delicious day'}
               </p>
             </div>
           </div>
@@ -484,7 +486,7 @@ function ProfilePageContent({ authenticatedUserId }: { authenticatedUserId: stri
           />
           <div className="text-center">
             <p className="font-black text-[17px] text-[#3B2A22]">{totalLikes.toLocaleString()}</p>
-            <p className="mt-0.5 text-[10px] text-[#8A6E60]">좋아요</p>
+            <p className="mt-0.5 text-[10px] text-[#8A6E60]">Likes</p>
           </div>
         </div>
       </div>
@@ -498,10 +500,10 @@ function ProfilePageContent({ authenticatedUserId }: { authenticatedUserId: stri
 
       {/* 나의 피드 */}
       <div className="px-4 mt-8">
-        <h2 className="font-black text-[18px] text-[#1A1A1A] mb-3">나의 피드 {myPosts.length}</h2>
+        <h2 className="font-black text-[18px] text-[#1A1A1A] mb-3">My posts {myPosts.length}</h2>
         {isProfileFeedLoading && myPosts.length === 0 ? (
           <div className="w-full rounded-2xl border-2 border-dashed border-[#E5CFC5] py-8 text-center">
-            <p className="text-[13px] font-bold text-[#8A7A6C]">피드를 동기화하는 중…</p>
+            <p className="text-[13px] font-bold text-[#8A7A6C]">Syncing posts…</p>
           </div>
         ) : myPosts.length === 0 ? (
           <button
@@ -509,7 +511,7 @@ function ProfilePageContent({ authenticatedUserId }: { authenticatedUserId: stri
             className="w-full rounded-2xl border-2 border-dashed border-[#E5CFC5] py-8 text-center"
           >
             <p className="text-3xl mb-1">📔</p>
-            <p className="text-[13px] font-bold text-[#8A7A6C]">첫 먼치 피드를 작성해보세요</p>
+            <p className="text-[13px] font-bold text-[#8A7A6C]">Share your first Munchie post</p>
           </button>
         ) : (
           <div className="grid grid-cols-2 items-start gap-3">
@@ -563,27 +565,27 @@ function ProfilePageContent({ authenticatedUserId }: { authenticatedUserId: stri
             />
             <motion.div
               data-testid="profile-settings-sheet"
-              className="fixed bottom-0 left-0 right-0 mx-auto w-full max-w-[430px] bg-white rounded-t-3xl z-50 px-5 pt-4 pb-8 max-h-[80dvh] overflow-y-auto"
+              className="fixed bottom-0 left-0 right-0 mx-auto w-full max-w-[430px] bg-white rounded-t-3xl z-50 px-5 pt-4 pb-[calc(var(--lm-tab-bar-height)+2rem)] max-h-[80dvh] overflow-y-auto"
               initial={{ y: '100%' }} animate={{ y: 0 }} exit={{ y: '100%' }}
               transition={{ type: 'tween', ease: [0.32, 0.72, 0, 1], duration: 0.3 }}
             >
               <div className="mx-auto mb-4 h-1 w-10 rounded-full bg-gray-200" />
-              <p className="mb-4 font-bold text-[16px]">프로필 설정</p>
+              <p className="mb-4 font-bold text-[16px]">Profile settings</p>
 
               <div className="mb-5">
-                 <p className="mb-1.5 text-[12px] font-semibold text-[#9B9B9B]">계정</p>
+                 <p className="mb-1.5 text-[12px] font-semibold text-[#9B9B9B]">Account</p>
                  {/* Google 계정 정보를 설정 화면에서 바로 확인한다. */}
                  <AccountBanner />
               </div>
 
-              <p className="mb-1.5 text-[12px] font-semibold text-[#9B9B9B]">이름</p>
+              <p className="mb-1.5 text-[12px] font-semibold text-[#9B9B9B]">Name</p>
               <input
                 value={editName}
                 onChange={e => setEditName(e.target.value)}
                 className="w-full h-11 rounded-xl bg-[#FAF6F1] border border-[#F0E8E0] px-3 text-[14px] font-bold outline-none focus:border-[#E85053]"
               />
 
-              <p className="mt-4 mb-1.5 text-[12px] font-semibold text-[#9B9B9B]">아이디</p>
+              <p className="mt-4 mb-1.5 text-[12px] font-semibold text-[#9B9B9B]">Username</p>
               <div className="flex h-11 items-center rounded-xl border border-[#F0E8E0] bg-[#FAF6F1] px-3 focus-within:border-[#E85053]">
                 <span className="mr-1 text-[14px] font-bold text-[#9B887C]">@</span>
                 <input
@@ -596,9 +598,9 @@ function ProfilePageContent({ authenticatedUserId }: { authenticatedUserId: stri
                   className="min-w-0 flex-1 bg-transparent text-[14px] font-bold outline-none"
                 />
               </div>
-              <p className="mt-1 text-[10px] font-medium text-[#AA978C]">영문 소문자, 숫자, 밑줄 · 3~20자</p>
+              <p className="mt-1 text-[10px] font-medium text-[#AA978C]">3–20 lowercase letters, numbers or underscores</p>
 
-              <p className="mt-4 mb-1.5 text-[12px] font-semibold text-[#9B9B9B]">식단 제한 (그룹 세션에 자동 적용)</p>
+              <p className="mt-4 mb-1.5 text-[12px] font-semibold text-[#9B9B9B]">Dietary needs (used in group sessions)</p>
               <div className="flex flex-wrap gap-2">
                 {DIETARY_OPTIONS.map(d => (
                   <button
@@ -609,7 +611,7 @@ function ProfilePageContent({ authenticatedUserId }: { authenticatedUserId: stri
                     }`}
                     style={profile.dietary.includes(d) ? { background: '#EB5053' } : {}}
                   >
-                    {d}
+                    {dietaryLabel(d)}
                   </button>
                 ))}
               </div>
@@ -618,7 +620,7 @@ function ProfilePageContent({ authenticatedUserId }: { authenticatedUserId: stri
                 onClick={saveSettings}
                 className="mt-6 w-full h-12 rounded-2xl bg-[#E85053] text-white font-bold text-[14px]"
               >
-                저장하기
+                Save
               </button>
 
               <AccountLogoutButton onLoggedOut={() => setActiveSheet(null)} />
@@ -643,7 +645,7 @@ function ProfilePageContent({ authenticatedUserId }: { authenticatedUserId: stri
             >
               <div className="mx-auto mb-4 h-1 w-10 rounded-full bg-gray-200" />
               <div className="mb-4 flex items-center justify-between">
-                <p className="font-bold text-[16px]">아바타 변경</p>
+                <p className="font-bold text-[16px]">Change avatar</p>
                 <button onClick={() => setActiveSheet(null)}><X size={18} className="text-gray-400" /></button>
               </div>
 
@@ -653,7 +655,7 @@ function ProfilePageContent({ authenticatedUserId }: { authenticatedUserId: stri
                   onClick={() => avatarFileRef.current?.click()}
                   className="mt-3 flex items-center gap-1.5 rounded-full bg-[#EB5053] text-white px-4 h-9 text-[12px] font-bold active:scale-95 transition-transform"
                 >
-                  <Upload size={13} /> 사진 업로드
+                  <Upload size={13} /> Upload photo
                 </button>
                 {profile.avatarPhoto && (
                   <button
@@ -663,16 +665,16 @@ function ProfilePageContent({ authenticatedUserId }: { authenticatedUserId: stri
                         method: 'PATCH', credentials: 'same-origin', headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify({ avatarUrl: null }),
                       });
-                      toast('사진을 지웠어요 — 이모지로 돌아가요');
+                      toast('Photo removed. Your emoji is back.');
                     }}
                     className="mt-2 text-[11px] font-semibold text-[#B0A090] underline underline-offset-2"
                   >
-                    사진 삭제하고 이모지로
+                    Use emoji instead
                   </button>
                 )}
               </div>
 
-              <p className="mb-2 text-[12px] font-semibold text-[#9B9B9B]">기본 이모지</p>
+              <p className="mb-2 text-[12px] font-semibold text-[#9B9B9B]">Default emoji</p>
               <div className="flex flex-wrap gap-2">
                 {EMOJIS.map(e => {
                   const active = !profile.avatarPhoto && profile.emoji === e;
@@ -692,7 +694,7 @@ function ProfilePageContent({ authenticatedUserId }: { authenticatedUserId: stri
                 onClick={() => setActiveSheet(null)}
                 className="mt-6 w-full h-12 rounded-2xl bg-[#E85053] text-white font-bold text-[14px]"
               >
-                완료
+                Done
               </button>
             </motion.div>
           </>
@@ -713,7 +715,7 @@ function ProfileGuestPreview() {
   return (
     <div className="min-h-dvh bg-[#FCF4EE] pb-24">
       <HeaderActionRow className="header-action-row--raised">
-        <HeaderIconButton onClick={goToLogin} aria-label="프로필 설정">
+        <HeaderIconButton onClick={goToLogin} aria-label="Profile settings">
           <Settings size={18} color="#4A4A4A" />
         </HeaderIconButton>
       </HeaderActionRow>
@@ -733,7 +735,7 @@ function ProfileGuestPreview() {
               type="button"
               onClick={goToLogin}
               className="relative shrink-0 rounded-full border-4 border-[#F8DCD2] shadow-md active:scale-95 transition-transform"
-              aria-label="아바타 변경"
+              aria-label="Change avatar"
             >
               <Avatar emoji="😊" size={78} />
               <span className="absolute bottom-0 right-0 w-6 h-6 rounded-full bg-[#EB5053] border-2 border-white flex items-center justify-center">
@@ -741,9 +743,9 @@ function ProfileGuestPreview() {
               </span>
             </button>
             <div className="min-w-0 flex-1 pt-11">
-              <h1 className="text-[19px] font-black text-[#3B2A22]">로그인이 필요해요</h1>
+              <h1 className="text-[19px] font-black text-[#3B2A22]">Sign in to continue</h1>
               <p className="mt-1.5 text-[13px] font-medium leading-5 text-[#8A6E60]">
-                로그인하면 나의 코스·피드·저장을 볼 수 있어요.
+                Sign in to see your courses, posts and saves.
               </p>
             </div>
           </div>
@@ -752,17 +754,17 @@ function ProfileGuestPreview() {
             onClick={goToLogin}
             className="mt-4 h-12 w-full rounded-2xl bg-[#E85053] text-sm font-bold text-white active:scale-[0.98] transition-transform"
           >
-            Google로 로그인
+            Sign in with Google
           </button>
         </div>
         <div className="mt-5 grid grid-cols-3">
-          {(['팔로워', '팔로잉'] as const).map((label) => (
+          {(['Followers', 'Following'] as const).map((label) => (
             <button
               key={label}
               type="button"
               onClick={goToLogin}
               className="border-r border-[#EBC5B8] text-center"
-              aria-label={`${label} 목록`}
+              aria-label={`${label} List`}
             >
               <p className="font-black text-[17px] text-[#3B2A22]">0</p>
               <p className="mt-0.5 text-[10px] text-[#8A6E60]">{label}</p>
@@ -770,20 +772,20 @@ function ProfileGuestPreview() {
           ))}
           <button type="button" onClick={goToLogin} className="text-center">
             <p className="font-black text-[17px] text-[#3B2A22]">0</p>
-            <p className="mt-0.5 text-[10px] text-[#8A6E60]">좋아요</p>
+            <p className="mt-0.5 text-[10px] text-[#8A6E60]">Likes</p>
           </button>
         </div>
       </div>
 
       <div className="px-4 mt-8">
-        <h2 className="font-black text-[18px] text-[#1A1A1A] mb-3">나의 피드 0</h2>
+        <h2 className="font-black text-[18px] text-[#1A1A1A] mb-3">My posts 0</h2>
         <button
           type="button"
           onClick={goToLogin}
           className="w-full rounded-2xl border-2 border-dashed border-[#E5CFC5] py-8 text-center"
         >
           <p className="text-3xl mb-1">📔</p>
-          <p className="text-[13px] font-bold text-[#8A7A6C]">로그인하면 나의 피드를 볼 수 있어요</p>
+          <p className="text-[13px] font-bold text-[#8A7A6C]">Sign in to see your posts</p>
         </button>
       </div>
     </div>
@@ -794,7 +796,7 @@ function ProfileGuestPreview() {
 export default function ProfilePage() {
   const auth = useAuthStatus();
   if (auth.isLoading) {
-    return <main className="flex min-h-dvh items-center justify-center bg-[#FCF4EE]"><p className="text-sm font-bold text-[#8C7D74]">프로필 확인 중…</p></main>;
+    return <main className="flex min-h-dvh items-center justify-center bg-[#FCF4EE]"><p className="text-sm font-bold text-[#8C7D74]">Checking profile…</p></main>;
   }
   if (!auth.data || auth.isError || auth.data.isAnonymous) {
     return <ProfileGuestPreview />;

@@ -40,7 +40,7 @@ describe('Lunchmate room layered renderer contract', () => {
   it('mounts the background before character and status/interaction UI', () => {
     const roomBackground = ROOM_SOURCE.indexOf('<LunchmateRoomRenderer');
     const roomCharacter = ROOM_SOURCE.indexOf('<LunchmateCharacterRenderer', roomBackground);
-    const roomCaption = ROOM_SOURCE.indexOf('레이어 조합을 확인하는 미리보기예요', roomCharacter);
+    const roomCaption = ROOM_SOURCE.indexOf('Preview your look', roomCharacter);
     expect(roomBackground).toBeLessThan(roomCharacter);
     expect(roomCharacter).toBeLessThan(roomCaption);
 

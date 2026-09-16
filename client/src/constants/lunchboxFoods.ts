@@ -10,14 +10,14 @@ export type LunchboxInventory = Record<string, LunchboxInventoryEntry>;
 export type LunchboxFoodDefinition = Omit<LunchboxFoodItem, 'quantity' | 'unseenQuantity'>;
 
 export const LUNCHBOX_FOOD_CATALOG: readonly LunchboxFoodDefinition[] = [
-  { id: 'onigiri', name: '참치마요 주먹밥', placeholder: '🍙', sourceLabel: '먼치 피드 기록 보상', xpPreview: 5 },
-  { id: 'strawberry-cake', name: '딸기 한입 케이크', placeholder: '🍰', sourceLabel: '먼치 피드 기록 보상', xpPreview: 8 },
-  { id: 'ramen', name: '따끈한 라멘', placeholder: '🍜', sourceLabel: '먼치 피드 기록 보상', xpPreview: 6 },
-  { id: 'sushi', name: '알록달록 초밥', placeholder: '🍣', sourceLabel: '먼치 피드 기록 보상', xpPreview: 7 },
-  { id: 'pizza', name: '치즈 듬뿍 피자', placeholder: '🍕', sourceLabel: '먼치 피드 기록 보상', xpPreview: 7 },
-  { id: 'taco', name: '바삭한 타코', placeholder: '🌮', sourceLabel: '먼치 피드 기록 보상', xpPreview: 6 },
-  { id: 'burger', name: '미니 치즈버거', placeholder: '🍔', sourceLabel: '먼치 피드 기록 보상', xpPreview: 7 },
-  { id: 'salad', name: '싱그러운 샐러드', placeholder: '🥗', sourceLabel: '먼치 피드 기록 보상', xpPreview: 5 },
+  { id: 'onigiri', name: 'Tuna mayo rice ball', placeholder: '🍙', sourceLabel: 'Earned by posting', xpPreview: 5 },
+  { id: 'strawberry-cake', name: 'Strawberry mini cake', placeholder: '🍰', sourceLabel: 'Earned by posting', xpPreview: 8 },
+  { id: 'ramen', name: 'Steaming ramen', placeholder: '🍜', sourceLabel: 'Earned by posting', xpPreview: 6 },
+  { id: 'sushi', name: 'Colourful sushi', placeholder: '🍣', sourceLabel: 'Earned by posting', xpPreview: 7 },
+  { id: 'pizza', name: 'Extra cheesy pizza', placeholder: '🍕', sourceLabel: 'Earned by posting', xpPreview: 7 },
+  { id: 'taco', name: 'Crunchy taco', placeholder: '🌮', sourceLabel: 'Earned by posting', xpPreview: 6 },
+  { id: 'burger', name: 'Mini cheeseburger', placeholder: '🍔', sourceLabel: 'Earned by posting', xpPreview: 7 },
+  { id: 'salad', name: 'Fresh salad', placeholder: '🥗', sourceLabel: 'Earned by posting', xpPreview: 5 },
 ] as const;
 
 const STARTER_INVENTORY: LunchboxInventory = {

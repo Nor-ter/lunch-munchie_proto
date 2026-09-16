@@ -1,4 +1,5 @@
 import type { Restaurant } from '@/contexts/AppContext';
+import { categoryLabel } from '@/lib/categoryLabel';
 
 function nonEmpty(value: string | null | undefined): string {
   return typeof value === 'string' ? value.trim() : '';
@@ -7,8 +8,8 @@ function nonEmpty(value: string | null | undefined): string {
 export function restaurantSummary(restaurant: Restaurant): string {
   const description = nonEmpty(restaurant.description);
   if (description) return description;
-  const fallback = [nonEmpty(restaurant.category), nonEmpty(restaurant.address)].filter(Boolean);
-  return fallback.length > 0 ? fallback.join(' · ') : '상세 정보 준비 중이에요.';
+  const fallback = [categoryLabel(restaurant.category), nonEmpty(restaurant.address)].filter(Boolean);
+  return fallback.length > 0 ? fallback.join(' · ') : 'More details coming soon.';
 }
 
 export function mergeCanonicalRestaurantPresentation(

@@ -144,7 +144,7 @@ export function FoodCourseMap({
                     fill={isDark ? '#AAA' : '#666'}
                     fontFamily="'Baloo 2', 'Pretendard Variable', 'Pretendard', cursive"
                   >
-                    도보 {4 + i * 3}분
+                    Walk {4 + i * 3} min
                   </text>
                 </g>
               )}

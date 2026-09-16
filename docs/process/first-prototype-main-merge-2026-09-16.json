@@ -1,0 +1,85 @@
+{
+  "features": [
+    {
+      "name": "English prototype UI and shared labels",
+      "intent": "import",
+      "origin_ref": "origin/first-prototype",
+      "paths": [
+        "client/index.html",
+        "client/src/lib/categoryLabel.ts",
+        "client/src/lib/countLabel.ts",
+        "client/src/lib/dietaryLabel.ts",
+        "client/src/lib/uiErrorMessage.ts",
+        "client/src/pages/MunchieFeedPage.tsx",
+        "client/src/pages/ProfilePage.tsx",
+        "client/src/pages/SavedPage.tsx",
+        "e2e/english-ui.e2e.spec.ts",
+        "e2e/copy-refinement.e2e.spec.ts"
+      ],
+      "acceptance": {
+        "entrypoint": "/",
+        "preconditions": ["local synthetic API fixtures"],
+        "actions": ["visit Home, Quick Match, feed, saved, profile, lobby and result surfaces"],
+        "observables": ["user-facing controls and status copy are English", "shared labels and errors render in English", "360px, 390px and 430px layouts do not overflow"],
+        "edge_cases": ["singular and plural labels", "API error fallback copy", "mobile-width copy wrapping"]
+      },
+      "validation": {"status": "passed", "evidence": ["npm run test:precommit: exit 0; 111 test files / 672 unit tests; 31 local mocked Playwright tests; Vite build passed", "e2e/english-ui.e2e.spec.ts", "e2e/copy-refinement.e2e.spec.ts"]}
+    },
+    {
+      "name": "English Home restored with five-tab navigation",
+      "intent": "combine",
+      "origin_ref": "origin/first-prototype",
+      "paths": [
+        "client/src/App.tsx",
+        "client/src/components/TabBar.tsx",
+        "client/src/components/SlideTransitionRoutes.tsx",
+        "client/src/pages/HomePage.tsx",
+        "e2e/home-quick-match-deck.e2e.spec.ts",
+        "e2e/quick-match-entry.e2e.spec.ts"
+      ],
+      "acceptance": {
+        "entrypoint": "/",
+        "preconditions": ["local synthetic API fixtures"],
+        "actions": ["open Home", "swipe and tap preference cards", "enter Quick Match", "move through all five tabs", "return Home"],
+        "observables": ["root renders Home", "five English tabs are visible", "selected intent reaches Quick Match", "Home and Quick Match animate in both directions"],
+        "edge_cases": ["swipe in both directions", "reload Quick Match", "direct Quick Match entry"]
+      },
+      "validation": {"status": "passed", "evidence": ["e2e/home-quick-match-deck.e2e.spec.ts", "e2e/quick-match-entry.e2e.spec.ts", "client/src/components/SlideTransitionRoutes.test.ts", "npm run test:precommit: exit 0"]}
+    },
+    {
+      "name": "Latest main Quick Match and session behavior",
+      "intent": "retain",
+      "origin_ref": "origin/main",
+      "paths": [
+        "client/src/pages/LunchieSettingsPage.tsx",
+        "client/src/pages/LunchieSwipePage.tsx",
+        "client/src/components/lunchie/QuickMatchRestaurantDetailSheet.tsx",
+        "shared/quickMatchParty.ts",
+        "shared/lunchieAvatar.ts",
+        "e2e/quick-match.e2e.spec.ts"
+      ],
+      "acceptance": {
+        "entrypoint": "/lunchie/settings",
+        "preconditions": ["synthetic identity and session fixtures"],
+        "actions": ["expand settings", "select 30 people", "clear dietary groups independently", "start or resume a session", "open restaurant details and rotate photos"],
+        "observables": ["accordion layout and 30-person controls remain", "session replacement remains safe", "card and photo state remain independent", "copy is English"],
+        "edge_cases": ["active group-to-solo replacement", "empty catalogue", "rapid photo taps", "results while details are open"]
+      },
+      "validation": {"status": "passed", "evidence": ["e2e/quick-match.e2e.spec.ts", "client/src/pages/LunchieSettingsPage.presentation.test.ts", "npm run test:precommit: exit 0"]}
+    },
+    {
+      "name": "Stable profile character grab journey",
+      "intent": "import",
+      "origin_ref": "a6634a7a",
+      "paths": ["e2e/profile-character-grab.e2e.spec.ts"],
+      "acceptance": {
+        "entrypoint": "/profile",
+        "preconditions": ["profile character is visible"],
+        "actions": ["press, move and release", "re-grab during landing repeatedly", "drag while the tap reaction is active"],
+        "observables": ["character and shadow move together", "grab state transitions remain operable"],
+        "edge_cases": ["short movement", "landing re-entry", "tap-expression overlap"]
+      },
+      "validation": {"status": "passed", "evidence": ["e2e/profile-character-grab.e2e.spec.ts", "npm run test:precommit: exit 0"]}
+    }
+  ]
+}

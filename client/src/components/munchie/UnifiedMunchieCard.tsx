@@ -1,3 +1,4 @@
+import { uiErrorMessage } from '@/lib/uiErrorMessage';
 import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react';
 import { createPortal } from 'react-dom';
 import { AnimatePresence, motion } from 'framer-motion';
@@ -37,10 +38,10 @@ function timeAgo(iso: string | number) {
   const timestamp = new Date(normalized).getTime();
   if (!Number.isFinite(timestamp)) return '';
   const days = Math.max(0, Math.floor((Date.now() - timestamp) / 86_400_000));
-  if (days === 0) return '오늘';
-  if (days === 1) return '1일 전';
-  if (days < 7) return `${days}일 전`;
-  return `${Math.floor(days / 7)}주 전`;
+  if (days === 0) return 'Today';
+  if (days === 1) return '1d ago';
+  if (days < 7) return `${days}d ago`;
+  return `${Math.floor(days / 7)}w ago`;
 }
 
 function FeedAuthorAvatar({ post, className }: { post: FeedPost; className: string }) {
@@ -128,7 +129,7 @@ export default function UnifiedMunchieCard({
     heroImage: post.photos[0] ?? '',
     tags: post.tags,
     hashtags: [],
-    region: 'Munchie 커뮤니티',
+    region: 'Munchie community',
     metadata: { distance: 0, duration: 0, placeCount: Math.min(post.photos.length, 3) },
     stops: [],
     createdAt: post.createdAt,
@@ -183,11 +184,11 @@ export default function UnifiedMunchieCard({
   const go = (path: string) => interactive && navigate(path);
   const requireLogin = () => {
     if (!auth) {
-      toast.error('로그인 상태를 확인 중이에요. 잠시 후 다시 시도해 주세요.');
+      toast.error('Still signing you in. Try again in a moment.');
       return false;
     }
     if (!auth.isAnonymous) return true;
-    toast.error('이 기능은 로그인 후 사용할 수 있어요.');
+    toast.error('Sign in to keep going.');
     startGoogleAuth(window.location.pathname + window.location.search);
     return false;
   };
@@ -195,20 +196,20 @@ export default function UnifiedMunchieCard({
     if (!interactive || !comment.trim()) return;
     if (!requireLogin()) return;
     const response = await fetch('/api/feed-comment', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ courseId: course.id, text: comment.trim(), parentId: replyingTo?.id }) });
-    if (!response.ok) { toast.error('댓글을 등록하지 못했어요.'); return; }
+    if (!response.ok) { toast.error('Couldn\'t post your comment.'); return; }
     addFeedComment(post.id, comment.trim(), replyingTo?.id);
     setComment('');
     setReplyingTo(null);
     setCommentExpanded(true);
-    toast.success(replyingTo ? '답글을 등록했어요.' : '댓글을 등록했어요.');
+    toast.success(replyingTo ? 'Reply posted.' : 'Comment posted.');
   };
   const reportPost = async () => {
     if (!requireLogin()) return;
     const response = await fetch('/api/reports', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ targetType: 'course', targetId: course.id }) });
-    if (!response.ok) { toast.error('신고를 접수하지 못했어요.'); return; }
+    if (!response.ok) { toast.error('Couldn\'t send your report.'); return; }
     setPostReported(true);
     setShowPostMenu(false);
-    toast.success('게시물을 신고했어요. 검토 후 필요한 조치를 진행할게요.');
+    toast.success('Post reported. We\'ll take a look.');
   };
   const editPost = () => {
     setShowPostMenu(false);
@@ -225,17 +226,17 @@ export default function UnifiedMunchieCard({
     });
     const payload = await response.json().catch(() => ({})) as { error?: string };
     if (!response.ok) {
-      toast.error(payload.error || '게시물을 삭제하지 못했어요.');
+      toast.error(uiErrorMessage(payload.error || 'Couldn\'t delete the post.'));
       return;
     }
     setDeleteConfirmOpen(false);
     deleteCourseWithFeed(course.id);
-    toast.success('게시물과 원본 코스를 삭제했어요.');
+    toast.success('Post and original course deleted.');
   };
   const togglePostLike = async () => {
     if (!interactive || !requireLogin()) return;
     const response = await fetch('/api/feed-like', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ courseId: course.id }) });
-    if (!response.ok) { toast.error('좋아요를 저장하지 못했어요.'); return; }
+    if (!response.ok) { toast.error('Couldn\'t save your like.'); return; }
     toggleFeedLike(post.id);
   };
   const shareFeedPost = async () => {
@@ -243,16 +244,16 @@ export default function UnifiedMunchieCard({
     const shareUrl = typeof window === 'undefined'
       ? feedSharePath
       : `${window.location.origin}${feedSharePath}`;
-    const title = `${post.authorName}님의 Munchie 피드`;
-    const text = post.caption ? `${post.caption}` : 'Munchie 피드를 함께 봐요.';
+    const title = `${post.authorName}'s Munchie post`;
+    const text = post.caption ? `${post.caption}` : 'Check out this Munchie post.';
     const recordShare = () => incrementFeedShare(post.id);
     const copyShareLink = async () => {
       try {
         await navigator.clipboard.writeText(shareUrl);
         recordShare();
-        toast.success('피드 링크를 복사했어요.');
+        toast.success('Post link copied.');
       } catch {
-        toast.error('공유 링크를 복사하지 못했어요.');
+        toast.error('Couldn\'t copy the share link.');
       }
     };
 
@@ -305,7 +306,7 @@ export default function UnifiedMunchieCard({
             <button
               type="button"
               onClick={() => setDeleteConfirmOpen(false)}
-              aria-label="게시물 삭제 창 닫기"
+              aria-label="Close delete post dialog"
               className="absolute right-3 top-3 flex h-8 w-8 items-center justify-center rounded-full bg-[#F7ECE7] text-[#80675C]"
             >
               <X size={16} />
@@ -314,15 +315,15 @@ export default function UnifiedMunchieCard({
               <Trash2 size={22} />
             </span>
             <h2 id={`delete-post-title-${post.id}`} className="mt-3 text-[17px] font-black text-[#30221C]">
-              게시물을 삭제하시겠습니까?
+              Delete this post?
             </h2>
-            <p className="mt-1.5 text-[11px] font-semibold text-[#9A8277]">게시물과 원본 코스가 영구 삭제되며 복구할 수 없어요.</p>
+            <p className="mt-1.5 text-[11px] font-semibold text-[#9A8277]">The post and original course will be permanently deleted. This can't be undone.</p>
             <div className="mt-5 grid grid-cols-2 gap-2.5">
               <button type="button" onClick={() => setDeleteConfirmOpen(false)} className="h-11 rounded-[14px] border border-[#DFD0C8] bg-white text-[13px] font-black text-[#69564D]">
-                취소
+                Cancel
               </button>
               <button type="button" onClick={() => void confirmPostDelete()} className="h-11 rounded-[14px] bg-[#E85053] text-[13px] font-black text-white">
-                확인
+                Delete
               </button>
             </div>
           </motion.section>
@@ -343,12 +344,12 @@ export default function UnifiedMunchieCard({
           <button type="button" onClick={() => go(authorProfilePath)} className={`min-w-0 truncate text-left text-[10px] font-semibold ${homeSummary ? 'text-[#3E2922]' : 'text-[#342925]'}`}>{post.authorName}</button>
           <span className={`shrink-0 text-[8px] font-medium ${homeSummary ? 'text-[#A36D6C]' : 'text-[#8B817B]'}`}>{timeAgo(post.createdAt)}</span>
           <span className="flex-1" />
-          <button type="button" onClick={() => setShowPostMenu(value => !value)} aria-label="게시물 메뉴" className={`flex h-6 w-6 items-center justify-center ${homeSummary ? 'text-[#D94447]' : 'text-[#413733]'}`}><MoreHorizontal size={15} strokeWidth={3} /></button>
+          <button type="button" onClick={() => setShowPostMenu(value => !value)} aria-label="Post menu" className={`flex h-6 w-6 items-center justify-center ${homeSummary ? 'text-[#D94447]' : 'text-[#413733]'}`}><MoreHorizontal size={15} strokeWidth={3} /></button>
         </header>
-        <button type="button" onClick={() => go(compactDetailPath)} className="block w-full text-left" aria-label="피드 상세 보기">
+        <button type="button" onClick={() => go(compactDetailPath)} className="block w-full text-left" aria-label="View post details">
           <div className={`relative mx-2 mb-2 overflow-hidden rounded-[12px] border bg-[#F1E7DE] ${homeSummary ? 'border-[#F2B6AB]' : 'border-[#E8D6CC]'}`}>
             <TemplateArtwork course={course} template={template} photoSources={post.photos} decorOverride={renderedDecor} strokesOverride={renderedStrokes} eager />
-            {post.missingOriginalMedia && <span className="absolute left-2 top-2 rounded-full bg-black/55 px-2 py-1 text-[8px] font-bold text-white">원본 사진이 없는 이전 게시물</span>}
+            {post.missingOriginalMedia && <span className="absolute left-2 top-2 rounded-full bg-black/55 px-2 py-1 text-[8px] font-bold text-white">Original photo unavailable</span>}
             <div
               data-ui="compact-one-line-review"
               className={`pointer-events-none absolute inset-x-2 z-10 ${homeSummary ? 'bottom-2' : 'bottom-9'}`}
@@ -376,7 +377,7 @@ export default function UnifiedMunchieCard({
               <span
                 role="button"
                 tabIndex={0}
-                aria-label="피드 공유하기"
+                aria-label="Share post"
                 onClick={event => { event.stopPropagation(); void shareFeedPost(); }}
                 onKeyDown={event => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); event.stopPropagation(); void shareFeedPost(); } }}
                 className="flex h-6 items-center rounded-lg border border-[#CDDED3] bg-[#F7FCF8] px-1.5 text-[#668574]"
@@ -389,18 +390,18 @@ export default function UnifiedMunchieCard({
             <motion.div initial={{ opacity: 0, y: -4 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -4 }} className="absolute right-2 top-8 z-30 w-[112px] overflow-hidden rounded-xl border border-[#DACBC3] bg-white shadow-[0_8px_22px_rgba(57,38,29,0.16)]">
               {ownPost ? (
                 <>
-                  <button type="button" onClick={editPost} className="flex h-9 w-full items-center gap-1.5 px-3 text-left text-[10px] font-bold text-[#51443E]"><Pencil size={12} />게시물 수정</button>
-                  <button type="button" onClick={requestPostDelete} className="flex h-9 w-full items-center gap-1.5 border-t border-[#EEE3DD] px-3 text-left text-[10px] font-bold text-[#D84D52]"><Trash2 size={12} />게시물 삭제</button>
+                  <button type="button" onClick={editPost} className="flex h-9 w-full items-center gap-1.5 px-3 text-left text-[10px] font-bold text-[#51443E]"><Pencil size={12} />Edit post</button>
+                  <button type="button" onClick={requestPostDelete} className="flex h-9 w-full items-center gap-1.5 border-t border-[#EEE3DD] px-3 text-left text-[10px] font-bold text-[#D84D52]"><Trash2 size={12} />Delete post</button>
                 </>
               ) : canDeletePost ? (
                 <>
-                  <button type="button" onClick={() => { setShowPostMenu(false); go(authorProfilePath); }} className="block h-9 w-full px-3 text-left text-[10px] font-bold text-[#51443E]">작성자 보기</button>
-                  <button type="button" onClick={requestPostDelete} className="flex h-9 w-full items-center gap-1.5 border-t border-[#EEE3DD] px-3 text-left text-[10px] font-bold text-[#D84D52]"><Trash2 size={12} />관리자 삭제</button>
+                  <button type="button" onClick={() => { setShowPostMenu(false); go(authorProfilePath); }} className="block h-9 w-full px-3 text-left text-[10px] font-bold text-[#51443E]">View author</button>
+                  <button type="button" onClick={requestPostDelete} className="flex h-9 w-full items-center gap-1.5 border-t border-[#EEE3DD] px-3 text-left text-[10px] font-bold text-[#D84D52]"><Trash2 size={12} />Delete as admin</button>
                 </>
               ) : (
                 <>
-                  <button type="button" onClick={() => { setShowPostMenu(false); go(authorProfilePath); }} className="block h-9 w-full px-3 text-left text-[10px] font-bold text-[#51443E]">작성자 보기</button>
-                  <button type="button" disabled={postReported} onClick={reportPost} className="block h-9 w-full border-t border-[#EEE3DD] px-3 text-left text-[10px] font-bold text-[#D84D52] disabled:text-[#A99D97]">{postReported ? '신고 완료' : '게시물 신고'}</button>
+                  <button type="button" onClick={() => { setShowPostMenu(false); go(authorProfilePath); }} className="block h-9 w-full px-3 text-left text-[10px] font-bold text-[#51443E]">View author</button>
+                  <button type="button" disabled={postReported} onClick={reportPost} className="block h-9 w-full border-t border-[#EEE3DD] px-3 text-left text-[10px] font-bold text-[#D84D52] disabled:text-[#A99D97]">{postReported ? 'Reported' : 'Report post'}</button>
                 </>
               )}
             </motion.div>
@@ -423,7 +424,7 @@ export default function UnifiedMunchieCard({
             <strong className="truncate text-[15px] font-semibold text-[#3E2922]">{post.authorName}</strong>
           </button>
           <span className="min-w-0 flex-1 truncate text-[11px] font-medium text-[#8C7B72]">{timeAgo(post.createdAt)}</span>
-          <button type="button" onClick={() => setShowPostMenu(value => !value)} aria-label="게시물 메뉴" className="flex h-9 w-9 items-center justify-center text-[#A66C60]"><MoreHorizontal size={21} strokeWidth={3} /></button>
+          <button type="button" onClick={() => setShowPostMenu(value => !value)} aria-label="Post menu" className="flex h-9 w-9 items-center justify-center text-[#A66C60]"><MoreHorizontal size={21} strokeWidth={3} /></button>
         </header>
 
         <AnimatePresence>
@@ -431,18 +432,18 @@ export default function UnifiedMunchieCard({
             <motion.div initial={{ opacity: 0, y: -5 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -5 }} className="absolute right-3 top-12 z-30 w-[126px] overflow-hidden rounded-xl border border-[#E3D2C9] bg-white shadow-[0_10px_24px_rgba(57,38,29,0.16)]">
               {ownPost ? (
                 <>
-                  <button type="button" onClick={editPost} className="flex h-10 w-full items-center gap-2 px-3 text-left text-[11px] font-bold text-[#51443E]"><Pencil size={13} />게시물 수정</button>
-                  <button type="button" onClick={requestPostDelete} className="flex h-10 w-full items-center gap-2 border-t border-[#EEE3DD] px-3 text-left text-[11px] font-bold text-[#D84D52]"><Trash2 size={13} />게시물 삭제</button>
+                  <button type="button" onClick={editPost} className="flex h-10 w-full items-center gap-2 px-3 text-left text-[11px] font-bold text-[#51443E]"><Pencil size={13} />Edit post</button>
+                  <button type="button" onClick={requestPostDelete} className="flex h-10 w-full items-center gap-2 border-t border-[#EEE3DD] px-3 text-left text-[11px] font-bold text-[#D84D52]"><Trash2 size={13} />Delete post</button>
                 </>
               ) : canDeletePost ? (
                 <>
-                  <button type="button" onClick={() => { setShowPostMenu(false); go(authorProfilePath); }} className="block h-10 w-full px-3 text-left text-[11px] font-bold text-[#51443E]">작성자 보기</button>
-                  <button type="button" onClick={requestPostDelete} className="flex h-10 w-full items-center gap-2 border-t border-[#EEE3DD] px-3 text-left text-[11px] font-bold text-[#D84D52]"><Trash2 size={13} />관리자 삭제</button>
+                  <button type="button" onClick={() => { setShowPostMenu(false); go(authorProfilePath); }} className="block h-10 w-full px-3 text-left text-[11px] font-bold text-[#51443E]">View author</button>
+                  <button type="button" onClick={requestPostDelete} className="flex h-10 w-full items-center gap-2 border-t border-[#EEE3DD] px-3 text-left text-[11px] font-bold text-[#D84D52]"><Trash2 size={13} />Delete as admin</button>
                 </>
               ) : (
                 <>
-                  <button type="button" onClick={() => { setShowPostMenu(false); go(authorProfilePath); }} className="block h-10 w-full px-3 text-left text-[11px] font-bold text-[#51443E]">작성자 보기</button>
-                  <button type="button" disabled={postReported} onClick={reportPost} className="block h-10 w-full border-t border-[#EEE3DD] px-3 text-left text-[11px] font-bold text-[#D84D52] disabled:text-[#A99D97]">{postReported ? '신고 완료' : '게시물 신고'}</button>
+                  <button type="button" onClick={() => { setShowPostMenu(false); go(authorProfilePath); }} className="block h-10 w-full px-3 text-left text-[11px] font-bold text-[#51443E]">View author</button>
+                  <button type="button" disabled={postReported} onClick={reportPost} className="block h-10 w-full border-t border-[#EEE3DD] px-3 text-left text-[11px] font-bold text-[#D84D52] disabled:text-[#A99D97]">{postReported ? 'Reported' : 'Report post'}</button>
                 </>
               )}
             </motion.div>
@@ -457,14 +458,14 @@ export default function UnifiedMunchieCard({
           >
             <TemplateArtwork course={course} template={template} photoSources={post.photos} decorOverride={renderedDecor} strokesOverride={renderedStrokes} eager />
           </div>
-          {post.missingOriginalMedia && <span className="absolute left-2 top-2 z-10 rounded-full bg-black/55 px-2 py-1 text-[9px] font-bold text-white">원본 사진이 없는 이전 게시물</span>}
+          {post.missingOriginalMedia && <span className="absolute left-2 top-2 z-10 rounded-full bg-black/55 px-2 py-1 text-[9px] font-bold text-white">Original photo unavailable</span>}
           <button
             type="button"
             onClick={() => go(`/template/${template.id}?course=${course.id}&from=${detailOrigin}`)}
             className="absolute right-2 top-2 z-10 rounded-full bg-[#FFFDFC]/90 px-2.5 py-1 text-[9px] font-black text-[#765E53] shadow-sm backdrop-blur"
-            aria-label="Munchie 피드 이미지 상세 보기"
+            aria-label="View post image"
           >
-            템플릿 보기
+            View template
           </button>
           <motion.div
             aria-hidden="true"
@@ -476,7 +477,7 @@ export default function UnifiedMunchieCard({
           <button
             type="button"
             onClick={() => interactive && setReviewRevealed(value => !value)}
-            aria-label={reviewRevealed ? '한줄평 음영 숨기기' : '한줄평 또렷하게 보기'}
+            aria-label={reviewRevealed ? 'Turn off review highlight' : 'Highlight review text'}
             aria-pressed={reviewRevealed}
             className="absolute inset-x-3 bottom-3 z-10 text-left"
           >
@@ -501,29 +502,29 @@ export default function UnifiedMunchieCard({
 
         <div className="mx-3 flex items-center justify-between py-2.5 text-[#A27469]">
           <div className="flex items-center gap-2">
-            <button type="button" onClick={() => void togglePostLike()} className={`flex h-10 min-w-10 items-center justify-center gap-1 rounded-xl px-2 ${liked ? 'bg-[#FFE2DF] text-[#D94E55]' : 'text-current'}`} aria-label="좋아요">
+            <button type="button" onClick={() => void togglePostLike()} className={`flex h-10 min-w-10 items-center justify-center gap-1 rounded-xl px-2 ${liked ? 'bg-[#FFE2DF] text-[#D94E55]' : 'text-current'}`} aria-label="Like">
               <ThumbsUp size={20} strokeWidth={2} fill={liked ? 'currentColor' : 'none'} /><span className="text-[10px] font-black">{post.likes}</span>
             </button>
-            <button type="button" onClick={() => interactive && setCommentExpanded(true)} className="flex h-10 min-w-10 items-center justify-center gap-1 rounded-xl px-2 text-current" aria-label="댓글 보기">
+            <button type="button" onClick={() => interactive && setCommentExpanded(true)} className="flex h-10 min-w-10 items-center justify-center gap-1 rounded-xl px-2 text-current" aria-label="View comments">
               <MessageCircle size={20} strokeWidth={2} /><span className="text-[10px] font-black">{visibleComments.length}</span>
             </button>
-            <button type="button" onClick={() => go(courseMapPath)} className="flex h-10 w-10 items-center justify-center rounded-xl text-current" aria-label="코스맵 보기">
+            <button type="button" onClick={() => go(courseMapPath)} className="flex h-10 w-10 items-center justify-center rounded-xl text-current" aria-label="View Course Map">
               <Map size={23} strokeWidth={2} />
             </button>
           </div>
           <div className="flex items-center gap-2">
-            <button type="button" onClick={() => void shareFeedPost()} className="flex h-10 w-10 items-center justify-center rounded-xl text-current" aria-label="공유하기"><Share2 size={20} strokeWidth={2} /></button>
+            <button type="button" onClick={() => void shareFeedPost()} className="flex h-10 w-10 items-center justify-center rounded-xl text-current" aria-label="Share"><Share2 size={20} strokeWidth={2} /></button>
             <button
               type="button"
               onClick={() => {
                 if (!interactive) return;
                 saved ? unsaveCourse(course.id) : saveCourse(course.id);
-                toast.success(saved ? '저장을 해제했어요.' : 'Munchie 피드를 저장했어요.');
+                toast.success(saved ? 'Removed from saved.' : 'Post saved.');
               }}
               className={saved
                 ? SAVED_BOOKMARK_BUTTON_CLASS
                 : 'flex h-10 w-10 items-center justify-center rounded-xl text-current'}
-              aria-label={saved ? '저장 해제' : '저장'}
+              aria-label={saved ? 'Unsave' : 'Save'}
             >
               <Bookmark size={20} strokeWidth={2} fill={saved ? 'currentColor' : 'none'} />
             </button>
@@ -538,7 +539,7 @@ export default function UnifiedMunchieCard({
         <AnimatePresence>
           {commentExpanded && (
             <>
-              <motion.button type="button" aria-label="댓글 닫기" className="fixed inset-0 z-[90] bg-[#271913]/35" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={() => { setCommentExpanded(false); setReplyingTo(null); }} />
+              <motion.button type="button" aria-label="Close comments" className="fixed inset-0 z-[90] bg-[#271913]/35" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={() => { setCommentExpanded(false); setReplyingTo(null); }} />
               <motion.aside
                 drag="y"
                 dragConstraints={{ top: 0, bottom: 0 }}
@@ -549,14 +550,14 @@ export default function UnifiedMunchieCard({
                 exit={{ y: '100%' }}
                 transition={{ type: 'spring', stiffness: 330, damping: 32 }}
                 className="fixed inset-x-0 bottom-0 z-[100] mx-auto flex h-[82dvh] w-full max-w-[480px] flex-col overflow-hidden rounded-t-[24px] border border-[#E8D2C8] bg-[#FFFDFC] shadow-[0_-18px_48px_rgba(62,37,27,0.2)]"
-                aria-label="댓글"
+                aria-label="Comments"
               >
                 <div className="shrink-0 cursor-grab px-4 pb-3 pt-2 active:cursor-grabbing">
                   <span className="mx-auto block h-1.5 w-11 rounded-full bg-[#D8C7BF]" />
                   <div className="mt-3 flex items-center justify-between">
                     <span className="h-8 w-8" />
-                    <strong className="text-[15px] font-black text-[#342620]">댓글 {visibleComments.length}</strong>
-                    <button type="button" onClick={() => { setCommentExpanded(false); setReplyingTo(null); }} aria-label="댓글창 닫기" className="flex h-8 w-8 items-center justify-center rounded-full bg-[#F8ECE6] text-[#8D6C60]"><X size={16} /></button>
+                    <strong className="text-[15px] font-black text-[#342620]">Comments {visibleComments.length}</strong>
+                    <button type="button" onClick={() => { setCommentExpanded(false); setReplyingTo(null); }} aria-label="Close comments" className="flex h-8 w-8 items-center justify-center rounded-full bg-[#F8ECE6] text-[#8D6C60]"><X size={16} /></button>
                   </div>
                 </div>
 
@@ -570,34 +571,34 @@ export default function UnifiedMunchieCard({
                           <p className="text-[13px] leading-relaxed text-[#3E302A]"><strong className="mr-1.5 font-medium">{entry.authorName}</strong>{entry.text}</p>
                           <div className="mt-1.5 flex items-center gap-3 text-[10px] font-bold text-[#81716A]">
                             <span>{timeAgo(entry.createdAt)}</span>
-                            {!nested && <button type="button" onClick={() => setReplyingTo({ id: entry.id, authorName: entry.authorName })}>답글 달기</button>}
+                            {!nested && <button type="button" onClick={() => setReplyingTo({ id: entry.id, authorName: entry.authorName })}>Reply</button>}
                             <button type="button" onClick={() => reactToFeedComment(post.id, entry.id, 'like')} className={entry.myReaction === 'like' ? 'text-[#E83D45]' : ''}><ThumbsUp className="inline" size={13} /> {entry.likes ?? 0}</button>
                           </div>
                         </div>
-                        <button type="button" onClick={() => setCommentMenuId(current => current === entry.id ? null : entry.id)} aria-label={`${entry.authorName} 댓글 메뉴`} className="flex h-8 w-8 shrink-0 items-center justify-center text-[#88766E]"><MoreHorizontal size={18} /></button>
+                        <button type="button" onClick={() => setCommentMenuId(current => current === entry.id ? null : entry.id)} aria-label={`Comment options for ${entry.authorName}`} className="flex h-8 w-8 shrink-0 items-center justify-center text-[#88766E]"><MoreHorizontal size={18} /></button>
                         {commentMenuId === entry.id && (
                           <div className="absolute right-0 top-8 z-10 w-[108px] overflow-hidden rounded-xl border border-[#E3D2C9] bg-white shadow-lg">
-                            <button type="button" disabled={entry.reported} onClick={() => { reportFeedComment(post.id, entry.id); setCommentMenuId(null); toast.success('댓글을 신고했어요.'); }} className="flex h-10 w-full items-center gap-2 px-3 text-[11px] font-bold text-[#D84D52] disabled:text-[#A99D97]"><Flag size={13} />{entry.reported ? '신고됨' : '신고하기'}</button>
+                            <button type="button" disabled={entry.reported} onClick={() => { reportFeedComment(post.id, entry.id); setCommentMenuId(null); toast.success('Comment reported.'); }} className="flex h-10 w-full items-center gap-2 px-3 text-[11px] font-bold text-[#D84D52] disabled:text-[#A99D97]"><Flag size={13} />{entry.reported ? 'Reported' : 'Report'}</button>
                           </div>
                         )}
                       </div>
                     );
                     return <div key={item.id}>{renderComment(item)}{replies.map(reply => renderComment(reply, true))}</div>;
                   })}
-                  {rootComments.length === 0 && <p className="py-12 text-center text-[12px] font-semibold text-[#9A857A]">첫 번째 댓글을 남겨보세요.</p>}
+                  {rootComments.length === 0 && <p className="py-12 text-center text-[12px] font-semibold text-[#9A857A]">Be the first to comment.</p>}
                 </div>
 
                 <div className="shrink-0 border-t border-[#EADBD4] bg-white px-3 pb-[max(1rem,env(safe-area-inset-bottom))] pt-2.5">
                   {replyingTo && (
                     <div className="mb-2 flex items-center justify-between rounded-lg bg-[#FFF0EB] px-3 py-2 text-[11px] font-bold text-[#B55A58]">
-                      <span>@{replyingTo.authorName}님에게 답글 작성 중</span>
-                      <button type="button" onClick={() => setReplyingTo(null)} aria-label="답글 취소"><X size={14} /></button>
+                      <span>Replying to @{replyingTo.authorName}</span>
+                      <button type="button" onClick={() => setReplyingTo(null)} aria-label="Cancel reply"><X size={14} /></button>
                     </div>
                   )}
                   <div className="flex h-12 items-center gap-2 rounded-[15px] border border-[#E4D1C8] bg-[#FFFDFC] px-3">
                     <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[#FFE6DE] text-sm">{post.authorEmoji}</span>
-                    <input value={comment} onChange={event => setComment(event.target.value)} onKeyDown={event => event.key === 'Enter' && void submitComment()} placeholder={auth?.isAnonymous ? '로그인 후 댓글을 남길 수 있어요' : (replyingTo ? `${replyingTo.authorName}님에게 답글...` : '댓글 입력')} className="min-w-0 flex-1 bg-transparent text-[13px] outline-none placeholder:text-[#9B8A82]" autoFocus />
-                    <button type="button" onClick={() => void submitComment()} disabled={!comment.trim()} aria-label="댓글 등록" className="flex h-9 w-9 items-center justify-center rounded-full bg-[#EF6B6D] text-white disabled:bg-[#E8DDD8]"><Send size={18} /></button>
+                    <input value={comment} onChange={event => setComment(event.target.value)} onKeyDown={event => event.key === 'Enter' && void submitComment()} placeholder={auth?.isAnonymous ? 'Sign in to comment' : (replyingTo ? `Reply to ${replyingTo.authorName}…` : 'Add a comment')} className="min-w-0 flex-1 bg-transparent text-[13px] outline-none placeholder:text-[#9B8A82]" autoFocus />
+                    <button type="button" onClick={() => void submitComment()} disabled={!comment.trim()} aria-label="Post comment" className="flex h-9 w-9 items-center justify-center rounded-full bg-[#EF6B6D] text-white disabled:bg-[#E8DDD8]"><Send size={18} /></button>
                   </div>
                 </div>
               </motion.aside>

@@ -137,10 +137,10 @@ export function getCoursePlacesFromFeedStops(
     const courseStop = course?.stops.find((stop) => stop.placeId === placeId);
     return {
       id: placeId,
-      name: restaurant?.name ?? `스팟 ${index + 1}`,
+      name: restaurant?.name ?? `Stop ${index + 1}`,
       rating: restaurant?.rating ?? 0,
       distance: restaurant?.distance ?? '',
-      category: restaurant?.category ?? '맛집',
+      category: restaurant?.category ?? 'Restaurant',
       priceLevel: restaurant?.priceRange ?? 1,
       time: courseStop?.startTime,
       imageUrl: restaurant?.image,

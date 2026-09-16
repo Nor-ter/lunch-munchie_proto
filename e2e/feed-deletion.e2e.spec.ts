@@ -125,11 +125,11 @@ test('deleting from the feed menu permanently removes the server post and stale 
 
   const card = page.getByTestId(`unified-munchie-card-${POST_ID}`);
   await expect(card).toBeVisible();
-  await card.getByRole('button', { name: '게시물 메뉴' }).click();
-  await card.getByRole('button', { name: '게시물 삭제' }).click();
+  await card.getByRole('button', { name: 'Post menu' }).click();
+  await card.getByRole('button', { name: 'Delete post' }).click();
   const dialog = page.getByRole('alertdialog');
-  await expect(dialog).toContainText('원본 코스가 영구 삭제');
-  await dialog.getByRole('button', { name: '확인' }).click();
+  await expect(dialog).toContainText('original course will be permanently deleted');
+  await dialog.getByRole('button', { name: "Delete", exact: true }).click();
 
   await expect(card).toHaveCount(0);
   expect(api.deleteRequests()).toBe(1);
@@ -149,9 +149,9 @@ test('feed detail centers its simplified header while owner actions remain in th
   const card = page.getByTestId(`unified-munchie-card-${POST_ID}`);
 
   await expect(main).toBeVisible();
-  await expect(header.getByRole('button', { name: '먼치피드로 돌아가기' })).toBeVisible();
-  await expect(header.getByRole('button', { name: '피드 수정' })).toHaveCount(0);
-  await expect(header.getByRole('button', { name: '피드 삭제' })).toHaveCount(0);
+  await expect(header.getByRole('button', { name: 'Back to Munchie Feed' })).toBeVisible();
+  await expect(header.getByRole('button', { name: 'Feed 수정' })).toHaveCount(0);
+  await expect(header.getByRole('button', { name: 'Feed Delete' })).toHaveCount(0);
 
   const layout = await header.evaluate((element) => {
     const headerBox = element.getBoundingClientRect();
@@ -164,9 +164,9 @@ test('feed detail centers its simplified header while owner actions remain in th
   expect(layout.centerDelta).toBeLessThanOrEqual(1);
   expect(layout.mainWidth).toBeLessThanOrEqual(430);
 
-  await card.getByRole('button', { name: '게시물 메뉴' }).click();
-  await expect(card.getByRole('button', { name: '게시물 수정' })).toBeVisible();
-  await expect(card.getByRole('button', { name: '게시물 삭제' })).toBeVisible();
+  await card.getByRole('button', { name: 'Post menu' }).click();
+  await expect(card.getByRole('button', { name: 'Edit post' })).toBeVisible();
+  await expect(card.getByRole('button', { name: 'Delete post' })).toBeVisible();
 });
 
 test('configured administrator can delete another author post without receiving edit access', async ({ page }) => {
@@ -217,10 +217,10 @@ test('configured administrator can delete another author post without receiving 
   await page.goto('/feed');
   const card = page.getByTestId(`unified-munchie-card-${POST_ID}`);
   await expect(card).toBeVisible();
-  await card.getByRole('button', { name: '게시물 메뉴' }).click();
-  await expect(card.getByRole('button', { name: '게시물 수정' })).toHaveCount(0);
-  await card.getByRole('button', { name: '관리자 삭제' }).click();
-  await page.getByRole('alertdialog').getByRole('button', { name: '확인' }).click();
+  await card.getByRole('button', { name: 'Post menu' }).click();
+  await expect(card.getByRole('button', { name: 'Edit post' })).toHaveCount(0);
+  await card.getByRole('button', { name: 'Delete as admin' }).click();
+  await page.getByRole('alertdialog').getByRole('button', { name: "Delete", exact: true }).click();
 
   await expect(card).toHaveCount(0);
   expect(deleteRequests).toBe(1);

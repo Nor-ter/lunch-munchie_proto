@@ -77,14 +77,14 @@ test('saved Lunchie restaurant uses its configured map and returns to the Lunchi
   expect(mapBox!.width).toBeGreaterThanOrEqual(regionBox!.width - 3);
   const unavailableMap = region.getByRole('alert');
   if (await unavailableMap.isVisible()) {
-    await expect(unavailableMap).toContainText('Google 지도 설정을 확인해 주세요.');
+    await expect(unavailableMap).toContainText("The map isn't available right now.");
     expect(googleMapsLoaderRequested).toBe(false);
   } else {
     await expect.poll(() => googleMapsLoaderRequested).toBe(true);
   }
   expect(openStreetMapRequested).toBe(false);
 
-  await page.getByRole('button', { name: 'Lunchie 런치픽으로 돌아가기' }).click();
+  await page.getByRole('button', { name: 'Back to Lunchie Picks' }).click();
   await expect(page).toHaveURL('/saved?tab=restaurants');
-  await expect(page.getByRole('button', { name: /Lunchie 런치픽/ })).toHaveAttribute('aria-pressed', 'true');
+  await expect(page.getByRole('button', { name: /Lunchie Picks/ })).toHaveAttribute('aria-pressed', 'true');
 });

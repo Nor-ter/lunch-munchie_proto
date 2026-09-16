@@ -53,13 +53,13 @@ test('admin can review restaurant images from a grouped, paginated gallery', asy
   await page.route('**/photos/test/food.jpg', route => route.fulfill({ status: 200, contentType: 'image/gif', body: Buffer.from('R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABAAACAUwAOw==', 'base64') }));
 
   await page.goto('/admin');
-  await expect(page.getByRole('heading', { name: '식당 이미지 검수' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Restaurant photo review' })).toBeVisible();
   await expect(page.getByRole('heading', { name: 'Test Kitchen' })).toBeVisible();
-  await expect(page.getByText('추천용 사진 보강 필요')).toBeVisible();
-  await expect(page.getByText('원본 1장')).toBeVisible();
-  await expect(page.getByText('추천용 서로 다른 사진 1장 · 최소 2장')).toBeVisible();
-  await expect(page.getByText('검수 대기').first()).toBeVisible();
+  await expect(page.getByText('More suitable photos needed')).toBeVisible();
+  await expect(page.getByText('Original 1 photos')).toBeVisible();
+  await expect(page.getByText('Distinct suitable photos 1 photos · minimum 2 photos')).toBeVisible();
+  await expect(page.getByText('Pending review').first()).toBeVisible();
 
-  await page.getByRole('article').getByRole('button', { name: '승인' }).click();
+  await page.getByRole('article').getByRole('button', { name: 'Approve' }).click();
   await expect.poll(() => update).toMatchObject({ reviewStatus: 'approved', kind: 'dish', hasPerson: false, quality: 0.9 });
 });

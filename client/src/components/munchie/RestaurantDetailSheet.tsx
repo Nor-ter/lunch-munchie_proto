@@ -1,3 +1,5 @@
+import { categoryLabel } from '@/lib/categoryLabel';
+import { foodTagLabel } from '@/constants/foodTags';
 import { motion } from 'framer-motion';
 import { useEffect, useState } from 'react';
 import { Star, MapPin, Clock, X } from 'lucide-react';
@@ -40,15 +42,15 @@ export default function RestaurantDetailSheet({
     rating: fallbackPlace.rating || 0,
     reviewCount: 0,
     distance: fallbackPlace.distance,
-    address: fallbackPlace.address ?? '주소 정보 준비 중',
+    address: fallbackPlace.address ?? 'Address coming soon',
     image: fallbackPhoto,
     photos: fallbackPhoto ? [fallbackPhoto] : [],
     lat: fallbackPlace.latitude ?? 0,
     lng: fallbackPlace.longitude ?? 0,
     priceRange: Math.min(4, Math.max(1, fallbackPlace.priceLevel)) as Restaurant['priceRange'],
-    openHours: '영업시간 정보 준비 중',
+    openHours: 'Hours coming soon',
     dietary: [],
-    description: '코스에 등록된 장소예요.',
+    description: 'A stop on this course.',
   } : undefined);
 
   useEffect(() => {
@@ -77,7 +79,7 @@ export default function RestaurantDetailSheet({
     <motion.div
       role={isModal ? 'dialog' : undefined}
       aria-modal={isModal || undefined}
-      aria-label={isModal ? `${restaurant.name} 상세정보` : undefined}
+      aria-label={isModal ? `${restaurant.name} Details` : undefined}
       className={isModal
         ? 'fixed inset-x-[10%] inset-y-[10dvh] z-[70] mx-auto w-auto max-w-[360px] overflow-y-auto rounded-[28px] border border-white/80 bg-[#FFF8F3] shadow-[0_0_0_100vmax_rgba(45,29,24,0.38),0_24px_60px_rgba(45,29,24,0.32)]'
         : 'fixed inset-0 z-[60] mx-auto w-full max-w-[430px] overflow-y-auto bg-[#FFF8F3]'}
@@ -97,7 +99,7 @@ export default function RestaurantDetailSheet({
         )}
         <BackButton
           onClick={onClose}
-          aria-label={isModal ? '상세정보 닫기' : '뒤로가기'}
+          aria-label={isModal ? 'Close details' : 'Go back'}
           className="absolute left-5 top-[max(12px,env(safe-area-inset-top))] bg-white/90"
         >
           {isModal ? <X size={18} aria-hidden="true" /> : undefined}
@@ -116,7 +118,7 @@ export default function RestaurantDetailSheet({
             <span className="font-semibold text-[#C79396]">({formatRestaurantReviewCount(restaurant.reviewCount)})</span>
           </span>
           <span className="text-[12px] font-semibold text-white rounded-full px-2.5 py-1" style={{ background: '#EB5053' }}>
-            {restaurant.category}
+            {categoryLabel(restaurant.category)}
           </span>
           <span className="text-[12px] font-semibold text-[#4A4A4A] bg-[#F5F5F5] rounded-full px-2.5 py-1">
             {'₩'.repeat(priceRange)}
@@ -128,10 +130,10 @@ export default function RestaurantDetailSheet({
 
         <div className="space-y-1.5">
           <p className="flex items-start gap-1.5 text-[13px] text-[#4A4A4A]">
-            <MapPin size={13} className="mt-0.5 shrink-0 text-[#9B9B9B]" /> {restaurant.address || '주소 정보 없음'}
+            <MapPin size={13} className="mt-0.5 shrink-0 text-[#9B9B9B]" /> {restaurant.address || 'No address available'}
           </p>
           <p className="flex items-center gap-1.5 text-[13px] text-[#4A4A4A]">
-            <Clock size={13} className="shrink-0 text-[#9B9B9B]" /> {restaurant.openHours || '영업시간 정보 없음'}
+            <Clock size={13} className="shrink-0 text-[#9B9B9B]" /> {restaurant.openHours || 'No opening hours available'}
           </p>
         </div>
 
@@ -140,7 +142,7 @@ export default function RestaurantDetailSheet({
         {tags.length > 0 && (
           <div className="flex gap-1.5 flex-wrap">
             {tags.map(tag => (
-              <span key={tag} className="tag tag-hash">#{tag}</span>
+              <span key={tag} className="tag tag-hash">#{foodTagLabel(tag)}</span>
             ))}
           </div>
         )}
@@ -148,7 +150,7 @@ export default function RestaurantDetailSheet({
 
       {/* 메뉴 사진 */}
       <div className="mx-4 mt-4 pb-10">
-        <p className="mb-2 text-[13px] font-bold text-[#1A1A1A]">메뉴 사진</p>
+        <p className="mb-2 text-[13px] font-bold text-[#1A1A1A]">Menu photos</p>
         {menuPhotos.length > 0 ? (
           <div className="grid grid-cols-4 gap-2">
             {menuPhotos.map((url, i) => (
@@ -158,7 +160,7 @@ export default function RestaurantDetailSheet({
             ))}
           </div>
         ) : (
-          <p className="text-[12px] text-[#9B9B9B]">등록된 메뉴 사진이 없어요.</p>
+          <p className="text-[12px] text-[#9B9B9B]">No menu photos yet.</p>
         )}
       </div>
 

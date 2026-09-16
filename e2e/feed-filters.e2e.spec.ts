@@ -12,14 +12,14 @@ test('feed page starts with filter options closed', async ({ page }) => {
 
   await page.goto('/feed');
   await expect(page.getByRole('heading', { name: 'MUNCHIE FEED' })).toBeVisible();
-  await expect(page.getByRole('button', { name: '필터 보기' })).toHaveAttribute('aria-pressed', 'false');
-  await expect(page.getByText('근처 피드')).toHaveCount(0);
+  await expect(page.getByRole('button', { name: 'Show filters' })).toHaveAttribute('aria-pressed', 'false');
+  await expect(page.getByText('Nearby posts')).toHaveCount(0);
 
-  await page.getByRole('button', { name: '필터 보기' }).click();
-  await expect(page.getByRole('button', { name: '필터 보기' })).toHaveAttribute('aria-pressed', 'true');
-  await expect(page.getByText('근처 피드')).toBeVisible();
+  await page.getByRole('button', { name: 'Show filters' }).click();
+  await expect(page.getByRole('button', { name: 'Show filters' })).toHaveAttribute('aria-pressed', 'true');
+  await expect(page.getByText('Nearby posts')).toBeVisible();
 
-  await page.getByRole('button', { name: '필터 보기' }).click();
-  await expect(page.getByRole('button', { name: '필터 보기' })).toHaveAttribute('aria-pressed', 'false');
-  await expect(page.getByText('근처 피드')).toHaveCount(0);
+  await page.getByRole('button', { name: 'Show filters' }).click();
+  await expect(page.getByRole('button', { name: 'Show filters' })).toHaveAttribute('aria-pressed', 'false');
+  await expect(page.getByText('Nearby posts')).toHaveCount(0);
 });

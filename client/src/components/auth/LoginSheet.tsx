@@ -1,3 +1,4 @@
+import { uiErrorMessage } from '@/lib/uiErrorMessage';
 import { useEffect, useState } from 'react';
 import { LoaderCircle } from 'lucide-react';
 import {
@@ -32,7 +33,7 @@ export function LoginSheet({ open, onOpenChange }: LoginSheetProps) {
       await linkIdentityWithGoogle();
     } catch (cause) {
       setBusy(false);
-      setError(cause instanceof Error ? cause.message : 'Google 로그인을 시작하지 못했어요.');
+      setError(uiErrorMessage(cause, 'Couldn\'t start Google sign-in.'));
     }
   };
 
@@ -45,7 +46,7 @@ export function LoginSheet({ open, onOpenChange }: LoginSheetProps) {
     } catch (cause) {
       setBusy(false);
       setConflictOpen(false);
-      setError(cause instanceof Error ? cause.message : '기존 계정 로그인을 시작하지 못했어요.');
+      setError(uiErrorMessage(cause, 'Couldn\'t sign in to your existing account.'));
     }
   };
 
@@ -59,8 +60,8 @@ export function LoginSheet({ open, onOpenChange }: LoginSheetProps) {
       <Sheet open={open} onOpenChange={(next) => !busy && onOpenChange(next)}>
         <SheetContent side="bottom" className="mx-auto max-w-[480px] rounded-t-3xl border-[#F0E8E0] bg-white px-5 pb-9 pt-3">
           <SheetHeader className="px-0">
-            <SheetTitle className="text-lg font-black text-[#2D211C]">로그인</SheetTitle>
-            <SheetDescription>기기를 바꿔도 계정과 팔로우 관계를 이어갈 수 있어요.</SheetDescription>
+            <SheetTitle className="text-lg font-black text-[#2D211C]">Sign in</SheetTitle>
+            <SheetDescription>Your profile and the people you follow, on any device.</SheetDescription>
           </SheetHeader>
           <button
             type="button"
@@ -68,11 +69,11 @@ export function LoginSheet({ open, onOpenChange }: LoginSheetProps) {
             disabled={busy}
             className="flex h-13 w-full items-center justify-center rounded-xl bg-[#1A1A1A] text-sm font-bold text-white disabled:opacity-50"
           >
-            {busy ? <LoaderCircle className="size-5 animate-spin" /> : 'Google로 계속하기'}
+            {busy ? <LoaderCircle className="size-5 animate-spin" /> : 'Continue with Google'}
           </button>
           {error && <p role="alert" className="text-center text-xs text-[#D83A3D]">{error}</p>}
           <p className="text-center text-[11px] leading-relaxed text-[#A08F84]">
-            익명 계정에 Google을 연결하면 현재 uid와 팔로우 관계가 유지됩니다.
+            Link Google to keep your guest profile and the people you follow.
           </p>
         </SheetContent>
       </Sheet>
@@ -80,15 +81,15 @@ export function LoginSheet({ open, onOpenChange }: LoginSheetProps) {
       <AlertDialog open={conflictOpen} onOpenChange={(next) => !busy && setConflictOpen(next)}>
         <AlertDialogContent className="max-w-[390px] rounded-2xl">
           <AlertDialogHeader>
-            <AlertDialogTitle>이미 가입된 Google 계정이에요</AlertDialogTitle>
+            <AlertDialogTitle>This Google account is already linked</AlertDialogTitle>
             <AlertDialogDescription>
-              기존 계정으로 로그인하면 현재 익명 계정의 로컬 데이터와 소유권은 자동으로 옮겨지지 않아요.
+              Your guest activity won't move to this account automatically.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel onClick={cancelConflict} disabled={busy}>취소</AlertDialogCancel>
+            <AlertDialogCancel onClick={cancelConflict} disabled={busy}>Cancel</AlertDialogCancel>
             <AlertDialogAction onClick={signInExistingAccount} disabled={busy} className="bg-[#D83A3D] hover:bg-[#C53235]">
-              기존 계정으로 로그인
+              Use existing account
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

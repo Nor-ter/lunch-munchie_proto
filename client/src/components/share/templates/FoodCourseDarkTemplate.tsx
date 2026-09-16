@@ -78,7 +78,7 @@ const FoodCourseDarkTemplate = forwardRef<HTMLDivElement, TemplateProps>(({ cour
         </span>
         <span style={{ fontSize: 10, color: 'rgba(255,255,255,0.6)' }}>·</span>
         <span style={{ fontSize: 10, color: 'rgba(255,255,255,0.6)' }}>
-          {course.places.length}곳
+          {course.places.length} places
         </span>
         {course.region && (
           <>

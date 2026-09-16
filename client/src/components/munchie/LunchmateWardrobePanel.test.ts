@@ -131,7 +131,7 @@ describe('Lunchmate wardrobe UI contracts', () => {
     expect(PANEL_SOURCE).toContain('aria-selected={selected}');
     expect(PANEL_SOURCE).toContain('aria-pressed={selected}');
     expect(PANEL_SOURCE).toContain('aria-disabled={locked}');
-    expect(PANEL_SOURCE).toContain('레벨업으로 획득');
+    expect(PANEL_SOURCE).toContain('Unlock by levelling up');
   });
 
   it('keeps wardrobe grids responsive and room theme cards two-column on mobile', () => {
@@ -215,8 +215,8 @@ describe('Lunchmate wardrobe UI contracts', () => {
     expect(LEVEL_UP_MODAL_SOURCE).toContain('{RARITY_LABELS[rewardItem.rarity]}');
     expect(LEVEL_UP_MODAL_SOURCE).toContain('loadout={createRewardPreviewLoadout(rewardItem)}');
     expect(LEVEL_UP_MODAL_SOURCE).toContain('animated={false}');
-    expect(LEVEL_UP_MODAL_SOURCE).toContain('모든 꾸미기 아이템을 모았어요');
-    expect(LEVEL_UP_MODAL_SOURCE).toContain('현재 기기의 미리보기 보상으로 저장됐어요.');
+    expect(LEVEL_UP_MODAL_SOURCE).toContain('You\'ve collected every accessory!');
+    expect(LEVEL_UP_MODAL_SOURCE).toContain("This preview reward is saved on this device only.");
   });
 
   it('keeps every existing Level Up close path consuming the event', () => {
@@ -229,7 +229,7 @@ describe('Lunchmate wardrobe UI contracts', () => {
   it('routes Profile banner customization directly to FoodieRoom', () => {
     expect(PROFILE_SOURCE).toContain("navigate('/profile/foodie-room', {");
     expect(PROFILE_SOURCE).toContain('onCustomize={openFoodieRoom}');
-    expect(FOODIE_BUDDY_SOURCE).toContain('aria-label="런치메이트 룸 열기"');
+    expect(FOODIE_BUDDY_SOURCE).toContain('aria-label="Open Lunchiken\'s room"');
     expect(FOODIE_BUDDY_SOURCE).toContain('data-icon="hanger"');
     expect(PROFILE_SOURCE).not.toContain("activeSheet === 'foodie'");
     expect(PROFILE_SOURCE).not.toContain("setActiveSheet('foodie')");

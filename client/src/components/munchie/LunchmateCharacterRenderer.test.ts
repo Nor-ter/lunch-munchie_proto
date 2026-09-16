@@ -1176,7 +1176,7 @@ describe('Lunchmate food flow and presentation contracts', () => {
     expect(foodieBuddySource).toContain(": profileTapFace ?? 'default'}");
     expect(foodieBuddySource).toContain("height: 'clamp(144px, 38vw, 150px)'");
     expect(foodieBuddySource).toContain("background: 'rgba(255,255,255,0.85)'");
-    expect(foodieBuddySource).toContain('aria-label={`김밥 EXP ${progressLabel}`}');
+    expect(foodieBuddySource).toContain('aria-label={`Level progress: ${progressLabel}`}');
     expect(foodieBuddySource).not.toContain('👀→');
     expect(foodieBuddySource).not.toContain('wanderRef');
     expect(foodieBuddySource).not.toContain('bounceRef');

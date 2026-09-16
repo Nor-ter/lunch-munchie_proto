@@ -922,7 +922,7 @@ describe('Profile motion integration contract', () => {
     expect(FOODIE_BUDDY_SOURCE).not.toContain(
       'className="absolute inset-0 z-0 rounded-3xl bg-transparent',
     );
-    expect(FOODIE_BUDDY_SOURCE.match(/aria-label="런치메이트 룸 열기"/g))
+    expect(FOODIE_BUDDY_SOURCE.match(/aria-label="Open Lunchiken's room"/g))
       .toHaveLength(1);
     expect(FOODIE_BUDDY_SOURCE).toContain('data-icon="hanger"');
     expect(FOODIE_BUDDY_SOURCE).toContain('onClick={openFoodieRoom}');
@@ -933,7 +933,7 @@ describe('Profile motion integration contract', () => {
     expect(FOODIE_BUDDY_SOURCE).toContain(
       "data-lunchmate-profile-expression={profileMotion.grab.phase === 'grabbed' ? 'surprised' : 'default'}",
     );
-    expect(FOODIE_BUDDY_SOURCE).toContain('놀란 런치메이트 캐릭터, 드래그 중');
+    expect(FOODIE_BUDDY_SOURCE).toContain('Surprised Lunchiken, dragging');
     expect(FOODIE_BUDDY_SOURCE).not.toContain('onClick={profileMotion.grab');
   });
 
