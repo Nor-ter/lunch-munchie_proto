@@ -527,3 +527,11 @@
 - Precommit fails solely in the existing outputs/profile-lunchmate-fix archive (17 suites / 6 tests). Current source passes; archived assertions/configuration untouched. Cloudflare policy and diff whitespace PASS.
 - Main-agent scope check: no backend/DB/migration/API/dependency/env changes; no sub-agents. Live services, physical phones and separate Expo mobile remain outside this web copy verification. No commit/push/merge/rebase/deployment.
 - Latest handoff: [consumer copy refinement](first-prototype-copy-refinement.md), including complete inventory, mappings, changed files and screenshots.
+
+## 25. TypeSafe AI server setup (2026-09-21)
+
+- User authorized SDK installation and file setup after validating their API key. Branch: codex/setup-typesafe-ai.
+- Added @typesafe-ai/sdk 0.6.0, a lazy server-only client, an explicit check:typesafe command, an empty .env.example entry, and setup documentation. Preserved the user's actual .env. No public AI route or UI behavior change.
+- Live SDK check passed using synthetic color classification; no key or application data printed. TypeScript passed, 668 unit tests and 31 browser tests passed; Cloudflare policy and production build passed.
+- Security auditor: PASS for the TypeSafe changes (server-only secret, no browser import, no public endpoint, SDK logging disabled). Existing Google API/application restrictions and Android SHA-1 TODOs remain outside this change's verification. Historical env.enc is not evidence of plaintext key exposure.
+- No commit, push, merge, deployment, or production data changes.
