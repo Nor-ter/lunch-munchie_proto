@@ -1,3 +1,4 @@
+import { displayLabel } from '@/lib/displayCopy';
 import { CoursePlace } from '@/types/course';
 
 const DEFAULT_COLORS = ['#FF6B35', '#4CAF50', '#2196F3', '#9C27B0', '#E91E63'];
@@ -144,7 +145,7 @@ export function FoodCourseMap({
                     fill={isDark ? '#AAA' : '#666'}
                     fontFamily="'Baloo 2', 'Pretendard Variable', 'Pretendard', cursive"
                   >
-                    도보 {4 + i * 3}분
+                    Walk {4 + i * 3} min
                   </text>
                 </g>
               )}
@@ -190,7 +191,7 @@ export function FoodCourseMap({
                 </text>
                 <rect x={28} y={5} width={28} height={10} rx={3} fill={color} opacity={0.15} />
                 <text x={30} y={12.5} fontSize={6} fontWeight={700} fill={color} fontFamily="'Baloo 2', 'Pretendard Variable', 'Pretendard', cursive">
-                  {place.label ?? place.category}
+                  {displayLabel(place.label ?? place.category)}
                 </text>
                 <text
                   x={28}

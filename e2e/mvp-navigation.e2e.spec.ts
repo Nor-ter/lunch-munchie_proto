@@ -25,16 +25,16 @@ test('Munchie MVP opens on discovery with a focused three-action navigation', as
   await page.goto('/');
 
   await expect(page).toHaveURL(/\/feed$/);
-  await expect(page.getByRole('button', { name: '사용자 검색 열기' })).toBeVisible();
-  const navigation = page.getByRole('navigation', { name: '주요 메뉴' });
-  await expect(navigation.getByRole('button', { name: '발견' })).toHaveAttribute('aria-current', 'page');
-  await expect(navigation.getByRole('button', { name: '저장' })).toBeVisible();
-  await expect(navigation.getByRole('button', { name: '게시' })).toHaveCount(0);
-  await expect(navigation.getByRole('button', { name: '내 정보' })).toBeVisible();
+  await expect(page.getByRole('button', { name: "Open profile search" })).toBeVisible();
+  const navigation = page.getByRole('navigation', { name: "Main navigation" });
+  await expect(navigation.getByRole('button', { name: "Discover" })).toHaveAttribute('aria-current', 'page');
+  await expect(navigation.getByRole('button', { name: "Save" })).toBeVisible();
+  await expect(navigation.getByRole('button', { name: "Post" })).toHaveCount(0);
+  await expect(navigation.getByRole('button', { name: "Profile" })).toBeVisible();
   await expect(navigation.getByRole('button', { name: '홈' })).toHaveCount(0);
   await expect(navigation.getByRole('button', { name: '런치' })).toHaveCount(0);
-  await expect(page.getByRole('button', { name: '코스 만들기' })).toBeVisible();
-  await expect(page.getByText('아직 Munchie 피드가 없어요')).toBeVisible();
+  await expect(page.getByRole('button', { name: "Create course" })).toBeVisible();
+  await expect(page.getByText("No posts yet")).toBeVisible();
 });
 
 test('discovery course FAB stays above the tab bar at mobile widths while the feed scrolls', async ({ page }) => {
@@ -51,11 +51,11 @@ test('discovery course FAB stays above the tab bar at mobile widths while the fe
     await page.setViewportSize({ width, height: 740 });
     await page.goto('/feed');
     await expect(page.getByText('FAB가 보이는 피드')).toBeVisible();
-    const fab = page.getByRole('button', { name: '코스 만들기' });
+    const fab = page.getByRole('button', { name: "Create course" });
     await page.screenshot({ path: test.info().outputPath('fab-' + width + '.png') });
     await expect(fab.locator('svg')).toHaveAttribute('width', '25');
     await expect(fab.locator('svg')).toHaveAttribute('stroke-width', '2');
-    const navigation = page.getByRole('navigation', { name: '주요 메뉴' });
+    const navigation = page.getByRole('navigation', { name: "Main navigation" });
     const before = await fab.boundingBox();
     const navBox = await navigation.boundingBox();
     expect(before).not.toBeNull();
@@ -90,37 +90,37 @@ test('guest Settings keeps public preferences available and hides account-only a
   await expect(page).toHaveURL(/\/settings$/);
   await expect(page.getByTestId('settings-login-card')).toBeVisible();
   await expect(page.getByTestId('settings-profile-summary')).toHaveCount(0);
-  await expect(page.getByRole('button', { name: /알림/ })).toHaveCount(0);
+  await expect(page.getByRole('button', { name: /Notifications/ })).toHaveCount(0);
   await expect(page.getByText('로그인 및 보안')).toHaveCount(0);
-  await expect(page.getByRole('button', { name: '로그아웃' })).toHaveCount(0);
-  await expect(page.getByRole('button', { name: '계정 삭제' })).toHaveCount(0);
-  await expect(page.getByText('언어', { exact: true })).toBeVisible();
-  await expect(page.getByText('테마', { exact: true })).toBeVisible();
-  await expect(page.getByText('문의 및 피드백', { exact: true })).toBeVisible();
-  await expect(page.getByText('개인정보 처리방침', { exact: true })).toBeVisible();
-  await expect(page.getByText('이용약관', { exact: true })).toBeVisible();
+  await expect(page.getByRole('button', { name: "Log out" })).toHaveCount(0);
+  await expect(page.getByRole('button', { name: "Delete account" })).toHaveCount(0);
+  await expect(page.getByText("Language", { exact: true })).toBeVisible();
+  await expect(page.getByText("Theme", { exact: true })).toBeVisible();
+  await expect(page.getByText("Help and feedback", { exact: true })).toBeVisible();
+  await expect(page.getByText("Privacy policy", { exact: true })).toBeVisible();
+  await expect(page.getByText("Terms of use", { exact: true })).toBeVisible();
   await expect(page.getByText('1.0.0', { exact: true })).toBeVisible();
   expect(authStartUrl).toBe('');
 
-  await expect(page.getByRole('button', { name: /음식 취향/ })).toHaveCount(0);
+  await expect(page.getByRole('button', { name: /Food preferences/ })).toHaveCount(0);
   await page.goto('/settings/food-preferences');
   await expect(page).toHaveURL(/\/settings\/food-preferences$/);
-  await page.getByRole('button', { name: /좋아하는 음식/ }).click();
-  await page.getByRole('button', { name: '한식', exact: true }).click();
-  await page.getByRole('button', { name: /식단 선호/ }).click();
-  await page.getByRole('button', { name: /비건/ }).click();
-  await page.getByRole('button', { name: '저장하기' }).click();
+  await page.getByRole('button', { name: /Favourite cuisines/ }).click();
+  await page.getByRole('button', { name: "Korean", exact: true }).click();
+  await page.getByRole('button', { name: /Dietary preferences/ }).click();
+  await page.getByRole('button', { name: /Vegan/ }).click();
+  await page.getByRole('button', { name: "Save" }).click();
   await expect(page).toHaveURL(/\/settings$/);
-  await expect(page.getByRole('button', { name: /음식 취향/ })).toHaveCount(0);
+  await expect(page.getByRole('button', { name: /Food preferences/ })).toHaveCount(0);
   expect(authStartUrl).toBe('');
 
   await page.reload();
-  await expect(page.getByRole('button', { name: /음식 취향/ })).toHaveCount(0);
+  await expect(page.getByRole('button', { name: /Food preferences/ })).toHaveCount(0);
   await page.goto('/settings/food-preferences');
-  await expect(page.getByRole('button', { name: /좋아하는 음식 한식/ })).toBeVisible();
-  await expect(page.getByRole('button', { name: /식단 선호 비건/ })).toBeVisible();
+  await expect(page.getByRole('button', { name: /Favourite cuisines Korean/ })).toBeVisible();
+  await expect(page.getByRole('button', { name: /Dietary preferences Vegan/ })).toBeVisible();
   await expect(page.getByText('VEGAN', { exact: true })).toHaveCount(0);
-  await page.getByRole('button', { name: '뒤로 가기' }).click();
+  await page.getByRole('button', { name: "Go back" }).click();
 
   await page.getByTestId('settings-login-card').click();
   await expect(page.getByRole('heading', { name: 'Settings Google login boundary' })).toBeVisible();
@@ -136,7 +136,7 @@ test('guest profile Settings gear opens public Settings and only the login card 
   });
 
   await page.goto('/profile');
-  await page.getByRole('button', { name: '프로필 설정' }).click();
+  await page.getByRole('button', { name: "Profile settings" }).click();
 
   await expect(page).toHaveURL(/\/settings$/);
   await expect(page.getByTestId('settings-login-card')).toBeVisible();
@@ -188,67 +188,67 @@ test('profile settings use full pages and preserve existing profile and dietary 
   await page.setViewportSize({ width: 360, height: 740 });
 
   await page.goto('/profile');
-  await page.getByRole('button', { name: '프로필 설정' }).click();
+  await page.getByRole('button', { name: "Profile settings" }).click();
   await expect(page).toHaveURL(/\/settings$/);
-  await expect(page.getByRole('navigation', { name: '주요 메뉴' })).toHaveCount(0);
+  await expect(page.getByRole('navigation', { name: "Main navigation" })).toHaveCount(0);
   await expect(page.getByTestId('google-account-card')).toHaveCount(0);
-  await expect(page.getByRole('button', { name: '로그아웃' })).toHaveCount(0);
-  await expect(page.locator('section').filter({ has: page.getByText('프로필', { exact: true }) })).toHaveCount(0);
+  await expect(page.getByRole('button', { name: "Log out" })).toHaveCount(0);
+  await expect(page.locator('section').filter({ has: page.getByText("Profile", { exact: true }) })).toHaveCount(0);
   await expect(page.getByText('로그인 및 보안')).toHaveCount(0);
   await expect(page.getByText('계정', { exact: true })).toHaveCount(0);
-  await expect(page.getByText('일반', { exact: true })).toBeVisible();
-  await expect(page.getByText('언어', { exact: true })).toBeVisible();
-  await expect(page.getByText('한국어', { exact: true })).toBeVisible();
-  await expect(page.getByText('테마', { exact: true })).toBeVisible();
-  await expect(page.getByText('시스템 설정', { exact: true })).toBeVisible();
-  await expect(page.getByRole('button', { name: /언어/ })).toHaveCount(0);
-  await expect(page.getByRole('button', { name: /테마/ })).toHaveCount(0);
-  await expect(page.getByText('문의 및 피드백', { exact: true })).toBeVisible();
-  await expect(page.getByText('개인정보 처리방침', { exact: true })).toBeVisible();
-  await expect(page.getByText('이용약관', { exact: true })).toBeVisible();
-  await expect(page.getByText('앱 버전', { exact: true })).toBeVisible();
+  await expect(page.getByText("General", { exact: true })).toBeVisible();
+  await expect(page.getByText("Language", { exact: true })).toBeVisible();
+  await expect(page.getByText("English", { exact: true })).toBeVisible();
+  await expect(page.getByText("Theme", { exact: true })).toBeVisible();
+  await expect(page.getByText("System default", { exact: true })).toBeVisible();
+  await expect(page.getByRole('button', { name: /Language/ })).toHaveCount(0);
+  await expect(page.getByRole('button', { name: /Theme/ })).toHaveCount(0);
+  await expect(page.getByText("Help and feedback", { exact: true })).toBeVisible();
+  await expect(page.getByText("Privacy policy", { exact: true })).toBeVisible();
+  await expect(page.getByText("Terms of use", { exact: true })).toBeVisible();
+  await expect(page.getByText("App version", { exact: true })).toBeVisible();
   await expect(page.getByText('1.0.0', { exact: true })).toBeVisible();
-  await expect(page.getByText('준비 중', { exact: true })).toHaveCount(5);
+  await expect(page.getByText("Coming soon", { exact: true })).toHaveCount(5);
   await page.getByTestId('settings-profile-summary').click();
   await expect(page.getByText('kwonsoeun.long.address@example.com')).toBeVisible();
   const googleCardBox = await page.getByTestId('google-account-card').boundingBox();
-  const logoutCardBox = await page.getByRole('button', { name: '로그아웃' }).boundingBox();
+  const logoutCardBox = await page.getByRole('button', { name: "Log out" }).boundingBox();
   expect(googleCardBox).not.toBeNull();
   expect(logoutCardBox).not.toBeNull();
   expect(Math.round(logoutCardBox!.y - googleCardBox!.y - googleCardBox!.height)).toBeGreaterThanOrEqual(8);
 
-  await expect(page.getByRole('button', { name: '사진 변경' })).toBeVisible();
+  await expect(page.getByRole('button', { name: "Change photo" })).toBeVisible();
   const avatarPreviewBox = await page.getByTestId('profile-edit-avatar-preview').boundingBox();
   expect(avatarPreviewBox).not.toBeNull();
   expect(Math.round(avatarPreviewBox!.width)).toBe(80);
-  await page.getByLabel('이름').fill('Soeun Kwon');
-  await page.getByLabel('아이디').fill('so_oeunn');
-  await page.getByRole('button', { name: '저장하기' }).click();
+  await page.getByLabel("Name", { exact: true }).fill('Soeun Kwon');
+  await page.getByLabel("Username").fill('so_oeunn');
+  await page.getByRole('button', { name: "Save" }).click();
   await expect(page).toHaveURL(/\/settings$/);
 
-  await expect(page.getByRole('button', { name: /음식 취향/ })).toHaveCount(0);
+  await expect(page.getByRole('button', { name: /Food preferences/ })).toHaveCount(0);
   await page.goto('/settings/food-preferences');
-  await expect(page.getByRole('button', { name: /좋아하는 음식/ })).toHaveAttribute('aria-expanded', 'false');
-  await expect(page.getByRole('button', { name: '한식', exact: true })).toHaveCount(0);
-  await page.getByRole('button', { name: /좋아하는 음식/ }).click();
-  await page.getByRole('button', { name: '한식', exact: true }).click();
-  await page.getByRole('button', { name: /식단 선호/ }).click();
-  await expect(page.getByRole('button', { name: '한식', exact: true })).toHaveCount(0);
-  await page.getByRole('button', { name: /비건/ }).click();
-  await page.getByRole('button', { name: /피하고 싶은 음식/ }).click();
-  await page.getByRole('button', { name: /견과류/ }).click();
-  await expect(page.getByRole('button', { name: /식단 선호 비건/ })).toBeVisible();
-  await expect(page.getByRole('button', { name: /피하고 싶은 음식 견과류/ })).toBeVisible();
+  await expect(page.getByRole('button', { name: /Favourite cuisines/ })).toHaveAttribute('aria-expanded', 'false');
+  await expect(page.getByRole('button', { name: "Korean", exact: true })).toHaveCount(0);
+  await page.getByRole('button', { name: /Favourite cuisines/ }).click();
+  await page.getByRole('button', { name: "Korean", exact: true }).click();
+  await page.getByRole('button', { name: /Dietary preferences/ }).click();
+  await expect(page.getByRole('button', { name: "Korean", exact: true })).toHaveCount(0);
+  await page.getByRole('button', { name: /Vegan/ }).click();
+  await page.getByRole('button', { name: /Ingredients to avoid/ }).click();
+  await page.getByRole('button', { name: /Nuts/ }).click();
+  await expect(page.getByRole('button', { name: /Dietary preferences Vegan/ })).toBeVisible();
+  await expect(page.getByRole('button', { name: /Ingredients to avoid Nuts/ })).toBeVisible();
   await expect(page.getByText('VEGAN', { exact: true })).toHaveCount(0);
   await expect(page.getByText('NO_NUTS', { exact: true })).toHaveCount(0);
-  await page.getByRole('button', { name: /좋아하는 음식/ }).click();
-  await expect(page.getByRole('button', { name: '한식', exact: true })).toHaveAttribute('aria-pressed', 'true');
-  const selectedChipStyle = await page.getByRole('button', { name: '한식', exact: true }).evaluate(element => ({
+  await page.getByRole('button', { name: /Favourite cuisines/ }).click();
+  await expect(page.getByRole('button', { name: "Korean", exact: true })).toHaveAttribute('aria-pressed', 'true');
+  const selectedChipStyle = await page.getByRole('button', { name: "Korean", exact: true }).evaluate(element => ({
     backgroundColor: getComputedStyle(element).backgroundColor,
     borderColor: getComputedStyle(element).borderColor,
     color: getComputedStyle(element).color,
   }));
-  const unselectedChipStyle = await page.getByRole('button', { name: '일식', exact: true }).evaluate(element => ({
+  const unselectedChipStyle = await page.getByRole('button', { name: 'Japanese', exact: true }).evaluate(element => ({
     backgroundColor: getComputedStyle(element).backgroundColor,
     borderColor: getComputedStyle(element).borderColor,
     color: getComputedStyle(element).color,
@@ -256,39 +256,39 @@ test('profile settings use full pages and preserve existing profile and dietary 
   expect(selectedChipStyle).not.toEqual(unselectedChipStyle);
   expect(selectedChipStyle.backgroundColor).toBe('rgb(255, 228, 230)');
   expect(selectedChipStyle.borderColor).toBe('rgb(232, 80, 83)');
-  await page.getByRole('button', { name: '전체 해제' }).click();
-  await expect(page.getByRole('button', { name: '한식', exact: true })).toHaveAttribute('aria-pressed', 'false');
-  await expect(page.getByText('선택한 항목 없음')).toHaveCount(3);
-  await page.getByRole('button', { name: '한식', exact: true }).click();
-  await page.getByRole('button', { name: /식단 선호/ }).click();
-  await page.getByRole('button', { name: /비건/ }).click();
-  await page.getByRole('button', { name: /피하고 싶은 음식/ }).click();
-  await page.getByRole('button', { name: /견과류/ }).click();
-  await page.getByRole('button', { name: '저장하기' }).click();
+  await page.getByRole('button', { name: "Clear all" }).click();
+  await expect(page.getByRole('button', { name: "Korean", exact: true })).toHaveAttribute('aria-pressed', 'false');
+  await expect(page.getByText("Nothing selected")).toHaveCount(3);
+  await page.getByRole('button', { name: "Korean", exact: true }).click();
+  await page.getByRole('button', { name: /Dietary preferences/ }).click();
+  await page.getByRole('button', { name: /Vegan/ }).click();
+  await page.getByRole('button', { name: /Ingredients to avoid/ }).click();
+  await page.getByRole('button', { name: /Nuts/ }).click();
+  await page.getByRole('button', { name: "Save" }).click();
   await expect(page).toHaveURL(/\/settings$/);
-  await expect(page.getByRole('button', { name: /음식 취향/ })).toHaveCount(0);
+  await expect(page.getByRole('button', { name: /Food preferences/ })).toHaveCount(0);
 
-  await page.getByRole('button', { name: /알림/ }).click();
+  await page.getByRole('button', { name: /Notifications/ }).click();
   await expect(page).toHaveURL(/\/settings\/notifications$/);
-  await expect(page.getByText('알림 설정을 준비하고 있어요')).toBeVisible();
-  await page.getByRole('button', { name: '뒤로 가기' }).click();
+  await expect(page.getByText("Notifications are coming soon")).toBeVisible();
+  await page.getByRole('button', { name: "Go back" }).click();
 
   page.once('dialog', dialog => dialog.accept());
-  await page.getByRole('button', { name: '계정 삭제' }).click();
-  await expect(page.getByText('현재 계정 삭제 기능은 아직 제공되지 않습니다.')).toBeVisible();
+  await page.getByRole('button', { name: "Delete account" }).click();
+  await expect(page.getByText("Account deletion isn't available yet.")).toBeVisible();
 
   for (const width of [360, 390, 430]) {
     await page.setViewportSize({ width, height: 740 });
     for (const path of ['/settings', '/settings/profile', '/settings/food-preferences']) {
       await page.goto(path);
-      await expect(page.getByRole('heading', { name: path === '/settings' ? '설정' : path === '/settings/profile' ? '프로필 편집' : '음식 취향', exact: true })).toBeVisible();
+      await expect(page.getByRole('heading', { name: path === '/settings' ? "Settings" : path === '/settings/profile' ? "Edit profile" : "Food preferences", exact: true })).toBeVisible();
       expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(width);
       await page.screenshot({ path: test.info().outputPath(path.replaceAll('/', '-') + '-' + width + '.png'), fullPage: true });
       if (path === '/settings') continue;
       const saveBar = page.getByTestId('settings-save-bar');
       await expect(saveBar).toBeVisible();
       await expect.poll(() => saveBar.evaluate(element => getComputedStyle(element).position)).toBe('sticky');
-      const saveBox = await page.getByRole('button', { name: '저장하기' }).boundingBox();
+      const saveBox = await page.getByRole('button', { name: "Save" }).boundingBox();
       expect(saveBox).not.toBeNull();
       expect(saveBox!.x).toBeGreaterThanOrEqual(19);
       expect(saveBox!.x + saveBox!.width).toBeLessThanOrEqual(width - 19);
@@ -318,14 +318,14 @@ test('profile settings use full pages and preserve existing profile and dietary 
   }));
   await Promise.all([
     guestSession,
-    page.getByRole('button', { name: '로그아웃' }).click(),
+    page.getByRole('button', { name: "Log out" }).click(),
   ]);
   await expect(page).toHaveURL(/\/settings$/);
   expect(logoutRequested).toBe(true);
   await expect(page.getByTestId('settings-login-card')).toBeVisible();
   await expect(page.getByTestId('settings-profile-summary')).toHaveCount(0);
   await expect(page.getByText('로그인 및 보안')).toHaveCount(0);
-  await expect(page.getByText('로그아웃되었습니다')).toBeVisible();
+  await expect(page.getByText("Logged out")).toBeVisible();
 });
 
 test('profile create action enters the existing Google auth boundary', async ({ page }) => {
@@ -337,7 +337,7 @@ test('profile create action enters the existing Google auth boundary', async ({ 
   });
 
   await page.goto('/profile');
-  await page.getByRole('button', { name: '로그인하고 게시물 작성' }).click();
+  await page.getByRole('button', { name: "Log in to post" }).click();
 
   await expect(page.getByRole('heading', { name: 'Google login boundary' })).toBeVisible();
   expect(new URL(authStartUrl).searchParams.get('next')).toBe('/coursemap/new');
@@ -390,18 +390,18 @@ test('saved restaurants and multi-stop items share one course model', async ({ p
 
   await page.goto('/saved?tab=restaurants');
 
-  await expect(page.getByRole('textbox', { name: '저장 코스 검색' })).toBeVisible();
+  await expect(page.getByRole('textbox', { name: "Search saved courses" })).toBeVisible();
   await expect(page.getByRole('group', { name: '저장 항목 필터' })).toHaveCount(0);
   await expect(page.getByText('통합 식당')).toBeVisible();
-  await expect(page.getByText('1곳 코스').first()).toBeVisible();
+  await expect(page.getByText("1 place").first()).toBeVisible();
   await expect(page.getByText('Munchie 먼치픽')).toHaveCount(0);
   await expect(page.getByText('Lunchie 런치픽')).toHaveCount(0);
 
   await page.goto(`/course/${savedCourse.id}?from=saved&post=${savedPost.id}`);
-  await page.getByRole('button', { name: '방문 일지 만들기' }).click();
+  await page.getByRole('button', { name: "Create a post" }).click();
 
   await expect(page).toHaveURL(/\/coursemap\/new\?course=saved-course-1$/);
-  await expect(page.getByText('코스맵을 정하세요')).toBeVisible();
+  await expect(page.getByText("Choose your places")).toBeVisible();
   await expect(page.getByText('통합 식당').first()).toBeVisible();
 });
 
@@ -425,19 +425,19 @@ test('avatar editing lives only in Settings and reuses upload and profile persis
     await route.fulfill({ json: { profile: { profile_image_url: avatarUrl } } });
   });
   await page.goto('/profile?avatar=edit');
-  await expect(page.getByRole('button', { name: '프로필 설정' })).toBeVisible();
-  await expect(page.getByRole('button', { name: '아바타 변경' })).toHaveCount(0);
+  await expect(page.getByRole('button', { name: "Profile settings" })).toBeVisible();
+  await expect(page.getByRole('button', { name: "Change avatar" })).toHaveCount(0);
   await expect(page.locator('input[type=file]')).toHaveCount(0);
-  await expect(page.getByText('아바타 변경', { exact: true })).toHaveCount(0);
-  await page.getByRole('button', { name: '프로필 설정' }).click();
+  await expect(page.getByText("Change avatar", { exact: true })).toHaveCount(0);
+  await page.getByRole('button', { name: "Profile settings" }).click();
   await page.getByTestId('settings-profile-summary').click();
-  await page.getByRole('button', { name: '사진 변경', exact: true }).click();
+  await page.getByRole('button', { name: "Change photo", exact: true }).click();
   await page.locator('input[type=file]').setInputFiles({ name: 'avatar.png', mimeType: 'image/png', buffer: Buffer.from(photo.split(',')[1], 'base64') });
   await expect(page.getByTestId('profile-edit-avatar-preview').locator('img')).toHaveAttribute('src', photo);
   await page.reload();
   await expect(page.getByTestId('profile-edit-avatar-preview').locator('img')).toHaveAttribute('src', photo);
-  await page.getByRole('button', { name: '사진 변경', exact: true }).click();
-  await page.getByRole('button', { name: '사진 삭제하고 이모지로' }).click();
+  await page.getByRole('button', { name: "Change photo", exact: true }).click();
+  await page.getByRole('button', { name: "Use emoji instead" }).click();
   await expect.poll(() => avatarUrl).toBeNull();
   await expect(page.getByTestId('profile-edit-avatar-preview').locator('img')).toHaveCount(0);
 });

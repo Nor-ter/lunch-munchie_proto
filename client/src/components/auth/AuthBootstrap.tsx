@@ -39,7 +39,8 @@ export default function AuthBootstrap({ children }: AuthBootstrapProps) {
   if (state.status === 'loading') {
     return (
       <div className="flex min-h-dvh items-center justify-center bg-background text-sm text-muted-foreground">
-        Lunchie Munchie를 준비하고 있어요…
+
+        Getting Lunchie Munchie ready…
       </div>
     );
   }

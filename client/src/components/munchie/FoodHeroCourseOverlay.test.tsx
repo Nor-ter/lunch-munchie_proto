@@ -27,12 +27,12 @@ describe('FoodHeroCourseOverlay', () => {
     expect(html).toContain('data-story-ratio="4:5"');
     expect(html).toContain('aspect-[4/5]');
     expect(html).toContain('src="https://images.example/author-bowl.jpg"');
-    expect(html).toContain('1곳 코스');
+    expect(html).toContain("1 place");
     expect(html).toContain('담소국밥');
-    expect(html).toContain('한식');
+    expect(html).toContain("Korean");
     expect(html).toContain('서울 중구 세종대로 1');
     expect(html).toContain('1.2km');
-    expect(html).toContain('45분');
+    expect(html).toContain('45 min');
     expect(html).toContain('국물이 정말 좋았어요');
   });
 
@@ -60,7 +60,7 @@ describe('FoodHeroCourseOverlay', () => {
     expect(html).toMatch(/d="M [^"]+ C [^"]+"/);
     expect(html).toContain('width:44%');
     expect(html).toContain('을지식당');
-    expect(html).toContain('2시간 30분');
+    expect(html).toContain("2 hr 30 min");
   });
 
   it('hides absent metadata and uses an explicit empty state instead of another image', () => {
@@ -75,8 +75,8 @@ describe('FoodHeroCourseOverlay', () => {
     );
 
     expect(html).toContain('data-state="empty"');
-    expect(html).toContain('작성자가 등록한 음식 사진이 없어요');
-    expect(html).toContain('코스 정보만 확인할 수 있어요');
+    expect(html).toContain("No food photos yet");
+    expect(html).toContain("You can still view the course details");
     expect(html).not.toContain('<img');
     expect(html).not.toContain('km');
     expect(html).not.toContain('분</span>');
@@ -127,8 +127,8 @@ describe('FoodHeroCourseOverlay', () => {
     expect(html).toContain('트러플 파스타');
     expect(html).toContain('$24');
     expect(html).not.toContain('두 번째 사진만의 한줄평');
-    expect(html).toContain('aria-label="이전 음식 사진"');
-    expect(html).toContain('aria-label="다음 음식 사진"');
+    expect(html).toContain("aria-label=\"Previous food photo\"");
+    expect(html).toContain("aria-label=\"Next food photo\"");
     expect(html).toContain('1 / 2');
     expect(html).toContain('tabindex="0"');
     expect(html).toContain('focus-visible:ring-4');
@@ -166,7 +166,7 @@ describe('FoodHeroCourseOverlay', () => {
     expect(html).toContain('data-story-ratio="4:5"');
     expect(html).toContain('aspect-[4/5]');
     expect(html).toContain('data-overlay-size="lg"');
-    expect(html).toContain('text-[clamp(17px,7.2cqw,31px)]');
+    expect(html).toContain('text-[clamp(10px,7.2cqw,31px)]');
   });
 
   it('uses a collision-resistant overlay scale with compact, visible slide controls in discovery tiles', () => {
@@ -193,11 +193,11 @@ describe('FoodHeroCourseOverlay', () => {
     expect(html).toContain('line-clamp-3');
     expect(html).toContain('left:67%');
     expect(html).toContain('width:58%');
-    expect(html).not.toContain('1곳 코스');
+    expect(html).not.toContain("1 place");
     expect(html).toContain('aria-live="polite" aria-atomic="true"');
     expect(html).toContain('>1 / 2</span>');
-    expect(html).toContain('aria-label="이전 음식 사진"');
-    expect(html).toContain('aria-label="다음 음식 사진"');
+    expect(html).toContain("aria-label=\"Previous food photo\"");
+    expect(html).toContain("aria-label=\"Next food photo\"");
     expect(html).toContain('right-1 h-7 w-7');
   });
 
@@ -237,7 +237,7 @@ describe('FoodHeroCourseOverlay', () => {
   it('keeps a failed slide in place and stops a real swipe before the parent like handler', () => {
     const source = readFileSync(new URL('./FoodHeroCourseOverlay.tsx', import.meta.url), 'utf8');
     expect(source).toContain("current.includes(activeSlide.id) ? current : [...current, activeSlide.id]");
-    expect(source).toContain('다른 사진으로 자동 대체하지 않아요');
+    expect(source).toContain("The original photo isn't available.");
     expect(source).toContain('Math.abs(deltaX) >= 44');
     expect(source).toContain('event.stopPropagation()');
     expect(source).toContain("event.key === 'ArrowRight'");

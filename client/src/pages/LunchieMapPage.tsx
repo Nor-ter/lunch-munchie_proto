@@ -1,3 +1,4 @@
+import { displayLabel } from '@/lib/displayCopy';
 import { useEffect, useRef, useState } from 'react';
 import { useLocation, useSearch } from 'wouter';
 import { MapPin, Clock, Star } from 'lucide-react';
@@ -13,7 +14,7 @@ function groupByCategory(items: MenuItem[]): [string, MenuItem[]][] {
   const order: string[] = [];
   const groups = new Map<string, MenuItem[]>();
   for (const item of items) {
-    const key = item.category || '메뉴';
+    const key = item.category || "Menu";
     if (!groups.has(key)) {
       groups.set(key, []);
       order.push(key);
@@ -66,7 +67,8 @@ export default function LunchieMapPage() {
   if (isLoadingRestaurant) {
     return (
       <div role="status" className="min-h-dvh flex items-center justify-center bg-[#FCF4EE] px-5 text-[14px] text-[#9B9B9B]">
-        식당 위치를 불러오는 중…
+
+        Loading restaurant location…
       </div>
     );
   }
@@ -74,9 +76,10 @@ export default function LunchieMapPage() {
   if (!restaurant) {
     return (
       <div className="min-h-dvh flex flex-col items-center justify-center px-5 text-center">
-        <p role={restaurantLoadFailed ? 'alert' : undefined} className="text-[14px] text-[#9B9B9B] mb-4">식당 정보를 찾을 수 없습니다.</p>
+        <p role={restaurantLoadFailed ? 'alert' : undefined} className="text-[14px] text-[#9B9B9B] mb-4">Restaurant not found.</p>
         <button onClick={() => navigate(SAVED_PATH)} className="lm-btn-primary px-6 py-3 flex items-center justify-center">
-          저장 목록으로
+
+          Saved
         </button>
       </div>
     );
@@ -95,7 +98,7 @@ export default function LunchieMapPage() {
       <header className="flex items-center justify-between px-5 pb-3 pt-[max(12px,env(safe-area-inset-top))]">
         <BackButton
           onClick={() => navigate(SAVED_PATH)}
-          aria-label="저장으로 돌아가기"
+          aria-label="Back to saved"
           className="border border-[#EBD8CE] text-[#8B6A5D]"
         />
         <div className="text-center">
@@ -128,8 +131,8 @@ export default function LunchieMapPage() {
               <div role="alert" className="flex h-full items-center justify-center px-8 text-center">
                 <div>
                   <MapPin className="mx-auto text-[#E87874]" size={34} />
-                  <p className="mt-3 text-[15px] font-black text-[#3A2922]">지도를 불러올 수 없어요</p>
-                  <p className="mt-1 text-[12px] font-semibold text-[#9A8579]">Google 지도 설정을 확인해 주세요.</p>
+                  <p className="mt-3 text-[15px] font-black text-[#3A2922]">Couldn't load the map</p>
+                  <p className="mt-1 text-[12px] font-semibold text-[#9A8579]">The map is unavailable right now.</p>
                 </div>
               </div>
             )}
@@ -152,7 +155,7 @@ export default function LunchieMapPage() {
 
         <div className="mb-2 flex flex-wrap items-center gap-2">
           <span className="rounded-full bg-[#EB5053] px-2 py-0.5 text-[11px] font-bold text-white">
-            {restaurant.category}
+            {displayLabel(restaurant.category)}
           </span>
           <div className="flex items-center gap-1">
             <Star size={12} fill="#FFD700" color="#FFD700" />
@@ -186,7 +189,7 @@ export default function LunchieMapPage() {
         {(restaurant.tags ?? []).length > 0 && (
           <div className="mt-3 flex flex-wrap gap-1.5">
             {(restaurant.tags ?? []).map(tag => (
-              <span key={tag} className="tag tag-hash">#{tag}</span>
+              <span key={tag} className="tag tag-hash">#{displayLabel(tag)}</span>
             ))}
           </div>
         )}
@@ -201,7 +204,7 @@ export default function LunchieMapPage() {
 
         {menuItems.length > 0 ? (
           <div className="mt-4">
-            <p className="mb-2 text-[12px] font-bold text-[#9B9B9B]">메뉴 ({menuItems.length})</p>
+            <p className="mb-2 text-[12px] font-bold text-[#9B9B9B]">Menu ({menuItems.length})</p>
             <div className="overflow-hidden rounded-2xl border border-[#EFEFEF]">
               {groupByCategory(menuItems).map(([category, items]) => (
                 <div key={category}>
@@ -230,7 +233,7 @@ export default function LunchieMapPage() {
           </div>
         ) : foodPhotos.length > 0 ? (
           <div className="mt-4">
-            <p className="mb-2 text-[12px] font-bold text-[#9B9B9B]">메뉴 사진</p>
+            <p className="mb-2 text-[12px] font-bold text-[#9B9B9B]">Menu photos</p>
             <div className="grid grid-cols-4 gap-2">
               {foodPhotos.slice(0, 4).map(url => (
                 <div key={url} className="aspect-square overflow-hidden rounded-xl bg-[#F5F5F5]">

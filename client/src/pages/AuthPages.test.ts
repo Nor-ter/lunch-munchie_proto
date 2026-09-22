@@ -38,7 +38,7 @@ describe('web auth routes and integration boundaries', () => {
 
   it('keeps OAuth errors visible instead of immediately restarting login', () => {
     expect(LOGIN_SOURCE).toContain('if (authError) return;');
-    expect(LOGIN_SOURCE).toContain('오류 코드: {authError}');
+    expect(LOGIN_SOURCE).toContain("Error code: {authError}");
   });
 
   it('separates the guest login entry from authenticated account actions', () => {
@@ -49,7 +49,7 @@ describe('web auth routes and integration boundaries', () => {
     expect(SETTINGS_SOURCE).toContain('const authenticatedUser = auth.data && !auth.data.isAnonymous');
     expect(ACCOUNT_BANNER_SOURCE).toContain("sessionStorage.setItem('lm_logout_feedback', 'true')");
     expect(ACCOUNT_BANNER_SOURCE).toContain("window.location.replace('/settings')");
-    expect(SETTINGS_SOURCE).toContain("toast.success('로그아웃되었습니다')");
+    expect(SETTINGS_SOURCE).toContain("toast.success(\"Logged out\")");
   });
 
   it('does not clear the local preview profile during sign-out', () => {

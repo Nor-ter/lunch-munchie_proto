@@ -1,3 +1,5 @@
+import { countLabel } from '@/lib/displayCopy';
+import { displayLabel } from '@/lib/displayCopy';
 import { forwardRef } from 'react';
 import { Course } from '@/types/course';
 import { FoodCourseMap } from '@/components/share/FoodCourseMap';
@@ -93,7 +95,7 @@ const FoodCourseStoryTemplate = forwardRef<HTMLDivElement, TemplateProps>(({ cou
         >
           {course.hashtags.slice(0, 3).map((tag) => (
             <span key={tag} style={{ fontSize: 9, color: '#666', fontWeight: 600 }}>
-              #{tag}
+              #{displayLabel(tag)}
             </span>
           ))}
         </div>
@@ -134,7 +136,7 @@ const FoodCourseStoryTemplate = forwardRef<HTMLDivElement, TemplateProps>(({ cou
         ))}
         {course.places.length > 3 && (
           <p style={{ margin: 0, fontSize: 9, color: '#9E9E9E', textAlign: 'center' }}>
-            +{course.places.length - 3} more stops
+            +{countLabel(course.places.length - 3, 'more place', 'more places')}
           </p>
         )}
       </div>

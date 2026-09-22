@@ -148,11 +148,11 @@ describe('Lunchbox pointer feeding integration contract', () => {
   });
 
   it('shows the selected food prompt, drag-over, feeding, success, and error states', () => {
-    expect(FOODIE_BUDDY_SOURCE).toContain('을 나에게 끌어다 줘!');
-    expect(FOODIE_BUDDY_SOURCE).toContain('여기에 놓아주세요!');
-    expect(FOODIE_BUDDY_SOURCE).toContain('맛있게 먹는 중…');
+    expect(FOODIE_BUDDY_SOURCE).toContain("over to me!");
+    expect(FOODIE_BUDDY_SOURCE).toContain("Drop it here!");
+    expect(FOODIE_BUDDY_SOURCE).toContain("Munching…");
     expect(FOODIE_BUDDY_SOURCE).toContain("effectiveUiState === 'error'");
-    expect(FOODIE_BUDDY_SOURCE).toContain("resultMessage ?? '맛있는 한입 고마워! 😋'");
+    expect(FOODIE_BUDDY_SOURCE).toContain("resultMessage ?? \"Thanks for the bite! 😋\"");
   });
 
   it('uses canonical inventory and consumes one item only after a successful feed', () => {
@@ -199,7 +199,7 @@ describe('Lunchbox pointer feeding integration contract', () => {
 
   it('keeps the feeding guidance and lowers only the backdrop contrast while dragging', () => {
     expect(SHEET_SOURCE).toContain(
-      '위아래로 밀어 메뉴를 보고, 탭한 음식은 통째로 끌어주세요.',
+      "Scroll to browse, then choose a bite for Lunchiken.",
     );
     expect(SHEET_SOURCE).toContain("dragPreview ? 'bg-black/[0.32]' : 'bg-black/40'");
   });

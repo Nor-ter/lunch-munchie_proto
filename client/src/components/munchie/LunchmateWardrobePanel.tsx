@@ -34,16 +34,16 @@ interface LunchmateWardrobePanelProps {
 }
 
 const WARDROBE_SLOTS = [
-  { id: 'outfit', label: '옷', Icon: Shirt },
-  { id: 'headwear', label: '모자', Icon: Crown },
-  { id: 'eyewear', label: '안경', Icon: Glasses },
-  { id: 'bag', label: '가방', Icon: Backpack },
+  { id: 'outfit', label: "Clothes", Icon: Shirt },
+  { id: 'headwear', label: "Hats", Icon: Crown },
+  { id: 'eyewear', label: "Glasses", Icon: Glasses },
+  { id: 'bag', label: "Bags", Icon: Backpack },
 ] as const satisfies readonly { id: LunchmateSlot; label: string; Icon: typeof Shirt }[];
 
 const RARITY_LABELS: Record<LunchmateRarity, string> = {
-  common: '일반',
-  rare: '레어',
-  special: '스페셜',
+  common: "Common",
+  rare: "Rare",
+  special: "Special",
 };
 
 function WardrobeItemCard({
@@ -62,7 +62,7 @@ function WardrobeItemCard({
   onSelect: () => void;
 }) {
   const itemId = item?.id ?? null;
-  const name = item?.name ?? '착용 안 함';
+  const name = item?.name ?? "None";
   const candidateLoadout = createWardrobeCandidateLoadout(draftLoadout, activeSlot, itemId);
 
   return (
@@ -73,7 +73,7 @@ function WardrobeItemCard({
       }}
       aria-pressed={selected}
       aria-disabled={locked}
-      aria-label={`${name}, ${locked ? '레벨업으로 획득' : selected ? '선택됨' : '선택 가능'}`}
+      aria-label={`${name}, ${locked ? "Unlock by levelling up" : selected ? "Selected" : "Available"}`}
       className={`relative min-w-0 rounded-2xl border p-1.5 text-left transition-[border-color,background-color,opacity,transform] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#E85053] focus-visible:ring-offset-2 ${
         selected
           ? 'border-[#E85053] bg-[#FFF4F1] shadow-sm'
@@ -111,7 +111,7 @@ function WardrobeItemCard({
         {name}
       </span>
       <span className={`mt-0.5 block text-[8px] font-semibold ${locked ? 'text-[#88766C]' : 'text-[#AF8E7D]'}`}>
-        {locked ? '레벨업으로 획득' : item ? RARITY_LABELS[item.rarity] : '선택 가능'}
+        {locked ? "Unlock by levelling up" : item ? RARITY_LABELS[item.rarity] : "Available"}
       </span>
     </button>
   );
@@ -142,17 +142,19 @@ export default function LunchmateWardrobePanel({
 
   return (
     <div>
-      <h2 className="text-[16px] font-black">옷장</h2>
+      <h2 className="text-[16px] font-black">Wardrobe</h2>
       <p className="mt-1 text-[11px] leading-relaxed text-[#927E73]">
-        보유한 아이템을 조합해 런치메이트를 꾸며보세요.
+
+        Dress Lunchiken in your favourite items.
       </p>
       <p className="mt-1 text-[9px] font-semibold text-[#B09A8E]">
-        선택 중에는 미리보기이며 적용하기를 눌러 저장해요.
+
+        Try a look, then tap Apply to save it.
       </p>
 
       <div
         role="tablist"
-        aria-label="옷장 아이템 종류"
+        aria-label="Wardrobe categories"
         className="mt-4 grid grid-cols-4 gap-1 rounded-2xl bg-[#F4EAE4] p-1"
       >
         {WARDROBE_SLOTS.map(({ id, label, Icon }, index) => {
@@ -226,7 +228,8 @@ export default function LunchmateWardrobePanel({
             onClick={() => onDraftChange(clearPreviewLoadout())}
             className="h-11 flex-1 rounded-2xl border border-[#E8D8CF] bg-white text-[12px] font-bold text-[#735F54] active:scale-[0.99] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#E85053]"
           >
-            전체 해제
+
+            Clear all
           </button>
           <button
             type="button"
@@ -234,14 +237,16 @@ export default function LunchmateWardrobePanel({
             disabled={!hasChanges}
             className="h-11 flex-[1.45] rounded-2xl bg-[#E85053] text-[12px] font-black text-white transition-opacity active:scale-[0.99] disabled:cursor-not-allowed disabled:opacity-40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#E85053] focus-visible:ring-offset-2"
           >
-            적용하기
+
+            Apply
           </button>
         </div>
         <p className="mt-2 text-center text-[9px] leading-relaxed text-[#A18C80]">
-          적용하기를 누른 조합만 프로필에 저장돼요.
+
+          Tap Apply to save your look.
         </p>
         <p className="min-h-4 text-center text-[9px] font-bold text-[#D45A55]" aria-live="polite">
-          {appliedNotice ? '프로필에 적용했어요.' : ''}
+          {appliedNotice ? "Look saved." : ''}
         </p>
       </div>
     </div>

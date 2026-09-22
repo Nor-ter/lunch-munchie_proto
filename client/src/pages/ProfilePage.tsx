@@ -49,29 +49,29 @@ const LUNCHMATE_PREVIEW_FIXTURE = {
   foodItems: [
     {
       id: 'preview-onigiri',
-      name: '참치마요 주먹밥',
+      name: "Tuna mayo rice ball",
       placeholder: '🍙',
       quantity: 2,
       unseenQuantity: 1,
-      sourceLabel: '코스 기록 완료 보상',
+      sourceLabel: "Course post reward",
       xpPreview: 5,
     },
     {
       id: 'preview-strawberry-cake',
-      name: '딸기 한입 케이크',
+      name: "Strawberry cake bite",
       placeholder: '🍰',
       quantity: 1,
       unseenQuantity: 1,
-      sourceLabel: '먼치 피드 기록 보상',
+      sourceLabel: "Reward for posting",
       xpPreview: 8,
     },
     {
       id: 'preview-ramen',
-      name: '따끈한 라멘',
+      name: "Hot ramen",
       placeholder: '🍜',
       quantity: 0,
       unseenQuantity: 0,
-      sourceLabel: '다음 기록에서 획득 가능',
+      sourceLabel: "Earn from your next post",
       xpPreview: 6,
     },
   ],
@@ -330,7 +330,7 @@ function ProfilePageContent({ authenticatedUserId }: { authenticatedUserId: stri
       <HeaderActionRow className="header-action-row--raised">
         <HeaderIconButton
           onClick={() => navigate('/settings')}
-          aria-label="프로필 설정"
+          aria-label="Profile settings"
         >
           <Settings size={18} color="#4A4A4A" />
         </HeaderIconButton>
@@ -380,11 +380,12 @@ function ProfilePageContent({ authenticatedUserId }: { authenticatedUserId: stri
                   {profile.name}
                 </p>
                 <span className="shrink-0 rounded-full bg-white/80 px-1.5 py-0.5 text-[9px] font-bold text-[#C7864B]">
-                  🏅 배지
+
+                  🏅 Badges
                 </span>
               </div>
               <p className="mt-1.5 whitespace-nowrap text-[13px] font-medium text-[#8A6E60]">
-                {profile.handle ? `@${profile.handle}` : '오늘도 맛있는 하루를 위해'}
+                {profile.handle ? `@${profile.handle}` : "Always up for good food"}
               </p>
             </div>
           </div>
@@ -397,7 +398,7 @@ function ProfilePageContent({ authenticatedUserId }: { authenticatedUserId: stri
           />
           <div className="text-center">
             <p className="font-black text-[17px] text-[#3B2A22]">{totalLikes.toLocaleString()}</p>
-            <p className="mt-0.5 text-[10px] text-[#8A6E60]">좋아요</p>
+            <p className="mt-0.5 text-[10px] text-[#8A6E60]">Like</p>
           </div>
         </div>
       </div>
@@ -412,24 +413,24 @@ function ProfilePageContent({ authenticatedUserId }: { authenticatedUserId: stri
       {/* 나의 피드 */}
       <div className="px-4 mt-8">
         <div className="mb-3 flex items-center justify-between gap-3">
-          <h2 className="font-black text-[18px] text-[#1A1A1A]">나의 피드 {myPosts.length}</h2>
+          <h2 className="font-black text-[18px] text-[#1A1A1A]">My posts {myPosts.length}</h2>
           <button
             type="button"
             onClick={() => navigate('/coursemap/new')}
             className="inline-flex h-9 items-center gap-1.5 rounded-full bg-[#E85053] px-3.5 text-[12px] font-black text-white shadow-[0_4px_12px_rgba(232,80,83,0.2)] active:scale-95"
-            aria-label="새 게시물 작성"
+            aria-label="Create a post"
           >
-            <Plus size={15} strokeWidth={3} /> 게시
+            <Plus size={15} strokeWidth={3} />  Post
           </button>
         </div>
         {isProfileFeedLoading && myPosts.length === 0 ? (
           <div className="w-full rounded-2xl border-2 border-dashed border-[#E5CFC5] py-8 text-center">
-            <p className="text-[13px] font-bold text-[#8A7A6C]">피드를 동기화하는 중…</p>
+            <p className="text-[13px] font-bold text-[#8A7A6C]">Updating posts…</p>
           </div>
         ) : myPosts.length === 0 ? (
           <div className="w-full rounded-2xl border-2 border-dashed border-[#E5CFC5] py-8 text-center">
             <p className="text-3xl mb-1">📔</p>
-            <p className="text-[13px] font-bold text-[#8A7A6C]">게시 버튼으로 첫 피드를 작성해보세요</p>
+            <p className="text-[13px] font-bold text-[#8A7A6C]">Tap Post to share your first food find</p>
           </div>
         ) : (
           <div className="grid grid-cols-2 items-start gap-3">
@@ -495,7 +496,7 @@ function ProfileGuestPreview() {
   return (
     <div className="min-h-dvh bg-[#FCF4EE] pb-24">
       <HeaderActionRow className="header-action-row--raised">
-        <HeaderIconButton onClick={goToSettings} aria-label="프로필 설정">
+        <HeaderIconButton onClick={goToSettings} aria-label="Profile settings">
           <Settings size={18} color="#4A4A4A" />
         </HeaderIconButton>
       </HeaderActionRow>
@@ -515,9 +516,10 @@ function ProfileGuestPreview() {
               <Avatar emoji="😊" size={78} />
             </div>
             <div className="min-w-0 flex-1 pt-11">
-              <h1 className="text-[19px] font-black text-[#3B2A22]">로그인이 필요해요</h1>
+              <h1 className="text-[19px] font-black text-[#3B2A22]">Sign in to your profile</h1>
               <p className="mt-1.5 text-[13px] font-medium leading-5 text-[#8A6E60]">
-                로그인하면 나의 코스·피드·저장을 볼 수 있어요.
+
+                See your courses, posts and saved places.
               </p>
             </div>
           </div>
@@ -526,17 +528,18 @@ function ProfileGuestPreview() {
             onClick={goToLogin}
             className="mt-4 h-12 w-full rounded-2xl bg-[#E85053] text-sm font-bold text-white active:scale-[0.98] transition-transform"
           >
-            Google로 로그인
+
+            Continue with Google
           </button>
         </div>
         <div className="mt-5 grid grid-cols-3">
-          {(['팔로워', '팔로잉'] as const).map((label) => (
+          {(["Followers", "Following"] as const).map((label) => (
             <button
               key={label}
               type="button"
               onClick={goToLogin}
               className="border-r border-[#EBC5B8] text-center"
-              aria-label={`${label} 목록`}
+              aria-label={`${label} list`}
             >
               <p className="font-black text-[17px] text-[#3B2A22]">0</p>
               <p className="mt-0.5 text-[10px] text-[#8A6E60]">{label}</p>
@@ -544,21 +547,21 @@ function ProfileGuestPreview() {
           ))}
           <button type="button" onClick={goToLogin} className="text-center">
             <p className="font-black text-[17px] text-[#3B2A22]">0</p>
-            <p className="mt-0.5 text-[10px] text-[#8A6E60]">좋아요</p>
+            <p className="mt-0.5 text-[10px] text-[#8A6E60]">Like</p>
           </button>
         </div>
       </div>
 
       <div className="px-4 mt-8">
         <div className="mb-3 flex items-center justify-between gap-3">
-          <h2 className="font-black text-[18px] text-[#1A1A1A]">나의 피드 0</h2>
+          <h2 className="font-black text-[18px] text-[#1A1A1A]">My posts 0</h2>
           <button
             type="button"
             onClick={goToPostLogin}
             className="inline-flex h-9 items-center gap-1.5 rounded-full bg-[#E85053] px-3.5 text-[12px] font-black text-white shadow-[0_4px_12px_rgba(232,80,83,0.2)] active:scale-95"
-            aria-label="로그인하고 게시물 작성"
+            aria-label="Log in to post"
           >
-            <Plus size={15} strokeWidth={3} /> 게시
+            <Plus size={15} strokeWidth={3} />  Post
           </button>
         </div>
         <button
@@ -567,7 +570,7 @@ function ProfileGuestPreview() {
           className="w-full rounded-2xl border-2 border-dashed border-[#E5CFC5] py-8 text-center"
         >
           <p className="text-3xl mb-1">📔</p>
-          <p className="text-[13px] font-bold text-[#8A7A6C]">로그인하면 나의 피드를 볼 수 있어요</p>
+          <p className="text-[13px] font-bold text-[#8A7A6C]">Log in to see your posts</p>
         </button>
       </div>
     </div>
@@ -578,7 +581,7 @@ function ProfileGuestPreview() {
 export default function ProfilePage() {
   const auth = useAuthStatus();
   if (auth.isLoading) {
-    return <main className="flex min-h-dvh items-center justify-center bg-[#FCF4EE]"><p className="text-sm font-bold text-[#8C7D74]">프로필 확인 중…</p></main>;
+    return <main className="flex min-h-dvh items-center justify-center bg-[#FCF4EE]"><p className="text-sm font-bold text-[#8C7D74]">Loading profile…</p></main>;
   }
   if (!auth.data || auth.isError || auth.data.isAnonymous) {
     return <ProfileGuestPreview />;

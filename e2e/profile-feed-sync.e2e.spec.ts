@@ -100,7 +100,7 @@ test("another user's profile stays in sync with canonical create/delete state", 
   api.setPosts([]);
   await page.evaluate(() => window.dispatchEvent(new Event("focus")));
   await expect(page.getByTestId("unified-munchie-card-post_course-before")).toHaveCount(0);
-  await expect(page.getByText("아직 올린 피드가 없어요")).toBeVisible();
+  await expect(page.getByText("No posts yet")).toBeVisible();
 
   api.setPosts([apiPost("course-after")]);
   await page.evaluate(() => window.dispatchEvent(new Event("focus")));
@@ -172,9 +172,9 @@ test("my profile uses the signed-in subject and permanently deletes only my post
   await expect(ownCard).toBeVisible();
   await expect(page.getByTestId(`unified-munchie-card-${foreignPost.id}`)).toHaveCount(0);
 
-  await ownCard.getByRole("button", { name: "게시물 메뉴" }).click();
-  await ownCard.getByRole("button", { name: "게시물 삭제" }).click();
-  await page.getByRole("alertdialog").getByRole("button", { name: "확인" }).click();
+  await ownCard.getByRole("button", { name: "Post options" }).click();
+  await ownCard.getByRole("button", { name: "Delete post" }).click();
+  await page.getByRole("alertdialog").getByRole("button", { name: "OK" }).click();
 
   await expect(ownCard).toHaveCount(0);
   expect(deleteRequests).toBe(1);

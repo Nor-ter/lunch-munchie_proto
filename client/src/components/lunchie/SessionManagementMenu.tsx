@@ -32,7 +32,7 @@ export default function SessionManagementMenu({ className = '', onEnded }: Sessi
   if (!currentSession) return null;
 
   const isHost = currentSession.hostId === profile.id || currentSession.filters.partySize === 1;
-  const actionLabel = isHost ? '빠른 매칭 취소' : '대기방 나가기';
+  const actionLabel = isHost ? "Cancel Quick Match" : "Leave lobby";
 
   const clearLocalSession = () => {
     setCurrentSession(null);
@@ -53,7 +53,7 @@ export default function SessionManagementMenu({ className = '', onEnded }: Sessi
       onEnded?.();
     } catch (caught) {
       console.error('빠른 매칭 세션 관리 실패', caught);
-      setError('요청을 처리하지 못했어요. 다시 시도해 주세요.');
+      setError("Couldn't complete that. Try again.");
     } finally {
       setBusy(false);
     }
@@ -65,7 +65,7 @@ export default function SessionManagementMenu({ className = '', onEnded }: Sessi
         <DropdownMenuTrigger asChild>
           <button
             type="button"
-            aria-label="빠른 매칭 관리"
+            aria-label="Manage Quick Match"
             className={`flex size-10 items-center justify-center rounded-full outline-none transition-colors hover:bg-[#FFF0EE] focus-visible:ring-2 focus-visible:ring-[#F4515E] focus-visible:ring-offset-2 ${className}`}
           >
             <MoreHorizontal size={20} aria-hidden="true" />
@@ -90,12 +90,12 @@ export default function SessionManagementMenu({ className = '', onEnded }: Sessi
         <AlertDialogContent className="max-w-[390px] rounded-[22px] border-[#F0D9D3] bg-[#FFFBF8] p-5">
           <AlertDialogHeader className="text-left">
             <AlertDialogTitle className="text-[19px] font-black text-[#26232A]">
-              {isHost ? '빠른 매칭을 취소할까요?' : '대기방에서 나갈까요?'}
+              {isHost ? "Cancel Quick Match?" : "Leave the lobby?"}
             </AlertDialogTitle>
             <AlertDialogDescription className="text-[13px] leading-relaxed text-[#746A6E]">
               {isHost
-                ? '대기방의 모든 참여자가 나가게 되며 이 세션은 다시 시작할 수 없어요.'
-                : '나만 빠른 매칭에서 나가며 다른 참여자의 세션은 계속 유지돼요.'}
+                ? "This ends Quick Match for everyone. You can't restart it."
+                : "Everyone else can keep choosing after you leave."}
             </AlertDialogDescription>
           </AlertDialogHeader>
           {error && (
@@ -107,18 +107,19 @@ export default function SessionManagementMenu({ className = '', onEnded }: Sessi
                 onClick={clearLocalSession}
                 className="min-h-10 w-full rounded-xl bg-white px-3 text-[12px] font-bold text-[#C43B47] outline-none ring-1 ring-[#F2C6C1] transition-colors hover:bg-[#FFF0EE] focus-visible:ring-2 focus-visible:ring-[#F4515E]"
               >
-                이 기기에 저장된 세션 지우기
+
+                Clear from this device
               </button>
             </div>
           )}
           <AlertDialogFooter>
-            <AlertDialogCancel disabled={busy} className="min-h-11 rounded-xl">{isHost ? '세션 유지' : '계속 참여'}</AlertDialogCancel>
+            <AlertDialogCancel disabled={busy} className="min-h-11 rounded-xl">{isHost ? "Keep playing" : "Stay"}</AlertDialogCancel>
             <AlertDialogAction
               onClick={event => void handleConfirm(event)}
               disabled={busy}
               className="min-h-11 rounded-xl bg-[#C93742] font-bold text-white hover:bg-[#AE2D37]"
             >
-              {busy ? '처리 중…' : actionLabel}
+              {busy ? "Working…" : actionLabel}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

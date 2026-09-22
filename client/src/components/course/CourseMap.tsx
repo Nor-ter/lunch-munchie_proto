@@ -116,7 +116,7 @@ export function CourseMap({
           key={place.id}
           role={onSelectPlace ? 'button' : undefined}
           tabIndex={onSelectPlace ? 0 : undefined}
-          aria-label={onSelectPlace ? `${place.name} 지도에서 선택` : undefined}
+          aria-label={onSelectPlace ? `Select ${place.name} on map` : undefined}
           aria-pressed={onSelectPlace ? selected : undefined}
           onClick={() => onSelectPlace?.(place.id)}
           onKeyDown={(event) => {

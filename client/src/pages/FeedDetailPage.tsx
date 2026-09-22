@@ -1,3 +1,5 @@
+import { displayLabel } from '@/lib/displayCopy';
+import { countLabel } from '@/lib/displayCopy';
 import { useEffect, useMemo, useState } from 'react';
 import { MapPin, Route } from 'lucide-react';
 import { useLocation, useParams, useSearch } from 'wouter';
@@ -105,10 +107,10 @@ export default function FeedDetailPage() {
       ?? getRestaurantById(placeId);
     return {
       id: placeId,
-      name: restaurant?.name ?? embeddedStop?.name ?? `코스 장소 ${index + 1}`,
+      name: restaurant?.name ?? embeddedStop?.name ?? `Course place ${index + 1}`,
       rating: restaurant?.rating ?? 0,
       distance: restaurant?.distance ?? '',
-      category: restaurant?.category ?? embeddedStop?.category ?? '코스 장소',
+      category: restaurant?.category ?? embeddedStop?.category ?? "Course places",
       priceLevel: restaurant?.priceRange ?? 1,
       imageUrl: restaurant?.image,
       coords: { x: 20 + (index * 30), y: index % 2 === 0 ? 38 : 66 },
@@ -140,7 +142,7 @@ export default function FeedDetailPage() {
   ), [routePlaces]);
   const displayTags = Array.from(new Set(post?.tags ?? []));
 
-  const detailTitle = detailRecord?.course.title ?? post?.title ?? '나만의 Munchie 코스';
+  const detailTitle = detailRecord?.course.title ?? post?.title ?? "My food course";
 
   const handleDirectionsOpen = () => {
     const firstStop = post?.stops?.[0];
@@ -152,15 +154,15 @@ export default function FeedDetailPage() {
   };
 
   if (!post && (isLoading || profileFeed.isLoading || isLoadingDirectPost)) {
-    return <main className="flex min-h-dvh items-center justify-center bg-[#FCF4EE] text-sm font-bold text-[#9A8579]">피드를 불러오는 중이에요…</main>;
+    return <main className="flex min-h-dvh items-center justify-center bg-[#FCF4EE] text-sm font-bold text-[#9A8579]">Loading post…</main>;
   }
 
   if (!post || directPostMissing && !cachedPost && !savedRecord) {
     return (
       <main className="flex min-h-dvh items-center justify-center bg-[#FCF4EE] px-6 text-center">
         <div>
-          <p className="font-bold text-[#2D211C]">피드를 찾을 수 없어요</p>
-          <button onClick={() => navigate(backPath)} className="mt-4 rounded-full bg-[#E85053] px-6 py-3 text-sm font-bold text-white">돌아가기</button>
+          <p className="font-bold text-[#2D211C]">Post not found</p>
+          <button onClick={() => navigate(backPath)} className="mt-4 rounded-full bg-[#E85053] px-6 py-3 text-sm font-bold text-white">Go back</button>
         </div>
       </main>
     );
@@ -171,7 +173,7 @@ export default function FeedDetailPage() {
       <div className="fixed left-4 top-[max(12px,env(safe-area-inset-top))] z-30">
         <BackButton
           onClick={() => navigate(backPath)}
-          aria-label={fromNotifications ? '알림으로 돌아가기' : fromProfile ? '프로필로 돌아가기' : fromSaved ? '저장목록으로 돌아가기' : '먼치피드로 돌아가기'}
+          aria-label={fromNotifications ? "Back to notifications" : fromProfile ? "Back to profile" : fromSaved ? "Back to saved" : "Back to Munchie Feed"}
         />
       </div>
 
@@ -203,7 +205,7 @@ export default function FeedDetailPage() {
 
       <section className="mx-4 mt-4 rounded-[20px] border border-[#E6D1C6] bg-[#FFFDFC] px-5 pb-4 pt-4 shadow-[0_10px_24px_rgba(105,74,59,0.08)]">
         <div data-ui="feed-detail-copy" className="space-y-2">
-          <p className="text-[11px] font-black uppercase tracking-[0.18em] text-[#E56B68]">Munchie Course</p>
+          <p className="text-[11px] font-black uppercase tracking-[0.18em] text-[#E56B68]">Food course</p>
           <h1 className="mt-1 text-[24px] font-black leading-tight tracking-[-0.035em] text-[#30221C]">
             {detailTitle}
           </h1>
@@ -216,7 +218,7 @@ export default function FeedDetailPage() {
             )}
           {displayTags.length > 0 && (
             <div className="pt-1.5 flex flex-wrap gap-1.5">
-              {displayTags.map(tag => <span key={tag} className="rounded-full bg-[#FCE5DE] px-2.5 py-1 text-[11px] font-black text-[#C75B58]">#{tag}</span>)}
+              {displayTags.map(tag => <span key={tag} className="rounded-full bg-[#FCE5DE] px-2.5 py-1 text-[11px] font-black text-[#C75B58]">#{displayLabel(tag)}</span>)}
             </div>
           )}
         </div>
@@ -225,17 +227,17 @@ export default function FeedDetailPage() {
       <section data-ui="feed-detail-course-map" className="mx-4 mt-5 overflow-hidden rounded-[24px] border border-[#E8D5CB] bg-[#FFFDFC] shadow-[0_10px_26px_rgba(117,73,51,0.08)]">
         <div className="flex items-center justify-between px-4 pb-3 pt-4">
           <div>
-            <p className="flex items-center gap-1.5 text-[15px] font-black text-[#382820]"><Route size={17} className="text-[#E85053]" />코스맵</p>
-            <p className="mt-1 text-[11px] font-semibold text-[#9A8579]">게시물에 저장된 순서대로 이동 경로를 보여줘요.</p>
+            <p className="flex items-center gap-1.5 text-[15px] font-black text-[#382820]"><Route size={17} className="text-[#E85053]" />Course Map</p>
+            <p className="mt-1 text-[11px] font-semibold text-[#9A8579]">Follow the places in the order shown.</p>
           </div>
-          <span className="rounded-full bg-[#FFF0EB] px-2.5 py-1 text-[11px] font-black text-[#D95A59]">{routePlaces.length}곳</span>
+          <span className="rounded-full bg-[#FFF0EB] px-2.5 py-1 text-[11px] font-black text-[#D95A59]">{countLabel(routePlaces.length, 'place')}</span>
         </div>
 
         <div className="mx-3 h-[260px] overflow-hidden rounded-[18px] bg-[#F3EDE8]">
           {routePlaces.some(place => typeof place.latitude === 'number' && typeof place.longitude === 'number') ? (
             <FeedCourseMap places={routePlaces} />
           ) : (
-            <div className="flex h-full items-center justify-center px-8 text-center text-[12px] font-semibold text-[#9A8579]">이 게시물에는 지도에 표시할 코스 장소가 없어요.</div>
+            <div className="flex h-full items-center justify-center px-8 text-center text-[12px] font-semibold text-[#9A8579]">No places to show on the map for this post.</div>
           )}
         </div>
 
@@ -246,7 +248,7 @@ export default function FeedDetailPage() {
                 <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-[#E85053] text-[11px] font-black text-white">{index + 1}</span>
                 <span className="min-w-0">
                   <strong className="block truncate text-[12px] font-black text-[#3B2B24]">{place.name}</strong>
-                  <span className="mt-0.5 flex items-center gap-1 truncate text-[11px] font-semibold text-[#927D73]"><MapPin size={10} />{place.address ?? place.category}</span>
+                  <span className="mt-0.5 flex items-center gap-1 truncate text-[11px] font-semibold text-[#927D73]"><MapPin size={10} />{displayLabel(place.address ?? place.category)}</span>
                 </span>
               </li>
             ))}

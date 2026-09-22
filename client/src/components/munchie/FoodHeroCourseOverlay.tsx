@@ -1,3 +1,4 @@
+import { countLabel } from '@/lib/displayCopy';
 import React, { useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react';
 import { ChevronLeft, ChevronRight, ImageOff, Route } from 'lucide-react';
 import {
@@ -54,10 +55,10 @@ export function getAuthorPhotoSources(photos: FoodHeroCourseOverlayProps['photos
 }
 
 function formatDuration(minutes: number) {
-  if (minutes < 60) return `${Math.round(minutes)}분`;
+  if (minutes < 60) return `${Math.round(minutes)} min`;
   const hours = Math.floor(minutes / 60);
   const remainder = Math.round(minutes % 60);
-  return remainder ? `${hours}시간 ${remainder}분` : `${hours}시간`;
+  return remainder ? `${hours} hr ${remainder} min` : `${hours} hr`;
 }
 
 function gridOverlayLayout(overlay: FeedStoryOverlay, text: string | undefined) {
@@ -153,7 +154,7 @@ function slideAlt(slide: FeedStorySlide, fallbackTitle: string) {
   const label = slide.overlays.find(overlay => (
     overlay.kind === 'food_name' || overlay.kind === 'restaurant_name'
   ))?.text;
-  return `${cleanText(label) ?? fallbackTitle} 음식 사진`;
+  return `${cleanText(label) ?? fallbackTitle} food photo`;
 }
 
 /**
@@ -218,11 +219,11 @@ export default function FoodHeroCourseOverlay({
   const resolvedPlaceCount = stops.length || positiveNumber(placeCount);
   const cleanedTitle = cleanText(title);
   const displayTitle = resolvedPlaceCount === 1
-    ? stopNames[0] ?? cleanedTitle ?? '한 곳을 담은 코스'
+    ? stopNames[0] ?? cleanedTitle ?? "One place, worth a visit"
     : cleanedTitle
       ?? (stopNames[0] && resolvedPlaceCount && resolvedPlaceCount > 1
-        ? `${stopNames[0]} 외 ${resolvedPlaceCount - 1}곳`
-        : '나만의 Munchie 코스');
+        ? `${stopNames[0]} + ${resolvedPlaceCount - 1} more`
+        : "My food course");
   const hasPrevious = safeIndex > 0;
   const hasNext = safeIndex < storySlides.length - 1;
   const activeHasCourseMap = activeSlide?.overlays.some(overlay => overlay.kind === 'course_map') ?? false;
@@ -280,7 +281,7 @@ export default function FoodHeroCourseOverlay({
       data-presentation={grid ? 'grid' : 'default'}
       className={`relative w-full touch-pan-y select-none overflow-hidden bg-[#30211B] text-white outline-none [container-type:inline-size] focus-visible:ring-4 focus-visible:ring-inset focus-visible:ring-white/90 ${grid ? '' : 'aspect-[4/5]'} ${className}`}
       style={grid ? { aspectRatio: gridStoryRatio.aspectRatio } : undefined}
-      aria-label={`${displayTitle} 사진 슬라이드${onActivate ? '. Enter 키로 피드 상세 보기' : ''}`}
+      aria-label={`${displayTitle} photo carousel${onActivate ? '. Press Enter to view post' : ''}`}
       aria-roledescription="carousel"
       aria-keyshortcuts={onActivate ? 'ArrowLeft ArrowRight Enter Space' : 'ArrowLeft ArrowRight'}
       tabIndex={0}
@@ -341,8 +342,8 @@ export default function FoodHeroCourseOverlay({
               <span className="flex h-16 w-16 items-center justify-center rounded-full border border-white/20 bg-white/10">
                 <ImageOff size={28} aria-hidden="true" />
               </span>
-              <strong className="mt-4 text-[16px] font-black">이 음식 사진을 표시할 수 없어요</strong>
-              <span className="mt-1 text-[12px] font-semibold text-white/65">다른 사진으로 자동 대체하지 않아요</span>
+              <strong className="mt-4 text-[16px] font-black">This photo couldn't load</strong>
+              <span className="mt-1 text-[12px] font-semibold text-white/65">The original photo isn't available.</span>
             </div>
           )}
         </div>
@@ -351,17 +352,17 @@ export default function FoodHeroCourseOverlay({
           <span className="flex h-16 w-16 items-center justify-center rounded-full border border-white/20 bg-white/10">
             <ImageOff size={28} aria-hidden="true" />
           </span>
-          <strong className="mt-4 text-[16px] font-black">작성자가 등록한 음식 사진이 없어요</strong>
+          <strong className="mt-4 text-[16px] font-black">No food photos yet</strong>
           <span className="mt-2 max-w-full truncate text-[14px] font-black text-white/90">{displayTitle}</span>
-          <span className="mt-1 text-[12px] font-semibold text-white/65">코스 정보만 확인할 수 있어요</span>
+          <span className="mt-1 text-[12px] font-semibold text-white/65">You can still view the course details</span>
         </div>
       )}
 
-      <div className={`pointer-events-none absolute inset-x-0 top-0 z-20 flex items-center justify-between gap-2 ${grid ? 'p-1.5' : 'p-3'}`}>
+      <div className={`pointer-events-none absolute inset-x-0 top-0 z-20 flex items-center justify-between gap-2 ${grid || compact ? 'p-1.5' : 'p-3'}`}>
         {resolvedPlaceCount && !activeHasCourseMap && !grid ? (
           <span className="flex h-7 items-center gap-1 rounded-full border border-white/15 bg-black/35 px-2.5 text-[12px] font-black backdrop-blur-sm">
             <Route size={12} aria-hidden="true" />
-            {resolvedPlaceCount}곳 코스
+            {countLabel(resolvedPlaceCount, 'place')}
           </span>
         ) : <span />}
         {storySlides.length > 1 && (
@@ -375,7 +376,7 @@ export default function FoodHeroCourseOverlay({
         <>
           <button
             type="button"
-            aria-label="이전 음식 사진"
+            aria-label="Previous food photo"
             disabled={!hasPrevious}
             onPointerUp={event => event.stopPropagation()}
             onClick={event => { event.stopPropagation(); showPrevious(); }}
@@ -385,7 +386,7 @@ export default function FoodHeroCourseOverlay({
           </button>
           <button
             type="button"
-            aria-label="다음 음식 사진"
+            aria-label="Next food photo"
             disabled={!hasNext}
             onPointerUp={event => event.stopPropagation()}
             onClick={event => { event.stopPropagation(); showNext(); }}

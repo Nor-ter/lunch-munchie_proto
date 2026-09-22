@@ -22,8 +22,8 @@ describe('getCoursePlacesFromFeedStops', () => {
       { placeId: 'google_a', latitude: -37.81, longitude: 144.96 },
       { placeId: 'google_b', latitude: -37.82, longitude: 144.97 },
     ], course, getRestaurantById)).toMatchObject([
-      { id: 'google_a', latitude: -37.81, longitude: 144.96, name: '스팟 1' },
-      { id: 'google_b', latitude: -37.82, longitude: 144.97, name: '스팟 2' },
+      { id: 'google_a', latitude: -37.81, longitude: 144.96, name: 'Place 1' },
+      { id: 'google_b', latitude: -37.82, longitude: 144.97, name: "Place 2" },
     ]);
   });
 

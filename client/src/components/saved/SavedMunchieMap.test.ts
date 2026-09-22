@@ -26,11 +26,11 @@ describe('SavedMunchieMap course drill-down', () => {
     expect(source).toContain('data-route-state=');
     expect(source).toContain('isDirectionsLoading');
     expect(source).toContain('isDirectionsError');
-    expect(source).toContain('도보 경로를 불러오지 못했어요');
+    expect(source).toContain("Couldn't load the walking route");
   });
 
   it('returns to all saved courses when the detail is unselected', () => {
-    expect(source).toContain('aria-label="전체 저장 코스 보기"');
+    expect(source).toContain("aria-label=\"View all saved courses\"");
     expect(source).toContain('onSelectedFeedIdChange(null)');
     expect(source).toContain('<X size={14} />');
     expect(source).not.toContain('전체 코스\n');
@@ -38,7 +38,7 @@ describe('SavedMunchieMap course drill-down', () => {
 
   it('opens the existing restaurant detail sheet from a selected place marker', () => {
     expect(source).toContain('onClick={() => setSelectedPlaceId(point.id)}');
-    expect(source).toContain('상세정보 보기');
+    expect(source).toContain("View place ${index + 1}: ${point.name}");
     expect(source).toContain('<RestaurantDetailSheet');
     expect(source).toContain('restaurantId={selectedPlace.restaurantId}');
     expect(source).toContain('presentation="modal"');
@@ -46,7 +46,7 @@ describe('SavedMunchieMap course drill-down', () => {
 
   it('never substitutes a restaurant catalogue image for missing author media', () => {
     expect(source).toContain('selectedCourse.post.missingOriginalMedia');
-    expect(source).toContain('작성자가 등록한 음식 사진 없음');
+    expect(source).toContain("No food photo available");
     expect(source).not.toContain('selectedCourse.post.photos[0] ?? selectedCourse.points[0]?.imageUrl');
   });
 });

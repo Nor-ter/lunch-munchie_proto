@@ -1,3 +1,4 @@
+import { displayLabel } from '@/lib/displayCopy';
 export const MAX_FEED_STORY_SLIDES = 6;
 export const MAX_FEED_STORY_OVERLAYS = 6;
 export const MAX_FEED_STORY_TEXT_LENGTH = 120;
@@ -286,8 +287,9 @@ export function buildDefaultFeedStorySlides(
   return uniquePhotos.map(({ photo }, slideIndex) => {
     const stop = slideStops[slideIndex];
     const stopName = cleanText(stop?.name);
-    const displayTitle = stopName ?? title ?? '나만의 Munchie 코스';
-    const details = [cleanText(stop?.category), cleanText(stop?.address), distance, duration]
+    const displayTitle = stopName ?? title ?? "My food course";
+    const category = cleanText(stop?.category);
+    const details = [category ? displayLabel(category) : undefined, cleanText(stop?.address), distance, duration]
       .filter((value): value is string => Boolean(value))
       .join(' · ');
     const overlays: FeedStoryOverlay[] = [];

@@ -14,32 +14,32 @@ describe('Lunchie Quick Match presentation', () => {
     expect(settingsSource).toContain('/assets/characters/quick-match/coffee.png');
     expect(settingsSource).toContain('/assets/characters/quick-match/rice.png');
     expect(settingsSource).toContain('/assets/characters/quick-match/dessert.png');
-    expect(settingsSource).toContain("label: '랜덤'");
+    expect(settingsSource).toContain("label: \"Surprise me\"");
     expect(settingsSource).toContain('aria-pressed={selected}');
   });
 
   it('uses a vertical people wheel plus direct distance and dietary controls without a budget section', () => {
-    expect(settingsSource).toContain('aria-label="인원 수"');
+    expect(settingsSource).toContain("aria-label=\"Group size\"");
     expect(settingsSource).toContain('snap-y snap-mandatory overflow-y-auto');
     expect(settingsSource).toContain('touch-none');
     expect(settingsSource).toContain('onPointerDown={event =>');
     expect(settingsSource).toContain('onLostPointerCapture={event => endDrag(event.pointerId)}');
     expect(settingsSource).toContain('startInertia');
     expect(settingsSource).toContain('GROUP_SIZE_FLICK_FRICTION');
-    expect(settingsSource).toContain("value === 1 ? '혼자'");
+    expect(settingsSource).toContain("countLabel(value, 'person', 'people')");
     expect(settingsSource).toContain('initialIndexRef.current * GROUP_SIZE_ITEM_HEIGHT');
-    expect(settingsSource).not.toContain('aria-label="식사 인원 모드"');
+    expect(settingsSource).not.toContain("aria-label=\"Food Group size 모드\"");
     expect(settingsSource).not.toContain('함께 먹을 정원');
     expect(settingsSource).not.toContain('위아래로 스크롤해 인원을 선택해요');
     expect(settingsSource).not.toContain('focus-within:ring-2');
     expect(settingsSource).toContain('aria-valuemax={QUICK_MATCH_PARTY_SIZE_MAX}');
     expect(settingsSource).toContain('GROUP_SIZE_QUICK_OPTIONS');
-    expect(settingsSource).toContain('`${option}명 빠른 선택`');
-    expect(settingsSource).toContain('최대 {QUICK_MATCH_PARTY_SIZE_MAX}명');
+    expect(settingsSource).toContain("`Select ${countLabel(option, 'person', 'people')}`");
+    expect(settingsSource).toContain("up to {QUICK_MATCH_PARTY_SIZE_MAX} people");
     expect(settingsSource).toContain('onScroll={event =>');
-    expect(settingsSource).toContain('aria-label="검색 거리"');
+    expect(settingsSource).toContain("aria-label=\"Search radius\"");
     expect(settingsSource).not.toContain('런치킨을 좌우로 움직여 검색 범위를 정해요');
-    expect(settingsSource).not.toContain('aria-label="한 사람당 예산 세로 선택"');
+    expect(settingsSource).not.toContain("aria-label=\"한 사람당 예산 세로 Select\"");
     expect(settingsSource).not.toContain('1인 예산');
     expect(settingsSource).toContain('side-walk-${walkDirection}-${walkFrame}');
     expect(settingsSource).toContain('lunchmateLoadoutFromProfile(profile.lunchmateLoadout)');
@@ -48,7 +48,7 @@ describe('Lunchie Quick Match presentation', () => {
   it('caps the touch dial at 15 minutes, removes manual entry, and aligns the ruler to 1–5km+', () => {
     expect(settingsSource).toContain('aria-valuemax={15}');
     expect(settingsSource).toContain('onPointerMove={event =>');
-    expect(settingsSource).not.toContain('aria-label="마감 분 직접 입력"');
+    expect(settingsSource).not.toContain("aria-label=\"Time limit 분 직접 입력\"");
     expect(settingsSource).not.toContain('>Deadline</span>');
     expect(settingsSource).not.toContain('다이얼을 돌리거나 빠른 시간을 선택해요');
     expect(settingsSource).not.toContain('끌리는 카드를 한 장 골라주세요');
@@ -62,14 +62,14 @@ describe('Lunchie Quick Match presentation', () => {
 
   it('restores people settings and enables every canonical dietary filter', () => {
     expect(settingsSource).not.toContain('원하는 평점');
-    expect(settingsSource).not.toContain('>참여자</CardTitle>');
+    expect(settingsSource).not.toContain(">Guests</CardTitle>");
     expect(settingsSource).toContain('QUICK_MATCH_SETTINGS_STORAGE_KEY');
-    expect(preferenceSource).toContain("label: '페스코 채식'");
+    expect(preferenceSource).toContain("label: \"Pescatarian\"");
     expect(preferenceSource).toContain("value: 'GLUTEN_FREE'");
     expect(preferenceSource).toContain("value: 'NO_SEAFOOD'");
     expect(preferenceSource).not.toContain("label: 'Carnivore'");
     expect(preferenceSource).not.toContain("label: 'Small Appetite'");
-    expect(settingsSource).toContain('선택한 재료 없음');
+    expect(settingsSource).toContain("No ingredients selected");
     expect(settingsSource).toContain('aria-controls="dietary-exclusion-menu"');
     expect(settingsSource).not.toContain('Not available');
     expect(settingsSource).not.toContain('>Soon</span>');
@@ -78,23 +78,23 @@ describe('Lunchie Quick Match presentation', () => {
   });
 
   it('shows a server-verified progress card and shares cancel/leave controls with the lobby', () => {
-    expect(settingsSource).toContain('진행 중인 빠른 매칭');
+    expect(settingsSource).toContain("Your active Quick Match");
     expect(settingsSource).toContain('activeSessionVerified');
-    expect(settingsSource).toContain('저장된 세션 지우기');
+    expect(settingsSource).toContain("Clear saved session");
     expect(settingsSource).toContain('!currentSession.memberKey');
     expect(settingsSource).toContain('<SessionManagementMenu');
     expect(lobbySource).toContain('<SessionManagementMenu');
-    expect(managementSource).toContain('빠른 매칭을 취소할까요?');
-    expect(managementSource).toContain('대기방에서 나갈까요?');
-    expect(managementSource).toContain('이 기기에 저장된 세션 지우기');
+    expect(managementSource).toContain("Cancel Quick Match?");
+    expect(managementSource).toContain("Leave the lobby?");
+    expect(managementSource).toContain("Clear from this device");
   });
 
   it('renders explicit swipe loading, API, catalogue, preference, and session states', () => {
-    expect(swipeSource).toContain('빠른 매칭과 식당 후보를 준비하고 있어요');
-    expect(swipeSource).toContain('아직 추천할 식당이 없어요');
-    expect(swipeSource).toContain('조건에 맞는 식당이 없어요');
-    expect(swipeSource).toContain('더 이상 참여할 수 없는 빠른 매칭이에요');
-    expect(swipeSource).toContain('다시 시도');
+    expect(swipeSource).toContain("Finding places you might like.");
+    expect(swipeSource).toContain("No restaurants available yet");
+    expect(swipeSource).toContain("No restaurants match");
+    expect(swipeSource).toContain("This Quick Match is no longer available");
+    expect(swipeSource).toContain("Try again");
   });
 
   it('keeps Quick Match outside the Munchie MVP navigation', () => {
@@ -108,8 +108,8 @@ describe('Lunchie Quick Match presentation', () => {
 
   it('returns from the lobby to settings and renders the personalized lunchmate instead of the legacy gif', () => {
     expect(lobbySource).toContain("navigate('/lunchie/settings')");
-    expect(lobbySource).toContain('alt="참여자를 기다리는 나의 런치킨"');
-    expect(lobbySource).toContain('alt="예선전 출발을 기다리는 런치킨"');
+    expect(lobbySource).toContain("alt=\"Lunchiken waiting for guests\"");
+    expect(lobbySource).toContain("alt=\"Lunchiken waiting for Round 1\"");
     expect(lobbySource).toContain('lunchmateLoadoutFromProfile(profile.lunchmateLoadout)');
     expect(lobbySource).not.toContain('lunchie-quick-match-jump.gif');
     expect(lobbySource).not.toContain('<LunchieLogo size={54} />');

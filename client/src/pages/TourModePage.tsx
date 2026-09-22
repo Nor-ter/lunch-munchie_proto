@@ -1,3 +1,4 @@
+import { displayLabel } from '@/lib/displayCopy';
 /**
  * Lunchie Munchie — Tour Mode Page
  * Design: Soft Coral (Option 8) + Pubfish Reference
@@ -36,48 +37,48 @@ const TOUR_TYPES = [
   {
     id: 'cafe',
     emoji: '☕',
-    title: '카페 투어',
-    subtitle: '성수동 카페를 하나씩 탐방해요',
+    title: "Cafe crawl",
+    subtitle: "Visit cafes around Seongsu",
     color: '#3E719B',
-    tag: '추천',
+    tag: "Recommended",
   },
   {
     id: 'bar',
     emoji: '🍺',
-    title: '바 코스',
-    subtitle: '이태원 바를 순서대로 즐겨요',
+    title: "Bar crawl",
+    subtitle: "Visit bars around Itaewon",
     color: '#2C3E50',
-    tag: '인기',
+    tag: "Popular",
   },
   {
     id: 'food',
     emoji: '🍜',
-    title: '맛 투어',
-    subtitle: '다양한 음식을 코스로 즐겨요',
+    title: "Food trail",
+    subtitle: "A few stops, plenty to taste",
     color: '#EB5053',
     tag: '',
   },
   {
     id: 'date',
     emoji: '💕',
-    title: '데이트 코스',
-    subtitle: '특별한 날을 위한 코스예요',
+    title: 'Date night',
+    subtitle: "Places for a special day",
     color: '#C0392B',
     tag: 'NEW',
   },
   {
     id: 'solo',
     emoji: '🧘',
-    title: '나만의 코스',
-    subtitle: '직접 코스를 만들어보세요',
+    title: "Your own course",
+    subtitle: "Put your own course together",
     color: '#27AE60',
     tag: '',
   },
   {
     id: 'popular',
     emoji: '🔥',
-    title: '핫플 코스',
-    subtitle: '지금 가장 핫한 장소들',
+    title: "Popular places",
+    subtitle: "See what's popular nearby",
     color: '#D94447',
     tag: '',
   },
@@ -89,10 +90,10 @@ function ConditionsSetup({ tourType, onConfirm }: {
   tourType: typeof TOUR_TYPES[0];
   onConfirm: () => void;
 }) {
-  const [duration, setDuration] = useState('2시간');
+  const [duration, setDuration] = useState('2 hr');
   const [budget, setBudget] = useState('$$');
   const [partySize, setPartySize] = useState(2);
-  const [transport, setTransport] = useState('도보');
+  const [transport, setTransport] = useState('Walk');
 
   const { restaurants } = useApp();
   const nearbyPlaces = restaurants.slice(0, 3);
@@ -113,16 +114,16 @@ function ConditionsSetup({ tourType, onConfirm }: {
       <div className="rounded-2xl p-4 bg-[#F5F5F5]">
         <div className="flex items-center gap-2 mb-3">
           <Clock size={15} color="#9B9B9B" />
-          <p className="text-[13px] font-semibold text-[#1A1A1A]">시간</p>
+          <p className="text-[13px] font-semibold text-[#1A1A1A]">hr</p>
         </div>
         <div className="flex gap-2">
-          {['1시간', '2시간', '3시간', '종일'].map(d => (
+          {['1 hr', '2 hr', '3 hr', 'All day'].map(d => (
             <button key={d} onClick={() => setDuration(d)}
               className="flex-1 py-2 rounded-xl text-[12px] font-bold transition-all active:scale-95"
               style={duration === d
                 ? { background: '#EB5053', color: 'white' }
                 : { background: 'white', color: '#4A4A4A', border: '1px solid #E5E5E5' }}>
-              {d}
+              {displayLabel(d)}
             </button>
           ))}
         </div>
@@ -132,7 +133,7 @@ function ConditionsSetup({ tourType, onConfirm }: {
       <div className="rounded-2xl p-4 bg-[#F5F5F5]">
         <div className="flex items-center gap-2 mb-3">
           <DollarSign size={15} color="#9B9B9B" />
-          <p className="text-[13px] font-semibold text-[#1A1A1A]">예산 (1인당)</p>
+          <p className="text-[13px] font-semibold text-[#1A1A1A]">Budget per person</p>
         </div>
         <div className="flex gap-2">
           {['$', '$$', '$$$'].map(b => (
@@ -152,7 +153,7 @@ function ConditionsSetup({ tourType, onConfirm }: {
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
             <Users size={15} color="#9B9B9B" />
-            <p className="text-[13px] font-semibold text-[#1A1A1A]">인원</p>
+            <p className="text-[13px] font-semibold text-[#1A1A1A]">Group size</p>
           </div>
           <div className="flex items-center gap-3">
             <button onClick={() => setPartySize(p => Math.max(1, p - 1))}
@@ -166,12 +167,12 @@ function ConditionsSetup({ tourType, onConfirm }: {
 
       {/* Transport */}
       <div className="rounded-2xl p-4 bg-[#F5F5F5]">
-        <p className="text-[13px] font-semibold text-[#1A1A1A] mb-3">이동 수단</p>
+        <p className="text-[13px] font-semibold text-[#1A1A1A] mb-3">Getting around</p>
         <div className="flex gap-2">
           {[
-            { label: '도보', emoji: '🚶' },
-            { label: '대중교통', emoji: '🚇' },
-            { label: '차', emoji: '🚗' },
+            { label: 'Walk', emoji: '🚶' },
+            { label: 'Public transport', emoji: '🚇' },
+            { label: 'Drive', emoji: '🚗' },
           ].map(t => (
             <button key={t.label} onClick={() => setTransport(t.label)}
               className="flex-1 flex flex-col items-center py-2 rounded-xl text-[11px] font-semibold transition-all active:scale-95"
@@ -187,7 +188,7 @@ function ConditionsSetup({ tourType, onConfirm }: {
 
       {/* Nearby places preview */}
       <div className="rounded-2xl p-4 bg-[#F5F5F5]">
-        <p className="text-[13px] font-semibold text-[#1A1A1A] mb-3">근처 장소</p>
+        <p className="text-[13px] font-semibold text-[#1A1A1A] mb-3">Nearby places</p>
         <div className="space-y-2">
           {nearbyPlaces.map((place, i) => (
             <div key={place.id} className="flex items-center gap-3 bg-white rounded-xl p-2.5">
@@ -211,7 +212,8 @@ function ConditionsSetup({ tourType, onConfirm }: {
         className="w-full py-4 rounded-2xl font-bold text-white text-[15px] active:scale-[0.98]"
         style={{ background: '#EB5053' }}
       >
-        투어로 →
+
+        Start tour →
       </button>
     </div>
   );
@@ -286,7 +288,8 @@ function SharedMap({ tourType, onShare }: { tourType: typeof TOUR_TYPES[0]; onSh
                 <p className="text-[12px] text-[#9B9B9B] truncate">{activeStop.address}</p>
               </div>
               <p className="text-[12px] font-semibold mt-0.5" style={{ color: '#EB5053' }}>
-                지금 위치에서 약 {activeStop.distance}
+
+                About {activeStop.distance}
               </p>
             </div>
           </div>
@@ -294,17 +297,17 @@ function SharedMap({ tourType, onShare }: { tourType: typeof TOUR_TYPES[0]; onSh
         <div className="flex gap-3">
           <button onClick={onShare}
             className="flex-1 flex items-center justify-center gap-2 py-3 rounded-xl border border-[#E5E5E5] text-[13px] font-semibold text-[#1A1A1A] active:scale-95">
-            <Share2 size={15} /> 투어 공유하기
+            <Share2 size={15} />  Share tour
           </button>
           <button
             onClick={() => {
               if (activeIdx < stops.length - 1) setActiveIdx(i => i + 1);
-              else toast.success('투어 완료! 🎉');
+              else toast.success("Tour complete!");
             }}
             className="flex-1 flex items-center justify-center gap-2 py-3 rounded-xl text-white text-[13px] font-semibold active:scale-95"
             style={{ background: '#EB5053' }}>
             <Navigation size={15} />
-            {activeIdx < stops.length - 1 ? '다음 장소' : '투어 완료!'}
+            {activeIdx < stops.length - 1 ? "Next place" : "Finish tour"}
           </button>
         </div>
       </div>
@@ -323,7 +326,7 @@ export default function TourModePage() {
 
   const handleShare = () => {
     navigator.clipboard.writeText(window.location.href).then(() => {
-      toast.success('투어 링크가 복사됐어요! 📋');
+      toast.success("Tour link copied.");
     });
   };
 
@@ -331,8 +334,8 @@ export default function TourModePage() {
     return (
       <div className="min-h-dvh">
         <div className="flex items-center justify-between bg-white px-5 pb-3 pt-[max(12px,env(safe-area-inset-top))]">
-          <BackButton onClick={() => setPhase('conditions')} aria-label="조건 선택으로 돌아가기" />
-          <span className="font-bold text-[16px] text-[#1A1A1A]">투어 공유</span>
+          <BackButton onClick={() => setPhase('conditions')} aria-label="Back to preferences" />
+          <span className="font-bold text-[16px] text-[#1A1A1A]">Share tour</span>
           <button onClick={handleShare}
             className="w-10 h-10 rounded-full bg-[#FFF5F5] flex items-center justify-center active:scale-95">
             <Share2 size={17} color="#EB5053" />
@@ -347,7 +350,7 @@ export default function TourModePage() {
     <div className="min-h-dvh bg-white">
       {/* Header */}
       <div className="flex items-center justify-between px-5 pb-4 pt-[max(12px,env(safe-area-inset-top))]">
-        <BackButton onClick={() => phase === 'select' ? navigate('/') : setPhase('select')} aria-label="이전 화면으로 돌아가기" />
+        <BackButton onClick={() => phase === 'select' ? navigate('/') : setPhase('select')} aria-label="Go back" />
         <span className="font-bold text-[17px] text-[#1A1A1A]">Tour Mode</span>
         <div className="w-10" />
       </div>
@@ -356,8 +359,8 @@ export default function TourModePage() {
         <AnimatePresence mode="wait">
           {phase === 'select' ? (
             <motion.div key="select" initial={{ opacity: 0, x: 10 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -10 }}>
-              <h2 className="font-bold text-[18px] text-[#1A1A1A] mb-1">어떤 투어를<br />원하세요?</h2>
-              <p className="text-[12px] text-[#9B9B9B] mb-5">카테고리를 선택하면 코스를 추천해드려요</p>
+              <h2 className="font-bold text-[18px] text-[#1A1A1A] mb-1">What would you<br />like to try?</h2>
+              <p className="text-[12px] text-[#9B9B9B] mb-5">Choose a category to find a course</p>
 
               {/* Location */}
               <div className="flex items-center gap-1.5 mb-5 p-3 bg-[#F5F5F5] rounded-xl">
@@ -390,7 +393,7 @@ export default function TourModePage() {
             </motion.div>
           ) : phase === 'conditions' && selectedTour ? (
             <motion.div key="conditions" initial={{ opacity: 0, x: 10 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -10 }}>
-              <h2 className="font-bold text-[18px] text-[#1A1A1A] mb-4">조건 설정</h2>
+              <h2 className="font-bold text-[18px] text-[#1A1A1A] mb-4">Preferences</h2>
               <ConditionsSetup tourType={selectedTour} onConfirm={() => setPhase('map')} />
             </motion.div>
           ) : null}

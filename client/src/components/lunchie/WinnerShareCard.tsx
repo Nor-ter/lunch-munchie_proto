@@ -1,3 +1,4 @@
+import { displayLabel } from '@/lib/displayCopy';
 import { forwardRef, type SyntheticEvent } from 'react';
 import {
   formatLunchieDateLabel,
@@ -51,7 +52,7 @@ const WinnerShareCard = forwardRef<HTMLDivElement, WinnerShareCardProps>(({
 }, ref) => {
   const foodFallback = restaurant.photos?.[0]; // 실제 사진만 (스톡 폴백 제거)
   const resolvedVoteLabel = voteLabel?.trim() || (
-    participants.length === 1 ? '나의 최종 선택' : '친구들과 함께 고른 최종 선택'
+    participants.length === 1 ? "My choice" : "Our choice"
   );
   const resolvedMenuLabel = menuLabel?.trim() || getRepresentativeMenuLabel(restaurant.menuItems);
   const resolvedLocationLabel = locationLabel?.trim() || getLunchieLocationLabel(restaurant.address);
@@ -63,7 +64,7 @@ const WinnerShareCard = forwardRef<HTMLDivElement, WinnerShareCardProps>(({
   return (
     <div
       ref={ref}
-      aria-label={`${restaurant.name} Lunchie 결과 공유 카드`}
+      aria-label={`${restaurant.name} Lunchie result card`}
       style={{
         position: 'relative',
         width: 'min(360px, calc(100vw - 32px))',
@@ -93,23 +94,25 @@ const WinnerShareCard = forwardRef<HTMLDivElement, WinnerShareCardProps>(({
               loadout={loadout}
               size={40}
               renderSize="compact"
-              alt="Lunchie 런치킨"
+              alt="Lunchiken"
             />
           </div>
           <div style={{ minWidth: 0 }}>
             <p style={{ margin: 0, color: '#E85053', fontSize: 11, fontWeight: 950, letterSpacing: '0.03em' }}>LUNCHIE PICK</p>
-            <p style={{ margin: '1px 0 0', color: '#9A7665', fontSize: 8.5, fontWeight: 750 }}>picked with friends</p>
+            <p style={{ margin: '1px 0 0', color: '#9A7665', fontSize: 8.5, fontWeight: 750 }}>Chosen together</p>
           </div>
         </div>
         <span style={{ color: '#A26B54', fontSize: 10, fontWeight: 800, letterSpacing: '0.08em' }}>
-          MEAL RECORD
+
+          OUR LUNCH
         </span>
       </div>
 
       <div style={{ marginTop: 9, display: 'flex', alignItems: 'center', gap: 8 }}>
         <span style={{ flex: 1, borderTop: '1px dashed #D9B9A3' }} />
         <p style={{ margin: 0, color: '#E85053', fontSize: 13, fontWeight: 900, letterSpacing: '-0.01em' }}>
-          오늘의 Lunchie Pick
+
+          Today's Lunchie pick
         </p>
         <span style={{ flex: 1, borderTop: '1px dashed #D9B9A3' }} />
       </div>
@@ -151,7 +154,7 @@ const WinnerShareCard = forwardRef<HTMLDivElement, WinnerShareCardProps>(({
             fontWeight: 800,
           }}
         >
-          {restaurant.category}
+          {displayLabel(restaurant.category)}
         </span>
       </div>
 
@@ -252,16 +255,17 @@ const WinnerShareCard = forwardRef<HTMLDivElement, WinnerShareCardProps>(({
           </div>
         ) : (
           <p style={{ margin: '7px 0 0', color: '#A58B7D', fontSize: 10, fontWeight: 650 }}>
-            참여자 정보 없음
+
+            No guest details
           </p>
         )}
       </div>
 
       <div style={{ marginTop: 7, borderTop: '1px dashed #D9B9A3', paddingTop: 8, display: 'grid', gap: 5 }}>
         {([
-          ['대표 메뉴', resolvedMenuLabel],
-          ['지역', resolvedLocationLabel],
-          ['날짜', resolvedDateLabel],
+          ["Popular dish", resolvedMenuLabel],
+          ["Area", resolvedLocationLabel],
+          ["Date", resolvedDateLabel],
         ] as const).map(([label, value]) => (
           <div key={label} style={{ display: 'grid', gridTemplateColumns: '54px minmax(0, 1fr)', alignItems: 'baseline', gap: 7 }}>
             <span style={{ color: '#A26B54', fontSize: 9, fontWeight: 850 }}>{label}</span>
@@ -282,7 +286,8 @@ const WinnerShareCard = forwardRef<HTMLDivElement, WinnerShareCardProps>(({
       </div>
 
       <p style={{ margin: 'auto 0 0', paddingTop: 7, color: '#A98978', fontSize: 8.5, fontWeight: 700, textAlign: 'center' }}>
-        친구들과 같이 고른 오늘의 한 끼 · Lunchie Munchie
+
+        Lunch, chosen together · Lunchie Munchie
       </p>
 
       <span aria-hidden="true" style={{ position: 'absolute', left: -8, top: '72%', width: 16, height: 16, borderRadius: '50%', background: '#FFFDF8' }} />

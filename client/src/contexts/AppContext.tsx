@@ -112,7 +112,7 @@ function formatSessionDistance(metres: number) {
   const rounded = metres < 1_000
     ? `${Math.round(metres / 10) * 10}m`
     : `${(metres / 1_000).toFixed(metres < 10_000 ? 1 : 0)}km`;
-  return `직선거리 ${rounded}`;
+  return `Straight-line distance ${rounded}`;
 }
 
 function withSessionDistances(
@@ -357,10 +357,10 @@ export const MOCK_COURSES: Course[] = [];
 export const MOCK_FEED_POSTS: FeedPost[] = [];
 
 const THEMES = [
-  { id: 'date', label: '데이트코스', emoji: '💕', color: '#EB5053', tag: '데이트코스' as TagType },
-  { id: 'solo', label: '혼밥 코스', emoji: '🍚', color: '#D94447', tag: '혼밥' as TagType },
-  { id: 'budget', label: '가성비 맛집', emoji: '💰', color: '#3CBA44', tag: '가성비' as TagType },
-  { id: 'special', label: '펍나이트', emoji: '🍸', color: '#3E719B', tag: '펍나이트' as TagType },
+  { id: 'date', label: "Date night", emoji: '💕', color: '#EB5053', tag: '데이트코스' as TagType },
+  { id: 'solo', label: 'Dining alone', emoji: '🍚', color: '#D94447', tag: '혼밥' as TagType },
+  { id: 'budget', label: 'Budget friendly', emoji: '💰', color: '#3CBA44', tag: '가성비' as TagType },
+  { id: 'special', label: "Pub night", emoji: '🍸', color: '#3E719B', tag: '펍나이트' as TagType },
 ];
 
 export { THEMES };
@@ -373,7 +373,7 @@ function generateUserId() {
 
 const DEFAULT_PROFILE: UserProfile = {
   id: 'me',
-  name: '사용자',
+  name: 'Guest',
   emoji: '😊',
   favoriteFoods: [],
   dietary: [],
@@ -922,7 +922,7 @@ export function AppProvider({
       if (requestEpoch === savedCoursesRequestEpochRef.current) {
         // A transient GET failure must not erase the last known-good server
         // list. Keep the stale view visible and make retry explicit.
-        setSavedCoursesError(error instanceof Error ? error.message : '저장한 코스를 불러오지 못했어요.');
+        setSavedCoursesError(error instanceof Error ? error.message : "Couldn't load saved courses.");
       }
       return false;
     } finally {
@@ -947,7 +947,7 @@ export function AppProvider({
       params.set('radiusKm', String(locationFilter.radiusKm));
     }
     const response = await fetch(`/api/feed?${params.toString()}`);
-    if (!response.ok) throw new Error('피드를 불러오지 못했어요.');
+    if (!response.ok) throw new Error("Couldn't load posts.");
     const page = normalizeFeedApiPage(await response.json());
     const remoteFeeds = page.items
       .map(feed => feedPostFromApi(feed, profile))
@@ -1208,7 +1208,7 @@ export function AppProvider({
       return true;
     } catch (error) {
       setSavedCourseIds(previous => previous.filter(courseId => courseId !== id));
-      setSavedCoursesError(error instanceof Error ? error.message : '코스를 저장하지 못했어요.');
+      setSavedCoursesError(error instanceof Error ? error.message : "Couldn't save the course.");
       return false;
     }
   }, [initialAuthUserId, refreshSavedCourses, savedCourseIds]);
@@ -1234,7 +1234,7 @@ export function AppProvider({
           ? previous
           : [...previous, previousRecord].sort((left, right) => right.savedAt.localeCompare(left.savedAt)));
       }
-      setSavedCoursesError(error instanceof Error ? error.message : '저장을 해제하지 못했어요.');
+      setSavedCoursesError(error instanceof Error ? error.message : "Couldn't unsave the course.");
       return false;
     }
   }, [initialAuthUserId, savedCourseRecords]);
@@ -1453,7 +1453,7 @@ export function AppProvider({
           }),
         });
         const data = await res.json().catch(() => ({})) as { session?: { id: string }; token?: string; memberKey?: string; error?: string };
-        if (!res.ok || !data.session?.id || !data.token || !data.memberKey) throw new Error(data.error ?? '세션을 서버에 저장하지 못했어요.');
+        if (!res.ok || !data.session?.id || !data.token || !data.memberKey) throw new Error(data.error ?? "Couldn't save Quick Match.");
         const session: GroupSession = {
             id: data.session.id,
             name,
@@ -1555,7 +1555,7 @@ export function AppProvider({
     const members = Array.isArray(data.members) ? data.members : [];
     const session: GroupSession = {
       id: data.session.id,
-      name: '점심 세션',
+      name: 'Lunch together',
       inviteCode: token,
       hostId: data.session.host_user_id,
       members: members.map((m: { user_id: string; user_name: string; emoji: string; is_ready: boolean }) => ({
@@ -1604,8 +1604,8 @@ export function AppProvider({
       }),
     });
     const payload = await response.json().catch(() => ({})) as { error?: string; memberKey?: string };
-    if (!response.ok) throw new Error(payload.error ?? '세션에 참가하지 못했어요.');
-    if (!payload.memberKey) throw new Error('세션 자격 증명을 받지 못했어요.');
+    if (!response.ok) throw new Error(payload.error ?? "Couldn't join Quick Match.");
+    if (!payload.memberKey) throw new Error("Couldn't verify your access to Quick Match.");
     const fetched = await fetchSession(token);
     const joined = { ...fetched, memberKey: payload.memberKey };
     setCurrentSession(joined);
@@ -1625,7 +1625,7 @@ export function AppProvider({
       }),
     });
     const payload = await response.json().catch(() => ({})) as { error?: string };
-    if (!response.ok) throw new Error(payload.error ?? '준비 상태를 바꾸지 못했어요.');
+    if (!response.ok) throw new Error(payload.error ?? "Couldn't update your ready status.");
     return fetchSession(token);
   }, [profile, fetchSession]);
 
@@ -1648,7 +1648,7 @@ export function AppProvider({
     });
     const payload = await res.json().catch(() => ({})) as { error?: string; code?: string };
     if (!res.ok) {
-      const error = new Error(payload.error ?? '세션을 시작하지 못했어요.') as Error & { code?: string; status?: number };
+      const error = new Error(payload.error ?? "Couldn't start Quick Match.") as Error & { code?: string; status?: number };
       error.code = payload.code;
       error.status = res.status;
       throw error;
@@ -1687,7 +1687,7 @@ export function AppProvider({
         setCurrentSession(null);
         return;
       }
-      const error = new Error(payload.error ?? '세션 상태를 바꾸지 못했어요.') as Error & { code?: string; status?: number };
+      const error = new Error(payload.error ?? "Couldn't update Quick Match.") as Error & { code?: string; status?: number };
       error.code = payload.code;
       error.status = response.status;
       throw error;

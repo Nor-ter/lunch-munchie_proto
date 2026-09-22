@@ -1,3 +1,4 @@
+import { countLabel } from '@/lib/displayCopy';
 import {
   useEffect,
   useRef,
@@ -33,14 +34,14 @@ import {
  */
 
 export const FOODIE_CHARS = [
-  { emoji: '🍙', name: '주먹밥' },
-  { emoji: '🍞', name: '식빵' },
-  { emoji: '🥟', name: '만두' },
-  { emoji: '🍩', name: '도넛' },
-  { emoji: '🍜', name: '라멘' },
-  { emoji: '🍓', name: '딸기' },
-  { emoji: '🥑', name: '아보카도' },
-  { emoji: '🍤', name: '새우튀김' },
+  { emoji: '🍙', name: "Rice ball" },
+  { emoji: '🍞', name: "Toast" },
+  { emoji: '🥟', name: "Dumpling" },
+  { emoji: '🍩', name: "Doughnut" },
+  { emoji: '🍜', name: "Ramen" },
+  { emoji: '🍓', name: "Strawberry" },
+  { emoji: '🥑', name: "Avocado" },
+  { emoji: '🍤', name: "Tempura prawn" },
 ] as const;
 
 interface FoodieLevel {
@@ -49,10 +50,10 @@ interface FoodieLevel {
 }
 
 const LEVELS: FoodieLevel[] = [
-  { min: 0, name: '알' },
-  { min: 2, name: '새싹 푸디' },
-  { min: 5, name: '먹보 푸디' },
-  { min: 10, name: '전설의 미식가' },
+  { min: 0, name: "Egg" },
+  { min: 2, name: "Budding foodie" },
+  { min: 5, name: "Keen foodie" },
+  { min: 10, name: "Foodie legend" },
 ];
 
 export function foodieLevel(score: number): { level: FoodieLevel; index: number; next: FoodieLevel | null; progress: number } {
@@ -66,7 +67,7 @@ export function foodieLevel(score: number): { level: FoodieLevel; index: number;
   return { level, index, next, progress };
 }
 
-const BUBBLES = ['냠냠 😋', '오늘 뭐 먹지?', '코스맵 더 줘!', '맛집 가고 싶다…', '먹부림 최고 🍴'];
+const BUBBLES = ["Yum 😋", "Where shall we eat?", "Found any good courses?", "Ready for a bite…", "That hit the spot 🍴"];
 const LUNCHMATE_RENDER_SIZE = 86;
 export const PROFILE_TAP_STREAK_RESET_MS = 2_000;
 
@@ -359,28 +360,28 @@ export default function FoodieBuddy({
       ? kimbapCountForProgress(previousKimbapProgress)
       : 0;
   const progressLabel = progressSnapshot
-    ? `${progressSnapshot.xpIntoCurrentLevel} / ${progressSnapshot.xpRequiredForNextLevel} 맛추억`
+    ? `${progressSnapshot.xpIntoCurrentLevel} / ${progressSnapshot.xpRequiredForNextLevel} XP`
     : next
-      ? `다음 진화까지 ${next.min - score}점`
+      ? `${next.min - score} XP to the next level`
       : 'MAX 🎖️';
   // idle 말풍선은 점수 기반으로 고정하고, mock flow 상태에서만 짧은 안내로 교체한다.
   const bubble = isFoodDragOver
-    ? '여기에 놓아주세요!'
+    ? "Drop it here!"
     : isFoodDragging
       ? null
       : isFeeding
-        ? '맛있게 먹는 중…'
+        ? "Munching…"
         : isReaction
-          ? (resultMessage ?? '맛있는 한입 고마워! 😋')
+          ? (resultMessage ?? "Thanks for the bite! 😋")
           : effectiveUiState === 'error'
-            ? '다시 한 번 해볼까?'
+            ? "Try another bite?"
             : isFoodAvailable
               && selectedFood
-              ? `${selectedFood.placeholder ?? '음식'}을 나에게 끌어다 줘!`
+              ? `Drag ${selectedFood.placeholder ?? "the food"} over to me!`
               : isFoodAvailable
               ? normalizedUnseenCount > 0
-                ? `새 음식 ${unseenCountLabel}개 도착! 🍱`
-                : '새 음식이 도착했어! 🍱'
+                ? `${unseenCountLabel} new bites! 🍱`
+                : "Your next bite is here! 🍱"
               : BUBBLES[score % BUBBLES.length];
   const openFoodieRoom = onFoodieRoomOpen ?? onCustomize;
   const reducedMotion = useReducedMotion();
@@ -524,7 +525,7 @@ export default function FoodieBuddy({
           onClick={onProgressOpen}
           tabIndex={onProgressOpen ? 0 : -1}
           aria-disabled={!onProgressOpen}
-          aria-label="맛추억 미리보기 상세"
+          aria-label="View XP progress"
           className={`absolute bottom-2.5 left-2.5 top-2.5 z-20 flex w-[38px] flex-col items-center rounded-[17px] border border-white/80 bg-white/75 px-1 py-1.5 shadow-sm backdrop-blur-[2px] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white ${
             onProgressOpen ? 'pointer-events-auto cursor-pointer' : 'pointer-events-none'
           }`}
@@ -544,7 +545,7 @@ export default function FoodieBuddy({
 
           <div
             role="progressbar"
-            aria-label={`김밥 EXP ${progressLabel}`}
+            aria-label={`Gimbap XP ${progressLabel}`}
             aria-valuemin={0}
             aria-valuemax={kimbapSnapshot?.isMaxLevel ? 1 : kimbapSnapshot?.xpRequiredForNextLevel ?? 100}
             aria-valuenow={kimbapSnapshot?.isMaxLevel ? 1 : kimbapSnapshot?.xpIntoCurrentLevel ?? 0}
@@ -623,7 +624,7 @@ export default function FoodieBuddy({
           disabled={profileMotion.grab.isActive}
           className="absolute right-2.5 top-2.5 z-20 flex h-8 w-8 items-center justify-center rounded-full shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white disabled:cursor-default"
           style={{ background: 'rgba(255,255,255,0.85)', color: skin.sub }}
-          aria-label="런치메이트 룸 열기"
+          aria-label="Open Lunchiken's room"
         >
           <HangerIcon />
         </button>
@@ -645,8 +646,8 @@ export default function FoodieBuddy({
             ? { repeat: Infinity, repeatType: 'reverse', duration: 1.15, ease: 'easeInOut' }
             : { duration: 0.2 }}
           aria-label={isFoodAvailable && normalizedUnseenCount > 0
-            ? `새 음식 ${normalizedUnseenCount}개가 있는 런치박스`
-            : '런치박스'}
+            ? `Lunchbox with ${countLabel(normalizedUnseenCount, 'new bite')}`
+            : "Lunchbox"}
         >
           <span aria-hidden="true">🍱</span>
           {isFoodAvailable && normalizedUnseenCount > 0 && (
@@ -676,7 +677,7 @@ export default function FoodieBuddy({
             transition={motionIsReduced
               ? { duration: 0 }
               : { type: 'spring', stiffness: 360, damping: 22, mass: 0.55 }}
-            aria-label={`${selectedFood.name}, 런치메이트에게 끌어다 놓기`}
+            aria-label={`${selectedFood.name}, drag to Lunchiken`}
             data-profile-selected-food={selectedFood.id}
             data-profile-food-drag-handle="true"
             onPointerDown={handleProfileFoodPointerDown}
@@ -756,8 +757,8 @@ export default function FoodieBuddy({
           ref={foodDropTargetRef}
           role="region"
           aria-label={isFoodDragOver
-            ? '런치메이트 음식 놓기 영역, 지금 놓을 수 있어요'
-            : '런치메이트 음식 놓기 영역'}
+            ? "Lunchiken feeding area, ready to drop"
+            : "Lunchiken feeding area"}
           data-lunchmate-drop-active={isFoodDragging ? 'true' : 'false'}
           data-lunchmate-drop-over={isFoodDragOver ? 'true' : 'false'}
           data-lunchmate-profile-grab-anchor="true"
@@ -800,8 +801,8 @@ export default function FoodieBuddy({
             data-lunchmate-profile-expression={profileMotion.grab.phase === 'grabbed' ? 'surprised' : 'default'}
             role="img"
             aria-label={profileMotion.grab.phase === 'grabbed'
-              ? '놀란 런치메이트 캐릭터, 드래그 중'
-              : '런치메이트 캐릭터'}
+              ? "Surprised Lunchiken, being dragged"
+              : "Lunchiken"}
             onPointerDown={(event) => {
               const tapEligible = event.isPrimary
                 && !(event.pointerType === 'mouse' && event.button !== 0)
@@ -965,7 +966,7 @@ export default function FoodieBuddy({
                             onChickenImageLoad={profileMotion.handleCharacterImageLoad}
                             animated={false}
                             fallback={(
-                              <span className="text-[60px] leading-none" role="img" aria-label="런치메이트 대체 표시">
+                              <span className="text-[60px] leading-none" role="img" aria-label="Lunchiken placeholder">
                                 {char ?? '🐥'}
                               </span>
                             )}

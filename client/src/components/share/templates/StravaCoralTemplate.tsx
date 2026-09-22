@@ -1,3 +1,4 @@
+import { countLabel } from '@/lib/displayCopy';
 import { forwardRef } from 'react';
 import { Course } from '@/types/course';
 import { StravaRouteMap } from '@/components/share/StravaRouteMap';
@@ -62,7 +63,7 @@ const StravaCoralTemplate = forwardRef<HTMLDivElement, TemplateProps>(
           <span style={{ fontSize: 11, color: 'rgba(255,255,255,0.9)' }}>km</span>
           <span style={{ width: 1, height: 16, background: 'rgba(255,255,255,0.4)' }} />
           <span style={{ fontSize: 12, fontWeight: 600, color: '#fff' }}>
-            {course.places.length} stops
+            {countLabel(course.places.length, 'place')}
           </span>
         </div>
       </div>

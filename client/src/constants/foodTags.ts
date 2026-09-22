@@ -1,3 +1,5 @@
+import { displayLabel } from '@/lib/displayCopy';
+
 export const FOOD_TAGS = [
   '맛집',
   '데이트코스',
@@ -12,8 +14,8 @@ export const FOOD_TAGS = [
 export type TagType = (typeof FOOD_TAGS)[number];
 
 export const FOOD_FILTER_TAGS: { label: string; value: TagType | 'all' }[] = [
-  { label: '전체', value: 'all' },
-  ...FOOD_TAGS.map(tag => ({ label: tag, value: tag })),
+  { label: "All", value: 'all' },
+  ...FOOD_TAGS.map(tag => ({ label: displayLabel(tag), value: tag })),
 ];
 
 const LEGACY_TAG_MAP: Record<string, TagType> = {

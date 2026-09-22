@@ -1,3 +1,5 @@
+import { displayLabel } from '@/lib/displayCopy';
+import { countLabel } from '@/lib/displayCopy';
 /**
  * Lunchie Quick Match — compact settings and session entry.
  * Session persistence remains server-first through AppContext.
@@ -53,10 +55,10 @@ import {
 } from '@/lib/quickMatch';
 
 const PREFERENCE_CARDS: { value: Intent | null; label: string; image?: string; color: string }[] = [
-  { value: 'cafe', label: '커피', image: '/assets/characters/quick-match/coffee.png', color: '#FFF0E7' },
-  { value: 'meal', label: '식사', image: '/assets/characters/quick-match/rice.png', color: '#FFE9E4' },
-  { value: 'dessert', label: '디저트', image: '/assets/characters/quick-match/dessert.png', color: '#FFE7EC' },
-  { value: null, label: '랜덤', color: '#FFF4D9' },
+  { value: 'cafe', label: "Coffee", image: '/assets/characters/quick-match/coffee.png', color: '#FFF0E7' },
+  { value: 'meal', label: "Food", image: '/assets/characters/quick-match/rice.png', color: '#FFE9E4' },
+  { value: 'dessert', label: "Dessert", image: '/assets/characters/quick-match/dessert.png', color: '#FFE7EC' },
+  { value: null, label: "Surprise me", color: '#FFF4D9' },
 ];
 
 const RADIUS_OPTIONS = [1000, 2000, 3000, 4000, 5000];
@@ -69,14 +71,14 @@ const GROUP_SIZE_FLICK_FRICTION = 0.0032;
 const GROUP_SIZE_FLICK_MIN_VELOCITY = 0.04;
 const GROUP_SIZE_FLICK_MAX_VELOCITY = 3.2;
 const TAG_META: Record<string, { icon: string; hint: string }> = {
-  맛집: { icon: '🍽️', hint: '검증된 인기 메뉴' },
-  데이트코스: { icon: '💞', hint: '분위기 좋은 곳' },
-  혼밥: { icon: '🙋', hint: '혼자서도 편하게' },
-  카페: { icon: '☕', hint: '커피와 여유' },
-  펍나이트: { icon: '🍻', hint: '퇴근 후 한잔' },
-  브런치: { icon: '🥐', hint: '느긋한 한 끼' },
-  디저트: { icon: '🍰', hint: '달콤한 마무리' },
-  가성비: { icon: '✨', hint: '가격까지 만족' },
+  맛집: { icon: '🍽️', hint: "Crowd favourites" },
+  데이트코스: { icon: '💞', hint: "Great atmosphere" },
+  혼밥: { icon: '🙋', hint: "Comfortable dining alone" },
+  카페: { icon: '☕', hint: "Time for coffee" },
+  펍나이트: { icon: '🍻', hint: "After-work drinks" },
+  브런치: { icon: '🥐', hint: "A leisurely bite" },
+  디저트: { icon: '🍰', hint: "Something sweet" },
+  가성비: { icon: '✨', hint: "Great value" },
 };
 
 function formatRadius(radius: number): string {
@@ -87,15 +89,15 @@ type LocationFix = { latitude: number; longitude: number; accuracy: number };
 
 function currentPosition(): Promise<LocationFix> {
   if (!navigator.geolocation) {
-    return Promise.reject(new Error('이 브라우저에서는 위치 정보를 사용할 수 없습니다.'));
+    return Promise.reject(new Error("Location isn't available in this browser."));
   }
   return new Promise((resolve, reject) => {
     navigator.geolocation.getCurrentPosition(
       ({ coords }) => resolve({ latitude: coords.latitude, longitude: coords.longitude, accuracy: coords.accuracy }),
       error => reject(new Error(
         error.code === error.PERMISSION_DENIED
-          ? '위치 권한이 꺼져 있어요. 주소창의 사이트 설정에서 위치를 허용한 뒤 다시 시도해 주세요.'
-          : '현재 위치를 확인하지 못했습니다. 잠시 후 다시 시도해 주세요.',
+          ? "Allow location access in your browser's site settings, then try again."
+          : "Couldn't find your location. Try again.",
       )),
       { enableHighAccuracy: false, timeout: 10_000, maximumAge: 5 * 60_000 },
     );
@@ -178,11 +180,11 @@ function DeadlineDial({ minutes, onChange }: { minutes: number; onChange: (minut
       className="relative size-44 shrink-0 cursor-grab touch-none select-none rounded-full outline-none active:cursor-grabbing focus-visible:ring-4 focus-visible:ring-[#F4515E]/25"
       role="slider"
       tabIndex={0}
-      aria-label="마감 시간"
+      aria-label="Voting time"
       aria-valuemin={1}
       aria-valuemax={15}
       aria-valuenow={minutes}
-      aria-valuetext={`${minutes}분`}
+      aria-valuetext={`${minutes} min`}
       onPointerDown={event => {
         if (event.pointerType === 'mouse' && event.button !== 0) return;
         event.preventDefault();
@@ -253,7 +255,7 @@ function DeadlineDial({ minutes, onChange }: { minutes: number; onChange: (minut
         </g>
       </svg>
       <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center">
-        <strong className="text-[30px] leading-none text-[#26232A] tabular-nums">{minutes} <span className="text-[17px]">분</span></strong>
+        <strong className="text-[30px] leading-none text-[#26232A] tabular-nums">{minutes} <span className="text-[17px]">min</span></strong>
       </div>
     </div>
   );
@@ -408,11 +410,11 @@ function GroupSizeRuler({ value, onChange }: { value: number; onChange: (value: 
           className="scrollbar-hide relative z-20 h-full cursor-grab touch-none snap-y snap-mandatory overflow-y-auto overscroll-y-contain outline-none focus:outline-none focus-visible:outline-none"
           role="slider"
           tabIndex={0}
-          aria-label="인원 수"
+          aria-label="Group size"
           aria-valuemin={1}
           aria-valuemax={QUICK_MATCH_PARTY_SIZE_MAX}
           aria-valuenow={value}
-          aria-valuetext={value === 1 ? '혼자' : `${value}명`}
+          aria-valuetext={countLabel(value, 'person', 'people')}
           onScroll={event => {
             if (dragRef.current || inertiaFrameRef.current != null) return;
             const nextValue = valueFromScrollTop(event.currentTarget.scrollTop);
@@ -493,9 +495,9 @@ function GroupSizeRuler({ value, onChange }: { value: number; onChange: (value: 
               className={`flex h-12 w-full shrink-0 snap-center items-center justify-center text-[18px] font-black transition-[color,transform,opacity] ${
                 option === value ? 'scale-110 text-[#F4515E]' : 'scale-95 text-[#9F9699] opacity-55'
               }`}
-              aria-label={option === 1 ? '혼자' : `${option}명`}
+              aria-label={countLabel(option, 'person', 'people')}
             >
-              {option === 1 ? '혼자' : `${option}명`}
+              {countLabel(option, 'person', 'people')}
             </div>
           ))}
           <div className="h-12 shrink-0" aria-hidden="true" />
@@ -503,19 +505,19 @@ function GroupSizeRuler({ value, onChange }: { value: number; onChange: (value: 
         <div className="pointer-events-none absolute inset-x-0 top-0 z-30 h-12 bg-gradient-to-b from-[#FFF8F6] via-[#FFF8F6]/90 to-transparent" />
         <div className="pointer-events-none absolute inset-x-0 bottom-0 z-30 h-12 bg-gradient-to-t from-[#FFF8F6] via-[#FFF8F6]/90 to-transparent" />
       </div>
-      <div className="mt-2 grid grid-cols-6 gap-1.5" aria-label="빠른 인원 선택">
+      <div className="mt-2 grid grid-cols-6 gap-1.5" aria-label="Quick group size">
         {GROUP_SIZE_QUICK_OPTIONS.map(option => (
           <button
             key={option}
             type="button"
             onClick={() => selectValue(option)}
-            aria-label={option === 1 ? '혼자 빠른 선택' : `${option}명 빠른 선택`}
+            aria-label={`Select ${countLabel(option, 'person', 'people')}`}
             aria-pressed={option === value}
             className={`min-h-9 rounded-xl text-[11px] font-black transition-colors ${
               option === value ? 'bg-[#F4515E] text-white' : 'bg-[#FFF0EE] text-[#B5444D]'
             }`}
           >
-            {option === 1 ? '혼자' : option}
+            {option}
           </button>
         ))}
       </div>
@@ -537,9 +539,9 @@ function IngredientAvoidancePicker({ selected, onToggle }: { selected: string[];
         className={`flex min-h-11 w-full items-center rounded-[12px] border px-3 text-left transition-colors ${selectedLabels.length ? 'border-[#55A964] bg-[#EDF8EE]' : 'border-transparent bg-[#F8F5F3]'}`}
       >
         <span className="mr-2 text-base">🚫</span>
-        <strong className="text-[11px] text-[#514A4D]">피하고 싶은 재료</strong>
+        <strong className="text-[11px] text-[#514A4D]">Ingredients to avoid</strong>
         <span className="ml-2 min-w-0 flex-1 truncate text-[10px] font-semibold text-[#7B7276]">
-          {selectedLabels.length ? selectedLabels.join(', ') : '선택한 재료 없음'}
+          {selectedLabels.length ? selectedLabels.join(', ') : "No ingredients selected"}
         </span>
         {selectedLabels.length > 0 && <span className="mr-2 rounded-full bg-[#55A964] px-1.5 py-0.5 text-[9px] font-bold text-white">{selectedLabels.length}</span>}
         <ChevronDown size={15} className={`shrink-0 text-[#8A8084] transition-transform ${open ? 'rotate-180' : ''}`} />
@@ -645,7 +647,8 @@ function DistanceRuler({ radius, onChange, loadout }: { radius: number; onChange
     <div>
       <div className="mb-2 flex items-center gap-2 text-[13px] font-extrabold text-[#26232A]">
         <Ruler size={17} className="text-[#F4515E]" />
-        거리
+
+        Distance
         <strong className="ml-auto text-[15px] text-[#F4515E]">{formatRadius(radius)}</strong>
       </div>
       <div className="relative mx-1 h-[100px] rounded-[18px] bg-[#FFF8F6] px-6 pt-4">
@@ -672,7 +675,7 @@ function DistanceRuler({ radius, onChange, loadout }: { radius: number; onChange
               chickenAssetKeyOverride={chickenAsset}
               chickenFaceSystem={!walkDirection}
               animated={false}
-              alt={`검색 거리 ${formatRadius(radius)}를 가리키는 런치킨`}
+              alt={`Lunchiken pointing to search radius ${formatRadius(radius)}`}
             />
           </span>
           <span className="h-3 w-0.5 bg-[#F4515E]" />
@@ -685,7 +688,7 @@ function DistanceRuler({ radius, onChange, loadout }: { radius: number; onChange
           value={selectedIndex}
           onChange={event => onChange(RADIUS_OPTIONS[Number(event.target.value)]!)}
           className="lunchie-distance-range absolute inset-x-5 top-[27px] z-20 h-14 opacity-[0.01]"
-          aria-label="검색 거리"
+          aria-label="Search radius"
           aria-valuetext={formatRadius(radius)}
         />
         <div className="absolute inset-x-5 bottom-5 text-[9px] font-bold text-[#A69B96]">
@@ -838,10 +841,10 @@ export default function LunchieSettingsPage() {
       const label = localityForCoordinate(fix.latitude, fix.longitude);
       setOrigin(fix);
       setOriginLabel(label);
-      toast.success(`현재 위치를 ${label}(으)로 확인했어요.`);
+      toast.success(`Location set to ${label}.`);
       return fix;
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : '현재 위치를 확인하지 못했습니다.');
+      toast.error(error instanceof Error ? error.message : "Couldn't find your location.");
       throw error;
     } finally {
       setIsLocating(false);
@@ -856,12 +859,12 @@ export default function LunchieSettingsPage() {
 
   const createAndEnterSession = async () => {
     const categories = tags.filter(tag => realCategories.has(tag));
-    const hostName = profile.name && profile.name !== '사용자' ? profile.name : '호스트';
+    const hostName = profile.name && profile.name !== "Guest" ? profile.name : "Host";
     const currentOrigin = distanceEnabled
       ? origin ?? await currentPosition()
       : null;
     const session = await createSession(
-      `${hostName}의 점심 세션`,
+      `Lunch with ${hostName}`,
       {
         partySize,
         dietary,
@@ -890,10 +893,10 @@ export default function LunchieSettingsPage() {
 
     if (isSolo) {
       await startSession(session.inviteCode, deadlineMin);
-      toast.success('빠른 매칭을 시작합니다.');
+      toast.success("Starting Quick Match.");
       navigate('/lunchie/swipe');
     } else {
-      toast.success('세션이 만들어졌어요. 친구를 초대해 보세요.');
+      toast.success("Ready to go. Invite your friends!");
       navigate('/session/lobby');
     }
   };
@@ -914,7 +917,7 @@ export default function LunchieSettingsPage() {
           const activeSession = await fetchSession(currentSession.inviteCode);
           if (activeSession.membershipActive !== false && isActiveQuickMatchStatus(activeSession.status)) {
             const isWaiting = activeSession.status === 'waiting';
-            toast.info(isWaiting ? '진행 중인 대기방으로 이동합니다.' : '진행 중인 투표로 이동합니다.');
+            toast.info(isWaiting ? "Returning to your lobby." : "Returning to your vote.");
             navigate(isWaiting ? '/session/lobby' : '/lunchie/swipe');
             return;
           }
@@ -924,7 +927,7 @@ export default function LunchieSettingsPage() {
         } catch (error) {
           const status = (error as { status?: number }).status;
           if (status !== 404 && status !== 410) {
-            toast.error('진행 중인 빠른 매칭을 확인하지 못했어요. 다시 시도해 주세요.');
+            toast.error("Couldn't check your Quick Match. Try again.");
             return;
           }
           setCurrentSession(null);
@@ -934,7 +937,7 @@ export default function LunchieSettingsPage() {
       await createAndEnterSession();
     } catch (error) {
       console.error('빠른 매칭 세션 생성 실패', error);
-      toast.error('세션을 만들지 못했어요. 잠시 후 다시 시도해 주세요.');
+      toast.error("Couldn't create Quick Match. Try again.");
     } finally {
       setIsCreating(false);
       creationLockRef.current = false;
@@ -956,10 +959,10 @@ export default function LunchieSettingsPage() {
       await createAndEnterSession();
       setReplacementOpen(false);
     } catch (error) {
-      const message = error instanceof Error ? error.message : '새 Quick Match를 시작하지 못했어요.';
+      const message = error instanceof Error ? error.message : "Couldn't start a new Quick Match.";
       if (endedExistingSession) {
         setReplacementOpen(false);
-        toast.error(`기존 세션은 종료됐지만 새 세션을 만들지 못했어요. 다시 시도해 주세요. ${message}`);
+        toast.error(`Your previous Quick Match ended, but the new one couldn't start. ${message}`);
       } else {
         setReplacementError(message);
       }
@@ -972,56 +975,56 @@ export default function LunchieSettingsPage() {
   return (
     <div className="min-h-dvh bg-[#FFF6F2] pb-6">
       <header className="sticky top-0 z-20 flex items-start gap-3 bg-[#FFF6F2]/95 px-5 pb-3 pt-[max(12px,env(safe-area-inset-top))] backdrop-blur">
-        <BackButton onClick={() => navigate('/')} aria-label="홈으로 돌아가기" />
+        <BackButton onClick={() => navigate('/')} aria-label="Back to Discover" />
         <div>
           <h1 className="text-[19px] font-extrabold leading-none tracking-[-0.4px] text-[#F4515E]">Lunchie</h1>
-          <p className="mt-1 text-[10px] font-bold tracking-[0.7px] text-[#9B959A]">빠른 매칭</p>
+          <p className="mt-1 text-[10px] font-bold tracking-[0.7px] text-[#9B959A]">Quick Match</p>
         </div>
       </header>
 
       <main className="mx-auto max-w-[480px] space-y-3 px-4 pb-32">
         {sessionCheckFailed && currentSession && (
           <section role="alert" className="rounded-[20px] border border-[#F2C6C1] bg-white p-4 shadow-sm">
-            <h2 className="text-[14px] font-black text-[#302B2E]">진행 중인 빠른 매칭을 확인하지 못했어요</h2>
-            <p className="mt-1 text-[11px] leading-relaxed text-[#7C7276]">저장된 세션은 유지하고 있어요. 새 세션을 만들기 전에 다시 확인해 주세요.</p>
+            <h2 className="text-[14px] font-black text-[#302B2E]">Couldn't load your Quick Match</h2>
+            <p className="mt-1 text-[11px] leading-relaxed text-[#7C7276]">Your Quick Match is still saved. Check again before starting a new one.</p>
             <div className="mt-3 flex flex-wrap gap-2">
-              <button type="button" onClick={() => setSessionCheckAttempt(attempt => attempt + 1)} className="min-h-10 rounded-xl bg-[#F4515E] px-4 text-[12px] font-bold text-white">다시 시도</button>
-              <button type="button" onClick={() => setCurrentSession(null)} className="min-h-10 rounded-xl bg-[#FFF0EE] px-4 text-[12px] font-bold text-[#C43B47]">저장된 세션 지우기</button>
+              <button type="button" onClick={() => setSessionCheckAttempt(attempt => attempt + 1)} className="min-h-10 rounded-xl bg-[#F4515E] px-4 text-[12px] font-bold text-white">Try again</button>
+              <button type="button" onClick={() => setCurrentSession(null)} className="min-h-10 rounded-xl bg-[#FFF0EE] px-4 text-[12px] font-bold text-[#C43B47]">Clear saved session</button>
             </div>
           </section>
         )}
         {hasActiveSession && currentSession && (
-          <section className="rounded-[22px] border border-[#F5B8B4] bg-[#FFFCFA] p-4 shadow-[0_8px_24px_rgba(180,100,90,0.10)]" aria-label="진행 중인 빠른 매칭">
+          <section className="rounded-[22px] border border-[#F5B8B4] bg-[#FFFCFA] p-4 shadow-[0_8px_24px_rgba(180,100,90,0.10)]" aria-label="Your active Quick Match">
             <div className="flex items-start gap-3">
               <div className="min-w-0 flex-1">
                 <div className="flex flex-wrap items-center gap-2">
-                  <h2 className="text-[15px] font-black text-[#26232A]">진행 중인 빠른 매칭</h2>
+                  <h2 className="text-[15px] font-black text-[#26232A]">Your active Quick Match</h2>
                   <span className="rounded-full bg-[#FFF0EE] px-2.5 py-1 text-[10px] font-black uppercase tracking-wide text-[#D83D49]">
-                    {currentSession.status === 'waiting' ? '대기 중' : currentSession.status === 'choosing' ? '최종 선택 중' : '투표 중'}
+                    {currentSession.status === 'waiting' ? "Waiting" : currentSession.status === 'choosing' ? "Final vote" : "Voting"}
                   </span>
                 </div>
-                <p className="mt-1 text-[11px] font-semibold text-[#8A8084]">서버에서 확인된 세션으로 바로 이어서 할 수 있어요.</p>
+                <p className="mt-1 text-[11px] font-semibold text-[#8A8084]">Continue where you left off.</p>
               </div>
               <SessionManagementMenu onEnded={() => navigate('/lunchie/settings')} className="text-[#6F6468]" />
             </div>
             <div className="mt-3 grid grid-cols-2 gap-2 text-[11px]">
-              <span className="rounded-xl bg-[#FFF6F2] px-3 py-2 font-bold text-[#645A5E]">👥 {currentSession.members.length}/{currentSession.filters.partySize}명</span>
-              <span className="rounded-xl bg-[#FFF6F2] px-3 py-2 font-bold text-[#645A5E]">⏱ {currentSession.deadlineMinutes ?? deadlineMin}분</span>
+              <span className="rounded-xl bg-[#FFF6F2] px-3 py-2 font-bold text-[#645A5E]">👥 {currentSession.members.length}/{countLabel(currentSession.filters.partySize, 'person', 'people')}</span>
+              <span className="rounded-xl bg-[#FFF6F2] px-3 py-2 font-bold text-[#645A5E]">⏱ {currentSession.deadlineMinutes ?? deadlineMin} min</span>
               <span className="rounded-xl bg-[#FFF6F2] px-3 py-2 font-bold text-[#645A5E]">📍 {formatRadius(currentSession.filters.radius)}</span>
-              <span className="rounded-xl bg-[#FFF6F2] px-3 py-2 font-bold text-[#645A5E]">{currentSession.filters.partySize === 1 ? '🙋 혼자' : '🤝 함께'}</span>
+              <span className="rounded-xl bg-[#FFF6F2] px-3 py-2 font-bold text-[#645A5E]">{currentSession.filters.partySize === 1 ? "🙋 Just you" : "🤝 Group"}</span>
             </div>
             <button
               type="button"
               onClick={() => navigate(currentSession.status === 'waiting' ? '/session/lobby' : '/lunchie/swipe')}
               className="mt-3 min-h-11 w-full rounded-[14px] bg-[#F4515E] px-4 text-[13px] font-black text-white outline-none transition-transform active:scale-[0.98] focus-visible:ring-2 focus-visible:ring-[#F4515E] focus-visible:ring-offset-2"
             >
-              {currentSession.status === 'waiting' ? '대기방으로 돌아가기' : '빠른 매칭 계속하기'}
+              {currentSession.status === 'waiting' ? "Back to lobby" : "Continue Quick Match"}
             </button>
           </section>
         )}
 
         <Card>
-          <CardTitle icon={<Clock3 size={16} />}>마감</CardTitle>
+          <CardTitle icon={<Clock3 size={16} />}>Time limit</CardTitle>
           <div className="flex flex-col items-center">
             <DeadlineDial minutes={deadlineMin} onChange={setDeadlineMin} />
           </div>
@@ -1030,14 +1033,14 @@ export default function LunchieSettingsPage() {
         <Card>
           <div className="mb-3 flex items-center gap-2 text-[14px] font-extrabold text-[#26232A]">
             <Users size={17} className="text-[#F4515E]" />
-            <span>인원</span>
+            <span>Group size</span>
             <span className="ml-auto rounded-full bg-[#FFE4E3] px-2.5 py-1 text-[11px] text-[#D83C49]">
-              {partySize === 1 ? '혼자' : `${partySize}명`}
+              {countLabel(partySize, 'person', 'people')}
             </span>
           </div>
           <GroupSizeRuler value={partySize} onChange={setGroupSize} />
           <p className="mt-2 text-center text-[10px] font-semibold text-[#948A8E]">
-            최대 {QUICK_MATCH_PARTY_SIZE_MAX}명까지 함께 선택할 수 있어요.
+            Choose with up to {QUICK_MATCH_PARTY_SIZE_MAX} people.
           </p>
         </Card>
 
@@ -1049,7 +1052,8 @@ export default function LunchieSettingsPage() {
               aria-pressed={!distanceEnabled}
               className={`min-h-9 rounded-full px-3 text-[10px] font-bold ${!distanceEnabled ? 'bg-[#F4515E] text-white' : 'bg-[#FFF0EE] text-[#C43B47]'}`}
             >
-              반경 제한 없음
+
+              Any distance
             </button>
             <button
               type="button"
@@ -1057,21 +1061,21 @@ export default function LunchieSettingsPage() {
               disabled={isLocating}
               className="flex min-h-9 items-center gap-1 rounded-full px-2 text-[10px] font-bold text-[#F4515E] disabled:opacity-50"
             >
-              <Navigation size={12} /> {isLocating ? '확인 중…' : origin ? '위치 다시 확인' : '현재 위치 확인'}
+              <Navigation size={12} /> {isLocating ? "Checking…" : origin ? "Refresh location" : "Use my location"}
             </button>
           </div>
           <DistanceRuler radius={radius} onChange={selectRadius} loadout={lunchmateLoadout} />
           <div className="mt-3 rounded-[13px] bg-[#FFF8F6] px-3 py-2 text-[10px] font-semibold leading-relaxed text-[#857B80]">
             {origin
-              ? `현재 위치 · ${originLabel ?? '현재 위치 주변'}${distanceEnabled ? ` · ${formatRadius(radius)} 이내` : ' · 반경 제한 없음'}`
+              ? `${originLabel ?? 'Near you'}${distanceEnabled ? ` · within ${formatRadius(radius)}` : ' · any distance'}`
               : distanceEnabled
-                ? '선택한 반경을 적용하려면 현재 위치 권한이 필요해요.'
-                : '위치 권한 없이 전체 후보에서 추천받을 수 있어요.'}
+                ? "Allow location access to search nearby."
+                : "You can search all places without sharing your location."}
           </div>
         </Card>
 
         <Card>
-          <CardTitle icon={<UtensilsCrossed size={16} />} badge={`${chosenCount} 선택`}>오늘의 빠른 매칭</CardTitle>
+          <CardTitle icon={<UtensilsCrossed size={16} />} badge={`${chosenCount} selected`}>Today's Quick Match</CardTitle>
           <div className="grid grid-cols-4 gap-2">
             {PREFERENCE_CARDS.map(option => (
               <PreferenceCard key={option.label} option={option} selected={intent === option.value} onClick={() => setIntent(option.value)} />
@@ -1081,7 +1085,7 @@ export default function LunchieSettingsPage() {
           <div className="my-4 h-px bg-[#F0EAE8]" />
           <div className="mb-2 flex items-center gap-2">
             <Sparkles size={15} className="text-[#F4515E]" />
-            <p className="text-[12px] font-extrabold text-[#524B4F]">어떤 분위기인가요?</p>
+            <p className="text-[12px] font-extrabold text-[#524B4F]">What's the occasion?</p>
           </div>
           <div className="grid grid-cols-2 gap-2">
             {FOOD_TAGS.map(tag => {
@@ -1098,7 +1102,7 @@ export default function LunchieSettingsPage() {
                 >
                   <span className="text-xl">{meta?.icon}</span>
                   <span className="min-w-0">
-                    <strong className="block text-[12px] text-[#3E373B]">{tag}</strong>
+                    <strong className="block text-[12px] text-[#3E373B]">{displayLabel(tag)}</strong>
                     <span className="block truncate text-[9px] font-semibold text-[#A39A9E]">{meta?.hint}</span>
                   </span>
                   <span className={`ml-auto flex size-4 shrink-0 items-center justify-center rounded-full border ${selected ? 'border-[#F4515E] bg-[#F4515E] text-white' : 'border-[#D9D0CD] text-transparent'}`}><Check size={10} strokeWidth={3} /></span>
@@ -1109,13 +1113,14 @@ export default function LunchieSettingsPage() {
 
           <div className="my-3 h-px bg-[#F0EAE8]" />
           <div className="mb-2 flex items-center justify-between gap-3">
-            <p className="text-[12px] font-extrabold text-[#524B4F]">식단 요구 사항</p>
+            <p className="text-[12px] font-extrabold text-[#524B4F]">Dietary needs</p>
             <button
               type="button"
               onClick={() => setDietary(current => current.filter(value => !DIETARY_REQUIREMENTS.some(option => option.value === value)))}
               className="min-h-9 rounded-lg px-2 text-[10px] font-bold text-[#C43B47] outline-none focus-visible:ring-2 focus-visible:ring-[#F4515E]"
             >
-              선택 초기화
+
+              Clear
             </button>
           </div>
           <div className="grid grid-cols-2 gap-1.5">
@@ -1150,14 +1155,14 @@ export default function LunchieSettingsPage() {
             className="lunchie-session-primary-action w-full disabled:cursor-not-allowed disabled:opacity-60"
           >
             {isCheckingSession
-              ? '진행 중인 세션 확인 중…'
+              ? "Checking Quick Match…"
               : isCreating
-              ? '준비하는 중…'
+              ? "Getting ready…"
               : hasPartySizeConflict
-                ? `기존 세션 종료 후 ${isSolo ? '혼자로' : `${partySize}명으로`} 시작하기`
+                ? `Start a new match`
               : hasActiveSession && currentSession
-                ? currentSession.status === 'waiting' ? '대기방으로 돌아가기' : '투표 계속하기'
-                : isSolo ? '카드 선택 시작하기' : '세션 만들고 초대하기'}
+                ? currentSession.status === 'waiting' ? "Back to lobby" : "Continue voting"
+                : isSolo ? "Start choosing" : "Create and invite"}
           </motion.button>
         </div>
       </main>
@@ -1166,11 +1171,12 @@ export default function LunchieSettingsPage() {
         <AlertDialogContent className="max-w-[390px] rounded-[22px] border-[#F0D9D3] bg-[#FFFBF8] p-5">
           <AlertDialogHeader className="text-left">
             <AlertDialogTitle className="text-[19px] font-black text-[#26232A]">
-              새 인원 설정으로 시작할까요?
+
+              Start with a new group size?
             </AlertDialogTitle>
             <AlertDialogDescription className="text-[13px] leading-relaxed text-[#746A6E]">
-              현재 {currentSession?.filters.partySize ?? 1}명 세션이 진행 중이에요. {isSolo ? '혼자' : `${partySize}명`} 설정을 적용하려면
-              {currentSession?.hostId === profile.id ? ' 기존 세션을 종료하고' : ' 기존 세션에서 나간 뒤'} 새 Quick Match를 만들어야 해요.
+              Your current Quick Match is for {countLabel(currentSession?.filters.partySize ?? 1, 'person', 'people')}. To choose with {countLabel(partySize, 'person', 'people')},
+              {currentSession?.hostId === profile.id ? ' end' : ' leave'} it and start a new Quick Match.
             </AlertDialogDescription>
           </AlertDialogHeader>
           {replacementError && (
@@ -1179,13 +1185,13 @@ export default function LunchieSettingsPage() {
             </p>
           )}
           <AlertDialogFooter>
-            <AlertDialogCancel disabled={replacementBusy} className="min-h-11 rounded-xl">기존 세션 계속하기</AlertDialogCancel>
+            <AlertDialogCancel disabled={replacementBusy} className="min-h-11 rounded-xl">Keep current match</AlertDialogCancel>
             <AlertDialogAction
               onClick={event => void handleReplaceSession(event)}
               disabled={replacementBusy}
               className="min-h-11 rounded-xl bg-[#C93742] font-bold text-white hover:bg-[#AE2D37]"
             >
-              {replacementBusy ? '새 세션 준비 중…' : `${currentSession?.hostId === profile.id ? '종료' : '나가기'} 후 새로 시작`}
+              {replacementBusy ? "Getting ready…" : `${currentSession?.hostId === profile.id ? 'End' : 'Leave'} and restart`}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

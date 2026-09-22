@@ -13,15 +13,15 @@ describe('Profile information and level synchronization', () => {
     expect(profileSource).not.toContain('value={editBio}');
     expect(settingsSource).toContain("body: JSON.stringify({ username, handle: normalizedHandle })");
     expect(settingsSource).toContain("updateProfile({ name: saved.profile.username, handle: saved.profile.handle })");
-    expect(profileSource).toContain('오늘도 맛있는 하루를 위해');
-    expect(profileSource).toContain('🏅 배지');
+    expect(profileSource).toContain("Always up for good food");
+    expect(profileSource).toContain("🏅 Badges");
   });
 
   it('persists canonical lunchmate XP while keeping the clickable kimbap level UI', () => {
     expect(profileSource).toContain('initialTotalXp: lunchmateTotalXp');
     expect(profileSource).toContain('updateProfile({ lunchmateTotalXp: nextTotalXp })');
     expect(profileSource).toContain('progressButtonRef={progressButtonRef}');
-    expect(buddySource).toContain('aria-label={`김밥 EXP ${progressLabel}`}');
+    expect(buddySource).toContain("aria-label={`Gimbap XP ${progressLabel}`}");
     expect(buddySource).toContain('Array.from({ length: filledKimbapCount }');
   });
 
@@ -47,6 +47,6 @@ describe('Profile information and level synchronization', () => {
   it('shows every level stage with its configured icon', () => {
     expect(progressSource).toContain('LUNCHMATE_LEVELS.map(level =>');
     expect(progressSource).toContain('getLunchmateLevelIcon(level.level)');
-    expect(progressSource).toContain('아이콘별 레벨 단계');
+    expect(progressSource).toContain("Level milestones");
   });
 });

@@ -1,3 +1,4 @@
+import { countLabel } from '@/lib/displayCopy';
 /**
  * Lunchie Munchie — Session Lobby Page
  * Keeps the existing session polling/invite/start flow while presenting clear
@@ -86,7 +87,7 @@ export default function SessionLobbyPage() {
         .then(session => {
           if (!active) return;
           if (session.membershipActive === false || !isActiveQuickMatchStatus(session.status)) {
-            toast.info(session.status === 'cancelled' ? '빠른 매칭이 취소됐어요.' : '더 이상 진행 중인 빠른 매칭이 아니에요.');
+            toast.info(session.status === 'cancelled' ? "Quick Match cancelled." : "This Quick Match has ended.");
             setCurrentSession(null);
             navigate('/lunchie/settings');
           } else if (session.status !== 'waiting') {
@@ -134,10 +135,11 @@ export default function SessionLobbyPage() {
       <ScreenContainer className="lunchie-lobby flex min-h-dvh items-center justify-center px-5">
         <AppCard className="w-full max-w-sm p-6 text-center">
           <LunchieLogo size={48} className="mb-4 flex justify-center" />
-          <h1 className="text-[18px] font-black text-[var(--lm-text)]">진행 중인 세션이 없어요</h1>
-          <p className="mt-1 text-[13px] text-[var(--lm-sub)]">조건을 고르고 새 Lunchie 투표를 만들어 보세요.</p>
+          <h1 className="text-[18px] font-black text-[var(--lm-text)]">No active Quick Match</h1>
+          <p className="mt-1 text-[13px] text-[var(--lm-sub)]">Choose your preferences to start a new vote.</p>
           <PrimaryButton className="mt-5 w-full" onClick={() => navigate('/lunchie/settings')}>
-            세션 만들기
+
+            Create Quick Match
           </PrimaryButton>
         </AppCard>
       </ScreenContainer>
@@ -169,21 +171,21 @@ export default function SessionLobbyPage() {
               chickenAssetKeyOverride="idle"
               chickenFaceSystem
               animated={false}
-              alt="예선전 출발을 기다리는 런치킨"
+              alt="Lunchiken waiting for Round 1"
             />
             <span className="absolute -right-2 -top-2 flex size-9 items-center justify-center rounded-full bg-[#EB5053] text-lg text-white shadow-lg">✓</span>
           </motion.div>
-          <span className="rounded-full bg-[#FFE3DF] px-3 py-1 text-[11px] font-black tracking-[0.4px] text-[#D8484B]">참여 완료</span>
-          <h1 className="mt-4 text-[25px] font-black tracking-[-0.7px] text-[#2F2927]">참여 완료!</h1>
+          <span className="rounded-full bg-[#FFE3DF] px-3 py-1 text-[11px] font-black tracking-[0.4px] text-[#D8484B]">Joined</span>
+          <h1 className="mt-4 text-[25px] font-black tracking-[-0.7px] text-[#2F2927]">You're in!</h1>
           <p className="mt-2 max-w-[290px] text-[14px] font-semibold leading-relaxed text-[#8A7B75]">
             {presentation.isWaiting ? (
-              <>{presentation.hostName}님이 시작하면<br />바로 예선전으로 함께 이동해요.</>
+              <>Round 1 begins<br />when {presentation.hostName} starts the vote.</>
             ) : (
-              <>예선전으로 함께 이동하고 있어요.</>
+              <>Heading to Round 1…</>
             )}
           </p>
 
-          <div className="mt-8 flex items-center justify-center -space-x-2" aria-label={`${presentation.memberCount}명 참여 중`}>
+          <div className="mt-8 flex items-center justify-center -space-x-2" aria-label={`${presentation.memberCount} joined`}>
             {presentation.members.map(member => (
               <span key={member.id} className="flex size-12 items-center justify-center rounded-full border-[3px] border-[#FCF4EE] bg-white text-[22px] shadow-sm" title={member.name}>
                 {member.emoji}
@@ -201,7 +203,8 @@ export default function SessionLobbyPage() {
                 />
               ))}
             </span>
-            시작 신호를 확인하고 있어요
+
+            Waiting for the host to start
           </div>
         </main>
       </ScreenContainer>
@@ -221,9 +224,9 @@ export default function SessionLobbyPage() {
 
   const handleCopy = async () => {
     if (await copyInviteLink()) {
-      toast.success('초대 링크를 복사했어요! 📋');
+      toast.success("Invite link copied.");
     } else {
-      toast.error('링크를 복사하지 못했어요. 브라우저 권한을 확인해 주세요.');
+      toast.error("Couldn't copy the link. Check your browser permissions.");
     }
   };
 
@@ -238,10 +241,10 @@ export default function SessionLobbyPage() {
     } catch (error) {
       if (isAbortError(error)) return;
       if (await copyInviteLink()) {
-        toast.success('공유 대신 초대 링크를 복사했어요.');
+        toast.success("Invite link copied.");
       } else {
         console.error('Failed to share invite link', error);
-        toast.error('초대 링크를 공유하지 못했어요. 잠시 후 다시 시도해 주세요.');
+        toast.error("Couldn't share the invite. Try again.");
       }
     }
   };
@@ -257,8 +260,8 @@ export default function SessionLobbyPage() {
       console.error(error);
       const failure = error as Error & { code?: string };
       const message = failure.code === 'NO_ELIGIBLE_RESTAURANTS'
-        ? '현재 조건에 맞는 식당이 없어요. 반경이나 조건을 바꿔 주세요.'
-        : '투표를 시작하지 못했어요. 잠시 후 다시 시도해 주세요.';
+        ? "No restaurants match. Try a wider area or different preferences."
+        : "Couldn't start voting. Try again.";
       setStartFailure({ message, code: failure.code });
       toast.error(message);
       setIsStarting(false);
@@ -279,11 +282,12 @@ export default function SessionLobbyPage() {
   return (
     <ScreenContainer className="lunchie-lobby flex min-h-dvh flex-col overflow-x-hidden px-5">
       <header className="flex items-center gap-3 pb-5 pt-[max(12px,env(safe-area-inset-top))]">
-        <BackButton aria-label="빠른 매칭 설정으로 돌아가기" onClick={() => navigate('/lunchie/settings')} />
+        <BackButton aria-label="Back to Quick Match settings" onClick={() => navigate('/lunchie/settings')} />
         <div className="min-w-0 flex-1">
           <h1 className="truncate text-[20px] font-black text-[var(--lm-text)]">{currentSession.name}</h1>
           <p className="mt-0.5 truncate text-[12px] text-[var(--lm-sub)]">
-            호스트 {presentation.hostName} · {presentation.memberCount}/{presentation.capacity}명
+
+            Hosted by {presentation.hostName} · {presentation.memberCount} of {presentation.capacity} joined
           </p>
         </div>
         <StatusBadge
@@ -301,9 +305,9 @@ export default function SessionLobbyPage() {
           <AppCard className="mb-4 p-4">
             {isSoloSession ? (
               <div className="py-2">
-                <span id="lobby-invite-title" className="text-[14px] font-bold text-[var(--lm-text)]">혼자 하는 Lunchie예요</span>
-                <p className="mt-1 text-[12px] leading-relaxed text-[var(--lm-sub)]">1명 정원으로 만든 세션은 초대할 수 없어요. 친구와 함께하려면 설정에서 ‘같이’를 선택해 새 세션을 만들어 주세요.</p>
-                <button type="button" onClick={() => navigate('/lunchie/settings')} className="mt-3 min-h-10 rounded-xl bg-[#FCB3A8] px-4 text-[12px] font-bold text-[var(--lm-text)]">같이 하는 세션 만들기</button>
+                <span id="lobby-invite-title" className="text-[14px] font-bold text-[var(--lm-text)]">This one's just for you</span>
+                <p className="mt-1 text-[12px] leading-relaxed text-[var(--lm-sub)]">This Quick Match is for one. Choose a larger group size to invite friends.</p>
+                <button type="button" onClick={() => navigate('/lunchie/settings')} className="mt-3 min-h-10 rounded-xl bg-[#FCB3A8] px-4 text-[12px] font-bold text-[var(--lm-text)]">Create a group match</button>
               </div>
             ) : <>
             <button
@@ -315,7 +319,7 @@ export default function SessionLobbyPage() {
             >
               <span className="flex items-center gap-2">
                 <QrCode size={18} className="text-[var(--lm-primary)]" aria-hidden="true" />
-                <span id="lobby-invite-title" className="text-[14px] font-bold text-[var(--lm-text)]">친구 초대하기</span>
+                <span id="lobby-invite-title" className="text-[14px] font-bold text-[var(--lm-text)]">Invite friends</span>
               </span>
               <ChevronDown
                 size={18}
@@ -338,12 +342,13 @@ export default function SessionLobbyPage() {
                     <div
                       className="rounded-[18px] bg-white p-3 shadow-[0_4px_18px_rgba(91,57,42,0.08)]"
                       role="img"
-                      aria-label={`${currentSession.name} 참여용 QR 코드`}
+                      aria-label={`QR code to join ${currentSession.name}`}
                     >
                       <QRCodeSVG value={inviteUrl} size={152} fgColor="#E85053" level="M" />
                     </div>
                     <p className="max-w-full truncate rounded-full bg-[#FFF7F3] px-3 py-1.5 text-[11px] text-[#806F65]">
-                      코드 {currentSession.inviteCode}
+
+                      Code {currentSession.inviteCode}
                     </p>
                     <div className="grid w-full grid-cols-2 gap-2">
                       <button
@@ -351,14 +356,14 @@ export default function SessionLobbyPage() {
                         onClick={() => void handleCopy()}
                         className="flex min-h-11 items-center justify-center gap-2 rounded-xl bg-[#FCB3A8] px-3 text-[13px] font-bold text-[var(--lm-text)] outline-none transition-colors hover:bg-[#F9A79B] focus-visible:ring-2 focus-visible:ring-[var(--lm-primary)] focus-visible:ring-offset-2"
                       >
-                        <Copy size={16} aria-hidden="true" /> 링크 복사
+                        <Copy size={16} aria-hidden="true" />  Copy link
                       </button>
                       <button
                         type="button"
                         onClick={() => void handleShare()}
                         className="flex min-h-11 items-center justify-center gap-2 rounded-xl bg-[#FCB3A8] px-3 text-[13px] font-bold text-[var(--lm-text)] outline-none transition-colors hover:bg-[#F9A79B] focus-visible:ring-2 focus-visible:ring-[var(--lm-primary)] focus-visible:ring-offset-2"
                       >
-                        <Share2 size={16} aria-hidden="true" /> 공유하기
+                        <Share2 size={16} aria-hidden="true" />  Share
                       </button>
                     </div>
                   </div>
@@ -381,7 +386,8 @@ export default function SessionLobbyPage() {
               <span className="flex items-center gap-2">
                 <Users size={18} className="text-[var(--lm-primary)]" aria-hidden="true" />
                 <span id="lobby-members-title" className="text-[14px] font-bold text-[var(--lm-text)]">
-                  참여자 {presentation.memberCount}명
+
+                  Guests {presentation.memberCount}
                 </span>
               </span>
               <ChevronDown
@@ -408,31 +414,32 @@ export default function SessionLobbyPage() {
                           {member.isCurrentUser && profile.avatarPhoto && (
                             <AvatarImage
                               src={profile.avatarPhoto}
-                              alt={`${member.name}님의 프로필 사진`}
+                              alt={`${member.name}'s profile photo`}
                               className="object-cover"
                             />
                           )}
-                          <AvatarFallback className="bg-[#EFE3DA] text-[20px]" aria-label={`${member.name}님의 아바타`}>
+                          <AvatarFallback className="bg-[#EFE3DA] text-[20px]" aria-label={`${member.name}'s avatar`}>
                             {member.emoji}
                           </AvatarFallback>
                         </Avatar>
                         <div className="min-w-0 flex-1">
                           <div className="flex min-w-0 items-center gap-1.5">
                             <p className="truncate text-[13px] font-bold text-[var(--lm-text)]">{member.name}</p>
-                            {member.isCurrentUser && <span className="shrink-0 text-[10px] text-[var(--lm-sub)]">나</span>}
+                            {member.isCurrentUser && <span className="shrink-0 text-[10px] text-[var(--lm-sub)]">You</span>}
                           </div>
                           {member.isHost && (
                             <span className="mt-0.5 inline-flex items-center gap-1 text-[10px] font-bold text-[var(--lm-primary)]">
-                              <Crown size={11} aria-hidden="true" /> 호스트
+                              <Crown size={11} aria-hidden="true" />  Host
                             </span>
                           )}
                         </div>
                         <span
                           className="inline-flex shrink-0 items-center gap-1 rounded-full bg-[#EAF7EC] px-2 py-1 text-[10px] font-bold text-[#278836]"
-                          aria-label="세션 참여 완료"
+                          aria-label="Joined Quick Match"
                         >
                           <CheckCircle2 size={12} aria-hidden="true" />
-                          참여 완료
+
+                          Joined
                         </span>
                       </div>
                     ))}
@@ -442,14 +449,14 @@ export default function SessionLobbyPage() {
                         type="button"
                         onClick={() => void handleCopy()}
                         className="flex min-h-12 w-full items-center gap-3 rounded-2xl border border-dashed border-[#E8C9C3] bg-[#FFF9F6] px-3 text-left outline-none transition-colors hover:bg-[#FFF3EE] focus-visible:ring-2 focus-visible:ring-[var(--lm-primary)] focus-visible:ring-offset-2"
-                        aria-label={`빈 자리 ${presentation.remainingSlots}개, 초대 링크 복사`}
+                        aria-label={`${countLabel(presentation.remainingSlots, 'spot')} left, copy invite link`}
                       >
                         <span className="flex size-9 shrink-0 items-center justify-center rounded-full bg-white text-[var(--lm-primary)] shadow-sm">
                           <UserPlus size={17} aria-hidden="true" />
                         </span>
                         <span className="min-w-0 flex-1">
-                          <span className="block text-[12px] font-bold text-[var(--lm-text)]">빈 자리에 친구 초대</span>
-                          <span className="block text-[10px] text-[var(--lm-sub)]">{presentation.remainingSlots}자리 남음 · 탭해서 링크 복사</span>
+                          <span className="block text-[12px] font-bold text-[var(--lm-text)]">Invite a friend</span>
+                          <span className="block text-[10px] text-[var(--lm-sub)]">{countLabel(presentation.remainingSlots, 'spot')} left · Tap to copy link</span>
                         </span>
                       </button>
                     )}
@@ -475,7 +482,7 @@ export default function SessionLobbyPage() {
                 chickenAssetKeyOverride="idle"
                 chickenFaceSystem
                 animated={false}
-                alt="참여자를 기다리는 나의 런치킨"
+                alt="Lunchiken waiting for guests"
               />
             </motion.div>
           </div>
@@ -483,8 +490,8 @@ export default function SessionLobbyPage() {
             <p className="text-[13px] font-bold leading-snug text-[var(--lm-text)]">{presentation.statusCopy}</p>
             <p className="mt-1 text-[11px] text-[var(--lm-sub)]">
               {presentation.isFull
-                ? '정원이 모두 찼어요.'
-                : `${presentation.remainingSlots}자리 더 초대할 수 있어요.`}
+                ? "Everyone's here."
+                : `${countLabel(presentation.remainingSlots, 'spot')} left.`}
             </p>
           </div>
         </AppCard>
@@ -500,7 +507,8 @@ export default function SessionLobbyPage() {
                 onClick={() => navigate('/lunchie/settings')}
                 className="mt-2 min-h-9 rounded-xl bg-[#EB5053] px-3 text-[11px] font-bold text-white"
               >
-                반경·조건 바꾸기
+
+                Edit preferences
               </button>
             )}
           </div>
@@ -511,7 +519,7 @@ export default function SessionLobbyPage() {
           disabled={presentation.isWaiting && (!presentation.canStart || isStarting)}
           aria-describedby={presentation.disabledReason ? 'lobby-cta-reason' : undefined}
         >
-          {isStarting ? '투표를 여는 중…' : presentation.ctaLabel}
+          {isStarting ? "Starting vote…" : presentation.ctaLabel}
         </PrimaryButton>
         {presentation.disabledReason && (
           <p id="lobby-cta-reason" className="mt-2 text-center text-[11px] font-semibold text-[#8A746A]">

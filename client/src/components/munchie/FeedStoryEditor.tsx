@@ -58,36 +58,36 @@ const OVERLAY_CHOICES: Array<{
   label: string;
   Icon: typeof RouteMapIcon;
 }> = [
-  { kind: 'course_map', label: '코스맵', Icon: RouteMapIcon },
-  { kind: 'food_name', label: '음식명', Icon: Utensils },
-  { kind: 'restaurant_name', label: '식당명', Icon: Store },
-  { kind: 'price', label: '가격', Icon: BadgeDollarSign },
-  { kind: 'review', label: '한줄평', Icon: MessageSquareQuote },
-  { kind: 'text', label: '자유텍스트', Icon: Type },
+  { kind: 'course_map', label: "Course Map", Icon: RouteMapIcon },
+  { kind: 'food_name', label: "Dish name", Icon: Utensils },
+  { kind: 'restaurant_name', label: "Restaurant name", Icon: Store },
+  { kind: 'price', label: "Price", Icon: BadgeDollarSign },
+  { kind: 'review', label: "Caption", Icon: MessageSquareQuote },
+  { kind: 'text', label: "Text", Icon: Type },
 ];
 
 const TONE_OPTIONS: Array<{ value: FeedStoryOverlayTone; label: string }> = [
-  { value: 'light', label: '심플' },
-  { value: 'dark', label: '반투명' },
-  { value: 'accent', label: '포인트' },
+  { value: 'light', label: "Simple" },
+  { value: 'dark', label: "Translucent" },
+  { value: 'accent', label: "Accent" },
 ];
 
 const POSITION_OPTIONS = [
-  { x: 18, y: 16, label: '왼쪽 위' },
-  { x: 50, y: 16, label: '가운데 위' },
-  { x: 82, y: 16, label: '오른쪽 위' },
-  { x: 18, y: 50, label: '왼쪽 가운데' },
-  { x: 50, y: 50, label: '정가운데' },
-  { x: 82, y: 50, label: '오른쪽 가운데' },
-  { x: 18, y: 84, label: '왼쪽 아래' },
-  { x: 50, y: 84, label: '가운데 아래' },
-  { x: 82, y: 84, label: '오른쪽 아래' },
+  { x: 18, y: 16, label: "Top left" },
+  { x: 50, y: 16, label: "Top centre" },
+  { x: 82, y: 16, label: "Top right" },
+  { x: 18, y: 50, label: "Middle left" },
+  { x: 50, y: 50, label: "Centre" },
+  { x: 82, y: 50, label: "Middle right" },
+  { x: 18, y: 84, label: "Bottom left" },
+  { x: 50, y: 84, label: "Bottom centre" },
+  { x: 82, y: 84, label: "Bottom right" },
 ] as const;
 
 const SIZE_OPTIONS: Array<{ value: FeedStoryOverlaySize; label: string }> = [
-  { value: 'sm', label: '작게' },
-  { value: 'md', label: '보통' },
-  { value: 'lg', label: '크게' },
+  { value: 'sm', label: "Small" },
+  { value: 'md', label: "Medium" },
+  { value: 'lg', label: "Large" },
 ];
 
 const ALIGN_OPTIONS: Array<{
@@ -95,13 +95,13 @@ const ALIGN_OPTIONS: Array<{
   label: string;
   Icon: typeof AlignLeft;
 }> = [
-  { value: 'left', label: '왼쪽 정렬', Icon: AlignLeft },
-  { value: 'center', label: '가운데 정렬', Icon: AlignCenter },
-  { value: 'right', label: '오른쪽 정렬', Icon: AlignRight },
+  { value: 'left', label: "Align left", Icon: AlignLeft },
+  { value: 'center', label: "Align centre", Icon: AlignCenter },
+  { value: 'right', label: "Align right", Icon: AlignRight },
 ];
 
 const overlayKindLabel = (kind: FeedStoryOverlayKind) => (
-  OVERLAY_CHOICES.find(choice => choice.kind === kind)?.label ?? '정보'
+  OVERLAY_CHOICES.find(choice => choice.kind === kind)?.label ?? "Info"
 );
 
 const stopRestaurantId = (stop: FeedStoryEditorStop) => (
@@ -145,13 +145,13 @@ function defaultOverlayText(
   if (kind === 'course_map') {
     return restaurants.length > 0
       ? restaurants.map((restaurant, index) => `${index + 1}. ${restaurant.name}`).join(' → ')
-      : '코스맵';
+      : "Course Map";
   }
-  if (kind === 'restaurant_name') return restaurants[0]?.name ?? '식당 이름';
-  if (kind === 'food_name') return '음식 이름';
-  if (kind === 'price') return '가격';
-  if (kind === 'review') return '한줄평을 입력하세요';
-  return '텍스트를 입력하세요';
+  if (kind === 'restaurant_name') return restaurants[0]?.name ?? "Restaurant name";
+  if (kind === 'food_name') return "Dish name";
+  if (kind === 'price') return "Price";
+  if (kind === 'review') return "Add a caption";
+  return "Add some text";
 }
 
 export function clampFeedStoryOverlay(
@@ -353,34 +353,34 @@ export default function FeedStoryEditor({
 
   if (!selectedSlide) {
     return (
-      <section className={`rounded-2xl border border-dashed border-[#E2CFC5] bg-white/70 px-5 py-10 text-center ${className}`} aria-label="피드 슬라이드 편집기">
-        <strong className="text-[14px] text-[#46342C]">편집할 사진이 없어요</strong>
-        <p className="mt-1 text-[11px] font-semibold text-[#9C857A]">먼저 게시 흐름에서 사진을 추가해 주세요.</p>
+      <section className={`rounded-2xl border border-dashed border-[#E2CFC5] bg-white/70 px-5 py-10 text-center ${className}`} aria-label="Photo editor">
+        <strong className="text-[14px] text-[#46342C]">No photos to edit</strong>
+        <p className="mt-1 text-[11px] font-semibold text-[#9C857A]">Add a photo to get started.</p>
       </section>
     );
   }
 
   return (
-    <section className={className} aria-label="피드 슬라이드 편집기">
+    <section className={className} aria-label="Photo editor">
       <div className="mb-3 flex items-center justify-between gap-3">
         <button
           type="button"
           onClick={() => selectSlide(selectedSlideIndex - 1)}
-          aria-label="이전 사진"
+          aria-label="Previous photo"
           className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full border border-[#E9D6CC] bg-white text-[#5D483E] shadow-sm active:scale-95"
         >
           <ChevronLeft size={20} />
         </button>
         <div className="min-w-0 text-center">
-          <p className="text-[13px] font-black text-[#3C2A23]">{selectedSlideIndex + 1}번 사진만 편집 중</p>
+          <p className="text-[13px] font-black text-[#3C2A23]">Editing photo {selectedSlideIndex + 1} only</p>
           <p className="mt-0.5 text-[10px] font-bold text-[#9B8277]" aria-live="polite" aria-atomic="true">
-            {selectedSlideIndex + 1} / {slides.length} 사진
+            Photo {selectedSlideIndex + 1} of {slides.length}
           </p>
         </div>
         <button
           type="button"
           onClick={() => selectSlide(selectedSlideIndex + 1)}
-          aria-label="다음 사진"
+          aria-label="Next photo"
           className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full border border-[#E9D6CC] bg-white text-[#5D483E] shadow-sm active:scale-95"
         >
           <ChevronRight size={20} />
@@ -393,8 +393,8 @@ export default function FeedStoryEditor({
         data-story-ratio="4:5"
         className="relative mx-auto isolate aspect-[4/5] w-full max-w-[390px] touch-pan-y select-none overflow-hidden rounded-[22px] border border-[#E6D2C8] bg-[#30211B] shadow-[0_14px_34px_rgba(72,43,31,0.18)] [container-type:inline-size]"
         role="group"
-        aria-roledescription="편집 슬라이드"
-        aria-label={`${selectedSlideIndex + 1} / ${slides.length} 사진`}
+        aria-roledescription="Edit slide"
+        aria-label={`Photo ${selectedSlideIndex + 1} of ${slides.length}`}
         tabIndex={0}
         onKeyDown={(event) => {
           if (event.target !== event.currentTarget) return;
@@ -413,7 +413,7 @@ export default function FeedStoryEditor({
       >
         <img
           src={selectedSlide.photo}
-          alt={`${selectedSlideIndex + 1}번째 피드 사진`}
+          alt={`Post photo ${selectedSlideIndex + 1}`}
           className="absolute inset-0 h-full w-full object-cover"
           draggable={false}
         />
@@ -426,7 +426,7 @@ export default function FeedStoryEditor({
             onPointerDown={event => beginOverlayDrag(event, overlay)}
             onKeyDown={event => handleOverlayKeyDown(event, overlay)}
             onClick={event => { event.stopPropagation(); setSelectedOverlayId(overlay.id); }}
-            aria-label={`${overlayKindLabel(overlay.kind)} 오버레이 이동 및 편집`}
+            aria-label={`Move and edit ${overlayKindLabel(overlay.kind)} overlay`}
             aria-pressed={selectedOverlayId === overlay.id}
             className={`absolute z-10 touch-none cursor-grab border-0 bg-transparent p-0 active:cursor-grabbing ${selectedOverlayId === overlay.id ? 'rounded-xl ring-2 ring-[#FFE16A] ring-offset-2 ring-offset-black/20' : ''}`}
             style={{
@@ -445,13 +445,13 @@ export default function FeedStoryEditor({
         ))}
       </div>
 
-      <ol className="mt-3 flex gap-2 overflow-x-auto pb-1" aria-label="사진 선택">
+      <ol className="mt-3 flex gap-2 overflow-x-auto pb-1" aria-label="Choose photo">
         {slides.map((slide, index) => (
           <li key={slide.id} className="shrink-0">
             <button
               type="button"
               onClick={() => selectSlide(index)}
-              aria-label={`${index + 1}번째 사진 선택`}
+              aria-label={`Select photo ${index + 1}`}
               aria-current={index === selectedSlideIndex ? 'true' : undefined}
               className={`relative h-14 w-14 overflow-hidden rounded-xl border-2 bg-[#EEE2DA] active:scale-95 ${index === selectedSlideIndex ? 'border-[#E94D55]' : 'border-white'}`}
             >
@@ -465,7 +465,7 @@ export default function FeedStoryEditor({
 
       <div className="mt-4 rounded-2xl border border-[#EBDDD5] bg-white px-3 py-3 shadow-sm">
         <div className="flex items-center justify-between gap-3">
-          <p className="text-[12px] font-black text-[#45332B]">정보 추가</p>
+          <p className="text-[12px] font-black text-[#45332B]">Add details</p>
           <span className="text-[10px] font-bold tabular-nums text-[#9C8277]">
             {selectedSlide.overlays.length} / {MAX_FEED_STORY_OVERLAYS}
           </span>
@@ -487,13 +487,13 @@ export default function FeedStoryEditor({
       </div>
 
       {selectedOverlay && (
-        <section className="mt-3 rounded-2xl border border-[#E8D7CE] bg-white px-3 py-3 shadow-sm" aria-label={`${overlayKindLabel(selectedOverlay.kind)} 편집`}>
+        <section className="mt-3 rounded-2xl border border-[#E8D7CE] bg-white px-3 py-3 shadow-sm" aria-label={`Edit ${overlayKindLabel(selectedOverlay.kind)}`}>
           <div className="flex items-center justify-between gap-3">
-            <strong className="text-[12px] text-[#45332B]">{overlayKindLabel(selectedOverlay.kind)} 편집</strong>
+            <strong className="text-[12px] text-[#45332B]">Edit {overlayKindLabel(selectedOverlay.kind)}</strong>
             <button
               type="button"
               onClick={removeSelected}
-              aria-label={`${overlayKindLabel(selectedOverlay.kind)} 삭제`}
+              aria-label={`Delete ${overlayKindLabel(selectedOverlay.kind)}`}
               className="flex h-11 w-11 items-center justify-center rounded-xl bg-[#FFF0F0] text-[#D84950] active:scale-95"
             >
               <Trash2 size={16} />
@@ -502,7 +502,8 @@ export default function FeedStoryEditor({
 
           {selectedOverlay.kind === 'restaurant_name' && restaurantOptions.length > 0 && (
             <label className="mt-2 block text-[10px] font-black text-[#816B60]">
-              연결 식당
+
+              Linked restaurant
               <select
                 value={selectedOverlay.restaurantId ?? ''}
                 onChange={(event) => {
@@ -521,11 +522,13 @@ export default function FeedStoryEditor({
 
           {selectedOverlay.kind === 'course_map' ? (
             <p className="mt-2 rounded-xl bg-[#FFF5F0] px-3 py-2.5 text-[10px] font-bold leading-relaxed text-[#816B60]">
-              코스맵은 선택한 식당 순서를 자동으로 표시해요. 위치·톤·크기·너비는 아래에서 바꿀 수 있어요.
+
+              Your Course Map follows your restaurant order. Adjust its look below.
             </p>
           ) : (
             <label className="mt-2 block text-[10px] font-black text-[#816B60]">
-              표시 문구
+
+              Display text
               <textarea
                 value={selectedOverlay.text ?? ''}
                 onChange={event => updateSelected({ text: event.target.value })}
@@ -538,7 +541,7 @@ export default function FeedStoryEditor({
 
           <div className="mt-3 grid gap-3 sm:grid-cols-2">
             <fieldset>
-              <legend className="text-[10px] font-black text-[#816B60]">디자인</legend>
+              <legend className="text-[10px] font-black text-[#816B60]">Style</legend>
               <div className="mt-1 grid grid-cols-3 gap-1">
                 {TONE_OPTIONS.map(option => (
                   <button
@@ -552,7 +555,7 @@ export default function FeedStoryEditor({
               </div>
             </fieldset>
             <fieldset>
-              <legend className="text-[10px] font-black text-[#816B60]">크기</legend>
+              <legend className="text-[10px] font-black text-[#816B60]">Size</legend>
               <div className="mt-1 grid grid-cols-3 gap-1">
                 {SIZE_OPTIONS.map(option => (
                   <button
@@ -568,14 +571,14 @@ export default function FeedStoryEditor({
           </div>
 
           <fieldset className="mt-3">
-            <legend className="text-[10px] font-black text-[#816B60]">빠른 위치</legend>
+            <legend className="text-[10px] font-black text-[#816B60]">Position</legend>
             <div className="mt-1 grid grid-cols-3 gap-1 rounded-xl bg-[#F8F0EB] p-1.5">
               {POSITION_OPTIONS.map(position => (
                 <button
                   key={position.label}
                   type="button"
                   onClick={() => updateSelected({ x: position.x, y: position.y })}
-                  aria-label={`${position.label}에 배치`}
+                  aria-label={`Place at ${position.label}`}
                   className="flex min-h-10 items-center justify-center rounded-lg bg-white text-[9px] font-black text-[#806B60] shadow-sm active:scale-95"
                 >
                   {position.label}
@@ -585,7 +588,7 @@ export default function FeedStoryEditor({
           </fieldset>
 
           <fieldset className="mt-3">
-            <legend className="text-[10px] font-black text-[#816B60]">정렬</legend>
+            <legend className="text-[10px] font-black text-[#816B60]">Alignment</legend>
             <div className="mt-1 grid grid-cols-3 gap-1">
               {ALIGN_OPTIONS.map(({ value, label, Icon }) => (
                 <button
@@ -601,7 +604,8 @@ export default function FeedStoryEditor({
           </fieldset>
 
           <label className="mt-3 block text-[10px] font-black text-[#816B60]">
-            너비
+
+            Width
             <input
               type="range"
               min="20"
@@ -610,10 +614,10 @@ export default function FeedStoryEditor({
               value={selectedOverlay.width}
               onChange={event => updateSelected({ width: Number(event.target.value) })}
               className="mt-2 w-full accent-[#E94D55]"
-              aria-label="오버레이 너비"
+              aria-label="Overlay width"
             />
           </label>
-          <p className="mt-2 rounded-xl bg-[#FFF6EF] px-3 py-2 text-[10px] font-semibold leading-relaxed text-[#8A7165]">지금 변경한 문구·코스맵·디자인·위치는 이 사진에만 저장돼요. 캔버스에서 드래그하거나 방향키로 더 세밀하게 이동할 수 있어요.</p>
+          <p className="mt-2 rounded-xl bg-[#FFF6EF] px-3 py-2 text-[10px] font-semibold leading-relaxed text-[#8A7165]">Changes apply to this photo only. Drag or use the arrow keys to move items.</p>
         </section>
       )}
     </section>

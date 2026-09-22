@@ -104,10 +104,12 @@ export default function LunchmateProgressSheet({
               <div className="flex items-start justify-between gap-3 pb-3">
                 <div>
                   <h2 id="lunchmate-progress-title" className="text-[18px] font-black text-[#2F211B]">
-                    레벨 정보
+
+                    Your progress
                   </h2>
                   <p className="mt-1 text-[11px] leading-relaxed text-[#9B8376]">
-                    음식을 나누고 맛추억을 쌓아 새로운 레벨을 만나보세요.
+
+                    Share bites to earn XP and level up.
                   </p>
                 </div>
                 <button
@@ -115,7 +117,7 @@ export default function LunchmateProgressSheet({
                   type="button"
                   onClick={onClose}
                   className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[#F7F1EC] text-[#8A756A] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#E85053]"
-                  aria-label="맛추억 상세 닫기"
+                  aria-label="Close XP details"
                 >
                   <X size={17} />
                 </button>
@@ -141,23 +143,24 @@ export default function LunchmateProgressSheet({
                     </div>
                   </div>
                   <div className="rounded-2xl bg-white px-3 py-2 text-right shadow-sm">
-                    <p className="text-[10px] font-semibold text-[#A18C80]">누적 맛추억</p>
-                    <p className="text-[16px] font-black text-[#E85053]">{snapshot.totalXp} 맛추억</p>
+                    <p className="text-[10px] font-semibold text-[#A18C80]">Total XP</p>
+                    <p className="text-[16px] font-black text-[#E85053]">{snapshot.totalXp}  XP</p>
                   </div>
                 </div>
 
                 <div className="mt-5 flex items-end justify-between gap-3">
                   <p className="text-[11px] font-bold text-[#6F5A4E]">
-                    다음 레벨까지 {snapshot.xpRemainingToNextLevel} 맛추억
+
+                    Next level in {snapshot.xpRemainingToNextLevel}  XP
                   </p>
                   <p className="text-[10px] font-semibold text-[#A18C80]">
-                    {snapshot.xpIntoCurrentLevel} / {snapshot.xpRequiredForNextLevel} 맛추억
+                    {snapshot.xpIntoCurrentLevel} / {snapshot.xpRequiredForNextLevel}  XP
                   </p>
                 </div>
                 <div
                   className="mt-2 h-3 overflow-hidden rounded-full bg-[#F1DFD5]"
                   role="progressbar"
-                  aria-label="다음 레벨 EXP 진행도"
+                  aria-label="Progress to next level"
                   aria-valuemin={0}
                   aria-valuemax={100}
                   aria-valuenow={Math.round(progressPercent)}
@@ -172,10 +175,10 @@ export default function LunchmateProgressSheet({
 
               <section className="mt-4" aria-labelledby="lunchmate-level-stages-title">
                 <div className="flex items-center justify-between gap-3">
-                  <h3 id="lunchmate-level-stages-title" className="text-[13px] font-black text-[#49372E]">레벨 단계</h3>
-                  <span className="text-[10px] font-bold text-[#A18C80]">총 {LUNCHMATE_LEVELS.length}단계</span>
+                  <h3 id="lunchmate-level-stages-title" className="text-[13px] font-black text-[#49372E]">Levels</h3>
+                  <span className="text-[10px] font-bold text-[#A18C80]">Total {LUNCHMATE_LEVELS.length}levels</span>
                 </div>
-                <div className="mt-2 grid grid-cols-4 gap-2" aria-label="아이콘별 레벨 단계">
+                <div className="mt-2 grid grid-cols-4 gap-2" aria-label="Level milestones">
                   {LUNCHMATE_LEVELS.map(level => {
                     const iconDefinition = getLunchmateLevelIcon(level.level);
                     const LevelStageIcon = iconDefinition.Icon;
@@ -186,7 +189,7 @@ export default function LunchmateProgressSheet({
                         className={`min-w-0 rounded-2xl border px-1.5 py-3 text-center ${
                           reached ? 'border-[#EFCDBE] bg-[#FFF8F4]' : 'border-[#EEE3DD] bg-[#FAF6F3] opacity-60'
                         }`}
-                        aria-label={`Lv.${level.level} ${level.levelName}, ${level.requiredTotalXp} 맛추억`}
+                        aria-label={`Lv.${level.level} ${level.levelName}, ${level.requiredTotalXp} XP`}
                       >
                         <span
                           className="mx-auto flex h-9 w-9 items-center justify-center rounded-xl"
@@ -197,7 +200,7 @@ export default function LunchmateProgressSheet({
                         </span>
                         <p className="mt-2 text-[10px] font-black text-[#59463C]">Lv.{level.level}</p>
                         <p className="mt-0.5 truncate text-[8px] font-bold text-[#8F7A70]">{level.levelName}</p>
-                        <p className="mt-1 text-[8px] font-semibold text-[#B08F7E]">{level.requiredTotalXp} 맛추억</p>
+                        <p className="mt-1 text-[8px] font-semibold text-[#B08F7E]">{level.requiredTotalXp}  XP</p>
                       </div>
                     );
                   })}
@@ -209,9 +212,9 @@ export default function LunchmateProgressSheet({
                   <NextRewardIcon size={21} />
                 </span>
                 <div className="min-w-0">
-                  <p className="text-[10px] font-bold text-[#B1907E]">다음 레벨 보상</p>
+                  <p className="text-[10px] font-bold text-[#B1907E]">Next reward</p>
                   <p className="mt-0.5 text-[13px] font-black text-[#49372E]">{snapshot.nextRewardPlaceholder}</p>
-                  <p className="mt-1 text-[10px] leading-relaxed text-[#A18C80]">다음 레벨에 도달하면 받을 수 있어요.</p>
+                  <p className="mt-1 text-[10px] leading-relaxed text-[#A18C80]">Unlock at the next level.</p>
                 </div>
               </div>
 
@@ -222,7 +225,8 @@ export default function LunchmateProgressSheet({
                   className="mt-3 flex h-11 w-full items-center justify-center gap-2 rounded-2xl border border-[#F0C5BC] bg-[#FFF8F5] text-[12px] font-black text-[#D85658] active:scale-[0.98]"
                 >
                   <RotateCcw size={14} />
-                  Lv.1부터 다시 시작
+
+                  Reset to level 1
                 </button>
               )}
             </div>

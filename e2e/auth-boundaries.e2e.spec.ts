@@ -15,11 +15,11 @@ async function interceptGoogleStart(page: import('playwright/test').Page) {
 test('anonymous profile never renders a prototype user', async ({ page }) => {
   await mockAnonymousAuth(page);
   await page.goto('/profile');
-  await expect(page.getByRole('heading', { name: '로그인이 필요해요' })).toBeVisible();
-  await expect(page.getByRole('heading', { name: '나의 피드 0' })).toBeVisible();
-  await expect(page.getByText('로그인하면 나의 피드를 볼 수 있어요')).toBeVisible();
+  await expect(page.getByRole('heading', { name: "Sign in to your profile" })).toBeVisible();
+  await expect(page.getByRole('heading', { name: "My posts 0" })).toBeVisible();
+  await expect(page.getByText("Log in to see your posts")).toBeVisible();
   await expect(page.getByText('지민', { exact: true })).toHaveCount(0);
-  await expect(page.getByRole('button', { name: 'Google로 로그인' })).toBeVisible();
+  await expect(page.getByRole('button', { name: "Continue with Google" })).toBeVisible();
 });
 
 test('anonymous users are sent directly to Google before the post editor renders', async ({ page }) => {
@@ -27,7 +27,7 @@ test('anonymous users are sent directly to Google before the post editor renders
   await interceptGoogleStart(page);
   await page.goto('/coursemap/new');
   await expect(page).toHaveURL(/\/api\/auth\/google\/start\?next=%2Fcoursemap%2Fnew/);
-  await expect(page.getByText('코스맵을 정하세요')).toHaveCount(0);
+  await expect(page.getByText("Choose your places")).toHaveCount(0);
 });
 
 test('legacy login URL immediately forwards to Google OAuth without a landing page', async ({ page }) => {
@@ -89,11 +89,11 @@ test('authenticated users can search a profile and follow it from Munchie Feed',
   }));
 
   await page.goto('/feed');
-  await page.getByRole('button', { name: '사용자 검색 열기' }).click();
-  await page.getByRole('searchbox', { name: '사용자 검색' }).fill('맛친구');
+  await page.getByRole('button', { name: "Open profile search" }).click();
+  await page.getByRole('searchbox', { name: "Search profiles" }).fill('맛친구');
   await expect(page.getByText('@munch_friend')).toBeVisible();
-  await page.getByRole('button', { name: '팔로우' }).click();
-  await expect(page.getByRole('button', { name: '언팔로우' })).toBeVisible();
+  await page.getByRole('button', { name: "Follow" }).click();
+  await expect(page.getByRole('button', { name: "Unfollow" })).toBeVisible();
   expect(followRequests).toBe(1);
   await page.getByText('맛친구', { exact: true }).click();
   await expect(page).toHaveURL('/profile/friend-user');

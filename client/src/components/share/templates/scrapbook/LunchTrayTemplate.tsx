@@ -1,3 +1,4 @@
+import { countLabel } from '@/lib/displayCopy';
 import { forwardRef } from 'react';
 import { Course } from '@/types/course';
 import { ScrapPalette, SCRAP_PALETTES, gingham, photoFallback } from './scrapTheme';
@@ -239,7 +240,7 @@ const LunchTrayTemplate = forwardRef<HTMLDivElement, Props>(({ course, palette }
             color: p.deep,
           }}
         >
-          {course.distanceKm}km · {course.durationHours}h · {course.places.length} spots
+          {course.distanceKm}km · {course.durationHours}h · {countLabel(course.places.length, 'place')}
         </div>
         <p
           style={{

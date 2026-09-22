@@ -8,7 +8,7 @@ export function restaurantSummary(restaurant: Restaurant): string {
   const description = nonEmpty(restaurant.description);
   if (description) return description;
   const fallback = [nonEmpty(restaurant.category), nonEmpty(restaurant.address)].filter(Boolean);
-  return fallback.length > 0 ? fallback.join(' · ') : '상세 정보 준비 중이에요.';
+  return fallback.length > 0 ? fallback.join(' · ') : "No details available yet.";
 }
 
 export function mergeCanonicalRestaurantPresentation(

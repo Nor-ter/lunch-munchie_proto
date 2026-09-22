@@ -125,7 +125,7 @@ function normalizedCourseId(value: string) {
   const courseId = value.trim();
   if (!courseId || courseId.length > 128) {
     throw new SavedCoursesApiError(
-      "코스 정보가 올바르지 않습니다.",
+      "This course couldn't be loaded.",
       400,
       "INVALID_COURSE_ID",
     );
@@ -141,7 +141,7 @@ async function responseJson<T>(response: Response): Promise<T> {
     const message =
       typeof payload?.error === "string"
         ? payload.error
-        : "저장한 코스를 불러오지 못했습니다.";
+        : "Couldn't load saved courses.";
     const code = typeof payload?.code === "string" ? payload.code : undefined;
     throw new SavedCoursesApiError(message, response.status, code);
   }
@@ -203,7 +203,7 @@ export async function fetchFeedDetailById(
   const normalizedFeedId = feedId.trim();
   if (!normalizedFeedId.startsWith("post_") || normalizedFeedId.length > 133) {
     throw new SavedCoursesApiError(
-      "피드 정보가 올바르지 않습니다.",
+      "This post couldn't be loaded.",
       400,
       "INVALID_FEED_ID",
     );

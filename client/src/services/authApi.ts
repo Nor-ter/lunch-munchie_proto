@@ -88,7 +88,7 @@ export async function confirmConflictSignIn(): Promise<void> {
 
 export async function signOutToAnonymous(): Promise<void> {
   const response = await fetch('/api/auth/logout', { method: 'POST', credentials: 'same-origin' });
-  if (!response.ok) throw new Error('로그아웃하지 못했어요.');
+  if (!response.ok) throw new Error("Couldn't log out. Try again.");
   // 다른 사람이 같은 브라우저를 열었을 때 이전 계정의 방/투표 상태를 복원하지 않는다.
   for (const key of [
     'lm_session',

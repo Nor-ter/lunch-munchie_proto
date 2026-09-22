@@ -77,14 +77,14 @@ test('saved restaurant uses its configured map and returns to the unified saved 
   expect(mapBox!.width).toBeGreaterThanOrEqual(regionBox!.width - 3);
   const unavailableMap = region.getByRole('alert');
   if (await unavailableMap.isVisible()) {
-    await expect(unavailableMap).toContainText('Google 지도 설정을 확인해 주세요.');
+    await expect(unavailableMap).toContainText("The map is unavailable right now.");
     expect(googleMapsLoaderRequested).toBe(false);
   } else {
     await expect.poll(() => googleMapsLoaderRequested).toBe(true);
   }
   expect(openStreetMapRequested).toBe(false);
 
-  await page.getByRole('button', { name: '저장으로 돌아가기' }).click();
+  await page.getByRole('button', { name: "Back to saved" }).click();
   await expect(page).toHaveURL('/saved');
   await expect(page.getByRole('group', { name: '저장 항목 필터' })).toHaveCount(0);
   await expect(page.getByText('Munchie 먼치픽')).toHaveCount(0);

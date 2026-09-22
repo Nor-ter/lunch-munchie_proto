@@ -1,3 +1,4 @@
+import { countLabel } from '@/lib/displayCopy';
 import { forwardRef } from 'react';
 import { Course } from '@/types/course';
 import { CourseMap } from '@/components/course/CourseMap';
@@ -8,10 +9,10 @@ interface TemplateProps {
 
 const StatsCardTemplate = forwardRef<HTMLDivElement, TemplateProps>(({ course }, ref) => {
   const stats = [
-    { label: '거리', value: `${course.distanceKm}km` },
-    { label: '소요', value: `${course.durationHours}h` },
-    { label: '장소', value: `${course.places.length}곳` },
-    { label: '저장', value: course.saveCount.toLocaleString() },
+    { label: "Distance", value: `${course.distanceKm}km` },
+    { label: "Duration", value: `${course.durationHours}h` },
+    { label: "Place", value: countLabel(course.places.length, 'place') },
+    { label: "Saves", value: course.saveCount.toLocaleString() },
   ];
 
   return (

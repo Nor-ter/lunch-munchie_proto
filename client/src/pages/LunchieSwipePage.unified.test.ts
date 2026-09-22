@@ -30,7 +30,7 @@ describe('unified Lunchie group flow', () => {
     expect(introSource).toContain('artwork="chicken"');
     expect(introSource).toContain('chickenFaceSystem');
     expect(introSource).toContain('loadout={lunchmateLoadout}');
-    expect(introSource).toContain('음식점 카드를 준비하고 있어요');
+    expect(introSource).toContain("Finding places you might like.");
     expect(introSource).not.toContain('Swipe gesture demo card');
     expect(introSource).not.toContain('NOPE');
     expect(introSource).not.toContain('LIKE');
@@ -48,7 +48,7 @@ describe('unified Lunchie group flow', () => {
   it('opens the shared restaurant details without coupling the action to a swipe', () => {
     expect(swipeSource).toContain("import QuickMatchRestaurantDetailSheet from '@/components/lunchie/QuickMatchRestaurantDetailSheet'");
     expect(swipeSource).not.toContain("import RestaurantDetailSheet from '@/components/munchie/RestaurantDetailSheet'");
-    expect(swipeSource).toContain('aria-label={`${restaurant.name} 식당 상세보기`}');
+    expect(swipeSource).toContain("aria-label={`View ${restaurant.name} details`}");
     expect(swipeSource).toContain('onOpenRestaurantDetails(restaurant)');
     expect(swipeSource).toContain('lunchieQuickMatchDetail');
     expect(swipeSource).toContain('restaurant={detailRestaurant}');

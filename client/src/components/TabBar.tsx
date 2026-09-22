@@ -59,9 +59,9 @@ function FaceIcon({ active }: { active: boolean }) {
 }
 
 const TABS = [
-  { path: "/feed", label: "발견", Icon: MunchIcon },
-  { path: "/saved", label: "저장", Icon: BookmarkIcon },
-  { path: "/profile", label: "내 정보", Icon: FaceIcon },
+  { path: "/feed", label: "Discover", Icon: MunchIcon },
+  { path: "/saved", label: "Saved", Icon: BookmarkIcon },
+  { path: "/profile", label: "Profile", Icon: FaceIcon },
 ] as const;
 
 export default function TabBar() {
@@ -69,7 +69,7 @@ export default function TabBar() {
 
   return (
     <div className="tab-bar">
-      <nav aria-label="주요 메뉴" className="tab-bar-content grid grid-cols-3 items-center px-[30px]">
+      <nav aria-label="Main navigation" className="tab-bar-content grid grid-cols-3 items-center px-[30px]">
         {TABS.map((tab) => {
           const isActive = location === tab.path || location.startsWith(tab.path);
           const isProfile = tab.path === "/profile";

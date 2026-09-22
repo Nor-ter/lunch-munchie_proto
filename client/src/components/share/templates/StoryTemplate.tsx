@@ -34,7 +34,8 @@ const StoryTemplate = forwardRef<HTMLDivElement, TemplateProps>(({ course }, ref
 
       {/* Sub comment */}
       <p style={{ fontSize: 12, color: '#EB5053', fontStyle: 'italic', margin: '4px 0 0 0' }}>
-        맛있는 하루 코스 ♥
+
+        A day of good food ♥
       </p>
 
       {/* Map */}
@@ -44,7 +45,8 @@ const StoryTemplate = forwardRef<HTMLDivElement, TemplateProps>(({ course }, ref
 
       {/* Bottom comment */}
       <p style={{ fontSize: 11, color: '#1A1A1A', margin: '12px 0 0 0', flexGrow: 1 }}>
-        맛있는 하루, 너무 완벽해! ♥
+
+        A day of good food ♥
       </p>
 
       {/* Footer */}

@@ -37,12 +37,13 @@ function TemplateSection({
           <p className="mt-1 text-[11px] font-semibold text-[#927D72]">{description}</p>
         </div>
         <span className="mb-0.5 flex shrink-0 items-center gap-1 text-[10px] font-bold text-[#B1988C]">
-          밀어서 보기 <ChevronRight size={13} />
+
+          Swipe to browse <ChevronRight size={13} />
         </span>
       </div>
 
       <div
-        aria-label={`${title} 슬라이드`}
+        aria-label={`${title} slides`}
         className="mt-3 grid grid-flow-col grid-rows-2 auto-cols-[calc((100%_-_2.75rem)/2)] gap-3 overflow-x-auto px-4 pb-4 scrollbar-hide snap-x snap-mandatory"
       >
         {templates.map((template, index) => (
@@ -50,7 +51,7 @@ function TemplateSection({
             key={template.id}
             type="button"
             onClick={() => onSelect(template)}
-            aria-label={`${template.name} 빈 템플릿 보기`}
+            aria-label={`Preview blank ${template.name}`}
             className="snap-start rounded-[20px] border border-[#EBD9D0] bg-[#FFFDFC] p-2 text-left shadow-[0_8px_20px_rgba(91,57,42,0.08)]"
             initial={{ opacity: 0, y: 10 }}
             animate={{ opacity: 1, y: 0 }}
@@ -60,7 +61,7 @@ function TemplateSection({
             <div className="flex h-[192px] w-full items-center justify-center overflow-hidden rounded-[14px] bg-[#F8F1EB]">
               <img
                 src={template.background}
-                alt={`${template.name} 사진 없는 기본 템플릿`}
+                alt={`${template.name} without photos`}
                 className="h-full w-full object-contain"
                 loading={index < 4 ? 'eager' : 'lazy'}
               />
@@ -70,7 +71,7 @@ function TemplateSection({
                 <p className="min-w-0 truncate text-[12px] font-black text-[#3B2A22]">{template.name}</p>
                 <span className="shrink-0 rounded-full bg-[#FFF0EB] px-1.5 py-0.5 text-[8px] font-black text-[#D96B69]">{template.aspect}</span>
               </div>
-              <p className="mt-1 flex items-center gap-1 text-[9px] font-semibold text-[#A28C81]"><ImageOff size={10} /> 사진 없는 기본형</p>
+              <p className="mt-1 flex items-center gap-1 text-[9px] font-semibold text-[#A28C81]"><ImageOff size={10} />  Without photos</p>
             </div>
           </motion.button>
         ))}
@@ -91,18 +92,19 @@ export default function TemplatesBrowsePage() {
       transition={{ duration: 0.22 }}
     >
       <header className="border-b border-[#EEDFD6] bg-[#FFFDFC] px-5 pb-5 pt-[max(12px,env(safe-area-inset-top))]">
-        <BackButton onClick={() => navigate('/feed')} aria-label="먼치피드로 돌아가기" />
+        <BackButton onClick={() => navigate('/feed')} aria-label="Back to Munchie Feed" />
         <p className="mt-5 text-[9px] font-black uppercase tracking-[0.2em] text-[#E66F70]">Munchie templates</p>
-        <h1 className="mt-1 text-[26px] font-black tracking-[-0.03em] text-[#2D211C]">템플릿 한눈에 보기</h1>
+        <h1 className="mt-1 text-[26px] font-black tracking-[-0.03em] text-[#2D211C]">Find your template</h1>
         <p className="mt-2 text-[12px] font-semibold leading-relaxed text-[#8C776B]">
-          모든 Munchie 피드 디자인을 한곳에서 확인해보세요.
+
+          Browse designs for your next food post.
         </p>
       </header>
 
       <TemplateSection
-        eyebrow="Munchie feed"
-        title="맛집 피드 템플릿"
-        description={`4:3 피드 카드 · 전체 ${FEED_TEMPLATES.length}개`}
+        eyebrow="Munchie Feed"
+        title="Post templates"
+        description={`4:3 post cards · ${FEED_TEMPLATES.length} designs`}
         templates={FEED_TEMPLATES}
         onSelect={setSelectedTemplate}
       />

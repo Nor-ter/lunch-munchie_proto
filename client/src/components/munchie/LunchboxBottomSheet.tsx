@@ -401,10 +401,12 @@ export default function LunchboxBottomSheet({
               <div className="flex items-start justify-between gap-3 pb-3">
                 <div>
                   <h2 id="lunchbox-sheet-title" className="text-[18px] font-black text-[#2F211B]">
-                    나의 런치박스 🍱
+
+                    My lunchbox 🍱
                   </h2>
                   <p className="mt-1 text-[11px] leading-relaxed text-[#9B8376]">
-                    위아래로 밀어 메뉴를 보고, 탭한 음식은 통째로 끌어주세요.
+
+                    Scroll to browse, then choose a bite for Lunchiken.
                   </p>
                 </div>
                 <button
@@ -412,7 +414,7 @@ export default function LunchboxBottomSheet({
                   type="button"
                   onClick={onClose}
                   className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[#F7F1EC] text-[#8A756A] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#E85053]"
-                  aria-label="런치박스 닫기"
+                  aria-label="Close lunchbox"
                 >
                   <X size={17} />
                 </button>
@@ -424,7 +426,7 @@ export default function LunchboxBottomSheet({
                 <div
                   className="min-h-0 flex-1 touch-pan-y overflow-y-auto overscroll-contain px-5 py-3 [-webkit-overflow-scrolling:touch]"
                   role="radiogroup"
-                  aria-label="한입 나누기 음식 선택"
+                  aria-label="Choose a bite to share"
                   data-lunchbox-scroll-region="true"
                 >
                   <div
@@ -448,8 +450,8 @@ export default function LunchboxBottomSheet({
                             role="radio"
                             aria-checked={selected}
                             aria-label={unavailable
-                              ? `${item.name}, 품절`
-                              : `${item.name}, 탭하여 선택하거나 런치메이트에게 드래그`}
+                              ? `${item.name}, all gone`
+                              : `${item.name}, tap to select or drag to Lunchiken`}
                             disabled={unavailable || isSubmitting}
                             onClick={() => {
                               if (suppressClickItemIdRef.current === item.id) {
@@ -493,7 +495,7 @@ export default function LunchboxBottomSheet({
                               {item.name}
                             </span>
                             <span className="mt-0.5 text-[9px] font-bold text-[#E9B66F]">
-                              {unavailable ? '품절' : `보유 ${item.quantity}개 · +${item.xpPreview} XP`}
+                              {unavailable ? "All gone" : `${item.quantity} left · +${item.xpPreview} XP`}
                             </span>
                             {selected && (
                               <span className="absolute bottom-2 right-2 flex h-5 w-5 items-center justify-center rounded-full bg-[#F04F55] text-white" aria-hidden="true">
@@ -505,7 +507,8 @@ export default function LunchboxBottomSheet({
                       })}
                     </div>
                     <p className="pb-0.5 pt-2 text-center text-[9px] font-bold text-[#E9B66F]/75">
-                      ↕ 위아래로 밀어 더 많은 음식을 확인하세요
+
+                      ↕ Scroll for more food
                     </p>
                   </div>
                 </div>
@@ -530,15 +533,16 @@ export default function LunchboxBottomSheet({
                     className="h-12 w-full rounded-2xl bg-[#E85053] text-[14px] font-black text-white transition-all active:scale-[0.99] disabled:cursor-not-allowed disabled:bg-[#E6DED8] disabled:text-[#A99A91] disabled:active:scale-100"
                   >
                     {isSubmitting
-                      ? '한입 준비 중…'
+                      ? "Getting your bite ready…"
                       : flowState === 'error'
-                        ? '다시 한입 나누기'
+                        ? "Try again"
                         : selectedItem
-                          ? `${selectedItem.name} 한입 나누기`
-                          : '한입 나누기'}
+                          ? `Share ${selectedItem.name}`
+                          : "Share a bite"}
                   </button>
                   <p className="mt-2 text-center text-[10px] text-[#B09D92]">
-                    음식이 캐릭터 옆에 놓이면 끌어다 먹여주세요. 먹인 음식은 1개 차감돼요.
+
+                    Drag the food to Lunchiken. Each bite uses one item.
                   </p>
                 </footer>
               </>
@@ -547,12 +551,14 @@ export default function LunchboxBottomSheet({
                 <div className="mx-auto flex h-24 w-24 items-center justify-center rounded-[30px] border-2 border-dashed border-[#E5D6CB] bg-[#FBF5F0] text-[46px]" aria-hidden="true">
                   🍽️
                 </div>
-                <p className="mt-5 text-[16px] font-black text-[#3A2B24]">새로운 한입이 아직 없어요</p>
+                <p className="mt-5 text-[16px] font-black text-[#3A2B24]">No bites yet</p>
                 <p className="mx-auto mt-2 max-w-[270px] text-[12px] leading-relaxed text-[#9B8376]">
-                  맛있는 기록을 만들면 런치박스에 새로운 음식이 생겨요.
+
+                  Share a food post to earn something for your lunchbox.
                 </p>
                 <p className="mt-3 text-[10px] font-semibold text-[#C3AFA4]">
-                  기록 화면으로 이동하는 기능은 다음 단계에서 연결돼요.
+
+                  Posting from here is coming soon.
                 </p>
               </div>
             )}

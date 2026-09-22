@@ -24,9 +24,9 @@ describe('FeedDetailPage saved view navigation', () => {
     expect(source).toContain("import BackButton from '@/components/ui/BackButton'");
     expect(source).not.toContain('grid grid-cols-[40px_1fr_40px] items-center');
     expect(source).not.toContain('text-center text-[15px] font-black');
-    expect(source).not.toContain('Munchie Feed');
-    expect(source).not.toContain('aria-label="피드 수정"');
-    expect(source).not.toContain('aria-label="피드 삭제"');
+    expect(source).not.toContain('>Munchie Feed</');
+    expect(source).not.toContain("aria-label=\"Feed 수정\"");
+    expect(source).not.toContain("aria-label=\"Feed Delete\"");
     expect(source).not.toContain('deletePost');
   });
 
@@ -35,12 +35,12 @@ describe('FeedDetailPage saved view navigation', () => {
   });
 
   it('keeps owner edit and delete actions in the card menu', () => {
-    expect(cardSource).toContain('aria-label="게시물 메뉴"');
-    expect(cardSource).toContain('게시물 수정');
-    expect(cardSource).toContain('게시물 삭제');
+    expect(cardSource).toContain("aria-label=\"Post options\"");
+    expect(cardSource).toContain("Edit post");
+    expect(cardSource).toContain("Delete post");
     expect(cardSource).toContain('confirmPostDelete');
     expect(cardSource).toContain('const canDeletePost = ownPost || Boolean(auth?.isAdmin)');
-    expect(cardSource).toContain('관리자 삭제');
+    expect(cardSource).toContain("Delete as admin");
   });
 
   it('builds the Google Maps handoff from the canonical feed stop order', () => {

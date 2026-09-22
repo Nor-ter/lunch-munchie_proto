@@ -42,12 +42,12 @@ async function shareBiteMock(item: LunchboxFoodItem, attempt: number, signal: Ab
 
   // 실패 경로를 직접 확인할 수 있도록 딸기 케이크의 첫 요청만 실패시킨다.
   if (item.id === FAIL_ONCE_FOOD_ID && attempt === 1) {
-    throw new LunchmateMockError('미리보기 요청이 잠시 실패했어요. 선택한 음식으로 다시 시도해 주세요.');
+    throw new LunchmateMockError("That bite didn't work. Try the same food again.");
   }
 
   return {
     xpGained: item.xpPreview,
-    message: `${item.placeholder ?? '🍽️'} 맛있는 한입! +${item.xpPreview} XP`,
+    message: `${item.placeholder ?? '🍽️'} Thanks for the bite! +${item.xpPreview} XP`,
   };
 }
 
@@ -163,7 +163,7 @@ export function useLunchmateFlow({
       if (error instanceof DOMException && error.name === 'AbortError') return;
       setErrorMessage(error instanceof LunchmateMockError
         ? error.message
-        : '미리보기 요청에 실패했어요. 음식은 차감되지 않았으니 다시 시도해 주세요.');
+        : "Couldn't share that bite. Your food is still there. Try again.");
       setState('error');
     } finally {
       if (activeControllerRef.current === controller) {

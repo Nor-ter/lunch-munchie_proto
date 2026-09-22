@@ -41,7 +41,7 @@ export function useProfileFeed(userId: string) {
           credentials: "same-origin",
           cache: "no-store",
         });
-        if (!response.ok) throw new Error("프로필 피드를 불러오지 못했어요.");
+        if (!response.ok) throw new Error("Couldn't load profile posts.");
         const page = normalizeFeedApiPage(await response.json());
         posts.push(...page.items.map(item => feedPostFromApi(item, profile)));
         cursor = page.hasMore ? page.nextCursor : null;
@@ -55,7 +55,7 @@ export function useProfileFeed(userId: string) {
       setRemotePosts(Array.from(uniqueByCourse.values()));
     } catch (cause) {
       if (sequence !== requestSequence.current) return;
-      setError(cause instanceof Error ? cause : new Error("프로필 피드를 불러오지 못했어요."));
+      setError(cause instanceof Error ? cause : new Error("Couldn't load profile posts."));
     } finally {
       if (sequence === requestSequence.current) setIsLoading(false);
     }

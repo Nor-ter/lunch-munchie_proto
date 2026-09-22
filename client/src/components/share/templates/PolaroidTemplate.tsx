@@ -1,3 +1,5 @@
+import { countLabel } from '@/lib/displayCopy';
+import { displayLabel } from '@/lib/displayCopy';
 import { forwardRef } from 'react';
 import { Course } from '@/types/course';
 import { CourseMap } from '@/components/course/CourseMap';
@@ -44,13 +46,13 @@ const PolaroidTemplate = forwardRef<HTMLDivElement, TemplateProps>(({ course }, 
           {course.title}
         </p>
         <p style={{ fontSize: 10, color: '#9E9E9E', margin: 0, textAlign: 'center' }}>
-          @{course.authorHandle} · {course.places.length} stops
+          @{course.authorHandle} · {countLabel(course.places.length, 'place')}
         </p>
       </div>
       <div style={{ display: 'flex', gap: 4, marginTop: 10, flexWrap: 'wrap', justifyContent: 'center' }}>
         {course.hashtags.slice(0, 3).map((tag) => (
           <span key={tag} style={{ fontSize: 9, color: '#EB5053' }}>
-            #{tag}
+            #{displayLabel(tag)}
           </span>
         ))}
       </div>

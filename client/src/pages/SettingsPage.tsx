@@ -21,15 +21,15 @@ import {
 const EMOJIS = ['😊', '🍱', '🍜', '🍣', '🥩', '🍕', '🌮', '🍔', '🥗', '☕', '🎂', '🍰'];
 
 const FAVORITE_FOOD_OPTIONS = [
-  { value: '한식', label: '한식' },
-  { value: '일식', label: '일식' },
-  { value: '중식', label: '중식' },
-  { value: '태국', label: '태국' },
-  { value: '베트남', label: '베트남' },
-  { value: '이탈리안', label: '이탈리안' },
-  { value: '카페', label: '카페' },
-  { value: '브런치', label: '브런치' },
-  { value: '디저트', label: '디저트' },
+  { value: '한식', label: "Korean" },
+  { value: '일식', label: "Japanese" },
+  { value: '중식', label: "Chinese" },
+  { value: '태국', label: "Thai" },
+  { value: '베트남', label: "Vietnamese" },
+  { value: '이탈리안', label: "Italian" },
+  { value: '카페', label: "Cafe" },
+  { value: '브런치', label: "Brunch" },
+  { value: '디저트', label: "Dessert" },
 ] as const;
 const FAVORITE_FOOD_VALUES = new Set<string>(FAVORITE_FOOD_OPTIONS.map(option => option.value));
 // Mirrors the canonical root package.json version without expanding Vite config for one display value.
@@ -45,7 +45,7 @@ function SettingsHeader({ title, backTo, action }: { title: string; backTo: stri
   const [, navigate] = useLocation();
   return (
     <header className="sticky top-0 z-20 grid grid-cols-[minmax(36px,1fr)_auto_minmax(36px,1fr)] items-center border-b border-[#EEDFD7] bg-[#FCF4EE]/95 px-4 pb-3 pt-[max(12px,env(safe-area-inset-top))] backdrop-blur">
-      <BackButton onClick={() => navigate(backTo)} aria-label="뒤로 가기" />
+      <BackButton onClick={() => navigate(backTo)} aria-label="Go back" />
       <h1 className="text-center text-[17px] font-black text-[#30231E]">{title}</h1>
       <span className="justify-self-end">{action}</span>
     </header>
@@ -135,7 +135,7 @@ function SettingsUnavailableRow({
         <span className="block text-[14px] font-semibold text-[#33251F]">{label}</span>
         {detail && <span className="mt-1 block truncate text-[11px] font-normal text-[#A08D84]">{detail}</span>}
       </span>
-      <span className="shrink-0 rounded-full bg-[#F6EFEB] px-2.5 py-1 text-[10px] font-semibold text-[#9A857B]">준비 중</span>
+      <span className="shrink-0 rounded-full bg-[#F6EFEB] px-2.5 py-1 text-[10px] font-semibold text-[#9A857B]">Coming soon</span>
     </div>
   );
 }
@@ -143,7 +143,7 @@ function SettingsUnavailableRow({
 function AppVersionRow() {
   return (
     <div className="flex min-h-14 items-center justify-between gap-4 border-t border-[#F2E6E0] px-4">
-      <span className="text-[13px] font-semibold text-[#665149]">앱 버전</span>
+      <span className="text-[13px] font-semibold text-[#665149]">App version</span>
       <span className="max-w-[50%] truncate text-right text-[12px] font-normal tabular-nums text-[#A08D84]">{APP_VERSION}</span>
     </div>
   );
@@ -170,20 +170,20 @@ export default function SettingsPage() {
   useEffect(() => {
     if (sessionStorage.getItem('lm_logout_feedback') !== 'true') return;
     sessionStorage.removeItem('lm_logout_feedback');
-    toast.success('로그아웃되었습니다');
+    toast.success("Logged out");
   }, []);
 
   const showAccountDeletionUnavailable = () => {
-    if (!window.confirm('계정 삭제 기능을 확인할까요?\n현재 단계에서는 계정이 삭제되지 않습니다.')) return;
-    toast.info('현재 계정 삭제 기능은 아직 제공되지 않습니다.');
+    if (!window.confirm("Check account deletion availability?\nYour account won't be deleted.")) return;
+    toast.info("Account deletion isn't available yet.");
   };
 
   return (
     <main className="min-h-dvh bg-[#FCF4EE] pb-[max(28px,env(safe-area-inset-bottom))] text-[#30231E]">
-      <SettingsHeader title="설정" backTo="/profile" />
+      <SettingsHeader title="Settings" backTo="/profile" />
       <div className="space-y-7 px-4 py-5">
         {auth.isLoading || !auth.data ? (
-          <div aria-label="로그인 상태 확인 중" className="min-h-[88px] animate-pulse rounded-[20px] border border-[#F0E2DA] bg-[#FFF8F4] shadow-[0_3px_12px_rgba(91,57,44,0.05)]" />
+          <div aria-label="Checking login status" className="min-h-[88px] animate-pulse rounded-[20px] border border-[#F0E2DA] bg-[#FFF8F4] shadow-[0_3px_12px_rgba(91,57,44,0.05)]" />
         ) : auth.data.isAnonymous ? (
           <AccountBanner variant="settings-entry" />
         ) : (
@@ -191,41 +191,41 @@ export default function SettingsPage() {
             type="button"
             onClick={() => navigate('/settings/profile')}
             data-testid="settings-profile-summary"
-            aria-label="프로필 편집"
+            aria-label="Edit profile"
             className="flex min-h-[96px] w-full items-center gap-4 rounded-[20px] border border-[#F0D8CE] bg-[linear-gradient(135deg,#FFF9F5_0%,#FFF0EA_100%)] px-5 text-left shadow-[0_6px_18px_rgba(91,57,44,0.09)] transition-[transform,box-shadow] hover:shadow-[0_8px_22px_rgba(91,57,44,0.11)] active:scale-[0.99] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#F28A8D]"
           >
             <SettingsAvatar photo={profile.avatarPhoto} emoji={profile.emoji} size="identity" />
             <span className="min-w-0 flex-1">
               <span className="block truncate text-[16px] font-black text-[#30221C]">{profile.name}</span>
-              <span className="mt-1 block truncate text-[12px] font-medium text-[#9A8175]">@{profile.handle || '아이디 설정'}</span>
+              <span className="mt-1 block truncate text-[12px] font-medium text-[#9A8175]">{profile.handle ? `@${profile.handle}` : "Choose a username"}</span>
             </span>
             <ChevronRight size={18} className="shrink-0 text-[#B9AAA2]" aria-hidden="true" />
           </button>
         )}
 
-        {isAuthenticated && <Section label="개인화">
+        {isAuthenticated && <Section label="Preferences">
           <SettingsRow
             icon={<Bell size={17} />}
-            label="알림"
-            detail="알림 설정 안내"
+            label="Notifications"
+            detail="Notification settings"
             onClick={() => navigate('/settings/notifications')}
           />
         </Section>}
 
-        <Section label="일반">
-          <SettingsUnavailableRow icon={<Globe2 size={17} />} label="언어" detail="한국어" />
+        <Section label="General">
+          <SettingsUnavailableRow icon={<Globe2 size={17} />} label="Language" detail="English" />
           <div className="border-t border-[#F2E6E0]">
-            <SettingsUnavailableRow icon={<Palette size={17} />} label="테마" detail="시스템 설정" />
+            <SettingsUnavailableRow icon={<Palette size={17} />} label="Theme" detail="System default" />
           </div>
         </Section>
 
-        <Section label="지원 및 정보">
-          <SettingsUnavailableRow icon={<MessageCircle size={17} />} label="문의 및 피드백" />
+        <Section label="Support and about">
+          <SettingsUnavailableRow icon={<MessageCircle size={17} />} label="Help and feedback" />
           <div className="border-t border-[#F2E6E0]">
-            <SettingsUnavailableRow icon={<ShieldCheck size={17} />} label="개인정보 처리방침" />
+            <SettingsUnavailableRow icon={<ShieldCheck size={17} />} label="Privacy policy" />
           </div>
           <div className="border-t border-[#F2E6E0]">
-            <SettingsUnavailableRow icon={<FileText size={17} />} label="이용약관" />
+            <SettingsUnavailableRow icon={<FileText size={17} />} label="Terms of use" />
           </div>
           <AppVersionRow />
         </Section>
@@ -238,7 +238,8 @@ export default function SettingsPage() {
               className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl px-4 text-[12px] font-semibold text-[#C92F3B] transition-colors hover:bg-[#FFECEE] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#F28A8D]"
             >
               <Trash2 size={15} aria-hidden="true" />
-              계정 삭제
+
+              Delete account
             </button>
           </div>
         )}
@@ -263,7 +264,7 @@ export function ProfileEditSettingsPage() {
       method: 'PATCH', credentials: 'same-origin', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ avatarUrl: null }),
     });
-    toast.success('아바타를 변경했어요! ' + e);
+    toast.success("Avatar updated! " + e);
   };
 
   const handleAvatarUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -277,17 +278,17 @@ export function ProfileEditSettingsPage() {
         body: JSON.stringify({ dataUrl }),
       });
       const upload = await uploadResponse.json().catch(() => ({})) as { url?: string; error?: string };
-      if (!uploadResponse.ok || !upload.url) throw new Error(upload.error || '사진 업로드에 실패했어요.');
+      if (!uploadResponse.ok || !upload.url) throw new Error(upload.error || "Couldn't upload the photo.");
       const profileResponse = await fetch('/api/profile', {
         method: 'PATCH', credentials: 'same-origin', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ avatarUrl: upload.url }),
       });
       const saved = await profileResponse.json().catch(() => ({})) as { profile?: { profile_image_url?: string | null }; error?: string };
-      if (!profileResponse.ok) throw new Error(saved.error || '프로필 사진을 저장하지 못했어요.');
+      if (!profileResponse.ok) throw new Error(saved.error || "Couldn't save your profile photo.");
       updateProfile({ avatarPhoto: saved.profile?.profile_image_url ?? upload.url });
-      toast.success('프로필 사진을 업데이트했어요! 📸');
+      toast.success("Profile photo updated.");
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : '사진을 불러오지 못했어요');
+      toast.error(error instanceof Error ? error.message : "Couldn't load the photo.");
     }
   };
 
@@ -297,11 +298,11 @@ export function ProfileEditSettingsPage() {
     const username = name.trim();
     const normalizedHandle = handle.trim().replace(/^@/, '').toLowerCase();
     if (!username) {
-      toast.error('이름을 입력해 주세요.');
+      toast.error("Enter your name.");
       return;
     }
     if (!/^[a-z0-9_]{3,20}$/.test(normalizedHandle)) {
-      toast.error('아이디는 영문 소문자, 숫자, 밑줄로 3~20자까지 입력해 주세요.');
+      toast.error("Use 3–20 lowercase letters, numbers or underscores.");
       return;
     }
     setSaving(true);
@@ -317,16 +318,16 @@ export function ProfileEditSettingsPage() {
         error?: string;
       };
       if (!response.ok || !saved.profile?.username || !saved.profile.handle) {
-        throw new Error(saved.error || '프로필을 저장하지 못했어요.');
+        throw new Error(saved.error || "Couldn't save your profile.");
       }
       updateProfile({ name: saved.profile.username, handle: saved.profile.handle });
       if (new URLSearchParams(window.location.search).has(GOOGLE_PROFILE_IMPORT_PARAM)) {
         markGoogleProfilePrompted();
       }
-      toast.success('프로필을 저장했어요.');
+      toast.success("Profile saved.");
       navigate('/settings');
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : '프로필을 저장하지 못했어요.');
+      toast.error(error instanceof Error ? error.message : "Couldn't save your profile.");
     } finally {
       setSaving(false);
     }
@@ -334,13 +335,13 @@ export function ProfileEditSettingsPage() {
 
   return (
     <main className="flex min-h-dvh flex-col bg-[#FCF4EE] text-[#30231E]">
-      <SettingsHeader title="프로필 편집" backTo="/settings" />
+      <SettingsHeader title="Edit profile" backTo="/settings" />
       <div className="flex min-h-0 flex-1 flex-col px-5 pt-6">
         <div className="mb-6 flex flex-col items-center">
           <div data-testid="profile-edit-avatar-preview">
             <SettingsAvatar photo={profile.avatarPhoto} emoji={profile.emoji} size="preview" />
           </div>
-          <button type="button" onClick={() => setAvatarOpen(true)} className="mt-2 min-h-11 rounded-full px-4 text-[12px] font-bold text-[#D94D55] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#F28A8D]">사진 변경</button>
+          <button type="button" onClick={() => setAvatarOpen(true)} className="mt-2 min-h-11 rounded-full px-4 text-[12px] font-bold text-[#D94D55] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#F28A8D]">Change photo</button>
         {/* 설정 프로필 사진 업로드 */}
         <input
           ref={avatarFileRef}
@@ -353,7 +354,7 @@ export function ProfileEditSettingsPage() {
 
         <div className="space-y-5">
           <label className="block">
-            <span className="mb-2 block text-[12px] font-black text-[#665149]">이름</span>
+            <span className="mb-2 block text-[12px] font-black text-[#665149]">Name</span>
             <input
               value={name}
               onChange={event => setName(event.target.value.slice(0, 80))}
@@ -362,7 +363,7 @@ export function ProfileEditSettingsPage() {
           </label>
 
           <label className="block">
-            <span className="mb-2 block text-[12px] font-black text-[#665149]">아이디</span>
+            <span className="mb-2 block text-[12px] font-black text-[#665149]">Username</span>
             <span className="flex h-12 items-center rounded-[14px] border border-[#E5D7CF] bg-white px-4 focus-within:border-[#E85053] focus-within:ring-2 focus-within:ring-[#FAD6D7]">
               <span className="mr-1 text-[14px] font-bold text-[#9B887C]">@</span>
               <input
@@ -375,20 +376,20 @@ export function ProfileEditSettingsPage() {
                 className="min-w-0 flex-1 bg-transparent text-[14px] font-bold outline-none"
               />
             </span>
-            <span className="mt-1.5 block text-[10px] font-semibold text-[#A58F84]">영문 소문자, 숫자, 밑줄 · 3–20자</span>
+            <span className="mt-1.5 block text-[10px] font-semibold text-[#A58F84]">3–20 lowercase letters, numbers or underscores</span>
           </label>
         </div>
 
         {authenticatedUser && <section className="mt-6">
-          <h2 className="mb-2 px-1 text-[11px] font-black tracking-[0.04em] text-[#9A8175]">연결된 계정</h2>
+          <h2 className="mb-2 px-1 text-[11px] font-black tracking-[0.04em] text-[#9A8175]">Connected account</h2>
           <div className="space-y-2.5">
             <div data-testid="google-account-card" className="flex min-h-[68px] items-center gap-3 rounded-[16px] border border-[#EADDD6] bg-white px-4 shadow-[0_2px_8px_rgba(70,45,35,0.06)]">
               <span className="flex size-9 shrink-0 items-center justify-center rounded-full bg-[#F8F8F8]"><GoogleMark /></span>
               <span className="min-w-0 flex-1">
-                <span className="block text-[14px] font-semibold text-[#33251F]">Google 계정</span>
-                <span className="mt-1 block truncate text-[11px] font-normal text-[#A08D84]">{authenticatedUser.email ?? authenticatedUser.name ?? '계정 정보 없음'}</span>
+                <span className="block text-[14px] font-semibold text-[#33251F]">Google account</span>
+                <span className="mt-1 block truncate text-[11px] font-normal text-[#A08D84]">{authenticatedUser.email ?? authenticatedUser.name ?? "Account details unavailable"}</span>
               </span>
-              <span className="shrink-0 rounded-full bg-[#EEF4FF] px-2.5 py-1 text-[10px] font-bold text-[#4285F4]">연결됨</span>
+              <span className="shrink-0 rounded-full bg-[#EEF4FF] px-2.5 py-1 text-[10px] font-bold text-[#4285F4]">Connected</span>
             </div>
             <AccountLogoutButton
               className="mt-0 h-16 justify-start rounded-[16px] border border-[#EADDD6] bg-white px-4 text-[14px] font-semibold text-[#33251F] shadow-[0_2px_8px_rgba(70,45,35,0.06)] hover:bg-[#FFF9F6]"
@@ -405,7 +406,8 @@ export function ProfileEditSettingsPage() {
             className="flex h-12 w-full items-center justify-center gap-2 rounded-[15px] bg-[#E85053] text-[14px] font-black text-white shadow-[0_7px_18px_rgba(210,62,67,0.2)] transition-transform active:scale-[0.98] focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-[#F5B7BA] disabled:opacity-60"
           >
             {saving && <LoaderCircle size={16} className="animate-spin" />}
-            저장하기
+
+            Save
           </button>
         </SettingsSaveBar>
 
@@ -426,8 +428,8 @@ export function ProfileEditSettingsPage() {
             >
               <div className="mx-auto mb-4 h-1 w-10 rounded-full bg-gray-200" />
               <div className="mb-4 flex items-center justify-between">
-                <p className="font-bold text-[16px]">아바타 변경</p>
-                <button type="button" aria-label="사진 변경 닫기" onClick={closeAvatar}><X size={18} className="text-gray-400" /></button>
+                <p className="font-bold text-[16px]">Change avatar</p>
+                <button type="button" aria-label="Close avatar options" onClick={closeAvatar}><X size={18} className="text-gray-400" /></button>
               </div>
 
               <div className="mb-5 flex flex-col items-center">
@@ -436,7 +438,7 @@ export function ProfileEditSettingsPage() {
                   onClick={() => avatarFileRef.current?.click()}
                   className="mt-3 flex items-center gap-1.5 rounded-full bg-[#EB5053] text-white px-4 h-9 text-[12px] font-bold active:scale-95 transition-transform"
                 >
-                  <Upload size={13} /> 사진 업로드
+                  <Upload size={13} />  Upload photo
                 </button>
                 {profile.avatarPhoto && (
                   <button
@@ -446,16 +448,17 @@ export function ProfileEditSettingsPage() {
                         method: 'PATCH', credentials: 'same-origin', headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify({ avatarUrl: null }),
                       });
-                      toast('사진을 지웠어요 — 이모지로 돌아가요');
+                      toast("Photo removed. Your emoji is back.");
                     }}
                     className="mt-2 text-[11px] font-semibold text-[#B0A090] underline underline-offset-2"
                   >
-                    사진 삭제하고 이모지로
+
+                    Use emoji instead
                   </button>
                 )}
               </div>
 
-              <p className="mb-2 text-[12px] font-semibold text-[#9B9B9B]">기본 이모지</p>
+              <p className="mb-2 text-[12px] font-semibold text-[#9B9B9B]">Choose an emoji</p>
               <div className="flex flex-wrap gap-2">
                 {EMOJIS.map(e => {
                   const active = !profile.avatarPhoto && profile.emoji === e;
@@ -475,7 +478,8 @@ export function ProfileEditSettingsPage() {
                 onClick={closeAvatar}
                 className="mt-6 w-full h-12 rounded-2xl bg-[#E85053] text-white font-bold text-[14px]"
               >
-                완료
+
+                Done
               </button>
             </motion.div>
           </>
@@ -520,7 +524,7 @@ function PreferenceChips({
 type PreferenceCategory = 'favorites' | 'dietary' | 'avoidances';
 
 function summarizeSelections(values: string[], options: ReadonlyArray<{ value: string; label: string }>) {
-  if (values.length === 0) return '선택한 항목 없음';
+  if (values.length === 0) return "Nothing selected";
   const labels = values.map(value => options.find(option => option.value === value)?.label ?? value);
   const visible = labels.slice(0, 3);
   const remainder = values.length - visible.length;
@@ -596,7 +600,7 @@ export function FoodPreferencesSettingsPage() {
       dietary: normalizeDietaryPreferences(selected),
       favoriteFoods: normalizeFavoriteFoods(favoriteFoods),
     });
-    toast.success('음식 취향을 저장했어요.');
+    toast.success("Food preferences saved.");
     navigate('/settings');
   };
 
@@ -607,7 +611,7 @@ export function FoodPreferencesSettingsPage() {
   return (
     <main className="flex min-h-dvh flex-col bg-[#FCF4EE] text-[#30231E]">
       <SettingsHeader
-        title="음식 취향"
+        title="Food preferences"
         backTo="/settings"
         action={(
           <button
@@ -615,17 +619,18 @@ export function FoodPreferencesSettingsPage() {
             onClick={() => { setFavoriteFoods([]); setSelected([]); }}
             className="rounded-lg px-2 py-1.5 text-[12px] font-semibold text-[#C43D45] hover:bg-[#FFE9EA] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#F28A8D]"
           >
-            전체 해제
+
+            Clear all
           </button>
         )}
       />
       <div className="flex min-h-0 flex-1 flex-col px-5 pt-6">
-        <p className="text-[15px] font-semibold leading-6 text-[#49372F]">내 취향에 맞는 코스를 추천해드릴게요.</p>
+        <p className="text-[15px] font-semibold leading-6 text-[#49372F]">Find courses that suit your taste.</p>
 
         <div className="mt-7 space-y-3">
-          <PreferenceCategoryCard id="favorites" title="좋아하는 음식" options={FAVORITE_FOOD_OPTIONS} selected={favoriteFoods} expanded={expandedCategory === 'favorites'} onToggleExpanded={toggleExpandedCategory} onToggleValue={toggleFavoriteFood} />
-          <PreferenceCategoryCard id="dietary" title="식단 선호" options={DIETARY_REQUIREMENTS} selected={selected.filter(value => DIETARY_REQUIREMENTS.some(option => option.value === value))} expanded={expandedCategory === 'dietary'} onToggleExpanded={toggleExpandedCategory} onToggleValue={toggle} />
-          <PreferenceCategoryCard id="avoidances" title="피하고 싶은 음식" options={INGREDIENT_AVOIDANCES} selected={selected.filter(value => INGREDIENT_AVOIDANCES.some(option => option.value === value))} expanded={expandedCategory === 'avoidances'} onToggleExpanded={toggleExpandedCategory} onToggleValue={toggle} />
+          <PreferenceCategoryCard id="favorites" title="Favourite cuisines" options={FAVORITE_FOOD_OPTIONS} selected={favoriteFoods} expanded={expandedCategory === 'favorites'} onToggleExpanded={toggleExpandedCategory} onToggleValue={toggleFavoriteFood} />
+          <PreferenceCategoryCard id="dietary" title="Dietary preferences" options={DIETARY_REQUIREMENTS} selected={selected.filter(value => DIETARY_REQUIREMENTS.some(option => option.value === value))} expanded={expandedCategory === 'dietary'} onToggleExpanded={toggleExpandedCategory} onToggleValue={toggle} />
+          <PreferenceCategoryCard id="avoidances" title="Ingredients to avoid" options={INGREDIENT_AVOIDANCES} selected={selected.filter(value => INGREDIENT_AVOIDANCES.some(option => option.value === value))} expanded={expandedCategory === 'avoidances'} onToggleExpanded={toggleExpandedCategory} onToggleValue={toggle} />
         </div>
 
         <SettingsSaveBar>
@@ -634,7 +639,8 @@ export function FoodPreferencesSettingsPage() {
             onClick={save}
             className="h-12 w-full rounded-[15px] bg-[#E85053] text-[14px] font-black text-white shadow-[0_7px_18px_rgba(210,62,67,0.2)] transition-transform active:scale-[0.98] focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-[#F5B7BA]"
           >
-            저장하기
+
+            Save
           </button>
         </SettingsSaveBar>
       </div>
@@ -645,12 +651,12 @@ export function FoodPreferencesSettingsPage() {
 export function NotificationSettingsPage() {
   return (
     <main className="min-h-dvh bg-[#FCF4EE] text-[#30231E]">
-      <SettingsHeader title="알림" backTo="/settings" />
+      <SettingsHeader title="Notifications" backTo="/settings" />
       <div className="px-5 py-7">
         <section className="rounded-[18px] border border-[#E8D9D1] bg-white px-5 py-8 text-center shadow-[0_5px_18px_rgba(91,57,44,0.05)]">
           <span className="mx-auto flex size-12 items-center justify-center rounded-full bg-[#FFF0EC] text-[#D94D55]"><Bell size={22} /></span>
-          <h2 className="mt-4 text-[15px] font-black">알림 설정을 준비하고 있어요</h2>
-          <p className="mt-2 text-[12px] font-semibold leading-5 text-[#927C72]">알림 기능이 연결되면 이 화면에서 수신 항목을 직접 관리할 수 있어요.</p>
+          <h2 className="mt-4 text-[15px] font-black">Notifications are coming soon</h2>
+          <p className="mt-2 text-[12px] font-semibold leading-5 text-[#927C72]">You'll be able to choose which updates you receive here.</p>
         </section>
       </div>
     </main>

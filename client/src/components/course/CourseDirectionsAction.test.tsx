@@ -12,10 +12,10 @@ describe('CourseDirectionsAction', () => {
       />,
     );
 
-    expect(markup).toContain('Google 지도에서 길찾기');
+    expect(markup).toContain("Open in Google Maps");
     expect(markup).toContain('target="_blank"');
-    expect(markup).toContain('저장된 3곳 순서대로 경로를 엽니다.');
-    expect(markup).toContain('실제 이동 시간은 Google 지도에서 확인하세요.');
+    expect(markup).toContain("Follow all 3 places in order.");
+    expect(markup).toContain('Check travel times in Google Maps.');
     expect(markup).not.toContain('정확한 일정');
   });
 
@@ -25,9 +25,9 @@ describe('CourseDirectionsAction', () => {
     );
 
     expect(markup).toContain('disabled=""');
-    expect(markup).toContain('길찾기 정보 없음');
-    expect(markup).toContain('모든 장소에 주소 또는 좌표가 있어야');
-    expect(markup).toContain('순서를 보존한 길찾기');
+    expect(markup).toContain("Directions unavailable");
+    expect(markup).toContain("Some places are missing location details");
+    expect(markup).toContain('directions aren&#x27;t available.');
     expect(markup).not.toContain('href=');
   });
 });

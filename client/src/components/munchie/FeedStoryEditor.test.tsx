@@ -122,33 +122,33 @@ describe('FeedStoryEditor markup', () => {
       />,
     );
 
-    expect(html).toContain('aria-label="피드 슬라이드 편집기"');
-    expect(html).toContain('aria-label="이전 사진"');
-    expect(html).toContain('aria-label="다음 사진"');
-    expect(html).toContain('aria-roledescription="편집 슬라이드"');
+    expect(html).toContain("aria-label=\"Photo editor\"");
+    expect(html).toContain("aria-label=\"Previous photo\"");
+    expect(html).toContain("aria-label=\"Next photo\"");
+    expect(html).toContain("aria-roledescription=\"Edit slide\"");
     expect(html).toContain('data-story-ratio="4:5"');
     expect(html).toContain('aspect-[4/5]');
     expect(html).toContain('data-overlay-size="md"');
-    expect(html).toContain('aria-label="1 / 2 사진"');
+    expect(html).toContain("aria-label=\"Photo 1 of 2\"");
     expect(html).toContain('tabindex="0"');
     expect(html).toContain('src="/photos/uploads/author/a.jpg"');
     expect(html).toContain('첫 사진 정보');
     expect(html).not.toContain('둘째 사진 정보');
-    expect(html).toContain('1번 사진만 편집 중');
-    expect(html).toContain('1번째 사진 선택');
-    expect(html).toContain('2번째 사진 선택');
-    for (const label of ['코스맵', '음식명', '식당명', '가격', '한줄평', '자유텍스트']) {
+    expect(html).toContain('Editing photo 1 only');
+    expect(html).toContain('Select photo 1');
+    expect(html).toContain('Select photo 2');
+    for (const label of ['Course Map', 'Dish name', 'Restaurant name', 'Price', 'Caption', 'Text']) {
       expect(html).toContain(label);
     }
     expect(html).toContain('h-11 w-11');
-    expect(html).toContain('디자인');
-    expect(html).toContain('심플');
-    expect(html).toContain('반투명');
-    expect(html).toContain('빠른 위치');
-    expect(html).toContain('왼쪽 위에 배치');
-    expect(html).toContain('정가운데에 배치');
-    expect(html).toContain('오른쪽 아래에 배치');
-    expect(html).toContain('이 사진에만 저장돼요');
+    expect(html).toContain("Style");
+    expect(html).toContain("Simple");
+    expect(html).toContain("Translucent");
+    expect(html).toContain("Position");
+    expect(html).toContain('Place at Top left');
+    expect(html).toContain('Place at Centre');
+    expect(html).toContain('Place at Bottom right');
+    expect(html).toContain('Changes apply to this photo only.');
     expect(html).not.toContain('type="file"');
     expect(html).not.toContain('dangerouslySetInnerHTML');
   });
@@ -158,9 +158,9 @@ describe('FeedStoryEditor markup', () => {
       <FeedStoryEditor slides={[]} onChange={vi.fn()} />,
     );
 
-    expect(html).toContain('편집할 사진이 없어요');
-    expect(html).toContain('먼저 게시 흐름에서 사진을 추가해 주세요.');
-    expect(html).not.toContain('사진 업로드');
+    expect(html).toContain("No photos to edit");
+    expect(html).toContain("Add a photo to get started.");
+    expect(html).not.toContain("Upload photo");
     expect(html).not.toContain('type="file"');
   });
 });

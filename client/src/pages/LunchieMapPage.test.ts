@@ -8,7 +8,7 @@ describe('LunchieMapPage persisted restaurant recovery', () => {
   it('loads an exact saved restaurant when it is absent from the startup catalogue', () => {
     expect(source).toContain('fetchRestaurantById(restaurantId)');
     expect(source).toContain('registerRestaurants([found])');
-    expect(source).toContain('식당 위치를 불러오는 중…');
+    expect(source).toContain("Loading restaurant location…");
   });
 
   it('uses the app Google Maps stack and renders the exact restaurant marker', () => {
@@ -25,7 +25,7 @@ describe('LunchieMapPage persisted restaurant recovery', () => {
   it('uses the shared header back-button and returns to the unified saved list', () => {
     expect(source).toContain("import BackButton from '@/components/ui/BackButton'");
     expect(source).toContain('<BackButton');
-    expect(source).toContain('aria-label="저장으로 돌아가기"');
+    expect(source).toContain("aria-label=\"Back to saved\"");
     expect(source).toContain("const SAVED_PATH = '/saved'");
     expect(source).toContain('navigate(SAVED_PATH)');
     expect(source).not.toContain('window.history.back()');

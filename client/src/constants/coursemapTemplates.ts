@@ -37,11 +37,11 @@ export interface CoursemapTemplate {
 const ORIGINAL_COURSEMAP_TEMPLATES: CoursemapTemplate[] = [
   {
     id: 'nice-orange',
-    name: '나이스 오렌지',
+    name: "Nice orange",
     image: '/templates4_3/munchie-01.png',
     frameImage: '/templates4_3/munchie-01.png',
-    description: '오렌지 체크와 스마일 장식이 있는 먼치 프레임이에요.',
-    bestFor: '데이트 · 소풍 · 기분 좋은 하루',
+    description: "Orange checks and smiley details.",
+    bestFor: "Dates · Picnics · Days out",
     frameInset: { top: 11, right: 10, bottom: 9, left: 10 },
     transparentFrame: true,
     slots: [
@@ -52,11 +52,11 @@ const ORIGINAL_COURSEMAP_TEMPLATES: CoursemapTemplate[] = [
   },
   {
     id: 'lucky-green',
-    name: '럭키 그린',
+    name: "Lucky green",
     image: '/templates4_3/munchie-02.png',
     frameImage: '/templates4_3/munchie-02.png',
-    description: '네잎클로버와 무지개가 가득한 lucky day 프레임이에요.',
-    bestFor: '데이트 · 소풍 · 기분 좋은 하루',
+    description: "Clovers and rainbows for a lucky day.",
+    bestFor: "Dates · Picnics · Days out",
     frameInset: { top: 11, right: 10, bottom: 9, left: 10 },
     transparentFrame: true,
     slots: [
@@ -67,11 +67,11 @@ const ORIGINAL_COURSEMAP_TEMPLATES: CoursemapTemplate[] = [
   },
   {
     id: 'yellow-note',
-    name: '옐로우 노트',
+    name: "Yellow notes",
     image: '/templates4_3/munchie-03.png',
     frameImage: '/templates4_3/munchie-03.png',
-    description: '노란 패브릭과 종이 조각이 겹쳐진 포근한 프레임이에요.',
-    bestFor: '브런치 · 카페 · 따뜻한 하루',
+    description: "Warm yellow fabric and layered paper.",
+    bestFor: "Brunch · Cafes · Cosy days",
     frameInset: { top: 11, right: 8, bottom: 9, left: 8 },
     transparentFrame: true,
     slots: [
@@ -82,11 +82,11 @@ const ORIGINAL_COURSEMAP_TEMPLATES: CoursemapTemplate[] = [
   },
   {
     id: 'lovely-lavender',
-    name: '러블리 라벤더',
+    name: "Lovely lavender",
     image: '/templates4_3/munchie-04.png',
     frameImage: '/templates4_3/munchie-04.png',
-    description: '라벤더 체크와 파스텔 리본이 있는 러블리 프레임이에요.',
-    bestFor: '감성 코스 · 북카페 · 조용한 하루',
+    description: "Lavender checks and pastel ribbons.",
+    bestFor: "Book cafes · Quiet days",
     frameInset: { top: 11, right: 8, bottom: 9, left: 8 },
     transparentFrame: true,
     slots: [
@@ -97,11 +97,11 @@ const ORIGINAL_COURSEMAP_TEMPLATES: CoursemapTemplate[] = [
   },
   {
     id: 'strawberry-picnic',
-    name: '딸기 피크닉',
+    name: "Strawberry picnic",
     image: '/templates4_3/munchie-05.png',
     frameImage: '/templates4_3/munchie-05.png',
-    description: '딸기와 버튼 장식이 가득한 피크닉 프레임이에요.',
-    bestFor: '디저트 투어 · 카페 · 달콤한 코스',
+    description: "Strawberries and buttons for a picnic feel.",
+    bestFor: "Desserts · Cafes · Sweet treats",
     frameInset: { top: 11, right: 8, bottom: 9, left: 8 },
     transparentFrame: true,
     slots: [
@@ -112,11 +112,11 @@ const ORIGINAL_COURSEMAP_TEMPLATES: CoursemapTemplate[] = [
   },
   {
     id: 'happy-pink',
-    name: '해피 핑크',
+    name: "Happy pink",
     image: '/templates4_3/munchie-06.png',
     frameImage: '/templates4_3/munchie-06.png',
-    description: 'Be happy! 스마일과 별이 톡톡 튀는 팝 핑크 프레임이에요.',
-    bestFor: '액티비티 · 생일 · 신나는 코스',
+    description: "Bright pink with smiles and stars.",
+    bestFor: "Birthdays · Activities · Days out",
     frameInset: { top: 11, right: 10, bottom: 9, left: 10 },
     transparentFrame: true,
     slots: [
@@ -127,11 +127,11 @@ const ORIGINAL_COURSEMAP_TEMPLATES: CoursemapTemplate[] = [
   },
   {
     id: 'soft-blue-note',
-    name: '소프트 블루',
+    name: "Soft blue",
     image: '/templates4_3/munchie-07.png',
     frameImage: '/templates4_3/munchie-07.png',
-    description: '파스텔 블루와 라벤더 조각이 섞인 기록장 프레임이에요.',
-    bestFor: '혼자 여행 · 전시 · 시티 투어',
+    description: "A scrapbook of soft blue and lavender.",
+    bestFor: "Solo trips · Galleries · City walks",
     frameInset: { top: 11, right: 8, bottom: 9, left: 8 },
     transparentFrame: true,
     slots: [
@@ -142,11 +142,11 @@ const ORIGINAL_COURSEMAP_TEMPLATES: CoursemapTemplate[] = [
   },
   {
     id: 'red-check-picnic',
-    name: '레드 체크',
+    name: "Red gingham",
     image: '/templates4_3/munchie-08.png',
     frameImage: '/templates4_3/munchie-08.png',
-    description: '레드 체크와 리본, 클로버가 어우러진 피크닉 프레임이에요.',
-    bestFor: '맛집 투어 · 브런치 · 레트로 감성',
+    description: "Red checks, ribbons and clovers.",
+    bestFor: "Food trails · Brunch · Retro style",
     frameInset: { top: 11, right: 8, bottom: 9, left: 8 },
     transparentFrame: true,
     slots: [
@@ -157,11 +157,11 @@ const ORIGINAL_COURSEMAP_TEMPLATES: CoursemapTemplate[] = [
   },
   {
     id: 'good-day-blue',
-    name: '굿데이 블루',
+    name: "Good day blue",
     image: '/templates4_3/munchie-09.png',
     frameImage: '/templates4_3/munchie-09.png',
-    description: 'GOOD DAY 티켓과 데님 별 장식이 있는 차분한 블루 프레임이에요.',
-    bestFor: '산책 · 기록 · 여유로운 하루',
+    description: "Blue tickets and denim stars.",
+    bestFor: "Walks · Memories · Slow days",
     frameInset: { top: 11, right: 8, bottom: 9, left: 8 },
     transparentFrame: true,
     slots: [
@@ -172,11 +172,11 @@ const ORIGINAL_COURSEMAP_TEMPLATES: CoursemapTemplate[] = [
   },
   {
     id: 'fresh-rainbow',
-    name: '프레시 레인보우',
+    name: "Fresh rainbow",
     image: '/templates4_3/munchie-10.png',
     frameImage: '/templates4_3/munchie-10.png',
-    description: '알록달록한 종이 조각과 스티커가 밝게 둘러진 먼치 프레임이에요.',
-    bestFor: '친구 모임 · 생일 · 즐거운 기록',
+    description: "Colourful paper and playful stickers.",
+    bestFor: "Friends · Birthdays · Good times",
     frameInset: { top: 11, right: 8, bottom: 9, left: 8 },
     transparentFrame: true,
     slots: [
@@ -237,8 +237,8 @@ export const STORY_FEED_TEMPLATES: CoursemapTemplate[] = SHARE_TEMPLATES.map((te
   id: `story-feed-${String(index + 1).padStart(2, '0')}`,
   name: template.name,
   image: `/templates4_3/story-converted/template-${String(index + 1).padStart(2, '0')}.jpg`,
-  description: `${template.name} 스토리 디자인을 4:3 맛집 피드에 맞게 재구성했어요.`,
-  bestFor: '맛집 기록 · 사진 앨범 · Munchie 피드',
+  description: `${template.name}, adapted for a 4:3 food post.`,
+  bestFor: "Food photos · Albums · Munchie Feed",
   slots: getStoryFeedSlots(index).map(slot => ({ ...slot })),
   frameInset: { top: 6, right: 6, bottom: 6, left: 6 },
 }));

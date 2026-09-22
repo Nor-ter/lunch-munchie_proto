@@ -51,7 +51,7 @@ describe('UnifiedMunchieCard feed flow', () => {
     expect(source).toContain("if (feedGrid)");
     expect(source).toContain("{post.authorName}");
     expect(source).toContain("· {timeAgo(post.createdAt)}");
-    expect(source).toContain("{saved ? '저장됨' : '저장'}");
+    expect(source).toContain("{saved ? \"Saved\" : \"Save\"}");
     expect(source).toContain('<span className="min-w-0 truncate font-black text-[#3E2922]">');
     expect(source).toMatch(/compact\s+grid\s+eager/);
     expect(source).not.toContain('data-variant="feed-grid" className="rounded');

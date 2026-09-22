@@ -29,33 +29,33 @@ test('mobile Quick Match deck follows swipe direction and preserves tap, intent,
   await mockHomeApi(page);
   await page.goto('/legacy/home');
 
-  const foodie = page.getByRole('button', { name: '밥 카드 (선택됨)' });
+  const foodie = page.getByRole('button', { name: 'Food card (selected)' });
   await expect(foodie).toBeVisible();
   await expect(foodie).toHaveCSS('touch-action', 'pan-y');
 
-  await swipeCard(page, '밥 카드 (선택됨)', -80);
-  const dessert = page.getByRole('button', { name: '디저트 카드 (선택됨)' });
+  await swipeCard(page, 'Food card (selected)', -80);
+  const dessert = page.getByRole('button', { name: 'Dessert card (selected)' });
   await expect(dessert).toBeVisible();
   await expect.poll(async () => {
     const [foodieBox, dessertBox] = await Promise.all([
-      page.getByRole('button', { name: '밥 카드' }).boundingBox(),
+      page.getByRole('button', { name: 'Food card' }).boundingBox(),
       dessert.boundingBox(),
     ]);
     return foodieBox!.x < dessertBox!.x;
   }).toBe(true);
 
-  await swipeCard(page, '디저트 카드 (선택됨)', 80);
-  await expect(page.getByRole('button', { name: '밥 카드 (선택됨)' })).toBeVisible();
+  await swipeCard(page, 'Dessert card (selected)', 80);
+  await expect(page.getByRole('button', { name: 'Food card (selected)' })).toBeVisible();
   await expect.poll(async () => {
     const [dessertBox, foodieBox] = await Promise.all([
-      page.getByRole('button', { name: '디저트 카드' }).boundingBox(),
-      page.getByRole('button', { name: '밥 카드 (선택됨)' }).boundingBox(),
+      page.getByRole('button', { name: 'Dessert card' }).boundingBox(),
+      page.getByRole('button', { name: 'Food card (selected)' }).boundingBox(),
     ]);
     return dessertBox!.x > foodieBox!.x;
   }).toBe(true);
 
-  await page.getByRole('button', { name: '커피 카드' }).click();
-  await expect(page.getByRole('button', { name: '커피 카드 (선택됨)' })).toBeVisible();
+  await page.getByRole('button', { name: 'Coffee card' }).click();
+  await expect(page.getByRole('button', { name: 'Coffee card (selected)' })).toBeVisible();
   await page.getByRole('button', { name: 'Quick Match!' }).click();
   await expect(page).toHaveURL('/lunchie/settings?intent=cafe');
 });

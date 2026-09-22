@@ -26,7 +26,8 @@ const ListTemplate = forwardRef<HTMLDivElement, TemplateProps>(({ course }, ref)
         {course.title}
       </p>
       <p style={{ fontSize: 11, color: '#EB5053', margin: '6px 0 12px 0' }}>
-        맛있는 하루 코스 ♥
+
+        A day of good food ♥
       </p>
 
       {/* Place list */}

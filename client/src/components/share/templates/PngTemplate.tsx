@@ -38,7 +38,8 @@ const PngTemplate = forwardRef<HTMLDivElement, TemplateProps>(({ course }, ref) 
           {course.title}
         </p>
         <p style={{ fontSize: 11, color: '#EB5053', margin: '6px 0 0 0' }}>
-          맛있는 하루 코스 ♥
+
+          A day of good food ♥
         </p>
         <div style={{ marginTop: 8 }}>
           <CourseMap places={course.places} width={180} height={120} />

@@ -14,9 +14,9 @@ const toneClasses: Record<FeedStoryOverlay['tone'], string> = {
 };
 
 const sizeClasses: Record<FeedStoryOverlay['size'], string> = {
-  sm: 'text-[clamp(10px,3.2cqw,13px)] leading-[1.34]',
-  md: 'text-[clamp(12px,4.4cqw,18px)] leading-[1.26]',
-  lg: 'text-[clamp(17px,7.2cqw,31px)] leading-[1.07]',
+  sm: 'text-[clamp(8px,3.2cqw,13px)] leading-[1.34]',
+  md: 'text-[clamp(10px,4.4cqw,18px)] leading-[1.26]',
+  lg: 'text-[clamp(10px,7.2cqw,31px)] leading-[1.07]',
 };
 
 const gridSizeClasses: Record<FeedStoryOverlay['size'], Record<'short' | 'regular' | 'long', string>> = {
@@ -116,14 +116,14 @@ function FeedStoryCourseMap({
         ))}
       </svg>
       {showLabels && (
-          <span className="flex min-w-0 items-center gap-1 overflow-hidden text-[clamp(9px,2.8cqw,11px)] leading-tight" aria-label="코스 순서">
+          <span className="flex min-w-0 items-center gap-1 overflow-hidden text-[clamp(9px,2.8cqw,11px)] leading-tight" aria-label="Course order">
           {visible.length > 0
             ? visible.map((place, index) => (
                 <span key={place.id} className="min-w-0 max-w-[46%] truncate">
-                  {index + 1}. {cleanText(place.name) ?? '장소'}
+                  {index + 1}. {cleanText(place.name) ?? "Place"}
                 </span>
               ))
-            : <span>코스 장소를 먼저 선택해 주세요</span>}
+            : <span>Choose your places first</span>}
           {places.length > visible.length && <span className="shrink-0">+{places.length - visible.length}</span>}
         </span>
       )}

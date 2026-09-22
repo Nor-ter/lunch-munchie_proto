@@ -143,7 +143,7 @@ test('character grabs on a short move and carries its shadow with it', async ({ 
   await page.mouse.move(startX + 5, startY - 2);
   await expect(character).toHaveAttribute('data-lunchmate-profile-grab', 'grabbed');
   await expect(character).toHaveAttribute('data-lunchmate-profile-expression', 'surprised');
-  await expect(character).toHaveAttribute('aria-label', '놀란 런치메이트 캐릭터, 드래그 중');
+  await expect(character).toHaveAttribute('aria-label', "Surprised Lunchiken, being dragged");
 
   const before = await readGrabLayerAndShadowRects(page);
 

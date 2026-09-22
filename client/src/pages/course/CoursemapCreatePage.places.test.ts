@@ -17,7 +17,7 @@ describe('CoursemapCreatePage Google Places regression', () => {
   it('keeps saved restaurants alongside Google suggestions and never calls Google directly', () => {
     expect(SOURCE).toContain('restaurants.filter');
     expect(SOURCE).toContain('suggestions.map');
-    expect(SOURCE).toContain('Google 장소');
+    expect(SOURCE).toContain("Google places");
     expect(SOURCE).not.toContain('places.googleapis.com');
   });
 

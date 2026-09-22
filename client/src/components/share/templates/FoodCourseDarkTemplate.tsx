@@ -1,3 +1,4 @@
+import { countLabel } from '@/lib/displayCopy';
 import { forwardRef } from 'react';
 import { Course } from '@/types/course';
 import { FoodCourseMap } from '@/components/share/FoodCourseMap';
@@ -78,7 +79,7 @@ const FoodCourseDarkTemplate = forwardRef<HTMLDivElement, TemplateProps>(({ cour
         </span>
         <span style={{ fontSize: 10, color: 'rgba(255,255,255,0.6)' }}>·</span>
         <span style={{ fontSize: 10, color: 'rgba(255,255,255,0.6)' }}>
-          {course.places.length}곳
+          {countLabel(course.places.length, 'place')}
         </span>
         {course.region && (
           <>

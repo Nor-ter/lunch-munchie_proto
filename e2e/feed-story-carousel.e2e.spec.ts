@@ -224,7 +224,7 @@ test('feed, profile, and detail render the same persisted per-photo story', asyn
       await expect(card.locator('button [data-ui="munchie-food-hero"]')).toHaveCount(0);
       await dragLeft(page, carousel);
     } else {
-      await carousel.getByRole('button', { name: '다음 음식 사진' }).click();
+      await carousel.getByRole('button', { name: "Next food photo" }).click();
     }
     await expect(carousel).toHaveAttribute('data-slide-index', '1');
     await expect(carousel.locator('img')).toHaveAttribute('src', SECOND_PHOTO);
@@ -238,10 +238,10 @@ test('grid swipes change slides without becoming likes, while a stationary doubl
   const card = page.getByTestId(`unified-munchie-card-${POST_ID}`);
   const carousel = card.locator('[data-ui="munchie-food-hero"]');
 
-  await card.getByRole('button', { name: '다음 음식 사진' }).click();
+  await card.getByRole('button', { name: "Next food photo" }).click();
   await expect(carousel).toHaveAttribute('data-slide-index', '1');
   expect(api.likeRequests()).toBe(0);
-  await card.getByRole('button', { name: '이전 음식 사진' }).click();
+  await card.getByRole('button', { name: "Previous food photo" }).click();
   await expect(carousel).toHaveAttribute('data-slide-index', '0');
 
   await dragLeft(page, carousel);
@@ -281,7 +281,7 @@ test('a stationary grid tap opens the dedicated feed detail with story, copy, ma
   await expect(page.locator('[data-ui="feed-detail-story"]')).toBeVisible();
   await expect(page.locator('[data-ui="feed-detail-copy"]')).toContainText('오버레이 코스');
   await expect(page.locator('[data-ui="feed-detail-course-map"]')).toContainText('첫 식당');
-  await expect(page.getByRole('link', { name: 'Google 지도에서 길찾기' })).toBeVisible();
+  await expect(page.getByRole('link', { name: "Open in Google Maps" })).toBeVisible();
 });
 
 test('clicking the discovery post author row opens post detail instead of the profile', async ({ page }) => {
@@ -336,8 +336,8 @@ test('a broken slide stays explicit and can be left and revisited without photo 
   const status = carousel.getByRole('status');
   await expect(status).toHaveAttribute('aria-live', 'polite');
   await expect(status).toHaveAttribute('aria-atomic', 'true');
-  await expect(status).toContainText('이 음식 사진을 표시할 수 없어요');
-  await expect(status).toContainText('다른 사진으로 자동 대체하지 않아요');
+  await expect(status).toContainText("This photo couldn't load");
+  await expect(status).toContainText("The original photo isn't available.");
 
   await carousel.press('ArrowRight');
   await expect(carousel).toHaveAttribute('data-slide-index', '1');

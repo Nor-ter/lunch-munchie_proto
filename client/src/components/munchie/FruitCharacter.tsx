@@ -106,9 +106,9 @@ const FACES: Record<FruitKind, () => ReactElement> = {
 };
 
 export const FRUIT_LABELS: Record<FruitKind, string> = {
-  kiwi: '키위',
-  strawberry: '딸기',
-  apple: '사과',
+  kiwi: "Kiwi",
+  strawberry: "Strawberry",
+  apple: "Apple",
 };
 
 export default function FruitCharacter({
@@ -126,7 +126,7 @@ export default function FruitCharacter({
       className={`inline-block shrink-0 drop-shadow-[0_2px_4px_rgba(72,38,25,0.25)] ${className}`}
       style={{ width: size, height: size }}
       role="img"
-      aria-label={`${FRUIT_LABELS[kind]} 캐릭터`}
+      aria-label={`${FRUIT_LABELS[kind]} character`}
     >
       <Face />
     </span>

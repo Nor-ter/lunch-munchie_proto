@@ -9,7 +9,7 @@ describe('CourseDetailPage map hydration', () => {
     expect(source).toContain('getCoursePlacesFromFeedStops');
     expect(source).toContain('mapReady ? (');
     expect(source).toContain('places={mapGeoPlaces}');
-    expect(source).toContain('지도 불러오는 중…');
+    expect(source).toContain("Loading map…");
     expect(source).not.toContain('width={430}');
   });
 

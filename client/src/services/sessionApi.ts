@@ -65,17 +65,17 @@ export async function persistSessionSwipe(
 
       const payload = await response.json().catch(() => ({})) as { error?: string };
       const error = Object.assign(
-        new Error(payload.error ?? '선택을 저장하지 못했어요.'),
+        new Error(payload.error ?? "Couldn't save your vote."),
         { retryable: response.status >= 500 },
       );
       if (response.status < 500 || attempt === attempts) throw error;
       lastError = error;
     } catch (error) {
-      lastError = error instanceof Error ? error : new Error('선택을 저장하지 못했어요.');
+      lastError = error instanceof Error ? error : new Error("Couldn't save your vote.");
       if ('retryable' in lastError && lastError.retryable === false) throw lastError;
       if (attempt === attempts) throw lastError;
     }
     await retryDelay(attempt);
   }
-  throw lastError ?? new Error('선택을 저장하지 못했어요.');
+  throw lastError ?? new Error("Couldn't save your vote.");
 }
