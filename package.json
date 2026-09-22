@@ -33,7 +33,7 @@
     "check:cloudflare-policy": "node scripts/checkCloudflarePolicy.mjs",
     "check:cloudflare-policy:staged": "node scripts/checkCloudflarePolicy.mjs --staged",
     "test:cloudflare-policy": "node scripts/checkCloudflarePolicy.mjs --self-test",
-    "test:precommit": "npm run check:cloudflare-policy && tsc --noEmit && vitest run && playwright test && vite build",
+    "test:precommit": "npm run check:cloudflare-policy && tsc --noEmit && vitest run && playwright test --workers=1 && vite build",
     "test:e2e": "playwright test",
     "test:e2e:live": "playwright test --config playwright.live.config.ts",
     "e2e:auth:setup": "tsx e2e-harness/scripts/capture-auth.ts",

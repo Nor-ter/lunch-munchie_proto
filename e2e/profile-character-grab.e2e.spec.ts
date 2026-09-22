@@ -88,6 +88,42 @@ test('character grabs on a short move and carries its shadow with it', async ({ 
   const shadow = page.locator('[data-lunchmate-profile-moving-shadow="true"]');
   await expect(character).toHaveAttribute('data-lunchmate-profile-grab', 'idle');
 
+  // Record rendered transitions in the page: polling from the runner can miss
+  // the 400ms press or 320ms landing under parallel-suite load.
+  const transitions = await character.evaluateHandle(element => {
+    const attribute = 'data-lunchmate-profile-grab';
+    let interactionId = 0;
+    const states: Array<string | null> = [element.getAttribute(attribute)];
+    const record = (state: string | null) => {
+      if (states[states.length - 1] !== state) states.push(state);
+    };
+    const observer = new MutationObserver(mutations => {
+      // oldValue preserves intermediate states even if several mutations are
+      // delivered together after the DOM has already reached the next state.
+      for (const mutation of mutations) record(mutation.oldValue);
+      record(element.getAttribute(attribute));
+    });
+    observer.observe(element, { attributes: true, attributeFilter: [attribute], attributeOldValue: true });
+    // Scope history to the actual pointerdown, without a runner round-trip
+    // during which the previous landing could finish.
+    element.addEventListener('pointerdown', () => {
+      observer.takeRecords();
+      interactionId += 1;
+      states.splice(0, states.length, element.getAttribute(attribute));
+    }, { capture: true });
+    return {
+      currentId() { return interactionId; },
+      read(id: number) { return id === interactionId ? states.slice(1) : []; },
+    };
+  });
+  let expectedInteractionId = 1;
+  const expectTransitions = async (...expected: string[]) => {
+    await expect.poll(() => transitions.evaluate(
+      (history, { id, length }) => history.read(id).slice(0, length),
+      { id: expectedInteractionId, length: expected.length },
+    )).toEqual(expected);
+  };
+
   const characterBox = await character.boundingBox();
   expect(characterBox).not.toBeNull();
   const startX = characterBox!.x + (characterBox!.width / 2);
@@ -100,7 +136,7 @@ test('character grabs on a short move and carries its shadow with it', async ({ 
   // 정지 상태로 LUNCHMATE_PROFILE_LONG_PRESS_MS(400ms)가 지나면 long-press 자동 잡기가
   // 걸리므로, 단언 왕복을 사이에 두지 않고 pointerdown 직후 곧바로 움직인다.
   await page.mouse.move(startX + 3, startY);
-  await expect(character).toHaveAttribute('data-lunchmate-profile-grab', 'pressing');
+  await expectTransitions('pressing');
   await expect(character).toHaveCSS('cursor', 'grabbing');
 
   // 4px부터 기다림 없이 잡히고, 포인터가 원래 영역을 벗어나도 capture가 이동을 잇는다.
@@ -126,25 +162,32 @@ test('character grabs on a short move and carries its shadow with it', async ({ 
   expect(Math.abs(layerDeltaX - shadowDeltaX)).toBeLessThan(2);
 
   await page.mouse.up();
-  await expect(character).toHaveAttribute('data-lunchmate-profile-grab', 'landing');
+  await expectTransitions('pressing', 'grabbed', 'landing');
 
   // 복귀 애니메이션 중에도 보이는 캐릭터를 다시 잡고 바로 옮길 수 있어야 한다.
   // Linux CI의 Playwright boundingBox는 overflow clip·그림자 때문에 중심이 수 px~수십 px
   // 어긋나므로, 픽셀 고정은 유닛 테스트가 담당하고 여기선 제스처 계약을 본다.
   for (let attempt = 0; attempt < 8; attempt += 1) {
+    const previousInteractionId = await transitions.evaluate(history => history.currentId());
+    expectedInteractionId = previousInteractionId + 1;
     const visibleBox = await movingLayer.boundingBox();
     expect(visibleBox).not.toBeNull();
     const regrabX = visibleBox!.x + (visibleBox!.width / 2);
     const regrabY = visibleBox!.y + (visibleBox!.height / 2) - 4;
-    await page.mouse.move(regrabX, regrabY);
-    await page.mouse.down();
-    await expect(character).toHaveAttribute('data-lunchmate-profile-grab', 'pressing');
+    // Queue real mouse input together so a runner round-trip cannot leave the
+    // pointer at an old position while the character continues landing.
+    await Promise.all([page.mouse.move(regrabX, regrabY), page.mouse.down()]);
+    await expect.poll(() => transitions.evaluate(history => history.currentId()), {
+      message: 'Re-grab pointerdown must reach the character and start a new interaction',
+    }).toBe(expectedInteractionId);
+    await expectTransitions('pressing');
 
     const direction = attempt % 2 === 0 ? -1 : 1;
     await page.mouse.move(regrabX + (direction * 6), regrabY - 2);
+    await expectTransitions('pressing', 'grabbed');
     await expect(character).toHaveAttribute('data-lunchmate-profile-grab', 'grabbed');
     await page.mouse.up();
-    await expect(character).toHaveAttribute('data-lunchmate-profile-grab', 'landing');
+    await expectTransitions('pressing', 'grabbed', 'landing');
   }
   await expect(character).toHaveAttribute('data-lunchmate-profile-grab', 'idle', { timeout: 2_000 });
 
@@ -156,10 +199,12 @@ test('character grabs on a short move and carries its shadow with it', async ({ 
   await page.mouse.click(tapX, tapY);
   await expect(page.locator('[data-lunchmate-profile-tap-face]'))
     .toHaveAttribute('data-lunchmate-profile-tap-face', 'surprised');
+  expectedInteractionId = (await transitions.evaluate(history => history.currentId())) + 1;
   await page.mouse.move(tapX, tapY);
   await page.mouse.down();
-  await expect(character).toHaveAttribute('data-lunchmate-profile-grab', 'pressing');
+  await expectTransitions('pressing');
   await page.mouse.move(tapX + 6, tapY - 2);
   await expect(character).toHaveAttribute('data-lunchmate-profile-grab', 'grabbed');
   await page.mouse.up();
+  await expectTransitions('pressing', 'grabbed', 'landing');
 });

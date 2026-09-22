@@ -304,7 +304,22 @@ test('profile settings use full pages and preserve existing profile and dietary 
   });
   await page.goto('/settings/profile');
   page.once('dialog', dialog => dialog.accept());
-  await page.getByRole('button', { name: '로그아웃' }).click();
+  // A matching URL does not mean the new app has bootstrapped after logout.
+  // Ignore the outgoing document's session refetch; observe the new document.
+  const guestSession = page.waitForEvent('framenavigated', frame =>
+    frame === page.mainFrame() && new URL(frame.url()).pathname === '/settings',
+  ).then(() => page.waitForResponse(async response => {
+    if (new URL(response.url()).pathname !== '/api/auth/session' || response.status() !== 200) return false;
+    try {
+      return (await response.json()).user === null;
+    } catch {
+      return false;
+    }
+  }));
+  await Promise.all([
+    guestSession,
+    page.getByRole('button', { name: '로그아웃' }).click(),
+  ]);
   await expect(page).toHaveURL(/\/settings$/);
   expect(logoutRequested).toBe(true);
   await expect(page.getByTestId('settings-login-card')).toBeVisible();

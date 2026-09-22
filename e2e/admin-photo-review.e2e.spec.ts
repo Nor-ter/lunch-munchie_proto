@@ -52,6 +52,9 @@ test('admin can review restaurant images from a grouped, paginated gallery', asy
   await page.route('**/api/admin/photos/*', handlePhotoApi);
   await page.route('**/photos/test/food.jpg', route => route.fulfill({ status: 200, contentType: 'image/gif', body: Buffer.from('R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABAAACAUwAOw==', 'base64') }));
 
+  await page.route('https://fonts.googleapis.com/**', route => route.fulfill({ status: 200, contentType: 'text/css', body: '' }));
+  await page.route('https://cdn.jsdelivr.net/**', route => route.fulfill({ status: 200, contentType: 'text/css', body: '' }));
+
   await page.goto('/admin');
   await expect(page.getByRole('heading', { name: '식당 이미지 검수' })).toBeVisible();
   await expect(page.getByRole('heading', { name: 'Test Kitchen' })).toBeVisible();
