@@ -1,10 +1,10 @@
 /**
  * Lunchie Munchie — Quick Match Page
  * Design: Soft Coral (Option 8) + Pubfish Reference
- * Flow: 스와이프 → 결과 발표
+ * Flow: 음식 종류 → 추천/비추천 → TOP 2 → 만족도
  */
 
-import { useState, useCallback, useEffect, useRef } from 'react';
+import { useState, useCallback, useEffect, useMemo, useRef } from 'react';
 import { motion, useMotionValue, useTransform, useMotionTemplate, AnimatePresence, type MotionValue } from 'framer-motion';
 import { useLocation } from 'wouter';
 import { Heart, X, Star, MapPin, Clock, Phone, Navigation, Share2, Download, Link2, Home, Bookmark, RotateCcw, Loader2, RefreshCw, SlidersHorizontal, Info, LockKeyhole, MessageCircleHeart, Sparkles, Users } from 'lucide-react';
@@ -28,10 +28,88 @@ import SessionManagementMenu from '@/components/lunchie/SessionManagementMenu';
 import BackButton from '@/components/ui/BackButton';
 import QuickMatchRestaurantDetailSheet from '@/components/lunchie/QuickMatchRestaurantDetailSheet';
 import { restaurantSummary } from '@/lib/restaurantPresentation';
+import { LUNCHIE_CUISINE_CHOICES, prioritizeRestaurantsForCuisine, type LunchieCuisineChoice } from '@/lib/lunchieGame';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 type SwipeAction = 'like' | 'dislike';
+
+function GameStageRail({ current }: { current: 1 | 2 | 3 | 4 }) {
+  const stages = ['음식 종류', '추천 투표', 'TOP 2', '만족도'];
+  return (
+    <div className="mx-auto flex w-full max-w-[350px] items-center" aria-label={`게임 ${current}단계: ${stages[current - 1]}`}>
+      {stages.map((stage, index) => {
+        const step = index + 1;
+        const active = step === current;
+        const complete = step < current;
+        return (
+          <div key={stage} className="contents">
+            <div className="flex min-w-0 flex-1 flex-col items-center gap-1">
+              <span className={`flex size-6 items-center justify-center rounded-full text-[10px] font-black ${active ? 'bg-white text-[#5B45D6] shadow-md' : complete ? 'bg-[#FFE36E] text-[#43357D]' : 'bg-white/15 text-white/55'}`}>
+                {complete ? '✓' : step}
+              </span>
+              <span className={`truncate text-[8px] font-black ${active ? 'text-white' : 'text-white/55'}`}>{stage}</span>
+            </div>
+            {index < stages.length - 1 && <span className={`mb-4 h-0.5 w-3 rounded-full ${complete ? 'bg-[#FFE36E]' : 'bg-white/15'}`} aria-hidden="true" />}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+function CuisineChoiceScreen({
+  isSolo,
+  memberCount,
+  onSelect,
+}: {
+  isSolo: boolean;
+  memberCount: number;
+  onSelect: (choice: LunchieCuisineChoice) => void;
+}) {
+  return (
+    <motion.main
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      className="min-h-dvh bg-[radial-gradient(circle_at_top,#8A62E8_0%,#5B45D6_48%,#2F246F_100%)] px-5 pb-8 pt-[max(18px,env(safe-area-inset-top))] text-white"
+    >
+      <GameStageRail current={1} />
+      <div className="mx-auto mt-10 max-w-[380px] text-center">
+        <span className="inline-flex rounded-full bg-white/15 px-3 py-1 text-[10px] font-black tracking-[0.9px] text-[#FFE36E]">ROUND 1 · PICK A TYPE</span>
+        <h1 className="mt-4 text-[28px] font-black tracking-[-0.8px]">오늘 어떤 음식이 끌려요?</h1>
+        <p className="mt-2 text-[13px] font-semibold leading-relaxed text-white/70">
+          4개 중 하나를 골라 추천 카드의 순서를 정해요.
+        </p>
+
+        <div className="mt-7 grid grid-cols-2 gap-3" role="group" aria-label="음식 종류 4개 중 선택">
+          {LUNCHIE_CUISINE_CHOICES.map((choice, index) => (
+            <motion.button
+              key={choice.id}
+              type="button"
+              onClick={() => onSelect(choice.id)}
+              className="min-h-[146px] rounded-[24px] border-2 border-white/20 p-4 text-left shadow-[0_14px_30px_rgba(25,14,72,0.25)] outline-none focus-visible:ring-4 focus-visible:ring-white/70"
+              style={{ background: choice.color }}
+              whileTap={{ scale: 0.96 }}
+              aria-label={`${choice.label}: ${choice.hint}`}
+            >
+              <span className="text-[11px] font-black text-white/65">{String.fromCharCode(65 + index)}</span>
+              <span className="mt-1 block text-4xl" aria-hidden="true">{choice.emoji}</span>
+              <span className="mt-3 block text-[16px] font-black">{choice.label}</span>
+              <span className="mt-0.5 block text-[10px] font-bold text-white/70">{choice.hint}</span>
+            </motion.button>
+          ))}
+        </div>
+
+        <div className="mt-6 rounded-2xl border border-white/15 bg-black/15 px-4 py-3">
+          <p className="text-[11px] font-black text-[#FFE36E]">🔒 PRIVATE PICK</p>
+          <p className="mt-1 text-[11px] font-semibold text-white/70">
+            {isSolo ? '내 선택으로 바로 다음 라운드가 시작돼요.' : `다른 ${Math.max(0, memberCount - 1)}명의 답은 보이지 않고 완료 인원만 보여요.`}
+          </p>
+        </div>
+      </div>
+    </motion.main>
+  );
+}
 
 function SwipeStateScreen({
   state,
@@ -261,21 +339,17 @@ function LikeSparkle({
 
 function SwipeCard({
   restaurant,
-  onAction,
   isTop,
   stackIndex,
   progress,
   total,
-  isLocked,
   onOpenRestaurantDetails,
 }: {
   restaurant: any;
-  onAction: (a: SwipeAction) => void;
   isTop: boolean;
   stackIndex: number;
   progress: number;
   total: number;
-  isLocked: boolean;
   onOpenRestaurantDetails: (restaurant: Restaurant) => void;
 }) {
   const [isRevealed, setIsRevealed] = useState(false);
@@ -349,12 +423,6 @@ function SwipeCard({
     ? `메뉴 사진 전체 ${foodPhotos.length}장 중 ${photoIndex + 1}번째`
     : undefined;
 
-  const handleDragEnd = useCallback((_: unknown, info: { offset: { x: number } }) => {
-    if (isLocked) return;
-    if (info.offset.x > 90) onAction('like');
-    else if (info.offset.x < -90) onAction('dislike');
-  }, [isLocked, onAction]);
-
   if (!isTop) {
     return (
       <div
@@ -380,11 +448,7 @@ function SwipeCard({
         transformStyle: 'preserve-3d',
         WebkitTransformStyle: 'preserve-3d',
       }}
-      drag={isRevealed || isLocked ? false : 'x'}
-      dragConstraints={{ left: 0, right: 0 }}
-      dragElastic={0.6}
-      onDragEnd={handleDragEnd}
-      whileDrag={{ cursor: 'grabbing' }}
+      drag={false}
       onTap={(event) => {
         const target = event.target;
         const openedDetail = target instanceof Element
@@ -784,7 +848,8 @@ function WinnerScreen({ selectedWinner, onReset }: { selectedWinner?: Restaurant
   const [isCapturing, setIsCapturing] = useState(false);
   const [saved, setSaved] = useState(false);
   const [detailIndex, setDetailIndex] = useState<number | null>(null);
-  const [reaction, setReaction] = useState<'POS' | 'NEU' | 'NEG' | null>(null);
+  const [satisfaction, setSatisfaction] = useState(70);
+  const [satisfactionSubmitted, setSatisfactionSubmitted] = useState(false);
   const lunchmateLoadout = lunchmateLoadoutFromProfile(profile.lunchmateLoadout);
   const winnerEventKeyRef = useRef<string | null>(null);
   const [liveResults, setLiveResults] = useState<{
@@ -889,19 +954,21 @@ function WinnerScreen({ selectedWinner, onReset }: { selectedWinner?: Restaurant
     }
   };
 
-  const shareReaction = (nextReaction: 'POS' | 'NEU' | 'NEG') => {
-    if (reaction) return;
-    setReaction(nextReaction);
+  const shareSatisfaction = () => {
+    if (satisfactionSubmitted) return;
+    const action = satisfaction >= 70 ? 'POS' : satisfaction >= 40 ? 'NEU' : 'NEG';
+    setSatisfactionSubmitted(true);
     logEvent({
       event_type: 'SURVEY',
-      action: nextReaction,
+      action,
       user_id: profile.id,
       session_id: currentSession?.id ?? null,
       restaurant_id: winner.id,
-      context: { moment: 'shared_session_reveal' },
+      score: satisfaction / 100,
+      context: { moment: 'shared_session_reveal', satisfaction_score: satisfaction },
     });
     flushEvents();
-    toast.success('내 의견을 남겼어요!');
+    toast.success('만족도를 남겼어요!');
   };
 
   return (
@@ -938,26 +1005,41 @@ function WinnerScreen({ selectedWinner, onReset }: { selectedWinner?: Restaurant
       {/* Detail Card */}
       <div className="px-5 -mt-5 relative">
         <div className="bg-white rounded-3xl p-5 shadow-lg space-y-4">
-          <div className="rounded-[22px] bg-[#F3F0FF] p-4 text-center" aria-labelledby="result-reaction-title">
-            <div className="mx-auto flex size-9 items-center justify-center rounded-xl bg-[#5B45D6] text-white">
+          <div className="rounded-[22px] bg-[#5B45D6] p-4 text-center text-white" aria-labelledby="result-satisfaction-title">
+            <GameStageRail current={4} />
+            <div className="mx-auto flex size-9 items-center justify-center rounded-xl bg-white/15 text-white">
               <MessageCircleHeart size={19} aria-hidden="true" />
             </div>
-            <p id="result-reaction-title" className="mt-2 text-[14px] font-black text-[#352E59]">이 결정, 나는 어떻게 느껴요?</p>
-            <p className="mt-0.5 text-[10px] font-semibold text-[#7D73A5]">결과가 나온 뒤 각자의 의견을 편하게 남겨요.</p>
-            <div className="mt-3 grid grid-cols-3 gap-2">
-              {([
-                ['POS', '😍', '완전 좋아'],
-                ['NEU', '🙂', '괜찮아'],
-                ['NEG', '🤔', '조금 아쉬워'],
-              ] as const).map(([value, emoji, label]) => (
-                <button key={value} type="button" onClick={() => shareReaction(value)} disabled={reaction !== null}
-                  className={`rounded-2xl border py-2.5 transition-all active:scale-95 ${reaction === value ? 'border-[#5B45D6] bg-[#5B45D6] text-white shadow-md' : 'border-white bg-white text-[#51496F]'}`}>
-                  <span className="block text-xl" aria-hidden="true">{emoji}</span>
-                  <span className="mt-1 block text-[10px] font-black">{label}</span>
-                </button>
-              ))}
+            <p id="result-satisfaction-title" className="mt-2 text-[16px] font-black">이 결정에 얼마나 만족해요?</p>
+            <p className="mt-0.5 text-[10px] font-semibold text-white/65">다른 사람에게는 점수가 보이지 않아요.</p>
+            <div className="mt-4 rounded-2xl bg-white/10 px-3 py-4">
+              <div className="flex items-center justify-between text-[10px] font-black text-white/65">
+                <span>아쉬워요</span>
+                <output htmlFor="lunchie-satisfaction" className="rounded-full bg-[#FFE36E] px-2.5 py-1 text-[13px] font-black text-[#372B70]">{satisfaction}%</output>
+                <span>완전 만족</span>
+              </div>
+              <input
+                id="lunchie-satisfaction"
+                type="range"
+                min="0"
+                max="100"
+                step="5"
+                value={satisfaction}
+                onChange={event => setSatisfaction(Number(event.target.value))}
+                disabled={satisfactionSubmitted}
+                aria-label="결과 만족도"
+                className="mt-4 w-full accent-[#FFE36E]"
+              />
             </div>
-            {reaction && <p className="mt-2 text-[10px] font-bold text-[#5B45D6]" role="status">의견 완료 · 다음 모임 추천에 반영할게요 ✓</p>}
+            <button
+              type="button"
+              onClick={shareSatisfaction}
+              disabled={satisfactionSubmitted}
+              className="mt-3 min-h-11 w-full rounded-2xl bg-white px-4 text-[12px] font-black text-[#5B45D6] disabled:bg-white/20 disabled:text-white/70"
+            >
+              {satisfactionSubmitted ? '만족도 제출 완료 ✓' : '만족도 보내기'}
+            </button>
+            {satisfactionSubmitted && <p className="mt-2 text-[10px] font-bold text-[#FFE36E]" role="status">다음 모임 추천에 반영할게요.</p>}
           </div>
 
           {/* Badges */}
@@ -1202,6 +1284,9 @@ function FinalBattleResultScreen({
         animate={{ opacity: 1 }}
         className={`min-h-dvh flex flex-col ${isSoloSession ? 'bg-[#F4F0FF]' : 'bg-[#FFF8F2]'}`}
       >
+        <div className="bg-[#5B45D6] px-5 pb-3 pt-[max(14px,env(safe-area-inset-top))]">
+          <GameStageRail current={3} />
+        </div>
         <div className="px-5 pt-12 pb-4 text-center">
           {isSoloSession && <span className="rounded-full bg-[#5B45D6] px-3 py-1 text-[10px] font-black tracking-[0.8px] text-white">SOLO FINAL</span>}
           <p className="mt-3 font-black text-[#302927] text-[22px]">{isSoloSession ? '마지막 도전자! 🏆' : '여기 어때요? 🤔'}</p>
@@ -1252,6 +1337,9 @@ function FinalBattleResultScreen({
       animate={{ opacity: 1 }}
       className={`min-h-dvh flex flex-col ${isSoloSession ? 'bg-[#F4F0FF]' : 'bg-[#FFF8F2]'}`}
     >
+      <div className="bg-[#5B45D6] px-5 pb-3 pt-[max(14px,env(safe-area-inset-top))]">
+        <GameStageRail current={3} />
+      </div>
       {/* Header */}
       <div className="px-5 pt-12 pb-4 text-center">
         {isSoloSession && <span className="rounded-full bg-[#5B45D6] px-3 py-1 text-[10px] font-black tracking-[0.8px] text-white">SOLO SHOWDOWN</span>}
@@ -1797,7 +1885,10 @@ function WaitingOrDecidedScreen({ onContinue, onReroll }: { onContinue: (winner?
               <span className="inline-flex items-center gap-1 rounded-full bg-[#FFF7D8] px-2.5 py-1 text-[9px] font-black text-[#9A6C16]"><Sparkles size={11} /> 의견 존중</span>
             </div>
 
-            <div className="mt-6 rounded-[26px] border border-[#F3E4DD] bg-white p-5 text-left shadow-[0_14px_40px_rgba(102,68,54,0.08)]">
+            <div
+              className="mt-6 rounded-[26px] border border-[#F3E4DD] bg-white p-5 text-left shadow-[0_14px_40px_rgba(102,68,54,0.08)]"
+              aria-label={`${displayedCompleted}/${displayedTotal}명 ${phase === 'FINAL' ? '투표 완료' : '선택 완료'}`}
+            >
               <div className="flex items-start justify-between">
                 <div>
                   <p className="text-[11px] font-black text-[#A08D84]">{phase === 'FINAL' ? '결승 투표 현황' : '예선 투표 현황'}</p>
@@ -1828,27 +1919,9 @@ function WaitingOrDecidedScreen({ onContinue, onReroll }: { onContinue: (winner?
               )}
             </div>
 
-            <div className="mt-3 max-h-[190px] space-y-2 overflow-y-auto text-left">
-              {liveResults.memberCompletion.map(member => {
-                const memberDone = member.completed || (phase === 'FINAL' && voted && member.id === profile.id);
-                return (
-                <div key={member.id} className="flex items-center justify-between rounded-2xl border border-[#F1E4DE] bg-white/80 p-3 shadow-sm">
-                  <div className="flex min-w-0 items-center gap-3">
-                    <span className="flex size-10 shrink-0 items-center justify-center rounded-full bg-[#FFF0EA] text-xl">{member.emoji}</span>
-                    <div className="min-w-0">
-                      <p className="truncate text-[13px] font-black text-[#443A36]">{member.name}{member.id === profile.id ? ' · 나' : ''}</p>
-                      {!memberDone && phase !== 'FINAL' && (
-                        <p className="mt-0.5 text-[10px] font-semibold text-[#AA9890]">{member.swipeCount}/{member.targetCount} 카드 선택</p>
-                      )}
-                    </div>
-                  </div>
-                  {memberDone ? (
-                    <span className="shrink-0 rounded-full bg-[#EAF7EC] px-2.5 py-1 text-[10px] font-black text-[#278836]">선택 완료 ✓</span>
-                  ) : (
-                    <span className="shrink-0 rounded-full bg-[#FFF0EA] px-2.5 py-1 text-[10px] font-black text-[#DC6660]">고르는 중</span>
-                  )}
-                </div>
-              ); })}
+            <div className="mt-3 rounded-2xl border border-[#E6DFFD] bg-[#F7F4FF] px-4 py-3 text-center">
+              <p className="text-[11px] font-black text-[#5B45D6]">🔒 선택 내용은 끝까지 비공개</p>
+              <p className="mt-1 text-[10px] font-semibold text-[#80769E]">누가 무엇을 골랐는지, 몇 장을 골랐는지는 보여주지 않아요.</p>
             </div>
           </motion.div>
         )}
@@ -1890,7 +1963,18 @@ function QuickMatchExperience() {
   const { currentSession, addSwipe, swipeRecords, profile, rerollSession } = useApp();
   const [phase, setPhase] = useState<Phase>('swipe');
   const lunchmateLoadout = lunchmateLoadoutFromProfile(profile.lunchmateLoadout);
-  const targetRestaurants = currentSession?.restaurants || [];
+  const sessionRestaurants = currentSession?.restaurants || [];
+  const cuisineStorageKey = `lm_lunchie_cuisine:${currentSession?.id ?? 'none'}:${profile.id}`;
+  const [cuisineChoice, setCuisineChoice] = useState<LunchieCuisineChoice | null>(() => {
+    const saved = localStorage.getItem(cuisineStorageKey);
+    return LUNCHIE_CUISINE_CHOICES.some(choice => choice.id === saved)
+      ? saved as LunchieCuisineChoice
+      : null;
+  });
+  const targetRestaurants = useMemo(
+    () => prioritizeRestaurantsForCuisine(sessionRestaurants, cuisineChoice),
+    [sessionRestaurants, cuisineChoice],
+  );
   const currentSessionSwipes = swipeRecords.filter(s => s.sessionId === currentSession?.id);
   const [currentIndex, setCurrentIndex] = useState(() => {
     const initialIndex = targetRestaurants.findIndex(r => !currentSessionSwipes.some(s => s.restaurantId === r.id));
@@ -1915,6 +1999,19 @@ function QuickMatchExperience() {
     if (!currentSession?.deadline) return 0;
     return Math.max(0, new Date(currentSession.deadline).getTime() - Date.now());
   });
+
+  const chooseCuisine = useCallback((choice: LunchieCuisineChoice) => {
+    localStorage.setItem(cuisineStorageKey, choice);
+    setCuisineChoice(choice);
+    setCurrentIndex(0);
+    setShowIntro(true);
+  }, [cuisineStorageKey]);
+
+  const resetCuisineRound = useCallback(() => {
+    localStorage.removeItem(cuisineStorageKey);
+    setCuisineChoice(null);
+    setShowIntro(false);
+  }, [cuisineStorageKey]);
 
   // Countdown ticker for the header badge
   useEffect(() => {
@@ -2151,6 +2248,16 @@ function QuickMatchExperience() {
   if (!currentSession) return <SwipeStateScreen state="session-missing" />;
   const isSoloSession = currentSession.members.length <= 1;
 
+  if (phase === 'swipe' && !cuisineChoice) {
+    return (
+      <CuisineChoiceScreen
+        isSolo={isSoloSession}
+        memberCount={currentSession.members.length}
+        onSelect={chooseCuisine}
+      />
+    );
+  }
+
   // 새 추천으로 재시작. 같은 덱(targetRestaurants)은 이미 swipeRecords에 다 기록돼 있어서,
   // rerollSession으로 새 덱을 먼저 받아온 뒤에 phase를 'swipe'로 돌려야 한다 — 순서를 바꾸면
   // "전부 스와이프 완료" 감지 effect(위)가 옛 덱 그대로 즉시 'decided'로 되돌려 무한 루프가 난다.
@@ -2158,6 +2265,7 @@ function QuickMatchExperience() {
     logEvent({ event_type: 'REROLL', user_id: profile.id, session_id: currentSession?.id ?? null, slate_id: currentSession?.slateId ?? null });
     rejectedRef.current.clear();
     await rerollSession(targetRestaurants.map(r => r.id));
+    resetCuisineRound();
     setCurrentIndex(0); setSwipeData([]); setSelectedWinner(null); setDuel(null); setPhase('swipe');
   };
   // 듀얼 선택 → 우승 확정 (1번 비교, 이론 권장).
@@ -2229,7 +2337,7 @@ function QuickMatchExperience() {
     }
     return <WaitingOrDecidedScreen
       onContinue={(w) => { if (w) setSelectedWinner(w); setPhase('results'); }}
-      onReroll={async (excludeIds) => { await rerollSession(excludeIds); setSwipeData([]); setCurrentIndex(0); setSelectedWinner(null); setDuel(null); setPhase('swipe'); }}
+      onReroll={async (excludeIds) => { await rerollSession(excludeIds); resetCuisineRound(); setSwipeData([]); setCurrentIndex(0); setSelectedWinner(null); setDuel(null); setPhase('swipe'); }}
     />; // 그룹: 멤버 투표 폴링 + REROLL시 새 세대 재스와이프
   }
   if (phase === 'results') {
@@ -2244,16 +2352,19 @@ function QuickMatchExperience() {
 
   return (
     <div className="min-h-dvh bg-[#FCF4EE] relative">
+      <div className="bg-[#5B45D6] px-5 pb-3 pt-[max(14px,env(safe-area-inset-top))]">
+        <GameStageRail current={2} />
+      </div>
       {/* Header */}
-      <div className="flex items-center justify-between px-5 pb-3 pt-[max(12px,env(safe-area-inset-top))]">
+      <div className="flex items-center justify-between px-5 pb-3 pt-3">
         <BackButton
           onClick={() => { logAbandon('back'); navigate('/lunchie/settings'); }}
           aria-label="빠른 매칭 설정으로 돌아가기"
         />
         <div className="text-center">
-          {isSoloSession && <span className="inline-flex rounded-full bg-[#E9E3FF] px-2 py-0.5 text-[8px] font-black tracking-[0.7px] text-[#5B45D6]">SOLO ROUND</span>}
-          <p className="font-black text-[16px] text-[#1A1A1A]">{isSoloSession ? '나만의 예선전 🎮' : '예선전 🍽️'}</p>
-          <p className="text-[11px] text-[#9B9B9B]">{isSoloSession ? `${total}장의 카드에서 파이널 후보를 골라요` : '마음에 드는 음식을 골라보세요'}</p>
+          <span className="inline-flex rounded-full bg-[#E9E3FF] px-2 py-0.5 text-[8px] font-black tracking-[0.7px] text-[#5B45D6]">ROUND 2 · YES OR NO</span>
+          <p className="font-black text-[16px] text-[#1A1A1A]">이 식당을 추천할까요?</p>
+          <p className="text-[11px] text-[#9B9B9B]">한 곳씩 보고 추천 또는 비추천을 골라요 · {progress}/{total}</p>
         </div>
         {currentSession?.deadline ? (
           <motion.div
@@ -2312,9 +2423,9 @@ function QuickMatchExperience() {
 
             <div className="mt-6 max-w-[280px]">
               {isSoloSession && <span className="mb-3 inline-flex rounded-full bg-white/15 px-3 py-1 text-[10px] font-black tracking-[0.9px] text-[#FFE38A]">SOLO LUNCH GAME</span>}
-              <p className="text-[22px] font-black text-white">{isSoloSession ? '나만의 게임을 준비 중!' : '음식점 카드를 준비하고 있어요'}</p>
+              <p className="text-[22px] font-black text-white">추천 투표를 준비 중!</p>
               <p className="mt-2 text-[14px] font-semibold leading-relaxed text-white/60">
-                {isSoloSession ? '카드를 고르고 TOP 2 파이널에 도전해요' : '내 취향에 맞는 후보를 고르고 있어요'}
+                다른 사람의 선택은 보이지 않아요 · 내 답에만 집중해요
               </p>
             </div>
 
@@ -2339,12 +2450,10 @@ function QuickMatchExperience() {
               <SwipeCard
                 key={restaurant.id}
                 restaurant={restaurant}
-                onAction={handleAction}
                 isTop={i === 0}
                 stackIndex={i}
                 progress={progress}
                 total={total}
-                isLocked={isSubmittingSwipe}
                 onOpenRestaurantDetails={openRestaurantDetails}
               />
             ))}
@@ -2352,26 +2461,27 @@ function QuickMatchExperience() {
         </div>
       </div>
 
-      {/* Action buttons */}
-      <div className="px-8 pb-10 pt-4 flex items-center justify-center gap-8">
+      {/* One restaurant, two explicit answers — no swipe gesture. */}
+      <div className="grid grid-cols-2 gap-3 px-5 pb-10 pt-4">
         <motion.button
           onClick={() => handleAction('dislike')}
           disabled={isSubmittingSwipe}
-          aria-label="싫어요"
-          className="flex h-[75px] w-[75px] items-center justify-center rounded-full bg-white shadow-xl active:scale-90 disabled:cursor-wait disabled:opacity-50"
-          whileTap={{ scale: 0.85 }}
+          aria-label="비추천"
+          className="min-h-[84px] rounded-[22px] border-2 border-[#E14F59] bg-[#FFF0F1] px-3 text-center shadow-lg disabled:cursor-wait disabled:opacity-50"
+          whileTap={{ scale: 0.96 }}
         >
-          <X size={30} color="#EB5053" strokeWidth={2.5} />
+          <X size={24} className="mx-auto text-[#D83F4B]" strokeWidth={3} />
+          <span className="mt-1 block text-[14px] font-black text-[#C93743]">비추천이에요</span>
         </motion.button>
         <motion.button
           onClick={() => handleAction('like')}
           disabled={isSubmittingSwipe}
-          aria-label="좋아요"
-          className="flex h-[75px] w-[75px] items-center justify-center rounded-full shadow-xl active:scale-90 disabled:cursor-wait disabled:opacity-50"
-          style={{ background: '#EB5053' }}
-          whileTap={{ scale: 0.85 }}
+          aria-label="추천"
+          className="min-h-[84px] rounded-[22px] border-2 border-[#386CE0] bg-[#356DE4] px-3 text-center text-white shadow-lg disabled:cursor-wait disabled:opacity-50"
+          whileTap={{ scale: 0.96 }}
         >
-          <Heart size={30} color="white" fill="white" />
+          <Heart size={24} className="mx-auto" fill="white" />
+          <span className="mt-1 block text-[14px] font-black">추천해요</span>
         </motion.button>
       </div>
 

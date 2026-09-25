@@ -1221,8 +1221,8 @@ export default function LunchieSettingsPage() {
                 <h2 id="solo-game-title" className="text-[15px] font-black">내 취향으로 끝까지 승부!</h2>
               </div>
             </div>
-            <div className="mt-3 grid grid-cols-3 gap-2 text-center">
-              {['카드 선택', 'TOP 2 대결', 'WINNER 공개'].map((label, index) => (
+            <div className="mt-3 grid grid-cols-4 gap-1.5 text-center">
+              {['음식 종류', '추천 투표', 'TOP 2', '만족도'].map((label, index) => (
                 <div key={label} className="rounded-xl bg-white/12 px-1.5 py-2 text-[9px] font-black">
                   <span className="mb-1 block text-[#FFE38A]">0{index + 1}</span>{label}
                 </div>

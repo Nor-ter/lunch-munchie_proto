@@ -30,7 +30,7 @@ describe('unified Lunchie group flow', () => {
     expect(introSource).toContain('artwork="chicken"');
     expect(introSource).toContain('chickenFaceSystem');
     expect(introSource).toContain('loadout={lunchmateLoadout}');
-    expect(introSource).toContain('음식점 카드를 준비하고 있어요');
+    expect(introSource).toContain('추천 투표를 준비 중!');
     expect(introSource).not.toContain('Swipe gesture demo card');
     expect(introSource).not.toContain('NOPE');
     expect(introSource).not.toContain('LIKE');
@@ -59,15 +59,24 @@ describe('unified Lunchie group flow', () => {
     expect(themeSource).toContain('only light');
   });
 
-  it('locks private answers until the shared reveal and records a post-result opinion', () => {
+  it('locks private answers, shows only completion totals, and records slider satisfaction', () => {
     expect(swipeSource).toContain('ANSWERS LOCKED');
     expect(swipeSource).toContain('다른 사람의 답은 아직 비밀');
+    expect(swipeSource).toContain('누가 무엇을 골랐는지, 몇 장을 골랐는지는 보여주지 않아요.');
+    expect(swipeSource).not.toContain('max-h-[190px] space-y-2 overflow-y-auto');
     expect(swipeSource).toContain("event_type: 'SURVEY'");
     expect(swipeSource).toContain("moment: 'shared_session_reveal'");
+    expect(swipeSource).toContain('aria-label="결과 만족도"');
+    expect(swipeSource).toContain('satisfaction_score: satisfaction');
   });
 
-  it('carries the game-show presentation through the solo round and final', () => {
-    expect(swipeSource).toContain('SOLO ROUND');
+  it('carries four actual game stages through solo and group sessions', () => {
+    expect(swipeSource).toContain('ROUND 1 · PICK A TYPE');
+    expect(swipeSource).toContain('음식 종류 4개 중 선택');
+    expect(swipeSource).toContain('ROUND 2 · YES OR NO');
+    expect(swipeSource).toContain('비추천이에요');
+    expect(swipeSource).toContain('추천해요');
+    expect(swipeSource).toContain('drag={false}');
     expect(swipeSource).toContain('SOLO LUNCH GAME');
     expect(swipeSource).toContain('SOLO SHOWDOWN');
     expect(swipeSource).toContain('SOLO WINNER!');

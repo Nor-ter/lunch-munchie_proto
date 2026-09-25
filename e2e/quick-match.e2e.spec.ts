@@ -96,6 +96,11 @@ async function seedIdentity(page: Page, session?: ReturnType<typeof cachedSessio
   }, { identity: userId, activeSession: session ?? null });
 }
 
+async function chooseRandomCuisine(page: Page) {
+  await expect(page.getByRole('group', { name: '음식 종류 4개 중 선택' })).toBeVisible();
+  await page.getByRole('button', { name: /오늘의 랜덤/ }).click();
+}
+
 test('mobile settings keeps the timer and vertical people wheel synchronized without horizontal overflow', async ({ page }) => {
   const browserErrors = captureUnexpectedBrowserErrors(page);
   await page.setViewportSize({ width: 390, height: 844 });
@@ -364,10 +369,11 @@ test('solo start sends the new member credential and opens the restaurant deck',
   await page.getByRole('button', { name: '솔로 게임 시작! 🎮' }).click();
 
   await expect(page).toHaveURL(/\/lunchie\/swipe$/);
+  await chooseRandomCuisine(page);
   const loadingIntro = page.getByRole('status', { name: 'Quick Match 음식점 후보를 준비하고 있어요' });
   await expect(loadingIntro).toBeVisible();
   await expect(loadingIntro.getByRole('img', { name: 'Quick Match를 준비하는 나의 런치킨' })).toBeVisible();
-  await expect(loadingIntro.getByText('나만의 게임을 준비 중!', { exact: true })).toBeVisible();
+  await expect(loadingIntro.getByText('추천 투표를 준비 중!', { exact: true })).toBeVisible();
   await expect(loadingIntro.getByRole('button')).toHaveCount(0);
   await expect(loadingIntro.getByText(/NOPE|LIKE|싫어요|좋아요/)).toHaveCount(0);
   await expect(page.getByRole('heading', { name: restaurant.name })).toBeVisible();
@@ -400,6 +406,92 @@ test('solo start sends the new member credential and opens the restaurant deck',
   await page.waitForTimeout(1_200);
   await expect(page).toHaveURL(/\/lunchie\/settings$/);
   expect(browserErrors).toEqual([]);
+});
+
+test('group waiting reveals only the completed count, never individual answers or progress', async ({ page }) => {
+  const restaurant = {
+    id: 'private-vote-restaurant',
+    name: 'Private Vote Kitchen',
+    category: '한식',
+    tags: ['점심'],
+    rating: 4.7,
+    reviewCount: 90,
+    distance: '300m',
+    address: 'Melbourne',
+    image: '',
+    lat: -37.81,
+    lng: 144.96,
+    priceRange: 2,
+    openHours: '11:00 - 21:00',
+    dietary: [],
+    description: 'Private group voting fixture.',
+  };
+  const members = [
+    { id: userId, name: 'Tester', emoji: '😊', hasVoted: false, preferences: [], ready: true },
+    { id: 'friend-1', name: 'Hidden Friend One', emoji: '🍜', hasVoted: false, preferences: [], ready: true },
+    { id: 'friend-2', name: 'Hidden Friend Two', emoji: '🍕', hasVoted: false, preferences: [], ready: true },
+  ];
+
+  await page.route('https://fonts.googleapis.com/**', route => route.fulfill({ status: 200, contentType: 'text/css', body: '' }));
+  await page.route('https://cdn.jsdelivr.net/**', route => route.fulfill({ status: 200, contentType: 'text/css', body: '' }));
+  await page.route('**/api/**', async route => {
+    const url = new URL(route.request().url());
+    if (url.pathname === '/api/auth/session') {
+      await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ user: { sub: userId, name: 'Tester' }, profile: null }) });
+      return;
+    }
+    if (url.pathname === '/api/restaurants') {
+      await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify([restaurant]) });
+      return;
+    }
+    if (url.pathname === '/api/sessions/ABC123/results') {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          phase: 'PRELIM',
+          completedCount: 1,
+          totalMembers: 3,
+          memberCompletion: [
+            { id: userId, name: 'Tester', emoji: '😊', completed: true, swipeCount: 1, targetCount: 1 },
+            { id: 'friend-1', name: 'Hidden Friend One', emoji: '🍜', completed: false, swipeCount: 0, targetCount: 1 },
+            { id: 'friend-2', name: 'Hidden Friend Two', emoji: '🍕', completed: false, swipeCount: 0, targetCount: 1 },
+          ],
+          results: [],
+          finalists: [],
+          isExpired: false,
+          deadlineAt: null,
+          generation: 1,
+        }),
+      });
+      return;
+    }
+    if (url.pathname === '/api/sessions/ABC123' && route.request().method() === 'GET') {
+      const response = serverSession('SWIPING_1');
+      response.session.group_size = 3;
+      response.session.deck_ids = [restaurant.id];
+      response.members = members.map(member => ({ user_id: member.id, user_name: member.name, emoji: member.emoji, is_ready: true }));
+      await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(response) });
+      return;
+    }
+    if (url.pathname === '/api/courses' || url.pathname === '/api/feed') {
+      await route.fulfill({ status: 200, contentType: 'application/json', body: '[]' });
+      return;
+    }
+    await route.fulfill({ status: 200, contentType: 'application/json', body: '{"ok":true}' });
+  });
+  await seedIdentity(page, cachedSession({ status: 'voting', members, restaurants: [restaurant] }));
+  await page.addInitScript(({ sessionId, restaurantId }) => {
+    localStorage.setItem('lm_swipes', JSON.stringify([{ restaurantId, action: 'like', timestamp: new Date().toISOString(), sessionId }]));
+  }, { sessionId: 'session-e2e', restaurantId: restaurant.id });
+
+  await page.goto('/lunchie/swipe');
+
+  await expect(page.getByLabel('1/3명 선택 완료')).toBeVisible();
+  await expect(page.getByText('누가 무엇을 골랐는지, 몇 장을 골랐는지는 보여주지 않아요.', { exact: true })).toBeVisible();
+  await expect(page.getByText('Hidden Friend One', { exact: true })).toHaveCount(0);
+  await expect(page.getByText('Hidden Friend Two', { exact: true })).toHaveCount(0);
+  await expect(page.getByText('0/1 카드 선택', { exact: true })).toHaveCount(0);
 });
 
 test('restaurant progress stays separate from menu photo progress', async ({ page }) => {
@@ -474,11 +566,11 @@ test('restaurant progress stays separate from menu photo progress', async ({ pag
   });
   await seedIdentity(page, cachedSession({ status: 'voting', restaurants }));
   await page.goto('/lunchie/swipe');
+  await chooseRandomCuisine(page);
 
   const firstRestaurantProgress = page.getByRole('status', { name: '전체 2개 중 1번째 음식점' });
   await expect(firstRestaurantProgress).toHaveText('1 / 2');
-  await expect(page.getByText('마음에 드는 음식을 골라보세요', { exact: true })).toBeVisible();
-  await expect(page.getByText('마음에 드는 음식을 골라보세요 · 1/2', { exact: true })).toHaveCount(0);
+  await expect(page.getByText('이 식당을 추천할까요?', { exact: true })).toBeVisible();
 
   await expect(page.getByText('예선전 시작! 🍽️', { exact: true })).toHaveCount(0, { timeout: 4_000 });
   await page.getByRole('heading', { name: restaurants[0].name }).click();
@@ -490,7 +582,7 @@ test('restaurant progress stays separate from menu photo progress', async ({ pag
   await page.getByRole('button', { name: '메뉴 닫기' }).click();
   await expect(firstRestaurantProgress).toHaveText('1 / 2');
 
-  await page.getByRole('button', { name: '싫어요' }).click();
+  await page.getByRole('button', { name: '비추천' }).click();
   await expect(page.getByRole('status', { name: '전체 2개 중 2번째 음식점' })).toHaveText('2 / 2');
 });
 
@@ -608,6 +700,7 @@ test('choosing solo replaces an active group room instead of resuming its two-pe
   await confirmation.getByRole('button', { name: '종료 후 새로 시작' }).click();
 
   await expect(page).toHaveURL(/\/lunchie\/swipe$/);
+  await chooseRandomCuisine(page);
   await expect(page.getByRole('heading', { name: restaurant.name })).toBeVisible();
   expect(cancelCount).toBe(1);
   expect(createCount).toBe(1);
@@ -697,6 +790,7 @@ test('rapid menu-photo taps do not stack cube rotations', async ({ page }) => {
   });
   await seedIdentity(page, cachedSession({ status: 'voting', restaurants: [restaurant] }));
   await page.goto('/lunchie/swipe');
+  await chooseRandomCuisine(page);
 
   const detailPreview = page.getByRole('button', { name: `${restaurant.name} 상세정보 보기` });
   await expect(detailPreview).toBeVisible();

@@ -101,9 +101,10 @@ describe('Lunchie Quick Match presentation', () => {
 
   it('presents solo Quick Match as the same game-show experience without group claims', () => {
     expect(settingsSource).toContain('SOLO LUNCH GAME');
-    expect(settingsSource).toContain('TOP 2 대결');
+    expect(settingsSource).toContain("['음식 종류', '추천 투표', 'TOP 2', '만족도']");
     expect(settingsSource).toContain('솔로 게임 시작! 🎮');
-    expect(swipeSource).toContain('나만의 예선전 🎮');
+    expect(swipeSource).toContain('오늘 어떤 음식이 끌려요?');
+    expect(swipeSource).toContain('이 식당을 추천할까요?');
     expect(swipeSource).toContain('내가 고른 TOP 2');
   });
 
