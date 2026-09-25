@@ -99,6 +99,14 @@ describe('Lunchie Quick Match presentation', () => {
     expect(swipeSource).toContain('다시 시도');
   });
 
+  it('presents solo Quick Match as the same game-show experience without group claims', () => {
+    expect(settingsSource).toContain('SOLO LUNCH GAME');
+    expect(settingsSource).toContain('TOP 2 대결');
+    expect(settingsSource).toContain('솔로 게임 시작! 🎮');
+    expect(swipeSource).toContain('나만의 예선전 🎮');
+    expect(swipeSource).toContain('내가 고른 TOP 2');
+  });
+
   it('keeps the Quick Match and lobby navigation bar flat like the home navigation', () => {
     expect(tabBarSource).toContain('tab.path === "/lunchie/settings"');
     expect(tabBarSource).toContain('location === "/session/lobby"');

@@ -815,6 +815,7 @@ function WinnerScreen({ selectedWinner, onReset }: { selectedWinner?: Restaurant
 
   const winnerId = liveResults.winnerId || liveResults.results[0]?.restaurantId;
   const winner = selectedWinner || restaurants.find(r => r.id === winnerId) || currentSession?.restaurants[0];
+  const isSoloSession = (currentSession?.members.length ?? 1) <= 1;
 
   useEffect(() => {
     if (winner) {
@@ -928,7 +929,7 @@ function WinnerScreen({ selectedWinner, onReset }: { selectedWinner?: Restaurant
             />
           </div>
           <span className="inline-block text-[11px] font-black text-white bg-white/20 backdrop-blur-sm rounded-full px-3 py-1 mb-1.5">
-            오늘의 점심 당첨!
+            {isSoloSession ? '🏆 SOLO WINNER!' : '오늘의 점심 당첨!'}
           </span>
           <h1 className="text-white font-black text-[24px] leading-tight">{winner.name}</h1>
         </div>
@@ -1181,6 +1182,7 @@ function FinalBattleResultScreen({
   const finalActionSizeClass = 'flex w-full items-center justify-center rounded-2xl py-4 text-[15px] font-bold';
   const [selected, setSelected] = useState<1 | 2 | null>(null);
   const { currentSession, profile } = useApp();
+  const isSoloSession = (currentSession?.members.length ?? 1) <= 1;
   const [finalSlateId] = useState(() => `final_${currentSession?.id ?? 'x'}_${Date.now()}`);
   const duelRound = 2; // 듀얼 = round 2 (예선=round 1)
   const mountAtRef = useRef(Date.now()); // 듀얼 노출 시각 → 결정 시간(신뢰도) 측정
@@ -1198,10 +1200,11 @@ function FinalBattleResultScreen({
       <motion.div
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
-        className="min-h-dvh flex flex-col bg-[#FFF8F2]"
+        className={`min-h-dvh flex flex-col ${isSoloSession ? 'bg-[#F4F0FF]' : 'bg-[#FFF8F2]'}`}
       >
         <div className="px-5 pt-12 pb-4 text-center">
-          <p className="font-black text-[#302927] text-[22px]">여기 어때요? 🤔</p>
+          {isSoloSession && <span className="rounded-full bg-[#5B45D6] px-3 py-1 text-[10px] font-black tracking-[0.8px] text-white">SOLO FINAL</span>}
+          <p className="mt-3 font-black text-[#302927] text-[22px]">{isSoloSession ? '마지막 도전자! 🏆' : '여기 어때요? 🤔'}</p>
           <p className="mt-1 text-[13px] text-[#917F77]">좋아요 중 마지막 후보예요 · 별로면 새로 추천받아요</p>
         </div>
         <div className="flex-1 flex items-center justify-center px-5">
@@ -1226,7 +1229,7 @@ function FinalBattleResultScreen({
               onContinue(finalist1);
             }}
             className={`${finalActionSizeClass} text-white active:scale-[0.98] shadow-xl transition-opacity`}
-            style={{ background: '#EB5053' }}
+            style={{ background: isSoloSession ? '#5B45D6' : '#EB5053' }}
           >
             이곳으로 결정!
           </button>
@@ -1247,12 +1250,13 @@ function FinalBattleResultScreen({
     <motion.div
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
-      className="min-h-dvh flex flex-col bg-[#FFF8F2]"
+      className={`min-h-dvh flex flex-col ${isSoloSession ? 'bg-[#F4F0FF]' : 'bg-[#FFF8F2]'}`}
     >
       {/* Header */}
       <div className="px-5 pt-12 pb-4 text-center">
-        <p className="font-black text-[#302927] text-[22px]">결승전 🏆</p>
-        <p className="mt-1 text-[13px] text-[#917F77]">친구들과 함께 고른 TOP 2 · 마음에 드는 한 곳을 선택해요</p>
+        {isSoloSession && <span className="rounded-full bg-[#5B45D6] px-3 py-1 text-[10px] font-black tracking-[0.8px] text-white">SOLO SHOWDOWN</span>}
+        <p className="mt-3 font-black text-[#302927] text-[22px]">{isSoloSession ? '나만의 결승전 🏆' : '결승전 🏆'}</p>
+        <p className="mt-1 text-[13px] text-[#917F77]">{isSoloSession ? '내가 고른 TOP 2 · 최종 우승자를 선택해요' : '친구들과 함께 고른 TOP 2 · 마음에 드는 한 곳을 선택해요'}</p>
       </div>
 
       {/* Diagonal split layout */}
@@ -1405,8 +1409,8 @@ function FinalBattleResultScreen({
             ? { duration: 1.4, repeat: Infinity, ease: 'easeInOut' }
             : { duration: 0.25 }}
         >
-          <div className="w-14 h-14 rounded-full bg-[#EB5053] border-[3px] border-white flex items-center justify-center shadow-2xl">
-            <span className="font-black text-white text-[15px]">대결</span>
+          <div className={`w-14 h-14 rounded-full border-[3px] border-white flex items-center justify-center shadow-2xl ${isSoloSession ? 'bg-[#5B45D6]' : 'bg-[#EB5053]'}`}>
+            <span className="font-black text-white text-[15px]">{isSoloSession ? 'VS' : '대결'}</span>
           </div>
         </motion.div>
       </div>
@@ -1422,7 +1426,7 @@ function FinalBattleResultScreen({
           }}
           disabled={selected === null}
           className={`${finalActionSizeClass} text-white active:scale-[0.98] shadow-xl transition-opacity disabled:opacity-40`}
-          style={{ background: '#EB5053' }}
+          style={{ background: isSoloSession ? '#5B45D6' : '#EB5053' }}
         >
           {selected === null ? '음식점을 선택해주세요' : '이곳으로 결정!'}
         </button>
@@ -2145,6 +2149,7 @@ function QuickMatchExperience() {
   const topPick = swipeData.find(s => s.action === 'like')?.restaurant || targetRestaurants[0];
 
   if (!currentSession) return <SwipeStateScreen state="session-missing" />;
+  const isSoloSession = currentSession.members.length <= 1;
 
   // 새 추천으로 재시작. 같은 덱(targetRestaurants)은 이미 swipeRecords에 다 기록돼 있어서,
   // rerollSession으로 새 덱을 먼저 받아온 뒤에 phase를 'swipe'로 돌려야 한다 — 순서를 바꾸면
@@ -2246,8 +2251,9 @@ function QuickMatchExperience() {
           aria-label="빠른 매칭 설정으로 돌아가기"
         />
         <div className="text-center">
-          <p className="font-black text-[16px] text-[#1A1A1A]">예선전 🍽️</p>
-          <p className="text-[11px] text-[#9B9B9B]">마음에 드는 음식을 골라보세요</p>
+          {isSoloSession && <span className="inline-flex rounded-full bg-[#E9E3FF] px-2 py-0.5 text-[8px] font-black tracking-[0.7px] text-[#5B45D6]">SOLO ROUND</span>}
+          <p className="font-black text-[16px] text-[#1A1A1A]">{isSoloSession ? '나만의 예선전 🎮' : '예선전 🍽️'}</p>
+          <p className="text-[11px] text-[#9B9B9B]">{isSoloSession ? `${total}장의 카드에서 파이널 후보를 골라요` : '마음에 드는 음식을 골라보세요'}</p>
         </div>
         {currentSession?.deadline ? (
           <motion.div
@@ -2282,7 +2288,7 @@ function QuickMatchExperience() {
             role="status"
             aria-live="polite"
             aria-label="Quick Match 음식점 후보를 준비하고 있어요"
-            className="absolute inset-0 z-50 flex flex-col items-center justify-center bg-[#1A1A1A] px-6 text-center"
+            className={`absolute inset-0 z-50 flex flex-col items-center justify-center px-6 text-center ${isSoloSession ? 'bg-[radial-gradient(circle_at_top,#8A62E8_0%,#5B45D6_45%,#2F246F_100%)]' : 'bg-[#1A1A1A]'}`}
             exit={{ opacity: 0, scale: 1.05 }}
             transition={{ duration: 0.3 }}
           >
@@ -2305,9 +2311,10 @@ function QuickMatchExperience() {
             </motion.div>
 
             <div className="mt-6 max-w-[280px]">
-              <p className="text-[22px] font-black text-white">음식점 카드를 준비하고 있어요</p>
+              {isSoloSession && <span className="mb-3 inline-flex rounded-full bg-white/15 px-3 py-1 text-[10px] font-black tracking-[0.9px] text-[#FFE38A]">SOLO LUNCH GAME</span>}
+              <p className="text-[22px] font-black text-white">{isSoloSession ? '나만의 게임을 준비 중!' : '음식점 카드를 준비하고 있어요'}</p>
               <p className="mt-2 text-[14px] font-semibold leading-relaxed text-white/60">
-                내 취향에 맞는 후보를 고르고 있어요
+                {isSoloSession ? '카드를 고르고 TOP 2 파이널에 도전해요' : '내 취향에 맞는 후보를 고르고 있어요'}
               </p>
             </div>
 
@@ -2315,7 +2322,7 @@ function QuickMatchExperience() {
               {[0, 1, 2].map((dot) => (
                 <motion.span
                   key={dot}
-                  className="size-2 rounded-full bg-[#EB5053]"
+                  className={`size-2 rounded-full ${isSoloSession ? 'bg-[#FFE38A]' : 'bg-[#EB5053]'}`}
                   animate={{ opacity: [0.35, 1, 0.35], scale: [0.85, 1, 0.85] }}
                   transition={{ duration: 1.2, repeat: Infinity, delay: dot * 0.18, ease: 'easeInOut' }}
                 />

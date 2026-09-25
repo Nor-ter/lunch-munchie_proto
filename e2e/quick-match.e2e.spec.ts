@@ -361,13 +361,13 @@ test('solo start sends the new member credential and opens the restaurant deck',
   await page.getByRole('button', { name: '🥛 유제품', exact: true }).click();
   await page.getByRole('button', { name: '🥚 달걀', exact: true }).click();
   await page.getByRole('button', { name: '🐟 해산물', exact: true }).click();
-  await page.getByRole('button', { name: '카드 선택 시작하기' }).click();
+  await page.getByRole('button', { name: '솔로 게임 시작! 🎮' }).click();
 
   await expect(page).toHaveURL(/\/lunchie\/swipe$/);
   const loadingIntro = page.getByRole('status', { name: 'Quick Match 음식점 후보를 준비하고 있어요' });
   await expect(loadingIntro).toBeVisible();
   await expect(loadingIntro.getByRole('img', { name: 'Quick Match를 준비하는 나의 런치킨' })).toBeVisible();
-  await expect(loadingIntro.getByText('음식점 카드를 준비하고 있어요', { exact: true })).toBeVisible();
+  await expect(loadingIntro.getByText('나만의 게임을 준비 중!', { exact: true })).toBeVisible();
   await expect(loadingIntro.getByRole('button')).toHaveCount(0);
   await expect(loadingIntro.getByText(/NOPE|LIKE|싫어요|좋아요/)).toHaveCount(0);
   await expect(page.getByRole('heading', { name: restaurant.name })).toBeVisible();

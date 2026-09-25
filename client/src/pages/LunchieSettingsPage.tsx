@@ -11,6 +11,7 @@ import {
   ChevronDown,
   CircleHelp,
   Clock3,
+  Gamepad2,
   Navigation,
   Ruler,
   Sparkles,
@@ -1206,6 +1207,30 @@ export default function LunchieSettingsPage() {
           </div>
         </Card>
 
+        {isSolo && (
+          <motion.section
+            initial={{ opacity: 0, y: 8 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="overflow-hidden rounded-[22px] bg-[linear-gradient(135deg,#5B45D6,#8A62E8)] p-4 text-white shadow-[0_14px_34px_rgba(91,69,214,0.2)]"
+            aria-labelledby="solo-game-title"
+          >
+            <div className="flex items-center gap-2">
+              <span className="flex size-9 items-center justify-center rounded-xl bg-white/15"><Gamepad2 size={19} /></span>
+              <div>
+                <p className="text-[9px] font-black tracking-[0.8px] text-[#FFE38A]">SOLO LUNCH GAME</p>
+                <h2 id="solo-game-title" className="text-[15px] font-black">내 취향으로 끝까지 승부!</h2>
+              </div>
+            </div>
+            <div className="mt-3 grid grid-cols-3 gap-2 text-center">
+              {['카드 선택', 'TOP 2 대결', 'WINNER 공개'].map((label, index) => (
+                <div key={label} className="rounded-xl bg-white/12 px-1.5 py-2 text-[9px] font-black">
+                  <span className="mb-1 block text-[#FFE38A]">0{index + 1}</span>{label}
+                </div>
+              ))}
+            </div>
+          </motion.section>
+        )}
+
         <div className="pb-1 pt-0.5">
           <motion.button
             type="button"
@@ -1222,7 +1247,7 @@ export default function LunchieSettingsPage() {
                 ? `기존 세션 종료 후 ${isSolo ? '혼자로' : `${partySize}명으로`} 시작하기`
               : hasActiveSession && currentSession
                 ? currentSession.status === 'waiting' ? '대기방으로 돌아가기' : '투표 계속하기'
-                : isSolo ? '카드 선택 시작하기' : '세션 만들고 초대하기'}
+                : isSolo ? '솔로 게임 시작! 🎮' : '세션 만들고 초대하기'}
           </motion.button>
         </div>
 

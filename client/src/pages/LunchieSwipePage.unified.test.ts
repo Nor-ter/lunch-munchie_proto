@@ -65,4 +65,12 @@ describe('unified Lunchie group flow', () => {
     expect(swipeSource).toContain("event_type: 'SURVEY'");
     expect(swipeSource).toContain("moment: 'shared_session_reveal'");
   });
+
+  it('carries the game-show presentation through the solo round and final', () => {
+    expect(swipeSource).toContain('SOLO ROUND');
+    expect(swipeSource).toContain('SOLO LUNCH GAME');
+    expect(swipeSource).toContain('SOLO SHOWDOWN');
+    expect(swipeSource).toContain('SOLO WINNER!');
+    expect(swipeSource).toContain('내가 고른 TOP 2');
+  });
 });
