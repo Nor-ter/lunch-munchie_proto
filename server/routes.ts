@@ -739,7 +739,7 @@ router.get("/sessions/:token/results", async (req: any, res: any) => {
 
     const payload = buildResultsPayload(session, members, sessionSwipes, allRestaurants);
 
-    if (payload.isExpired && session.status !== 'COMPLETED') {
+    if ((payload.phase === 'DONE' || payload.isExpired) && session.status !== 'COMPLETED') {
       await db.update(sessions)
         .set({ status: 'COMPLETED' })
         .where(eq(sessions.id, session.id));
@@ -750,7 +750,7 @@ router.get("/sessions/:token/results", async (req: any, res: any) => {
   const mem = memByToken(token);
   if (mem) {
     const payload = buildResultsPayload(mem.session, mem.members, mem.swipes, MOCK_RESTAURANTS);
-    if (payload.isExpired && mem.session.status !== 'COMPLETED') {
+    if ((payload.phase === 'DONE' || payload.isExpired) && mem.session.status !== 'COMPLETED') {
       mem.session.status = 'COMPLETED';
     }
     return res.json(payload);

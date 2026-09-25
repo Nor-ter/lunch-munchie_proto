@@ -18,6 +18,11 @@ export interface PersistSessionSwipeOptions {
   retryDelay?: (attempt: number) => Promise<void>;
 }
 
+export interface CompletedSessionResults {
+  phase: 'DONE';
+  winnerId: string;
+}
+
 function swipeRequestId() {
   if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
     return `swipe_${crypto.randomUUID()}`;
@@ -78,4 +83,31 @@ export async function persistSessionSwipe(
     await retryDelay(attempt);
   }
   throw lastError ?? new Error('선택을 저장하지 못했어요.');
+}
+
+/**
+ * Persist a solo final vote, then read results so the API promotes
+ * the decided session to COMPLETED before the winner UI is shown.
+ */
+export async function completeSoloSessionChoice(
+  input: SessionSwipeInput,
+  inviteCode: string,
+  options: PersistSessionSwipeOptions = {},
+): Promise<CompletedSessionResults> {
+  const request = options.request ?? fetch;
+  await persistSessionSwipe(input, { ...options, request });
+
+  const response = await request(`/api/sessions/${encodeURIComponent(inviteCode)}/results`);
+  const payload = await response.json().catch(() => ({})) as {
+    error?: string;
+    phase?: string;
+    winnerId?: string | null;
+  };
+  if (!response.ok) {
+    throw new Error(payload.error ?? '세션 종료를 확인하지 못했어요.');
+  }
+  if (payload.phase !== 'DONE' || payload.winnerId !== input.restaurantId) {
+    throw new Error('최종 선택이 아직 세션에 반영되지 않았어요.');
+  }
+  return { phase: 'DONE', winnerId: payload.winnerId };
 }

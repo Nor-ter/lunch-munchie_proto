@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { persistSessionSwipe } from './sessionApi';
+import { completeSoloSessionChoice, persistSessionSwipe } from './sessionApi';
 
 const input = {
   sessionId: 'session-1',
@@ -53,5 +53,52 @@ describe('persistSessionSwipe', () => {
     await expect(persistSessionSwipe(input, { request, retryDelay: noDelay }))
       .rejects.toThrow('세션 권한이 없습니다.');
     expect(request).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('completeSoloSessionChoice', () => {
+  it('persists the final vote before requesting results that complete the session', async () => {
+    const request = vi.fn()
+      .mockResolvedValueOnce(new Response('{}', { status: 200 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({ phase: 'DONE', winnerId: 'restaurant-1' }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      }));
+
+    await expect(completeSoloSessionChoice({ ...input, round: 2 }, 'ABC 123', {
+      request,
+      retryDelay: noDelay,
+    })).resolves.toEqual({ phase: 'DONE', winnerId: 'restaurant-1' });
+
+    expect(request).toHaveBeenNthCalledWith(1, '/api/swipes', expect.objectContaining({ method: 'POST' }));
+    expect(request).toHaveBeenNthCalledWith(2, '/api/sessions/ABC%20123/results');
+  });
+
+  it('does not report completion while the server still considers the final pending', async () => {
+    const request = vi.fn()
+      .mockResolvedValueOnce(new Response('{}', { status: 200 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({ phase: 'FINAL' }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      }));
+
+    await expect(completeSoloSessionChoice({ ...input, round: 2 }, 'ABC123', {
+      request,
+      retryDelay: noDelay,
+    })).rejects.toThrow('최종 선택이 아직 세션에 반영되지 않았어요.');
+  });
+
+  it('rejects an expired result that completed with a different winner', async () => {
+    const request = vi.fn()
+      .mockResolvedValueOnce(new Response('{}', { status: 200 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({ phase: 'DONE', winnerId: 'other-restaurant' }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      }));
+
+    await expect(completeSoloSessionChoice({ ...input, round: 2 }, 'ABC123', {
+      request,
+      retryDelay: noDelay,
+    })).rejects.toThrow('최종 선택이 아직 세션에 반영되지 않았어요.');
   });
 });

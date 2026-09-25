@@ -104,4 +104,15 @@ describe('unified Lunchie group flow', () => {
     expect(swipeSource).toContain('명이 다녀왔어요');
     expect(swipeSource).toContain('mealRatingDistribution');
   });
+
+  it('persists a solo final vote and completes the session before showing winner statistics', () => {
+    expect(swipeSource).toContain('await completeSoloSessionChoice({');
+    expect(swipeSource).toContain('const round = 2 * (currentSession.generation ?? 1);');
+    expect(swipeSource).toContain('const byServerRank = (list: any[]) => [...list].sort((a, b) => a.id.localeCompare(b.id));');
+    expect(swipeSource).toContain('setPhase(\'final-stats\');');
+    expect(swipeSource.indexOf('await completeSoloSessionChoice({')).toBeLessThan(
+      swipeSource.indexOf("setPhase('final-stats');", swipeSource.indexOf('await completeSoloSessionChoice({')),
+    );
+    expect(swipeSource).toContain('isSubmitting={isSubmittingFinalChoice}');
+  });
 });

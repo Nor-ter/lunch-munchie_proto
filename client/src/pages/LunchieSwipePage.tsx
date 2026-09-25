@@ -19,7 +19,7 @@ import MenuItemDetail from '@/components/MenuItemDetail';
 import { logSwipe, logWinner, logNavigate, logEvent, flushEvents } from '@/lib/eventLogger';
 import { lunchmateLoadoutFromProfile } from '@/utils/lunchmateProfile';
 import { intentForCategory } from '@shared/intent';
-import { persistSessionSwipe } from '@/services/sessionApi';
+import { completeSoloSessionChoice, persistSessionSwipe } from '@/services/sessionApi';
 import { classifySwipeAvailability, type SwipeAvailability } from '@/lib/swipeAvailability';
 import { isActiveQuickMatchStatus } from '@/lib/quickMatch';
 import { beginMenuPhotoRotation, completeMenuPhotoRotation } from '@/lib/menuPhotoRotation';
@@ -1643,12 +1643,14 @@ function FinalBattleResultScreen({
   onContinue,
   onRejectBoth,
   logSelection = true,
+  isSubmitting = false,
 }: {
   finalist1: any;
   finalist2: any | null;
   onContinue: (winner?: any) => void;
   onRejectBoth?: () => void;
   logSelection?: boolean;
+  isSubmitting?: boolean;
 }) {
   const finalActionSizeClass = 'flex w-full items-center justify-center rounded-2xl py-4 text-[15px] font-bold';
   const [selected, setSelected] = useState<1 | 2 | null>(null);
@@ -1702,15 +1704,18 @@ function FinalBattleResultScreen({
               if (logSelection) logEvent({ event_type: 'SWIPE', action: 'CHOOSE', user_id: profile.id, slate_id: finalSlateId, slate_type: 'FINAL', restaurant_id: finalist1.id, round: duelRound, session_id: currentSession?.id ?? null, context: { decision_ms: Date.now() - mountAtRef.current } });
               onContinue(finalist1);
             }}
-            className={`${finalActionSizeClass} text-white active:scale-[0.98] shadow-xl transition-opacity`}
+            disabled={isSubmitting}
+            aria-busy={isSubmitting}
+            className={`${finalActionSizeClass} text-white active:scale-[0.98] shadow-xl transition-opacity disabled:opacity-50`}
             style={{ background: isSoloSession ? '#5B45D6' : '#EB5053' }}
           >
-            이곳으로 결정!
+            {isSubmitting ? '최종 선택 저장 중…' : '이곳으로 결정!'}
           </button>
           {onRejectBoth && (
             <button
               onClick={onRejectBoth}
-              className={`${finalActionSizeClass} mt-2.5 border border-[#EFD8CF] bg-white text-[#78665E] active:scale-[0.98] transition-all`}
+              disabled={isSubmitting}
+              className={`${finalActionSizeClass} mt-2.5 border border-[#EFD8CF] bg-white text-[#78665E] active:scale-[0.98] transition-all disabled:opacity-50`}
             >
               별로예요 · 새로 추천받기
             </button>
@@ -1741,6 +1746,7 @@ function FinalBattleResultScreen({
         {/* tl_branch: 선택하면 삼각형이 전체화면으로 펼쳐지고, 다시 누르면 반반 구도로 복귀 */}
         <motion.button
           onClick={() => setSelected(previous => (previous === 1 ? null : 1))}
+          disabled={isSubmitting}
           className="absolute inset-0 text-left"
           animate={{
             clipPath: selected === 1
@@ -1808,6 +1814,7 @@ function FinalBattleResultScreen({
 
         <motion.button
           onClick={() => setSelected(previous => (previous === 2 ? null : 2))}
+          disabled={isSubmitting}
           className="absolute inset-0 text-right"
           animate={{
             clipPath: selected === 2
@@ -1901,16 +1908,18 @@ function FinalBattleResultScreen({
             if (winner && logSelection) logEvent({ event_type: 'SWIPE', action: 'CHOOSE', user_id: profile.id, slate_id: finalSlateId, slate_type: 'FINAL', restaurant_id: winner.id, round: duelRound, session_id: currentSession?.id ?? null, context: { opponent_id: opponent?.id, decision_ms: Date.now() - mountAtRef.current } });
             onContinue(winner);
           }}
-          disabled={selected === null}
+          disabled={selected === null || isSubmitting}
+          aria-busy={isSubmitting}
           className={`${finalActionSizeClass} text-white active:scale-[0.98] shadow-xl transition-opacity disabled:opacity-40`}
           style={{ background: isSoloSession ? '#5B45D6' : '#EB5053' }}
         >
-          {selected === null ? '음식점을 선택해주세요' : '이곳으로 결정!'}
+          {isSubmitting ? '최종 선택 저장 중…' : selected === null ? '음식점을 선택해주세요' : '이곳으로 결정!'}
         </button>
         {onRejectBoth && (
           <button
             onClick={onRejectBoth}
-            className={`${finalActionSizeClass} mt-2.5 border border-[#EFD8CF] bg-white text-[#78665E] active:scale-[0.98] transition-all`}
+            disabled={isSubmitting}
+            className={`${finalActionSizeClass} mt-2.5 border border-[#EFD8CF] bg-white text-[#78665E] active:scale-[0.98] transition-all disabled:opacity-50`}
           >
             둘 다 별로!
           </button>
@@ -2172,6 +2181,7 @@ function WaitingOrDecidedScreen({ onContinue, onReroll }: { onContinue: (winner?
         onContinue={restaurant => { if (restaurant) void castVote(restaurant.id); }}
         onRejectBoth={() => void castVote(REJECT)}
         logSelection={false}
+        isSubmitting={isVoting}
       />
     );
   }
@@ -2452,8 +2462,10 @@ function QuickMatchExperience() {
   const [rerollPrompt, setRerollPrompt] = useState<'none' | 'lastChance' | 'exhausted'>('none');
   const [showIntro, setShowIntro] = useState(true);
   const [isSubmittingSwipe, setIsSubmittingSwipe] = useState(false);
+  const [isSubmittingFinalChoice, setIsSubmittingFinalChoice] = useState(false);
   const [detailRestaurant, setDetailRestaurant] = useState<Restaurant | null>(null);
   const submittingSwipeRef = useRef(false);
+  const submittingFinalChoiceRef = useRef(false);
   const [remainingMs, setRemainingMs] = useState(() => {
     if (!currentSession?.deadline) return 0;
     return Math.max(0, new Date(currentSession.deadline).getTime() - Date.now());
@@ -2710,17 +2722,20 @@ function QuickMatchExperience() {
     return () => { window.removeEventListener('pagehide', onHide); logAbandon('unmount'); }; // 실제 라우트 이탈 시만
   }, [logAbandon]);
 
-  // 솔로 결정(통일): 엔진 top-2 듀얼 1번 (이론 권장). 둘 다 별로면 다음 후보로 (handleRejectBoth).
+  // 솔로 결정(통일): 서버의 least-misery 동점 규칙(ID 순)과 같은 top-2 듀얼 1번.
   // 분기 없음 — 좋아요 1개든 7개든 같은 모델. 그룹은 WaitingOrDecidedScreen이 처리.
   useEffect(() => {
     if (phase !== 'decided' || duel || selectedWinner) return;
     const isSolo = (currentSession?.members?.length ?? 1) <= 1;
     if (!isSolo) return;
-    const byEng = (list: any[]) => [...list].sort((a, b) => (currentSession?.recMeta?.[a.id]?.position ?? 999) - (currentSession?.recMeta?.[b.id]?.position ?? 999));
-    const liked = byEng(swipeData.filter(s => s.action === 'like').map(s => s.restaurant));
-    const pool = liked.length >= 1 ? liked : byEng(targetRestaurants.slice(0, total)); // 좋아요 없으면 엔진 top으로 완화
+    const byServerRank = (list: any[]) => [...list].sort((a, b) => a.id.localeCompare(b.id));
+    const currentRunLikes = swipeData.filter(s => s.action === 'like').map(s => s.restaurant);
+    const restoredLikes = targetRestaurants.filter(restaurant => currentSessionSwipes.some(
+      swipe => swipe.restaurantId === restaurant.id && (swipe.action === 'like' || swipe.action === 'save'),
+    ));
+    const pool = byServerRank(currentRunLikes.length > 0 ? currentRunLikes : restoredLikes);
     if (pool.length === 1) setDuel({ a: pool[0], b: null });                            // 후보 1 → 확인 화면(자동 확정 X)
-    else if (pool.length >= 2) setDuel({ a: pool[0], b: pool[1] });                       // 엔진 top-2 듀얼
+    else if (pool.length >= 2) setDuel({ a: pool[0], b: pool[1] });                       // 서버와 동일한 top-2 듀얼
     else { setSelectedWinner(null); setPhase('results'); }                                // 후보 없음(예외)
   }, [phase]);
 
@@ -2766,7 +2781,30 @@ function QuickMatchExperience() {
     setCurrentIndex(0); setSwipeData([]); setSelectedWinner(null); setDuel(null); setRoundTwoStatsAcknowledged(false); setPhase('swipe');
   };
   // 듀얼 선택 → 우승 확정 (1번 비교, 이론 권장).
-  const handleDuelChoice = (chosen?: any) => { if (chosen) setSelectedWinner(chosen); setPhase('final-stats'); };
+  const handleDuelChoice = async (chosen?: Restaurant) => {
+    if (!chosen || !currentSession || submittingFinalChoiceRef.current) return;
+    submittingFinalChoiceRef.current = true;
+    setIsSubmittingFinalChoice(true);
+    const round = 2 * (currentSession.generation ?? 1);
+    try {
+      await completeSoloSessionChoice({
+        id: `vote_${currentSession.id}_${profile.id}_${round}`,
+        sessionId: currentSession.id,
+        userId: profile.id,
+        restaurantId: chosen.id,
+        round,
+        action: 'LIKE',
+      }, currentSession.inviteCode);
+      setSelectedWinner(chosen);
+      setPhase('final-stats');
+    } catch (error) {
+      console.error('빠른 매칭 최종 선택 저장 실패', error);
+      toast.error('최종 선택을 저장하지 못했어요. 다시 시도해 주세요.');
+    } finally {
+      submittingFinalChoiceRef.current = false;
+      setIsSubmittingFinalChoice(false);
+    }
+  };
   // "둘 다 별로" → 두 후보 거절(NOPE FINAL = head-to-head 부정) → 남은 좋아요로 다른 듀얼, 없으면 새 추천.
   const handleRejectBoth = () => {
     if (!duel) return;
@@ -2776,8 +2814,12 @@ function QuickMatchExperience() {
         rejectedRef.current.add(f.id);
       }
     });
-    const byEng = (list: any[]) => [...list].sort((x, y) => (currentSession?.recMeta?.[x.id]?.position ?? 999) - (currentSession?.recMeta?.[y.id]?.position ?? 999));
-    const remaining = byEng(swipeData.filter(s => s.action === 'like').map(s => s.restaurant).filter((r: any) => !rejectedRef.current.has(r.id)));
+    const byServerRank = (list: any[]) => [...list].sort((x, y) => x.id.localeCompare(y.id));
+    const currentRunLikes = swipeData.filter(s => s.action === 'like').map(s => s.restaurant);
+    const restoredLikes = targetRestaurants.filter(restaurant => currentSessionSwipes.some(
+      swipe => swipe.restaurantId === restaurant.id && (swipe.action === 'like' || swipe.action === 'save'),
+    ));
+    const remaining = byServerRank((currentRunLikes.length > 0 ? currentRunLikes : restoredLikes).filter((r: any) => !rejectedRef.current.has(r.id)));
     if (remaining.length >= 2) setDuel({ a: remaining[0], b: remaining[1] });                     // 다른 좋아요 쌍
     else if (remaining.length === 1) setDuel({ a: remaining[0], b: null });                       // 하나만 남음 → 확인 화면(자동 확정 X)
     else {
@@ -2854,8 +2896,8 @@ function QuickMatchExperience() {
           </motion.div>
         );
       }
-      // 솔로: 좋아요 수로 구성된 듀얼(준결승→결승). 로컬 즉시 — /results 폴링/플래시 없음.
-      if (duel) return <FinalBattleResultScreen key={(duel.a?.id ?? '') + (duel.b?.id ?? '')} finalist1={duel.a} finalist2={duel.b} onContinue={handleDuelChoice} onRejectBoth={handleRejectBoth} />;
+      // 솔로: 좋아요 수로 구성된 듀얼. 확정은 서버 저장과 세션 종료 후에만 진행.
+      if (duel) return <FinalBattleResultScreen key={(duel.a?.id ?? '') + (duel.b?.id ?? '')} finalist1={duel.a} finalist2={duel.b} onContinue={handleDuelChoice} onRejectBoth={handleRejectBoth} isSubmitting={isSubmittingFinalChoice} />;
       return <SwipeStateScreen state="loading" />; // 효과가 듀얼/우승 구성 중
     }
     return <WaitingOrDecidedScreen
