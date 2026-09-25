@@ -20,12 +20,17 @@ describe('Lunchie game cuisine round', () => {
   });
 
   it('moves the selected cuisine to the front without removing shared candidates', () => {
-    const ordered = prioritizeRestaurantsForCuisine(restaurants, 'asian');
+    const ordered = prioritizeRestaurantsForCuisine(restaurants, ['asian']);
     expect(ordered.map(restaurant => restaurant.id)).toEqual(['thai', 'italian', 'korean', 'cafe']);
     expect(ordered).toHaveLength(restaurants.length);
   });
 
+  it('moves matches for every selected cuisine to the front', () => {
+    const ordered = prioritizeRestaurantsForCuisine(restaurants, ['asian', 'western']);
+    expect(ordered.map(restaurant => restaurant.id)).toEqual(['italian', 'thai', 'cafe', 'korean']);
+  });
+
   it('keeps the recommendation order for the random choice', () => {
-    expect(prioritizeRestaurantsForCuisine(restaurants, 'surprise')).toEqual(restaurants);
+    expect(prioritizeRestaurantsForCuisine(restaurants, ['surprise'])).toEqual(restaurants);
   });
 });

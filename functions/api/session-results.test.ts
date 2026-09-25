@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { sessionResults } from "./[[path]]";
-import { cuisineSignal, satisfactionSignal } from "../../shared/lunchieRoundStats";
+import { cuisineSignal, mealRatingSignal, satisfactionSignal } from "../../shared/lunchieRoundStats";
 
 const session = {
   id: "session-1", host_user_id: "host", share_token: "ABC123", group_size: 2,
@@ -42,10 +42,12 @@ describe("shared-session results", () => {
 
   it("returns anonymous cuisine and satisfaction aggregates without changing the vote result", () => {
     const prelim = [
-      row("host", cuisineSignal("korean"), 1, "SYSTEM"),
+      row("host", cuisineSignal(["korean", "asian"]), 1, "SYSTEM"),
       row("guest", cuisineSignal("asian"), 1, "SYSTEM"),
       row("host", satisfactionSignal(80), 1, "SYSTEM"),
       row("guest", satisfactionSignal(60), 1, "SYSTEM"),
+      row("host", mealRatingSignal(4), 1, "SYSTEM"),
+      row("guest", mealRatingSignal(5), 1, "SYSTEM"),
       row("host", "__deck_size__:1", 1, "SYSTEM"), row("guest", "__deck_size__:1", 1, "SYSTEM"),
       row("host", "A", 1), row("guest", "A", 1),
       row("host", "__prelim_done__", 1, "SYSTEM"), row("guest", "__prelim_done__", 1, "SYSTEM"),
@@ -54,9 +56,12 @@ describe("shared-session results", () => {
     const result = sessionResults(session, members, prelim, restaurants);
     expect(result.phase).toBe("DONE");
     expect(result.winnerId).toBe("A");
-    expect(result.cuisineTally).toEqual({ korean: 1, asian: 1, western: 0, surprise: 0 });
+    expect(result.cuisineTally).toEqual({ korean: 1, asian: 2, western: 0, surprise: 0 });
     expect(result.cuisineVotedCount).toBe(2);
     expect(result.satisfactionAverage).toBe(70);
     expect(result.satisfactionResponseCount).toBe(2);
+    expect(result.visitedCount).toBe(2);
+    expect(result.mealRatingAverage).toBe(4.5);
+    expect(result.mealRatingDistribution).toEqual({ 1: 0, 2: 0, 3: 0, 4: 1, 5: 1 });
   });
 });

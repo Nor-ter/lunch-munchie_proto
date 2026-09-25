@@ -72,7 +72,9 @@ describe('unified Lunchie group flow', () => {
 
   it('carries four actual game stages through solo and group sessions', () => {
     expect(swipeSource).toContain('ROUND 1 · PICK A TYPE');
-    expect(swipeSource).toContain('음식 종류 4개 중 선택');
+    expect(swipeSource).toContain('음식 종류 복수 선택');
+    expect(swipeSource).toContain('끌리는 종류를 모두 고른 뒤 선택을 확정해요.');
+    expect(swipeSource).toContain('aria-pressed={isSelected}');
     expect(swipeSource).toContain('ROUND 2 · YES OR NO');
     expect(swipeSource).toContain('비추천이에요');
     expect(swipeSource).toContain('추천해요');
@@ -93,5 +95,13 @@ describe('unified Lunchie group flow', () => {
     expect(swipeSource).toContain('ROUND 4 RESULT');
     expect(swipeSource).toContain('전체 만족도 평균');
     expect(swipeSource).toContain('익명 집계');
+  });
+
+  it('separates decision satisfaction from anonymous after-meal star statistics', () => {
+    expect(swipeSource).toContain('결정 만족도와 별개로, 실제 식사 경험을 별점으로 남겨주세요.');
+    expect(swipeSource).toContain('aria-label="식사 후 별점 선택"');
+    expect(swipeSource).toContain("moment: 'after_meal'");
+    expect(swipeSource).toContain('명이 다녀왔어요');
+    expect(swipeSource).toContain('mealRatingDistribution');
   });
 });

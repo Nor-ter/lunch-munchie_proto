@@ -97,8 +97,9 @@ async function seedIdentity(page: Page, session?: ReturnType<typeof cachedSessio
 }
 
 async function chooseRandomCuisine(page: Page) {
-  await expect(page.getByRole('group', { name: '음식 종류 4개 중 선택' })).toBeVisible();
+  await expect(page.getByRole('group', { name: '음식 종류 복수 선택' })).toBeVisible();
   await page.getByRole('button', { name: /오늘의 랜덤/ }).click();
+  await page.getByRole('button', { name: '1개 선택 완료 →' }).click();
   await expect(page.getByLabel('1라운드 통계 결과')).toBeVisible();
   await page.getByRole('button', { name: '추천 투표 시작 →' }).click();
 }

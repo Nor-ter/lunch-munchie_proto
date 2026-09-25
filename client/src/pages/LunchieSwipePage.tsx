@@ -29,7 +29,7 @@ import BackButton from '@/components/ui/BackButton';
 import QuickMatchRestaurantDetailSheet from '@/components/lunchie/QuickMatchRestaurantDetailSheet';
 import { restaurantSummary } from '@/lib/restaurantPresentation';
 import { LUNCHIE_CUISINE_CHOICES, prioritizeRestaurantsForCuisine, type LunchieCuisineChoice } from '@/lib/lunchieGame';
-import { cuisineSignal, satisfactionSignal } from '@shared/lunchieRoundStats';
+import { cuisineSignal, mealRatingSignal, satisfactionSignal } from '@shared/lunchieRoundStats';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -51,6 +51,9 @@ type LunchieRoundStatsPayload = {
   satisfactionResponseCount?: number;
   satisfactionAverage?: number | null;
   satisfactionBuckets?: { low: number; medium: number; high: number };
+  visitedCount?: number;
+  mealRatingAverage?: number | null;
+  mealRatingDistribution?: Record<1 | 2 | 3 | 4 | 5, number>;
 };
 
 function GameStageRail({ current }: { current: 1 | 2 | 3 | 4 }) {
@@ -175,23 +178,23 @@ function RoundStatisticsScreen({
 
 function CuisineStatisticsScreen({
   inviteCode,
-  choice,
+  choices,
   isSolo,
   memberCount,
   onContinue,
 }: {
   inviteCode: string;
-  choice: LunchieCuisineChoice;
+  choices: LunchieCuisineChoice[];
   isSolo: boolean;
   memberCount: number;
   onContinue: () => void;
 }) {
   const [stats, setStats] = useState<LunchieRoundStatsPayload>(() => ({
     cuisineTally: {
-      korean: choice === 'korean' ? 1 : 0,
-      asian: choice === 'asian' ? 1 : 0,
-      western: choice === 'western' ? 1 : 0,
-      surprise: choice === 'surprise' ? 1 : 0,
+      korean: choices.includes('korean') ? 1 : 0,
+      asian: choices.includes('asian') ? 1 : 0,
+      western: choices.includes('western') ? 1 : 0,
+      surprise: choices.includes('surprise') ? 1 : 0,
     },
     cuisineVotedCount: isSolo ? 1 : 0,
   }));
@@ -244,13 +247,24 @@ function CuisineChoiceScreen({
   isSolo,
   memberCount,
   isSubmitting,
-  onSelect,
+  onSubmit,
 }: {
   isSolo: boolean;
   memberCount: number;
   isSubmitting: boolean;
-  onSelect: (choice: LunchieCuisineChoice) => void;
+  onSubmit: (choices: LunchieCuisineChoice[]) => void;
 }) {
+  const [selected, setSelected] = useState<LunchieCuisineChoice[]>([]);
+  const toggleChoice = (choice: LunchieCuisineChoice) => {
+    setSelected(current => {
+      if (choice === 'surprise') return current.includes('surprise') ? [] : ['surprise'];
+      const withoutSurprise = current.filter(item => item !== 'surprise');
+      return withoutSurprise.includes(choice)
+        ? withoutSurprise.filter(item => item !== choice)
+        : [...withoutSurprise, choice];
+    });
+  };
+
   return (
     <motion.main
       initial={{ opacity: 0 }}
@@ -262,33 +276,47 @@ function CuisineChoiceScreen({
         <span className="inline-flex rounded-full bg-white/15 px-3 py-1 text-[10px] font-black tracking-[0.9px] text-[#FFE36E]">ROUND 1 · PICK A TYPE</span>
         <h1 className="mt-4 text-[28px] font-black tracking-[-0.8px]">오늘 어떤 음식이 끌려요?</h1>
         <p className="mt-2 text-[13px] font-semibold leading-relaxed text-white/70">
-          4개 중 하나를 골라 추천 카드의 순서를 정해요.
+          끌리는 종류를 모두 고른 뒤 선택을 확정해요.
         </p>
 
-        <div className="mt-7 grid grid-cols-2 gap-3" role="group" aria-label="음식 종류 4개 중 선택">
-          {LUNCHIE_CUISINE_CHOICES.map((choice, index) => (
-            <motion.button
-              key={choice.id}
-              type="button"
-              onClick={() => onSelect(choice.id)}
-              disabled={isSubmitting}
-              className="min-h-[146px] rounded-[24px] border-2 border-white/20 p-4 text-left shadow-[0_14px_30px_rgba(25,14,72,0.25)] outline-none focus-visible:ring-4 focus-visible:ring-white/70 disabled:opacity-55"
-              style={{ background: choice.color }}
-              whileTap={{ scale: 0.96 }}
-              aria-label={`${choice.label}: ${choice.hint}`}
-            >
-              <span className="text-[11px] font-black text-white/65">{String.fromCharCode(65 + index)}</span>
-              <span className="mt-1 block text-4xl" aria-hidden="true">{choice.emoji}</span>
-              <span className="mt-3 block text-[16px] font-black">{choice.label}</span>
-              <span className="mt-0.5 block text-[10px] font-bold text-white/70">{choice.hint}</span>
-            </motion.button>
-          ))}
+        <div className="mt-7 grid grid-cols-2 gap-3" role="group" aria-label="음식 종류 복수 선택">
+          {LUNCHIE_CUISINE_CHOICES.map((choice, index) => {
+            const isSelected = selected.includes(choice.id);
+            return (
+              <motion.button
+                key={choice.id}
+                type="button"
+                onClick={() => toggleChoice(choice.id)}
+                disabled={isSubmitting}
+                className={`relative min-h-[146px] rounded-[24px] border-2 p-4 text-left shadow-[0_14px_30px_rgba(25,14,72,0.25)] outline-none focus-visible:ring-4 focus-visible:ring-white/70 disabled:opacity-55 ${isSelected ? 'border-[#FFE36E] ring-4 ring-[#FFE36E]/30' : 'border-white/20'}`}
+                style={{ background: choice.color }}
+                whileTap={{ scale: 0.96 }}
+                aria-label={`${choice.label}: ${choice.hint}`}
+                aria-pressed={isSelected}
+              >
+                <span className="text-[11px] font-black text-white/65">{String.fromCharCode(65 + index)}</span>
+                {isSelected && <span className="absolute right-3 top-3 flex size-7 items-center justify-center rounded-full bg-[#FFE36E] text-sm font-black text-[#372B70]" aria-hidden="true">✓</span>}
+                <span className="mt-1 block text-4xl" aria-hidden="true">{choice.emoji}</span>
+                <span className="mt-3 block text-[16px] font-black">{choice.label}</span>
+                <span className="mt-0.5 block text-[10px] font-bold text-white/70">{choice.hint}</span>
+              </motion.button>
+            );
+          })}
         </div>
+
+        <button
+          type="button"
+          onClick={() => onSubmit(selected)}
+          disabled={selected.length === 0 || isSubmitting}
+          className="mt-5 min-h-14 w-full rounded-[20px] bg-[#FFE36E] px-4 text-[14px] font-black text-[#372B70] shadow-xl disabled:bg-white/15 disabled:text-white/35"
+        >
+          {isSubmitting ? '선택 저장 중…' : `${selected.length || 0}개 선택 완료 →`}
+        </button>
 
         <div className="mt-6 rounded-2xl border border-white/15 bg-black/15 px-4 py-3">
           <p className="text-[11px] font-black text-[#FFE36E]">🔒 PRIVATE PICK</p>
           <p className="mt-1 text-[11px] font-semibold text-white/70">
-            {isSolo ? '내 선택으로 바로 다음 라운드가 시작돼요.' : `다른 ${Math.max(0, memberCount - 1)}명의 답은 보이지 않고 완료 인원만 보여요.`}
+            {isSolo ? '여러 종류를 고를 수 있고, 확정 후 통계를 보여드려요.' : `다른 ${Math.max(0, memberCount - 1)}명의 답은 보이지 않고 완료 인원만 보여요.`}
           </p>
         </div>
       </div>
@@ -1036,6 +1064,9 @@ function WinnerScreen({ selectedWinner, onReset }: { selectedWinner?: Restaurant
   const [satisfaction, setSatisfaction] = useState(70);
   const [satisfactionSubmitted, setSatisfactionSubmitted] = useState(false);
   const [isSubmittingSatisfaction, setIsSubmittingSatisfaction] = useState(false);
+  const [mealRating, setMealRating] = useState(0);
+  const [mealRatingSubmitted, setMealRatingSubmitted] = useState(false);
+  const [isSubmittingMealRating, setIsSubmittingMealRating] = useState(false);
   const lunchmateLoadout = lunchmateLoadoutFromProfile(profile.lunchmateLoadout);
   const winnerEventKeyRef = useRef<string | null>(null);
   const [liveResults, setLiveResults] = useState<{
@@ -1044,11 +1075,14 @@ function WinnerScreen({ selectedWinner, onReset }: { selectedWinner?: Restaurant
     satisfactionResponseCount?: number;
     satisfactionAverage?: number | null;
     satisfactionBuckets?: { low: number; medium: number; high: number };
+    visitedCount?: number;
+    mealRatingAverage?: number | null;
+    mealRatingDistribution?: Record<1 | 2 | 3 | 4 | 5, number>;
   }>({ results: [], winnerId: null, satisfactionResponseCount: 0, satisfactionAverage: null });
 
-  // Once this member answers, refresh the anonymous satisfaction aggregate.
+  // Keep both the decision survey and the after-meal visit aggregate current.
   useEffect(() => {
-    if (!currentSession || !satisfactionSubmitted) return;
+    if (!currentSession) return;
 
     const fetchLiveResults = async () => {
       try {
@@ -1065,7 +1099,7 @@ function WinnerScreen({ selectedWinner, onReset }: { selectedWinner?: Restaurant
     fetchLiveResults();
     const interval = setInterval(fetchLiveResults, 3000);
     return () => clearInterval(interval);
-  }, [currentSession, satisfactionSubmitted]);
+  }, [currentSession, satisfactionSubmitted, mealRatingSubmitted]);
 
   const winnerId = liveResults.winnerId || liveResults.results[0]?.restaurantId;
   const winner = selectedWinner || restaurants.find(r => r.id === winnerId) || currentSession?.restaurants[0];
@@ -1193,6 +1227,52 @@ function WinnerScreen({ selectedWinner, onReset }: { selectedWinner?: Restaurant
     }
   };
 
+  const shareMealRating = async () => {
+    if (!currentSession || mealRating < 1 || mealRatingSubmitted || isSubmittingMealRating) return;
+    setIsSubmittingMealRating(true);
+    try {
+      await persistSessionSwipe({
+        id: `meal_rating_${currentSession.id}_${profile.id}`,
+        sessionId: currentSession.id,
+        userId: profile.id,
+        restaurantId: mealRatingSignal(mealRating),
+        round: 1,
+        action: 'SYSTEM',
+      });
+      setMealRatingSubmitted(true);
+      setLiveResults(previous => {
+        const previousCount = previous.visitedCount ?? 0;
+        const previousAverage = previous.mealRatingAverage ?? 0;
+        const previousDistribution = previous.mealRatingDistribution ?? { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 };
+        return {
+          ...previous,
+          visitedCount: previousCount + 1,
+          mealRatingAverage: Math.round((((previousAverage * previousCount) + mealRating) / (previousCount + 1)) * 10) / 10,
+          mealRatingDistribution: {
+            ...previousDistribution,
+            [mealRating]: (previousDistribution[mealRating as 1 | 2 | 3 | 4 | 5] ?? 0) + 1,
+          },
+        };
+      });
+      logEvent({
+        event_type: 'SURVEY',
+        action: mealRating >= 4 ? 'POS' : mealRating === 3 ? 'NEU' : 'NEG',
+        user_id: profile.id,
+        session_id: currentSession.id,
+        restaurant_id: winner.id,
+        score: mealRating / 5,
+        context: { moment: 'after_meal', meal_rating: mealRating, visited: true },
+      });
+      flushEvents();
+      toast.success('식사 후 별점을 남겼어요!');
+    } catch (error) {
+      console.error('식사 후 별점 저장 실패', error);
+      toast.error('별점을 저장하지 못했어요. 다시 시도해 주세요.');
+    } finally {
+      setIsSubmittingMealRating(false);
+    }
+  };
+
   return (
     <motion.div
       initial={{ opacity: 0, y: 30 }}
@@ -1279,6 +1359,76 @@ function WinnerScreen({ selectedWinner, onReset }: { selectedWinner?: Restaurant
                 <p className="mt-3 text-center text-[9px] font-bold text-white/45">익명 응답 {Math.max(1, liveResults.satisfactionResponseCount ?? 0)}명</p>
               </div>
             )}
+          </div>
+
+          <div className="rounded-[22px] border-2 border-[#FFD8B8] bg-[#FFF8EF] p-4 text-center" aria-labelledby="after-meal-rating-title">
+            <span className="inline-flex rounded-full bg-[#EB5053] px-3 py-1 text-[9px] font-black tracking-[0.7px] text-white">AFTER THE MEAL</span>
+            <p id="after-meal-rating-title" className="mt-3 text-[17px] font-black text-[#3D315D]">다녀오셨나요?</p>
+            <p className="mt-1 text-[11px] font-semibold leading-relaxed text-[#7A6B78]">결정 만족도와 별개로, 실제 식사 경험을 별점으로 남겨주세요.</p>
+
+            <div className="mt-4 flex justify-center gap-1.5" role="group" aria-label="식사 후 별점 선택">
+              {([1, 2, 3, 4, 5] as const).map(star => (
+                <button
+                  key={star}
+                  type="button"
+                  onClick={() => setMealRating(star)}
+                  disabled={mealRatingSubmitted}
+                  aria-label={`${star}점`}
+                  aria-pressed={mealRating === star}
+                  className="rounded-xl p-1 outline-none focus-visible:ring-4 focus-visible:ring-[#EB5053]/25 disabled:cursor-default"
+                >
+                  <Star
+                    size={34}
+                    fill={star <= mealRating ? '#FFB629' : 'transparent'}
+                    color={star <= mealRating ? '#FFB629' : '#D8CDD1'}
+                    strokeWidth={2.4}
+                  />
+                </button>
+              ))}
+            </div>
+            <p className="mt-1 min-h-5 text-[11px] font-black text-[#EB5053]">
+              {mealRating > 0 ? `${mealRating}점 · 실제 방문 완료` : '별을 눌러 방문 후 만족도를 선택하세요'}
+            </p>
+            <button
+              type="button"
+              onClick={shareMealRating}
+              disabled={mealRating < 1 || mealRatingSubmitted || isSubmittingMealRating}
+              className="mt-3 min-h-11 w-full rounded-2xl bg-[#EB5053] px-4 text-[12px] font-black text-white shadow-md disabled:bg-[#E8DBD5] disabled:text-[#A99A96]"
+            >
+              {mealRatingSubmitted ? '식사 후 별점 제출 완료 ✓' : isSubmittingMealRating ? '별점 집계 중…' : '다녀왔어요 · 별점 보내기'}
+            </button>
+
+            <div className="mt-4 rounded-2xl bg-white p-4 text-left shadow-sm" aria-label="식사 후 만족도 통계">
+              <div className="flex items-center justify-between gap-3">
+                <div>
+                  <p className="text-[9px] font-black tracking-[0.7px] text-[#EB5053]">VISIT STATISTICS</p>
+                  <p className="mt-1 text-[13px] font-black text-[#3D315D]">{liveResults.visitedCount ?? 0}명이 다녀왔어요</p>
+                </div>
+                <div className="text-right">
+                  <p className="text-[9px] font-bold text-[#9B8C94]">식사 후 평균</p>
+                  <p className="text-[26px] font-black text-[#FF9E1B]">{liveResults.mealRatingAverage ?? '—'}<span className="text-xs"> / 5</span></p>
+                </div>
+              </div>
+              <div className="mt-3 space-y-1.5">
+                {([5, 4, 3, 2, 1] as const).map(star => {
+                  const count = liveResults.mealRatingDistribution?.[star] ?? 0;
+                  const totalRatings = Math.max(1, liveResults.visitedCount ?? 0);
+                  return (
+                    <div key={star} className="flex items-center gap-2 text-[9px] font-black text-[#75666E]">
+                      <span className="w-6">{star}★</span>
+                      <div className="h-2 flex-1 overflow-hidden rounded-full bg-[#F1E7E2]">
+                        <motion.div
+                          className="h-full rounded-full bg-[#FFB629]"
+                          animate={{ width: `${(count / totalRatings) * 100}%` }}
+                        />
+                      </div>
+                      <span className="w-4 text-right tabular-nums">{count}</span>
+                    </div>
+                  );
+                })}
+              </div>
+              <p className="mt-3 text-center text-[9px] font-bold text-[#A6979E]">개별 별점은 숨기고 익명 통계만 보여줘요.</p>
+            </div>
           </div>
 
           {/* Badges */}
@@ -2250,6 +2400,20 @@ function WaitingOrDecidedScreen({ onContinue, onReroll }: { onContinue: (winner?
 
 type Phase = 'swipe' | 'decided' | 'final-stats' | 'results';
 
+function parseSavedCuisineChoices(value: string | null): LunchieCuisineChoice[] {
+  if (!value) return [];
+  try {
+    const parsed = JSON.parse(value);
+    if (Array.isArray(parsed)) {
+      return parsed.filter((choice): choice is LunchieCuisineChoice =>
+        LUNCHIE_CUISINE_CHOICES.some(option => option.id === choice));
+    }
+  } catch { /* 기존 단일 선택 문자열과 호환 */ }
+  return LUNCHIE_CUISINE_CHOICES.some(choice => choice.id === value)
+    ? [value as LunchieCuisineChoice]
+    : [];
+}
+
 function QuickMatchExperience() {
   const [, navigate] = useLocation();
   const { currentSession, addSwipe, swipeRecords, profile, rerollSession } = useApp();
@@ -2258,20 +2422,17 @@ function QuickMatchExperience() {
   const sessionRestaurants = currentSession?.restaurants || [];
   const cuisineStorageKey = `lm_lunchie_cuisine:${currentSession?.id ?? 'none'}:${profile.id}`;
   const cuisineStatsSeenKey = `${cuisineStorageKey}:stats_seen`;
-  const [cuisineChoice, setCuisineChoice] = useState<LunchieCuisineChoice | null>(() => {
-    const saved = localStorage.getItem(cuisineStorageKey);
-    return LUNCHIE_CUISINE_CHOICES.some(choice => choice.id === saved)
-      ? saved as LunchieCuisineChoice
-      : null;
-  });
+  const [cuisineChoices, setCuisineChoices] = useState<LunchieCuisineChoice[]>(
+    () => parseSavedCuisineChoices(localStorage.getItem(cuisineStorageKey)),
+  );
   const [cuisineStatsAcknowledged, setCuisineStatsAcknowledged] = useState(
     () => localStorage.getItem(cuisineStatsSeenKey) === '1',
   );
   const [isSubmittingCuisine, setIsSubmittingCuisine] = useState(false);
   const [roundTwoStatsAcknowledged, setRoundTwoStatsAcknowledged] = useState(false);
   const targetRestaurants = useMemo(
-    () => prioritizeRestaurantsForCuisine(sessionRestaurants, cuisineChoice),
-    [sessionRestaurants, cuisineChoice],
+    () => prioritizeRestaurantsForCuisine(sessionRestaurants, cuisineChoices),
+    [sessionRestaurants, cuisineChoices],
   );
   const currentSessionSwipes = swipeRecords.filter(s => s.sessionId === currentSession?.id);
   const [currentIndex, setCurrentIndex] = useState(() => {
@@ -2298,21 +2459,21 @@ function QuickMatchExperience() {
     return Math.max(0, new Date(currentSession.deadline).getTime() - Date.now());
   });
 
-  const chooseCuisine = useCallback(async (choice: LunchieCuisineChoice) => {
-    if (!currentSession || isSubmittingCuisine) return;
+  const chooseCuisine = useCallback(async (choices: LunchieCuisineChoice[]) => {
+    if (!currentSession || isSubmittingCuisine || choices.length === 0) return;
     setIsSubmittingCuisine(true);
     try {
       await persistSessionSwipe({
         id: `cuisine_${currentSession.id}_${profile.id}`,
         sessionId: currentSession.id,
         userId: profile.id,
-        restaurantId: cuisineSignal(choice),
+        restaurantId: cuisineSignal(choices),
         round: 1,
         action: 'SYSTEM',
       });
-      localStorage.setItem(cuisineStorageKey, choice);
+      localStorage.setItem(cuisineStorageKey, JSON.stringify(choices));
       localStorage.removeItem(cuisineStatsSeenKey);
-      setCuisineChoice(choice);
+      setCuisineChoices(choices);
       setCuisineStatsAcknowledged(false);
       setCurrentIndex(0);
       setShowIntro(true);
@@ -2327,7 +2488,7 @@ function QuickMatchExperience() {
   const resetCuisineRound = useCallback(() => {
     localStorage.removeItem(cuisineStorageKey);
     localStorage.removeItem(cuisineStatsSeenKey);
-    setCuisineChoice(null);
+    setCuisineChoices([]);
     setCuisineStatsAcknowledged(false);
     setRoundTwoStatsAcknowledged(false);
     setShowIntro(false);
@@ -2568,22 +2729,22 @@ function QuickMatchExperience() {
   if (!currentSession) return <SwipeStateScreen state="session-missing" />;
   const isSoloSession = currentSession.members.length <= 1;
 
-  if (phase === 'swipe' && !cuisineChoice) {
+  if (phase === 'swipe' && cuisineChoices.length === 0) {
     return (
       <CuisineChoiceScreen
         isSolo={isSoloSession}
         memberCount={currentSession.members.length}
         isSubmitting={isSubmittingCuisine}
-        onSelect={chooseCuisine}
+        onSubmit={chooseCuisine}
       />
     );
   }
 
-  if (phase === 'swipe' && cuisineChoice && !cuisineStatsAcknowledged) {
+  if (phase === 'swipe' && cuisineChoices.length > 0 && !cuisineStatsAcknowledged) {
     return (
       <CuisineStatisticsScreen
         inviteCode={currentSession.inviteCode}
-        choice={cuisineChoice}
+        choices={cuisineChoices}
         isSolo={isSoloSession}
         memberCount={currentSession.members.length}
         onContinue={() => {

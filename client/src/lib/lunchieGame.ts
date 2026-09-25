@@ -23,10 +23,11 @@ const CUISINE_KEYWORDS: Record<Exclude<LunchieCuisineChoice, 'surprise'>, string
 
 export function prioritizeRestaurantsForCuisine<T extends { category?: string | null }>(
   restaurants: readonly T[],
-  choice: LunchieCuisineChoice | null,
+  choices: readonly LunchieCuisineChoice[],
 ): T[] {
-  if (!choice || choice === 'surprise') return [...restaurants];
-  const keywords = CUISINE_KEYWORDS[choice];
+  const selected = choices.filter((choice): choice is Exclude<LunchieCuisineChoice, 'surprise'> => choice !== 'surprise');
+  if (selected.length === 0 || choices.includes('surprise')) return [...restaurants];
+  const keywords = selected.flatMap(choice => CUISINE_KEYWORDS[choice]);
   const matches: T[] = [];
   const rest: T[] = [];
 
