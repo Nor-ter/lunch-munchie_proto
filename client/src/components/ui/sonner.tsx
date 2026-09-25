@@ -8,6 +8,12 @@ const Toaster = ({ ...props }: ToasterProps) => {
     <Sonner
       theme={theme as ToasterProps["theme"]}
       className="toaster group"
+      position="top-center"
+      visibleToasts={1}
+      duration={2200}
+      offset={{ top: "calc(env(safe-area-inset-top) + 12px)" }}
+      mobileOffset={{ top: "calc(env(safe-area-inset-top) + 12px)", left: 12, right: 12 }}
+      swipeDirections={["top"]}
       style={
         {
           "--normal-bg": "var(--popover)",
