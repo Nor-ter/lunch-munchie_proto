@@ -5,7 +5,7 @@ import {
   type RequestAuthVerifier,
 } from "./auth/requestAuth.js";
 import { users, sessions, restaurants, swipes, courses, courseItems, sessionMembers } from "../shared/schema.js";
-import { eq, and, inArray } from "drizzle-orm";
+import { eq, and, inArray, like } from "drizzle-orm";
 import { nanoid } from "nanoid";
 import { MOCK_RESTAURANTS, MOCK_COURSES } from "./melbourneData.js";
 import { buildSlate, buildControlSlate, assignVariant } from "./engine/scorer.js";
@@ -24,6 +24,7 @@ import type { DietRestriction } from "../shared/const.js";
 import { intentForCategory, intentForHour } from "../shared/intent.js";
 import { normalizeQuickMatchPartySize } from "../shared/quickMatchParty.js";
 import { normalizeLunchieSessionAvatar } from "../shared/lunchieAvatar.js";
+import { buildLunchieRoundStats, roundStatSignalPrefix } from "../shared/lunchieRoundStats.js";
 
 const router = Router();
 
@@ -659,7 +660,11 @@ function buildResultsPayload(
     }
   });
   // 집계에서 sentinel 전부 제외 (안 빼면 가짜 결승 후보가 된다)
-  const r1 = r1All.filter(s => s.restaurant_id !== PRELIM_DONE_ID && !(typeof s.restaurant_id === 'string' && s.restaurant_id.startsWith(DECK_SIZE_PREFIX)));
+  const r1 = r1All.filter(s =>
+    s.restaurant_id !== PRELIM_DONE_ID &&
+    !(typeof s.restaurant_id === 'string' && s.restaurant_id.startsWith(DECK_SIZE_PREFIX)) &&
+    !(typeof s.restaurant_id === 'string' && roundStatSignalPrefix(s.restaurant_id))
+  );
   const r2 = sessionSwipes.filter(s => Number(s.round) === finalRound);
 
   const completionMap: Record<string, number> = {};
@@ -704,6 +709,7 @@ function buildResultsPayload(
   });
 
   return {
+    ...buildLunchieRoundStats(sessionSwipes as any),
     completedCount: completedMembers.length,
     totalMembers: members.length,
     memberCompletion,
@@ -863,6 +869,7 @@ router.get("/courses", async (req: any, res: any) => {
 // Swipes
 router.post("/swipes", async (req: any, res: any) => {
   const { id, session_id, user_id, restaurant_id, round, swipe_action, created_at } = req.body;
+  const statPrefix = typeof restaurant_id === 'string' ? roundStatSignalPrefix(restaurant_id) : null;
   const row = {
     id,
     session_id,
@@ -872,10 +879,26 @@ router.post("/swipes", async (req: any, res: any) => {
     swipe_action,
     created_at: created_at ? new Date(created_at) : new Date()
   };
-  const r = await tryDb(() => db.insert(swipes).values(row));
+  const r = await tryDb(async () => {
+    if (statPrefix) {
+      await db.delete(swipes).where(and(
+        eq(swipes.session_id, session_id),
+        eq(swipes.user_id, user_id),
+        like(swipes.restaurant_id, `${statPrefix}%`),
+      ));
+    }
+    return db.insert(swipes).values(row);
+  });
   if (r.ok) return res.status(201).json({ success: true });
   const mem = memBySessionId(session_id);
   if (mem) {
+    if (statPrefix) {
+      mem.swipes = mem.swipes.filter((swipe: any) => !(
+        swipe.user_id === user_id &&
+        typeof swipe.restaurant_id === 'string' &&
+        swipe.restaurant_id.startsWith(statPrefix)
+      ));
+    }
     mem.swipes.push(row);
     return res.status(201).json({ success: true });
   }

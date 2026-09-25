@@ -14,6 +14,10 @@ import { isValidCoordinate, isWithinRadius } from "../../shared/geo";
 import { normalizeQuickMatchPartySize } from "../../shared/quickMatchParty";
 import { normalizeRestaurantPayload } from "../../shared/restaurantContract";
 import { normalizeLunchieSessionAvatar } from "../../shared/lunchieAvatar";
+import {
+  buildLunchieRoundStats,
+  roundStatSignalPrefix,
+} from "../../shared/lunchieRoundStats";
 import { buildSlate, scoreCandidateBreakdown } from "../../server/engine/scorer";
 import type { Candidate, RecContext, SlateType } from "../../shared/engine";
 import { isAdminEmail } from "./adminAccess";
@@ -2359,6 +2363,7 @@ export function sessionResults(
     (swipe) =>
       swipe.restaurant_id !== PRELIM_DONE_ID &&
       !swipe.restaurant_id.startsWith(DECK_SIZE_PREFIX) &&
+      !roundStatSignalPrefix(swipe.restaurant_id) &&
       !swipe.restaurant_id.startsWith(FORCE_PREFIX),
   );
   const validFinalRows = finalRows.filter(
@@ -2419,7 +2424,9 @@ export function sessionResults(
       .map((swipe) => swipe.user_id),
   );
   const finalStage = decision.phase === "FINAL";
+  const roundStats = buildLunchieRoundStats(swipes);
   return {
+    ...roundStats,
     completedCount,
     totalMembers: members.length,
     memberCompletion: members.map((member) => ({
@@ -3028,19 +3035,34 @@ app.post("/api/swipes", async (c) => {
   if (!member) return c.json({ error: "세션 참여자를 찾을 수 없습니다." }, 403);
   const isSignal =
     restaurantId === PRELIM_DONE_ID ||
-    restaurantId.startsWith(DECK_SIZE_PREFIX);
+    restaurantId.startsWith(DECK_SIZE_PREFIX) ||
+    roundStatSignalPrefix(restaurantId) !== null;
+  const statSignalPrefix = roundStatSignalPrefix(restaurantId);
   const allowedAction =
     action === "LIKE" ||
     action === "DISLIKE" ||
     (isSignal && action === "SYSTEM");
-  if (!allowedAction || restaurantId.startsWith(FORCE_PREFIX))
+  if (
+    !allowedAction ||
+    restaurantId.startsWith(FORCE_PREFIX) ||
+    (statSignalPrefix !== null && (round !== 1 || action !== "SYSTEM"))
+  )
     return c.json({ error: "유효하지 않은 투표입니다." }, 400);
   const now = Date.now();
   const requestId = nullableText(body.id, 128) ?? crypto.randomUUID();
   // A final vote is replaceable before the group is completed, but there is
   // only one effective vote per person. This makes retries idempotent.
   const statements =
-    round % 2 === 0 && action === "LIKE"
+    statSignalPrefix
+      ? [
+          c.env.DB.prepare(
+            "DELETE FROM swipes WHERE session_id = ? AND user_id = ? AND restaurant_id LIKE ?",
+          ).bind(sessionId, userId, `${statSignalPrefix}%`),
+          c.env.DB.prepare(
+            "INSERT OR IGNORE INTO swipes (id, session_id, user_id, restaurant_id, round, swipe_action, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
+          ).bind(requestId, sessionId, userId, restaurantId, round, action, now),
+        ]
+      : round % 2 === 0 && action === "LIKE"
       ? [
           c.env.DB.prepare(
             "DELETE FROM swipes WHERE session_id = ? AND user_id = ? AND round = ? AND swipe_action = 'LIKE'",

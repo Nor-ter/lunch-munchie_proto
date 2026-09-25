@@ -29,10 +29,29 @@ import BackButton from '@/components/ui/BackButton';
 import QuickMatchRestaurantDetailSheet from '@/components/lunchie/QuickMatchRestaurantDetailSheet';
 import { restaurantSummary } from '@/lib/restaurantPresentation';
 import { LUNCHIE_CUISINE_CHOICES, prioritizeRestaurantsForCuisine, type LunchieCuisineChoice } from '@/lib/lunchieGame';
+import { cuisineSignal, satisfactionSignal } from '@shared/lunchieRoundStats';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 type SwipeAction = 'like' | 'dislike';
+
+type RoundStatItem = {
+  id: string;
+  label: string;
+  value: number;
+  color: string;
+  emoji?: string;
+};
+
+type LunchieRoundStatsPayload = {
+  totalMembers?: number;
+  isExpired?: boolean;
+  cuisineTally?: Record<LunchieCuisineChoice, number>;
+  cuisineVotedCount?: number;
+  satisfactionResponseCount?: number;
+  satisfactionAverage?: number | null;
+  satisfactionBuckets?: { low: number; medium: number; high: number };
+};
 
 function GameStageRail({ current }: { current: 1 | 2 | 3 | 4 }) {
   const stages = ['음식 종류', '추천 투표', 'TOP 2', '만족도'];
@@ -58,13 +77,178 @@ function GameStageRail({ current }: { current: 1 | 2 | 3 | 4 }) {
   );
 }
 
+function RoundStatisticsScreen({
+  round,
+  eyebrow,
+  title,
+  description,
+  items,
+  completed,
+  total,
+  ready = true,
+  onContinue,
+  continueLabel,
+  summaryLabel,
+}: {
+  round: 1 | 2 | 3 | 4;
+  eyebrow: string;
+  title: string;
+  description: string;
+  items: RoundStatItem[];
+  completed: number;
+  total: number;
+  ready?: boolean;
+  onContinue?: () => void;
+  continueLabel?: string;
+  summaryLabel?: string;
+}) {
+  const safeTotal = Math.max(total, 1);
+  const maxValue = Math.max(1, ...items.map(item => item.value));
+
+  return (
+    <motion.main
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      className="min-h-dvh bg-[radial-gradient(circle_at_top,#8A62E8_0%,#5B45D6_48%,#2F246F_100%)] px-5 pb-8 pt-[max(18px,env(safe-area-inset-top))] text-white"
+      aria-label={`${round}라운드 통계 결과`}
+    >
+      <GameStageRail current={round} />
+      <div className="mx-auto mt-9 max-w-[380px] text-center">
+        <span className="inline-flex rounded-full bg-[#FFE36E] px-3 py-1 text-[10px] font-black tracking-[0.8px] text-[#372B70]">{eyebrow}</span>
+        <h1 className="mt-4 text-[28px] font-black tracking-[-0.8px]">{ready ? title : '모두의 선택을 기다리는 중'}</h1>
+        <p className="mt-2 text-[12px] font-semibold leading-relaxed text-white/70">
+          {ready ? description : '개별 답은 숨긴 채 완료 인원만 표시해요. 모두 끝나면 통계를 동시에 공개합니다.'}
+        </p>
+
+        {!ready ? (
+          <div className="mt-8 rounded-[28px] border border-white/15 bg-white/10 p-6 text-left shadow-2xl">
+            <p className="text-[11px] font-black text-white/60">ANSWERS LOCKED</p>
+            <p className="mt-2 text-[38px] font-black tabular-nums">{completed}<span className="mx-2 text-xl text-white/35">/</span>{safeTotal}</p>
+            <p className="text-[11px] font-bold text-white/65">명 선택 완료</p>
+            <div className="mt-5 h-3 overflow-hidden rounded-full bg-black/20">
+              <motion.div
+                className="h-full rounded-full bg-[#FFE36E]"
+                animate={{ width: `${Math.min(100, (completed / safeTotal) * 100)}%` }}
+              />
+            </div>
+            <p className="mt-4 text-center text-[10px] font-bold text-[#FFE36E]">🔒 이름과 개별 선택은 공개하지 않아요</p>
+          </div>
+        ) : (
+          <div className="mt-7 space-y-3 rounded-[28px] border border-white/15 bg-white/10 p-5 text-left shadow-2xl">
+            {items.map(item => {
+              const percent = Math.round((item.value / safeTotal) * 100);
+              return (
+                <div key={item.id} className="rounded-2xl bg-black/15 p-3.5">
+                  <div className="flex items-center justify-between gap-3">
+                    <span className="truncate text-[13px] font-black">{item.emoji && <span className="mr-1.5" aria-hidden="true">{item.emoji}</span>}{item.label}</span>
+                    <span className="shrink-0 text-[13px] font-black tabular-nums text-[#FFE36E]">{item.value} · {percent}%</span>
+                  </div>
+                  <div className="mt-2.5 h-2.5 overflow-hidden rounded-full bg-black/20">
+                    <motion.div
+                      initial={{ width: 0 }}
+                      animate={{ width: `${Math.max(item.value > 0 ? 8 : 0, (item.value / maxValue) * 100)}%` }}
+                      transition={{ duration: 0.55, ease: 'easeOut' }}
+                      className="h-full rounded-full"
+                      style={{ backgroundColor: item.color }}
+                    />
+                  </div>
+                </div>
+              );
+            })}
+            <p className="pt-1 text-center text-[10px] font-bold text-white/50">익명 집계 · {summaryLabel ?? `총 ${safeTotal}명 기준`}</p>
+          </div>
+        )}
+
+        {ready && onContinue && (
+          <button
+            type="button"
+            onClick={onContinue}
+            className="mt-6 min-h-14 w-full rounded-[20px] bg-white px-4 text-[14px] font-black text-[#5B45D6] shadow-xl active:scale-[0.98]"
+          >
+            {continueLabel ?? '다음 라운드 →'}
+          </button>
+        )}
+      </div>
+    </motion.main>
+  );
+}
+
+function CuisineStatisticsScreen({
+  inviteCode,
+  choice,
+  isSolo,
+  memberCount,
+  onContinue,
+}: {
+  inviteCode: string;
+  choice: LunchieCuisineChoice;
+  isSolo: boolean;
+  memberCount: number;
+  onContinue: () => void;
+}) {
+  const [stats, setStats] = useState<LunchieRoundStatsPayload>(() => ({
+    cuisineTally: {
+      korean: choice === 'korean' ? 1 : 0,
+      asian: choice === 'asian' ? 1 : 0,
+      western: choice === 'western' ? 1 : 0,
+      surprise: choice === 'surprise' ? 1 : 0,
+    },
+    cuisineVotedCount: isSolo ? 1 : 0,
+  }));
+
+  useEffect(() => {
+    if (isSolo) return;
+    let cancelled = false;
+    const load = async () => {
+      try {
+        const response = await fetch(`/api/sessions/${inviteCode}/results`);
+        if (!response.ok) return;
+        const payload = await response.json() as LunchieRoundStatsPayload;
+        if (!cancelled) setStats(payload);
+      } catch { /* 다음 폴링에서 다시 시도 */ }
+    };
+    void load();
+    const timer = window.setInterval(() => void load(), 1200);
+    return () => { cancelled = true; window.clearInterval(timer); };
+  }, [inviteCode, isSolo]);
+
+  const completed = isSolo ? 1 : stats.cuisineVotedCount ?? 0;
+  const effectiveTotal = isSolo ? 1 : stats.totalMembers ?? memberCount;
+  const ready = isSolo || completed >= effectiveTotal || stats.isExpired === true;
+  const tally = stats.cuisineTally ?? { korean: 0, asian: 0, western: 0, surprise: 0 };
+  const items = LUNCHIE_CUISINE_CHOICES.map(option => ({
+    id: option.id,
+    label: option.label,
+    value: tally[option.id] ?? 0,
+    color: option.color,
+    emoji: option.emoji,
+  }));
+
+  return (
+    <RoundStatisticsScreen
+      round={1}
+      eyebrow="ROUND 1 RESULT"
+      title="오늘의 입맛 분포"
+      description="모두의 음식 종류 선택을 익명으로 합쳤어요."
+      items={items}
+      completed={completed}
+      total={effectiveTotal}
+      ready={ready}
+      onContinue={onContinue}
+      continueLabel="추천 투표 시작 →"
+    />
+  );
+}
+
 function CuisineChoiceScreen({
   isSolo,
   memberCount,
+  isSubmitting,
   onSelect,
 }: {
   isSolo: boolean;
   memberCount: number;
+  isSubmitting: boolean;
   onSelect: (choice: LunchieCuisineChoice) => void;
 }) {
   return (
@@ -87,7 +271,8 @@ function CuisineChoiceScreen({
               key={choice.id}
               type="button"
               onClick={() => onSelect(choice.id)}
-              className="min-h-[146px] rounded-[24px] border-2 border-white/20 p-4 text-left shadow-[0_14px_30px_rgba(25,14,72,0.25)] outline-none focus-visible:ring-4 focus-visible:ring-white/70"
+              disabled={isSubmitting}
+              className="min-h-[146px] rounded-[24px] border-2 border-white/20 p-4 text-left shadow-[0_14px_30px_rgba(25,14,72,0.25)] outline-none focus-visible:ring-4 focus-visible:ring-white/70 disabled:opacity-55"
               style={{ background: choice.color }}
               whileTap={{ scale: 0.96 }}
               aria-label={`${choice.label}: ${choice.hint}`}
@@ -850,16 +1035,20 @@ function WinnerScreen({ selectedWinner, onReset }: { selectedWinner?: Restaurant
   const [detailIndex, setDetailIndex] = useState<number | null>(null);
   const [satisfaction, setSatisfaction] = useState(70);
   const [satisfactionSubmitted, setSatisfactionSubmitted] = useState(false);
+  const [isSubmittingSatisfaction, setIsSubmittingSatisfaction] = useState(false);
   const lunchmateLoadout = lunchmateLoadoutFromProfile(profile.lunchmateLoadout);
   const winnerEventKeyRef = useRef<string | null>(null);
   const [liveResults, setLiveResults] = useState<{
     results: { restaurantId: string; score: number; likeCount: number; dislikeCount: number }[];
     winnerId?: string | null;
-  }>({ results: [], winnerId: null });
+    satisfactionResponseCount?: number;
+    satisfactionAverage?: number | null;
+    satisfactionBuckets?: { low: number; medium: number; high: number };
+  }>({ results: [], winnerId: null, satisfactionResponseCount: 0, satisfactionAverage: null });
 
-  // Poll server results to determine the winning restaurant (skipped once the user has picked one in the finals)
+  // Once this member answers, refresh the anonymous satisfaction aggregate.
   useEffect(() => {
-    if (!currentSession || selectedWinner) return;
+    if (!currentSession || !satisfactionSubmitted) return;
 
     const fetchLiveResults = async () => {
       try {
@@ -876,7 +1065,7 @@ function WinnerScreen({ selectedWinner, onReset }: { selectedWinner?: Restaurant
     fetchLiveResults();
     const interval = setInterval(fetchLiveResults, 3000);
     return () => clearInterval(interval);
-  }, [currentSession, selectedWinner]);
+  }, [currentSession, satisfactionSubmitted]);
 
   const winnerId = liveResults.winnerId || liveResults.results[0]?.restaurantId;
   const winner = selectedWinner || restaurants.find(r => r.id === winnerId) || currentSession?.restaurants[0];
@@ -954,21 +1143,54 @@ function WinnerScreen({ selectedWinner, onReset }: { selectedWinner?: Restaurant
     }
   };
 
-  const shareSatisfaction = () => {
-    if (satisfactionSubmitted) return;
-    const action = satisfaction >= 70 ? 'POS' : satisfaction >= 40 ? 'NEU' : 'NEG';
-    setSatisfactionSubmitted(true);
-    logEvent({
-      event_type: 'SURVEY',
-      action,
-      user_id: profile.id,
-      session_id: currentSession?.id ?? null,
-      restaurant_id: winner.id,
-      score: satisfaction / 100,
-      context: { moment: 'shared_session_reveal', satisfaction_score: satisfaction },
-    });
-    flushEvents();
-    toast.success('만족도를 남겼어요!');
+  const shareSatisfaction = async () => {
+    if (satisfactionSubmitted || isSubmittingSatisfaction) return;
+    setIsSubmittingSatisfaction(true);
+    try {
+      if (currentSession) {
+        await persistSessionSwipe({
+          id: `satisfaction_${currentSession.id}_${profile.id}`,
+          sessionId: currentSession.id,
+          userId: profile.id,
+          restaurantId: satisfactionSignal(satisfaction),
+          round: 1,
+          action: 'SYSTEM',
+        });
+      }
+      const action = satisfaction >= 70 ? 'POS' : satisfaction >= 40 ? 'NEU' : 'NEG';
+      setSatisfactionSubmitted(true);
+      setLiveResults(previous => {
+        const previousCount = previous.satisfactionResponseCount ?? 0;
+        const previousAverage = previous.satisfactionAverage ?? 0;
+        const previousBuckets = previous.satisfactionBuckets ?? { low: 0, medium: 0, high: 0 };
+        return {
+          ...previous,
+          satisfactionResponseCount: previousCount + 1,
+          satisfactionAverage: Math.round(((previousAverage * previousCount) + satisfaction) / (previousCount + 1)),
+          satisfactionBuckets: {
+            low: previousBuckets.low + (satisfaction < 40 ? 1 : 0),
+            medium: previousBuckets.medium + (satisfaction >= 40 && satisfaction < 70 ? 1 : 0),
+            high: previousBuckets.high + (satisfaction >= 70 ? 1 : 0),
+          },
+        };
+      });
+      logEvent({
+        event_type: 'SURVEY',
+        action,
+        user_id: profile.id,
+        session_id: currentSession?.id ?? null,
+        restaurant_id: winner.id,
+        score: satisfaction / 100,
+        context: { moment: 'shared_session_reveal', satisfaction_score: satisfaction },
+      });
+      flushEvents();
+      toast.success('만족도를 남겼어요!');
+    } catch (error) {
+      console.error('만족도 저장 실패', error);
+      toast.error('만족도를 저장하지 못했어요. 다시 시도해 주세요.');
+    } finally {
+      setIsSubmittingSatisfaction(false);
+    }
   };
 
   return (
@@ -1034,12 +1256,29 @@ function WinnerScreen({ selectedWinner, onReset }: { selectedWinner?: Restaurant
             <button
               type="button"
               onClick={shareSatisfaction}
-              disabled={satisfactionSubmitted}
+              disabled={satisfactionSubmitted || isSubmittingSatisfaction}
               className="mt-3 min-h-11 w-full rounded-2xl bg-white px-4 text-[12px] font-black text-[#5B45D6] disabled:bg-white/20 disabled:text-white/70"
             >
-              {satisfactionSubmitted ? '만족도 제출 완료 ✓' : '만족도 보내기'}
+              {satisfactionSubmitted ? '만족도 제출 완료 ✓' : isSubmittingSatisfaction ? '집계 중…' : '만족도 보내기'}
             </button>
             {satisfactionSubmitted && <p className="mt-2 text-[10px] font-bold text-[#FFE36E]" role="status">다음 모임 추천에 반영할게요.</p>}
+            {satisfactionSubmitted && (
+              <div className="mt-4 rounded-2xl bg-black/15 p-4 text-left" aria-label="4라운드 통계 결과">
+                <div className="flex items-end justify-between gap-3">
+                  <div>
+                    <p className="text-[9px] font-black tracking-[0.7px] text-[#FFE36E]">ROUND 4 RESULT</p>
+                    <p className="mt-1 text-[12px] font-black">전체 만족도 평균</p>
+                  </div>
+                  <p className="text-[30px] font-black text-[#FFE36E]">{liveResults.satisfactionAverage ?? satisfaction}<span className="text-sm">%</span></p>
+                </div>
+                <div className="mt-3 grid grid-cols-3 gap-2 text-center text-[9px] font-black">
+                  <div className="rounded-xl bg-white/10 px-1 py-2"><span className="block text-lg">{liveResults.satisfactionBuckets?.low ?? (satisfaction < 40 ? 1 : 0)}</span>아쉬움</div>
+                  <div className="rounded-xl bg-white/10 px-1 py-2"><span className="block text-lg">{liveResults.satisfactionBuckets?.medium ?? (satisfaction >= 40 && satisfaction < 70 ? 1 : 0)}</span>괜찮음</div>
+                  <div className="rounded-xl bg-white/10 px-1 py-2"><span className="block text-lg">{liveResults.satisfactionBuckets?.high ?? (satisfaction >= 70 ? 1 : 0)}</span>만족</div>
+                </div>
+                <p className="mt-3 text-center text-[9px] font-bold text-white/45">익명 응답 {Math.max(1, liveResults.satisfactionResponseCount ?? 0)}명</p>
+              </div>
+            )}
           </div>
 
           {/* Badges */}
@@ -1577,6 +1816,7 @@ function WaitingOrDecidedScreen({ onContinue, onReroll }: { onContinue: (winner?
   const [voted, setVoted] = useState(false);
   const [isVoting, setIsVoting] = useState(false);
   const [resultsConnection, setResultsConnection] = useState<'loading' | 'live' | 'offline'>('loading');
+  const [prelimStatsAcknowledged, setPrelimStatsAcknowledged] = useState(false);
 
   // 결승 한 표(round=2G). restaurantId가 REJECT면 "둘 다 별로". 멤버당 1표로 서버가 중복 제거.
   const castVote = async (restaurantId: string) => {
@@ -1692,6 +1932,9 @@ function WaitingOrDecidedScreen({ onContinue, onReroll }: { onContinue: (winner?
     : liveResults.completedCount;
   const displayedTotal = Math.max(liveResults.totalMembers, 1);
   const completionPercent = Math.min(100, (displayedCompleted / displayedTotal) * 100);
+  const prelimLikeCount = liveResults.results.reduce((sum, result) => sum + result.likeCount, 0);
+  const prelimDislikeCount = liveResults.results.reduce((sum, result) => sum + result.dislikeCount, 0);
+  const prelimAnswerCount = Math.max(1, prelimLikeCount + prelimDislikeCount);
 
   // NO_CONSENSUS → 합의 실패 안내 (reroll 상한 초과)
   if (phase === 'NO_CONSENSUS') {
@@ -1749,6 +1992,26 @@ function WaitingOrDecidedScreen({ onContinue, onReroll }: { onContinue: (winner?
     );
   }
 
+  if ((phase === 'FINAL' || phase === 'DONE') && !prelimStatsAcknowledged) {
+    return (
+      <RoundStatisticsScreen
+        round={2}
+        eyebrow="ROUND 2 RESULT"
+        title="그룹 추천 투표 결과"
+        description="개별 답은 숨기고 전체 추천·비추천 수만 공개했어요."
+        items={[
+          { id: 'like', label: '추천', value: prelimLikeCount, color: '#65E6A8', emoji: '♥' },
+          { id: 'dislike', label: '비추천', value: prelimDislikeCount, color: '#FF7B86', emoji: '✕' },
+        ]}
+        completed={liveResults.completedCount}
+        total={prelimAnswerCount}
+        onContinue={() => setPrelimStatsAcknowledged(true)}
+        continueLabel={phase === 'FINAL' ? 'TOP 2 대결 보기 →' : '최종 통계 보기 →'}
+        summaryLabel={`총 ${prelimAnswerCount}개 평가`}
+      />
+    );
+  }
+
   // Group finals reuse the same diagonal duel used in solo mode. The server
   // still owns the tally; this component only provides the shared selection UI.
   if (phase === 'FINAL' && !voted && finalistRs.length >= 1) {
@@ -1798,6 +2061,35 @@ function WaitingOrDecidedScreen({ onContinue, onReroll }: { onContinue: (winner?
             <div>
               <h2 className="mb-1 text-[28px] font-black text-[#312A28]">결정됐어요!</h2>
               <p className="text-[13px] font-semibold text-[#927F77]">모든 친구들이 투표를 완료했습니다</p>
+            </div>
+
+            <div className="mx-auto w-full max-w-[340px] rounded-3xl bg-[#5B45D6] p-5 text-left text-white shadow-[0_14px_40px_rgba(91,69,214,0.2)]" aria-label="3라운드 통계 결과">
+              <p className="text-[10px] font-black tracking-[0.8px] text-[#FFE36E]">ROUND 3 RESULT</p>
+              <p className="mt-1 text-[18px] font-black">TOP 2 최종 득표</p>
+              <div className="mt-4 space-y-3">
+                {(finalistRs.length ? finalistRs : winner ? [winner] : []).map(restaurant => {
+                  const votes = liveResults.finalTally?.[restaurant.id]
+                    ?? (restaurant.id === liveResults.winnerId ? displayedTotal : 0);
+                  const percent = Math.round((votes / Math.max(1, liveResults.finalVotedCount ?? displayedTotal)) * 100);
+                  return (
+                    <div key={restaurant.id}>
+                      <div className="flex items-center justify-between gap-2 text-[12px] font-black">
+                        <span className="truncate">{restaurant.id === liveResults.winnerId ? '🏆 ' : ''}{restaurant.name}</span>
+                        <span className="text-[#FFE36E]">{votes}표 · {percent}%</span>
+                      </div>
+                      <div className="mt-1.5 h-2 overflow-hidden rounded-full bg-black/20">
+                        <div className="h-full rounded-full bg-[#FFE36E]" style={{ width: `${percent}%` }} />
+                      </div>
+                    </div>
+                  );
+                })}
+                {(liveResults.finalTally?.[REJECT] ?? 0) > 0 && (
+                  <div className="flex items-center justify-between text-[11px] font-bold text-white/65">
+                    <span>둘 다 별로</span><span>{liveResults.finalTally?.[REJECT]}표</span>
+                  </div>
+                )}
+              </div>
+              <p className="mt-3 text-center text-[9px] font-bold text-white/45">익명 집계 · 개인 선택은 비공개</p>
             </div>
             
             {winner && (
@@ -1956,7 +2248,7 @@ function WaitingOrDecidedScreen({ onContinue, onReroll }: { onContinue: (winner?
 
 // ─── Main Quick Match Page ────────────────────────────────────────────────────
 
-type Phase = 'swipe' | 'decided' | 'results';
+type Phase = 'swipe' | 'decided' | 'final-stats' | 'results';
 
 function QuickMatchExperience() {
   const [, navigate] = useLocation();
@@ -1965,12 +2257,18 @@ function QuickMatchExperience() {
   const lunchmateLoadout = lunchmateLoadoutFromProfile(profile.lunchmateLoadout);
   const sessionRestaurants = currentSession?.restaurants || [];
   const cuisineStorageKey = `lm_lunchie_cuisine:${currentSession?.id ?? 'none'}:${profile.id}`;
+  const cuisineStatsSeenKey = `${cuisineStorageKey}:stats_seen`;
   const [cuisineChoice, setCuisineChoice] = useState<LunchieCuisineChoice | null>(() => {
     const saved = localStorage.getItem(cuisineStorageKey);
     return LUNCHIE_CUISINE_CHOICES.some(choice => choice.id === saved)
       ? saved as LunchieCuisineChoice
       : null;
   });
+  const [cuisineStatsAcknowledged, setCuisineStatsAcknowledged] = useState(
+    () => localStorage.getItem(cuisineStatsSeenKey) === '1',
+  );
+  const [isSubmittingCuisine, setIsSubmittingCuisine] = useState(false);
+  const [roundTwoStatsAcknowledged, setRoundTwoStatsAcknowledged] = useState(false);
   const targetRestaurants = useMemo(
     () => prioritizeRestaurantsForCuisine(sessionRestaurants, cuisineChoice),
     [sessionRestaurants, cuisineChoice],
@@ -2000,18 +2298,40 @@ function QuickMatchExperience() {
     return Math.max(0, new Date(currentSession.deadline).getTime() - Date.now());
   });
 
-  const chooseCuisine = useCallback((choice: LunchieCuisineChoice) => {
-    localStorage.setItem(cuisineStorageKey, choice);
-    setCuisineChoice(choice);
-    setCurrentIndex(0);
-    setShowIntro(true);
-  }, [cuisineStorageKey]);
+  const chooseCuisine = useCallback(async (choice: LunchieCuisineChoice) => {
+    if (!currentSession || isSubmittingCuisine) return;
+    setIsSubmittingCuisine(true);
+    try {
+      await persistSessionSwipe({
+        id: `cuisine_${currentSession.id}_${profile.id}`,
+        sessionId: currentSession.id,
+        userId: profile.id,
+        restaurantId: cuisineSignal(choice),
+        round: 1,
+        action: 'SYSTEM',
+      });
+      localStorage.setItem(cuisineStorageKey, choice);
+      localStorage.removeItem(cuisineStatsSeenKey);
+      setCuisineChoice(choice);
+      setCuisineStatsAcknowledged(false);
+      setCurrentIndex(0);
+      setShowIntro(true);
+    } catch (error) {
+      console.error('음식 종류 선택 저장 실패', error);
+      toast.error('음식 종류 선택을 저장하지 못했어요. 다시 시도해 주세요.');
+    } finally {
+      setIsSubmittingCuisine(false);
+    }
+  }, [currentSession, cuisineStatsSeenKey, cuisineStorageKey, isSubmittingCuisine, profile.id]);
 
   const resetCuisineRound = useCallback(() => {
     localStorage.removeItem(cuisineStorageKey);
+    localStorage.removeItem(cuisineStatsSeenKey);
     setCuisineChoice(null);
+    setCuisineStatsAcknowledged(false);
+    setRoundTwoStatsAcknowledged(false);
     setShowIntro(false);
-  }, [cuisineStorageKey]);
+  }, [cuisineStatsSeenKey, cuisineStorageKey]);
 
   // Countdown ticker for the header badge
   useEffect(() => {
@@ -2253,7 +2573,23 @@ function QuickMatchExperience() {
       <CuisineChoiceScreen
         isSolo={isSoloSession}
         memberCount={currentSession.members.length}
+        isSubmitting={isSubmittingCuisine}
         onSelect={chooseCuisine}
+      />
+    );
+  }
+
+  if (phase === 'swipe' && cuisineChoice && !cuisineStatsAcknowledged) {
+    return (
+      <CuisineStatisticsScreen
+        inviteCode={currentSession.inviteCode}
+        choice={cuisineChoice}
+        isSolo={isSoloSession}
+        memberCount={currentSession.members.length}
+        onContinue={() => {
+          localStorage.setItem(cuisineStatsSeenKey, '1');
+          setCuisineStatsAcknowledged(true);
+        }}
       />
     );
   }
@@ -2266,10 +2602,10 @@ function QuickMatchExperience() {
     rejectedRef.current.clear();
     await rerollSession(targetRestaurants.map(r => r.id));
     resetCuisineRound();
-    setCurrentIndex(0); setSwipeData([]); setSelectedWinner(null); setDuel(null); setPhase('swipe');
+    setCurrentIndex(0); setSwipeData([]); setSelectedWinner(null); setDuel(null); setRoundTwoStatsAcknowledged(false); setPhase('swipe');
   };
   // 듀얼 선택 → 우승 확정 (1번 비교, 이론 권장).
-  const handleDuelChoice = (chosen?: any) => { if (chosen) setSelectedWinner(chosen); setPhase('results'); };
+  const handleDuelChoice = (chosen?: any) => { if (chosen) setSelectedWinner(chosen); setPhase('final-stats'); };
   // "둘 다 별로" → 두 후보 거절(NOPE FINAL = head-to-head 부정) → 남은 좋아요로 다른 듀얼, 없으면 새 추천.
   const handleRejectBoth = () => {
     if (!duel) return;
@@ -2295,6 +2631,32 @@ function QuickMatchExperience() {
   if (phase === 'decided') {
     const isSolo = (currentSession?.members?.length ?? 1) <= 1;
     if (isSolo) {
+      if (!roundTwoStatsAcknowledged) {
+        const likedCount = swipeData.length
+          ? swipeData.filter(item => item.action === 'like').length
+          : currentSessionSwipes.filter(item => item.action === 'like' || item.action === 'save').length;
+        const dislikedCount = swipeData.length
+          ? swipeData.filter(item => item.action === 'dislike').length
+          : currentSessionSwipes.filter(item => item.action === 'skip').length;
+        const answerCount = Math.max(1, likedCount + dislikedCount);
+        return (
+          <RoundStatisticsScreen
+            round={2}
+            eyebrow="ROUND 2 RESULT"
+            title="추천 투표 결과"
+            description="한 곳씩 평가한 결과를 합쳤어요. 이제 TOP 2가 맞붙습니다."
+            items={[
+              { id: 'like', label: '추천', value: likedCount, color: '#65E6A8', emoji: '♥' },
+              { id: 'dislike', label: '비추천', value: dislikedCount, color: '#FF7B86', emoji: '✕' },
+            ]}
+            completed={answerCount}
+            total={answerCount}
+            onContinue={() => setRoundTwoStatsAcknowledged(true)}
+            continueLabel="TOP 2 대결 보기 →"
+            summaryLabel={`총 ${answerCount}개 평가`}
+          />
+        );
+      }
       // 마지막 기회 안내 — 그룹의 REROLL "isLastChance" 화면과 동일한 안내 메시지·버튼.
       if (rerollPrompt === 'lastChance') {
         return (
@@ -2337,8 +2699,28 @@ function QuickMatchExperience() {
     }
     return <WaitingOrDecidedScreen
       onContinue={(w) => { if (w) setSelectedWinner(w); setPhase('results'); }}
-      onReroll={async (excludeIds) => { await rerollSession(excludeIds); resetCuisineRound(); setSwipeData([]); setCurrentIndex(0); setSelectedWinner(null); setDuel(null); setPhase('swipe'); }}
+      onReroll={async (excludeIds) => { await rerollSession(excludeIds); resetCuisineRound(); setSwipeData([]); setCurrentIndex(0); setSelectedWinner(null); setDuel(null); setRoundTwoStatsAcknowledged(false); setPhase('swipe'); }}
     />; // 그룹: 멤버 투표 폴링 + REROLL시 새 세대 재스와이프
+  }
+  if (phase === 'final-stats') {
+    const opponent = duel?.a?.id === selectedWinner?.id ? duel?.b : duel?.a;
+    return (
+      <RoundStatisticsScreen
+        round={3}
+        eyebrow="ROUND 3 RESULT"
+        title="TOP 2 최종 결과"
+        description="최종 선택이 집계됐어요. 우승 식당을 공개합니다."
+        items={[
+          { id: selectedWinner?.id ?? 'winner', label: selectedWinner?.name ?? '선택한 식당', value: 1, color: '#FFE36E', emoji: '🏆' },
+          ...(opponent ? [{ id: opponent.id, label: opponent.name, value: 0, color: '#8A7BEF', emoji: '🍽️' }] : []),
+        ]}
+        completed={1}
+        total={1}
+        onContinue={() => setPhase('results')}
+        continueLabel="우승 식당과 만족도 보기 →"
+        summaryLabel="최종 1표"
+      />
+    );
   }
   if (phase === 'results') {
     return <WinnerScreen selectedWinner={selectedWinner} onReset={handleReset} />;

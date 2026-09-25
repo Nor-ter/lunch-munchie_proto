@@ -82,4 +82,16 @@ describe('unified Lunchie group flow', () => {
     expect(swipeSource).toContain('SOLO WINNER!');
     expect(swipeSource).toContain('내가 고른 TOP 2');
   });
+
+  it('reveals anonymous statistics after every game round', () => {
+    expect(swipeSource).toContain('ROUND 1 RESULT');
+    expect(swipeSource).toContain('오늘의 입맛 분포');
+    expect(swipeSource).toContain('ROUND 2 RESULT');
+    expect(swipeSource).toContain('그룹 추천 투표 결과');
+    expect(swipeSource).toContain('ROUND 3 RESULT');
+    expect(swipeSource).toContain('TOP 2 최종 득표');
+    expect(swipeSource).toContain('ROUND 4 RESULT');
+    expect(swipeSource).toContain('전체 만족도 평균');
+    expect(swipeSource).toContain('익명 집계');
+  });
 });

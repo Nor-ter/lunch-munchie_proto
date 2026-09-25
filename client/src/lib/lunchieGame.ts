@@ -1,4 +1,6 @@
-export type LunchieCuisineChoice = 'korean' | 'asian' | 'western' | 'surprise';
+import type { LunchieCuisineId } from '@shared/lunchieRoundStats';
+
+export type LunchieCuisineChoice = LunchieCuisineId;
 
 export const LUNCHIE_CUISINE_CHOICES: ReadonlyArray<{
   id: LunchieCuisineChoice;
