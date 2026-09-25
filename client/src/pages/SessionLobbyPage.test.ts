@@ -1,5 +1,8 @@
 import { describe, expect, it } from 'vitest';
+import { readFileSync } from 'node:fs';
 import { resolveInviteOrigin } from './SessionLobbyPage';
+
+const lobbySource = readFileSync(new URL('./SessionLobbyPage.tsx', import.meta.url), 'utf8');
 
 describe('resolveInviteOrigin', () => {
   it('opens invite links through the Pages dev port when launched from Vite on a LAN host', () => {
@@ -16,5 +19,11 @@ describe('resolveInviteOrigin', () => {
 
   it('leaves non-Vite browser origins unchanged', () => {
     expect(resolveInviteOrigin(undefined, 'https://lunchie.example.com')).toBe('https://lunchie.example.com');
+  });
+
+  it('explains the independent-choice shared reveal before a group starts', () => {
+    expect(lobbySource).toContain('PRIVATE PICK');
+    expect(lobbySource).toContain('NO LIVE SCORE');
+    expect(lobbySource).toContain('GROUP REVEAL');
   });
 });

@@ -12,8 +12,12 @@ import {
   ChevronDown,
   Copy,
   Crown,
+  EyeOff,
+  Gamepad2,
+  LockKeyhole,
   QrCode,
   Share2,
+  Sparkles,
   UserPlus,
   Users,
 } from 'lucide-react';
@@ -173,8 +177,8 @@ export default function SessionLobbyPage() {
             />
             <span className="absolute -right-2 -top-2 flex size-9 items-center justify-center rounded-full bg-[#EB5053] text-lg text-white shadow-lg">✓</span>
           </motion.div>
-          <span className="rounded-full bg-[#FFE3DF] px-3 py-1 text-[11px] font-black tracking-[0.4px] text-[#D8484B]">참여 완료</span>
-          <h1 className="mt-4 text-[25px] font-black tracking-[-0.7px] text-[#2F2927]">참여 완료!</h1>
+          <span className="rounded-full bg-[#5B45D6] px-3 py-1 text-[11px] font-black tracking-[0.8px] text-white">YOU'RE IN!</span>
+          <h1 className="mt-4 text-[28px] font-black tracking-[-0.9px] text-[#2F2927]">참여 완료!</h1>
           <p className="mt-2 max-w-[290px] text-[14px] font-semibold leading-relaxed text-[#8A7B75]">
             {presentation.isWaiting ? (
               <>{presentation.hostName}님이 시작하면<br />바로 예선전으로 함께 이동해요.</>
@@ -202,6 +206,19 @@ export default function SessionLobbyPage() {
               ))}
             </span>
             시작 신호를 확인하고 있어요
+          </div>
+          <div className="mt-7 grid w-full max-w-[330px] grid-cols-3 gap-2 text-left">
+            {[
+              ['1', '혼자 고르기', '선택은 비밀'],
+              ['2', '함께 공개', '동시에 확인'],
+              ['3', '한 곳 결정', '의견 남기기'],
+            ].map(([step, title, copy]) => (
+              <div key={step} className="rounded-2xl border border-[#EFE1DA] bg-white p-3 shadow-sm">
+                <span className="flex size-6 items-center justify-center rounded-lg bg-[#5B45D6] text-[11px] font-black text-white">{step}</span>
+                <p className="mt-2 text-[11px] font-black text-[#403633]">{title}</p>
+                <p className="mt-0.5 text-[9px] font-semibold text-[#A18F88]">{copy}</p>
+              </div>
+            ))}
           </div>
         </main>
       </ScreenContainer>
@@ -297,6 +314,33 @@ export default function SessionLobbyPage() {
       </header>
 
       <main className="flex-1">
+        <section className="mb-4 overflow-hidden rounded-[28px] bg-[linear-gradient(135deg,#5B45D6_0%,#7B5CE1_55%,#E85053_140%)] p-5 text-white shadow-[0_18px_45px_rgba(91,69,214,0.22)]" aria-labelledby="session-game-title">
+          <div className="flex items-start justify-between gap-3">
+            <div>
+              <span className="inline-flex items-center gap-1.5 rounded-full bg-white/15 px-2.5 py-1 text-[10px] font-black tracking-[0.8px]">
+                <Gamepad2 size={13} aria-hidden="true" /> LIVE LUNCH GAME
+              </span>
+              <h2 id="session-game-title" className="mt-3 text-[25px] font-black leading-[1.05] tracking-[-0.8px]">같이 고르고,<br />한 번에 공개!</h2>
+            </div>
+            <motion.div animate={reduceMotion ? undefined : { rotate: [-5, 5, -5], scale: [1, 1.06, 1] }} transition={{ duration: 2.4, repeat: Infinity }} className="flex size-14 shrink-0 items-center justify-center rounded-2xl bg-white/15">
+              <Sparkles size={28} aria-hidden="true" />
+            </motion.div>
+          </div>
+          <div className="mt-5 grid grid-cols-3 gap-2">
+            {[
+              { icon: LockKeyhole, label: 'PRIVATE PICK', copy: '눈치 없이 선택' },
+              { icon: EyeOff, label: 'NO LIVE SCORE', copy: '득표는 비공개' },
+              { icon: Users, label: 'GROUP REVEAL', copy: '모두 동시에 공개' },
+            ].map(({ icon: Icon, label, copy }) => (
+              <div key={label} className="rounded-2xl bg-white/12 p-2.5 backdrop-blur-sm">
+                <Icon size={16} className="text-[#FFE38A]" aria-hidden="true" />
+                <p className="mt-2 text-[9px] font-black tracking-[0.4px]">{label}</p>
+                <p className="mt-0.5 text-[9px] font-semibold text-white/70">{copy}</p>
+              </div>
+            ))}
+          </div>
+        </section>
+
         <section aria-labelledby="lobby-invite-title">
           <AppCard className="mb-4 p-4">
             {isSoloSession ? (

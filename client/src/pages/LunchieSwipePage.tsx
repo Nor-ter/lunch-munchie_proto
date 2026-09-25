@@ -7,7 +7,7 @@
 import { useState, useCallback, useEffect, useRef } from 'react';
 import { motion, useMotionValue, useTransform, useMotionTemplate, AnimatePresence, type MotionValue } from 'framer-motion';
 import { useLocation } from 'wouter';
-import { Heart, X, Star, MapPin, Clock, Phone, Navigation, Share2, Download, Link2, Home, Bookmark, RotateCcw, Loader2, RefreshCw, SlidersHorizontal, Info } from 'lucide-react';
+import { Heart, X, Star, MapPin, Clock, Phone, Navigation, Share2, Download, Link2, Home, Bookmark, RotateCcw, Loader2, RefreshCw, SlidersHorizontal, Info, LockKeyhole, MessageCircleHeart, Sparkles, Users } from 'lucide-react';
 import { toast } from 'sonner';
 import { useApp, type Restaurant, type MenuItem } from '@/contexts/AppContext';
 import { useCourseShare } from '@/hooks/useCourseShare';
@@ -784,6 +784,7 @@ function WinnerScreen({ selectedWinner, onReset }: { selectedWinner?: Restaurant
   const [isCapturing, setIsCapturing] = useState(false);
   const [saved, setSaved] = useState(false);
   const [detailIndex, setDetailIndex] = useState<number | null>(null);
+  const [reaction, setReaction] = useState<'POS' | 'NEU' | 'NEG' | null>(null);
   const lunchmateLoadout = lunchmateLoadoutFromProfile(profile.lunchmateLoadout);
   const winnerEventKeyRef = useRef<string | null>(null);
   const [liveResults, setLiveResults] = useState<{
@@ -887,6 +888,21 @@ function WinnerScreen({ selectedWinner, onReset }: { selectedWinner?: Restaurant
     }
   };
 
+  const shareReaction = (nextReaction: 'POS' | 'NEU' | 'NEG') => {
+    if (reaction) return;
+    setReaction(nextReaction);
+    logEvent({
+      event_type: 'SURVEY',
+      action: nextReaction,
+      user_id: profile.id,
+      session_id: currentSession?.id ?? null,
+      restaurant_id: winner.id,
+      context: { moment: 'shared_session_reveal' },
+    });
+    flushEvents();
+    toast.success('내 의견을 남겼어요!');
+  };
+
   return (
     <motion.div
       initial={{ opacity: 0, y: 30 }}
@@ -921,6 +937,28 @@ function WinnerScreen({ selectedWinner, onReset }: { selectedWinner?: Restaurant
       {/* Detail Card */}
       <div className="px-5 -mt-5 relative">
         <div className="bg-white rounded-3xl p-5 shadow-lg space-y-4">
+          <div className="rounded-[22px] bg-[#F3F0FF] p-4 text-center" aria-labelledby="result-reaction-title">
+            <div className="mx-auto flex size-9 items-center justify-center rounded-xl bg-[#5B45D6] text-white">
+              <MessageCircleHeart size={19} aria-hidden="true" />
+            </div>
+            <p id="result-reaction-title" className="mt-2 text-[14px] font-black text-[#352E59]">이 결정, 나는 어떻게 느껴요?</p>
+            <p className="mt-0.5 text-[10px] font-semibold text-[#7D73A5]">결과가 나온 뒤 각자의 의견을 편하게 남겨요.</p>
+            <div className="mt-3 grid grid-cols-3 gap-2">
+              {([
+                ['POS', '😍', '완전 좋아'],
+                ['NEU', '🙂', '괜찮아'],
+                ['NEG', '🤔', '조금 아쉬워'],
+              ] as const).map(([value, emoji, label]) => (
+                <button key={value} type="button" onClick={() => shareReaction(value)} disabled={reaction !== null}
+                  className={`rounded-2xl border py-2.5 transition-all active:scale-95 ${reaction === value ? 'border-[#5B45D6] bg-[#5B45D6] text-white shadow-md' : 'border-white bg-white text-[#51496F]'}`}>
+                  <span className="block text-xl" aria-hidden="true">{emoji}</span>
+                  <span className="mt-1 block text-[10px] font-black">{label}</span>
+                </button>
+              ))}
+            </div>
+            {reaction && <p className="mt-2 text-[10px] font-bold text-[#5B45D6]" role="status">의견 완료 · 다음 모임 추천에 반영할게요 ✓</p>}
+          </div>
+
           {/* Badges */}
           <div className="flex items-center gap-2 flex-wrap">
             <div className="flex items-center gap-1 bg-[#FFF5F5] rounded-full px-2.5 py-1">
@@ -1740,14 +1778,20 @@ function WaitingOrDecidedScreen({ onContinue, onReroll }: { onContinue: (winner?
             </button>
 
             <span className="inline-flex rounded-full bg-[#FFE0DC] px-3 py-1 text-[10px] font-black tracking-[0.7px] text-[#D94B4E]">
-              {phase === 'FINAL' ? 'FINAL CHOICE' : 'CHOICES IN'}
+              {phase === 'FINAL' ? 'FINAL CHOICE' : 'ANSWERS LOCKED'}
             </span>
             <h2 className="mt-3 text-[24px] font-black tracking-[-0.7px] text-[#312A28]">
-              친구들의 선택을 모으는 중
+              내 선택을 잠갔어요!
             </h2>
             <p className="mt-1 text-[12px] font-semibold text-[#9A8880]">
-              모두 끝나면 {phase === 'FINAL' ? '최종 결과가' : '결승 후보가'} 동시에 열려요.
+              다른 사람의 답은 아직 비밀 · 모두 끝나면 {phase === 'FINAL' ? '최종 결과가' : '결승 후보가'} 같이 열려요.
             </p>
+
+            <div className="mt-4 flex items-center justify-center gap-2" aria-label="공정한 선택 방식">
+              <span className="inline-flex items-center gap-1 rounded-full bg-[#F1EEFF] px-2.5 py-1 text-[9px] font-black text-[#5B45D6]"><LockKeyhole size={11} /> 독립 선택</span>
+              <span className="inline-flex items-center gap-1 rounded-full bg-[#FFF1EC] px-2.5 py-1 text-[9px] font-black text-[#D94B4E]"><Users size={11} /> 동시 공개</span>
+              <span className="inline-flex items-center gap-1 rounded-full bg-[#FFF7D8] px-2.5 py-1 text-[9px] font-black text-[#9A6C16]"><Sparkles size={11} /> 의견 존중</span>
+            </div>
 
             <div className="mt-6 rounded-[26px] border border-[#F3E4DD] bg-white p-5 text-left shadow-[0_14px_40px_rgba(102,68,54,0.08)]">
               <div className="flex items-start justify-between">

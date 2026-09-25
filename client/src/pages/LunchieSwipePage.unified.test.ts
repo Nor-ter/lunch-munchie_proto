@@ -58,4 +58,11 @@ describe('unified Lunchie group flow', () => {
   it('advertises a light-only browser color scheme', () => {
     expect(themeSource).toContain('only light');
   });
+
+  it('locks private answers until the shared reveal and records a post-result opinion', () => {
+    expect(swipeSource).toContain('ANSWERS LOCKED');
+    expect(swipeSource).toContain('다른 사람의 답은 아직 비밀');
+    expect(swipeSource).toContain("event_type: 'SURVEY'");
+    expect(swipeSource).toContain("moment: 'shared_session_reveal'");
+  });
 });
