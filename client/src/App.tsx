@@ -43,6 +43,7 @@ import TemplatesBrowsePage from "./pages/TemplatesBrowsePage";
 import CourseFeedsPage from "./pages/course/CourseFeedsPage";
 import PlaceExplorePage from "./pages/PlaceExplorePage";
 import StorySharePage from "./pages/StorySharePage";
+import OfficeLunchDemoPage from "./pages/OfficeLunchDemoPage";
 import LunchieWaitingCompanion from "./components/lunchie/LunchieWaitingCompanion";
 import { startGoogleAuth } from "./services/authApi";
 
@@ -133,6 +134,9 @@ function AppShell({ userId }: { userId: string | null }) {
 const queryClient = new QueryClient();
 
 export default function App() {
+  const [location] = useLocation();
+  if (location === "/office-lunch-demo") return <OfficeLunchDemoPage />;
+
   return (
     <ErrorBoundary>
       <ThemeProvider defaultTheme="light">
