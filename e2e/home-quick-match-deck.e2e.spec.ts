@@ -28,6 +28,8 @@ test('English Home deck preserves swipe, tap, intent and vertical pan with five 
   await page.setViewportSize({ width: 372, height: 812 });
   await mockHomeApi(page);
   await page.goto('/');
+  await expect(page.frameLocator('iframe').getByRole('heading', { name: 'Ready for lunch?' })).toBeVisible();
+  await page.goto('/app-home');
   await expect(page.locator('.tab-bar button')).toHaveCount(5);
 
   const foodie = page.getByRole('button', { name: 'Meal Card (selected)' });

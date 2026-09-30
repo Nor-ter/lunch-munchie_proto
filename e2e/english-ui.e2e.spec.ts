@@ -19,7 +19,7 @@ for (const width of [360, 390, 430]) {
     test.setTimeout(90_000);
     await page.setViewportSize({ width, height: 844 });
     await mockPrototype(page);
-    for (const [name, route] of Object.entries({ home: '/', feed: '/feed', saved: '/saved', profile: '/profile', room: '/profile/foodie-room', settings: '/lunchie/settings', create: '/coursemap/new', templates: '/templates', onboarding: '/onboarding', lobby: '/session/lobby' })) {
+    for (const [name, route] of Object.entries({ home: '/app-home', feed: '/feed', saved: '/saved', profile: '/profile', room: '/profile/foodie-room', settings: '/lunchie/settings', create: '/coursemap/new', templates: '/templates', onboarding: '/onboarding', lobby: '/session/lobby' })) {
       await page.goto(route);
       await expect(page.locator('html')).toHaveAttribute('lang', 'en');
       await expect(page.locator('#root')).not.toBeEmpty();
