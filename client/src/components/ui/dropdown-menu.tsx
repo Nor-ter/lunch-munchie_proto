@@ -1,3 +1,4 @@
+import { englishText } from '@shared/englishCopy';
 import * as React from "react";
 import * as DropdownMenuPrimitive from "@radix-ui/react-dropdown-menu";
 import { CheckIcon, ChevronRightIcon, CircleIcon } from "lucide-react";
@@ -101,7 +102,7 @@ function DropdownMenuCheckboxItem({
           <CheckIcon className="size-4" />
         </DropdownMenuPrimitive.ItemIndicator>
       </span>
-      {children}
+      {englishText(children)}
     </DropdownMenuPrimitive.CheckboxItem>
   );
 }
@@ -136,7 +137,7 @@ function DropdownMenuRadioItem({
           <CircleIcon className="size-2 fill-current" />
         </DropdownMenuPrimitive.ItemIndicator>
       </span>
-      {children}
+      {englishText(children)}
     </DropdownMenuPrimitive.RadioItem>
   );
 }
@@ -214,7 +215,7 @@ function DropdownMenuSubTrigger({
       )}
       {...props}
     >
-      {children}
+      {englishText(children)}
       <ChevronRightIcon className="ml-auto size-4" />
     </DropdownMenuPrimitive.SubTrigger>
   );

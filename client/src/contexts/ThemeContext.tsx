@@ -1,3 +1,4 @@
+import { englishText } from '@shared/englishCopy';
 import React, { createContext, useContext, useEffect, useState } from "react";
 
 type Theme = "light" | "dark";
@@ -56,7 +57,7 @@ export function ThemeProvider({
 
   return (
     <ThemeContext.Provider value={{ theme, toggleTheme, switchable }}>
-      {children}
+      {englishText(children)}
     </ThemeContext.Provider>
   );
 }

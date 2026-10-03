@@ -1,3 +1,4 @@
+import { englishText } from '@shared/englishCopy';
 import * as React from "react";
 import * as ContextMenuPrimitive from "@radix-ui/react-context-menu";
 import { CheckIcon, ChevronRightIcon, CircleIcon } from "lucide-react";
@@ -69,7 +70,7 @@ function ContextMenuSubTrigger({
       )}
       {...props}
     >
-      {children}
+      {englishText(children)}
       <ChevronRightIcon className="ml-auto" />
     </ContextMenuPrimitive.SubTrigger>
   );
@@ -153,7 +154,7 @@ function ContextMenuCheckboxItem({
           <CheckIcon className="size-4" />
         </ContextMenuPrimitive.ItemIndicator>
       </span>
-      {children}
+      {englishText(children)}
     </ContextMenuPrimitive.CheckboxItem>
   );
 }
@@ -177,7 +178,7 @@ function ContextMenuRadioItem({
           <CircleIcon className="size-2 fill-current" />
         </ContextMenuPrimitive.ItemIndicator>
       </span>
-      {children}
+      {englishText(children)}
     </ContextMenuPrimitive.RadioItem>
   );
 }

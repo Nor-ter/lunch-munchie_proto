@@ -2,9 +2,9 @@ import { describe, expect, it } from 'vitest';
 import { resolveCourseDetailBackPath, shouldShowSavedCopyEdit } from './CourseDetailPage';
 
 describe('CourseDetailPage back navigation', () => {
-  it('returns template-detail feed entries directly to the Munchie Feed', () => {
-    expect(resolveCourseDetailBackPath('template-detail', 'feed')).toBe('/feed');
-    expect(resolveCourseDetailBackPath('template-detail', null)).toBe('/feed');
+  it('returns legacy template-detail feed entries to the template list', () => {
+    expect(resolveCourseDetailBackPath('template-detail', 'feed')).toBe('/templates');
+    expect(resolveCourseDetailBackPath('template-detail', null)).toBe('/templates');
   });
 
   it('returns saved and profile template entries to their originating lists', () => {
@@ -20,8 +20,8 @@ describe('CourseDetailPage back navigation', () => {
   });
 
   it('preserves existing back paths for non-template entries', () => {
-    expect(resolveCourseDetailBackPath('feed', null)).toBe('/feed?tab=feed');
-    expect(resolveCourseDetailBackPath('explore', null)).toBe('/feed');
+    expect(resolveCourseDetailBackPath('feed', null)).toBe('/saved');
+    expect(resolveCourseDetailBackPath('explore', null)).toBe('/explore/places');
   });
 
   it('shows copy-to-edit only for courses opened from saved feed details', () => {

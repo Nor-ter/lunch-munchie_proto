@@ -85,7 +85,7 @@ if (typeof window !== "undefined") {
 // 편의 헬퍼
 export const logSwipe = (
   restaurant_id: string,
-  action: "LIKE" | "NOPE",
+  action: "LIKE" | "NOPE" | "NEUTRAL",
   extra: Partial<RecEventInput> = {}
 ) => logEvent({ event_type: "SWIPE", restaurant_id, action, ...extra });
 

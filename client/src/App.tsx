@@ -1,3 +1,4 @@
+import { englishText } from '@shared/englishCopy';
 /**
  * Lunchie Munchie App — Design: Soft Coral (Option 8)
  */
@@ -14,7 +15,6 @@ import AuthBootstrap from "./components/auth/AuthBootstrap";
 import { MapProvider } from "./components/map/MapProvider";
 import TabBar from "./components/TabBar";
 import OnboardingPage from "./pages/OnboardingPage";
-import MunchieFeedPage from "./pages/MunchieFeedPage";
 import FeedDetailPage from "./pages/FeedDetailPage";
 import FeedEditPage from "./pages/FeedEditPage";
 import CourseNavigatePage from "./pages/CourseNavigatePage";
@@ -69,7 +69,7 @@ function RequireGoogleAuth({ userId, children }: { userId: string | null; childr
   useEffect(() => {
     if (!userId) startGoogleAuth(location);
   }, [location, userId]);
-  return userId ? <>{children}</> : null;
+  return userId ? <>{englishText(children)}</> : null;
 }
 
 function AppShell({ userId }: { userId: string | null }) {
@@ -87,10 +87,9 @@ function AppShell({ userId }: { userId: string | null }) {
             <Route path="/auth/login" component={AuthLoginPage} />
             <Route path="/auth/callback" component={AuthCallbackPage} />
             <Route path="/">{() => <Redirect to="/lunchie/settings" />}</Route>
-            {/* 기존 먼치모드(코스 탐색)는 Munchie Feed로 통합 */}
-            <Route path="/explore">{() => <Redirect to="/feed" />}</Route>
+            <Route path="/explore">{() => <Redirect to="/explore/places" />}</Route>
             <Route path="/explore/places" component={PlaceExplorePage} />
-            <Route path="/feed" component={MunchieFeedPage} />
+            <Route path="/feed">{() => <Redirect to="/lunchie/settings" />}</Route>
             <Route path="/feed/new">{() => <Redirect to="/coursemap/new" />}</Route>
             <Route path="/feed/:id/edit" component={FeedEditPage} />
             <Route path="/feed/:id" component={FeedDetailPage} />
@@ -113,6 +112,7 @@ function AppShell({ userId }: { userId: string | null }) {
             <Route path="/join/:token" component={SessionJoinPage} />
             <Route path="/lunchie/swipe" component={LunchieSwipePage} />
             <Route path="/lunchie/results" component={LunchieResultsPage} />
+            <Route path="/lunchie/results/:restaurantId" component={LunchieResultsPage} />
             <Route path="/lunchie/map" component={LunchieMapPage} />
             <Route path="/metrics">{() => <Redirect to="/admin" />}</Route>
             <Route path="/admin" component={AdminDashboardPage} />

@@ -1,3 +1,4 @@
+import { englishText } from '@shared/englishCopy';
 /**
  * components/map/MapProvider.tsx — Google Maps JS 로더 (web-maps-places-workflow.md Phase 0).
  *
@@ -18,7 +19,7 @@ export function MapProvider({ children }: { children: ReactNode }) {
   if (!GOOGLE_MAPS_API_KEY) {
     // 키 없이도 앱 전체가 죽지 않게 — 지도 관련 화면만 빈 상태로 보임(콘솔에 에러 로그).
     console.error('[MapProvider] VITE_GOOGLE_MAPS_API_KEY 가 .env 에 설정되지 않았습니다.');
-    return <>{children}</>;
+    return <>{englishText(children)}</>;
   }
-  return <APIProvider apiKey={GOOGLE_MAPS_API_KEY}>{children}</APIProvider>;
+  return <APIProvider apiKey={GOOGLE_MAPS_API_KEY}>{englishText(children)}</APIProvider>;
 }

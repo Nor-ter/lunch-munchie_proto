@@ -255,7 +255,7 @@ export async function extractMenu(url: string, opts: { dryRun?: boolean } = {}):
   const apiKey = process.env.NVIDIA_API_KEY;
   const dryRun = opts.dryRun ?? !apiKey; // 키 없으면 자동 dry-run
   try {
-    if (!(await robotsAllowed(url))) return { url, ok: false, items: [], error: "robots.txt 차단" };
+    if (!(await robotsAllowed(url))) return { url, ok: false, items: [], error: "Blocked by robots.txt" };
 
     const r = await fetchAndExtract(url, apiKey, dryRun);
     if (!r.ok) return { url, ok: false, items: [], error: r.error };

@@ -1,3 +1,4 @@
+import { englishText } from '@shared/englishCopy';
 import { useEffect, useState } from 'react';
 import { useLocation, useParams } from 'wouter';
 import { useApp } from '@/contexts/AppContext';
@@ -36,7 +37,7 @@ export default function SessionJoinPage() {
 
   useEffect(() => {
     if (!isLoggedIn || name) return;
-    const accountName = profile.name !== '지민' && profile.name !== '사용자'
+    const accountName = !["Jimin", "User", 'User'].includes(profile.name)
       ? profile.name
       : auth.data?.name;
     if (accountName) setName(accountName);
@@ -44,7 +45,7 @@ export default function SessionJoinPage() {
 
   useEffect(() => {
     if (!token) {
-      toast.error('유효하지 않은 초대 코드입니다.');
+      toast.error("Invalid invite code.");
       navigate('/');
       return;
     }
@@ -56,7 +57,7 @@ export default function SessionJoinPage() {
         setLoadingSession(false);
       })
       .catch((e) => {
-        toast.error('유효하지 않은 세션이거나 만료되었습니다.');
+        toast.error("This session is invalid or has expired.");
         navigate('/');
       });
   }, [token, fetchSession, navigate]);
@@ -78,7 +79,7 @@ export default function SessionJoinPage() {
 
   const handleJoin = async () => {
     if (!name.trim()) {
-      toast.error('닉네임을 입력해주세요!');
+      toast.error("Please enter a nickname!");
       return;
     }
 
@@ -94,11 +95,11 @@ export default function SessionJoinPage() {
       
       // 2. Join the session via API
       const session = await joinSession(token, name.trim(), selectedEmoji);
-      toast.success(`"${session.name}" 세션에 참가했습니다! 🎉`);
+      toast.success(`"${session.name}" joined! 🎉`);
       navigate('/session/lobby');
     } catch (e) {
       console.error('빠른 매칭 세션 참가 실패', e);
-      toast.error('세션에 참가하지 못했어요. 초대 링크를 확인하고 다시 시도해 주세요.');
+      toast.error("Couldn't join the session. Check the invite link and try again.");
     } finally {
       setIsJoining(false);
     }
@@ -106,21 +107,21 @@ export default function SessionJoinPage() {
 
   if (loadingSession) {
     return (
-      <div className="min-h-dvh bg-white flex flex-col items-center justify-center">
+      <div className="min-h-dvh bg-[#FCFCFC] flex flex-col items-center justify-center">
         <Loader2 className="w-10 h-10 animate-spin text-[#EB5053] mb-4" />
-        <p className="text-[#1A1A1A] font-semibold">초대 정보를 확인하는 중입니다...</p>
+        <p className="text-[#1A1A1A] font-semibold">Checking your invitation…</p>
       </div>
     );
   }
 
   return (
-    <div className="min-h-dvh bg-[#FCF4EE] flex flex-col px-5 pb-[calc(24px+env(safe-area-inset-bottom))] pt-[max(12px,env(safe-area-inset-top))]">
+    <div className="min-h-dvh bg-[#FCFCFC] flex flex-col px-5 pb-[calc(24px+env(safe-area-inset-bottom))] pt-[max(12px,env(safe-area-inset-top))]">
       {/* Header */}
       <div className="flex items-center gap-3">
-        <BackButton onClick={() => navigate('/lunchie/settings')} aria-label="퀵매치로 돌아가기" />
+        <BackButton onClick={() => navigate('/lunchie/settings')} aria-label="Back to Quick Match" />
         <div>
-          <h1 className="font-bold text-[18px] text-[#1A1A1A]">점심 세션 참여하기</h1>
-          <p className="text-[12px] text-[#9B9B9B]">친구들과 맛집 결정을 함께해요</p>
+          <h1 className="font-bold text-[18px] text-[#1A1A1A]">Join a Lunch Session</h1>
+          <p className="text-[12px] text-[#9B9B9B]">Choose a restaurant with your friends</p>
         </div>
       </div>
 
@@ -132,20 +133,20 @@ export default function SessionJoinPage() {
           className="bg-white rounded-3xl p-5 shadow-sm border border-black/5 space-y-5"
         >
           <div className="text-center mb-2">
-            <span className="text-[11px] font-bold text-[#EB5053] bg-[#FFF5F5] px-2.5 py-1 rounded-full tracking-wider">초대장</span>
+            <span className="text-[11px] font-bold text-[#EB5053] bg-[#FFF5F5] px-2.5 py-1 rounded-full tracking-wider">Invitation</span>
             <h2 className="font-bold text-[20px] text-[#1A1A1A] mt-2 leading-tight">
-              "{sessionName}"
+              "{englishText(sessionName)}"
             </h2>
-            <p className="text-[13px] text-[#9B9B9B] mt-1">세션에 초대되었습니다!</p>
+            <p className="text-[13px] text-[#9B9B9B] mt-1">You're invited!</p>
           </div>
 
           {/* Emoji Avatar Selector */}
           <div className="flex flex-col items-center">
             <div className="w-16 h-16 rounded-2xl bg-[#FFF5F5] flex items-center justify-center text-3xl shadow-md border-2 border-[#EB5053]/10 relative mb-3">
-              {selectedEmoji}
+              {englishText(selectedEmoji)}
             </div>
 
-            <p className="text-[11px] text-[#9B9B9B] mb-2.5">내 캐릭터 선택</p>
+            <p className="text-[11px] text-[#9B9B9B] mb-2.5">Choose Your Character</p>
             <div className="grid grid-cols-8 gap-1.5 w-full justify-center">
               {EMOJIS.slice(0, 16).map(e => (
                 <button
@@ -158,7 +159,7 @@ export default function SessionJoinPage() {
                       : 'bg-[#F5F5F5] hover:bg-[#EAEAEA]'
                   }`}
                 >
-                  {e}
+                  {englishText(e)}
                 </button>
               ))}
             </div>
@@ -166,12 +167,12 @@ export default function SessionJoinPage() {
 
           {/* Name Input */}
           <div className="space-y-1.5">
-            <label className="font-semibold text-[13px] text-[#4A4A4A] block">사용할 닉네임</label>
+            <label className="font-semibold text-[13px] text-[#4A4A4A] block">Your Nickname</label>
             <input
               type="text"
               value={name}
               onChange={e => setName(e.target.value)}
-              placeholder="예: 맛잘알 길동이"
+              placeholder="e.g. Foodie Alex"
               maxLength={15}
               className="w-full h-11 bg-[#F5F5F5] rounded-xl px-4 text-[14px] text-[#1A1A1A] outline-none focus:ring-2 focus:ring-[#EB5053]/30 transition-all font-semibold"
             />
@@ -190,13 +191,13 @@ export default function SessionJoinPage() {
               </div>
               <div className="min-w-0 flex-1">
                 <div className="flex items-center gap-2">
-                  <p className="text-[13px] font-black text-[#1A1A1A]">식단 제약 사항</p>
-                  <span className="rounded-full bg-[#F5F1EE] px-2 py-0.5 text-[10px] font-black text-[#9B857A]">선택 사항</span>
+                  <p className="text-[13px] font-black text-[#1A1A1A]">Dietary Restrictions</p>
+                  <span className="rounded-full bg-[#F5F1EE] px-2 py-0.5 text-[10px] font-black text-[#9B857A]">Optional</span>
                 </div>
                 <p className="mt-0.5 truncate text-[11px] font-semibold text-[#9B9B9B]">
-                  {selectedDietaryOptions.length
-                    ? `${selectedDietaryOptions.length}개 선택 · ${selectedDietaryOptions.map(option => option.label).join(', ')}`
-                    : '선택한 식단 제약이 없어요'}
+                  {englishText(selectedDietaryOptions.length
+                    ? `${selectedDietaryOptions.length} selected ·  ${selectedDietaryOptions.map(option => option.label).join(', ')}`
+                    : "No dietary restrictions selected")}
                 </p>
               </div>
               <ChevronDown className={`shrink-0 text-[#9B9B9B] transition-transform ${dietaryOpen ? 'rotate-180' : ''}`} size={18} />
@@ -216,14 +217,15 @@ export default function SessionJoinPage() {
                       }`}
                       style={isSelected ? { background: '#EB5053' } : {}}
                     >
-                      {option.label}
+                      {englishText(option.label)}
                     </button>
                   );
                 })}
               </div>
             )}
             <p className="mt-3 text-[10px] leading-relaxed text-[#9B9B9B]">
-              메뉴 정보를 기준으로 필터링합니다. 심한 알레르기는 매장에 재료와 교차오염 여부를 꼭 확인해주세요.
+
+              Filters use menu information. For severe allergies, confirm ingredients and cross-contamination risks with the restaurant.
             </p>
           </section>
         </motion.div>
@@ -236,27 +238,29 @@ export default function SessionJoinPage() {
           {isLoggedIn ? (
             <div className="flex items-center justify-between gap-3">
               <div className="min-w-0">
-                <p className="text-[12px] font-bold text-[#4A4A4A]">회원 로그인 완료</p>
-                <p className="truncate text-[10px] text-[#9B9B9B]">저장된 취향을 기본값으로 적용했어요</p>
+                <p className="text-[12px] font-bold text-[#4A4A4A]">Signed In</p>
+                <p className="truncate text-[10px] text-[#9B9B9B]">Your saved preferences are applied</p>
               </div>
               <button
                 onClick={handleLogout}
                 className="shrink-0 rounded-full bg-[#F5F5F5] px-3 py-1.5 text-[11px] font-semibold text-[#9B9B9B] active:scale-95"
               >
-                로그아웃
+
+                Sign Out
               </button>
             </div>
           ) : (
             <div className="flex items-center justify-between gap-3">
               <div className="flex min-w-0 items-center gap-2">
                 <LogIn size={14} className="shrink-0 text-[#EB5053]" />
-                <p className="truncate text-[11px] font-semibold text-[#8C7A72]">로그인하면 저장된 취향을 불러올 수 있어요</p>
+                <p className="truncate text-[11px] font-semibold text-[#8C7A72]">Sign in to load your saved preferences</p>
               </div>
               <button
                 onClick={handleLogin}
                 className="shrink-0 rounded-full bg-white px-3 py-1.5 text-[11px] font-bold text-[#EB5053] active:scale-95"
               >
-                로그인
+
+                Sign In
               </button>
             </div>
           )}
@@ -270,14 +274,15 @@ export default function SessionJoinPage() {
           disabled={isJoining}
           className="w-full lm-btn-primary flex items-center justify-center font-semibold text-[15px] shadow-lg shadow-[#EB5053]/20"
         >
-          {isJoining ? (
+          {englishText(isJoining ? (
             <>
               <Loader2 className="w-5 h-5 animate-spin mr-2" />
-              참가하는 중...
+
+              Joining…
             </>
           ) : (
-            '🎉 세션 참여하기'
-          )}
+            "Join Session"
+          ))}
         </button>
       </div>
     </div>

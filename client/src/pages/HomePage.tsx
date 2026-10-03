@@ -1,3 +1,4 @@
+import { englishText } from '@shared/englishCopy';
 import { useEffect, useMemo, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { AnimatePresence, motion, useReducedMotion } from 'framer-motion';
@@ -40,9 +41,9 @@ export async function fetchJourneyHistory(
 
 /** 스와이프 카드덱 — 커피/밥/디저트 세 장이 순환하며 앞의 카드가 선택 상태다 */
 const QUICK_MATCH_CARDS = [
-  { key: 'coffee', label: '커피', en: 'COFFEE', image: '/assets/characters/quick-match/coffee.png', intent: 'cafe', background: 'linear-gradient(160deg, #FFFDFC 0%, #FFEBDD 100%)', steam: true },
-  { key: 'foodie', label: '밥', en: 'FOODIE', image: '/assets/characters/quick-match/rice.png', intent: 'meal', background: 'linear-gradient(160deg, #FFFDFC 0%, #FFE5E0 100%)', steam: true },
-  { key: 'dessert', label: '디저트', en: 'DESSERT', image: '/assets/characters/quick-match/dessert.png', intent: 'dessert', background: 'linear-gradient(160deg, #FFFDFC 0%, #FFE2E8 100%)', steam: false },
+  { key: 'coffee', label: "Coffee", en: 'COFFEE', image: '/assets/characters/quick-match/coffee.png', intent: 'cafe', background: 'linear-gradient(160deg, #FFFDFC 0%, #FFEBDD 100%)', steam: true },
+  { key: 'foodie', label: "Meals", en: 'FOODIE', image: '/assets/characters/quick-match/rice.png', intent: 'meal', background: 'linear-gradient(160deg, #FFFDFC 0%, #FFE5E0 100%)', steam: true },
+  { key: 'dessert', label: "Dessert", en: 'DESSERT', image: '/assets/characters/quick-match/dessert.png', intent: 'dessert', background: 'linear-gradient(160deg, #FFFDFC 0%, #FFE2E8 100%)', steam: false },
 ] as const;
 
 /** 카드 순환 위치: 0=앞, 1=오른쪽 behind, 2=왼쪽 behind */
@@ -112,7 +113,7 @@ function HomeLunchmate({ loadout }: { loadout: LunchmateLoadout }) {
       chickenAssetKeyOverride={blinking ? 'sleepy' : 'idle'}
       loadout={loadout}
       size={66}
-      alt="내 코스튬을 입고 눈을 깜빡이는 런치메이트"
+      alt="Lunchmate blinking in your outfit"
     />
   );
 }
@@ -141,7 +142,7 @@ function QuickMatchDeck({
           >
             <motion.button
               type="button"
-              aria-label={`${card.label} 카드${isFront ? ' (선택됨)' : ''}`}
+              aria-label={englishText(`${card.label} Card${isFront ? " (Selected)" : ''}`)}
               drag={isFront ? 'x' : false}
               dragConstraints={{ left: 0, right: 0 }}
               dragElastic={0.45}
@@ -160,14 +161,14 @@ function QuickMatchDeck({
               transition={{ type: 'spring', stiffness: 320, damping: 26 }}
               whileHover={{ scale: position.scale + 0.025 }}
               whileTap={{ scale: position.scale - 0.03 }}
-              className="pointer-events-auto flex h-[132px] w-[108px] cursor-grab flex-col items-center justify-center overflow-hidden rounded-[11px] border-[0.75px] border-[#EE8C8D] px-1.5 pb-1.5 pt-1 shadow-[0_10px_22px_rgba(153,74,62,0.13)] active:cursor-grabbing"
-              style={{ touchAction: 'pan-y', background: card.background }}
+              className="pointer-events-auto flex h-[132px] w-[108px] cursor-grab flex-col items-center justify-center overflow-hidden rounded-[11px] border-[0.75px] border-[#E8E6E7] bg-white px-1.5 pb-1.5 pt-1 shadow-[0_10px_22px_rgba(0,0,0,0.08)] active:cursor-grabbing"
+              style={{ touchAction: 'pan-y' }}
             >
               <span className="relative flex h-[92px] w-[96px] items-end justify-center">
                 {card.steam && <SteamWisps />}
-                <img src={card.image} alt={`${card.label} 음식`} className="h-[86px] w-[94px] object-contain drop-shadow-[0_7px_8px_rgba(104,55,38,0.13)]" draggable={false} />
+                <img src={card.image} alt={englishText(`${card.label} Food`)} className="h-[86px] w-[94px] object-contain drop-shadow-[0_7px_8px_rgba(104,55,38,0.13)]" draggable={false} />
               </span>
-              <span className="mt-0.5 rounded-full bg-white/75 px-2 py-0.5 text-[11px] font-black tracking-[0.05em] text-[#C93B3E]">{card.en}</span>
+              <span className="mt-0.5 rounded-full bg-white/75 px-2 py-0.5 text-[11px] font-black tracking-[0.05em] text-[#C93B3E]">{englishText(card.en)}</span>
             </motion.button>
           </div>
         );
@@ -266,8 +267,8 @@ export default function HomePage() {
     const journeyItems = todayJourneyStops.map(stop => ({
       id: `journey-${stop.restaurant_id}-${stop.at}`,
       kind: 'journey' as const,
-      title: '오늘의 여정',
-      body: `${stop.name}${stop.satisfaction ? '에서의 기록이 추가됐어요.' : '이(가) 다음 여정으로 등록됐어요.'}`,
+      title: "Today's Journey",
+      body: `${stop.name}${stop.satisfaction ? " added to your journey." : " added as your next stop."}`,
       href: '/profile',
       at: stop.at,
     }));
@@ -275,23 +276,23 @@ export default function HomePage() {
       ...(post.likes > 0 ? [{
         id: `feed-like-${post.id}-${post.likes}`,
         kind: 'like' as const,
-        title: '새 좋아요',
-        body: `내 Munchie 피드에 좋아요 ${post.likes}개가 달렸어요.`,
+        title: "New Like",
+        body: `Your Munchie post received  ${post.likes} reactions.`,
         href: `/feed/${post.id}?from=notifications`,
         at: new Date(post.createdAt).getTime() + post.likes,
       }] : []),
       ...((post.dislikes ?? 0) > 0 ? [{
         id: `feed-dislike-${post.id}-${post.dislikes}`,
         kind: 'dislike' as const,
-        title: '새 싫어요',
-        body: `내 Munchie 피드에 싫어요 ${post.dislikes}개가 달렸어요.`,
+        title: "New Dislike",
+        body: `Your Munchie post received  ${post.dislikes} reactions.`,
         href: `/feed/${post.id}?from=notifications`,
         at: new Date(post.createdAt).getTime() + (post.dislikes ?? 0),
       }] : []),
       ...post.comments.map(comment => ({
         id: `feed-comment-${comment.id}`,
         kind: 'comment' as const,
-        title: `${comment.authorName}님의 새 코멘트`,
+        title: `${comment.authorName} left a new comment`,
         body: comment.text,
         href: `/feed/${post.id}?from=notifications`,
         at: new Date(comment.createdAt).getTime(),
@@ -320,7 +321,7 @@ export default function HomePage() {
         <HeaderActionRow data-ui="home-notification-area" className="header-action-row--raised">
           <HeaderIconButton
             onClick={() => setNotificationsOpen(true)}
-            aria-label="알림 열기"
+            aria-label="Open Notifications"
             aria-expanded={notificationsOpen}
             className="overflow-visible text-[#4A4A4A]"
           >
@@ -337,7 +338,7 @@ export default function HomePage() {
                 animate={{ scale: [1, 1.08, 1] }}
                 transition={{ duration: 1.8, repeat: Infinity, ease: 'easeInOut' }}
               >
-                {unreadCount > 9 ? '9+' : unreadCount}
+                {englishText(unreadCount > 9 ? '9+' : unreadCount)}
               </motion.span>
             )}
           </HeaderIconButton>
@@ -346,8 +347,8 @@ export default function HomePage() {
         <div data-ui="home-heading-group" className="mx-5 mt-[30px] flex items-center justify-evenly">
           <HomeLunchmate loadout={homeLunchmateLoadout} />
           <h1 data-ui="home-heading" className="w-fit min-w-0 max-w-[calc(100%-84px)] shrink text-center text-[22px] font-bold leading-[1.45] tracking-[-0.04em] text-[#935B5C]">
-            <span className="block">런치로 같이 메뉴 정하기!</span>
-            <span className="block">먼치로 함께 맛집 코스 탐방!</span>
+            <span className="block">Choose a meal together with Lunchie!</span>
+            <span className="block">Explore food courses together with Munchie!</span>
           </h1>
         </div>
       </header>
@@ -355,7 +356,7 @@ export default function HomePage() {
       <section className="mt-[30px]">
         <div className="px-4">
           <h2 className="text-[25px] font-black leading-none tracking-[0.01em] text-[#C93B3E]">LUNCHIE</h2>
-          <p className="mt-1 text-[14px] font-medium text-[#8B5E5D]">런치로 같이 점심 정하기!</p>
+          <p className="mt-1 text-[14px] font-medium text-[#8B5E5D]">Choose lunch together with Lunchie!</p>
         </div>
         <div className="mt-3">
         <LunchieLandingCard />
@@ -366,14 +367,15 @@ export default function HomePage() {
         <div className="flex items-end justify-between px-4">
           <div>
             <h2 className="text-[25px] font-black leading-none text-[#C93B3E]">MUNCHIE</h2>
-            <p className="mt-1 text-[14px] font-medium text-[#8B5E5D]">먼치로 함께 맛집 코스 탐방</p>
+            <p className="mt-1 text-[14px] font-medium text-[#8B5E5D]">Explore food courses together with Munchie</p>
           </div>
           <button
             type="button"
-            onClick={() => navigate('/feed')}
+            onClick={() => navigate('/templates')}
             className="flex items-center gap-1 text-[14px] font-black text-[#D94447]"
           >
-            더보기 <ArrowRight size={17} />
+
+            See More <ArrowRight size={17} />
           </button>
         </div>
 
@@ -394,7 +396,7 @@ export default function HomePage() {
             <>
             <motion.button
               type="button"
-              aria-label="알림 닫기"
+              aria-label="Close Notifications"
               className="fixed inset-0 z-50 bg-black/35"
               initial={{ opacity: 0 }}
               animate={{ opacity: 1, pointerEvents: 'auto' }}
@@ -410,37 +412,37 @@ export default function HomePage() {
             >
               <div className="flex items-center justify-between">
                 <div>
-                  <h2 className="mt-1 text-[22px] font-black text-[#251A16]">알림 {unreadCount > 0 && <span className="text-[#FF424B]">{unreadCount}</span>}</h2>
+                  <h2 className="mt-1 text-[22px] font-black text-[#251A16]">Notifications {unreadCount > 0 && <span className="text-[#FF424B]">{unreadCount}</span>}</h2>
                 </div>
-                <button type="button" onClick={() => setNotificationsOpen(false)} className="flex h-10 w-10 items-center justify-center rounded-full bg-[#F7EFEA]" aria-label="닫기"><X size={18} /></button>
+                <button type="button" onClick={() => setNotificationsOpen(false)} className="flex h-10 w-10 items-center justify-center rounded-full bg-[#F7EFEA]" aria-label="Close"><X size={18} /></button>
               </div>
               <section className="mt-5 rounded-[22px] border border-[#F1D8CC] bg-[#FFF5EF] p-4">
                 <div className="flex items-center justify-between">
                   <div>
-                  <h3 className="mt-1 text-[17px] font-black text-[#3E2D25]">오늘의 여정</h3>
+                  <h3 className="mt-1 text-[17px] font-black text-[#3E2D25]">Today's Journey</h3>
                   </div>
-                  <span className="rounded-full bg-white px-2.5 py-1 text-[10px] font-black text-[#DB6C66]">{journeyStops.length}곳</span>
+                  <span className="rounded-full bg-white px-2.5 py-1 text-[10px] font-black text-[#DB6C66]">{journeyStops.length} restaurants</span>
                 </div>
                 {journeyStops.length > 0 ? (
                   <div className="mt-3 space-y-2">
                     {journeyStops.map((stop, index) => (
                       <div key={`${stop.restaurant_id}-${stop.at}`} className="flex items-center gap-2.5 rounded-2xl bg-white px-3 py-2.5">
                         <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-[#F6B5AC] text-[11px] font-black text-white">{index + 1}</span>
-                        <span className="min-w-0 flex-1 truncate text-[12px] font-bold text-[#4B382F]">{stop.name}</span>
-                        <span className="text-[10px] font-semibold text-[#A68C7F]">{stop.category ?? '맛집'}</span>
+                        <span className="min-w-0 flex-1 truncate text-[12px] font-bold text-[#4B382F]">{englishText(stop.name)}</span>
+                        <span className="text-[10px] font-semibold text-[#A68C7F]">{englishText(stop.category ?? "Food Spots")}</span>
                       </div>
                     ))}
                   </div>
                 ) : (
-                  <p className="mt-3 rounded-2xl bg-white px-3 py-4 text-center text-[11px] font-semibold text-[#9D8579]">오늘 등록된 여정이 아직 없어요.</p>
+                  <p className="mt-3 rounded-2xl bg-white px-3 py-4 text-center text-[11px] font-semibold text-[#9D8579]">No journey stops added today.</p>
                 )}
               </section>
               {unreadCount > 0 && (
-                <button type="button" onClick={() => setReadNotificationIds(notifications.map(item => item.id))} className="mt-3 text-[11px] font-black text-[#F25055]">모두 읽음</button>
+                <button type="button" onClick={() => setReadNotificationIds(notifications.map(item => item.id))} className="mt-3 text-[11px] font-black text-[#F25055]">Mark All Read</button>
               )}
               <div className="mt-5 space-y-2.5">
                 {visibleNotifications.length === 0 ? (
-                  <div className="rounded-2xl border border-dashed border-[#E1D2C8] px-5 py-12 text-center text-[12px] font-semibold text-[#A38D82]">더이상 새로운 알람이 없어요</div>
+                  <div className="rounded-2xl border border-dashed border-[#E1D2C8] px-5 py-12 text-center text-[12px] font-semibold text-[#A38D82]">You're all caught up</div>
                 ) : visibleNotifications.map(item => {
                   const unread = !readNotificationIds.includes(item.id);
                   const Icon = item.kind === 'journey' ? MapPin : item.kind === 'like' ? ThumbsUp : item.kind === 'dislike' ? ThumbsDown : MessageCircle;
@@ -453,8 +455,8 @@ export default function HomePage() {
                     >
                       <span className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-full ${unread ? 'bg-[#FF424B] text-white' : 'bg-[#F5EEEA] text-[#8A7469]'}`}><Icon size={15} /></span>
                       <span className="min-w-0 flex-1">
-                        <span className="block text-[12px] font-black text-[#352720]">{item.title}</span>
-                        <span className="mt-1 block line-clamp-2 text-[11px] font-semibold leading-relaxed text-[#887369]">{item.body}</span>
+                        <span className="block text-[12px] font-black text-[#352720]">{englishText(item.title)}</span>
+                        <span className="mt-1 block line-clamp-2 text-[11px] font-semibold leading-relaxed text-[#887369]">{englishText(item.body)}</span>
                       </span>
                       {unread && <span className="mt-1.5 h-2 w-2 shrink-0 rounded-full bg-[#FF424B]" />}
                     </button>

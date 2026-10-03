@@ -1,3 +1,4 @@
+import { englishText } from '@shared/englishCopy';
 /**
  * components/map/CourseMap.tsx — 코스 지도 (Google Maps JS, web-maps-places-workflow.md Phase 2).
  * 대응 원본: mobile/components/CourseMap.tsx (react-native-maps) — 웹 재작성(@vis.gl/react-google-maps).
@@ -105,12 +106,12 @@ export function CourseMap({ points, width, height, onPressPoint, onPressPlaceId,
             <AdvancedMarker
               key={point.id}
               position={{ lat: point.latitude, lng: point.longitude }}
-              title={point.subtitle ? `${point.name} · ${point.subtitle}` : point.name}
+              title={englishText(point.subtitle ? `${point.name} · ${point.subtitle}` : point.name)}
               onClick={() => onPressPoint?.(point)}
               zIndex={selected ? 10 : 1}
             >
               <div
-                aria-label={`${point.name}${selected ? ', 선택됨' : ''}`}
+                aria-label={englishText(`${point.name}${selected ? ", selected" : ''}`)}
                 data-selected={selected ? 'true' : 'false'}
                 style={{
                   width: size,

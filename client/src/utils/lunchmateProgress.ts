@@ -6,10 +6,10 @@ export interface LunchmateLevelDefinition {
 }
 
 export const LUNCHMATE_LEVELS: readonly LunchmateLevelDefinition[] = [
-  { level: 1, levelName: '한입 새싹', requiredTotalXp: 0, rewardPlaceholder: '기본 런치 스티커 placeholder' },
-  { level: 2, levelName: '맛 탐험가', requiredTotalXp: 20, rewardPlaceholder: '피크닉 냅킨 아이템 placeholder' },
-  { level: 3, levelName: '한상 수집가', requiredTotalXp: 50, rewardPlaceholder: '미니 접시 아이템 placeholder' },
-  { level: 4, levelName: '맛추억 마스터', requiredTotalXp: 90, rewardPlaceholder: '반짝 포크 아이템 placeholder' },
+  { level: 1, levelName: "Budding Foodie", requiredTotalXp: 0, rewardPlaceholder: "Default Lunch Sticker Placeholder" },
+  { level: 2, levelName: "Food Explorer", requiredTotalXp: 20, rewardPlaceholder: "Picnic Napkin Placeholder" },
+  { level: 3, levelName: "Meal Collector", requiredTotalXp: 50, rewardPlaceholder: "Mini Plate Placeholder" },
+  { level: 4, levelName: "Food Memory Master", requiredTotalXp: 90, rewardPlaceholder: "Shiny Fork Placeholder" },
 ];
 
 const MAX_XP_REQUIRED_PER_LEVEL = 100;
@@ -49,8 +49,8 @@ function getLunchmateLevelDefinition(level: number): Omit<LunchmateLevelDefiniti
   if (knownLevel) return knownLevel;
   return {
     level,
-    levelName: '맛추억 마스터',
-    rewardPlaceholder: `Lv.${level} 꾸미기 아이템`,
+    levelName: "Food Memory Master",
+    rewardPlaceholder: `Lv.${level} Customization Items`,
   };
 }
 

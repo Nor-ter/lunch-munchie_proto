@@ -319,8 +319,8 @@ export const MOCK_RESTAURANTS: MockRestaurant[] = [
 export const MOCK_COURSES: MockCourse[] = [
   {
     id: 'c1',
-    title: '멜버른 CBD 커피 & 레인웨이',
-    description: '멜버른 커피 문화의 정수를 맛보는 도심 레인웨이 산책 코스.',
+    title: "Melbourne CBD Coffee & Laneways",
+    description: "A city laneway walk celebrating Melbourne's coffee culture.",
     hero_image: 'https://images.unsplash.com/photo-1554118811-1e0d58224f24?w=800&q=80',
     tags: ['카페', '혼자 여행'],
     hashtags: ['#멜버른커피', '#레인웨이', '#CBD', '#카페투어'],
@@ -338,8 +338,8 @@ export const MOCK_COURSES: MockCourse[] = [
   },
   {
     id: 'c2',
-    title: '플린더스 레인 미식 투어',
-    description: '브런치부터 타파스, 모던 타이까지 플린더스 레인을 따라가는 맛집 코스.',
+    title: "Flinders Lane Food Tour",
+    description: "Follow Flinders Lane for brunch, tapas and modern Thai dining.",
     hero_image: 'https://images.unsplash.com/photo-1559314809-0d155014e29e?w=800&q=80',
     tags: ['맛집', '데이트 코스'],
     hashtags: ['#플린더스레인', '#멜버른맛집', '#브런치', '#타파스'],
@@ -357,8 +357,8 @@ export const MOCK_COURSES: MockCourse[] = [
   },
   {
     id: 'c3',
-    title: '피츠로이 하루 종일 코스',
-    description: '커피, 크루아상, 젤라또, 그리고 파인다이닝까지 — 피츠로이를 온전히 즐기는 풀데이 코스.',
+    title: "A Full Day in Fitzroy",
+    description: "Explore Fitzroy through coffee, croissants, gelato and fine dining.",
     hero_image: 'https://images.unsplash.com/photo-1509440159596-0249088772ff?w=800&q=80',
     tags: ['맛집', '데이트 코스'],
     hashtags: ['#피츠로이', '#멜버른', '#카페', '#파인다이닝', '#하루코스'],
@@ -376,8 +376,8 @@ export const MOCK_COURSES: MockCourse[] = [
   },
   {
     id: 'c4',
-    title: '피츠로이 디저트 & 비건',
-    description: '달콤한 크루아상과 젤라또, 식물성 디너로 마무리하는 가벼운 저녁 코스.',
+    title: "Fitzroy Desserts & Vegan Dining",
+    description: "Croissants and gelato followed by a plant-based dinner.",
     hero_image: 'https://images.unsplash.com/photo-1567206563064-6f60f40a2b57?w=800&q=80',
     tags: ['카페', '혼자 여행'],
     hashtags: ['#디저트', '#비건', '#피츠로이', '#젤라또'],
@@ -395,8 +395,8 @@ export const MOCK_COURSES: MockCourse[] = [
   },
   {
     id: 'c5',
-    title: 'CBD → 피츠로이 크로스 데이트',
-    description: '도심 커피로 시작해 모던 타이 점심, 콜링우드 카페, 거트루드 파인다이닝으로 이어지는 하루 데이트.',
+    title: "CBD to Fitzroy Date",
+    description: "Start with city coffee, then enjoy Thai lunch, Collingwood cafes and Gertrude Street dining.",
     hero_image: 'https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?w=800&q=80',
     tags: ['데이트 코스', '맛집'],
     hashtags: ['#데이트', '#멜버른', '#CBD', '#콜링우드', '#피츠로이'],
@@ -416,8 +416,8 @@ export const MOCK_COURSES: MockCourse[] = [
   // ── 요리별 테마 코스 ────────────────────────────────────────────────────
   {
     id: 'c6',
-    title: '서울 in 멜버른: 한식 코스',
-    description: '숯불 바비큐부터 양념치킨까지, 멜버른에서 즐기는 진짜 한식 투어.',
+    title: "Seoul in Melbourne: Korean Food",
+    description: "Explore Korean dining in Melbourne, from charcoal barbecue to seasoned fried chicken.",
     hero_image: 'https://images.unsplash.com/photo-1414235077428-338989a2e8c0?w=800&q=80',
     tags: ['맛집', '맛집 투어'],
     hashtags: ['#한식', '#코리안BBQ', '#멜버른맛집', '#치킨'],
@@ -435,8 +435,8 @@ export const MOCK_COURSES: MockCourse[] = [
   },
   {
     id: 'c7',
-    title: '차이나타운 딤섬 & 광둥 코스',
-    description: '멜버른 차이나타운에서 샤오롱바오, 미슐랭 딤섬, 심야 광둥식까지.',
+    title: "Chinatown Dim Sum & Cantonese Dining",
+    description: "Explore Melbourne Chinatown through soup dumplings, dim sum and late-night Cantonese dining.",
     hero_image: 'https://images.unsplash.com/photo-1559314809-0d155014e29e?w=800&q=80',
     tags: ['맛집', '맛집 투어'],
     hashtags: ['#중식', '#차이나타운', '#딤섬', '#만두'],
@@ -454,8 +454,8 @@ export const MOCK_COURSES: MockCourse[] = [
   },
   {
     id: 'c8',
-    title: '멜버른 이자카야 & 오마카세',
-    description: '모던 아시안 다이닝으로 시작해 이자카야, 그리고 프리미엄 스시 오마카세로.',
+    title: "Melbourne Izakaya & Omakase",
+    description: "Enjoy modern Asian dining, izakaya and premium sushi omakase.",
     hero_image: 'https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?w=800&q=80',
     tags: ['맛집', '데이트 코스'],
     hashtags: ['#일식', '#이자카야', '#오마카세', '#스시'],
@@ -473,8 +473,8 @@ export const MOCK_COURSES: MockCourse[] = [
   },
   {
     id: 'c9',
-    title: '파스타·피자 이탈리안 코스',
-    description: '수제 파스타, 클래식 에스프레소 바, 나폴리 피자로 이어지는 이탈리안 미식.',
+    title: "Italian Pasta & Pizza Course",
+    description: "An Italian food journey through handmade pasta, espresso and Neapolitan pizza.",
     hero_image: 'https://images.unsplash.com/photo-1551183053-bf91a1d81141?w=800&q=80',
     tags: ['맛집', '데이트 코스'],
     hashtags: ['#이탈리안', '#파스타', '#피자', '#멜버른'],
@@ -494,8 +494,8 @@ export const MOCK_COURSES: MockCourse[] = [
   // ── 위트 있는 이름의 코스 ──────────────────────────────────────────────
   {
     id: 'c10',
-    title: '저기압일 땐 고기 앞으로',
-    description: '기분이 가라앉는 날엔 역시 고기. 숯불 한우, 아르헨티나 아사도, 코리안 BBQ에 파인다이닝 고기까지 — 고기로 시작해 고기로 끝나는 날.',
+    title: "Meat for a Mood Boost",
+    description: "A hearty day of charcoal barbecue, Argentinian asado, Korean BBQ and fine dining.",
     hero_image: 'https://images.unsplash.com/photo-1558030006-450675393462?w=800&q=80',
     tags: ['맛집', '맛집 투어'],
     hashtags: ['#고기맛집', '#육식주의', '#저기압엔고기', '#멜버른'],
@@ -513,8 +513,8 @@ export const MOCK_COURSES: MockCourse[] = [
   },
   {
     id: 'c11',
-    title: '탄수화물은 죄가 없다',
-    description: '크루아상으로 시작해 파스타, 피자로 달리는 무한 탄수화물 코스. 다이어트는 내일부터.',
+    title: "Carbs without Guilt",
+    description: "Start with croissants and continue through pasta and pizza. A delicious day of carbs.",
     hero_image: 'https://images.unsplash.com/photo-1509440159596-0249088772ff?w=800&q=80',
     tags: ['카페', '맛집'],
     hashtags: ['#탄수화물', '#빵순이', '#파스타', '#피자', '#치팅데이'],

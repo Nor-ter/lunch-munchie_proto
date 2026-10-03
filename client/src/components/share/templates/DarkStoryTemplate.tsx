@@ -1,3 +1,4 @@
+import { englishText } from '@shared/englishCopy';
 import { forwardRef } from 'react';
 import { Course } from '@/types/course';
 import { CourseMap } from '@/components/course/CourseMap';
@@ -23,16 +24,16 @@ const DarkStoryTemplate = forwardRef<HTMLDivElement, TemplateProps>(({ course },
     >
       <span style={{ fontSize: 9, color: '#EB5053', letterSpacing: 1 }}>LUNCHIE MUNCHIE</span>
       <p style={{ fontSize: 18, fontWeight: 'bold', color: '#fff', margin: '8px 0 4px' }}>
-        {course.title}
+        {englishText(course.title)}
       </p>
       <p style={{ fontSize: 11, color: '#aaa', margin: '0 0 12px' }}>
-        {course.distanceKm}km · {course.durationHours}h · {course.places.length}곳
+        {course.distanceKm}km · {course.durationHours}h · {course.places.length} restaurants
       </p>
       <div style={{ borderRadius: 12, overflow: 'hidden', border: '1px solid #333' }}>
         <CourseMap places={course.places} width={200} height={200} />
       </div>
       <p style={{ fontSize: 10, color: '#666', marginTop: 'auto', textAlign: 'center' }}>
-        @{course.authorHandle}
+        @{englishText(course.authorHandle)}
       </p>
     </div>
   );

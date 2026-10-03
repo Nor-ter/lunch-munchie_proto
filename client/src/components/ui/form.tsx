@@ -1,3 +1,4 @@
+import { englishText } from '@shared/englishCopy';
 "use client";
 
 import * as React from "react";
@@ -151,7 +152,7 @@ function FormMessage({ className, ...props }: React.ComponentProps<"p">) {
       className={cn("text-destructive text-sm", className)}
       {...props}
     >
-      {body}
+      {englishText(body)}
     </p>
   );
 }

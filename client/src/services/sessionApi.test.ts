@@ -85,7 +85,7 @@ describe('completeSoloSessionChoice', () => {
     await expect(completeSoloSessionChoice({ ...input, round: 2 }, 'ABC123', {
       request,
       retryDelay: noDelay,
-    })).rejects.toThrow('최종 선택이 아직 세션에 반영되지 않았어요.');
+    })).rejects.toThrow("Your final choice hasn't been recorded yet.");
   });
 
   it('rejects an expired result that completed with a different winner', async () => {
@@ -99,6 +99,6 @@ describe('completeSoloSessionChoice', () => {
     await expect(completeSoloSessionChoice({ ...input, round: 2 }, 'ABC123', {
       request,
       retryDelay: noDelay,
-    })).rejects.toThrow('최종 선택이 아직 세션에 반영되지 않았어요.');
+    })).rejects.toThrow("Your final choice hasn't been recorded yet.");
   });
 });

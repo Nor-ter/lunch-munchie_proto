@@ -24,7 +24,7 @@ const HeaderIconButton = forwardRef<
     ref={ref}
     type={type}
     className={cn(
-      'relative flex h-10 w-10 items-center justify-center rounded-full bg-white shadow-sm active:scale-95',
+      'relative flex h-10 w-10 items-center justify-center rounded-full bg-transparent text-[#171717] active:bg-[#F4F3F4] active:scale-95',
       className,
     )}
     {...props}

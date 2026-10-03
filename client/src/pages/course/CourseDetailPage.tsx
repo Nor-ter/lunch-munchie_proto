@@ -1,3 +1,4 @@
+import { englishText } from '@shared/englishCopy';
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useParams, useLocation, useSearch } from 'wouter';
@@ -55,10 +56,10 @@ function useFrom(): FromMode {
 const BACK_PATH: Record<FromMode, string> = {
   saved: '/saved',
   profile: '/profile',
-  feed: '/feed?tab=feed',
-  template: '/feed?tab=template',
-  'template-detail': '/feed?tab=template',
-  explore: '/feed', // 먼치모드 통합 — 구 explore 진입도 피드로 복귀
+  feed: '/saved',
+  template: '/templates',
+  'template-detail': '/templates',
+  explore: '/explore/places',
 };
 
 export function resolveCourseDetailBackPath(
@@ -74,7 +75,7 @@ export function resolveCourseDetailBackPath(
   if (from !== 'template-detail') return BACK_PATH[from];
   if (templateFrom === 'profile') return BACK_PATH.profile;
   if (templateFrom === 'saved') return BACK_PATH.saved;
-  return '/feed';
+  return '/templates';
 }
 
 export function shouldShowSavedCopyEdit(from: FromMode): boolean {
@@ -172,7 +173,7 @@ function PlaceItem({
           disabled={!isEditing}
           onClick={onReplace}
           className={`flex shrink-0 items-center justify-center ${isEditing ? 'cursor-pointer active:scale-90' : ''}`}
-          aria-label={isEditing ? `${index + 1}번 장소 검색 및 변경` : `${index + 1}번째 장소`}
+          aria-label={englishText(isEditing ? `${index + 1} · search or change place` : `${index + 1} place`)}
         >
           <CourseSequenceMarker index={index} selected={replacementActive} />
         </button>
@@ -182,7 +183,7 @@ function PlaceItem({
         layout
         role={canPeek ? 'button' : undefined}
         tabIndex={canPeek ? 0 : undefined}
-        aria-label={canPeek ? (selected ? `${place.name} 상세보기` : `${place.name} 선택`) : undefined}
+        aria-label={englishText(canPeek ? (selected ? `${place.name} Details` : `${place.name} Select`) : undefined)}
         aria-pressed={canPeek ? selected : undefined}
         drag={canPeek && selected ? 'x' : false}
         dragConstraints={{ left: 0, right: 90 }}
@@ -219,7 +220,7 @@ function PlaceItem({
           {isEditing && (
             <motion.button
               type="button"
-              aria-label={`${place.name} 순서 변경`}
+              aria-label={englishText(`${place.name} Reorder`)}
               initial={{ opacity: 0, scale: 0.7 }}
               animate={{ opacity: 1, scale: 1 }}
               exit={{ opacity: 0, scale: 0.7 }}
@@ -233,25 +234,25 @@ function PlaceItem({
           )}
         </AnimatePresence>
         {place.imageUrl ? (
-          <img src={place.imageUrl} alt={place.name} className="w-14 h-14 rounded-lg object-cover shrink-0" draggable={false} />
+          <img src={place.imageUrl} alt={englishText(place.name)} className="w-14 h-14 rounded-lg object-cover shrink-0" draggable={false} />
         ) : (
           <div className="w-14 h-14 rounded-lg bg-gray-100 shrink-0" />
         )}
         <div className="flex flex-col justify-center min-w-0 flex-1">
-          <p className="font-medium text-sm truncate">{place.name}</p>
+          <p className="font-medium text-sm truncate">{englishText(place.name)}</p>
           <p className="text-xs text-gray-400 mt-0.5">
             <Star size={10} className="inline mb-0.5 text-[#D94447] fill-[#D94447]" />
-            {' '}{place.rating} · {place.distance}
+            {' '}{place.rating} · {englishText(place.distance)}
           </p>
-          <p className="text-xs text-gray-400">{place.category}</p>
-          {place.address && <p className="text-[11px] text-gray-400 truncate">{place.address}</p>}
+          <p className="text-xs text-gray-400">{englishText(place.category)}</p>
+          {englishText(place.address && <p className="text-[11px] text-gray-400 truncate">{englishText(place.address)}</p>)}
         </div>
         {canPeek && selected && (
           <motion.button
             initial={{ opacity: 0, x: 4 }}
             animate={{ opacity: 1, x: 0 }}
             onClick={(e) => { e.stopPropagation(); onOpenDetail?.(place.id); }}
-            aria-label={`${place.name} 상세보기`}
+            aria-label={englishText(`${place.name} Details`)}
             className="shrink-0 w-8 h-8 rounded-full flex items-center justify-center"
             style={{ background: color.base, color: 'white' }}
           >
@@ -262,7 +263,7 @@ function PlaceItem({
           {isEditing && (
             <motion.button
               type="button"
-              aria-label={`${place.name} 장소 삭제`}
+              aria-label={englishText(`${place.name} Remove Place`)}
               initial={{ opacity: 0, scale: 0.7 }}
               animate={{ opacity: 1, scale: 1 }}
               exit={{ opacity: 0, scale: 0.7 }}
@@ -335,9 +336,9 @@ export default function CourseDetailPage() {
   const legacyPhotoPlaces: CoursePlace[] = useMemo(
     () => (orphanPost?.photos ?? []).slice(0, 3).map((photo, index) => ({
       id: `legacy-${orphanPost!.id}-${index}`,
-      name: `코스 스팟 ${index + 1}`,
+      name: `Course Spots ${index + 1}`,
       rating: 0,
-      distance: '기록 사진',
+      distance: "Your Photos",
       category: orphanPost?.tags[index] ?? 'Munchie',
       priceLevel: 1,
       imageUrl: photo,
@@ -353,7 +354,7 @@ export default function CourseDetailPage() {
   const durationHours = appCourse
     ? appCourse.metadata.duration / 60
     : 0;
-  const durationLabel = `${Number.isInteger(durationHours) ? durationHours : durationHours.toFixed(1)}시간`;
+  const durationLabel = `${Number.isInteger(durationHours) ? durationHours : durationHours.toFixed(1)} hours`;
   const authorHandle = (orphanPost?.authorName || 'app_user').replace(/^@/, '');
   const authorMeta = orphanPost ? 'Munchie creator' : '0 Followers';
   const authorId = orphanPost
@@ -368,7 +369,7 @@ export default function CourseDetailPage() {
     : orphanPost?.authorLevel ?? 1;
   const authorLevelName = isOwnCourseAuthor
     ? ownAuthorProgress.levelName
-    : orphanPost?.authorLevelName ?? '한입 새싹';
+    : orphanPost?.authorLevelName ?? "Budding Foodie";
   const authorLevelIcon = getLunchmateLevelIcon(authorLevel);
   const AuthorLevelIcon = authorLevelIcon.Icon;
   const authorAvatarImage = isOwnCourseAuthor ? profile.avatarPhoto : orphanPost?.authorImage;
@@ -419,7 +420,7 @@ export default function CourseDetailPage() {
   const handleCourseShare = async () => {
     if (!id) return;
     const shareUrl = `${window.location.origin}/course/${encodeURIComponent(id)}`;
-    const shareTitle = appCourse?.title || orphanPost?.caption || 'Lunchie Munchie 코스맵';
+    const shareTitle = appCourse?.title || orphanPost?.caption || "Lunchie Munchie Course Map";
     const recordShare = () => {
       if (orphanPost) incrementFeedShare(orphanPost.id);
     };
@@ -427,9 +428,9 @@ export default function CourseDetailPage() {
       try {
         await navigator.clipboard.writeText(shareUrl);
         recordShare();
-        toast.success('코스 링크를 복사했어요.');
+        toast.success("Course link copied.");
       } catch {
-        toast.error('코스 링크를 공유하지 못했어요.');
+        toast.error("Couldn't share the course link.");
       }
     };
 
@@ -441,7 +442,7 @@ export default function CourseDetailPage() {
     try {
       await navigator.share({
         title: `Lunchie Munchie — ${shareTitle}`,
-        text: `${shareTitle} 코스를 함께 둘러보세요.`,
+        text: `${shareTitle} Explore this course together.`,
         url: shareUrl,
       });
       recordShare();
@@ -455,10 +456,10 @@ export default function CourseDetailPage() {
     if (!id) return;
     if (isCourseSaved) {
       unsaveCourse(id);
-      toast.success('저장을 해제했어요.');
+      toast.success("Removed from Saved.");
     } else {
       saveCourse(id);
-      toast.success('코스를 저장했어요.');
+      toast.success("Course saved.");
     }
   };
 
@@ -491,7 +492,7 @@ export default function CourseDetailPage() {
     if (editingPlaceIndex === null) return;
     const replacingIndex = editingPlaceIndex === 'new' ? -1 : editingPlaceIndex;
     if (places.some((place, index) => index !== replacingIndex && place.id === restaurant.id)) {
-      toast.info('이미 코스에 담긴 장소예요.');
+      toast.info("This place is already in your course.");
       return;
     }
 
@@ -514,7 +515,7 @@ export default function CourseDetailPage() {
       selectCourseRestaurant(restaurant);
       endPlaceSearchSession();
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : '장소 정보를 가져오지 못했어요.');
+      toast.error(error instanceof Error ? error.message : "Couldn't load place details.");
     } finally {
       setDetailsLoadingId(null);
     }
@@ -522,7 +523,7 @@ export default function CourseDetailPage() {
 
   const removeCoursePlace = (placeId: string) => {
     if (places.length <= 1) {
-      toast.info('코스에는 장소가 최소 1곳 필요해요.');
+      toast.info("A course needs at least one place.");
       return;
     }
     setPlaces(current => syncCoursePlaceCoordinates(current.filter(place => place.id !== placeId)));
@@ -541,7 +542,7 @@ export default function CourseDetailPage() {
     } else {
       addCourse({
         id,
-        title: orphanPost?.caption || 'Munchie 코스',
+        title: orphanPost?.caption || "Munchie Course",
         description: orphanPost?.caption ?? '',
         heroImage: places[0]?.imageUrl ?? orphanPost?.photos[0] ?? '',
         tags: orphanPost?.tags ?? [],
@@ -562,7 +563,7 @@ export default function CourseDetailPage() {
 
     closePlaceSearch();
     setIsEditing(false);
-    toast.success('코스 순서와 장소를 저장했어요.');
+    toast.success("Course order and places saved.");
   };
 
   const toggleEditMode = () => {
@@ -581,12 +582,12 @@ export default function CourseDetailPage() {
     });
     const payload = await response.json().catch(() => ({})) as { error?: string };
     if (!response.ok) {
-      toast.error(payload.error || '게시물을 삭제하지 못했어요.');
+      toast.error(payload.error || "Couldn't delete this post.");
       return;
     }
     setDeleteConfirmOpen(false);
     deleteCourseWithFeed(id);
-    toast.success('코스맵과 먼치 피드를 삭제했어요.');
+    toast.success("Course map and Munchie post deleted.");
     navigate(backPath);
   };
 
@@ -621,9 +622,9 @@ export default function CourseDetailPage() {
         <span className="absolute -top-2 left-6 h-4 w-4 rotate-45 border-l border-t border-[#E85053] bg-white" />
         <div className="mb-2 flex items-center justify-between gap-2">
           <p className="text-[12px] font-black text-[#49362E]">
-            {editingPlaceIndex === 'new' ? '새 장소 추가' : `${editingPlaceIndex + 1}번 장소 변경`}
+            {englishText(editingPlaceIndex === 'new' ? "Add Place" : `${editingPlaceIndex + 1} · change place`)}
           </p>
-          <button type="button" onClick={closePlaceSearch} aria-label="장소 검색 닫기" className="flex h-7 w-7 items-center justify-center rounded-full bg-[#F7EFEA] text-[#8B7469]">
+          <button type="button" onClick={closePlaceSearch} aria-label="Close Place Search" className="flex h-7 w-7 items-center justify-center rounded-full bg-[#F7EFEA] text-[#8B7469]">
             <X size={14} />
           </button>
         </div>
@@ -633,7 +634,7 @@ export default function CourseDetailPage() {
             autoFocus
             value={placeSearchInput}
             onChange={event => setPlaceSearchInput(event.target.value)}
-            placeholder="지도검색 — 장소 이름 또는 주소"
+            placeholder="Search places or addresses"
             className="min-w-0 flex-1 bg-transparent text-[13px] outline-none placeholder:text-[#B7A69D]"
           />
         </div>
@@ -648,8 +649,8 @@ export default function CourseDetailPage() {
             >
               {restaurant.image ? <img src={restaurant.image} alt="" className="h-9 w-9 shrink-0 rounded-lg object-cover" /> : <span className="h-9 w-9 shrink-0 rounded-lg bg-[#F2EEEB]" />}
               <span className="min-w-0 flex-1">
-                <span className="block truncate text-[12px] font-bold text-[#3F3029]">{restaurant.name}</span>
-                <span className="block truncate text-[10px] text-[#9A8980]">{restaurant.address}</span>
+                <span className="block truncate text-[12px] font-bold text-[#3F3029]">{englishText(restaurant.name)}</span>
+                <span className="block truncate text-[10px] text-[#9A8980]">{englishText(restaurant.address)}</span>
               </span>
               <Plus size={14} className="shrink-0 text-[#E85053]" />
             </button>
@@ -664,15 +665,15 @@ export default function CourseDetailPage() {
               className="flex w-full items-center gap-2.5 rounded-xl px-2 py-2 text-left active:bg-[#FFF6F2] disabled:opacity-50"
             >
               <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-[#FFF0EC] text-[#E85053]"><MapPin size={15} /></span>
-              <span className="min-w-0 flex-1 truncate text-[12px] font-bold text-[#3F3029]">{suggestion.text}</span>
+              <span className="min-w-0 flex-1 truncate text-[12px] font-bold text-[#3F3029]">{englishText(suggestion.text)}</span>
               <Plus size={14} className="shrink-0 text-[#E85053]" />
             </button>
           ))}
 
-          {placeSearchLoading && <p className="py-3 text-center text-[11px] text-[#9A8980]">장소 검색 중…</p>}
-          {placeSearchError && <p className="py-3 text-center text-[11px] text-[#D45A5E]">온라인 장소 검색을 불러오지 못했어요.</p>}
+          {placeSearchLoading && <p className="py-3 text-center text-[11px] text-[#9A8980]">Searching places…</p>}
+          {placeSearchError && <p className="py-3 text-center text-[11px] text-[#D45A5E]">Couldn't load online place search.</p>}
           {placeSearchInput.trim().length > 0 && !placeSearchLoading && localPlaceResults.length === 0 && placeSuggestions.length === 0 && !placeSearchError && (
-            <p className="py-3 text-center text-[11px] text-[#9A8980]">일치하는 장소가 없어요.</p>
+            <p className="py-3 text-center text-[11px] text-[#9A8980]">No matching places.</p>
           )}
         </div>
       </div>
@@ -688,10 +689,10 @@ export default function CourseDetailPage() {
     >
       {/* Back button */}
       <div className="flex items-center justify-between px-5 pb-3 pt-[max(12px,env(safe-area-inset-top))]">
-        <BackButton onClick={() => navigate(backPath)} aria-label="이전 화면으로 돌아가기" />
+        <BackButton onClick={() => navigate(backPath)} aria-label="Back" />
         <div className="text-center">
           <p className="text-[10px] font-black uppercase tracking-[0.18em] text-[#E67E78]">Munchie</p>
-          <p className="text-[16px] font-black text-[#49362E]">코스맵 보기</p>
+          <p className="text-[16px] font-black text-[#49362E]">View Course Map</p>
         </div>
         <div className="h-9 w-9" aria-hidden="true" />
       </div>
@@ -705,7 +706,7 @@ export default function CourseDetailPage() {
           <button
             type="button"
             onClick={() => navigate(`/profile/${authorId}`)}
-            aria-label={`${authorHandle} 프로필 보기`}
+            aria-label={englishText(`${authorHandle} View Profile`)}
             className="flex items-center gap-2 rounded-xl text-left outline-none transition-transform active:scale-[0.98] focus-visible:ring-2 focus-visible:ring-[#ED7773] focus-visible:ring-offset-2"
           >
             <div className="flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-full bg-[#F3EDE8] text-lg">
@@ -718,16 +719,16 @@ export default function CourseDetailPage() {
             </div>
             <div>
               <div className="flex items-center gap-1.5">
-                <span className="font-medium text-sm">@{authorHandle}</span>
+                <span className="font-medium text-sm">@{englishText(authorHandle)}</span>
               </div>
-              <span className="text-xs text-gray-500">{authorMeta}</span>
+              <span className="text-xs text-gray-500">{englishText(authorMeta)}</span>
               <span
                 className="mt-0.5 flex w-fit items-center gap-1 rounded-full bg-[#FFF3EC] px-2 py-0.5 text-[9px] font-black"
                 style={{ color: authorLevelIcon.color }}
-                aria-label={`작성자 레벨 Lv.${authorLevel} ${authorLevelName}`}
+                aria-label={englishText(`Author Level Lv.${authorLevel} ${authorLevelName}`)}
               >
                 <AuthorLevelIcon size={10} strokeWidth={2.5} aria-hidden="true" />
-                Lv.{authorLevel} {authorLevelName}
+                Lv.{authorLevel} {englishText(authorLevelName)}
               </span>
             </div>
           </button>
@@ -742,15 +743,15 @@ export default function CourseDetailPage() {
               />
             </div>
             <div>
-              <span className="block font-medium text-sm">@{authorHandle}</span>
-              <span className="text-xs text-gray-500">{authorMeta}</span>
+              <span className="block font-medium text-sm">@{englishText(authorHandle)}</span>
+              <span className="text-xs text-gray-500">{englishText(authorMeta)}</span>
               <span
                 className="mt-0.5 flex w-fit items-center gap-1 rounded-full bg-[#FFF3EC] px-2 py-0.5 text-[9px] font-black"
                 style={{ color: authorLevelIcon.color }}
-                aria-label={`작성자 레벨 Lv.${authorLevel} ${authorLevelName}`}
+                aria-label={englishText(`Author Level Lv.${authorLevel} ${authorLevelName}`)}
               >
                 <AuthorLevelIcon size={10} strokeWidth={2.5} aria-hidden="true" />
-                Lv.{authorLevel} {authorLevelName}
+                Lv.{authorLevel} {englishText(authorLevelName)}
               </span>
             </div>
           </div>
@@ -760,7 +761,7 @@ export default function CourseDetailPage() {
           <button
             type="button"
             onClick={handleCourseShare}
-            aria-label="코스 공유하기"
+            aria-label="Share Course"
             className="flex h-9 w-9 items-center justify-center rounded-full border border-[#F0C8C8] bg-white text-[#D94E55] active:scale-[0.98]"
           >
             <Share2 size={17} />
@@ -770,14 +771,15 @@ export default function CourseDetailPage() {
             onClick={toggleEditMode}
             className="border border-gray-300 text-sm px-3 py-1 rounded-full"
           >
-            {isEditing ? '완료' : '편집'}
+            {englishText(isEditing ? "Complete" : "Edit")}
           </button>
         ) : isProfileTemplateCourse ? (
           <button
             onClick={() => navigate(`/course/${id}/edit?from=profile`)}
             className="border border-gray-300 text-sm px-3 py-1 rounded-full"
           >
-            편집
+
+            Edit
           </button>
         ) : !isOwnCourseAuthor && authorId ? (
           <FollowButton userId={authorId} />
@@ -804,11 +806,11 @@ export default function CourseDetailPage() {
             className="flex h-full items-center justify-center bg-[#F3EDE8] text-[12px] text-[#9B9B9B]"
             aria-busy={mapLoading || undefined}
           >
-            {mapLoading ? '지도 불러오는 중…' : '표시할 지도 좌표가 없어요.'}
+            {englishText(mapLoading ? "Loading map…" : "No map locations available.")}
           </div>
         )}
         <AnimatePresence>
-          {selectedPlaceId && (
+          {englishText(selectedPlaceId && (
             <motion.div
               key={selectedPlaceId}
               initial={{ opacity: 0 }}
@@ -817,9 +819,9 @@ export default function CourseDetailPage() {
               className="pointer-events-none absolute bottom-3 left-1/2 max-w-[calc(100%-1.5rem)] -translate-x-1/2 truncate rounded-full border border-white/80 bg-[#4A352D]/90 px-3 py-1.5 text-[11px] font-bold text-white shadow-lg backdrop-blur"
               aria-live="polite"
             >
-              {places.find((place) => place.id === selectedPlaceId)?.name} 선택됨
+              {englishText(places.find((place) => place.id === selectedPlaceId)?.name)}  Selected
             </motion.div>
-          )}
+          ))}
         </AnimatePresence>
       </div>
 
@@ -830,13 +832,13 @@ export default function CourseDetailPage() {
       >
         <span className="flex shrink-0 items-center gap-1.5">
           <Clock size={14} className="text-[#EE7772]" />
-          {durationLabel}
+          {englishText(durationLabel)}
         </span>
-        <span className="flex shrink-0 items-center gap-1" aria-label={`스팟 ${places.length}개`}>
+        <span className="flex shrink-0 items-center gap-1" aria-label={englishText(`Spots ${places.length} items`)}>
           <MapPin size={14} className="text-[#E85053]" />
           {places.length}
         </span>
-        <span className="flex shrink-0 items-center gap-1" aria-label={`좋아요 ${orphanPost?.likes ?? 0}개`}>
+        <span className="flex shrink-0 items-center gap-1" aria-label={englishText(`Likes ${orphanPost?.likes ?? 0} items`)}>
           <ThumbsUp size={13} className="text-[#E85053]" />
           {orphanPost?.likes ?? 0}
         </span>
@@ -879,7 +881,7 @@ export default function CourseDetailPage() {
                     onClick={() => setEditingPlaceIndex(current => current === 'new' ? null : 'new')}
                     className="ml-11 mt-1 flex h-11 w-[calc(100%-2.75rem)] items-center justify-center gap-1.5 rounded-xl border border-dashed border-[#E7B8AE] bg-[#FFF8F5] text-[12px] font-black text-[#D95A5D]"
                   >
-                    <Plus size={15} /> 새 장소 추가
+                    <Plus size={15} />  Add Place
                   </button>
                   <AnimatePresence>{editingPlaceIndex === 'new' ? placeSearchPanel : null}</AnimatePresence>
                 </div>
@@ -893,13 +895,13 @@ export default function CourseDetailPage() {
 
       {/* 식당 상세 슬라이드 (뒤로가면 이 화면으로 복귀) */}
       <AnimatePresence>
-        {detailPlaceId && (
+        {englishText(detailPlaceId && (
           <RestaurantDetailSheet
             restaurantId={detailPlaceId}
             fallbackPlace={places.find(place => place.id === detailPlaceId)}
             onClose={() => setDetailPlaceId(null)}
           />
-        )}
+        ))}
       </AnimatePresence>
 
 
@@ -911,7 +913,8 @@ export default function CourseDetailPage() {
             onClick={() => navigate(`/course/${id}/edit?from=profile`)}
             className="page-bottom-action-primary"
           >
-            편집
+
+            Edit
           </button>
         ) : fromSaved && isEditing ? (
           <button
@@ -919,7 +922,8 @@ export default function CourseDetailPage() {
             onClick={() => setDeleteConfirmOpen(true)}
             className="h-[52px] flex-1 rounded-2xl bg-[#E85053] text-sm font-black text-white shadow-[0_8px_18px_rgba(232,80,83,0.25)] active:scale-[0.98]"
           >
-            삭제
+
+            Delete
           </button>
         ) : isSavedOrigin ? (
           <>
@@ -927,7 +931,7 @@ export default function CourseDetailPage() {
               type="button"
               onClick={() => orphanPost && toggleFeedLike(orphanPost.id)}
               disabled={!orphanPost}
-              aria-label={isCoursePostLiked ? '좋아요 취소' : '좋아요'}
+              aria-label={englishText(isCoursePostLiked ? "Unlike" : "Likes")}
               aria-pressed={isCoursePostLiked}
               className={`page-bottom-action-secondary transition-colors disabled:opacity-40 ${
                 isCoursePostLiked ? 'bg-[#FFE2DF] text-[#D94E55]' : ''
@@ -940,7 +944,8 @@ export default function CourseDetailPage() {
               onClick={() => navigate(`/coursemap/new?course=${id}`)}
               className="page-bottom-action-primary"
             >
-              복사해서 편집
+
+              Copy & Edit
             </button>
           </>
         ) : (
@@ -949,7 +954,7 @@ export default function CourseDetailPage() {
               type="button"
               onClick={() => orphanPost && toggleFeedLike(orphanPost.id)}
               disabled={!orphanPost}
-              aria-label={isCoursePostLiked ? '좋아요 취소' : '좋아요'}
+              aria-label={englishText(isCoursePostLiked ? "Unlike" : "Likes")}
               aria-pressed={isCoursePostLiked}
               className={`page-bottom-action-secondary transition-colors disabled:opacity-40 ${
                 isCoursePostLiked ? 'bg-[#FFE2DF] text-[#D94E55]' : ''
@@ -960,11 +965,11 @@ export default function CourseDetailPage() {
             <button
               type="button"
               onClick={toggleCourseSaved}
-              aria-label={isCourseSaved ? '저장 해제' : '저장하기'}
+              aria-label={englishText(isCourseSaved ? "Unsave" : "Save")}
               className="page-bottom-action-primary gap-2"
             >
               <Bookmark size={18} fill={isCourseSaved ? 'currentColor' : 'none'} />
-              {isCourseSaved ? '저장됨' : '저장하기'}
+              {englishText(isCourseSaved ? "Saved" : "Save")}
             </button>
           </>
         )}
@@ -995,7 +1000,7 @@ export default function CourseDetailPage() {
                 <button
                   type="button"
                   onClick={() => setDeleteConfirmOpen(false)}
-                  aria-label="코스맵 삭제 창 닫기"
+                  aria-label="Close Course Deletion"
                   className="absolute right-3 top-3 flex h-8 w-8 items-center justify-center rounded-full bg-[#F7ECE7] text-[#80675C]"
                 >
                   <X size={16} />
@@ -1004,17 +1009,21 @@ export default function CourseDetailPage() {
                   <Trash2 size={22} />
                 </span>
                 <h2 id="delete-course-title" className="mt-3 text-[17px] font-black text-[#30221C]">
-                  게시물을 삭제하시겠습니까?
+
+                  Delete this post?
                 </h2>
                 <p className="mt-1.5 text-[11px] font-semibold leading-5 text-[#9A8277]">
-                  코스맵과 먼치 피드 같이 삭제되며<br />다시 복구할 수 없습니다.
+
+                  The course map and Munchie post will both be deleted. <br />This can't be undone.
                 </p>
                 <div className="mt-5 grid grid-cols-2 gap-2.5">
                   <button type="button" onClick={() => setDeleteConfirmOpen(false)} className="h-11 rounded-[14px] border border-[#DFD0C8] bg-white text-[13px] font-black text-[#69564D]">
-                    취소
+
+                    Cancel
                   </button>
                   <button type="button" onClick={() => void confirmCourseDelete()} className="h-11 rounded-[14px] bg-[#E85053] text-[13px] font-black text-white">
-                    확인
+
+                    Confirm
                   </button>
                 </div>
               </motion.section>

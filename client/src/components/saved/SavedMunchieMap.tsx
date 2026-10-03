@@ -1,3 +1,4 @@
+import { englishText } from '@shared/englishCopy';
 import { useEffect, useMemo, useState } from 'react';
 import { AdvancedMarker, Map, Polyline, useMap } from '@vis.gl/react-google-maps';
 import { AnimatePresence, motion } from 'framer-motion';
@@ -123,9 +124,10 @@ export function SavedMunchieMap({
       <div className="flex h-full min-h-[430px] items-center justify-center rounded-[26px] border border-dashed border-[#DCCBC0] bg-[#FFFDFC] px-8 text-center">
         <div>
           <MapPin className="mx-auto text-[#E87874]" size={34} />
-          <p className="mt-3 text-[15px] font-black text-[#3A2922]">표시할 코스 정보가 없어요</p>
+          <p className="mt-3 text-[15px] font-black text-[#3A2922]">No Course Information Available</p>
           <p className="mt-1 text-[12px] font-semibold leading-relaxed text-[#9A8579]">
-            저장한 코스의 장소 위치가 연결되면 이 지도에 자동으로 표시됩니다.
+
+            Saved course locations appear on this map when available.
           </p>
         </div>
       </div>
@@ -137,9 +139,10 @@ export function SavedMunchieMap({
       <div className="flex h-full min-h-[430px] items-center justify-center rounded-[26px] border border-dashed border-[#DCCBC0] bg-[#FFFDFC] px-8 text-center">
         <div>
           <MapPin className="mx-auto text-[#E87874]" size={34} />
-          <p className="mt-3 text-[15px] font-black text-[#3A2922]">지도를 불러올 수 없어요</p>
+          <p className="mt-3 text-[15px] font-black text-[#3A2922]">Couldn't load the map</p>
           <p className="mt-1 text-[12px] font-semibold leading-relaxed text-[#9A8579]">
-            지도 설정이 완료되면 저장한 코스가 여기에 표시됩니다.
+
+            Saved courses will appear once maps are configured.
           </p>
         </div>
       </div>
@@ -177,13 +180,13 @@ export function SavedMunchieMap({
           <AdvancedMarker
             key={course.id}
             position={{ lat: course.latitude, lng: course.longitude }}
-            title={`${course.post.caption} · ${course.points.length}개 장소`}
+            title={englishText(`${course.post.caption} · ${course.points.length} places`)}
             onClick={() => onSelectedFeedIdChange(course.id)}
           >
             <div
               data-ui="saved-course-centroid"
               className="relative flex h-11 w-11 items-center justify-center overflow-hidden rounded-full border-[3px] border-white bg-[#EF6B6D] text-[18px] shadow-[0_5px_14px_rgba(70,38,27,0.3)] transition-transform active:scale-95"
-              aria-label={`${course.post.caption} 코스, 장소 ${course.points.length}개`}
+              aria-label={englishText(`${course.post.caption} Course, Place ${course.points.length} items`)}
             >
               <AuthorAvatar
                 image={course.post.authorImage}
@@ -214,14 +217,14 @@ export function SavedMunchieMap({
                 <AdvancedMarker
                   key={point.id}
                   position={{ lat: point.latitude, lng: point.longitude }}
-                  title={`${index + 1}. ${point.name}`}
+                  title={englishText(`${index + 1}. ${point.name}`)}
                   onClick={() => setSelectedPlaceId(point.id)}
                   zIndex={index + 1}
                 >
                   <div
                     data-ui="saved-course-place"
                     data-selected={selectedPlaceId === point.id ? 'true' : 'false'}
-                    aria-label={`${index + 1}번 장소 ${point.name} 상세정보 보기`}
+                    aria-label={englishText(`${index + 1} stop ${point.name} View Details`)}
                     className={`flex h-9 w-9 items-center justify-center rounded-full border-[3px] border-white text-[13px] font-black text-white shadow-[0_4px_12px_rgba(61,35,26,0.3)] transition-transform ${
                       selectedPlaceId === point.id ? '-translate-y-1 scale-110' : ''
                     }`}
@@ -241,7 +244,8 @@ export function SavedMunchieMap({
           role="status"
           className="absolute right-3 top-3 rounded-full border border-[#E7D5CB] bg-[#FFFDFC]/95 px-3 py-2 text-[11px] font-bold text-[#80695E] shadow-md backdrop-blur"
         >
-          도보 경로 불러오는 중…
+
+          Loading walking route…
         </div>
       )}
 
@@ -250,7 +254,8 @@ export function SavedMunchieMap({
           role="alert"
           className="absolute right-3 top-3 max-w-[240px] rounded-[14px] border border-[#F2C7C3] bg-[#FFF7F5]/95 px-3 py-2 text-[11px] font-bold leading-4 text-[#B84D4D] shadow-md backdrop-blur"
         >
-          도보 경로를 불러오지 못했어요. 잠시 후 다시 확인해 주세요.
+
+          Couldn't load the walking route. Please try again shortly.
         </div>
       )}
 
@@ -263,7 +268,7 @@ export function SavedMunchieMap({
                 setSelectedPlaceId(null);
                 onSelectedFeedIdChange(null);
               }}
-              aria-label="전체 저장 코스 보기"
+              aria-label="View All Saved Courses"
               initial={{ opacity: 0, x: -8 }}
               animate={{ opacity: 1, x: 0 }}
               exit={{ opacity: 0, x: -8 }}
@@ -286,13 +291,14 @@ export function SavedMunchieMap({
                 />
                 <div className="min-w-0 flex-1">
                   <span className="rounded-full bg-[#FFE4DE] px-2 py-0.5 text-[9px] font-black text-[#D85A59]">
-                    저장 코스 · {selectedCourse.points.length}곳
+
+                    Saved Course ·  {selectedCourse.points.length} restaurants
                   </span>
                   <p className="mt-1 line-clamp-2 text-[13px] font-black leading-5 text-[#382820]">
-                    {selectedCourse.post.caption}
+                    {englishText(selectedCourse.post.caption)}
                   </p>
                   <p className="mt-1 truncate text-[10px] font-semibold text-[#99847A]">
-                    {selectedCourse.points.map((point) => point.name).join(' · ')}
+                    {englishText(selectedCourse.points.map((point) => point.name).join(' · '))}
                   </p>
                 </div>
               </div>
@@ -301,7 +307,8 @@ export function SavedMunchieMap({
                 onClick={() => navigate(getSavedFeedDetailPath(selectedCourse.feedId, 'map'))}
                 className="mt-3 flex h-10 w-full items-center justify-center gap-1 rounded-[13px] bg-[#EF6B6D] text-[12px] font-black text-white"
               >
-                저장 피드 보기 <ChevronRight size={15} />
+
+                View Saved Post <ChevronRight size={15} />
               </button>
             </motion.div>
           </>

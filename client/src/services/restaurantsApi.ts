@@ -12,6 +12,6 @@ export async function getRestaurantById(
     credentials: 'same-origin',
   });
   if (response.status === 404) return null;
-  if (!response.ok) throw new Error('식당 정보를 불러오지 못했어요.');
+  if (!response.ok) throw new Error("Couldn't load restaurant details.");
   return mapRestaurantApiRecord(await response.json() as GoogleRestaurantRow);
 }

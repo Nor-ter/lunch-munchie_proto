@@ -1,3 +1,4 @@
+import { englishText } from '@shared/englishCopy';
 /**
  * Lunchie Quick Match — compact settings and session entry.
  * Session persistence remains server-first through AppContext.
@@ -11,17 +12,15 @@ import {
   ChevronDown,
   CircleHelp,
   Clock3,
-  Gamepad2,
   Navigation,
   Ruler,
   Sparkles,
+  Triangle,
   Users,
   UtensilsCrossed,
 } from 'lucide-react';
 import { useApp } from '@/contexts/AppContext';
-import LunchmateCharacterRenderer from '@/components/munchie/LunchmateCharacterRenderer';
 import { FOOD_TAGS } from '@/constants/foodTags';
-import { lunchmateLoadoutFromProfile } from '@/utils/lunchmateProfile';
 import { toast } from 'sonner';
 import type { Intent } from '@shared/intent';
 import { localityForCoordinate } from '@shared/melbourneLocality';
@@ -29,7 +28,6 @@ import {
   QUICK_MATCH_PARTY_SIZE_MAX,
   normalizeQuickMatchPartySize,
 } from '@shared/quickMatchParty';
-import type { LunchmateLoadout } from '@/types/lunchmateCustomization';
 import { logSessionCreated } from '@/lib/eventLogger';
 import SessionManagementMenu from '@/components/lunchie/SessionManagementMenu';
 import {
@@ -44,19 +42,17 @@ import {
 } from '@/components/ui/alert-dialog';
 import {
   DEFAULT_QUICK_MATCH_SETTINGS,
-  DIETARY_REQUIREMENTS,
-  INGREDIENT_AVOIDANCES,
   QUICK_MATCH_SETTINGS_STORAGE_KEY,
   isActiveQuickMatchStatus,
   normalizeDietaryPreferences,
   normalizeQuickMatchSettings,
 } from '@/lib/quickMatch';
 
-const PREFERENCE_CARDS: { value: Intent | null; label: string; image?: string; color: string }[] = [
-  { value: 'cafe', label: '커피', image: '/assets/characters/quick-match/coffee.png', color: '#FFF0E7' },
-  { value: 'meal', label: '식사', image: '/assets/characters/quick-match/rice.png', color: '#FFE9E4' },
-  { value: 'dessert', label: '디저트', image: '/assets/characters/quick-match/dessert.png', color: '#FFE7EC' },
-  { value: null, label: '랜덤', color: '#FFF4D9' },
+const PREFERENCE_CARDS: { value: Intent | null; label: string; image?: string }[] = [
+  { value: 'cafe', label: "Coffee", image: '/assets/characters/quick-match/coffee.png' },
+  { value: 'meal', label: "Meals", image: '/assets/characters/quick-match/rice.png' },
+  { value: 'dessert', label: "Dessert", image: '/assets/characters/quick-match/dessert.png' },
+  { value: null, label: "Surprise Me" },
 ];
 
 const RADIUS_OPTIONS = [1000, 2000, 3000, 4000, 5000];
@@ -69,14 +65,14 @@ const GROUP_SIZE_FLICK_FRICTION = 0.0032;
 const GROUP_SIZE_FLICK_MIN_VELOCITY = 0.04;
 const GROUP_SIZE_FLICK_MAX_VELOCITY = 3.2;
 const TAG_META: Record<string, { icon: string; hint: string }> = {
-  맛집: { icon: '🍽️', hint: '검증된 인기 메뉴' },
-  데이트코스: { icon: '💞', hint: '분위기 좋은 곳' },
-  혼밥: { icon: '🙋', hint: '혼자서도 편하게' },
-  카페: { icon: '☕', hint: '커피와 여유' },
-  펍나이트: { icon: '🍻', hint: '퇴근 후 한잔' },
-  브런치: { icon: '🥐', hint: '느긋한 한 끼' },
-  디저트: { icon: '🍰', hint: '달콤한 마무리' },
-  가성비: { icon: '✨', hint: '가격까지 만족' },
+  맛집: { icon: '🍽️', hint: "Popular Favorites" },
+  데이트코스: { icon: '💞', hint: "Great Atmosphere" },
+  혼밥: { icon: '🙋', hint: "Solo Friendly" },
+  카페: { icon: '☕', hint: "Coffee Break" },
+  펍나이트: { icon: '🍻', hint: "After-work Drinks" },
+  브런치: { icon: '🥐', hint: "A Relaxed Meal" },
+  디저트: { icon: '🍰', hint: "Something Sweet" },
+  가성비: { icon: '✨', hint: "Great Value" },
 };
 
 function formatRadius(radius: number): string {
@@ -87,15 +83,15 @@ type LocationFix = { latitude: number; longitude: number; accuracy: number };
 
 function currentPosition(): Promise<LocationFix> {
   if (!navigator.geolocation) {
-    return Promise.reject(new Error('이 브라우저에서는 위치 정보를 사용할 수 없습니다.'));
+    return Promise.reject(new Error("Location is unavailable in this browser."));
   }
   return new Promise((resolve, reject) => {
     navigator.geolocation.getCurrentPosition(
       ({ coords }) => resolve({ latitude: coords.latitude, longitude: coords.longitude, accuracy: coords.accuracy }),
       error => reject(new Error(
         error.code === error.PERMISSION_DENIED
-          ? '위치 권한이 꺼져 있어요. 주소창의 사이트 설정에서 위치를 허용한 뒤 다시 시도해 주세요.'
-          : '현재 위치를 확인하지 못했습니다. 잠시 후 다시 시도해 주세요.',
+          ? "Location permission is off. Enable it in your browser's site settings and try again."
+          : "Couldn't find your location. Please try again shortly.",
       )),
       { enableHighAccuracy: false, timeout: 10_000, maximumAge: 5 * 60_000 },
     );
@@ -104,18 +100,18 @@ function currentPosition(): Promise<LocationFix> {
 
 function Card({ children }: { children: ReactNode }) {
   return (
-    <section className="rounded-[22px] bg-white p-4 shadow-[0_2px_10px_rgba(180,140,130,0.10)]">
-      {children}
+    <section className="border-b border-[#E8E6E7] bg-[#FCFCFC] px-1 py-5">
+      {englishText(children)}
     </section>
   );
 }
 
 function CardTitle({ icon, children, badge }: { icon: ReactNode; children: ReactNode; badge?: ReactNode }) {
   return (
-    <div className="mb-3 flex items-center gap-2 text-[14px] font-extrabold text-[#26232A]">
-      <span className="text-[#F4515E]">{icon}</span>
-      <span>{children}</span>
-      {badge && <span className="ml-auto rounded-full bg-[#FFE4E3] px-2.5 py-1 text-[11px] text-[#DB3C49]">{badge}</span>}
+    <div className="mb-4 flex items-center gap-2.5 text-[15px] font-bold text-[#171717]">
+      <span className="text-[#AA1A0D]">{englishText(icon)}</span>
+      <span>{englishText(children)}</span>
+      {englishText(badge && <span className="ml-auto rounded-full bg-[#FBECE9] px-2.5 py-1 text-[11px] font-semibold text-[#AA1A0D]">{englishText(badge)}</span>)}
     </div>
   );
 }
@@ -138,24 +134,24 @@ function CollapsibleOptionPanel({
   children: ReactNode;
 }) {
   return (
-    <section className="rounded-[18px] bg-white p-2 shadow-[0_2px_10px_rgba(180,140,130,0.10)]">
+    <section className="border-b border-[#E8E6E7] bg-[#FCFCFC] py-1">
       <button
         type="button"
         onClick={onToggle}
         aria-expanded={open}
         aria-controls={controlsId}
-        className="flex min-h-12 w-full items-center gap-2 rounded-[14px] bg-[#FFF8F6] px-3 text-left"
+        className="flex min-h-[68px] w-full items-center gap-3 px-1 text-left active:bg-[#F8F7F8]"
       >
-        <span className="flex size-8 shrink-0 items-center justify-center rounded-full bg-[#FFE4E3] text-[#F4515E]">{icon}</span>
+        <span className="flex size-8 shrink-0 items-center justify-center text-[#AA1A0D]">{englishText(icon)}</span>
         <span className="min-w-0 flex-1">
-          <strong className="block text-[12px] font-extrabold text-[#3E373B]">{title}</strong>
-          <span className="mt-0.5 block truncate text-[10px] font-semibold text-[#8A8084]">{summary}</span>
+          <strong className="block text-[14px] font-semibold text-[#171717]">{englishText(title)}</strong>
+          <span className="mt-1 block truncate text-[12px] text-[#858185]">{englishText(summary)}</span>
         </span>
-        <ChevronDown size={16} className={`shrink-0 text-[#8A8084] transition-transform ${open ? 'rotate-180' : ''}`} />
+        <ChevronDown size={17} className={`shrink-0 text-[#858185] transition-transform ${open ? 'rotate-180' : ''}`} />
       </button>
       {open && (
-        <div id={controlsId} className="mt-2">
-          {children}
+        <div id={controlsId} className="border-t border-[#EEECEE] pb-4 pt-3">
+          {englishText(children)}
         </div>
       )}
     </section>
@@ -217,14 +213,14 @@ function DeadlineDial({ minutes, onChange }: { minutes: number; onChange: (minut
 
   return (
     <div
-      className="relative size-44 shrink-0 cursor-grab touch-none select-none rounded-full outline-none active:cursor-grabbing focus-visible:ring-4 focus-visible:ring-[#F4515E]/25"
+      className="relative size-44 shrink-0 cursor-grab touch-none select-none rounded-full outline-none active:cursor-grabbing focus-visible:ring-4 focus-visible:ring-[#AA1A0D]/20"
       role="slider"
       tabIndex={0}
-      aria-label="마감 시간"
+      aria-label="Time Limit"
       aria-valuemin={1}
       aria-valuemax={15}
       aria-valuenow={minutes}
-      aria-valuetext={`${minutes}분`}
+      aria-valuetext={`${minutes} min`}
       onPointerDown={event => {
         if (event.pointerType === 'mouse' && event.button !== 0) return;
         event.preventDefault();
@@ -277,7 +273,7 @@ function DeadlineDial({ minutes, onChange }: { minutes: number; onChange: (minut
           cy={center}
           r={radius}
           fill="none"
-          stroke="#F4515E"
+          stroke="#AA1A0D"
           strokeWidth="12"
           strokeLinecap="round"
           strokeDasharray={circumference}
@@ -291,11 +287,11 @@ function DeadlineDial({ minutes, onChange }: { minutes: number; onChange: (minut
             transition: dragging ? 'transform 55ms cubic-bezier(0.2, 0.85, 0.25, 1)' : 'transform 160ms ease-out',
           }}
         >
-          <circle cx={0} cy={0} r="9" fill="white" stroke="#F4515E" strokeWidth="5" />
+          <circle cx={0} cy={0} r="9" fill="white" stroke="#AA1A0D" strokeWidth="5" />
         </g>
       </svg>
       <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center">
-        <strong className="text-[30px] leading-none text-[#26232A] tabular-nums">{minutes} <span className="text-[17px]">분</span></strong>
+        <strong className="text-[30px] leading-none text-[#26232A] tabular-nums">{minutes} <span className="text-[17px]"> min</span></strong>
       </div>
     </div>
   );
@@ -443,18 +439,18 @@ function GroupSizeRuler({ value, onChange }: { value: number; onChange: (value: 
 
   return (
     <div className="w-full">
-      <div className="relative h-36 w-full overflow-hidden rounded-[20px] bg-[#FFF8F6]">
-        <div className="pointer-events-none absolute inset-x-3 top-1/2 z-10 h-12 -translate-y-1/2 rounded-[14px] border-y border-[#F7B9B4] bg-white/75 shadow-[0_4px_14px_rgba(244,81,94,0.08)]" aria-hidden="true" />
+      <div className="relative h-36 w-full overflow-hidden rounded-[10px] bg-[#F5F4F5]">
+        <div className="pointer-events-none absolute inset-x-3 top-1/2 z-10 h-12 -translate-y-1/2 rounded-[8px] border-y border-[#ECC1BB] bg-white/80" aria-hidden="true" />
         <div
           ref={scrollerRef}
           className="scrollbar-hide relative z-20 h-full cursor-grab touch-none snap-y snap-mandatory overflow-y-auto overscroll-y-contain outline-none focus:outline-none focus-visible:outline-none"
           role="slider"
           tabIndex={0}
-          aria-label="인원 수"
+          aria-label="Group Size"
           aria-valuemin={1}
           aria-valuemax={QUICK_MATCH_PARTY_SIZE_MAX}
           aria-valuenow={value}
-          aria-valuetext={value === 1 ? '혼자' : `${value}명`}
+          aria-valuetext={value === 1 ? "Solo" : `${value} people`}
           onScroll={event => {
             if (dragRef.current || inertiaFrameRef.current != null) return;
             const nextValue = valueFromScrollTop(event.currentTarget.scrollTop);
@@ -533,75 +529,33 @@ function GroupSizeRuler({ value, onChange }: { value: number; onChange: (value: 
                 scrollerRef.current && (scrollerRef.current.style.scrollSnapType = 'y mandatory');
               }}
               className={`flex h-12 w-full shrink-0 snap-center items-center justify-center text-[18px] font-black transition-[color,transform,opacity] ${
-                option === value ? 'scale-110 text-[#F4515E]' : 'scale-95 text-[#9F9699] opacity-55'
+                option === value ? 'scale-110 text-[#AA1A0D]' : 'scale-95 text-[#8F8A8E] opacity-55'
               }`}
-              aria-label={option === 1 ? '혼자' : `${option}명`}
+              aria-label={englishText(option === 1 ? "Solo" : `${option} people`)}
             >
-              {option === 1 ? '혼자' : `${option}명`}
+              {englishText(option === 1 ? "Solo" : `${option} people`)}
             </div>
           ))}
           <div className="h-12 shrink-0" aria-hidden="true" />
         </div>
-        <div className="pointer-events-none absolute inset-x-0 top-0 z-30 h-12 bg-gradient-to-b from-[#FFF8F6] via-[#FFF8F6]/90 to-transparent" />
-        <div className="pointer-events-none absolute inset-x-0 bottom-0 z-30 h-12 bg-gradient-to-t from-[#FFF8F6] via-[#FFF8F6]/90 to-transparent" />
+        <div className="pointer-events-none absolute inset-x-0 top-0 z-30 h-12 bg-gradient-to-b from-[#F5F4F5] via-[#F5F4F5]/90 to-transparent" />
+        <div className="pointer-events-none absolute inset-x-0 bottom-0 z-30 h-12 bg-gradient-to-t from-[#F5F4F5] via-[#F5F4F5]/90 to-transparent" />
       </div>
-      <div className="mt-2 grid grid-cols-6 gap-1.5" aria-label="빠른 인원 선택">
+      <div className="mt-2 grid grid-cols-6 gap-1.5" aria-label="Quick Group Size">
         {GROUP_SIZE_QUICK_OPTIONS.map(option => (
           <button
             key={option}
             type="button"
             onClick={() => selectValue(option)}
-            aria-label={option === 1 ? '혼자 빠른 선택' : `${option}명 빠른 선택`}
+            aria-label={englishText(option === 1 ? "Choose Solo" : `${option} people`)}
             aria-pressed={option === value}
             className={`min-h-9 rounded-xl text-[11px] font-black transition-colors ${
-              option === value ? 'bg-[#F4515E] text-white' : 'bg-[#FFF0EE] text-[#B5444D]'
+              option === value ? 'bg-[#AA1A0D] text-white' : 'bg-[#FBECE9] text-[#AA1A0D]'
             }`}
           >
-            {option === 1 ? '혼자' : option}
+            {englishText(option === 1 ? "Solo" : option)}
           </button>
         ))}
-      </div>
-    </div>
-  );
-}
-
-function IngredientAvoidancePicker({
-  selected,
-  onToggle,
-  onClear,
-}: {
-  selected: string[];
-  onToggle: (value: string) => void;
-  onClear: () => void;
-}) {
-  return (
-    <div>
-      <div className="mb-2 flex items-center justify-end">
-        <button
-          type="button"
-          onClick={onClear}
-          className="min-h-9 rounded-lg px-2 text-[10px] font-bold text-[#C43B47] outline-none focus-visible:ring-2 focus-visible:ring-[#F4515E]"
-        >
-          선택 초기화
-        </button>
-      </div>
-      <div className="grid grid-cols-2 gap-1.5">
-        {INGREDIENT_AVOIDANCES.map(option => {
-          const isSelected = selected.includes(option.value);
-          return (
-            <button
-              key={option.label}
-              type="button"
-              onClick={() => onToggle(option.value)}
-              aria-pressed={isSelected}
-              className={`flex min-h-10 w-full items-center rounded-[10px] px-2.5 text-left ${isSelected ? 'bg-[#EDF8EE]' : 'bg-[#F8F5F3] hover:bg-[#F1ECE9]'}`}
-            >
-              <span className="mr-2 text-base">{option.icon}</span>
-              <span className="truncate text-[11px] font-bold text-[#514A4D]">{option.label}</span>
-              <span className={`ml-auto flex size-4 shrink-0 items-center justify-center rounded border ${isSelected ? 'border-[#55A964] bg-[#55A964] text-white' : 'border-[#D8CFCC] bg-white text-transparent'}`}><Check size={10} strokeWidth={3} /></span>
-            </button>
-          );
-        })}
       </div>
     </div>
   );
@@ -617,104 +571,59 @@ function PreferenceCard({ option, selected, onClick }: {
       type="button"
       onClick={onClick}
       whileTap={{ scale: 0.96 }}
-      className={`relative min-w-0 overflow-hidden rounded-[18px] border-2 px-2 pb-3 pt-2 transition-all ${
+      className={`relative min-w-0 overflow-hidden rounded-[10px] border px-2 pb-3 pt-2 transition-colors ${
         selected
-          ? 'border-[#F4515E] bg-white shadow-[0_8px_20px_rgba(244,81,94,0.18)]'
-          : 'border-transparent bg-[#FAF7F5]'
+          ? 'border-[#AA1A0D] bg-white'
+          : 'border-[#E8E6E7] bg-white'
       }`}
       aria-pressed={selected}
     >
       {selected && (
-        <span className="absolute right-2 top-2 z-10 flex size-5 items-center justify-center rounded-full bg-[#F4515E] text-white">
+        <span className="absolute right-2 top-2 z-10 flex size-5 items-center justify-center rounded-full bg-[#AA1A0D] text-white">
           <Check size={13} strokeWidth={3} />
         </span>
       )}
-      <span className="relative mx-auto flex aspect-square w-full max-w-[76px] items-center justify-center rounded-[16px]" style={{ background: option.color }}>
+      <span className="relative mx-auto flex aspect-square w-full max-w-[72px] items-center justify-center bg-transparent">
         {option.image ? (
           <img src={option.image} alt="" className="h-[72px] w-[72px] object-contain" draggable={false} />
         ) : (
-          <span className="flex size-14 items-center justify-center rounded-full border-2 border-dashed border-[#F2B944] bg-white/80 text-[#E7A71E]">
+          <span className="flex size-14 items-center justify-center rounded-full border border-dashed border-[#F0B8AE] bg-white text-[#AA1A0D] shadow-[0_8px_18px_rgba(170,26,13,0.08)]">
             <CircleHelp size={34} strokeWidth={2.4} />
           </span>
         )}
       </span>
-      <span className="relative z-10 mt-1.5 block text-[10px] font-black tracking-[0.8px] text-[#F4515E]">{option.label}</span>
-      {selected && <span className="absolute bottom-1.5 left-[18%] z-0 h-2 w-[64%] rounded-sm bg-[#FFD5D1] opacity-80" />}
+      <span className={`relative z-10 mt-2 block text-[11px] font-semibold ${selected ? 'text-[#AA1A0D]' : 'text-[#565256]'}`}>{englishText(option.label)}</span>
     </motion.button>
   );
 }
 
-function DistanceRuler({ radius, onChange, loadout }: { radius: number; onChange: (value: number) => void; loadout: LunchmateLoadout }) {
+function DistanceRuler({ radius, onChange }: { radius: number; onChange: (value: number) => void }) {
   const selectedIndex = RADIUS_OPTIONS.indexOf(radius);
   const progress = selectedIndex / (RADIUS_OPTIONS.length - 1) * 100;
-  const previousIndexRef = useRef(selectedIndex);
-  const settleTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const walkTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  const [walkDirection, setWalkDirection] = useState<'left' | 'right' | null>(null);
-  const [walkFrame, setWalkFrame] = useState<1 | 2>(1);
-
-  useEffect(() => {
-    const previousIndex = previousIndexRef.current;
-    previousIndexRef.current = selectedIndex;
-    if (previousIndex === selectedIndex) return;
-
-    setWalkDirection(selectedIndex > previousIndex ? 'right' : 'left');
-    setWalkFrame(frame => frame === 1 ? 2 : 1);
-    if (walkTimerRef.current) clearInterval(walkTimerRef.current);
-    walkTimerRef.current = setInterval(() => setWalkFrame(frame => frame === 1 ? 2 : 1), 140);
-    if (settleTimerRef.current) clearTimeout(settleTimerRef.current);
-    settleTimerRef.current = setTimeout(() => {
-      if (walkTimerRef.current) clearInterval(walkTimerRef.current);
-      walkTimerRef.current = null;
-      setWalkDirection(null);
-      setWalkFrame(1);
-    }, 520);
-  }, [selectedIndex]);
-
-  useEffect(() => () => {
-    if (settleTimerRef.current) clearTimeout(settleTimerRef.current);
-    if (walkTimerRef.current) clearInterval(walkTimerRef.current);
-  }, []);
-
-  const chickenAsset = walkDirection
-    ? `side-walk-${walkDirection}-${walkFrame}` as const
-    : 'idle' as const;
 
   return (
     <div>
-      <div className="mb-2 flex items-center gap-2 text-[13px] font-extrabold text-[#26232A]">
-        <Ruler size={17} className="text-[#F4515E]" />
-        거리
-        <strong className="ml-auto text-[15px] text-[#F4515E]">{formatRadius(radius)}</strong>
+      <div className="mb-2 mr-1 flex items-center gap-2 text-[13px] font-extrabold text-[#26232A]">
+        <Ruler size={17} className="text-[#AA1A0D]" />
+
+        Distance
+        <strong className="ml-auto text-[15px] text-[#AA1A0D]">{englishText(formatRadius(radius))}</strong>
       </div>
-      <div className="relative mx-1 h-[100px] rounded-[18px] bg-[#FFF8F6] px-6 pt-4">
+      <div className="relative mx-1 h-[100px] rounded-[10px] bg-[#F5F4F5] px-6 pt-4">
         <div className="absolute left-5 right-5 top-[54px] h-1 rounded-full bg-[#E9DEDA]" />
-        <div className="absolute left-5 top-[54px] h-1 rounded-full bg-[#F4515E] transition-[width]" style={{ width: `calc((100% - 40px) * ${progress / 100})` }} />
+        <div className="absolute left-5 top-[54px] h-1 rounded-full bg-[#AA1A0D] transition-[width]" style={{ width: `calc((100% - 40px) * ${progress / 100})` }} />
         <div className="absolute left-5 right-5 top-[47px] flex justify-between" aria-hidden="true">
           {Array.from({ length: 17 }, (_, index) => (
             <span key={index} className={`w-[2px] rounded-full bg-[#CBBDB8] ${index % 4 === 0 ? 'h-4' : 'h-2.5 opacity-75'}`} />
           ))}
         </div>
         <motion.span
-          className="pointer-events-none absolute top-[2px] z-10 flex -translate-x-1/2 flex-col items-center"
+          className="pointer-events-none absolute top-[22px] z-10 flex size-8 -translate-x-1/2 items-center justify-center text-[#AA1A0D]"
           animate={{ left: `calc(20px + (100% - 40px) * ${progress / 100})` }}
           transition={{ type: 'spring', stiffness: 340, damping: 28 }}
           aria-hidden="true"
         >
-          <span className="flex size-12 items-center justify-center overflow-hidden rounded-full border-2 border-[#F4515E] bg-white shadow-[0_4px_12px_rgba(244,81,94,0.22)]">
-            <LunchmateCharacterRenderer
-              flowState="idle"
-              loadout={loadout}
-              size={42}
-              renderSize="compact"
-              artwork="chicken"
-              chickenAssetKeyOverride={chickenAsset}
-              chickenFaceSystem={!walkDirection}
-              animated={false}
-              alt={`검색 거리 ${formatRadius(radius)}를 가리키는 런치킨`}
-            />
-          </span>
-          <span className="h-3 w-0.5 bg-[#F4515E]" />
+          <Triangle size={24} fill="currentColor" strokeWidth={0} className="rotate-180" />
         </motion.span>
         <input
           type="range"
@@ -724,7 +633,7 @@ function DistanceRuler({ radius, onChange, loadout }: { radius: number; onChange
           value={selectedIndex}
           onChange={event => onChange(RADIUS_OPTIONS[Number(event.target.value)]!)}
           className="lunchie-distance-range absolute inset-x-5 top-[27px] z-20 h-14 opacity-[0.01]"
-          aria-label="검색 거리"
+          aria-label="Search Radius"
           aria-valuetext={formatRadius(radius)}
         />
         <div className="absolute inset-x-5 bottom-5 text-[9px] font-bold text-[#A69B96]">
@@ -737,7 +646,7 @@ function DistanceRuler({ radius, onChange, loadout }: { radius: number; onChange
                 transform: index === 0 ? 'translateX(0)' : index === RADIUS_OPTIONS.length - 1 ? 'translateX(-100%)' : 'translateX(-50%)',
               }}
             >
-              {formatRadius(option)}
+              {englishText(formatRadius(option))}
             </span>
           ))}
         </div>
@@ -776,10 +685,7 @@ export default function LunchieSettingsPage() {
   const [distanceEnabled, setDistanceEnabled] = useState(storedSettings.distanceEnabled);
   const [intent, setIntent] = useState<Intent | null>(initialIntent ?? storedSettings.intent);
   const [tags, setTags] = useState<string[]>(storedSettings.tags);
-  const [dietary, setDietary] = useState<string[]>(storedSettings.dietary);
   const [moodOptionsOpen, setMoodOptionsOpen] = useState(false);
-  const [dietaryOptionsOpen, setDietaryOptionsOpen] = useState(false);
-  const [avoidanceOptionsOpen, setAvoidanceOptionsOpen] = useState(false);
   const [isCreating, setIsCreating] = useState(false);
   const [origin, setOrigin] = useState<LocationFix | null>(null);
   const [originLabel, setOriginLabel] = useState<string | null>(null);
@@ -792,20 +698,14 @@ export default function LunchieSettingsPage() {
   const [replacementOpen, setReplacementOpen] = useState(false);
   const [replacementBusy, setReplacementBusy] = useState(false);
   const [replacementError, setReplacementError] = useState<string | null>(null);
-  const lunchmateLoadout = useMemo(
-    () => lunchmateLoadoutFromProfile(profile.lunchmateLoadout),
-    [profile.lunchmateLoadout],
+  const dietary = useMemo(
+    () => normalizeDietaryPreferences(profile.dietary),
+    [profile.dietary],
   );
 
   const isSolo = partySize === 1;
   const budget = 2 as const;
-  const selectedPreferenceLabel = PREFERENCE_CARDS.find(option => option.value === intent)?.label ?? '랜덤';
-  const dietaryRequirementCount = dietary.filter(value => (
-    DIETARY_REQUIREMENTS.some(option => option.value === value)
-  )).length;
-  const ingredientAvoidanceCount = dietary.filter(value => (
-    INGREDIENT_AVOIDANCES.some(option => option.value === value)
-  )).length;
+  const selectedPreferenceLabel = PREFERENCE_CARDS.find(option => option.value === intent)?.label ?? "Surprise Me";
   const hasActiveSession = Boolean(
     activeSessionVerified
     && currentSession
@@ -886,10 +786,10 @@ export default function LunchieSettingsPage() {
       const label = localityForCoordinate(fix.latitude, fix.longitude);
       setOrigin(fix);
       setOriginLabel(label);
-      toast.success(`현재 위치를 ${label}(으)로 확인했어요.`);
+      toast.success(`Your location is  ${label}.`);
       return fix;
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : '현재 위치를 확인하지 못했습니다.');
+      toast.error(error instanceof Error ? error.message : "Couldn't find your location.");
       throw error;
     } finally {
       setIsLocating(false);
@@ -904,12 +804,12 @@ export default function LunchieSettingsPage() {
 
   const createAndEnterSession = async () => {
     const categories = tags.filter(tag => realCategories.has(tag));
-    const hostName = profile.name && profile.name !== '사용자' ? profile.name : '호스트';
+    const hostName = profile.name && !["User", 'User'].includes(profile.name) ? profile.name : "Host";
     const currentOrigin = distanceEnabled
       ? origin ?? await currentPosition()
       : null;
     const session = await createSession(
-      `${hostName}의 점심 세션`,
+      `${hostName}'s Lunch Session`,
       {
         partySize,
         dietary,
@@ -938,10 +838,10 @@ export default function LunchieSettingsPage() {
 
     if (isSolo) {
       await startSession(session.inviteCode, deadlineMin);
-      toast.success('빠른 매칭을 시작합니다.');
+      toast.success("Starting Quick Match.");
       navigate('/lunchie/swipe');
     } else {
-      toast.success('세션이 만들어졌어요. 친구를 초대해 보세요.');
+      toast.success("Session created. Invite your friends!");
       navigate('/session/lobby');
     }
   };
@@ -962,7 +862,7 @@ export default function LunchieSettingsPage() {
           const activeSession = await fetchSession(currentSession.inviteCode);
           if (activeSession.membershipActive !== false && isActiveQuickMatchStatus(activeSession.status)) {
             const isWaiting = activeSession.status === 'waiting';
-            toast.info(isWaiting ? '진행 중인 대기방으로 이동합니다.' : '진행 중인 투표로 이동합니다.');
+            toast.info(isWaiting ? "Returning to your active lobby." : "Returning to your active vote.");
             navigate(isWaiting ? '/session/lobby' : '/lunchie/swipe');
             return;
           }
@@ -972,7 +872,7 @@ export default function LunchieSettingsPage() {
         } catch (error) {
           const status = (error as { status?: number }).status;
           if (status !== 404 && status !== 410) {
-            toast.error('진행 중인 빠른 매칭을 확인하지 못했어요. 다시 시도해 주세요.');
+            toast.error("Couldn't check your active Quick Match. Please try again.");
             return;
           }
           setCurrentSession(null);
@@ -982,7 +882,7 @@ export default function LunchieSettingsPage() {
       await createAndEnterSession();
     } catch (error) {
       console.error('빠른 매칭 세션 생성 실패', error);
-      toast.error('세션을 만들지 못했어요. 잠시 후 다시 시도해 주세요.');
+      toast.error("Couldn't create a session. Please try again shortly.");
     } finally {
       setIsCreating(false);
       creationLockRef.current = false;
@@ -1004,10 +904,10 @@ export default function LunchieSettingsPage() {
       await createAndEnterSession();
       setReplacementOpen(false);
     } catch (error) {
-      const message = error instanceof Error ? error.message : '새 Quick Match를 시작하지 못했어요.';
+      const message = error instanceof Error ? error.message : "Couldn't start a new Quick Match.";
       if (endedExistingSession) {
         setReplacementOpen(false);
-        toast.error(`기존 세션은 종료됐지만 새 세션을 만들지 못했어요. 다시 시도해 주세요. ${message}`);
+        toast.error(`Your previous session ended, but a new one couldn't be created. Please try again. ${message}`);
       } else {
         setReplacementError(message);
       }
@@ -1018,57 +918,57 @@ export default function LunchieSettingsPage() {
   };
 
   return (
-    <div className="min-h-dvh bg-[#FFF6F2] pb-6">
-      <header className="sticky top-0 z-20 bg-[#FFF6F2]/95 px-5 pb-2 pt-[max(12px,env(safe-area-inset-top))] backdrop-blur">
-        <div>
-          <h1 className="text-[19px] font-extrabold leading-none tracking-[-0.4px] text-[#F4515E]">Lunchie</h1>
-          <p className="mt-1 text-[10px] font-bold tracking-[0.7px] text-[#9B959A]">빠른 매칭</p>
+    <div className="min-h-dvh bg-[#FCFCFC] pb-6 text-[#171717]">
+      <header className="sticky top-0 z-20 border-b border-[#E8E6E7] bg-[#FCFCFC]/95 px-5 pb-4 pt-[max(16px,env(safe-area-inset-top))] backdrop-blur">
+        <div className="text-center">
+          <h1 className="text-[18px] font-bold leading-none text-[#171717]">Quick Match</h1>
+          <p className="mt-1.5 text-[11px] font-medium text-[#858185]">What are you craving today?</p>
         </div>
       </header>
 
-      <main className="mx-auto max-w-[480px] space-y-2.5 px-4 pb-28">
+      <main className="mx-auto max-w-[480px] px-5 pb-24">
         {sessionCheckFailed && currentSession && (
-          <section role="alert" className="rounded-[20px] border border-[#F2C6C1] bg-white p-4 shadow-sm">
-            <h2 className="text-[14px] font-black text-[#302B2E]">진행 중인 빠른 매칭을 확인하지 못했어요</h2>
-            <p className="mt-1 text-[11px] leading-relaxed text-[#7C7276]">저장된 세션은 유지하고 있어요. 새 세션을 만들기 전에 다시 확인해 주세요.</p>
+          <section role="alert" className="my-4 rounded-[10px] border border-[#ECC1BB] bg-[#FDF6F4] p-4">
+            <h2 className="text-[14px] font-black text-[#302B2E]">Couldn't check your active Quick Match</h2>
+            <p className="mt-1 text-[11px] leading-relaxed text-[#7C7276]">Your saved session is still available. Check it again before creating a new session.</p>
             <div className="mt-3 flex flex-wrap gap-2">
-              <button type="button" onClick={() => setSessionCheckAttempt(attempt => attempt + 1)} className="min-h-10 rounded-xl bg-[#F4515E] px-4 text-[12px] font-bold text-white">다시 시도</button>
-              <button type="button" onClick={() => setCurrentSession(null)} className="min-h-10 rounded-xl bg-[#FFF0EE] px-4 text-[12px] font-bold text-[#C43B47]">저장된 세션 지우기</button>
+              <button type="button" onClick={() => setSessionCheckAttempt(attempt => attempt + 1)} className="min-h-10 rounded-lg bg-[#AA1A0D] px-4 text-[12px] font-bold text-white">Try Again</button>
+              <button type="button" onClick={() => setCurrentSession(null)} className="min-h-10 rounded-lg border border-[#ECC1BB] bg-white px-4 text-[12px] font-bold text-[#AA1A0D]">Clear Saved Session</button>
             </div>
           </section>
         )}
         {hasActiveSession && currentSession && (
-          <section className="rounded-[22px] border border-[#F5B8B4] bg-[#FFFCFA] p-4 shadow-[0_8px_24px_rgba(180,100,90,0.10)]" aria-label="진행 중인 빠른 매칭">
+          <section className="my-4 rounded-[10px] border border-[#ECC1BB] bg-[#FDF6F4] p-4" aria-label="Active Quick Match">
             <div className="flex items-start gap-3">
               <div className="min-w-0 flex-1">
                 <div className="flex flex-wrap items-center gap-2">
-                  <h2 className="text-[15px] font-black text-[#26232A]">진행 중인 빠른 매칭</h2>
-                  <span className="rounded-full bg-[#FFF0EE] px-2.5 py-1 text-[10px] font-black uppercase tracking-wide text-[#D83D49]">
-                    {currentSession.status === 'waiting' ? '대기 중' : currentSession.status === 'choosing' ? '최종 선택 중' : '투표 중'}
+                  <h2 className="text-[15px] font-black text-[#26232A]">Active Quick Match</h2>
+                  <span className="rounded-full bg-white px-2.5 py-1 text-[10px] font-bold uppercase text-[#AA1A0D]">
+                    {englishText(currentSession.status === 'waiting' ? "Waiting" : currentSession.status === 'choosing' ? "Final Choice" : "Voting")}
                   </span>
                 </div>
-                <p className="mt-1 text-[11px] font-semibold text-[#8A8084]">서버에서 확인된 세션으로 바로 이어서 할 수 있어요.</p>
+                <p className="mt-1 text-[11px] font-semibold text-[#8A8084]">Continue your active session.</p>
               </div>
               <SessionManagementMenu onEnded={() => navigate('/lunchie/settings')} className="text-[#6F6468]" />
             </div>
             <div className="mt-3 grid grid-cols-2 gap-2 text-[11px]">
-              <span className="rounded-xl bg-[#FFF6F2] px-3 py-2 font-bold text-[#645A5E]">👥 {currentSession.members.length}/{currentSession.filters.partySize}명</span>
-              <span className="rounded-xl bg-[#FFF6F2] px-3 py-2 font-bold text-[#645A5E]">⏱ {currentSession.deadlineMinutes ?? deadlineMin}분</span>
-              <span className="rounded-xl bg-[#FFF6F2] px-3 py-2 font-bold text-[#645A5E]">📍 {formatRadius(currentSession.filters.radius)}</span>
-              <span className="rounded-xl bg-[#FFF6F2] px-3 py-2 font-bold text-[#645A5E]">{currentSession.filters.partySize === 1 ? '🙋 혼자' : '🤝 함께'}</span>
+              <span className="rounded-lg bg-white px-3 py-2 font-semibold text-[#565256]">👥 {currentSession.members.length}/{currentSession.filters.partySize} people</span>
+              <span className="rounded-lg bg-white px-3 py-2 font-semibold text-[#565256]">⏱ {currentSession.deadlineMinutes ?? deadlineMin} min</span>
+              <span className="rounded-lg bg-white px-3 py-2 font-semibold text-[#565256]">📍 {englishText(formatRadius(currentSession.filters.radius))}</span>
+              <span className="rounded-lg bg-white px-3 py-2 font-semibold text-[#565256]">{englishText(currentSession.filters.partySize === 1 ? "🙋 Solo" : "🤝 Together")}</span>
             </div>
             <button
               type="button"
               onClick={() => navigate(currentSession.status === 'waiting' ? '/session/lobby' : '/lunchie/swipe')}
-              className="mt-3 min-h-11 w-full rounded-[14px] bg-[#F4515E] px-4 text-[13px] font-black text-white outline-none transition-transform active:scale-[0.98] focus-visible:ring-2 focus-visible:ring-[#F4515E] focus-visible:ring-offset-2"
+              className="mt-3 min-h-11 w-full rounded-lg bg-[#AA1A0D] px-4 text-[13px] font-bold text-white outline-none transition-transform active:scale-[0.98] focus-visible:ring-2 focus-visible:ring-[#AA1A0D] focus-visible:ring-offset-2"
             >
-              {currentSession.status === 'waiting' ? '대기방으로 돌아가기' : '빠른 매칭 계속하기'}
+              {englishText(currentSession.status === 'waiting' ? "Back to Lobby" : "Continue Quick Match")}
             </button>
           </section>
         )}
 
         <Card>
-          <CardTitle icon={<UtensilsCrossed size={16} />} badge={selectedPreferenceLabel}>오늘의 빠른 매칭</CardTitle>
+          <CardTitle icon={<UtensilsCrossed size={16} />} badge={selectedPreferenceLabel}>Today's Quick Match</CardTitle>
           <div className="grid grid-cols-4 gap-2">
             {PREFERENCE_CARDS.map(option => (
               <PreferenceCard key={option.label} option={option} selected={intent === option.value} onClick={() => setIntent(option.value)} />
@@ -1077,9 +977,9 @@ export default function LunchieSettingsPage() {
         </Card>
 
         <CollapsibleOptionPanel
-          title="어떤 분위기인가요?"
+          title="What's the occasion?"
           icon={<Sparkles size={15} />}
-          summary={tags.length ? tags.join(', ') : '선택하지 않음'}
+          summary={tags.length ? tags.map(englishText).join(', ') : "No Preference"}
           open={moodOptionsOpen}
           onToggle={() => setMoodOptionsOpen(current => !current)}
           controlsId="quick-match-mood-options"
@@ -1095,70 +995,18 @@ export default function LunchieSettingsPage() {
                   onClick={() => toggleMany(tag, setTags)}
                   whileTap={{ scale: 0.97 }}
                   aria-pressed={selected}
-                  className={`flex min-h-[54px] items-center gap-2 rounded-[15px] border px-3 text-left transition-all ${selected ? 'border-[#F4515E] bg-[#FFF0EE]' : 'border-[#EEE7E4] bg-white'}`}
+                  className={`flex min-h-[54px] items-center gap-2 rounded-[8px] border px-3 text-left transition-colors ${selected ? 'border-[#AA1A0D] bg-[#FBECE9]' : 'border-[#E8E6E7] bg-white'}`}
                 >
-                  <span className="text-xl">{meta?.icon}</span>
+                  <span className="text-xl">{englishText(meta?.icon)}</span>
                   <span className="min-w-0">
-                    <strong className="block text-[12px] text-[#3E373B]">{tag}</strong>
-                    <span className="block truncate text-[9px] font-semibold text-[#A39A9E]">{meta?.hint}</span>
+                    <strong className="block text-[12px] text-[#3E373B]">{englishText(tag)}</strong>
+                    <span className="block truncate text-[9px] font-semibold text-[#A39A9E]">{englishText(meta?.hint)}</span>
                   </span>
-                  <span className={`ml-auto flex size-4 shrink-0 items-center justify-center rounded-full border ${selected ? 'border-[#F4515E] bg-[#F4515E] text-white' : 'border-[#D9D0CD] text-transparent'}`}><Check size={10} strokeWidth={3} /></span>
+                  <span className={`ml-auto flex size-4 shrink-0 items-center justify-center rounded-sm border ${selected ? 'border-[#AA1A0D] bg-[#AA1A0D] text-white' : 'border-[#C9C6C8] text-transparent'}`}><Check size={10} strokeWidth={3} /></span>
                 </motion.button>
               );
             })}
           </div>
-        </CollapsibleOptionPanel>
-
-        <CollapsibleOptionPanel
-          title="식단 요구 사항"
-          icon={<UtensilsCrossed size={15} />}
-          summary={dietaryRequirementCount ? `${dietaryRequirementCount}개 선택됨` : '선택하지 않음'}
-          open={dietaryOptionsOpen}
-          onToggle={() => setDietaryOptionsOpen(current => !current)}
-          controlsId="quick-match-dietary-options"
-        >
-          <div className="mb-2 flex items-center justify-end">
-            <button
-              type="button"
-              onClick={() => setDietary(current => current.filter(value => !DIETARY_REQUIREMENTS.some(option => option.value === value)))}
-              className="min-h-9 rounded-lg px-2 text-[10px] font-bold text-[#C43B47] outline-none focus-visible:ring-2 focus-visible:ring-[#F4515E]"
-            >
-              선택 초기화
-            </button>
-          </div>
-          <div className="grid grid-cols-2 gap-1.5">
-            {DIETARY_REQUIREMENTS.map(option => {
-              const selected = dietary.includes(option.value);
-              return (
-                <button
-                  key={option.label}
-                  type="button"
-                  onClick={() => toggleMany(option.value, setDietary)}
-                  aria-pressed={selected}
-                  className={`flex min-h-11 w-full items-center rounded-[12px] px-2.5 text-left transition-colors ${selected ? 'bg-[#EDF8EE]' : 'bg-[#F8F5F3] hover:bg-[#F1ECE9]'}`}
-                >
-                  <span className="mr-2 text-base">{option.icon}</span>
-                  <span className="truncate text-[11px] font-bold text-[#514A4D]">{option.label}</span>
-                  <span className={`ml-auto flex size-4 shrink-0 items-center justify-center rounded border ${selected ? 'border-[#55A964] bg-[#55A964] text-white' : 'border-[#D8CFCC] bg-white text-transparent'}`}><Check size={10} strokeWidth={3} /></span>
-                </button>
-              );
-            })}
-          </div>
-        </CollapsibleOptionPanel>
-
-        <CollapsibleOptionPanel
-          title="피하고 싶은 재료"
-          icon={<span className="text-base">🚫</span>}
-          summary={ingredientAvoidanceCount ? `${ingredientAvoidanceCount}개 선택됨` : '선택하지 않음'}
-          open={avoidanceOptionsOpen}
-          onToggle={() => setAvoidanceOptionsOpen(current => !current)}
-          controlsId="quick-match-ingredient-avoidance-options"
-        >
-          <IngredientAvoidancePicker
-            selected={dietary}
-            onToggle={value => toggleMany(value, setDietary)}
-            onClear={() => setDietary(current => current.filter(value => !INGREDIENT_AVOIDANCES.some(option => option.value === value)))}
-          />
         </CollapsibleOptionPanel>
 
         <Card>
@@ -1167,71 +1015,48 @@ export default function LunchieSettingsPage() {
               type="button"
               onClick={() => setDistanceEnabled(false)}
               aria-pressed={!distanceEnabled}
-              className={`min-h-9 rounded-full px-3 text-[10px] font-bold ${!distanceEnabled ? 'bg-[#F4515E] text-white' : 'bg-[#FFF0EE] text-[#C43B47]'}`}
+              className={`min-h-9 rounded-full px-3 text-[10px] font-bold ${!distanceEnabled ? 'bg-[#AA1A0D] text-white' : 'bg-[#FBECE9] text-[#AA1A0D]'}`}
             >
-              반경 제한 없음
+
+              No Radius Limit
             </button>
             <button
               type="button"
               onClick={() => void confirmCurrentLocation().catch(() => undefined)}
               disabled={isLocating}
-              className="flex min-h-9 items-center gap-1 rounded-full px-2 text-[10px] font-bold text-[#F4515E] disabled:opacity-50"
+              className="flex min-h-9 items-center gap-1 rounded-full px-2 text-[10px] font-bold text-[#AA1A0D] disabled:opacity-50"
             >
-              <Navigation size={12} /> {isLocating ? '확인 중…' : origin ? '위치 다시 확인' : '현재 위치 확인'}
+              <Navigation size={12} /> {englishText(isLocating ? "Checking…" : origin ? "Refresh Location" : "Find My Location")}
             </button>
           </div>
-          <DistanceRuler radius={radius} onChange={selectRadius} loadout={lunchmateLoadout} />
-          <div className="mt-3 rounded-[13px] bg-[#FFF8F6] px-3 py-2 text-[10px] font-semibold leading-relaxed text-[#857B80]">
-            {origin
-              ? `현재 위치 · ${originLabel ?? '현재 위치 주변'}${distanceEnabled ? ` · ${formatRadius(radius)} 이내` : ' · 반경 제한 없음'}`
+          <DistanceRuler radius={radius} onChange={selectRadius} />
+          <div className="mt-3 rounded-[8px] bg-[#F5F4F5] px-3 py-2 text-[10px] font-semibold leading-relaxed text-[#706B6F]">
+            {englishText(origin
+              ? `Current location ·  ${originLabel ?? "Near your location"}${distanceEnabled ? ` · ${formatRadius(radius)}  radius` : " · No radius limit"}`
               : distanceEnabled
-                ? '선택한 반경을 적용하려면 현재 위치 권한이 필요해요.'
-                : '위치 권한 없이 전체 후보에서 추천받을 수 있어요.'}
+                ? "Enable location to use your selected radius."
+                : "Get recommendations without location permission.")}
           </div>
         </Card>
 
         <Card>
           <div className="mb-3 flex items-center gap-2 text-[14px] font-extrabold text-[#26232A]">
-            <Users size={17} className="text-[#F4515E]" />
-            <span>인원</span>
-            <span className="ml-auto rounded-full bg-[#FFE4E3] px-2.5 py-1 text-[11px] text-[#D83C49]">{partySize === 1 ? '혼자' : `${partySize}명`}</span>
+            <Users size={17} className="text-[#AA1A0D]" />
+            <span>People</span>
+            <span className="ml-auto rounded-full bg-[#FBECE9] px-2.5 py-1 text-[11px] text-[#AA1A0D]">{englishText(partySize === 1 ? "Solo" : `${partySize} people`)}</span>
           </div>
           <GroupSizeRuler value={partySize} onChange={setGroupSize} />
-          <p className="mt-2 text-center text-[10px] font-semibold text-[#948A8E]">최대 {QUICK_MATCH_PARTY_SIZE_MAX}명까지 함께 선택할 수 있어요.</p>
+          <p className="mt-2 text-center text-[10px] font-semibold text-[#948A8E]">Up to  {QUICK_MATCH_PARTY_SIZE_MAX} people can choose together.</p>
         </Card>
 
         <Card>
-          <CardTitle icon={<Clock3 size={16} />}>마감</CardTitle>
+          <CardTitle icon={<Clock3 size={16} />}>Deadline</CardTitle>
           <div className="flex flex-col items-center">
             <DeadlineDial minutes={deadlineMin} onChange={setDeadlineMin} />
           </div>
         </Card>
 
-        {isSolo && (
-          <motion.section
-            initial={{ opacity: 0, y: 8 }}
-            animate={{ opacity: 1, y: 0 }}
-            className="overflow-hidden rounded-[22px] bg-[linear-gradient(135deg,#5B45D6,#8A62E8)] p-4 text-white shadow-[0_14px_34px_rgba(91,69,214,0.2)]"
-            aria-labelledby="solo-game-title"
-          >
-            <div className="flex items-center gap-2">
-              <span className="flex size-9 items-center justify-center rounded-xl bg-white/15"><Gamepad2 size={19} /></span>
-              <div>
-                <p className="text-[9px] font-black tracking-[0.8px] text-[#FFE38A]">SOLO LUNCH GAME</p>
-                <h2 id="solo-game-title" className="text-[15px] font-black">내 취향으로 끝까지 승부!</h2>
-              </div>
-            </div>
-            <div className="mt-3 grid grid-cols-4 gap-1.5 text-center">
-              {['음식 종류', '추천 투표', 'TOP 2', '만족도'].map((label, index) => (
-                <div key={label} className="rounded-xl bg-white/12 px-1.5 py-2 text-[9px] font-black">
-                  <span className="mb-1 block text-[#FFE38A]">0{index + 1}</span>{label}
-                </div>
-              ))}
-            </div>
-          </motion.section>
-        )}
-
-        <div className="pb-1 pt-0.5">
+        <div className="pb-1 pt-5">
           <motion.button
             type="button"
             onClick={() => void handleStart()}
@@ -1239,15 +1064,15 @@ export default function LunchieSettingsPage() {
             whileTap={{ scale: 0.98 }}
             className="lunchie-session-primary-action w-full disabled:cursor-not-allowed disabled:opacity-60"
           >
-            {isCheckingSession
-              ? '진행 중인 세션 확인 중…'
+            {englishText(isCheckingSession
+              ? "Checking active session…"
               : isCreating
-              ? '준비하는 중…'
+              ? "Preparing…"
               : hasPartySizeConflict
-                ? `기존 세션 종료 후 ${isSolo ? '혼자로' : `${partySize}명으로`} 시작하기`
+                ? `After ending your current session,  ${isSolo ? "solo" : `${partySize} people`} Start`
               : hasActiveSession && currentSession
-                ? currentSession.status === 'waiting' ? '대기방으로 돌아가기' : '투표 계속하기'
-                : isSolo ? '솔로 게임 시작! 🎮' : '세션 만들고 초대하기'}
+                ? currentSession.status === 'waiting' ? "Back to Lobby" : "Continue Voting"
+                : isSolo ? "Start Quick Match!" : "Create Session & Invite")}
           </motion.button>
         </div>
 
@@ -1257,26 +1082,28 @@ export default function LunchieSettingsPage() {
         <AlertDialogContent className="max-w-[390px] rounded-[22px] border-[#F0D9D3] bg-[#FFFBF8] p-5">
           <AlertDialogHeader className="text-left">
             <AlertDialogTitle className="text-[19px] font-black text-[#26232A]">
-              새 인원 설정으로 시작할까요?
+
+              Start with a new group size?
             </AlertDialogTitle>
             <AlertDialogDescription className="text-[13px] leading-relaxed text-[#746A6E]">
-              현재 {currentSession?.filters.partySize ?? 1}명 세션이 진행 중이에요. {isSolo ? '혼자' : `${partySize}명`} 설정을 적용하려면
-              {currentSession?.hostId === profile.id ? ' 기존 세션을 종료하고' : ' 기존 세션에서 나간 뒤'} 새 Quick Match를 만들어야 해요.
+
+              Current:  {currentSession?.filters.partySize ?? 1} people in an active session. {englishText(isSolo ? "Solo" : `${partySize} people`)}  To apply these settings,
+              {englishText(currentSession?.hostId === profile.id ? " end your current session and " : " leave your current session and ")}  create a new Quick Match.
             </AlertDialogDescription>
           </AlertDialogHeader>
-          {replacementError && (
+          {englishText(replacementError && (
             <p role="alert" className="rounded-xl bg-[#FFF0EE] px-3 py-2 text-[12px] font-semibold text-[#C93742]">
-              {replacementError}
+              {englishText(replacementError)}
             </p>
-          )}
+          ))}
           <AlertDialogFooter>
-            <AlertDialogCancel disabled={replacementBusy} className="min-h-11 rounded-xl">기존 세션 계속하기</AlertDialogCancel>
+            <AlertDialogCancel disabled={replacementBusy} className="min-h-11 rounded-xl">Continue Current Session</AlertDialogCancel>
             <AlertDialogAction
               onClick={event => void handleReplaceSession(event)}
               disabled={replacementBusy}
               className="min-h-11 rounded-xl bg-[#C93742] font-bold text-white hover:bg-[#AE2D37]"
             >
-              {replacementBusy ? '새 세션 준비 중…' : `${currentSession?.hostId === profile.id ? '종료' : '나가기'} 후 새로 시작`}
+              {englishText(replacementBusy ? "Preparing new session…" : `${currentSession?.hostId === profile.id ? "End" : "Leave"}  & Start Again`)}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

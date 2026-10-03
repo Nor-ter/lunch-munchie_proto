@@ -36,7 +36,7 @@ function assertFoodPlaceTypes(types: string[] | undefined) {
   if (isFoodPlaceTypes(types)) return;
   throw new GooglePlacesProxyError(
     'not_food_place',
-    '음식점·카페·마켓 같은 먹거리 장소만 코스에 담을 수 있어요.',
+    "Only food venues such as restaurants, cafes and markets can be added to courses.",
     400,
   );
 }
@@ -72,11 +72,11 @@ export class GooglePlacesProxyError extends Error {
 function requireString(body: Record<string, unknown>, key: string, maxLength: number) {
   const value = body[key];
   if (typeof value !== 'string' || !value.trim()) {
-    throw new GooglePlacesProxyError('invalid_request', `${key} 는 필수 문자열입니다.`);
+    throw new GooglePlacesProxyError('invalid_request', `${key}  must be a non-empty string.`);
   }
   const trimmed = value.trim();
   if (trimmed.length > maxLength) {
-    throw new GooglePlacesProxyError('invalid_request', `${key} 가 너무 깁니다.`);
+    throw new GooglePlacesProxyError('invalid_request', `${key}  is too long.`);
   }
   return trimmed;
 }
@@ -85,7 +85,7 @@ function optionalString(body: Record<string, unknown>, key: string, maxLength: n
   const value = body[key];
   if (value === undefined || value === null) return undefined;
   if (typeof value !== 'string' || value.length > maxLength) {
-    throw new GooglePlacesProxyError('invalid_request', `${key} 는 문자열이어야 합니다.`);
+    throw new GooglePlacesProxyError('invalid_request', `${key}  must be a string.`);
   }
   return value;
 }
@@ -95,7 +95,7 @@ function serverKey(env: GooglePlacesEnv) {
   if (!key) {
     throw new GooglePlacesProxyError(
       'config_error',
-      'Google 장소 검색 서버 설정이 필요합니다.',
+      "Google Places server configuration is required.",
       500,
     );
   }
@@ -123,7 +123,7 @@ async function googleJson(response: Response, label: string) {
     console.error(`[google-places] ${label}:`, providerMessage ?? `HTTP ${response.status}`);
     throw new GooglePlacesProxyError(
       'google_api_error',
-      'Google 장소 서비스를 불러오지 못했어요.',
+      "Couldn't access Google Places.",
       502,
     );
   }
@@ -221,7 +221,7 @@ export async function getGoogleLocationDetails(
   const latitude = Number(location?.latitude);
   const longitude = Number(location?.longitude);
   if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) {
-    throw new GooglePlacesProxyError('location_missing', '선택한 장소의 위치를 찾지 못했어요.', 502);
+    throw new GooglePlacesProxyError('location_missing', "Couldn't find the selected place's location.", 502);
   }
   const displayName = google.displayName as { text?: unknown } | undefined;
   return {
@@ -471,7 +471,7 @@ export async function getGooglePlaceDetails(
       source = 'google', place_types = excluded.place_types`)
     .bind(
       `google_${id}`,
-      typeof displayName?.text === 'string' ? displayName.text : '이름 없음',
+      typeof displayName?.text === 'string' ? displayName.text : "Unnamed",
       categoryFromTypes(types),
       typeof google.formattedAddress === 'string' ? google.formattedAddress : '',
       typeof location?.latitude === 'number' ? location.latitude : 0,
@@ -493,7 +493,7 @@ export async function getGooglePlaceDetails(
 
   const row = await env.DB.prepare(RESTAURANT_SELECT).bind(id).first<RestaurantRow>();
   if (!row) {
-    throw new GooglePlacesProxyError('db_error', '식당 정보를 저장하지 못했어요.', 500);
+    throw new GooglePlacesProxyError('db_error', "Couldn't save restaurant details.", 500);
   }
   return { restaurant: clientRestaurant(row), fromCache: false };
 }
@@ -520,7 +520,7 @@ export async function getGoogleDirections(
 ) {
   const coordinates = directionsPoints(body.coordinates);
   if (coordinates.length < 2 || coordinates.length > 10) {
-    throw new GooglePlacesProxyError('invalid_request', '경로는 장소 2~10곳이 필요해요.', 400);
+    throw new GooglePlacesProxyError('invalid_request', "A route needs 2–10 places.", 400);
   }
   const allowedModes = new Set(['walking', 'driving', 'bicycling', 'transit']);
   const mode = typeof body.mode === 'string' && allowedModes.has(body.mode) ? body.mode : 'walking';
@@ -540,7 +540,7 @@ export async function getGoogleDirections(
   if (status !== 'OK') {
     throw new GooglePlacesProxyError(
       status ? status.toLowerCase() : 'directions_error',
-      typeof google.error_message === 'string' ? google.error_message : '경로를 가져오지 못했어요.',
+      typeof google.error_message === 'string' ? google.error_message : "Couldn't load the route.",
       502,
     );
   }
@@ -550,7 +550,7 @@ export async function getGoogleDirections(
   } | undefined : undefined;
   const polyline = typeof route?.overview_polyline?.points === 'string' ? route.overview_polyline.points : '';
   if (!polyline) {
-    throw new GooglePlacesProxyError('directions_empty', '경로 폴리라인이 비어 있어요.', 502);
+    throw new GooglePlacesProxyError('directions_empty', "The route polyline is empty.", 502);
   }
   return {
     polyline,
@@ -565,7 +565,7 @@ export function googlePlacesErrorResponse(error: unknown) {
   }
   console.error('[google-places] unexpected error:', error);
   return Response.json(
-    { code: 'internal_error', message: '장소 검색 중 오류가 발생했어요.' },
+    { code: 'internal_error', message: "An error occurred while searching places." },
     { status: 500 },
   );
 }

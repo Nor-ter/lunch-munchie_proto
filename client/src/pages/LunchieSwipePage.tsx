@@ -1,3 +1,4 @@
+import { englishText } from '@shared/englishCopy';
 /**
  * Lunchie Munchie — Quick Match Page
  * Design: Soft Coral (Option 8) + Pubfish Reference
@@ -7,13 +8,11 @@
 import { useState, useCallback, useEffect, useMemo, useRef } from 'react';
 import { motion, useMotionValue, useTransform, useMotionTemplate, AnimatePresence, type MotionValue } from 'framer-motion';
 import { useLocation } from 'wouter';
-import { Heart, X, Star, MapPin, Clock, Phone, Navigation, Share2, Download, Link2, Home, Bookmark, RotateCcw, Loader2, RefreshCw, SlidersHorizontal, Info, LockKeyhole, MessageCircleHeart, Sparkles, Users } from 'lucide-react';
+import { Heart, X, Minus, Star, MapPin, Clock, Phone, Navigation, Share2, Download, Link2, Home, Bookmark, RotateCcw, Loader2, RefreshCw, SlidersHorizontal, Info, LockKeyhole, MessageCircleHeart, Sparkles, Users } from 'lucide-react';
 import { toast } from 'sonner';
-import { useApp, type Restaurant, type MenuItem } from '@/contexts/AppContext';
+import { useApp, type Restaurant, type MenuItem, type GroupSession } from '@/contexts/AppContext';
 import { useCourseShare } from '@/hooks/useCourseShare';
 import WinnerShareCard from '@/components/lunchie/WinnerShareCard';
-import LunchmateCharacterRenderer from '@/components/munchie/LunchmateCharacterRenderer';
-import { activateLunchieWaitingCompanion } from '@/components/lunchie/LunchieWaitingCompanion';
 import FoodImage from '@/components/FoodImage';
 import MenuItemDetail from '@/components/MenuItemDetail';
 import { logSwipe, logWinner, logNavigate, logEvent, flushEvents } from '@/lib/eventLogger';
@@ -27,13 +26,13 @@ import { normalizeRestaurantPayload } from '@shared/restaurantContract';
 import SessionManagementMenu from '@/components/lunchie/SessionManagementMenu';
 import BackButton from '@/components/ui/BackButton';
 import QuickMatchRestaurantDetailSheet from '@/components/lunchie/QuickMatchRestaurantDetailSheet';
-import { restaurantSummary } from '@/lib/restaurantPresentation';
+import { restaurantSummary, restaurantRatingLabel, restaurantPriceLabel } from '@/lib/restaurantPresentation';
 import { LUNCHIE_CUISINE_CHOICES, prioritizeRestaurantsForCuisine, type LunchieCuisineChoice } from '@/lib/lunchieGame';
 import { cuisineSignal, mealRatingSignal, satisfactionSignal } from '@shared/lunchieRoundStats';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
-type SwipeAction = 'like' | 'dislike';
+type SwipeAction = 'like' | 'dislike' | 'neutral';
 
 type RoundStatItem = {
   id: string;
@@ -57,9 +56,9 @@ type LunchieRoundStatsPayload = {
 };
 
 function GameStageRail({ current }: { current: 1 | 2 | 3 | 4 }) {
-  const stages = ['음식 종류', '추천 투표', 'TOP 2', '만족도'];
+  const stages = ["Cuisine", "Recommendation Vote", 'TOP 2', "Satisfaction"];
   return (
-    <div className="mx-auto flex w-full max-w-[350px] items-center" aria-label={`게임 ${current}단계: ${stages[current - 1]}`}>
+    <div className="mx-auto flex w-full max-w-[350px] items-center" aria-label={`Stage ${current}: ${stages[current - 1]}`}>
       {stages.map((stage, index) => {
         const step = index + 1;
         const active = step === current;
@@ -67,12 +66,12 @@ function GameStageRail({ current }: { current: 1 | 2 | 3 | 4 }) {
         return (
           <div key={stage} className="contents">
             <div className="flex min-w-0 flex-1 flex-col items-center gap-1">
-              <span className={`flex size-6 items-center justify-center rounded-full text-[10px] font-black ${active ? 'bg-white text-[#5B45D6] shadow-md' : complete ? 'bg-[#FFE36E] text-[#43357D]' : 'bg-white/15 text-white/55'}`}>
-                {complete ? '✓' : step}
+              <span className={`flex size-6 items-center justify-center rounded-full text-[10px] font-semibold ${active ? 'bg-[#AA1A0D] text-white' : complete ? 'bg-[#FBECE9] text-[#80140A]' : 'bg-[#F5F4F5] text-[#858185]'}`}>
+                {englishText(complete ? '✓' : step)}
               </span>
-              <span className={`truncate text-[8px] font-black ${active ? 'text-white' : 'text-white/55'}`}>{stage}</span>
+              <span className={`truncate text-[9px] font-semibold ${active ? 'text-[#AA1A0D]' : 'text-[#858185]'}`}>{englishText(stage)}</span>
             </div>
-            {index < stages.length - 1 && <span className={`mb-4 h-0.5 w-3 rounded-full ${complete ? 'bg-[#FFE36E]' : 'bg-white/15'}`} aria-hidden="true" />}
+            {index < stages.length - 1 && <span className={`mb-4 h-0.5 w-3 rounded-full ${complete ? 'bg-[#FBECE9]' : 'bg-[#E8E6E7]'}`} aria-hidden="true" />}
           </div>
         );
       })}
@@ -112,41 +111,41 @@ function RoundStatisticsScreen({
     <motion.main
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
-      className="min-h-dvh bg-[radial-gradient(circle_at_top,#8A62E8_0%,#5B45D6_48%,#2F246F_100%)] px-5 pb-8 pt-[max(18px,env(safe-area-inset-top))] text-white"
-      aria-label={`${round}라운드 통계 결과`}
+      className="min-h-dvh bg-[#FCFCFC] px-5 pb-8 pt-[max(18px,env(safe-area-inset-top))] text-[#171717]"
+      aria-label={englishText(`${round} round results`)}
     >
       <GameStageRail current={round} />
       <div className="mx-auto mt-9 max-w-[380px] text-center">
-        <span className="inline-flex rounded-full bg-[#FFE36E] px-3 py-1 text-[10px] font-black tracking-[0.8px] text-[#372B70]">{eyebrow}</span>
-        <h1 className="mt-4 text-[28px] font-black tracking-[-0.8px]">{ready ? title : '모두의 선택을 기다리는 중'}</h1>
-        <p className="mt-2 text-[12px] font-semibold leading-relaxed text-white/70">
-          {ready ? description : '개별 답은 숨긴 채 완료 인원만 표시해요. 모두 끝나면 통계를 동시에 공개합니다.'}
+        <span className="inline-flex rounded-full bg-[#FBECE9] px-3 py-1 text-[10px] font-black tracking-[0.8px] text-[#80140A]">{englishText(eyebrow)}</span>
+        <h1 className="mt-4 text-[24px] font-bold leading-tight">{englishText(ready ? title : "Waiting for Everyone")}</h1>
+        <p className="mt-2 text-[12px] font-semibold leading-relaxed text-[#858185]">
+          {englishText(ready ? description : "Individual choices stay private. Results appear together when everyone finishes.")}
         </p>
 
         {!ready ? (
-          <div className="mt-8 rounded-[28px] border border-white/15 bg-white/10 p-6 text-left shadow-2xl">
-            <p className="text-[11px] font-black text-white/60">ANSWERS LOCKED</p>
-            <p className="mt-2 text-[38px] font-black tabular-nums">{completed}<span className="mx-2 text-xl text-white/35">/</span>{safeTotal}</p>
-            <p className="text-[11px] font-bold text-white/65">명 선택 완료</p>
-            <div className="mt-5 h-3 overflow-hidden rounded-full bg-black/20">
+          <div className="mt-8 border-y border-[#E8E6E7] py-6 text-left">
+            <p className="text-[11px] font-black text-[#858185]">ANSWERS LOCKED</p>
+            <p className="mt-2 text-[38px] font-black tabular-nums">{completed}<span className="mx-2 text-xl text-[#BDBABD]">/</span>{safeTotal}</p>
+            <p className="text-[11px] font-bold text-[#858185]"> people finished</p>
+            <div className="mt-5 h-3 overflow-hidden rounded-full bg-[#E8E6E7]">
               <motion.div
-                className="h-full rounded-full bg-[#FFE36E]"
+                className="h-full rounded-full bg-[#AA1A0D]"
                 animate={{ width: `${Math.min(100, (completed / safeTotal) * 100)}%` }}
               />
             </div>
-            <p className="mt-4 text-center text-[10px] font-bold text-[#FFE36E]">🔒 이름과 개별 선택은 공개하지 않아요</p>
+            <p className="mt-4 text-center text-[10px] font-bold text-[#AA1A0D]">🔒 Names and individual choices stay private</p>
           </div>
         ) : (
-          <div className="mt-7 space-y-3 rounded-[28px] border border-white/15 bg-white/10 p-5 text-left shadow-2xl">
+          <div className="mt-7 space-y-4 border-y border-[#E8E6E7] py-5 text-left">
             {items.map(item => {
               const percent = Math.round((item.value / safeTotal) * 100);
               return (
-                <div key={item.id} className="rounded-2xl bg-black/15 p-3.5">
+                <div key={item.id} className="py-2">
                   <div className="flex items-center justify-between gap-3">
-                    <span className="truncate text-[13px] font-black">{item.emoji && <span className="mr-1.5" aria-hidden="true">{item.emoji}</span>}{item.label}</span>
-                    <span className="shrink-0 text-[13px] font-black tabular-nums text-[#FFE36E]">{item.value} · {percent}%</span>
+                    <span className="truncate text-[13px] font-black">{englishText(item.emoji && <span className="mr-1.5" aria-hidden="true">{englishText(item.emoji)}</span>)}{englishText(item.label)}</span>
+                    <span className="shrink-0 text-[13px] font-black tabular-nums text-[#AA1A0D]">{item.value} · {percent}%</span>
                   </div>
-                  <div className="mt-2.5 h-2.5 overflow-hidden rounded-full bg-black/20">
+                  <div className="mt-2.5 h-2.5 overflow-hidden rounded-full bg-[#E8E6E7]">
                     <motion.div
                       initial={{ width: 0 }}
                       animate={{ width: `${Math.max(item.value > 0 ? 8 : 0, (item.value / maxValue) * 100)}%` }}
@@ -158,7 +157,7 @@ function RoundStatisticsScreen({
                 </div>
               );
             })}
-            <p className="pt-1 text-center text-[10px] font-bold text-white/50">익명 집계 · {summaryLabel ?? `총 ${safeTotal}명 기준`}</p>
+            <p className="pt-1 text-center text-[10px] font-bold text-[#858185]">Anonymous results ·  {englishText(summaryLabel ?? `Total:  ${safeTotal} participants`)}</p>
           </div>
         )}
 
@@ -166,9 +165,9 @@ function RoundStatisticsScreen({
           <button
             type="button"
             onClick={onContinue}
-            className="mt-6 min-h-14 w-full rounded-[20px] bg-white px-4 text-[14px] font-black text-[#5B45D6] shadow-xl active:scale-[0.98]"
+            className="mt-6 min-h-12 w-full rounded-lg bg-[#AA1A0D] px-4 text-[14px] font-semibold text-white active:bg-[#80140A] active:scale-[0.98]"
           >
-            {continueLabel ?? '다음 라운드 →'}
+            {englishText(continueLabel ?? "Next Round →")}
           </button>
         )}
       </div>
@@ -231,14 +230,14 @@ function CuisineStatisticsScreen({
     <RoundStatisticsScreen
       round={1}
       eyebrow="ROUND 1 RESULT"
-      title="오늘의 입맛 분포"
-      description="모두의 음식 종류 선택을 익명으로 합쳤어요."
+      title="Today's Cravings"
+      description="Everyone's cuisine choices, combined anonymously."
       items={items}
       completed={completed}
       total={effectiveTotal}
       ready={ready}
       onContinue={onContinue}
-      continueLabel="추천 투표 시작 →"
+      continueLabel="Start Recommendation Vote →"
     />
   );
 }
@@ -269,17 +268,18 @@ function CuisineChoiceScreen({
     <motion.main
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
-      className="min-h-dvh bg-[radial-gradient(circle_at_top,#8A62E8_0%,#5B45D6_48%,#2F246F_100%)] px-5 pb-8 pt-[max(18px,env(safe-area-inset-top))] text-white"
+      className="min-h-dvh bg-[#FCFCFC] px-5 pb-8 pt-[max(18px,env(safe-area-inset-top))] text-[#171717]"
     >
       <GameStageRail current={1} />
       <div className="mx-auto mt-10 max-w-[380px] text-center">
-        <span className="inline-flex rounded-full bg-white/15 px-3 py-1 text-[10px] font-black tracking-[0.9px] text-[#FFE36E]">ROUND 1 · PICK A TYPE</span>
-        <h1 className="mt-4 text-[28px] font-black tracking-[-0.8px]">오늘 어떤 음식이 끌려요?</h1>
-        <p className="mt-2 text-[13px] font-semibold leading-relaxed text-white/70">
-          끌리는 종류를 모두 고른 뒤 선택을 확정해요.
+        <span className="inline-flex rounded-full bg-[#FBECE9] px-3 py-1 text-[10px] font-black tracking-[0.9px] text-[#AA1A0D]">ROUND 1 · PICK A TYPE</span>
+        <h1 className="mt-4 text-[24px] font-bold leading-tight">What are you craving?</h1>
+        <p className="mt-2 text-[13px] font-semibold leading-relaxed text-[#858185]">
+
+          Choose all the cuisines you like, then confirm.
         </p>
 
-        <div className="mt-7 grid grid-cols-2 gap-3" role="group" aria-label="음식 종류 복수 선택">
+        <div className="mt-7 grid grid-cols-2 gap-3" role="group" aria-label="Choose Cuisines">
           {LUNCHIE_CUISINE_CHOICES.map((choice, index) => {
             const isSelected = selected.includes(choice.id);
             return (
@@ -288,17 +288,17 @@ function CuisineChoiceScreen({
                 type="button"
                 onClick={() => toggleChoice(choice.id)}
                 disabled={isSubmitting}
-                className={`relative min-h-[146px] rounded-[24px] border-2 p-4 text-left shadow-[0_14px_30px_rgba(25,14,72,0.25)] outline-none focus-visible:ring-4 focus-visible:ring-white/70 disabled:opacity-55 ${isSelected ? 'border-[#FFE36E] ring-4 ring-[#FFE36E]/30' : 'border-white/20'}`}
-                style={{ background: choice.color }}
+                className={`relative min-h-[146px] rounded-lg border-2 p-4 text-left outline-none focus-visible:ring-2 focus-visible:ring-[#AA1A0D]/20 disabled:opacity-55 ${isSelected ? 'border-[#AA1A0D]' : 'border-[#E8E6E7]'}`}
+                style={{ background: isSelected ? '#FBECE9' : '#FFFFFF' }}
                 whileTap={{ scale: 0.96 }}
-                aria-label={`${choice.label}: ${choice.hint}`}
+                aria-label={englishText(`${choice.label}: ${choice.hint}`)}
                 aria-pressed={isSelected}
               >
-                <span className="text-[11px] font-black text-white/65">{String.fromCharCode(65 + index)}</span>
-                {isSelected && <span className="absolute right-3 top-3 flex size-7 items-center justify-center rounded-full bg-[#FFE36E] text-sm font-black text-[#372B70]" aria-hidden="true">✓</span>}
-                <span className="mt-1 block text-4xl" aria-hidden="true">{choice.emoji}</span>
-                <span className="mt-3 block text-[16px] font-black">{choice.label}</span>
-                <span className="mt-0.5 block text-[10px] font-bold text-white/70">{choice.hint}</span>
+                <span className="text-[11px] font-black text-[#858185]">{englishText(String.fromCharCode(65 + index))}</span>
+                {isSelected && <span className="absolute right-3 top-3 flex size-7 items-center justify-center rounded-full bg-[#AA1A0D] text-sm font-black text-white" aria-hidden="true">✓</span>}
+                <span className="mt-1 block text-4xl" aria-hidden="true">{englishText(choice.emoji)}</span>
+                <span className="mt-3 block text-[16px] font-black">{englishText(choice.label)}</span>
+                <span className="mt-0.5 block text-[10px] font-bold text-[#858185]">{englishText(choice.hint)}</span>
               </motion.button>
             );
           })}
@@ -308,15 +308,15 @@ function CuisineChoiceScreen({
           type="button"
           onClick={() => onSubmit(selected)}
           disabled={selected.length === 0 || isSubmitting}
-          className="mt-5 min-h-14 w-full rounded-[20px] bg-[#FFE36E] px-4 text-[14px] font-black text-[#372B70] shadow-xl disabled:bg-white/15 disabled:text-white/35"
+          className="mt-5 min-h-12 w-full rounded-lg bg-[#AA1A0D] px-4 text-[14px] font-semibold text-white active:bg-[#80140A] disabled:bg-[#E8E6E7] disabled:text-[#858185]"
         >
-          {isSubmitting ? '선택 저장 중…' : `${selected.length || 0}개 선택 완료 →`}
+          {englishText(isSubmitting ? "Saving choices…" : `${selected.length || 0} selected →`)}
         </button>
 
-        <div className="mt-6 rounded-2xl border border-white/15 bg-black/15 px-4 py-3">
-          <p className="text-[11px] font-black text-[#FFE36E]">🔒 PRIVATE PICK</p>
-          <p className="mt-1 text-[11px] font-semibold text-white/70">
-            {isSolo ? '여러 종류를 고를 수 있고, 확정 후 통계를 보여드려요.' : `다른 ${Math.max(0, memberCount - 1)}명의 답은 보이지 않고 완료 인원만 보여요.`}
+        <div className="mt-6 rounded-2xl border border-[#ECC1BB] bg-[#FBECE9] px-4 py-3">
+          <p className="text-[11px] font-black text-[#AA1A0D]">🔒 PRIVATE PICK</p>
+          <p className="mt-1 text-[11px] font-semibold text-[#858185]">
+            {englishText(isSolo ? "Choose multiple cuisines. Results appear after confirmation." : `Other  ${Math.max(0, memberCount - 1)} participants' choices stay private. Only completion totals are shown.`)}
           </p>
         </div>
       </div>
@@ -335,73 +335,74 @@ function SwipeStateScreen({
   const { currentSession } = useApp();
   const content = {
     loading: {
-      title: '결승 후보를 준비하고 있어요',
-      description: '빠른 매칭과 식당 후보를 준비하고 있어요…',
+      title: "Preparing Finalists",
+      description: "Preparing Quick Match and restaurant options…",
     },
     'api-error': {
-      title: '빠른 매칭을 불러오지 못했어요',
-      description: '인터넷 연결을 확인하고 다시 시도해 주세요.',
+      title: "Couldn't Load Quick Match",
+      description: "Check your connection and try again.",
     },
     'catalog-empty': {
-      title: '아직 추천할 식당이 없어요',
-      description: '이 빠른 매칭에 맞는 식당 후보를 불러오지 못했어요.',
+      title: "No Restaurants Available Yet",
+      description: "Couldn't load restaurants for this Quick Match.",
     },
     'no-matches': {
-      title: '조건에 맞는 식당이 없어요',
-      description: '검색 거리를 늘리거나 취향 조건을 조정해 보세요.',
+      title: "No Matching Restaurants",
+      description: "Try a wider radius or adjust your preferences.",
     },
     'session-missing': {
-      title: '빠른 매칭을 다시 준비할게요',
-      description: '진행 중인 빠른 매칭이 없어요. 설정에서 새로 시작해 주세요.',
+      title: "Let's Start a New Quick Match",
+      description: "No active Quick Match. Start a new one from settings.",
     },
     'session-invalid': {
-      title: '더 이상 참여할 수 없는 빠른 매칭이에요',
-      description: '이미 종료·만료·취소됐거나 대기방에서 나간 세션일 수 있어요.',
+      title: "This Quick Match Is Unavailable",
+      description: "The session may have ended, expired or been cancelled, or you may have left it.",
     },
     'session-not-started': {
-      title: '아직 빠른 매칭이 시작되지 않았어요',
-      description: '대기방으로 돌아가 호스트가 시작할 때까지 기다려 주세요.',
+      title: "Quick Match Hasn't Started",
+      description: "Return to the lobby and wait for the host to start.",
     },
   }[state];
   const canRetry = state === 'api-error' || state === 'catalog-empty';
   const primaryLabel = state === 'no-matches'
-    ? '조건 수정하기'
+    ? "Adjust Preferences"
     : state === 'session-not-started'
-      ? '대기방으로 돌아가기'
-      : '설정으로 돌아가기';
+      ? "Back to Lobby"
+      : "Back to Settings";
   const primaryPath = state === 'session-not-started' ? '/session/lobby' : '/lunchie/settings';
 
   return (
-    <div className="flex min-h-dvh items-center justify-center bg-[#FFF6F2] px-5 py-10">
-      <section role={state === 'loading' ? 'status' : 'alert'} aria-live="polite" className="w-full max-w-[390px] rounded-[26px] border border-[#F2DDD8] bg-white p-6 text-center shadow-[0_16px_44px_rgba(137,89,79,0.12)]">
-        <div className="mx-auto flex size-16 items-center justify-center rounded-full bg-[#FFF0EE] text-[#F4515E]">
+    <div className="flex min-h-dvh items-center justify-center bg-[#FCFCFC] px-5 py-10">
+      <section role={state === 'loading' ? 'status' : 'alert'} aria-live="polite" className="w-full max-w-[390px] rounded-[26px] border border-[#E8E6E7] bg-white p-6 text-center shadow-[0_16px_44px_rgba(137,89,79,0.12)]">
+        <div className="mx-auto flex size-16 items-center justify-center rounded-full bg-[#FBECE9] text-[#AA1A0D]">
           {state === 'loading'
             ? <Loader2 size={30} className="animate-spin motion-reduce:animate-none" aria-hidden="true" />
             : state === 'no-matches'
               ? <SlidersHorizontal size={28} aria-hidden="true" />
               : <span className="text-3xl" aria-hidden="true">🍽️</span>}
         </div>
-        <h1 className="mt-4 text-[20px] font-black tracking-[-0.3px] text-[#26232A]">{content.title}</h1>
-        <p className="mx-auto mt-2 max-w-[300px] text-[13px] leading-relaxed text-[#776E72]">{content.description}</p>
+        <h1 className="mt-4 text-[20px] font-black tracking-[-0.3px] text-[#171717]">{englishText(content.title)}</h1>
+        <p className="mx-auto mt-2 max-w-[300px] text-[13px] leading-relaxed text-[#858185]">{englishText(content.description)}</p>
         {state === 'loading' ? (
           <div className="mt-6 space-y-2" aria-hidden="true">
-            <div className="h-3 animate-pulse rounded-full bg-[#F4ECE9] motion-reduce:animate-none" />
-            <div className="mx-auto h-3 w-3/4 animate-pulse rounded-full bg-[#F4ECE9] motion-reduce:animate-none" />
+            <div className="h-3 animate-pulse rounded-full bg-[#F5F4F5] motion-reduce:animate-none" />
+            <div className="mx-auto h-3 w-3/4 animate-pulse rounded-full bg-[#F5F4F5] motion-reduce:animate-none" />
           </div>
         ) : (
           <div className="mt-6 space-y-2">
-            <button type="button" onClick={() => navigate(primaryPath)} className="min-h-12 w-full rounded-2xl bg-[#F4515E] px-4 text-[14px] font-black text-white outline-none focus-visible:ring-2 focus-visible:ring-[#F4515E] focus-visible:ring-offset-2">
-              {primaryLabel}
+            <button type="button" onClick={() => navigate(primaryPath)} className="min-h-12 w-full rounded-2xl bg-[#AA1A0D] px-4 text-[14px] font-black text-white outline-none focus-visible:ring-2 focus-visible:ring-[#AA1A0D] focus-visible:ring-offset-2">
+              {englishText(primaryLabel)}
             </button>
             {canRetry && onRetry && (
-              <button type="button" onClick={onRetry} className="flex min-h-11 w-full items-center justify-center gap-2 rounded-2xl border border-[#E9D8D3] bg-[#FFF9F6] px-4 text-[13px] font-bold text-[#5E5559] outline-none focus-visible:ring-2 focus-visible:ring-[#F4515E]">
-                <RefreshCw size={15} aria-hidden="true" /> 다시 시도
+              <button type="button" onClick={onRetry} className="flex min-h-11 w-full items-center justify-center gap-2 rounded-2xl border border-[#E8E6E7] bg-[#FCFCFC] px-4 text-[13px] font-bold text-[#858185] outline-none focus-visible:ring-2 focus-visible:ring-[#AA1A0D]">
+                <RefreshCw size={15} aria-hidden="true" />  Try Again
               </button>
             )}
             {currentSession && (state === 'catalog-empty' || state === 'no-matches' || state === 'session-not-started') && (
-              <div className="flex items-center justify-center gap-1 pt-2 text-[11px] font-semibold text-[#81767A]">
-                이 세션 관리
-                <SessionManagementMenu onEnded={() => navigate('/lunchie/settings')} className="text-[#81767A]" />
+              <div className="flex items-center justify-center gap-1 pt-2 text-[11px] font-semibold text-[#858185]">
+
+                Manage Session
+                <SessionManagementMenu onEnded={() => navigate('/lunchie/settings')} className="text-[#858185]" />
               </div>
             )}
           </div>
@@ -416,7 +417,7 @@ function groupByCategory(items: MenuItem[]): [string, MenuItem[]][] {
   const order: string[] = [];
   const map = new Map<string, MenuItem[]>();
   for (const it of items) {
-    const key = it.category || '메뉴';
+    const key = it.category || "Menu";
     if (!map.has(key)) { map.set(key, []); order.push(key); }
     map.get(key)!.push(it);
   }
@@ -630,10 +631,10 @@ function SwipeCard({
     setIsPhotoRotating(false);
   }, [restaurant.id, candidatePhotoKey]);
   const photoLabel = foodPhotos.length === 0
-    ? '등록된 음식 사진이 없어요'
-    : `메뉴 사진 ${photoIndex + 1} / ${foodPhotos.length}`;
+    ? "No Food Photos Available"
+    : `Menu Photos ${photoIndex + 1} / ${foodPhotos.length}`;
   const photoProgressAriaLabel = foodPhotos.length > 0
-    ? `메뉴 사진 전체 ${foodPhotos.length}장 중 ${photoIndex + 1}번째`
+    ? `All Menu Photos ${foodPhotos.length} photos ·  ${photoIndex + 1}`
     : undefined;
 
   if (!isTop) {
@@ -643,7 +644,7 @@ function SwipeCard({
         style={{
           transform: `scale(${1 - stackIndex * 0.04}) translateY(${stackIndex * 14}px)`,
           zIndex: 10 - stackIndex,
-          background: stackIndex === 1 ? '#e8c9a0' : '#d4a574',
+          background: stackIndex === 1 ? '#F5F4F5' : '#F5F4F5',
           opacity: 1 - stackIndex * 0.15,
         }}
       />
@@ -723,7 +724,7 @@ function SwipeCard({
           <span
             role="status"
             aria-live="polite"
-            aria-label={`전체 ${total}개 중 ${progress}번째 음식점`}
+            aria-label={englishText(`All ${total} options ·  ${progress} restaurant`)}
             className="inline-flex min-h-7 min-w-[64px] items-center justify-center rounded-md bg-black/45 px-3 py-1 text-[13px] font-black tabular-nums text-white shadow-sm backdrop-blur-sm"
           >
             {progress} / {total}
@@ -734,7 +735,8 @@ function SwipeCard({
         {!isRevealed && (
           <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 pointer-events-none">
             <div className="bg-black/30 text-white text-[11px] font-semibold px-3 py-1.5 rounded-full opacity-70">
-              탭 → 메뉴 보기
+
+              Tap → View Menu
             </div>
           </div>
         )}
@@ -742,17 +744,17 @@ function SwipeCard({
         {/* Bottom info */}
         <div className="absolute bottom-0 left-0 right-0 p-5">
           <div className="flex gap-1.5 mb-2 flex-wrap">
-            {(restaurant.tags || []).slice(0, 2).map((t: string) => (
+            {englishText((restaurant.tags || []).slice(0, 2).map((t: string) => (
               <span key={t} className="text-[10px] font-bold bg-white/20 text-white px-2.5 py-0.5 rounded-full">
-                {t}
+                {englishText(t)}
               </span>
-            ))}
+            )))}
           </div>
-          <h2 className="text-white font-black text-[24px] leading-tight">{restaurant.name}</h2>
+          <h2 className="text-white font-black text-[24px] leading-tight">{englishText(restaurant.name)}</h2>
           <button
             type="button"
             data-ui="quick-match-detail-trigger"
-            aria-label={`${restaurant.name} 상세정보 보기`}
+            aria-label={englishText(`${restaurant.name} View Details`)}
             onPointerDown={(event) => event.stopPropagation()}
             onClick={(event) => {
               event.stopPropagation();
@@ -760,39 +762,39 @@ function SwipeCard({
             }}
             className="mt-2 flex min-h-9 w-full items-center justify-between gap-2 rounded-xl bg-black/25 px-3 py-2 text-left outline-none transition-colors active:bg-black/40 focus-visible:ring-2 focus-visible:ring-white/80"
           >
-            <span className="min-w-0 flex-1 truncate text-[12px] font-semibold text-white/75">{detailSummary}</span>
-            <span className="shrink-0 text-[11px] font-black text-white">상세보기 ›</span>
+            <span className="min-w-0 flex-1 truncate text-[12px] font-semibold text-white/75">{englishText(detailSummary)}</span>
+            <span className="shrink-0 text-[11px] font-black text-white">Details ›</span>
           </button>
-          <div className="flex items-center gap-3 mt-2">
+          <div className="flex flex-wrap items-center gap-x-3 gap-y-1 mt-2">
             <div className="flex items-center gap-1">
-              <Star size={12} fill="#FFD700" color="#FFD700" />
-              <span className="text-white text-[12px] font-bold">{restaurant.rating}</span>
+              <Star size={12} fill="#AA1A0D" color="#AA1A0D" />
+              <span className="text-white text-[12px] font-semibold">{englishText(restaurantRatingLabel(restaurant.rating))}</span>
             </div>
-            <div className="flex items-center gap-1">
+            {englishText(restaurant.distance?.trim() && <div className="flex items-center gap-1">
               <MapPin size={11} color="rgba(255,255,255,0.6)" />
-              <span className="text-white/70 text-[11px]">{restaurant.distance}</span>
-            </div>
-            <span className="text-white/70 text-[11px]">{'₩'.repeat(restaurant.priceRange || 1)}</span>
+              <span className="text-white/70 text-[11px]">{englishText(restaurant.distance)}</span>
+            </div>)}
+            {englishText(restaurantPriceLabel(restaurant) && <span className="text-white/70 text-[11px]">{englishText(restaurantPriceLabel(restaurant))}</span>)}
             <span className="text-white/60 text-[10px] bg-white/15 px-2 py-0.5 rounded-full">
-              {restaurant.category}
+              {englishText(restaurant.category)}
             </span>
           </div>
         </div>
 
         {/* LIKE overlay */}
         <motion.div
-          className="absolute top-8 left-5 border-[3px] border-[#3CBA44] rounded-2xl px-4 py-2"
+          className="absolute top-8 left-5 border-[3px] border-[#AA1A0D] rounded-2xl px-4 py-2"
           style={{ opacity: likeOp, rotate: -12 }}
         >
-          <span className="text-[#3CBA44] font-black text-[18px]">좋아요 ♡</span>
+          <span className="text-[#AA1A0D] font-black text-[18px]">Like ♡</span>
         </motion.div>
 
         {/* NOPE overlay */}
         <motion.div
-          className="absolute top-8 right-5 border-[3px] border-[#EB5053] rounded-2xl px-4 py-2"
+          className="absolute top-8 right-5 border-[3px] border-[#AA1A0D] rounded-2xl px-4 py-2"
           style={{ opacity: nopeOp, rotate: 12 }}
         >
-          <span className="text-[#EB5053] font-black text-[18px]">패스 ✕</span>
+          <span className="text-[#AA1A0D] font-black text-[18px]">Pass ✕</span>
         </motion.div>
         {/* 좋아요 샤이닝 효과 — 두 겹의 대각선 빛이 어긋나게 스치고, 전체 플래시 + 사방으로 빛 파티클이 튄다 */}
         <motion.div
@@ -876,12 +878,12 @@ function SwipeCard({
             {/* Panel header */}
             <div className="flex items-center justify-between px-5 pt-5 pb-3 flex-shrink-0">
               <div className="min-w-0">
-                <p className="font-black text-[17px] text-white truncate">{restaurant.name}</p>
-                <p className="text-[11px] text-white/50 truncate">{restaurant.category} · 메뉴 둘러보기</p>
+                <p className="font-black text-[17px] text-white truncate">{englishText(restaurant.name)}</p>
+                <p className="text-[11px] text-white/50 truncate">{englishText(restaurant.category)}  · Browse Menu</p>
               </div>
               <button
                 onClick={() => setIsRevealed(false)}
-                aria-label="메뉴 닫기"
+                aria-label="Close Menu"
                 className="w-9 h-9 rounded-full bg-white/15 flex items-center justify-center active:scale-90 flex-shrink-0 ml-2">
                 <X size={16} color="white" />
               </button>
@@ -893,11 +895,12 @@ function SwipeCard({
                 event.stopPropagation();
                 onOpenRestaurantDetails(restaurant);
               }}
-              aria-label={`${restaurant.name} 식당 상세보기`}
+              aria-label={englishText(`${restaurant.name} Restaurant Details`)}
               className="mx-5 mb-2 flex min-h-10 flex-shrink-0 items-center justify-center gap-2 rounded-xl border border-white/15 bg-white/10 px-4 text-[13px] font-bold text-white outline-none transition-colors active:bg-white/20 focus-visible:ring-2 focus-visible:ring-white/80"
             >
               <Info size={16} aria-hidden="true" />
-              식당 상세보기
+
+              Restaurant Details
             </button>
 
             {restaurant.menuItems && restaurant.menuItems.length > 0 ? (
@@ -906,7 +909,7 @@ function SwipeCard({
                 <div className="flex-1 overflow-y-auto -mx-1 px-1">
                   {groupByCategory(restaurant.menuItems).map(([cat, items]) => (
                     <div key={cat} className="mb-1">
-                      <p className="text-[10px] font-bold text-white/40 uppercase tracking-wide pt-3 pb-1.5">{cat}</p>
+                      <p className="text-[10px] font-bold text-white/40 uppercase tracking-wide pt-3 pb-1.5">{englishText(cat)}</p>
                       {items.map((item, idx) => (
                         <div
                           key={idx}
@@ -918,22 +921,22 @@ function SwipeCard({
                             <div className="w-11 h-11 rounded-lg bg-white/10 flex-shrink-0" />
                           )}
                           <div className="min-w-0 flex-1">
-                            <p className="text-white text-[13.5px] font-semibold truncate">{item.name}</p>
-                            {item.description && (
-                              <p className="text-white/45 text-[11px] truncate mt-0.5">{item.description}</p>
-                            )}
+                            <p className="text-white text-[13.5px] font-semibold truncate">{englishText(item.name)}</p>
+                            {englishText(item.description && (
+                              <p className="text-white/45 text-[11px] truncate mt-0.5">{englishText(item.description)}</p>
+                            ))}
                             {item.dietary && item.dietary.length > 0 && (
                               <div className="flex gap-1 mt-1 flex-wrap">
                                 {item.dietary.map((d: string) => (
-                                  <span key={d} className="text-[9px] font-bold bg-[#3CBA44]/25 text-[#7ee08a] px-1.5 py-0.5 rounded-full">
-                                    {d}
+                                  <span key={d} className="text-[9px] font-bold bg-[#AA1A0D]/25 text-[#AA1A0D] px-1.5 py-0.5 rounded-full">
+                                    {englishText(d)}
                                   </span>
                                 ))}
                               </div>
                             )}
                           </div>
                           <span className="text-white/90 text-[13px] font-bold flex-shrink-0 tabular-nums">
-                            {item.price != null ? `$${item.price}` : ''}
+                            {englishText(item.price != null ? `$${item.price}` : '')}
                           </span>
                         </div>
                       ))}
@@ -963,7 +966,7 @@ function SwipeCard({
                               e.stopPropagation();
                               rotateMenuPhoto(-1);
                             }}
-                            aria-label="이전 사진"
+                            aria-label="Previous Photo"
                           />
                           <button
                             className="absolute inset-y-0 right-0 w-1/2"
@@ -972,7 +975,7 @@ function SwipeCard({
                               e.stopPropagation();
                               rotateMenuPhoto(1);
                             }}
-                            aria-label="다음 사진"
+                            aria-label="Next Photo"
                           />
                         </>
                       )}
@@ -1002,12 +1005,12 @@ function SwipeCard({
                   <p
                     role={photoProgressAriaLabel ? 'status' : undefined}
                     aria-live={photoProgressAriaLabel ? 'polite' : undefined}
-                    aria-label={photoProgressAriaLabel}
+                    aria-label={englishText(photoProgressAriaLabel)}
                     className="font-bold text-[16px] text-white"
                   >
-                    {photoLabel}
+                    {englishText(photoLabel)}
                   </p>
-                  <p className="text-[12px] text-white/50 mt-0.5">{restaurant.description}</p>
+                  <p className="text-[12px] text-white/50 mt-0.5">{englishText(restaurant.description)}</p>
                 </div>
               </div>
             )}
@@ -1039,11 +1042,11 @@ function formatRemainingTime(deadlineStr: string | null): string {
   if (diffHours >= 24) {
     const days = Math.floor(diffHours / 24);
     const remainingHours = diffHours % 24;
-    return `${days}일 ${remainingHours}시간`;
+    return `${days} days ${remainingHours} hours`;
   }
   if (diffHours >= 1) {
     const remainingMins = diffMins % 60;
-    return `${diffHours}시간 ${remainingMins}분`;
+    return `${diffHours} hours ${remainingMins} min`;
   }
   const mins = diffMins % 60;
   const secs = diffSecs % 60;
@@ -1052,14 +1055,19 @@ function formatRemainingTime(deadlineStr: string | null): string {
 
 // ─── Winner Screen ────────────────────────────────────────────────────────────
 
-function WinnerScreen({ selectedWinner, onReset }: { selectedWinner?: Restaurant | null; onReset: () => void }) {
+export function WinnerScreen({ selectedWinner, onReset, resultSession, savedResult = false }: {
+  selectedWinner?: Restaurant | null;
+  onReset: () => void;
+  resultSession?: GroupSession | null;
+  savedResult?: boolean;
+}) {
   const [, navigate] = useLocation();
-  const { currentSession, restaurants, profile } = useApp();
+  const { currentSession: activeSession, restaurants, profile, savedLunchPicks, saveLunchPick } = useApp();
+  const currentSession = resultSession === undefined ? activeSession : resultSession;
   const { captureCard, downloadImage } = useCourseShare();
   const shareCardRef = useRef<HTMLDivElement>(null);
   const [showShare, setShowShare] = useState(false);
   const [isCapturing, setIsCapturing] = useState(false);
-  const [saved, setSaved] = useState(false);
   const [detailIndex, setDetailIndex] = useState<number | null>(null);
   const [satisfaction, setSatisfaction] = useState(70);
   const [satisfactionSubmitted, setSatisfactionSubmitted] = useState(false);
@@ -1070,7 +1078,7 @@ function WinnerScreen({ selectedWinner, onReset }: { selectedWinner?: Restaurant
   const lunchmateLoadout = lunchmateLoadoutFromProfile(profile.lunchmateLoadout);
   const winnerEventKeyRef = useRef<string | null>(null);
   const [liveResults, setLiveResults] = useState<{
-    results: { restaurantId: string; score: number; likeCount: number; dislikeCount: number }[];
+    results: { restaurantId: string; score: number; likeCount: number; dislikeCount: number; neutralCount?: number }[];
     winnerId?: string | null;
     satisfactionResponseCount?: number;
     satisfactionAverage?: number | null;
@@ -1104,9 +1112,10 @@ function WinnerScreen({ selectedWinner, onReset }: { selectedWinner?: Restaurant
   const winnerId = liveResults.winnerId || liveResults.results[0]?.restaurantId;
   const winner = selectedWinner || restaurants.find(r => r.id === winnerId) || currentSession?.restaurants[0];
   const isSoloSession = (currentSession?.members.length ?? 1) <= 1;
+  const saved = savedLunchPicks.some(pick => pick.restaurant.id === winner?.id);
 
   useEffect(() => {
-    if (winner) {
+    if (winner && !savedResult) {
       const idempotencyKey = winnerEventKeyRef.current ?? `winner:${currentSession?.id ?? crypto.randomUUID()}:${winner.id}`;
       winnerEventKeyRef.current = idempotencyKey;
       // WINNER의 정본은 바로 아래 journey-winner API가 멱등 키와 함께 저장한다.
@@ -1126,7 +1135,7 @@ function WinnerScreen({ selectedWinner, onReset }: { selectedWinner?: Restaurant
       // 회고 대기: 다음 홈 진입 시 "어땠어요?" 설문 → 만족 정답(SURVEY) 수집
       try { localStorage.setItem('lunchie_retro', JSON.stringify({ id: winner.id, name: winner.name, session: currentSession?.id ?? null, at: Date.now() })); } catch { /* noop */ }
     }
-  }, [winner?.id]);
+  }, [winner?.id, savedResult]);
 
   if (!winner) return <SwipeStateScreen state="loading" />;
 
@@ -1135,7 +1144,7 @@ function WinnerScreen({ selectedWinner, onReset }: { selectedWinner?: Restaurant
 
   const handleCopyAddress = async () => {
     await navigator.clipboard.writeText(winner.address);
-    toast.success('주소가 복사됐어요! 📋');
+    toast.success("Address copied! 📋");
   };
 
   const handleSaveImage = async () => {
@@ -1143,10 +1152,10 @@ function WinnerScreen({ selectedWinner, onReset }: { selectedWinner?: Restaurant
     try {
       const dataUrl = await captureCard(shareCardRef);
       await downloadImage(dataUrl, `lunchie-${winner.name}.png`);
-      toast.success('이미지가 저장됐어요! 🎉');
+      toast.success("Image saved! 🎉");
     } catch (e) {
       console.error('Failed to save share card:', e);
-      toast.error('이미지 저장에 실패했어요');
+      toast.error("Couldn't save the image");
     } finally {
       setIsCapturing(false);
     }
@@ -1163,15 +1172,15 @@ function WinnerScreen({ selectedWinner, onReset }: { selectedWinner?: Restaurant
         await navigator.share({
           files: [file],
           title: 'Lunchie Munchie',
-          text: `오늘의 점심은 ${winner.name}! 🍽️`,
+          text: `Today's lunch is  ${winner.name}! 🍽️`,
         });
       } else {
         await downloadImage(dataUrl, `lunchie-${winner.name}.png`);
-        toast.success('이미지가 저장됐어요. 갤러리에서 공유해보세요! 📤');
+        toast.success("Image saved. Share it from your gallery! 📤");
       }
     } catch (e) {
       console.error('Failed to share card:', e);
-      toast.error('공유에 실패했어요');
+      toast.error("Couldn't share");
     } finally {
       setIsCapturing(false);
     }
@@ -1218,10 +1227,10 @@ function WinnerScreen({ selectedWinner, onReset }: { selectedWinner?: Restaurant
         context: { moment: 'shared_session_reveal', satisfaction_score: satisfaction },
       });
       flushEvents();
-      toast.success('만족도를 남겼어요!');
+      toast.success("Feedback submitted!");
     } catch (error) {
       console.error('만족도 저장 실패', error);
-      toast.error('만족도를 저장하지 못했어요. 다시 시도해 주세요.');
+      toast.error("Couldn't save your feedback. Please try again.");
     } finally {
       setIsSubmittingSatisfaction(false);
     }
@@ -1264,10 +1273,10 @@ function WinnerScreen({ selectedWinner, onReset }: { selectedWinner?: Restaurant
         context: { moment: 'after_meal', meal_rating: mealRating, visited: true },
       });
       flushEvents();
-      toast.success('식사 후 별점을 남겼어요!');
+      toast.success("Meal rating submitted!");
     } catch (error) {
       console.error('식사 후 별점 저장 실패', error);
-      toast.error('별점을 저장하지 못했어요. 다시 시도해 주세요.');
+      toast.error("Couldn't save your rating. Please try again.");
     } finally {
       setIsSubmittingMealRating(false);
     }
@@ -1277,48 +1286,164 @@ function WinnerScreen({ selectedWinner, onReset }: { selectedWinner?: Restaurant
     <motion.div
       initial={{ opacity: 0, y: 30 }}
       animate={{ opacity: 1, y: 0 }}
-      className="min-h-dvh bg-[#FCF4EE] pb-10"
+      className="min-h-dvh bg-[#FCFCFC] pb-10"
     >
       {/* Hero */}
-      <div className="relative w-full" style={{ aspectRatio: '4/3' }}>
+      <div className="border-b border-[#E8E6E7] px-5 py-3"><GameStageRail current={4} /></div>
+      <div className="relative w-full" style={{ aspectRatio: '16/9', maxHeight: '300px' }}>
         <FoodImage src={winner.image || winner.photos?.[0]} name={winner.name} category={winner.category} className="w-full h-full object-cover" emojiClass="text-[80px]" />
         <div className="absolute inset-0 bg-gradient-to-t from-black/75 via-black/15 to-transparent" />
+        {savedResult && <BackButton className="absolute left-4 top-4 z-10 bg-white" onClick={() => navigate('/saved')} aria-label="Back to Saved" />}
         <div className="absolute inset-x-0 bottom-0 px-5 pb-5 text-center">
-          <div className="mx-auto mb-2 flex size-16 items-center justify-center rounded-full bg-white/95 shadow-lg">
-            <LunchmateCharacterRenderer
-              flowState="idle"
-              artwork="chicken"
-              chickenAssetKeyOverride="idle"
-              chickenFaceSystem
-              animated={false}
-              loadout={lunchmateLoadout}
-              size={58}
-              renderSize="compact"
-              alt="오늘의 선택을 축하하는 런치킨"
-            />
-          </div>
-          <span className="inline-block text-[11px] font-black text-white bg-white/20 backdrop-blur-sm rounded-full px-3 py-1 mb-1.5">
-            {isSoloSession ? '🏆 SOLO WINNER!' : '오늘의 점심 당첨!'}
+          <span className="inline-block text-[11px] font-semibold text-white bg-white/20 backdrop-blur-sm rounded-full px-3 py-1 mb-1.5">
+            {englishText(isSoloSession ? '🏆 SOLO WINNER!' : "Today's Lunch Pick!")}
           </span>
-          <h1 className="text-white font-black text-[24px] leading-tight">{winner.name}</h1>
+          <h1 className="break-words text-white font-bold text-[24px] leading-tight">{englishText(winner.name)}</h1>
         </div>
       </div>
 
-      {/* Detail Card */}
-      <div className="px-5 -mt-5 relative">
-        <div className="bg-white rounded-3xl p-5 shadow-lg space-y-4">
-          <div className="rounded-[22px] bg-[#5B45D6] p-4 text-center text-white" aria-labelledby="result-satisfaction-title">
-            <GameStageRail current={4} />
-            <div className="mx-auto flex size-9 items-center justify-center rounded-xl bg-white/15 text-white">
+      <div className="px-5 py-5">
+        <div className="space-y-4">
+
+          {/* Badges */}
+          <div className="flex items-center gap-2 flex-wrap">
+            <div className="flex items-center gap-1 bg-[#FBECE9] rounded-full px-2.5 py-1">
+              <Star size={12} fill="#AA1A0D" color="#AA1A0D" />
+              <span className="text-[12px] font-bold text-[#AA1A0D]">{englishText(restaurantRatingLabel(winner.rating))}</span>
+            </div>
+            {englishText(winner.distance?.trim() && <span className="flex items-center gap-1 text-[12px] font-bold text-[#AA1A0D] bg-[#FBECE9] rounded-full px-2.5 py-1">
+              <MapPin size={12} aria-hidden="true" /> {englishText(winner.distance)}
+            </span>)}
+            {englishText(restaurantPriceLabel(winner) && <span className="text-[12px] font-bold text-[#AA1A0D] bg-[#FBECE9] rounded-full px-2.5 py-1">
+              {englishText(restaurantPriceLabel(winner))}
+            </span>)}
+            <span className="text-[12px] font-bold text-[#AA1A0D] bg-[#FBECE9] rounded-full px-2.5 py-1">
+              {englishText(winner.category)}
+            </span>
+          </div>
+
+          {/* Address */}
+          <div className="flex items-start gap-1.5">
+            <MapPin size={14} className="text-[#9B9B9B] mt-0.5 flex-shrink-0" />
+            <p className="text-[13px] text-[#565256]">{englishText(winner.address)}</p>
+          </div>
+
+          {/* Action Buttons */}
+          <div className="flex gap-2 pt-1">
+            <button
+              onClick={() => toast.info("Reservations are coming soon.")}
+              className="min-w-0 flex-1 min-h-11 py-3 rounded-lg font-bold text-[13px] flex items-center justify-center gap-1.5 border border-[#E8E6E7] text-[#565256] active:scale-[0.98] transition-all"
+            >
+              <Phone size={15} />  Reserve
+            </button>
+            <button
+              onClick={() => { logNavigate(winner.id, { user_id: profile.id, session_id: currentSession?.id ?? null }); navigate(`/lunchie/map?id=${winner.id}`); }}
+              className="min-w-0 flex-1 min-h-11 py-3 rounded-lg font-bold text-[13px] flex items-center justify-center gap-1.5 border border-[#E8E6E7] bg-white text-[#565256] active:scale-[0.98] transition-all"
+            >
+              <Navigation size={15} />  Directions
+            </button>
+          </div>
+
+          {/* 저장(강한 취향 신호 COURSE_SAVE) · 다시 고르기(REROLL) */}
+          <div className="flex gap-2">
+            <button
+              onClick={() => {
+                if (saved) { navigate('/saved'); return; }
+                try {
+                  saveLunchPick(winner, currentSession ?? null);
+                  logEvent({ event_type: 'COURSE_SAVE', user_id: profile.id, session_id: currentSession?.id ?? null, restaurant_id: winner.id });
+                  toast.success("Added to your Lunchie picks.");
+                } catch {
+                  toast.error("Couldn't save your Lunchie pick. Please try again.");
+                }
+              }}
+              className="min-w-0 flex-1 min-h-11 py-3 rounded-lg font-bold text-[13px] flex items-center justify-center gap-1.5 border active:scale-[0.98] transition-all"
+              style={{ borderColor: '#AA1A0D', color: saved ? '#AA1A0D' : 'white', background: saved ? '#FBECE9' : '#AA1A0D' }}
+            >
+              <Bookmark size={15} fill={saved ? '#AA1A0D' : 'none'} /> {englishText(saved ? "Lunchie Pick Saved" : "Save Lunchie Pick")}
+            </button>
+            <button
+              onClick={onReset}
+              className="min-w-0 flex-1 min-h-11 py-3 rounded-lg font-bold text-[13px] flex items-center justify-center gap-1.5 border border-[#E8E6E7] text-[#565256] active:scale-[0.98] transition-all"
+            >
+              <RotateCcw size={15} />  Choose Again
+            </button>
+          </div>
+
+          {/* Tags */}
+          <div className="flex gap-1.5 flex-wrap">
+            {winner.tags.map(tag => (
+              <span key={tag} className="tag tag-hash">#{englishText(tag)}</span>
+            ))}
+          </div>
+
+          {/* Description */}
+          <p className="text-[13px] text-[#565256] leading-relaxed">{englishText(winner.description)}</p>
+
+          {/* Menu — 실제 메뉴리스트(소스 카테고리 구조) 있으면 우선, 없으면 사진 그리드 폴백 */}
+          {winner.menuItems && winner.menuItems.length > 0 ? (
+            <div>
+              <p className="text-[12px] font-bold text-[#9B9B9B] mb-2">Menu ({winner.menuItems.length})</p>
+              <div className="max-h-[320px] overflow-y-auto rounded-2xl border border-[#E8E6E7]">
+                {groupByCategory(winner.menuItems).map(([cat, items]) => (
+                  <div key={cat}>
+                    <p className="text-[10px] font-bold text-[#BDBABD] uppercase tracking-wide px-3 pt-3 pb-1 bg-[#F5F4F5]">{englishText(cat)}</p>
+                    {items.map((item, i) => (
+                      <div
+                        key={i}
+                        className="w-full flex items-center gap-3 px-3 py-2.5 border-b border-[#E8E6E7] last:border-b-0 text-left"
+                      >
+                        {item.image ? (
+                          <img src={item.image} alt="" className="w-10 h-10 rounded-lg object-cover flex-shrink-0 bg-[#F5F4F5]" />
+                        ) : (
+                          <div className="w-10 h-10 rounded-lg bg-[#F5F4F5] flex-shrink-0" />
+                        )}
+                        <div className="min-w-0 flex-1">
+                          <p className="text-[13px] font-semibold text-[#2A2A2A] truncate">{englishText(item.name)}</p>
+                          {englishText(item.description && (
+                            <p className="text-[11px] text-[#9B9B9B] truncate mt-0.5">{englishText(item.description)}</p>
+                          ))}
+                          {item.dietary && item.dietary.length > 0 && (
+                            <div className="flex gap-1 mt-0.5 flex-wrap">
+                              {item.dietary.map((d) => (
+                                <span key={d} className="text-[9px] font-bold bg-[#FBECE9] text-[#AA1A0D] px-1.5 py-0.5 rounded-full">{englishText(d)}</span>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                        <span className="text-[12.5px] font-bold text-[#565256] flex-shrink-0 tabular-nums">
+                          {englishText(item.price != null ? `$${item.price}` : '')}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                ))}
+              </div>
+            </div>
+          ) : (
+            <div>
+              <p className="text-[12px] font-bold text-[#9B9B9B] mb-2">Menu Photos</p>
+              <div className="grid grid-cols-4 gap-2">
+                {foodPhotos.map((url, i) => (
+                  <div key={i} className="aspect-square rounded-xl overflow-hidden bg-[#F5F4F5]">
+                    <img src={url} alt="" className="w-full h-full object-cover" />
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          <div className="border-t border-[#E8E6E7] py-6 text-center text-[#171717]" aria-labelledby="result-satisfaction-title">
+            <div className="mx-auto flex size-9 items-center justify-center rounded-xl bg-white text-[#171717]">
               <MessageCircleHeart size={19} aria-hidden="true" />
             </div>
-            <p id="result-satisfaction-title" className="mt-2 text-[16px] font-black">이 결정에 얼마나 만족해요?</p>
-            <p className="mt-0.5 text-[10px] font-semibold text-white/65">다른 사람에게는 점수가 보이지 않아요.</p>
-            <div className="mt-4 rounded-2xl bg-white/10 px-3 py-4">
-              <div className="flex items-center justify-between text-[10px] font-black text-white/65">
-                <span>아쉬워요</span>
-                <output htmlFor="lunchie-satisfaction" className="rounded-full bg-[#FFE36E] px-2.5 py-1 text-[13px] font-black text-[#372B70]">{satisfaction}%</output>
-                <span>완전 만족</span>
+            <p id="result-satisfaction-title" className="mt-2 text-[16px] font-semibold">How happy are you with this choice?</p>
+            <p className="mt-0.5 text-[10px] font-semibold text-[#858185]">Your score stays private.</p>
+            <div className="mt-4 px-1 py-4">
+              <div className="flex items-center justify-between text-[10px] font-semibold text-[#858185]">
+                <span>Not Quite</span>
+                <output htmlFor="lunchie-satisfaction" className="rounded-full bg-[#FBECE9] px-2.5 py-1 text-[13px] font-semibold text-[#80140A]">{satisfaction}%</output>
+                <span>Love It</span>
               </div>
               <input
                 id="lunchie-satisfaction"
@@ -1329,84 +1454,84 @@ function WinnerScreen({ selectedWinner, onReset }: { selectedWinner?: Restaurant
                 value={satisfaction}
                 onChange={event => setSatisfaction(Number(event.target.value))}
                 disabled={satisfactionSubmitted}
-                aria-label="결과 만족도"
-                className="mt-4 w-full accent-[#FFE36E]"
+                aria-label="Choice Satisfaction"
+                className="mt-4 w-full accent-[#AA1A0D]"
               />
             </div>
             <button
               type="button"
               onClick={shareSatisfaction}
               disabled={satisfactionSubmitted || isSubmittingSatisfaction}
-              className="mt-3 min-h-11 w-full rounded-2xl bg-white px-4 text-[12px] font-black text-[#5B45D6] disabled:bg-white/20 disabled:text-white/70"
+              className="mt-3 min-h-11 w-full rounded-lg bg-[#AA1A0D] px-4 text-[12px] font-semibold text-white active:bg-[#80140A] disabled:bg-[#E8E6E7] disabled:text-[#858185]"
             >
-              {satisfactionSubmitted ? '만족도 제출 완료 ✓' : isSubmittingSatisfaction ? '집계 중…' : '만족도 보내기'}
+              {englishText(satisfactionSubmitted ? "Feedback Submitted ✓" : isSubmittingSatisfaction ? "Calculating…" : "Submit Feedback")}
             </button>
-            {satisfactionSubmitted && <p className="mt-2 text-[10px] font-bold text-[#FFE36E]" role="status">다음 모임 추천에 반영할게요.</p>}
+            {satisfactionSubmitted && <p className="mt-2 text-[10px] font-bold text-[#AA1A0D]" role="status">Your feedback helps with future recommendations.</p>}
             {satisfactionSubmitted && (
-              <div className="mt-4 rounded-2xl bg-black/15 p-4 text-left" aria-label="4라운드 통계 결과">
+              <div className="mt-4 border-t border-[#E8E6E7] pt-4 text-left" aria-label="Round 4 Results">
                 <div className="flex items-end justify-between gap-3">
                   <div>
-                    <p className="text-[9px] font-black tracking-[0.7px] text-[#FFE36E]">ROUND 4 RESULT</p>
-                    <p className="mt-1 text-[12px] font-black">전체 만족도 평균</p>
+                    <p className="text-[9px] font-semibold tracking-[0.7px] text-[#AA1A0D]">ROUND 4 RESULT</p>
+                    <p className="mt-1 text-[12px] font-semibold">Average Satisfaction</p>
                   </div>
-                  <p className="text-[30px] font-black text-[#FFE36E]">{liveResults.satisfactionAverage ?? satisfaction}<span className="text-sm">%</span></p>
+                  <p className="text-[30px] font-semibold text-[#AA1A0D]">{liveResults.satisfactionAverage ?? satisfaction}<span className="text-sm">%</span></p>
                 </div>
-                <div className="mt-3 grid grid-cols-3 gap-2 text-center text-[9px] font-black">
-                  <div className="rounded-xl bg-white/10 px-1 py-2"><span className="block text-lg">{liveResults.satisfactionBuckets?.low ?? (satisfaction < 40 ? 1 : 0)}</span>아쉬움</div>
-                  <div className="rounded-xl bg-white/10 px-1 py-2"><span className="block text-lg">{liveResults.satisfactionBuckets?.medium ?? (satisfaction >= 40 && satisfaction < 70 ? 1 : 0)}</span>괜찮음</div>
-                  <div className="rounded-xl bg-white/10 px-1 py-2"><span className="block text-lg">{liveResults.satisfactionBuckets?.high ?? (satisfaction >= 70 ? 1 : 0)}</span>만족</div>
+                <div className="mt-3 grid grid-cols-3 gap-2 text-center text-[9px] font-semibold">
+                  <div className="rounded-xl bg-white/10 px-1 py-2"><span className="block text-lg">{liveResults.satisfactionBuckets?.low ?? (satisfaction < 40 ? 1 : 0)}</span>Disappointed</div>
+                  <div className="rounded-xl bg-white/10 px-1 py-2"><span className="block text-lg">{liveResults.satisfactionBuckets?.medium ?? (satisfaction >= 40 && satisfaction < 70 ? 1 : 0)}</span>Okay</div>
+                  <div className="rounded-xl bg-white/10 px-1 py-2"><span className="block text-lg">{liveResults.satisfactionBuckets?.high ?? (satisfaction >= 70 ? 1 : 0)}</span>Happy</div>
                 </div>
-                <p className="mt-3 text-center text-[9px] font-bold text-white/45">익명 응답 {Math.max(1, liveResults.satisfactionResponseCount ?? 0)}명</p>
+                <p className="mt-3 text-center text-[9px] font-bold text-[#858185]">Anonymous responses {Math.max(1, liveResults.satisfactionResponseCount ?? 0)} people</p>
               </div>
             )}
           </div>
 
-          <div className="rounded-[22px] border-2 border-[#FFD8B8] bg-[#FFF8EF] p-4 text-center" aria-labelledby="after-meal-rating-title">
-            <span className="inline-flex rounded-full bg-[#EB5053] px-3 py-1 text-[9px] font-black tracking-[0.7px] text-white">AFTER THE MEAL</span>
-            <p id="after-meal-rating-title" className="mt-3 text-[17px] font-black text-[#3D315D]">다녀오셨나요?</p>
-            <p className="mt-1 text-[11px] font-semibold leading-relaxed text-[#7A6B78]">결정 만족도와 별개로, 실제 식사 경험을 별점으로 남겨주세요.</p>
+          <div className="border-t border-[#E8E6E7] py-6 text-center" aria-labelledby="after-meal-rating-title">
+            <span className="inline-flex rounded-full bg-[#FBECE9] px-3 py-1 text-[9px] font-semibold tracking-[0.7px] text-[#AA1A0D]">AFTER THE MEAL</span>
+            <p id="after-meal-rating-title" className="mt-3 text-[17px] font-semibold text-[#171717]">Have you visited?</p>
+            <p className="mt-1 text-[11px] font-semibold leading-relaxed text-[#858185]">Rate your actual meal separately from your satisfaction with the choice.</p>
 
-            <div className="mt-4 flex justify-center gap-1.5" role="group" aria-label="식사 후 별점 선택">
+            <div className="mt-4 flex justify-center gap-1.5" role="group" aria-label="Rate Your Meal">
               {([1, 2, 3, 4, 5] as const).map(star => (
                 <button
                   key={star}
                   type="button"
                   onClick={() => setMealRating(star)}
                   disabled={mealRatingSubmitted}
-                  aria-label={`${star}점`}
+                  aria-label={englishText(`${star} points`)}
                   aria-pressed={mealRating === star}
-                  className="rounded-xl p-1 outline-none focus-visible:ring-4 focus-visible:ring-[#EB5053]/25 disabled:cursor-default"
+                  className="rounded-xl p-1 outline-none focus-visible:ring-4 focus-visible:ring-[#AA1A0D]/25 disabled:cursor-default"
                 >
                   <Star
                     size={34}
-                    fill={star <= mealRating ? '#FFB629' : 'transparent'}
-                    color={star <= mealRating ? '#FFB629' : '#D8CDD1'}
+                    fill={star <= mealRating ? '#AA1A0D' : 'transparent'}
+                    color={star <= mealRating ? '#AA1A0D' : '#BDBABD'}
                     strokeWidth={2.4}
                   />
                 </button>
               ))}
             </div>
-            <p className="mt-1 min-h-5 text-[11px] font-black text-[#EB5053]">
-              {mealRating > 0 ? `${mealRating}점 · 실제 방문 완료` : '별을 눌러 방문 후 만족도를 선택하세요'}
+            <p className="mt-1 min-h-5 text-[11px] font-semibold text-[#AA1A0D]">
+              {englishText(mealRating > 0 ? `${mealRating} stars · visited` : "Choose a star rating after your visit")}
             </p>
             <button
               type="button"
               onClick={shareMealRating}
               disabled={mealRating < 1 || mealRatingSubmitted || isSubmittingMealRating}
-              className="mt-3 min-h-11 w-full rounded-2xl bg-[#EB5053] px-4 text-[12px] font-black text-white shadow-md disabled:bg-[#E8DBD5] disabled:text-[#A99A96]"
+              className="mt-3 min-h-11 w-full rounded-lg bg-[#AA1A0D] px-4 text-[12px] font-semibold text-white disabled:bg-[#F5F4F5] disabled:text-[#BDBABD]"
             >
-              {mealRatingSubmitted ? '식사 후 별점 제출 완료 ✓' : isSubmittingMealRating ? '별점 집계 중…' : '다녀왔어요 · 별점 보내기'}
+              {englishText(mealRatingSubmitted ? "Meal Rating Submitted ✓" : isSubmittingMealRating ? "Calculating ratings…" : "I've Visited · Submit Rating")}
             </button>
 
-            <div className="mt-4 rounded-2xl bg-white p-4 text-left shadow-sm" aria-label="식사 후 만족도 통계">
+            <div className="mt-4 border-t border-[#E8E6E7] pt-4 text-left" aria-label="Meal Rating Results">
               <div className="flex items-center justify-between gap-3">
                 <div>
-                  <p className="text-[9px] font-black tracking-[0.7px] text-[#EB5053]">VISIT STATISTICS</p>
-                  <p className="mt-1 text-[13px] font-black text-[#3D315D]">{liveResults.visitedCount ?? 0}명이 다녀왔어요</p>
+                  <p className="text-[9px] font-semibold tracking-[0.7px] text-[#AA1A0D]">VISIT STATISTICS</p>
+                  <p className="mt-1 text-[13px] font-semibold text-[#171717]">{liveResults.visitedCount ?? 0} people visited</p>
                 </div>
                 <div className="text-right">
-                  <p className="text-[9px] font-bold text-[#9B8C94]">식사 후 평균</p>
-                  <p className="text-[26px] font-black text-[#FF9E1B]">{liveResults.mealRatingAverage ?? '—'}<span className="text-xs"> / 5</span></p>
+                  <p className="text-[9px] font-bold text-[#858185]">Average meal rating</p>
+                  <p className="text-[26px] font-semibold text-[#AA1A0D]">{englishText(liveResults.mealRatingAverage ?? '—')}<span className="text-xs"> / 5</span></p>
                 </div>
               </div>
               <div className="mt-3 space-y-1.5">
@@ -1414,11 +1539,11 @@ function WinnerScreen({ selectedWinner, onReset }: { selectedWinner?: Restaurant
                   const count = liveResults.mealRatingDistribution?.[star] ?? 0;
                   const totalRatings = Math.max(1, liveResults.visitedCount ?? 0);
                   return (
-                    <div key={star} className="flex items-center gap-2 text-[9px] font-black text-[#75666E]">
+                    <div key={star} className="flex items-center gap-2 text-[9px] font-semibold text-[#858185]">
                       <span className="w-6">{star}★</span>
-                      <div className="h-2 flex-1 overflow-hidden rounded-full bg-[#F1E7E2]">
+                      <div className="h-2 flex-1 overflow-hidden rounded-full bg-[#F5F4F5]">
                         <motion.div
-                          className="h-full rounded-full bg-[#FFB629]"
+                          className="h-full rounded-full bg-[#AA1A0D]"
                           animate={{ width: `${(count / totalRatings) * 100}%` }}
                         />
                       </div>
@@ -1427,143 +1552,23 @@ function WinnerScreen({ selectedWinner, onReset }: { selectedWinner?: Restaurant
                   );
                 })}
               </div>
-              <p className="mt-3 text-center text-[9px] font-bold text-[#A6979E]">개별 별점은 숨기고 익명 통계만 보여줘요.</p>
+              <p className="mt-3 text-center text-[9px] font-bold text-[#858185]">Individual ratings stay private. Only anonymous totals are shown.</p>
             </div>
-          </div>
-
-          {/* Badges */}
-          <div className="flex items-center gap-2 flex-wrap">
-            <div className="flex items-center gap-1 bg-[#FFF5F5] rounded-full px-2.5 py-1">
-              <Star size={12} fill="#EB5053" color="#EB5053" />
-              <span className="text-[12px] font-bold text-[#EB5053]">{winner.rating}</span>
-            </div>
-            <span className="text-[12px] font-semibold text-[#4A4A4A] bg-[#F5F5F5] rounded-full px-2.5 py-1">
-              📍 {winner.distance}
-            </span>
-            <span className="text-[12px] font-semibold text-[#4A4A4A] bg-[#F5F5F5] rounded-full px-2.5 py-1">
-              {'₩'.repeat(winner.priceRange)}
-            </span>
-            <span className="text-[12px] font-semibold text-white rounded-full px-2.5 py-1" style={{ background: '#EB5053' }}>
-              {winner.category}
-            </span>
-          </div>
-
-          {/* Address */}
-          <div className="flex items-start gap-1.5">
-            <MapPin size={14} className="text-[#9B9B9B] mt-0.5 flex-shrink-0" />
-            <p className="text-[13px] text-[#4A4A4A]">{winner.address}</p>
-          </div>
-
-          {/* Tags */}
-          <div className="flex gap-1.5 flex-wrap">
-            {winner.tags.map(tag => (
-              <span key={tag} className="tag tag-hash">#{tag}</span>
-            ))}
-          </div>
-
-          {/* Description */}
-          <p className="text-[13px] text-[#4A4A4A] leading-relaxed">{winner.description}</p>
-
-          {/* Menu — 실제 메뉴리스트(소스 카테고리 구조) 있으면 우선, 없으면 사진 그리드 폴백 */}
-          {winner.menuItems && winner.menuItems.length > 0 ? (
-            <div>
-              <p className="text-[12px] font-bold text-[#9B9B9B] mb-2">메뉴 ({winner.menuItems.length})</p>
-              <div className="max-h-[320px] overflow-y-auto rounded-2xl border border-[#EFEFEF]">
-                {groupByCategory(winner.menuItems).map(([cat, items]) => (
-                  <div key={cat}>
-                    <p className="text-[10px] font-bold text-[#B0B0B0] uppercase tracking-wide px-3 pt-3 pb-1 bg-[#FAFAFA]">{cat}</p>
-                    {items.map((item, i) => (
-                      <div
-                        key={i}
-                        className="w-full flex items-center gap-3 px-3 py-2.5 border-b border-[#F0F0F0] last:border-b-0 text-left"
-                      >
-                        {item.image ? (
-                          <img src={item.image} alt="" className="w-10 h-10 rounded-lg object-cover flex-shrink-0 bg-[#F5F5F5]" />
-                        ) : (
-                          <div className="w-10 h-10 rounded-lg bg-[#F5F5F5] flex-shrink-0" />
-                        )}
-                        <div className="min-w-0 flex-1">
-                          <p className="text-[13px] font-semibold text-[#2A2A2A] truncate">{item.name}</p>
-                          {item.description && (
-                            <p className="text-[11px] text-[#9B9B9B] truncate mt-0.5">{item.description}</p>
-                          )}
-                          {item.dietary && item.dietary.length > 0 && (
-                            <div className="flex gap-1 mt-0.5 flex-wrap">
-                              {item.dietary.map((d) => (
-                                <span key={d} className="text-[9px] font-bold bg-[#E8F5E9] text-[#3CBA44] px-1.5 py-0.5 rounded-full">{d}</span>
-                              ))}
-                            </div>
-                          )}
-                        </div>
-                        <span className="text-[12.5px] font-bold text-[#4A4A4A] flex-shrink-0 tabular-nums">
-                          {item.price != null ? `$${item.price}` : ''}
-                        </span>
-                      </div>
-                    ))}
-                  </div>
-                ))}
-              </div>
-            </div>
-          ) : (
-            <div>
-              <p className="text-[12px] font-bold text-[#9B9B9B] mb-2">메뉴 사진</p>
-              <div className="grid grid-cols-4 gap-2">
-                {foodPhotos.map((url, i) => (
-                  <div key={i} className="aspect-square rounded-xl overflow-hidden bg-[#F5F5F5]">
-                    <img src={url} alt="" className="w-full h-full object-cover" />
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {/* Action Buttons */}
-          <div className="flex gap-2 pt-1">
-            <button
-              onClick={() => toast.info('예약 기능은 준비 중이에요 🙏')}
-              className="flex-1 py-3 rounded-2xl font-bold text-[14px] flex items-center justify-center gap-1.5 border border-[#E5E5E5] text-[#4A4A4A] active:scale-[0.98] transition-all"
-            >
-              <Phone size={15} /> 예약하기
-            </button>
-            <button
-              onClick={() => { logNavigate(winner.id, { user_id: profile.id, session_id: currentSession?.id ?? null }); navigate(`/lunchie/map?id=${winner.id}`); }}
-              className="flex-1 py-3 rounded-2xl font-bold text-white text-[14px] flex items-center justify-center gap-1.5 active:scale-[0.98] transition-all"
-              style={{ background: '#EB5053' }}
-            >
-              <Navigation size={15} /> 길찾기
-            </button>
-          </div>
-
-          {/* 저장(강한 취향 신호 COURSE_SAVE) · 다시 고르기(REROLL) */}
-          <div className="flex gap-2">
-            <button
-              onClick={() => { if (!saved) { logEvent({ event_type: 'COURSE_SAVE', user_id: profile.id, session_id: currentSession?.id ?? null, restaurant_id: winner.id }); setSaved(true); toast.success('저장했어요 🔖'); } }}
-              className="flex-1 py-3 rounded-2xl font-bold text-[14px] flex items-center justify-center gap-1.5 border active:scale-[0.98] transition-all"
-              style={{ borderColor: saved ? '#EB5053' : '#E5E5E5', color: saved ? '#EB5053' : '#4A4A4A', background: saved ? '#FFF5F5' : 'white' }}
-            >
-              <Bookmark size={15} fill={saved ? '#EB5053' : 'none'} /> {saved ? '저장됨' : '저장'}
-            </button>
-            <button
-              onClick={onReset}
-              className="flex-1 py-3 rounded-2xl font-bold text-[14px] flex items-center justify-center gap-1.5 border border-[#E5E5E5] text-[#4A4A4A] active:scale-[0.98] transition-all"
-            >
-              <RotateCcw size={15} /> 다시 고르기
-            </button>
           </div>
 
           <div className="mt-3 rounded-xl px-3 py-2.5 text-[12px] leading-relaxed"
-               style={{ background: '#FFF3D6', color: '#8A5A0B' }}>
-            🌱 다 드시고 나서 — <b>커피·디저트</b>도 근처에 있어요.
-            <br /><b>퀵매치</b>에서 커피·디저트를 선택해 다시 찾아보세요.
+               style={{ background: '#FBECE9', color: '#565256' }}>
+
+            🌱 After your meal —  <b>Coffee & Dessert</b> are nearby too.
+            <br /><b>Quick Match</b>: choose coffee or dessert to explore again.
           </div>
 
           {/* Share Card Button */}
           <button
             onClick={() => setShowShare(true)}
-            className="w-full py-3.5 rounded-2xl font-bold text-white text-[14px] flex items-center justify-center gap-2 active:scale-[0.98] transition-all shadow-lg"
-            style={{ background: 'linear-gradient(135deg, #F09D09 0%, #EB5053 100%)' }}
+            className="w-full min-h-11 py-3 rounded-lg border border-[#E8E6E7] bg-white font-semibold text-[#565256] text-[13px] flex items-center justify-center gap-2 active:scale-[0.98] transition-all"
           >
-            <Share2 size={16} /> 공유 카드 만들기
+            <Share2 size={16} />  Create Share Card
           </button>
         </div>
       </div>
@@ -1572,15 +1577,15 @@ function WinnerScreen({ selectedWinner, onReset }: { selectedWinner?: Restaurant
       <div className="px-5 mt-3 flex gap-2">
         <button
           onClick={handleCopyAddress}
-          className="flex-1 py-3 rounded-2xl font-bold text-[13px] flex items-center justify-center gap-1.5 bg-white border border-[#E5E5E5] text-[#4A4A4A] active:scale-[0.98] transition-all"
+          className="flex-1 py-3 rounded-2xl font-bold text-[13px] flex items-center justify-center gap-1.5 bg-white border border-[#E8E6E7] text-[#565256] active:scale-[0.98] transition-all"
         >
-          <Link2 size={14} /> 주소 복사
+          <Link2 size={14} />  Copy Address
         </button>
         <button
           onClick={() => navigate('/lunchie/settings')}
-          className="flex-1 py-3 rounded-2xl font-bold text-[13px] flex items-center justify-center gap-1.5 bg-white border border-[#E5E5E5] text-[#4A4A4A] active:scale-[0.98] transition-all"
+          className="flex-1 py-3 rounded-2xl font-bold text-[13px] flex items-center justify-center gap-1.5 bg-white border border-[#E8E6E7] text-[#565256] active:scale-[0.98] transition-all"
         >
-          <Home size={14} /> 퀵매치로
+          <Home size={14} />  Quick Match
         </button>
       </div>
 
@@ -1591,7 +1596,7 @@ function WinnerScreen({ selectedWinner, onReset }: { selectedWinner?: Restaurant
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            className="fixed inset-0 z-50 bg-[#FFF8F2]/95 backdrop-blur-sm flex flex-col items-center justify-center px-6 py-10 overflow-y-auto"
+            className="fixed inset-0 z-50 bg-[#FCFCFC]/95 backdrop-blur-sm flex flex-col items-center justify-center px-6 py-10 overflow-y-auto"
           >
             <WinnerShareCard ref={shareCardRef} restaurant={winner} loadout={lunchmateLoadout} participants={currentSession?.members ?? []} />
 
@@ -1599,25 +1604,26 @@ function WinnerScreen({ selectedWinner, onReset }: { selectedWinner?: Restaurant
               <button
                 onClick={handleSaveImage}
                 disabled={isCapturing}
-                className="flex-1 py-3.5 rounded-2xl border border-[#EFD8CF] font-bold text-[14px] flex items-center justify-center gap-1.5 bg-white text-[#5B4942] active:scale-[0.98] transition-all disabled:opacity-50"
+                className="flex-1 py-3.5 rounded-2xl border border-[#ECC1BB] font-bold text-[14px] flex items-center justify-center gap-1.5 bg-white text-[#565256] active:scale-[0.98] transition-all disabled:opacity-50"
               >
-                <Download size={16} /> 저장
+                <Download size={16} />  Save
               </button>
               <button
                 onClick={handleShareImage}
                 disabled={isCapturing}
                 className="flex-1 py-3.5 rounded-2xl font-bold text-[14px] flex items-center justify-center gap-1.5 text-white active:scale-[0.98] transition-all disabled:opacity-50"
-                style={{ background: '#EB5053' }}
+                style={{ background: '#AA1A0D' }}
               >
-                <Share2 size={16} /> 이미지 공유하기
+                <Share2 size={16} />  Share Image
               </button>
             </div>
 
             <button
               onClick={() => setShowShare(false)}
-              className="mt-5 text-[#9A847B] text-[13px] font-semibold active:scale-95"
+              className="mt-5 text-[#858185] text-[13px] font-semibold active:scale-95"
             >
-              닫기
+
+              Close
             </button>
           </motion.div>
         )}
@@ -1673,27 +1679,27 @@ function FinalBattleResultScreen({
       <motion.div
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
-        className={`min-h-dvh flex flex-col ${isSoloSession ? 'bg-[#F4F0FF]' : 'bg-[#FFF8F2]'}`}
+        className={`min-h-dvh flex flex-col ${isSoloSession ? 'bg-[#FCFCFC]' : 'bg-[#FCFCFC]'}`}
       >
-        <div className="bg-[#5B45D6] px-5 pb-3 pt-[max(14px,env(safe-area-inset-top))]">
+        <div className="border-b border-[#E8E6E7] bg-[#F5F4F5] px-5 pb-3 pt-[max(14px,env(safe-area-inset-top))]">
           <GameStageRail current={3} />
         </div>
         <div className="px-5 pt-12 pb-4 text-center">
-          {isSoloSession && <span className="rounded-full bg-[#5B45D6] px-3 py-1 text-[10px] font-black tracking-[0.8px] text-white">SOLO FINAL</span>}
-          <p className="mt-3 font-black text-[#302927] text-[22px]">{isSoloSession ? '마지막 도전자! 🏆' : '여기 어때요? 🤔'}</p>
-          <p className="mt-1 text-[13px] text-[#917F77]">좋아요 중 마지막 후보예요 · 별로면 새로 추천받아요</p>
+          {isSoloSession && <span className="rounded-full bg-[#AA1A0D] px-3 py-1 text-[10px] font-black tracking-[0.8px] text-white">SOLO FINAL</span>}
+          <p className="mt-3 font-black text-[#171717] text-[22px]">{englishText(isSoloSession ? "Last Contender! 🏆" : "How About This Place? 🤔")}</p>
+          <p className="mt-1 text-[13px] text-[#858185]">Your last liked option · get new recommendations if it isn't right</p>
         </div>
         <div className="flex-1 flex items-center justify-center px-5">
           <div className="w-full max-w-[360px] rounded-3xl overflow-hidden relative" style={{ aspectRatio: '4/5' }}>
             <FoodImage src={finalist1.image || finalist1.photos?.[0]} name={finalist1.name} category={finalist1.category} className="w-full h-full object-cover" emojiClass="text-[88px]" />
             <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/10 to-transparent" />
             <div className="absolute bottom-5 left-5 right-5">
-              <span className="inline-block bg-[#FFD700] text-[#1A1A1A] text-[11px] font-black px-3 py-1 rounded-full mb-2">🏆 유일한 후보</span>
-              <p className="text-white font-black text-[22px] leading-tight">{finalist1.name}</p>
+              <span className="inline-block bg-[#AA1A0D] text-[#1A1A1A] text-[11px] font-black px-3 py-1 rounded-full mb-2">🏆 Only Contender</span>
+              <p className="text-white font-black text-[22px] leading-tight">{englishText(finalist1.name)}</p>
               <div className="flex items-center gap-2 mt-1.5">
-                <Star size={13} fill="#FFD700" color="#FFD700" />
-                <span className="text-white/85 text-[13px]">{finalist1.rating}</span>
-                <span className="text-white/60 text-[12px]">{finalist1.distance}</span>
+                <Star size={13} fill="#AA1A0D" color="#AA1A0D" />
+                <span className="text-white/85 text-[13px]">{englishText(finalist1.rating)}</span>
+                <span className="text-white/60 text-[12px]">{englishText(finalist1.distance)}</span>
               </div>
             </div>
           </div>
@@ -1707,17 +1713,18 @@ function FinalBattleResultScreen({
             disabled={isSubmitting}
             aria-busy={isSubmitting}
             className={`${finalActionSizeClass} text-white active:scale-[0.98] shadow-xl transition-opacity disabled:opacity-50`}
-            style={{ background: isSoloSession ? '#5B45D6' : '#EB5053' }}
+            style={{ background: '#AA1A0D' }}
           >
-            {isSubmitting ? '최종 선택 저장 중…' : '이곳으로 결정!'}
+            {englishText(isSubmitting ? "Saving final choice…" : "Choose This Restaurant!")}
           </button>
           {onRejectBoth && (
             <button
               onClick={onRejectBoth}
               disabled={isSubmitting}
-              className={`${finalActionSizeClass} mt-2.5 border border-[#EFD8CF] bg-white text-[#78665E] active:scale-[0.98] transition-all disabled:opacity-50`}
+              className={`${finalActionSizeClass} mt-2.5 border border-[#ECC1BB] bg-white text-[#565256] active:scale-[0.98] transition-all disabled:opacity-50`}
             >
-              별로예요 · 새로 추천받기
+
+              Not for Me · Get New Options
             </button>
           )}
         </div>
@@ -1729,16 +1736,16 @@ function FinalBattleResultScreen({
     <motion.div
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
-      className={`min-h-dvh flex flex-col ${isSoloSession ? 'bg-[#F4F0FF]' : 'bg-[#FFF8F2]'}`}
+      className={`min-h-dvh flex flex-col ${isSoloSession ? 'bg-[#FCFCFC]' : 'bg-[#FCFCFC]'}`}
     >
-      <div className="bg-[#5B45D6] px-5 pb-3 pt-[max(14px,env(safe-area-inset-top))]">
+      <div className="border-b border-[#E8E6E7] bg-[#F5F4F5] px-5 pb-3 pt-[max(14px,env(safe-area-inset-top))]">
         <GameStageRail current={3} />
       </div>
       {/* Header */}
       <div className="px-5 pt-12 pb-4 text-center">
-        {isSoloSession && <span className="rounded-full bg-[#5B45D6] px-3 py-1 text-[10px] font-black tracking-[0.8px] text-white">SOLO SHOWDOWN</span>}
-        <p className="mt-3 font-black text-[#302927] text-[22px]">{isSoloSession ? '나만의 결승전 🏆' : '결승전 🏆'}</p>
-        <p className="mt-1 text-[13px] text-[#917F77]">{isSoloSession ? '내가 고른 TOP 2 · 최종 우승자를 선택해요' : '친구들과 함께 고른 TOP 2 · 마음에 드는 한 곳을 선택해요'}</p>
+        {isSoloSession && <span className="rounded-full bg-[#AA1A0D] px-3 py-1 text-[10px] font-black tracking-[0.8px] text-white">SOLO SHOWDOWN</span>}
+        <p className="mt-3 font-black text-[#171717] text-[22px]">{englishText(isSoloSession ? "My Final Showdown 🏆" : "Final Showdown 🏆")}</p>
+        <p className="mt-1 text-[13px] text-[#858185]">{englishText(isSoloSession ? "My Top 2 · choose the winner" : "Our Top 2 · choose your favorite")}</p>
       </div>
 
       {/* Diagonal split layout */}
@@ -1778,21 +1785,22 @@ function FinalBattleResultScreen({
             <motion.div
               className="absolute inset-0 ring-4 ring-inset"
               initial={{ boxShadow: 'inset 0 0 0 4px rgba(240,157,9,0)' }}
-              animate={{ boxShadow: 'inset 0 0 0 4px #EB5053' }}
+              animate={{ boxShadow: 'inset 0 0 0 4px #AA1A0D' }}
               transition={{ delay: 0.3, duration: 0.25 }}
             />
           )}
           <div className="absolute top-6 left-5 right-20 text-left">
             {selected === 1 && (
-              <span className="inline-block bg-[#EB5053] text-white text-[11px] font-black px-3 py-1 rounded-full mb-2">
-                ✓ 선택됨
+              <span className="inline-block bg-[#AA1A0D] text-white text-[11px] font-black px-3 py-1 rounded-full mb-2">
+
+                ✓ Selected
               </span>
             )}
-            <p className="text-white font-black text-[19px] leading-tight">{finalist1.name}</p>
+            <p className="text-white font-black text-[19px] leading-tight">{englishText(finalist1.name)}</p>
             <div className="flex items-center gap-2 mt-1">
-              <Star size={12} fill="#FFD700" color="#FFD700" />
-              <span className="text-white/85 text-[12px]">{finalist1.rating}</span>
-              <span className="text-white/60 text-[11px]">{finalist1.distance}</span>
+              <Star size={12} fill="#AA1A0D" color="#AA1A0D" />
+              <span className="text-white/85 text-[12px]">{englishText(finalist1.rating)}</span>
+              <span className="text-white/60 text-[11px]">{englishText(finalist1.distance)}</span>
             </div>
             {selected === 1 && (
               <motion.div
@@ -1801,11 +1809,11 @@ function FinalBattleResultScreen({
                 transition={{ delay: 0.4, duration: 0.35 }}
                 className="mt-3 max-w-[80%]"
               >
-                <p className="text-white/75 text-[12px] leading-relaxed">{finalist1.description}</p>
+                <p className="text-white/75 text-[12px] leading-relaxed">{englishText(finalist1.description)}</p>
                 <div className="flex gap-1.5 mt-2 flex-wrap">
-                  {(finalist1.tags || []).slice(0, 3).map((tag: string) => (
-                    <span key={tag} className="text-[10px] font-bold bg-white/20 text-white px-2.5 py-1 rounded-full">{tag}</span>
-                  ))}
+                  {englishText((finalist1.tags || []).slice(0, 3).map((tag: string) => (
+                    <span key={tag} className="text-[10px] font-bold bg-white/20 text-white px-2.5 py-1 rounded-full">{englishText(tag)}</span>
+                  )))}
                 </div>
               </motion.div>
             )}
@@ -1839,21 +1847,22 @@ function FinalBattleResultScreen({
             <motion.div
               className="absolute inset-0"
               initial={{ boxShadow: 'inset 0 0 0 4px rgba(240,157,9,0)' }}
-              animate={{ boxShadow: 'inset 0 0 0 4px #EB5053' }}
+              animate={{ boxShadow: 'inset 0 0 0 4px #AA1A0D' }}
               transition={{ delay: 0.3, duration: 0.25 }}
             />
           )}
           <div className="absolute bottom-6 right-5 left-20 text-right">
             {selected === 2 && (
-              <span className="inline-block bg-[#EB5053] text-white text-[11px] font-black px-3 py-1 rounded-full mb-2">
-                ✓ 선택됨
+              <span className="inline-block bg-[#AA1A0D] text-white text-[11px] font-black px-3 py-1 rounded-full mb-2">
+
+                ✓ Selected
               </span>
             )}
-            <p className="text-white font-black text-[19px] leading-tight">{finalist2.name}</p>
+            <p className="text-white font-black text-[19px] leading-tight">{englishText(finalist2.name)}</p>
             <div className="flex items-center gap-2 mt-1 justify-end">
-              <Star size={12} fill="#FFD700" color="#FFD700" />
-              <span className="text-white/85 text-[12px]">{finalist2.rating}</span>
-              <span className="text-white/60 text-[11px]">{finalist2.distance}</span>
+              <Star size={12} fill="#AA1A0D" color="#AA1A0D" />
+              <span className="text-white/85 text-[12px]">{englishText(finalist2.rating)}</span>
+              <span className="text-white/60 text-[11px]">{englishText(finalist2.distance)}</span>
             </div>
             {selected === 2 && (
               <motion.div
@@ -1862,11 +1871,11 @@ function FinalBattleResultScreen({
                 transition={{ delay: 0.4, duration: 0.35 }}
                 className="mt-3 max-w-[80%] ml-auto"
               >
-                <p className="text-white/75 text-[12px] leading-relaxed">{finalist2.description}</p>
+                <p className="text-white/75 text-[12px] leading-relaxed">{englishText(finalist2.description)}</p>
                 <div className="flex gap-1.5 mt-2 flex-wrap justify-end">
-                  {(finalist2.tags || []).slice(0, 3).map((tag: string) => (
-                    <span key={tag} className="text-[10px] font-bold bg-white/20 text-white px-2.5 py-1 rounded-full">{tag}</span>
-                  ))}
+                  {englishText((finalist2.tags || []).slice(0, 3).map((tag: string) => (
+                    <span key={tag} className="text-[10px] font-bold bg-white/20 text-white px-2.5 py-1 rounded-full">{englishText(tag)}</span>
+                  )))}
                 </div>
               </motion.div>
             )}
@@ -1893,8 +1902,8 @@ function FinalBattleResultScreen({
             ? { duration: 1.4, repeat: Infinity, ease: 'easeInOut' }
             : { duration: 0.25 }}
         >
-          <div className={`w-14 h-14 rounded-full border-[3px] border-white flex items-center justify-center shadow-2xl ${isSoloSession ? 'bg-[#5B45D6]' : 'bg-[#EB5053]'}`}>
-            <span className="font-black text-white text-[15px]">{isSoloSession ? 'VS' : '대결'}</span>
+          <div className={`w-14 h-14 rounded-full border-[3px] border-white flex items-center justify-center shadow-2xl bg-[#AA1A0D]`}>
+            <span className="font-black text-white text-[15px]">{englishText(isSoloSession ? 'VS' : "Showdown")}</span>
           </div>
         </motion.div>
       </div>
@@ -1911,17 +1920,18 @@ function FinalBattleResultScreen({
           disabled={selected === null || isSubmitting}
           aria-busy={isSubmitting}
           className={`${finalActionSizeClass} text-white active:scale-[0.98] shadow-xl transition-opacity disabled:opacity-40`}
-          style={{ background: isSoloSession ? '#5B45D6' : '#EB5053' }}
+          style={{ background: '#AA1A0D' }}
         >
-          {isSubmitting ? '최종 선택 저장 중…' : selected === null ? '음식점을 선택해주세요' : '이곳으로 결정!'}
+          {englishText(isSubmitting ? "Saving final choice…" : selected === null ? "Choose a Restaurant" : "Choose This Restaurant!")}
         </button>
         {onRejectBoth && (
           <button
             onClick={onRejectBoth}
             disabled={isSubmitting}
-            className={`${finalActionSizeClass} mt-2.5 border border-[#EFD8CF] bg-white text-[#78665E] active:scale-[0.98] transition-all disabled:opacity-50`}
+            className={`${finalActionSizeClass} mt-2.5 border border-[#ECC1BB] bg-white text-[#565256] active:scale-[0.98] transition-all disabled:opacity-50`}
           >
-            둘 다 별로!
+
+            Neither Works!
           </button>
         )}
       </div>
@@ -1934,13 +1944,12 @@ function FinalBattleResultScreen({
 function WaitingOrDecidedScreen({ onContinue, onReroll }: { onContinue: (winner?: any) => void; onReroll: (excludeIds: string[]) => void }) {
   const [, navigate] = useLocation();
   const { currentSession, restaurants, profile } = useApp();
-  const lunchmateLoadout = lunchmateLoadoutFromProfile(profile.lunchmateLoadout);
   const REJECT = '__reject__';
   const [liveResults, setLiveResults] = useState<{
     completedCount: number;
     totalMembers: number;
     memberCompletion: { id: string; name: string; emoji: string; completed: boolean; swipeCount: number; targetCount: number }[];
-    results: { restaurantId: string; score: number; likeCount: number; dislikeCount: number }[];
+    results: { restaurantId: string; score: number; likeCount: number; dislikeCount: number; neutralCount?: number }[];
     isExpired: boolean;
     deadlineAt: string | null;
     phase?: 'PRELIM' | 'FINAL' | 'REROLL' | 'NO_CONSENSUS' | 'DONE';
@@ -1997,7 +2006,7 @@ function WaitingOrDecidedScreen({ onContinue, onReroll }: { onContinue: (winner?
       logEvent({ event_type: 'SWIPE', action: isReject ? 'NOPE' : 'CHOOSE', slate_type: 'FINAL', restaurant_id: restaurantId, round, user_id: profile.id, session_id: currentSession?.id ?? null });
     } catch (error) {
       console.error('빠른 매칭 최종 선택 저장 실패', error);
-      toast.error('최종 선택을 저장하지 못했어요. 다시 시도해 주세요.');
+      toast.error("Couldn't save your final choice. Please try again.");
     } finally {
       setIsVoting(false);
     }
@@ -2093,21 +2102,22 @@ function WaitingOrDecidedScreen({ onContinue, onReroll }: { onContinue: (winner?
   const completionPercent = Math.min(100, (displayedCompleted / displayedTotal) * 100);
   const prelimLikeCount = liveResults.results.reduce((sum, result) => sum + result.likeCount, 0);
   const prelimDislikeCount = liveResults.results.reduce((sum, result) => sum + result.dislikeCount, 0);
-  const prelimAnswerCount = Math.max(1, prelimLikeCount + prelimDislikeCount);
+  const prelimNeutralCount = liveResults.results.reduce((sum, result) => sum + (result.neutralCount ?? 0), 0);
+  const prelimAnswerCount = Math.max(1, prelimLikeCount + prelimDislikeCount + prelimNeutralCount);
 
   // NO_CONSENSUS → 합의 실패 안내 (reroll 상한 초과)
   if (phase === 'NO_CONSENSUS') {
     return (
       <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }}
         className="min-h-dvh flex flex-col justify-between px-5 py-8"
-        style={{ background: 'linear-gradient(160deg, #4A4A4A 0%, #2a2a2a 100%)' }}>
+        style={{ background: '#FCFCFC' }}>
         <div className="flex-1 flex flex-col justify-center text-center">
           <div className="text-6xl mb-3">🤷</div>
-          <h2 className="text-white font-black text-[24px] mb-2">합의가 어려웠어요</h2>
-          <p className="text-white/70 text-[13px] leading-relaxed">여러 번 골라봤지만 모두 마음에 드는 곳을 못 찾았어요.<br />다른 동네로 넓히거나 나중에 다시 시도해볼까요?</p>
+          <h2 className="text-[#171717] font-bold text-[24px] mb-2">We Couldn't Agree</h2>
+          <p className="text-[#858185] text-[13px] leading-relaxed">We tried several options but couldn't find a place everyone liked.<br />Try another neighborhood or come back later.</p>
         </div>
         <button onClick={() => navigate('/')}
-          className="w-full max-w-[340px] py-4 rounded-2xl font-bold text-[#4A4A4A] text-[15px] bg-white active:scale-[0.98] transition-all shadow-md mx-auto block">처음으로</button>
+          className="w-full max-w-[340px] py-4 rounded-2xl font-bold text-[#565256] text-[15px] bg-white active:scale-[0.98] transition-all shadow-md mx-auto block">Home</button>
       </motion.div>
     );
   }
@@ -2121,17 +2131,17 @@ function WaitingOrDecidedScreen({ onContinue, onReroll }: { onContinue: (winner?
       return (
         <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }}
           className="min-h-dvh flex flex-col justify-between px-5 py-8"
-          style={{ background: 'linear-gradient(160deg, #2C3E50 0%, #1a252f 100%)' }}>
+          style={{ background: '#FCFCFC' }}>
           <div className="flex-1 flex flex-col justify-center text-center">
             <div className="text-6xl mb-3">🤔</div>
-            <h2 className="text-white font-black text-[24px] mb-2">두 번 다 아쉬웠네요</h2>
-            <p className="text-white/70 text-[13px] leading-relaxed">한 번 더 시도하면 마지막 기회예요.<br />여기서 처음부터 다시 시작할 수도 있어요.</p>
+            <h2 className="text-[#171717] font-bold text-[24px] mb-2">Neither Round Worked Out</h2>
+            <p className="text-[#858185] text-[13px] leading-relaxed">One more round will be the last attempt.<br />You can also start again from scratch.</p>
           </div>
           <div className="space-y-2">
             <button onClick={() => onReroll(liveResults.excludeIds ?? [])}
-              className="w-full max-w-[340px] py-4 rounded-2xl font-bold text-white text-[15px] bg-[#EB5053] active:scale-[0.98] transition-all shadow-md mx-auto block">마지막으로 한 번 더 →</button>
+              className="w-full max-w-[340px] py-4 rounded-2xl font-bold text-white text-[15px] bg-[#AA1A0D] active:scale-[0.98] transition-all shadow-md mx-auto block">One Last Try →</button>
             <button onClick={() => navigate('/')}
-              className="w-full max-w-[340px] py-4 rounded-2xl font-bold text-white/80 text-[14px] bg-white/10 active:scale-[0.98] transition-all mx-auto block">처음부터 다시 시작</button>
+              className="w-full max-w-[340px] py-4 rounded-lg border border-[#E8E6E7] font-semibold text-[#565256] text-[14px] bg-white active:scale-[0.98] transition-all mx-auto block">Start Over</button>
           </div>
         </motion.div>
       );
@@ -2139,14 +2149,14 @@ function WaitingOrDecidedScreen({ onContinue, onReroll }: { onContinue: (winner?
     return (
       <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }}
         className="min-h-dvh flex flex-col justify-between px-5 py-8"
-        style={{ background: 'linear-gradient(160deg, #2C3E50 0%, #1a252f 100%)' }}>
+        style={{ background: '#FCFCFC' }}>
         <div className="flex-1 flex flex-col justify-center text-center">
           <div className="text-6xl mb-3">🔄</div>
-          <h2 className="text-white font-black text-[24px] mb-2">다른 곳으로 다시 골라요</h2>
-          <p className="text-white/70 text-[13px] leading-relaxed">‘둘 다 별로’가 많았어요.<br />방금 후보는 빼고 새로운 곳을 가져왔어요.</p>
+          <h2 className="text-[#171717] font-bold text-[24px] mb-2">Let's Try Other Places</h2>
+          <p className="text-[#858185] text-[13px] leading-relaxed">Most people chose neither option.<br />We've brought new places, excluding the previous options.</p>
         </div>
         <button onClick={() => onReroll(liveResults.excludeIds ?? [])}
-          className="w-full max-w-[340px] py-4 rounded-2xl font-bold text-white text-[15px] bg-[#EB5053] active:scale-[0.98] transition-all shadow-md mx-auto block">다시 고르기 시작 →</button>
+          className="w-full max-w-[340px] py-4 rounded-2xl font-bold text-white text-[15px] bg-[#AA1A0D] active:scale-[0.98] transition-all shadow-md mx-auto block">Choose Again →</button>
       </motion.div>
     );
   }
@@ -2156,17 +2166,18 @@ function WaitingOrDecidedScreen({ onContinue, onReroll }: { onContinue: (winner?
       <RoundStatisticsScreen
         round={2}
         eyebrow="ROUND 2 RESULT"
-        title="그룹 추천 투표 결과"
-        description="개별 답은 숨기고 전체 추천·비추천 수만 공개했어요."
+        title="Group Recommendation Results"
+        description="Individual choices stay private. Only total responses are shown."
         items={[
-          { id: 'like', label: '추천', value: prelimLikeCount, color: '#65E6A8', emoji: '♥' },
-          { id: 'dislike', label: '비추천', value: prelimDislikeCount, color: '#FF7B86', emoji: '✕' },
+          { id: 'like', label: "Recommend", value: prelimLikeCount, color: '#AA1A0D', emoji: '♥' },
+          { id: 'dislike', label: "Not Recommended", value: prelimDislikeCount, color: '#ECC1BB', emoji: '✕' },
+          { id: 'neutral', label: "Neutral", value: prelimNeutralCount, color: '#858185', emoji: '-' },
         ]}
         completed={liveResults.completedCount}
         total={prelimAnswerCount}
         onContinue={() => setPrelimStatsAcknowledged(true)}
-        continueLabel={phase === 'FINAL' ? 'TOP 2 대결 보기 →' : '최종 통계 보기 →'}
-        summaryLabel={`총 ${prelimAnswerCount}개 평가`}
+        continueLabel={phase === 'FINAL' ? "View Top 2 →" : "View Final Results →"}
+        summaryLabel={`Total:  ${prelimAnswerCount} ratings`}
       />
     );
   }
@@ -2191,7 +2202,7 @@ function WaitingOrDecidedScreen({ onContinue, onReroll }: { onContinue: (winner?
       initial={{ opacity: 0, scale: 0.95 }}
       animate={{ opacity: 1, scale: 1 }}
       className="min-h-dvh flex flex-col justify-between px-5 py-8"
-      style={{ background: 'linear-gradient(180deg, #FFF8F2 0%, #FCEDE6 100%)' }}
+      style={{ background: '#FCFCFC' }}
     >
       <div className="flex-1 flex flex-col justify-center text-center">
         {isAllCompleted ? (
@@ -2201,31 +2212,14 @@ function WaitingOrDecidedScreen({ onContinue, onReroll }: { onContinue: (winner?
             animate={{ y: 0, opacity: 1 }}
             className="space-y-6 animate-fade-in"
           >
-            <motion.div
-              className="mx-auto flex size-28 items-center justify-center rounded-[34px] bg-white shadow-[0_18px_45px_rgba(218,82,78,0.16)]"
-              animate={{ y: [0, -6, 0], rotate: [-1.5, 1.5, -1.5] }}
-              transition={{ duration: 2, repeat: Infinity, ease: 'easeInOut' }}
-            >
-              <LunchmateCharacterRenderer
-                flowState="idle"
-                artwork="chicken"
-                chickenAssetKeyOverride="idle"
-                chickenFaceSystem
-                animated={false}
-                loadout={lunchmateLoadout}
-                size={104}
-                renderSize="compact"
-                alt="친구들과의 최종 선택을 축하하는 런치킨"
-              />
-            </motion.div>
             <div>
-              <h2 className="mb-1 text-[28px] font-black text-[#312A28]">결정됐어요!</h2>
-              <p className="text-[13px] font-semibold text-[#927F77]">모든 친구들이 투표를 완료했습니다</p>
+              <h2 className="mb-1 text-[28px] font-black text-[#171717]">It's Decided!</h2>
+              <p className="text-[13px] font-semibold text-[#858185]">Everyone has finished voting</p>
             </div>
 
-            <div className="mx-auto w-full max-w-[340px] rounded-3xl bg-[#5B45D6] p-5 text-left text-white shadow-[0_14px_40px_rgba(91,69,214,0.2)]" aria-label="3라운드 통계 결과">
-              <p className="text-[10px] font-black tracking-[0.8px] text-[#FFE36E]">ROUND 3 RESULT</p>
-              <p className="mt-1 text-[18px] font-black">TOP 2 최종 득표</p>
+            <div className="mx-auto w-full max-w-[340px] rounded-3xl bg-[#AA1A0D] p-5 text-left text-white shadow-[0_14px_40px_rgba(218,80,83,0.18)]" aria-label="Round 3 Results">
+              <p className="text-[10px] font-black tracking-[0.8px] text-[#FBECE9]">ROUND 3 RESULT</p>
+              <p className="mt-1 text-[18px] font-black">Top 2 Final Votes</p>
               <div className="mt-4 space-y-3">
                 {(finalistRs.length ? finalistRs : winner ? [winner] : []).map(restaurant => {
                   const votes = liveResults.finalTally?.[restaurant.id]
@@ -2234,27 +2228,27 @@ function WaitingOrDecidedScreen({ onContinue, onReroll }: { onContinue: (winner?
                   return (
                     <div key={restaurant.id}>
                       <div className="flex items-center justify-between gap-2 text-[12px] font-black">
-                        <span className="truncate">{restaurant.id === liveResults.winnerId ? '🏆 ' : ''}{restaurant.name}</span>
-                        <span className="text-[#FFE36E]">{votes}표 · {percent}%</span>
+                        <span className="truncate">{englishText(restaurant.id === liveResults.winnerId ? '🏆 ' : '')}{englishText(restaurant.name)}</span>
+                        <span className="text-[#FBECE9]">{votes} votes ·  {percent}%</span>
                       </div>
                       <div className="mt-1.5 h-2 overflow-hidden rounded-full bg-black/20">
-                        <div className="h-full rounded-full bg-[#FFE36E]" style={{ width: `${percent}%` }} />
+                        <div className="h-full rounded-full bg-[#FBECE9]" style={{ width: `${percent}%` }} />
                       </div>
                     </div>
                   );
                 })}
                 {(liveResults.finalTally?.[REJECT] ?? 0) > 0 && (
                   <div className="flex items-center justify-between text-[11px] font-bold text-white/65">
-                    <span>둘 다 별로</span><span>{liveResults.finalTally?.[REJECT]}표</span>
+                    <span>Neither</span><span>{liveResults.finalTally?.[REJECT]} votes</span>
                   </div>
                 )}
               </div>
-              <p className="mt-3 text-center text-[9px] font-bold text-white/45">익명 집계 · 개인 선택은 비공개</p>
+              <p className="mt-3 text-center text-[9px] font-bold text-white/45">Anonymous totals · individual choices stay private</p>
             </div>
             
             {winner && (
-              <div className="mx-auto max-w-[340px] space-y-3 rounded-3xl border border-[#F0DDD5] bg-white p-5 text-center shadow-[0_14px_40px_rgba(102,68,54,0.1)]">
-                <div className="mx-auto size-20 overflow-hidden rounded-full border-2 border-[#F4E2DB] bg-[#FFF0EA]">
+              <div className="mx-auto max-w-[340px] space-y-3 rounded-3xl border border-[#E8E6E7] bg-white p-5 text-center shadow-[0_14px_40px_rgba(102,68,54,0.1)]">
+                <div className="mx-auto size-20 overflow-hidden rounded-full border-2 border-[#E8E6E7] bg-[#FBECE9]">
                   <FoodImage
                     src={winner.image || winner.photos?.[0]}
                     name={winner.name}
@@ -2264,21 +2258,22 @@ function WaitingOrDecidedScreen({ onContinue, onReroll }: { onContinue: (winner?
                   />
                 </div>
                 <div>
-                  <span className="rounded-full bg-[#FFE7E1] px-2 py-0.5 text-[10px] font-bold text-[#D94B4E]">{winner.category}</span>
-                  <p className="mt-1 text-[18px] font-black text-[#332B28]">{winner.name}</p>
-                  <p className="mt-0.5 truncate text-[11px] text-[#94827A]">{winner.address}</p>
+                  <span className="rounded-full bg-[#FBECE9] px-2 py-0.5 text-[10px] font-bold text-[#AA1A0D]">{englishText(winner.category)}</span>
+                  <p className="mt-1 text-[18px] font-black text-[#171717]">{englishText(winner.name)}</p>
+                  <p className="mt-0.5 truncate text-[11px] text-[#858185]">{englishText(winner.address)}</p>
                 </div>
-                <div className="flex items-center justify-center gap-3 pt-1 text-[11px] text-[#766761]">
-                  <span>⭐ {winner.rating}</span>
-                  <span>📍 {winner.distance || '500m'}</span>
-                  <span>💰 {'₩'.repeat(winner.priceRange)}</span>
+                <div className="flex items-center justify-center gap-3 pt-1 text-[11px] text-[#858185]">
+                  <span>⭐ {englishText(restaurantRatingLabel(winner.rating))}</span>
+                  {englishText(winner.distance?.trim() && <span>📍 {englishText(winner.distance)}</span>)}
+                  {englishText(restaurantPriceLabel(winner) && <span>{englishText(restaurantPriceLabel(winner))}</span>)}
                 </div>
               </div>
             )}
             
             <button onClick={() => onContinue(winner)}
-              className="mx-auto block w-full max-w-[340px] rounded-2xl bg-[#EB5053] py-4 text-[15px] font-bold text-white shadow-md transition-all active:scale-[0.98]">
-              결과 확인하기 🎉
+              className="mx-auto block w-full max-w-[340px] rounded-2xl bg-[#AA1A0D] py-4 text-[15px] font-bold text-white shadow-md transition-all active:scale-[0.98]">
+
+              See Results 🎉
             </button>
           </motion.div>
         ) : (
@@ -2288,92 +2283,62 @@ function WaitingOrDecidedScreen({ onContinue, onReroll }: { onContinue: (winner?
             animate={{ y: 0, opacity: 1 }}
             className="relative mx-auto w-full max-w-[360px]"
           >
-            <motion.div
-              className="relative mx-auto mb-5 flex size-28 items-center justify-center rounded-[34px] bg-white shadow-[0_18px_44px_rgba(222,91,84,0.15)]"
-              animate={{ y: [0, -6, 0], rotate: [-1, 1, -1] }}
-              transition={{ duration: 2.2, repeat: Infinity, ease: 'easeInOut' }}
-            >
-              <LunchmateCharacterRenderer
-                flowState="idle"
-                artwork="chicken"
-                chickenAssetKeyOverride="idle"
-                chickenFaceSystem
-                animated={false}
-                loadout={lunchmateLoadout}
-                size={104}
-                renderSize="compact"
-                alt="친구들의 선택을 기다리는 런치킨"
-              />
-              <span className="absolute -right-2 -top-2 flex size-9 items-center justify-center rounded-full bg-[#EB5053] text-base text-white shadow-md">♥</span>
-            </motion.div>
-
-            <button
-              type="button"
-              onClick={() => {
-                if (!currentSession) return;
-                activateLunchieWaitingCompanion(currentSession.id);
-                navigate('/feed');
-              }}
-              className="relative mx-auto mb-4 block max-w-[285px] rounded-[20px] border border-[#EFD8CF] bg-white px-5 py-3 text-center shadow-[0_10px_28px_rgba(95,61,49,0.1)] transition-transform active:scale-[0.98]"
-            >
-              <span className="block text-[12px] font-black text-[#443833]">기다리는 동안 먼치피드 같이 둘러봐요</span>
-              <span className="mt-1 block text-[10px] font-bold text-[#E05255]">런치킨이 투표 시간을 계속 알려드려요 →</span>
-              <span className="absolute -top-2 left-1/2 size-4 -translate-x-1/2 rotate-45 border-l border-t border-[#EFD8CF] bg-white" aria-hidden="true" />
-            </button>
-
-            <span className="inline-flex rounded-full bg-[#FFE0DC] px-3 py-1 text-[10px] font-black tracking-[0.7px] text-[#D94B4E]">
-              {phase === 'FINAL' ? 'FINAL CHOICE' : 'ANSWERS LOCKED'}
+            <span className="inline-flex rounded-full bg-[#FBECE9] px-3 py-1 text-[10px] font-black tracking-[0.7px] text-[#AA1A0D]">
+              {englishText(phase === 'FINAL' ? 'FINAL CHOICE' : 'ANSWERS LOCKED')}
             </span>
-            <h2 className="mt-3 text-[24px] font-black tracking-[-0.7px] text-[#312A28]">
-              내 선택을 잠갔어요!
+            <h2 className="mt-3 text-[24px] font-black tracking-[-0.7px] text-[#171717]">
+
+              Your Choice Is Locked!
             </h2>
-            <p className="mt-1 text-[12px] font-semibold text-[#9A8880]">
-              다른 사람의 답은 아직 비밀 · 모두 끝나면 {phase === 'FINAL' ? '최종 결과가' : '결승 후보가'} 같이 열려요.
+            <p className="mt-1 text-[12px] font-semibold text-[#858185]">
+
+              Everyone else's choices stay private. Once everyone finishes,  {englishText(phase === 'FINAL' ? "the final results " : "the finalists ")}  will appear together.
             </p>
 
-            <div className="mt-4 flex items-center justify-center gap-2" aria-label="공정한 선택 방식">
-              <span className="inline-flex items-center gap-1 rounded-full bg-[#F1EEFF] px-2.5 py-1 text-[9px] font-black text-[#5B45D6]"><LockKeyhole size={11} /> 독립 선택</span>
-              <span className="inline-flex items-center gap-1 rounded-full bg-[#FFF1EC] px-2.5 py-1 text-[9px] font-black text-[#D94B4E]"><Users size={11} /> 동시 공개</span>
-              <span className="inline-flex items-center gap-1 rounded-full bg-[#FFF7D8] px-2.5 py-1 text-[9px] font-black text-[#9A6C16]"><Sparkles size={11} /> 의견 존중</span>
+            <div className="mt-4 flex items-center justify-center gap-2" aria-label="Fair Choices">
+              <span className="inline-flex items-center gap-1 rounded-full bg-[#FBECE9] px-2.5 py-1 text-[9px] font-black text-[#AA1A0D]"><LockKeyhole size={11} />  Independent Choices</span>
+              <span className="inline-flex items-center gap-1 rounded-full bg-[#FBECE9] px-2.5 py-1 text-[9px] font-black text-[#AA1A0D]"><Users size={11} />  Shared Reveal</span>
+              <span className="inline-flex items-center gap-1 rounded-full bg-[#FBECE9] px-2.5 py-1 text-[9px] font-black text-[#565256]"><Sparkles size={11} />  Everyone Counts</span>
             </div>
 
             <div
-              className="mt-6 rounded-[26px] border border-[#F3E4DD] bg-white p-5 text-left shadow-[0_14px_40px_rgba(102,68,54,0.08)]"
-              aria-label={`${displayedCompleted}/${displayedTotal}명 ${phase === 'FINAL' ? '투표 완료' : '선택 완료'}`}
+              className="mt-6 rounded-[26px] border border-[#E8E6E7] bg-white p-5 text-left shadow-[0_14px_40px_rgba(102,68,54,0.08)]"
+              aria-label={englishText(`${displayedCompleted}/${displayedTotal} people ${phase === 'FINAL' ? "Vote Complete" : "Choice Complete"}`)}
             >
               <div className="flex items-start justify-between">
                 <div>
-                  <p className="text-[11px] font-black text-[#A08D84]">{phase === 'FINAL' ? '결승 투표 현황' : '예선 투표 현황'}</p>
-                  <p className="mt-1 text-[28px] font-black tracking-[-1px] text-[#302927]">
-                    {displayedCompleted}<span className="mx-1 text-[16px] text-[#C4B5AE]">/</span>{displayedTotal}
-                    <span className="ml-1.5 text-[12px] font-bold text-[#897A73]">명 {phase === 'FINAL' ? '투표' : '완료'}</span>
+                  <p className="text-[11px] font-black text-[#858185]">{englishText(phase === 'FINAL' ? "Final Vote Progress" : "Preliminary Vote Progress")}</p>
+                  <p className="mt-1 text-[28px] font-black tracking-[-1px] text-[#171717]">
+                    {displayedCompleted}<span className="mx-1 text-[16px] text-[#BDBABD]">/</span>{displayedTotal}
+                    <span className="ml-1.5 text-[12px] font-bold text-[#858185]"> people {englishText(phase === 'FINAL' ? "Vote" : "Complete")}</span>
                   </p>
                 </div>
-                {timeLeft && (
-                  <div className="rounded-xl bg-[#FFF1EC] px-3 py-2 text-right">
-                    <p className="text-[9px] font-bold text-[#B3988D]">남은 시간</p>
-                    <p className="font-mono text-[14px] font-black tabular-nums text-[#E15154]">{timeLeft}</p>
+                {englishText(timeLeft && (
+                  <div className="rounded-xl bg-[#FBECE9] px-3 py-2 text-right">
+                    <p className="text-[9px] font-bold text-[#858185]">Time Left</p>
+                    <p className="font-mono text-[14px] font-black tabular-nums text-[#AA1A0D]">{englishText(timeLeft)}</p>
                   </div>
-                )}
+                ))}
               </div>
-              <div className="mt-4 h-2.5 w-full overflow-hidden rounded-full bg-[#F4E8E2]">
+              <div className="mt-4 h-2.5 w-full overflow-hidden rounded-full bg-[#F5F4F5]">
                 <motion.div
-                  className="h-full rounded-full bg-[#EB5053]"
+                  className="h-full rounded-full bg-[#AA1A0D]"
                   initial={{ width: 0 }}
                   animate={{ width: `${completionPercent}%` }}
                   transition={{ duration: 0.4 }}
                 />
               </div>
               {resultsConnection === 'offline' && (
-                <p className="mt-3 rounded-xl bg-[#FFF5DA] px-3 py-2 text-[10px] font-bold text-[#9A6C16]" role="status">
-                  연결을 다시 확인하고 있어요. 완료 신호는 자동으로 재전송됩니다.
+                <p className="mt-3 rounded-xl bg-[#FBECE9] px-3 py-2 text-[10px] font-bold text-[#565256]" role="status">
+
+                  Reconnecting. Your completion signal will retry automatically.
                 </p>
               )}
             </div>
 
-            <div className="mt-3 rounded-2xl border border-[#E6DFFD] bg-[#F7F4FF] px-4 py-3 text-center">
-              <p className="text-[11px] font-black text-[#5B45D6]">🔒 선택 내용은 끝까지 비공개</p>
-              <p className="mt-1 text-[10px] font-semibold text-[#80769E]">누가 무엇을 골랐는지, 몇 장을 골랐는지는 보여주지 않아요.</p>
+            <div className="mt-3 rounded-2xl border border-[#ECC1BB] bg-[#FCFCFC] px-4 py-3 text-center">
+              <p className="text-[11px] font-black text-[#AA1A0D]">🔒 Individual choices stay private</p>
+              <p className="mt-1 text-[10px] font-semibold text-[#858185]">We don't reveal who chose what or how many cards they selected.</p>
             </div>
           </motion.div>
         )}
@@ -2393,14 +2358,16 @@ function WaitingOrDecidedScreen({ onContinue, onReroll }: { onContinue: (winner?
               if (!response.ok) throw new Error('force_failed');
             } catch { /* 폴링으로 복구 */ }
           }}
-          className="mb-3 mx-auto block w-full max-w-[340px] rounded-2xl border border-[#F0D9D1] bg-white py-3 text-[13px] font-black text-[#D94B4E] shadow-sm transition-all active:scale-[0.98]">
-          기다리지 않고 지금 진행 · 호스트
+          className="mb-3 mx-auto block w-full max-w-[340px] rounded-2xl border border-[#ECC1BB] bg-white py-3 text-[13px] font-black text-[#AA1A0D] shadow-sm transition-all active:scale-[0.98]">
+
+          Continue Now · Host
         </button>
       )}
 
       <button onClick={() => navigate('/')}
-        className="mx-auto mt-1 block text-center text-[12px] font-bold text-[#A38F86] active:scale-95">
-        처음으로
+        className="mx-auto mt-1 block text-center text-[12px] font-bold text-[#858185] active:scale-95">
+
+        Home
       </button>
     </motion.div>
   );
@@ -2428,7 +2395,6 @@ function QuickMatchExperience() {
   const [, navigate] = useLocation();
   const { currentSession, addSwipe, swipeRecords, profile, rerollSession } = useApp();
   const [phase, setPhase] = useState<Phase>('swipe');
-  const lunchmateLoadout = lunchmateLoadoutFromProfile(profile.lunchmateLoadout);
   const sessionRestaurants = currentSession?.restaurants || [];
   const cuisineStorageKey = `lm_lunchie_cuisine:${currentSession?.id ?? 'none'}:${profile.id}`;
   const cuisineStatsSeenKey = `${cuisineStorageKey}:stats_seen`;
@@ -2491,7 +2457,7 @@ function QuickMatchExperience() {
       setShowIntro(true);
     } catch (error) {
       console.error('음식 종류 선택 저장 실패', error);
-      toast.error('음식 종류 선택을 저장하지 못했어요. 다시 시도해 주세요.');
+      toast.error("Couldn't save your cuisine choices. Please try again.");
     } finally {
       setIsSubmittingCuisine(false);
     }
@@ -2661,10 +2627,10 @@ function QuickMatchExperience() {
     submittingSwipeRef.current = true;
     setIsSubmittingSwipe(true);
     try {
-      await addSwipe(restaurant.id, action === 'like' ? 'like' : 'skip');
+      await addSwipe(restaurant.id, action === 'dislike' ? 'skip' : action);
     } catch (error) {
       console.error('빠른 매칭 선택 저장 실패', error);
-      toast.error('선택을 저장하지 못했어요. 다시 눌러 주세요.');
+      toast.error("Couldn't save your choice. Please try again.");
       submittingSwipeRef.current = false;
       setIsSubmittingSwipe(false);
       return;
@@ -2675,7 +2641,7 @@ function QuickMatchExperience() {
     // 서버 세션은 /api/swipes가 선택과 추천 근거를 원자적으로 기록한다.
     // 세션이 없는 레거시 단독 흐름만 best-effort 브라우저 로그를 사용한다.
     if (!currentSession) {
-      logSwipe(restaurant.id, action === 'like' ? 'LIKE' : 'NOPE', {
+      logSwipe(restaurant.id, action === 'like' ? 'LIKE' : action === 'neutral' ? 'NEUTRAL' : 'NOPE', {
         user_id: profile.id,
         slate_type: 'PRELIM',
         round: 1,
@@ -2799,7 +2765,7 @@ function QuickMatchExperience() {
       setPhase('final-stats');
     } catch (error) {
       console.error('빠른 매칭 최종 선택 저장 실패', error);
-      toast.error('최종 선택을 저장하지 못했어요. 다시 시도해 주세요.');
+      toast.error("Couldn't save your final choice. Please try again.");
     } finally {
       submittingFinalChoiceRef.current = false;
       setIsSubmittingFinalChoice(false);
@@ -2841,22 +2807,26 @@ function QuickMatchExperience() {
         const dislikedCount = swipeData.length
           ? swipeData.filter(item => item.action === 'dislike').length
           : currentSessionSwipes.filter(item => item.action === 'skip').length;
-        const answerCount = Math.max(1, likedCount + dislikedCount);
+        const neutralCount = swipeData.length
+          ? swipeData.filter(item => item.action === 'neutral').length
+          : currentSessionSwipes.filter(item => item.action === 'neutral').length;
+        const answerCount = Math.max(1, likedCount + dislikedCount + neutralCount);
         return (
           <RoundStatisticsScreen
             round={2}
             eyebrow="ROUND 2 RESULT"
-            title="추천 투표 결과"
-            description="한 곳씩 평가한 결과를 합쳤어요. 이제 TOP 2가 맞붙습니다."
+            title="Recommendation Vote Results"
+            description="Your restaurant ratings are combined. Your Top 2 are next."
             items={[
-              { id: 'like', label: '추천', value: likedCount, color: '#65E6A8', emoji: '♥' },
-              { id: 'dislike', label: '비추천', value: dislikedCount, color: '#FF7B86', emoji: '✕' },
+              { id: 'like', label: "Recommend", value: likedCount, color: '#AA1A0D', emoji: '♥' },
+              { id: 'dislike', label: "Not Recommended", value: dislikedCount, color: '#ECC1BB', emoji: '✕' },
+              { id: 'neutral', label: "Neutral", value: neutralCount, color: '#858185', emoji: '-' },
             ]}
             completed={answerCount}
             total={answerCount}
             onContinue={() => setRoundTwoStatsAcknowledged(true)}
-            continueLabel="TOP 2 대결 보기 →"
-            summaryLabel={`총 ${answerCount}개 평가`}
+            continueLabel="View Top 2 →"
+            summaryLabel={`Total:  ${answerCount} ratings`}
           />
         );
       }
@@ -2865,17 +2835,17 @@ function QuickMatchExperience() {
         return (
           <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }}
             className="min-h-dvh flex flex-col justify-between px-5 py-8"
-            style={{ background: 'linear-gradient(160deg, #2C3E50 0%, #1a252f 100%)' }}>
+            style={{ background: '#FCFCFC' }}>
             <div className="flex-1 flex flex-col justify-center text-center">
               <div className="text-6xl mb-3">🤔</div>
-              <h2 className="text-white font-black text-[24px] mb-2">계속 별로였네요</h2>
-              <p className="text-white/70 text-[13px] leading-relaxed">한 번 더 시도하면 마지막 기회예요.<br />여기서 처음부터 다시 시작할 수도 있어요.</p>
+              <h2 className="text-[#171717] font-bold text-[24px] mb-2">These Options Didn't Work Out</h2>
+              <p className="text-[#858185] text-[13px] leading-relaxed">One more round will be the last attempt.<br />You can also start again from scratch.</p>
             </div>
             <div className="space-y-2">
               <button onClick={() => { rejectRoundRef.current += 1; setRerollPrompt('none'); handleReset(); }}
-                className="w-full max-w-[340px] py-4 rounded-2xl font-bold text-white text-[15px] bg-[#EB5053] active:scale-[0.98] transition-all shadow-md mx-auto block">마지막으로 한 번 더 →</button>
+                className="w-full max-w-[340px] py-4 rounded-2xl font-bold text-white text-[15px] bg-[#AA1A0D] active:scale-[0.98] transition-all shadow-md mx-auto block">One Last Try →</button>
               <button onClick={() => navigate('/')}
-                className="w-full max-w-[340px] py-4 rounded-2xl font-bold text-white/80 text-[14px] bg-white/10 active:scale-[0.98] transition-all mx-auto block">처음부터 다시 시작</button>
+                className="w-full max-w-[340px] py-4 rounded-lg border border-[#E8E6E7] font-semibold text-[#565256] text-[14px] bg-white active:scale-[0.98] transition-all mx-auto block">Start Over</button>
             </div>
           </motion.div>
         );
@@ -2885,14 +2855,14 @@ function QuickMatchExperience() {
         return (
           <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }}
             className="min-h-dvh flex flex-col justify-between px-5 py-8"
-            style={{ background: 'linear-gradient(160deg, #4A4A4A 0%, #2a2a2a 100%)' }}>
+            style={{ background: '#FCFCFC' }}>
             <div className="flex-1 flex flex-col justify-center text-center">
               <div className="text-6xl mb-3">🤷</div>
-              <h2 className="text-white font-black text-[24px] mb-2">마음에 드는 곳을 못 찾았어요</h2>
-              <p className="text-white/70 text-[13px] leading-relaxed">여러 번 골라봤지만 계속 별로였어요.<br />다른 동네로 넓히거나 나중에 다시 시도해볼까요?</p>
+              <h2 className="text-[#171717] font-bold text-[24px] mb-2">No Favorite Found</h2>
+              <p className="text-[#858185] text-[13px] leading-relaxed">We tried several rounds, but none felt right.<br />Try another neighborhood or come back later.</p>
             </div>
             <button onClick={() => navigate('/')}
-              className="w-full max-w-[340px] py-4 rounded-2xl font-bold text-[#4A4A4A] text-[15px] bg-white active:scale-[0.98] transition-all shadow-md mx-auto block">처음으로</button>
+              className="w-full max-w-[340px] py-4 rounded-2xl font-bold text-[#565256] text-[15px] bg-white active:scale-[0.98] transition-all shadow-md mx-auto block">Home</button>
           </motion.div>
         );
       }
@@ -2911,17 +2881,17 @@ function QuickMatchExperience() {
       <RoundStatisticsScreen
         round={3}
         eyebrow="ROUND 3 RESULT"
-        title="TOP 2 최종 결과"
-        description="최종 선택이 집계됐어요. 우승 식당을 공개합니다."
+        title="Top 2 Final Results"
+        description="Final choices are counted. Here's the winning restaurant."
         items={[
-          { id: selectedWinner?.id ?? 'winner', label: selectedWinner?.name ?? '선택한 식당', value: 1, color: '#FFE36E', emoji: '🏆' },
-          ...(opponent ? [{ id: opponent.id, label: opponent.name, value: 0, color: '#8A7BEF', emoji: '🍽️' }] : []),
+          { id: selectedWinner?.id ?? 'winner', label: selectedWinner?.name ?? "Selected Restaurant", value: 1, color: '#AA1A0D', emoji: '🏆' },
+          ...(opponent ? [{ id: opponent.id, label: opponent.name, value: 0, color: '#F5F4F5', emoji: '🍽️' }] : []),
         ]}
         completed={1}
         total={1}
         onContinue={() => setPhase('results')}
-        continueLabel="우승 식당과 만족도 보기 →"
-        summaryLabel="최종 1표"
+        continueLabel="View Winner &amp; Feedback →"
+        summaryLabel="1 final vote"
       />
     );
   }
@@ -2936,31 +2906,31 @@ function QuickMatchExperience() {
   const urgent = remainingMs > 0 && remainingMs <= 30000;
 
   return (
-    <div className="min-h-dvh bg-[#FCF4EE] relative">
-      <div className="bg-[#5B45D6] px-5 pb-3 pt-[max(14px,env(safe-area-inset-top))]">
+    <div className="min-h-dvh bg-[#FCFCFC] relative">
+      <div className="border-b border-[#E8E6E7] bg-[#F5F4F5] px-5 pb-3 pt-[max(14px,env(safe-area-inset-top))]">
         <GameStageRail current={2} />
       </div>
       {/* Header */}
       <div className="flex items-center justify-between px-5 pb-3 pt-3">
         <BackButton
           onClick={() => { logAbandon('back'); navigate('/lunchie/settings'); }}
-          aria-label="빠른 매칭 설정으로 돌아가기"
+          aria-label="Back to Quick Match Settings"
         />
         <div className="text-center">
-          <span className="inline-flex rounded-full bg-[#E9E3FF] px-2 py-0.5 text-[8px] font-black tracking-[0.7px] text-[#5B45D6]">ROUND 2 · YES OR NO</span>
-          <p className="font-black text-[16px] text-[#1A1A1A]">이 식당을 추천할까요?</p>
-          <p className="text-[11px] text-[#9B9B9B]">한 곳씩 보고 추천 또는 비추천을 골라요 · {progress}/{total}</p>
+          <span className="inline-flex rounded-full bg-[#FBECE9] px-2 py-0.5 text-[8px] font-black tracking-[0.7px] text-[#AA1A0D]">ROUND 2 · RECOMMENDATION VOTE</span>
+          <p className="font-bold text-[16px] text-[#1A1A1A]">Would you recommend this restaurant?</p>
+          <p className="text-[11px] text-[#9B9B9B]">Rate each restaurant ·  {progress}/{total}</p>
         </div>
         {currentSession?.deadline ? (
           <motion.div
             className="flex items-center gap-1.5 px-3 py-1.5 rounded-full flex-shrink-0"
-            style={{ background: urgent ? '#F09D09' : '#FFF1E0' }}
+            style={{ background: urgent ? '#AA1A0D' : '#FBECE9' }}
             animate={urgent ? { scale: [1, 1.08, 1] } : {}}
             transition={{ duration: 1, repeat: urgent ? Infinity : 0 }}
           >
-            <Clock size={14} color={urgent ? 'white' : '#F09D09'} />
-            <span className="font-black text-[13px] tabular-nums" style={{ color: urgent ? 'white' : '#F09D09' }}>
-              {mm}:{ss}
+            <Clock size={14} color={urgent ? 'white' : '#AA1A0D'} />
+            <span className="font-black text-[13px] tabular-nums" style={{ color: urgent ? 'white' : '#AA1A0D' }}>
+              {englishText(mm)}:{englishText(ss)}
             </span>
           </motion.div>
         ) : (
@@ -2969,10 +2939,11 @@ function QuickMatchExperience() {
       </div>
 
       {currentSession.dietaryBestEffort && (
-        <div role="note" className="mx-5 mb-2 rounded-2xl border border-[#F3CFAE] bg-[#FFF7E8] px-4 py-3 text-center">
-          <p className="text-[12px] font-black text-[#7A4B20]">현재 위치에서 가장 가까운 후보</p>
-          <p className="mt-1 text-[10px] font-semibold leading-relaxed text-[#8A6747]">
-            선택한 모든 식단 조건을 매장에서 보장하지는 않아요. 제외 재료는 반영했지만 주문 전에 매장에 다시 확인해 주세요.
+        <div role="note" className="mx-5 mb-2 rounded-2xl border border-[#ECC1BB] bg-[#FBECE9] px-4 py-3 text-center">
+          <p className="text-[12px] font-black text-[#565256]">Closest to Your Location</p>
+          <p className="mt-1 text-[10px] font-semibold leading-relaxed text-[#858185]">
+
+            Restaurants may not meet every dietary preference. Ingredient exclusions were applied, but please confirm with the restaurant before ordering.
           </p>
         </div>
       )}
@@ -2983,34 +2954,17 @@ function QuickMatchExperience() {
           <motion.div
             role="status"
             aria-live="polite"
-            aria-label="Quick Match 음식점 후보를 준비하고 있어요"
-            className={`absolute inset-0 z-50 flex flex-col items-center justify-center px-6 text-center ${isSoloSession ? 'bg-[radial-gradient(circle_at_top,#8A62E8_0%,#5B45D6_45%,#2F246F_100%)]' : 'bg-[#1A1A1A]'}`}
+            aria-label="Preparing Quick Match Restaurants"
+            className="absolute inset-0 z-50 flex flex-col items-center justify-center bg-[#FCFCFC] px-6 text-center"
             exit={{ opacity: 0, scale: 1.05 }}
             transition={{ duration: 0.3 }}
           >
-            <motion.div
-              className="flex items-center justify-center"
-              animate={{ y: [0, -8, 0] }}
-              transition={{ duration: 2.2, repeat: Infinity, ease: 'easeInOut' }}
-            >
-              <LunchmateCharacterRenderer
-                flowState="idle"
-                artwork="chicken"
-                chickenAssetKeyOverride="idle"
-                chickenFaceSystem
-                loadout={lunchmateLoadout}
-                size={148}
-                renderSize="compact"
-                animated={false}
-                alt="Quick Match를 준비하는 나의 런치킨"
-              />
-            </motion.div>
+            <div className="max-w-[280px]">
+              {isSoloSession && <span className="mb-3 inline-flex rounded-full bg-[#FBECE9] px-3 py-1 text-[10px] font-semibold text-[#AA1A0D]">SOLO LUNCH GAME</span>}
+              <p className="text-[22px] font-bold text-[#171717]">Getting the Vote Ready!</p>
+              <p className="mt-2 text-[14px] leading-relaxed text-[#858185]">
 
-            <div className="mt-6 max-w-[280px]">
-              {isSoloSession && <span className="mb-3 inline-flex rounded-full bg-white/15 px-3 py-1 text-[10px] font-black tracking-[0.9px] text-[#FFE38A]">SOLO LUNCH GAME</span>}
-              <p className="text-[22px] font-black text-white">추천 투표를 준비 중!</p>
-              <p className="mt-2 text-[14px] font-semibold leading-relaxed text-white/60">
-                다른 사람의 선택은 보이지 않아요 · 내 답에만 집중해요
+                Other choices stay private · choose what feels right to you
               </p>
             </div>
 
@@ -3018,7 +2972,7 @@ function QuickMatchExperience() {
               {[0, 1, 2].map((dot) => (
                 <motion.span
                   key={dot}
-                  className={`size-2 rounded-full ${isSoloSession ? 'bg-[#FFE38A]' : 'bg-[#EB5053]'}`}
+                  className="size-2 rounded-full bg-[#AA1A0D]"
                   animate={{ opacity: [0.35, 1, 0.35], scale: [0.85, 1, 0.85] }}
                   transition={{ duration: 1.2, repeat: Infinity, delay: dot * 0.18, ease: 'easeInOut' }}
                 />
@@ -3046,27 +3000,36 @@ function QuickMatchExperience() {
         </div>
       </div>
 
-      {/* One restaurant, two explicit answers — no swipe gesture. */}
-      <div className="grid grid-cols-2 gap-3 px-5 pb-10 pt-4">
+      <div className="grid grid-cols-3 gap-2 px-5 pb-10 pt-4">
         <motion.button
           onClick={() => handleAction('dislike')}
           disabled={isSubmittingSwipe}
-          aria-label="비추천"
-          className="min-h-[84px] rounded-[22px] border-2 border-[#E14F59] bg-[#FFF0F1] px-3 text-center shadow-lg disabled:cursor-wait disabled:opacity-50"
+          aria-label="Not Recommended"
+          className="h-[84px] min-w-0 rounded-lg border border-[#E8E6E7] bg-[#F5F4F5] px-2 text-center text-[#565256] outline-none focus-visible:ring-2 focus-visible:ring-[#AA1A0D] disabled:cursor-wait disabled:opacity-50"
           whileTap={{ scale: 0.96 }}
         >
-          <X size={24} className="mx-auto text-[#D83F4B]" strokeWidth={3} />
-          <span className="mt-1 block text-[14px] font-black text-[#C93743]">비추천이에요</span>
+          <X size={24} className="mx-auto" strokeWidth={2} />
+          <span className="mt-1 block text-[13px] font-semibold">Not for Me</span>
+        </motion.button>
+        <motion.button
+          onClick={() => handleAction('neutral')}
+          disabled={isSubmittingSwipe}
+          aria-label="Neutral"
+          className="h-[84px] min-w-0 rounded-lg border border-[#E8E6E7] bg-[#F5F4F5] px-2 text-center text-[#565256] outline-none focus-visible:ring-2 focus-visible:ring-[#AA1A0D] disabled:cursor-wait disabled:opacity-50"
+          whileTap={{ scale: 0.96 }}
+        >
+          <Minus size={24} className="mx-auto" strokeWidth={2} />
+          <span className="mt-1 block text-[13px] font-semibold">Neutral</span>
         </motion.button>
         <motion.button
           onClick={() => handleAction('like')}
           disabled={isSubmittingSwipe}
-          aria-label="추천"
-          className="min-h-[84px] rounded-[22px] border-2 border-[#386CE0] bg-[#356DE4] px-3 text-center text-white shadow-lg disabled:cursor-wait disabled:opacity-50"
+          aria-label="Recommend"
+          className="h-[84px] min-w-0 rounded-lg border border-[#E8E6E7] bg-[#F5F4F5] px-2 text-center text-[#565256] outline-none focus-visible:ring-2 focus-visible:ring-[#AA1A0D] disabled:cursor-wait disabled:opacity-50"
           whileTap={{ scale: 0.96 }}
         >
-          <Heart size={24} className="mx-auto" fill="white" />
-          <span className="mt-1 block text-[14px] font-black">추천해요</span>
+          <Heart size={24} className="mx-auto" strokeWidth={2} />
+          <span className="mt-1 block text-[13px] font-semibold">Recommend</span>
         </motion.button>
       </div>
 

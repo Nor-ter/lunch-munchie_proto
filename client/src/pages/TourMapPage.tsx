@@ -1,3 +1,4 @@
+import { englishText } from '@shared/englishCopy';
 /**
  * Lunchie Munchie — Tour Map Share Page
  * Strava-style transparent SVG course overlay
@@ -86,13 +87,13 @@ function CourseOverlaySVG({ stops, config, width, height }: {
       </defs>
 
       {/* Glow */}
-      {pathD && config.lineStyle !== 'dashed' && (
+      {englishText(pathD && config.lineStyle !== 'dashed' && (
         <path d={pathD} stroke={config.lineColor} strokeWidth={config.lineWidth + 8}
           strokeOpacity={0.15} fill="none" strokeLinecap="round" strokeLinejoin="round" />
-      )}
+      ))}
 
       {/* Main line */}
-      {pathD && (
+      {englishText(pathD && (
         <path d={pathD}
           stroke={config.lineStyle === 'gradient' ? `url(#${gradId})` : config.lineColor}
           strokeWidth={config.lineWidth}
@@ -101,7 +102,7 @@ function CourseOverlaySVG({ stops, config, width, height }: {
           strokeLinejoin="round"
           strokeDasharray={dash}
         />
-      )}
+      ))}
 
       {/* Markers */}
       {pts.map((pt, i) => {
@@ -128,11 +129,11 @@ function CourseOverlaySVG({ stops, config, width, height }: {
               <>
                 <text x={pt.x} y={pt.y + r + 16} textAnchor="middle"
                   fontSize={9} fontWeight="600" fill="#000" stroke="#000" strokeWidth={3} opacity={0.5}>
-                  {stop.name.length > 7 ? `${stop.name.slice(0, 7)}…` : stop.name}
+                  {englishText(stop.name.length > 7 ? `${stop.name.slice(0, 7)}…` : stop.name)}
                 </text>
                 <text x={pt.x} y={pt.y + r + 16} textAnchor="middle"
                   fontSize={9} fontWeight="600" fill={config.lineColor}>
-                  {stop.name.length > 7 ? `${stop.name.slice(0, 7)}…` : stop.name}
+                  {englishText(stop.name.length > 7 ? `${stop.name.slice(0, 7)}…` : stop.name)}
                 </text>
               </>
             )}
@@ -168,11 +169,11 @@ function CourseOverlaySVG({ stops, config, width, height }: {
 function StyleEditor({ config, onChange }: { config: StyleConfig; onChange: (c: StyleConfig) => void }) {
   return (
     <div className="bg-[#F5F5F5] rounded-2xl p-4 space-y-4">
-      <p className="font-bold text-[14px] text-[#1A1A1A]">✏️ 스타일 커스텀</p>
+      <p className="font-bold text-[14px] text-[#1A1A1A]">✏️ Customize Style</p>
 
       {/* Color */}
       <div>
-        <p className="text-[11px] text-[#9B9B9B] font-semibold uppercase tracking-wider mb-2">라인 색상</p>
+        <p className="text-[11px] text-[#9B9B9B] font-semibold uppercase tracking-wider mb-2">Line Color</p>
         <div className="flex gap-2">
           {COLOR_PRESETS.map(c => (
             <button
@@ -191,7 +192,7 @@ function StyleEditor({ config, onChange }: { config: StyleConfig; onChange: (c: 
 
       {/* Line Width */}
       <div>
-        <p className="text-[11px] text-[#9B9B9B] font-semibold uppercase tracking-wider mb-2">라인 굵기</p>
+        <p className="text-[11px] text-[#9B9B9B] font-semibold uppercase tracking-wider mb-2">Line Width</p>
         <div className="flex gap-2">
           {[3, 5, 8, 12].map(w => (
             <button key={w} onClick={() => onChange({ ...config, lineWidth: w })}
@@ -207,7 +208,7 @@ function StyleEditor({ config, onChange }: { config: StyleConfig; onChange: (c: 
 
       {/* Line Style */}
       <div>
-        <p className="text-[11px] text-[#9B9B9B] font-semibold uppercase tracking-wider mb-2">라인 스타일</p>
+        <p className="text-[11px] text-[#9B9B9B] font-semibold uppercase tracking-wider mb-2">Line Style</p>
         <div className="flex gap-2">
           {(['solid', 'dashed', 'gradient'] as const).map(s => (
             <button key={s} onClick={() => onChange({ ...config, lineStyle: s })}
@@ -215,7 +216,7 @@ function StyleEditor({ config, onChange }: { config: StyleConfig; onChange: (c: 
               style={config.lineStyle === s
                 ? { backgroundColor: config.lineColor, color: '#fff', borderColor: config.lineColor }
                 : { backgroundColor: '#fff', color: '#4A4A4A', borderColor: '#E5E5E5' }}>
-              {s === 'solid' ? '실선' : s === 'dashed' ? '점선' : '그라데'}
+              {englishText(s === 'solid' ? "Solid" : s === 'dashed' ? "Dashed" : "Gradient")}
             </button>
           ))}
         </div>
@@ -224,15 +225,15 @@ function StyleEditor({ config, onChange }: { config: StyleConfig; onChange: (c: 
       {/* Toggles */}
       <div className="flex gap-2">
         {[
-          { key: 'showLabels' as const, label: '장소명' },
-          { key: 'showPhotos' as const, label: '사진 스트립' },
+          { key: 'showLabels' as const, label: "Place Names" },
+          { key: 'showPhotos' as const, label: "Photo Strip" },
         ].map(({ key, label }) => (
           <button key={key} onClick={() => onChange({ ...config, [key]: !config[key] })}
             className="flex-1 py-2 rounded-xl text-[12px] font-semibold border transition-all active:scale-95"
             style={config[key]
               ? { backgroundColor: config.lineColor, color: '#fff', borderColor: config.lineColor }
               : { backgroundColor: '#fff', color: '#4A4A4A', borderColor: '#E5E5E5' }}>
-            {label}
+            {englishText(label)}
           </button>
         ))}
       </div>
@@ -305,19 +306,19 @@ export default function TourMapPage() {
       link.download = `lunchie-munchie-course-${Date.now()}.png`;
       link.href = canvas.toDataURL('image/png');
       link.click();
-      toast.success('코스맵이 저장됐어요! 📸\n인스타 스토리에 스티커로 추가하세요!');
+      toast.success("Course map saved! 📸\nAdd it as a sticker to your Instagram story!");
     } catch {
-      toast.error('저장에 실패했습니다');
+      toast.error("Couldn't save");
     }
     setIsExporting(false);
   }, [config.bgMode]);
 
   const handleShare = async () => {
     if (navigator.share) {
-      await navigator.share({ title: 'Lunchie Munchie 코스맵', url: window.location.href });
+      await navigator.share({ title: "Lunchie Munchie Course Map", url: window.location.href });
     } else {
       await navigator.clipboard.writeText(window.location.href);
-      toast.success('링크가 복사됐어요! 📋');
+      toast.success("Link copied! 📋");
     }
   };
 
@@ -325,10 +326,10 @@ export default function TourMapPage() {
     <div className="min-h-dvh bg-[#FCF4EE]">
       {/* Header */}
       <div className="flex items-center justify-between border-b border-[#E5E5E5] px-5 pb-4 pt-[max(12px,env(safe-area-inset-top))]">
-        <BackButton onClick={() => window.history.back()} aria-label="이전 화면으로 돌아가기" />
+        <BackButton onClick={() => window.history.back()} aria-label="Back" />
         <div className="text-center">
-          <p className="font-bold text-[16px] text-[#1A1A1A]">코스맵 공유 🗺️</p>
-          <p className="text-[11px] text-[#9B9B9B]">Strava 스타일 투명 오버레이</p>
+          <p className="font-bold text-[16px] text-[#1A1A1A]">Share Course Map 🗺️</p>
+          <p className="text-[11px] text-[#9B9B9B]">Strava-style Transparent Overlay</p>
         </div>
         <button onClick={() => setShowEditor(v => !v)}
           className="w-10 h-10 rounded-full bg-[#FFF5F5] flex items-center justify-center active:scale-95">
@@ -352,12 +353,12 @@ export default function TourMapPage() {
             boxShadow: '0 8px 32px rgba(0,0,0,0.15)',
           }}
         >
-          {bgImage && (
+          {englishText(bgImage && (
             <img src={bgImage} alt="bg" className="absolute inset-0 w-full h-full object-cover" />
-          )}
+          ))}
           {!bgImage && (
             <div className="absolute inset-0 flex flex-col items-center justify-center bg-white/50">
-              <p className="text-[11px] text-[#9B9B9B] text-center">📷 배경 사진을 추가하거나<br />투명 PNG로 내보내세요</p>
+              <p className="text-[11px] text-[#9B9B9B] text-center">📷 Add a background photo or <br />export a transparent PNG</p>
             </div>
           )}
           <CourseOverlaySVG stops={stops} config={config} width={CANVAS_W} height={CANVAS_H} />
@@ -370,13 +371,13 @@ export default function TourMapPage() {
               <div key={stop.id} className="flex-shrink-0 flex flex-col items-center gap-1">
                 <div className="relative w-14 h-14 rounded-xl overflow-hidden border-2"
                   style={{ borderColor: config.lineColor }}>
-                  <img src={stop.image} alt={stop.name} className="w-full h-full object-cover" />
+                  <img src={stop.image} alt={englishText(stop.name)} className="w-full h-full object-cover" />
                   <div className="absolute top-1 left-1 w-4 h-4 rounded-full flex items-center justify-center text-white text-[9px] font-black"
                     style={{ backgroundColor: config.lineColor }}>
                     {i + 1}
                   </div>
                 </div>
-                <p className="text-[9px] text-[#4A4A4A] max-w-[56px] text-center truncate">{stop.name}</p>
+                <p className="text-[9px] text-[#4A4A4A] max-w-[56px] text-center truncate">{englishText(stop.name)}</p>
               </div>
             ))}
           </div>
@@ -398,20 +399,20 @@ export default function TourMapPage() {
 
         {/* Background mode */}
         <div>
-          <p className="text-[11px] text-[#9B9B9B] font-semibold uppercase tracking-wider mb-2">내보내기 형식</p>
+          <p className="text-[11px] text-[#9B9B9B] font-semibold uppercase tracking-wider mb-2">Export Format</p>
           <div className="grid grid-cols-2 gap-3">
             {[
-              { mode: 'transparent' as const, emoji: '🫥', title: '투명 PNG', sub: '인스타 스티커용' },
-              { mode: 'dark' as const, emoji: '🖼️', title: '다크 배경', sub: '스토리 완성본' },
+              { mode: 'transparent' as const, emoji: '🫥', title: "Transparent PNG", sub: "Instagram Sticker" },
+              { mode: 'dark' as const, emoji: '🖼️', title: "Dark Background", sub: "Complete Story" },
             ].map(({ mode, emoji, title, sub }) => (
               <button key={mode} onClick={() => setConfig(c => ({ ...c, bgMode: mode }))}
                 className="p-3 rounded-2xl border-2 text-center transition-all active:scale-95"
                 style={config.bgMode === mode
                   ? { borderColor: '#EB5053', backgroundColor: '#FFF5F5' }
                   : { borderColor: '#E5E5E5', backgroundColor: '#fff' }}>
-                <p className="text-2xl mb-1">{emoji}</p>
-                <p className="font-bold text-[13px] text-[#1A1A1A]">{title}</p>
-                <p className="text-[10px] text-[#9B9B9B]">{sub}</p>
+                <p className="text-2xl mb-1">{englishText(emoji)}</p>
+                <p className="font-bold text-[13px] text-[#1A1A1A]">{englishText(title)}</p>
+                <p className="text-[10px] text-[#9B9B9B]">{englishText(sub)}</p>
               </button>
             ))}
           </div>
@@ -421,24 +422,27 @@ export default function TourMapPage() {
         <div className="flex gap-3">
           <button onClick={handlePickPhoto}
             className="flex-1 flex items-center justify-center gap-2 py-3 rounded-xl border border-[#E5E5E5] text-[13px] font-semibold text-[#1A1A1A] active:scale-95 bg-white">
-            <Camera size={16} /> 배경 사진
+            <Camera size={16} />  Background Photo
           </button>
           <button onClick={() => void handleExport()}
             disabled={isExporting}
             className="flex-1 flex items-center justify-center gap-2 py-3 rounded-xl text-white text-[13px] font-semibold active:scale-95"
             style={{ backgroundColor: '#EB5053' }}>
-            <Download size={16} /> {isExporting ? '처리 중…' : '저장 & 공유'}
+            <Download size={16} /> {englishText(isExporting ? "Processing…" : "Save & Share")}
           </button>
         </div>
 
         {/* How-to tip */}
         <div className="rounded-2xl p-4 border-l-4" style={{ backgroundColor: '#FFF5F5', borderLeftColor: '#EB5053' }}>
-          <p className="font-bold text-[13px] mb-2" style={{ color: '#EB5053' }}>📱 인스타 스토리에 올리는 법</p>
+          <p className="font-bold text-[13px] mb-2" style={{ color: '#EB5053' }}>📱 Share to Instagram Stories</p>
           <p className="text-[12px] text-[#4A4A4A] leading-relaxed">
-            1. <strong>투명 PNG</strong>로 저장 후 인스타 스토리 열기<br />
-            2. 내 사진을 스토리 배경으로 추가<br />
-            3. 스티커 → 갤러리에서 코스맵 PNG 선택<br />
-            4. 크기·위치 조정 후 공유! 🎉
+            1. <strong>Transparent PNG</strong>, then open Instagram Stories<br />
+
+            2. Add a photo as your story background<br />
+
+            3. Stickers → choose the course map PNG from your gallery<br />
+
+            4. Adjust the size and position, then share! 🎉
           </p>
         </div>
 

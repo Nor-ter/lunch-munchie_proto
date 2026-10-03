@@ -1,3 +1,4 @@
+import { englishText } from '@shared/englishCopy';
 import { forwardRef } from 'react';
 import { Course } from '@/types/course';
 
@@ -23,10 +24,11 @@ const ListTemplate = forwardRef<HTMLDivElement, TemplateProps>(({ course }, ref)
       }}
     >
       <p style={{ fontSize: 16, fontWeight: 'bold', color: '#1A1A1A', margin: 0 }}>
-        {course.title}
+        {englishText(course.title)}
       </p>
       <p style={{ fontSize: 11, color: '#EB5053', margin: '6px 0 12px 0' }}>
-        맛있는 하루 코스 ♥
+
+        A Delicious Day ♥
       </p>
 
       {/* Place list */}
@@ -51,12 +53,12 @@ const ListTemplate = forwardRef<HTMLDivElement, TemplateProps>(({ course }, ref)
 
             {/* Name */}
             <span style={{ fontSize: 12, color: '#1A1A1A', flexGrow: 1 }}>
-              {place.name}
+              {englishText(place.name)}
             </span>
 
             {/* Time */}
             <span style={{ fontSize: 10, color: '#9E9E9E', flexShrink: 0 }}>
-              {TIMES[i] ?? ''}
+              {englishText(TIMES[i] ?? '')}
             </span>
           </div>
         ))}

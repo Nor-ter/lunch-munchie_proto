@@ -3,7 +3,7 @@
 
 export interface SwipeRow {
   restaurant_id: string;
-  swipe_action: string; // "LIKE" | "NOPE"
+  swipe_action: string; // "LIKE" | "DISLIKE" | "NOPE" | "NEUTRAL"
   round?: number | null; // 1=예선, 2=결승 투표
   user_id?: string;
 }
@@ -13,17 +13,19 @@ export interface RankedResult {
   score: number;
   likeCount: number;
   dislikeCount: number;
+  neutralCount: number;
 }
 
 // least-misery 랭크: 싫어요 적은 곳 우선, 같으면 좋아요 많은 순.
 // penalty = memberCount+1 → 싫어요 1개가 그룹 내 가능한 모든 좋아요를 압도한다.
 // "아무도 안 싫어하는 곳"이 인기(좋아요 총합)보다 먼저.
 export function rankResultsLeastMisery(swipes: SwipeRow[], memberCount: number): RankedResult[] {
-  const m = new Map<string, { likeCount: number; dislikeCount: number }>();
+  const m = new Map<string, { likeCount: number; dislikeCount: number; neutralCount: number }>();
   for (const s of swipes) {
     if (!s.restaurant_id) continue;
-    const r = m.get(s.restaurant_id) ?? { likeCount: 0, dislikeCount: 0 };
+    const r = m.get(s.restaurant_id) ?? { likeCount: 0, dislikeCount: 0, neutralCount: 0 };
     if (s.swipe_action === "LIKE") r.likeCount += 1;
+    else if (s.swipe_action === "NEUTRAL") r.neutralCount += 1;
     else r.dislikeCount += 1;
     m.set(s.restaurant_id, r);
   }
@@ -32,6 +34,7 @@ export function rankResultsLeastMisery(swipes: SwipeRow[], memberCount: number):
     restaurantId,
     likeCount: r.likeCount,
     dislikeCount: r.dislikeCount,
+    neutralCount: r.neutralCount,
     score: r.likeCount - r.dislikeCount * penalty,
   }));
   // E: 결정적 정렬 — score → 좋아요 수 → id (서버측 안정 tiebreak. 엔진 순위는 클라에서).

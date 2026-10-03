@@ -1,3 +1,4 @@
+import { englishText } from '@shared/englishCopy';
 import { LoaderCircle } from 'lucide-react';
 import { toast } from 'sonner';
 import { useCurrentUserId } from '@/hooks/useCurrentUserId';
@@ -20,14 +21,14 @@ export function FollowButton({ userId, initialFollowing }: { userId: string; ini
       data-testid="follow-button"
       disabled={busy}
       onClick={() => toggle.mutate(!following, {
-        onError: () => toast.error('팔로우 상태를 바꾸지 못했어요. 잠시 후 다시 시도해 주세요.'),
+        onError: () => toast.error("Couldn't update your follow. Please try again shortly."),
       })}
       className={following
-        ? 'min-w-[78px] rounded-lg border border-[#E5DCD2] bg-white px-3.5 py-2 text-xs font-bold text-[#6F625A] disabled:opacity-60'
-        : 'min-w-[78px] rounded-lg bg-[#EB5053] px-3.5 py-2 text-xs font-bold text-white disabled:opacity-60'}
-      aria-label={following ? '언팔로우' : '팔로우'}
+        ? 'min-w-[78px] rounded-lg border border-[#D8D5D7] bg-white px-3.5 py-2 text-xs font-bold text-[#565256] disabled:opacity-60'
+        : 'min-w-[78px] rounded-lg bg-[#AA1A0D] px-3.5 py-2 text-xs font-bold text-white disabled:opacity-60'}
+      aria-label={englishText(following ? "Unfollow" : "Follow")}
     >
-      {busy ? <LoaderCircle className="mx-auto size-4 animate-spin" /> : following ? '팔로잉' : '팔로우'}
+      {englishText(busy ? <LoaderCircle className="mx-auto size-4 animate-spin" /> : following ? "Following" : "Follow")}
     </button>
   );
 }

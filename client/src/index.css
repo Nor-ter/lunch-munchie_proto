@@ -5,9 +5,8 @@
 @custom-variant dark (&:is(.dark *));
 
 /* ============================================================
-   Lunchie Munchie Design System — "Soft Coral"
-   Primary: #E85053 | Accent: #D94447 | BG: #FFF8F2
-   (yellow/amber removed — red-tone brand only)
+   Lunchie Munchie Design System — "Quiet Plum"
+   Neutral, list-led surfaces with a restrained plum accent.
    ============================================================ */
 
 @theme inline {
@@ -38,8 +37,8 @@
 
 :root {
   color-scheme: only light;
-  --radius: 0.75rem;
-  --primary: oklch(0.58 0.19 22);
+  --radius: 0.625rem;
+  --primary: #AA1A0D;
   --primary-foreground: oklch(1 0 0);
   --background: oklch(1 0 0);
   --foreground: oklch(0.12 0.005 0);
@@ -51,26 +50,28 @@
   --secondary-foreground: oklch(0.3 0.005 0);
   --muted: oklch(0.96 0.003 0);
   --muted-foreground: oklch(0.6 0.01 0);
-  --accent: oklch(0.92 0.04 25);
+  --accent: #FBECE9;
   --accent-foreground: oklch(0.12 0.005 0);
-  --destructive: oklch(0.58 0.19 22);
+  --destructive: #C63F4B;
   --destructive-foreground: oklch(1 0 0);
-  --border: oklch(0.9 0.003 0);
-  --input: oklch(0.96 0.003 0);
-  --ring: oklch(0.58 0.19 22);
+  --border: #E8E6E7;
+  --input: #F4F3F4;
+  --ring: #AA1A0D;
 
   /* LM Design Tokens */
-  --lm-primary: #E85053;
-  --lm-session-primary: #EB5053;
-  --lm-accent: #D94447;
+  --lm-primary: #AA1A0D;
+  --lm-session-primary: #AA1A0D;
+  --lm-accent: #80140A;
   --lm-green: #3CBA44;
   --lm-blue: #3E719B;
-  --lm-bg: #FFF8F2;
-  --lm-card-warm: #FFD6D6;
-  --lm-text: #1A1A1A;
-  --lm-sub: #9B9B9B;
-  --lm-tab-bar-height: 88px;
-  --lm-tab-profile-icon-size: 59px;
+  --lm-bg: #FFFFFF;
+  --lm-card-warm: #FBECE9;
+  --lm-text: #171717;
+  --lm-sub: #858185;
+  --lm-divider: #E8E6E7;
+  --lm-soft: #F5F4F5;
+  --lm-tab-bar-height: 76px;
+  --lm-tab-profile-icon-size: 38px;
 }
 
 @layer base {
@@ -84,7 +85,8 @@
   body {
     color-scheme: only light;
     @apply bg-background text-foreground;
-    font-family: 'Baloo 2', 'Pretendard Variable', 'Pretendard', cursive;
+    font-family: 'Pretendard Variable', 'Pretendard', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    letter-spacing: 0;
     -webkit-tap-highlight-color: transparent;
     overflow-x: hidden;
     overflow-y: auto;
@@ -106,8 +108,13 @@
 
   .app-shell {
     max-width: 480px; margin: 0 auto; min-height: 100dvh;
-    position: relative; background: #FCF4EE;
-    box-shadow: 0 0 60px rgba(0,0,0,0.08);
+    position: relative; background: #FFFFFF;
+    box-shadow: 0 0 40px rgba(0,0,0,0.05);
+  }
+
+  body:has(.saved-page),
+  .app-shell:has(.saved-page) {
+    background: #FCFCFC;
   }
 
   /* The consumer app intentionally uses a phone-sized shell. Operations is a
@@ -120,8 +127,8 @@
   }
 
   .lm-btn-primary {
-    background: var(--lm-primary); color: white; border-radius: 16px;
-    height: 52px; font-weight: 700; font-size: 15px;
+    background: var(--lm-primary); color: white; border-radius: 10px;
+    height: 50px; font-weight: 700; font-size: 15px;
     transition: all 150ms; border: none;
   }
   .lm-btn-primary:active { opacity: 0.85; transform: scale(0.98); }
@@ -130,15 +137,15 @@
   .lunchie-session-primary-action {
     display: flex;
     width: 100%;
-    height: 56px;
+    height: 52px;
     align-items: center;
     justify-content: center;
     border: 0;
-    border-radius: 1rem;
+    border-radius: 10px;
     background: var(--lm-session-primary);
     color: white;
     font-size: 16px;
-    font-weight: 900;
+    font-weight: 700;
     line-height: 1;
     outline: none;
     transition: opacity 150ms ease, transform 150ms ease;
@@ -150,7 +157,7 @@
     box-shadow: 0 0 0 2px white, 0 0 0 4px var(--lm-session-primary);
   }
 
-  .lunchie-lobby { --lm-text: #3E2922; }
+  .lunchie-lobby { --lm-text: #171717; }
 
   .header-action-row {
     display: flex;
@@ -164,19 +171,19 @@
   }
 
   .lm-btn-outline {
-    background: white; color: #1A1A1A; border-radius: 16px;
+    background: white; color: #171717; border-radius: 10px;
     height: 52px; font-weight: 600; font-size: 15px;
     border: 1.5px solid #E5E5E5; transition: all 150ms;
   }
   .lm-btn-outline:active { opacity: 0.8; transform: scale(0.98); }
 
   .lm-card {
-    background: white; border-radius: 20px;
-    box-shadow: 0 2px 12px rgba(0,0,0,0.06);
+    background: white; border: 1px solid var(--lm-divider); border-radius: 10px;
+    box-shadow: none;
   }
 
   .lm-card-warm {
-    background: var(--lm-card-warm); border-radius: 20px;
+    background: var(--lm-card-warm); border-radius: 10px;
   }
 
   .tag { border-radius: 999px; padding: 3px 10px; font-size: 11px; font-weight: 600; display: inline-flex; align-items: center; }
@@ -187,12 +194,13 @@
   .tag-activity { background: #3E719B; color: white; }
   .tag-hash { background: rgba(0,0,0,0.06); color: #4A4A4A; }
 
-  /* Red tab bar */
+  /* Dark, compact navigation keeps content visually dominant. */
   .tab-bar {
     position: fixed; bottom: 0; left: 50%; transform: translateX(-50%);
     width: 100%; max-width: 480px;
     height: var(--lm-tab-bar-height);
-    background: #FF1346;
+    background: #171717;
+    border-top: 1px solid #2A2A2A;
     border-radius: 0;
     z-index: 50;
     padding-bottom: env(safe-area-inset-bottom, 0px);
@@ -209,7 +217,7 @@
 
   .tab-bar--flat {
     border-radius: 0;
-    box-shadow: none;
+    box-shadow: 0 -4px 18px rgba(0, 0, 0, 0.08);
   }
 
   .lunchie-distance-range {
@@ -269,12 +277,12 @@
     flex: 1;
     align-items: center;
     justify-content: center;
-    border-radius: 1rem;
+    border-radius: 10px;
     background: var(--lm-primary);
     color: white;
     font-size: 15px;
     font-weight: 700;
-    box-shadow: 0 8px 20px rgba(232, 80, 83, 0.25);
+    box-shadow: none;
   }
 
   .page-bottom-action-secondary {
@@ -284,8 +292,8 @@
     flex-shrink: 0;
     align-items: center;
     justify-content: center;
-    border: 1px solid #F0C8C8;
-    border-radius: 1rem;
+    border: 1px solid var(--lm-divider);
+    border-radius: 10px;
     color: var(--lm-primary);
   }
 

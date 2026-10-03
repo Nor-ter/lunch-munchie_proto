@@ -1,3 +1,4 @@
+import { englishText } from '@shared/englishCopy';
 import { forwardRef } from 'react';
 import { Course } from '@/types/course';
 import { ScrapPalette, SCRAP_PALETTES, photoFallback } from './scrapTheme';
@@ -128,7 +129,7 @@ const TicketTemplate = forwardRef<HTMLDivElement, Props>(({ course, palette }, r
                         crossOrigin="anonymous"
                       />
                     ) : (
-                      <div style={{ ...photoFallback(p), fontSize: 15 }}>{place ? '🍽️' : '·'}</div>
+                      <div style={{ ...photoFallback(p), fontSize: 15 }}>{englishText(place ? '🍽️' : '·')}</div>
                     )}
                   </div>
                   {place && (
@@ -144,7 +145,7 @@ const TicketTemplate = forwardRef<HTMLDivElement, Props>(({ course, palette }, r
                         maxWidth: 110,
                       }}
                     >
-                      {i + 1}. {place.name}
+                      {i + 1}. {englishText(place.name)}
                     </p>
                   )}
                 </div>
@@ -165,10 +166,10 @@ const TicketTemplate = forwardRef<HTMLDivElement, Props>(({ course, palette }, r
                 textOverflow: 'ellipsis',
               }}
             >
-              {course.title}
+              {englishText(course.title)}
             </p>
             <p style={{ margin: '2px 0 0', fontSize: 7.5, letterSpacing: 1.5, color: p.accent }}>
-              {dateLabel} · {course.distanceKm}KM · {course.places.length} SPOTS
+              {englishText(dateLabel)} · {course.distanceKm}KM · {course.places.length} SPOTS
             </p>
           </div>
         </div>

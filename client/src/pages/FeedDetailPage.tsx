@@ -1,3 +1,4 @@
+import { englishText } from '@shared/englishCopy';
 import { useLocation, useParams, useSearch } from 'wouter';
 import { useApp } from '@/contexts/AppContext';
 import UnifiedMunchieCard from '@/components/munchie/UnifiedMunchieCard';
@@ -30,19 +31,19 @@ export default function FeedDetailPage() {
       ? profileReturnId ? `/profile/${profileReturnId}` : '/profile'
       : fromSaved
         ? getSavedReturnPath(search, id)
-        : '/feed?tab=feed';
-  const backLabel = fromNotifications ? '퀵매치로 돌아가기' : fromProfile ? '프로필로 돌아가기' : fromSaved ? '저장목록으로 돌아가기' : '먼치피드로 돌아가기';
+        : '/saved';
+  const backLabel = fromNotifications ? "Back to Quick Match" : fromProfile ? "Back to Profile" : fromSaved ? "Back to Saved" : "Back to Saved";
 
   if (!post && (isLoading || profileFeed.isLoading)) {
-    return <main className="flex min-h-dvh items-center justify-center bg-[#FCF4EE] text-sm font-bold text-[#9A8579]">피드를 불러오는 중이에요…</main>;
+    return <main className="flex min-h-dvh items-center justify-center bg-[#FCF4EE] text-sm font-bold text-[#9A8579]">Loading feed…</main>;
   }
 
   if (!post) {
     return (
       <main className="flex min-h-dvh items-center justify-center bg-[#FCF4EE] px-6 text-center">
         <div>
-          <p className="font-bold text-[#2D211C]">피드를 찾을 수 없어요</p>
-          <button onClick={() => navigate(backPath)} className="mt-4 rounded-full bg-[#E85053] px-6 py-3 text-sm font-bold text-white">돌아가기</button>
+          <p className="font-bold text-[#2D211C]">Post not found</p>
+          <button onClick={() => navigate(backPath)} className="mt-4 rounded-full bg-[#E85053] px-6 py-3 text-sm font-bold text-white">Back</button>
         </div>
       </main>
     );
@@ -51,7 +52,7 @@ export default function FeedDetailPage() {
   return (
     <main className="mx-auto min-h-dvh max-w-[430px] bg-[#FCF4EE] pb-8">
       <header className="sticky top-0 z-30 grid grid-cols-[40px_1fr_40px] items-center bg-[#FCF4EE]/95 px-5 pb-3 pt-[max(12px,env(safe-area-inset-top))] backdrop-blur">
-        <BackButton onClick={() => navigate(backPath)} aria-label={backLabel} />
+        <BackButton onClick={() => navigate(backPath)} aria-label={englishText(backLabel)} />
         <p className="text-center text-[15px] font-black text-[#2D211C]">Munchie Feed</p>
         <span className="h-10 w-10" aria-hidden="true" />
       </header>

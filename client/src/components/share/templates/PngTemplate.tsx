@@ -1,3 +1,4 @@
+import { englishText } from '@shared/englishCopy';
 import { forwardRef } from 'react';
 import { Course } from '@/types/course';
 import { CourseMap } from '@/components/course/CourseMap';
@@ -35,10 +36,11 @@ const PngTemplate = forwardRef<HTMLDivElement, TemplateProps>(({ course }, ref) 
         }}
       >
         <p style={{ fontSize: 16, fontWeight: 'bold', color: '#1A1A1A', margin: 0 }}>
-          {course.title}
+          {englishText(course.title)}
         </p>
         <p style={{ fontSize: 11, color: '#EB5053', margin: '6px 0 0 0' }}>
-          맛있는 하루 코스 ♥
+
+          A Delicious Day ♥
         </p>
         <div style={{ marginTop: 8 }}>
           <CourseMap places={course.places} width={180} height={120} />

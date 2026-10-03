@@ -1,3 +1,4 @@
+import { englishText } from '@shared/englishCopy';
 /**
  * Lunchie Munchie — Course Detail Page
  * Design: Soft Coral (Option 8)
@@ -35,9 +36,10 @@ export default function CourseDetailPage() {
     return (
       <div className="min-h-dvh flex items-center justify-center">
         <div className="text-center">
-          <p className="font-bold text-[16px] text-[#1A1A1A] mb-4">코스를 찾을 수 없어요</p>
+          <p className="font-bold text-[16px] text-[#1A1A1A] mb-4">Course not found</p>
           <button onClick={() => navigate('/courses/feeds')} className="lm-btn-primary px-6 flex items-center justify-center">
-            코스 탐색
+
+            Explore Courses
           </button>
         </div>
       </div>
@@ -60,10 +62,10 @@ export default function CourseDetailPage() {
   const handleSave = () => {
     if (isSaved) {
       unsaveCourse(course.id);
-      toast.info('저장 취소됨');
+      toast.info("Removed from Saved");
     } else {
       saveCourse(course.id);
-      toast.success('코스를 저장했어요! 🔖');
+      toast.success("Course saved! 🔖");
     }
   };
 
@@ -71,14 +73,14 @@ export default function CourseDetailPage() {
     <div className="min-h-dvh bg-[#FCF4EE] pb-28">
       {/* Hero Header */}
       <div className="relative h-[250px] md:h-[300px]">
-        <img src={course.heroImage} alt={course.title} className="w-full h-full object-cover" />
+        <img src={course.heroImage} alt={englishText(course.title)} className="w-full h-full object-cover" />
         <CourseMapOverlay course={course} />
         <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/30 to-transparent pointer-events-none" />
 
         {/* Header */}
         <div className="absolute left-0 right-0 top-0 flex items-center justify-between px-5 pt-[max(12px,env(safe-area-inset-top))]">
-          <BackButton onClick={() => window.history.back()} aria-label="이전 화면으로 돌아가기" />
-          <span className="font-semibold text-white text-[15px]">코스 상세</span>
+          <BackButton onClick={() => window.history.back()} aria-label="Back" />
+          <span className="font-semibold text-white text-[15px]">Course Details</span>
           <button
             onClick={handleShare}
             className="w-9 h-9 rounded-full bg-white/80 flex items-center justify-center active:scale-95"
@@ -93,22 +95,22 @@ export default function CourseDetailPage() {
         {/* Tags */}
         <div className="flex gap-2 flex-wrap mb-3">
           {course.tags.map(tag => (
-            <span key={tag} className={`tag ${TAG_CLASS[tag] || 'tag-hash'}`}>{tag}</span>
+            <span key={tag} className={`tag ${TAG_CLASS[tag] || 'tag-hash'}`}>{englishText(tag)}</span>
           ))}
         </div>
 
         {/* Title */}
-        <h1 className="font-bold text-[22px] text-[#1A1A1A] leading-tight mb-2">{course.title}</h1>
+        <h1 className="font-bold text-[22px] text-[#1A1A1A] leading-tight mb-2">{englishText(course.title)}</h1>
 
         {/* Hashtags */}
         <div className="flex gap-1.5 flex-wrap mb-3">
           {course.hashtags.map(h => (
-            <span key={h} className="tag tag-hash">{h}</span>
+            <span key={h} className="tag tag-hash">{englishText(h)}</span>
           ))}
         </div>
 
         {/* Description */}
-        <p className="text-[14px] text-[#4A4A4A] leading-relaxed mb-4">{course.description}</p>
+        <p className="text-[14px] text-[#4A4A4A] leading-relaxed mb-4">{englishText(course.description)}</p>
 
         {/* Meta */}
         <div className="flex items-center gap-4 py-4 border-y border-[#E5E5E5] mb-5">
@@ -118,16 +120,16 @@ export default function CourseDetailPage() {
           </div>
           <div className="flex items-center gap-1.5">
             <Clock size={15} color="#EB5053" />
-            <span className="text-[13px] font-semibold text-[#1A1A1A]">{Math.floor(course.metadata.duration / 60)}시간</span>
+            <span className="text-[13px] font-semibold text-[#1A1A1A]">{Math.floor(course.metadata.duration / 60)} hours</span>
           </div>
           <div className="flex items-center gap-1.5">
             <span className="text-[15px]">📍</span>
-            <span className="text-[13px] font-semibold text-[#1A1A1A]">{course.metadata.placeCount}개 장소</span>
+            <span className="text-[13px] font-semibold text-[#1A1A1A]">{course.metadata.placeCount} places</span>
           </div>
         </div>
 
         {/* Course Timeline */}
-        <h2 className="font-bold text-[17px] text-[#1A1A1A] mb-4">코스 순서</h2>
+        <h2 className="font-bold text-[17px] text-[#1A1A1A] mb-4">Course Order</h2>
         <div className="space-y-0">
           {course.stops.map((stop, i) => {
             const restaurant = getRestaurantById(stop.placeId);
@@ -157,17 +159,17 @@ export default function CourseDetailPage() {
                 {/* Stop content */}
                 <div className={`flex-1 flex items-start gap-3 ${isLast ? 'pb-0' : 'pb-4'}`}>
                   <div className="flex-1 min-w-0">
-                    <p className="font-bold text-[15px] text-[#1A1A1A]">{restaurant.name}</p>
-                    <p className="text-[12px] text-[#9B9B9B] mt-0.5">{stop.startTime} — {stop.endTime}</p>
+                    <p className="font-bold text-[15px] text-[#1A1A1A]">{englishText(restaurant.name)}</p>
+                    <p className="text-[12px] text-[#9B9B9B] mt-0.5">{englishText(stop.startTime)} — {englishText(stop.endTime)}</p>
                     <div className="flex items-center gap-1.5 mt-1">
                       <Star size={11} fill="#D94447" color="#D94447" />
                       <span className="text-[11px] text-[#4A4A4A]">{restaurant.rating}</span>
-                      <span className="text-[11px] text-[#9B9B9B]">· {restaurant.category}</span>
+                      <span className="text-[11px] text-[#9B9B9B]">· {englishText(restaurant.category)}</span>
                     </div>
                   </div>
                   <img
                     src={restaurant.image}
-                    alt={restaurant.name}
+                    alt={englishText(restaurant.name)}
                     className="w-14 h-14 object-cover rounded-xl flex-shrink-0"
                   />
                   <button
@@ -198,13 +200,14 @@ export default function CourseDetailPage() {
             className="lm-btn-outline flex items-center justify-center gap-2 flex-[3]"
           >
             <Bookmark size={16} fill={isSaved ? '#EB5053' : 'none'} stroke={isSaved ? '#EB5053' : '#1A1A1A'} />
-            {isSaved ? '저장됨' : '저장하기'}
+            {englishText(isSaved ? "Saved" : "Save")}
           </button>
           <button
             onClick={() => navigate(`/courses/${course.id}/navigate`)}
             className="lm-btn-primary flex items-center justify-center gap-2 flex-[7]"
           >
-            코스 따라가기 <ChevronRight size={16} />
+
+            Follow Course <ChevronRight size={16} />
           </button>
         </div>
       </div>

@@ -1,3 +1,4 @@
+import { englishText } from '@shared/englishCopy';
 import { forwardRef } from 'react';
 import { Course } from '@/types/course';
 import { ScrapPalette, SCRAP_PALETTES, gingham, photoFallback } from './scrapTheme';
@@ -6,7 +7,7 @@ const CARD_W = 270;
 const CARD_H = 480;
 
 /** 스파인 글자 색 순환 (스티커 레터링 느낌) */
-const LETTER_COLORS = ['#E85053', '#DB9000', '#3E719B', '#2E8F35', '#C77DC4'];
+const LETTER_COLORS = ['#E85053', '#DB9000', '#3E719B', '#2E8F35', '#C46A62'];
 
 /** 폴라로이드 배치 (디스크 주변, 회전 각도) */
 const POLAROID_POS = [
@@ -64,7 +65,7 @@ const CdCaseTemplate = forwardRef<HTMLDivElement, Props>(({ course, palette }, r
               textShadow: '0.5px 0.5px 0 rgba(255,255,255,0.9)',
             }}
           >
-            {ch === ' ' ? '·' : ch}
+            {englishText(ch === ' ' ? '·' : ch)}
           </span>
         ))}
       </div>
@@ -155,7 +156,7 @@ const CdCaseTemplate = forwardRef<HTMLDivElement, Props>(({ course, palette }, r
                       crossOrigin="anonymous"
                     />
                   ) : (
-                    <div style={{ ...photoFallback(p), fontSize: 16 }}>{place ? '🍽️' : '📷'}</div>
+                    <div style={{ ...photoFallback(p), fontSize: 16 }}>{englishText(place ? '🍽️' : '📷')}</div>
                   )}
                 </div>
               </div>
@@ -180,7 +181,7 @@ const CdCaseTemplate = forwardRef<HTMLDivElement, Props>(({ course, palette }, r
             textShadow: '1px 1px 0 rgba(255,255,255,0.85)',
           }}
         >
-          {course.title}
+          {englishText(course.title)}
         </p>
         <div
           style={{
@@ -196,7 +197,7 @@ const CdCaseTemplate = forwardRef<HTMLDivElement, Props>(({ course, palette }, r
             letterSpacing: 1,
           }}
         >
-          {dateLabel} · {course.distanceKm}km · {course.places.length} SPOTS
+          {englishText(dateLabel)} · {course.distanceKm}km · {course.places.length} SPOTS
         </div>
 
         {/* 트랙리스트처럼 스팟 나열 */}
@@ -237,11 +238,11 @@ const CdCaseTemplate = forwardRef<HTMLDivElement, Props>(({ course, palette }, r
                   padding: '1px 6px',
                 }}
               >
-                {place.name}
+                {englishText(place.name)}
               </span>
-              {place.time && (
-                <span style={{ fontSize: 8, color: p.accent, fontWeight: 700 }}>{place.time}</span>
-              )}
+              {englishText(place.time && (
+                <span style={{ fontSize: 8, color: p.accent, fontWeight: 700 }}>{englishText(place.time)}</span>
+              ))}
             </div>
           ))}
           {course.places.length > 4 && (

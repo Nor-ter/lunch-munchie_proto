@@ -1,3 +1,4 @@
+import { englishText } from '@shared/englishCopy';
 import { useMemo } from "react";
 import { cva, type VariantProps } from "class-variance-authority";
 
@@ -169,14 +170,14 @@ function FieldSeparator({
       {...props}
     >
       <Separator className="absolute inset-0 top-1/2" />
-      {children && (
+      {englishText(children && (
         <span
           className="bg-background text-muted-foreground relative mx-auto block w-fit px-2"
           data-slot="field-separator-content"
         >
-          {children}
+          {englishText(children)}
         </span>
-      )}
+      ))}
     </div>
   );
 }
@@ -206,7 +207,7 @@ function FieldError({
       <ul className="ml-4 flex list-disc flex-col gap-1">
         {errors.map(
           (error, index) =>
-            error?.message && <li key={index}>{error.message}</li>
+            error?.message && <li key={index}>{englishText(error.message)}</li>
         )}
       </ul>
     );
@@ -223,7 +224,7 @@ function FieldError({
       className={cn("text-destructive text-sm font-normal", className)}
       {...props}
     >
-      {content}
+      {englishText(content)}
     </div>
   );
 }

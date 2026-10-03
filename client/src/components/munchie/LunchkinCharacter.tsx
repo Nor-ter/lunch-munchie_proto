@@ -16,7 +16,7 @@ export default function LunchkinCharacter({
   return (
     <span
       role="img"
-      aria-label="포크와 숟가락을 든 런치킨 캐릭터"
+      aria-label="Lunchkin holding a fork and spoon"
       className={`block shrink-0 ${className}`}
       style={{ width: size, height: size }}
     >

@@ -1,3 +1,4 @@
+import { englishText } from '@shared/englishCopy';
 import { forwardRef } from 'react';
 import { Course } from '@/types/course';
 import { FoodCourseMap } from '@/components/share/FoodCourseMap';
@@ -54,7 +55,7 @@ const FoodCourseDarkTemplate = forwardRef<HTMLDivElement, TemplateProps>(({ cour
     {/* Overlay text */}
     <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, padding: '20px 20px 28px' }}>
       <p style={{ margin: 0, fontSize: 9, fontWeight: 700, color: '#EB5053', letterSpacing: 1 }}>
-        @{course.authorHandle}
+        @{englishText(course.authorHandle)}
       </p>
       <h2
         style={{
@@ -65,27 +66,27 @@ const FoodCourseDarkTemplate = forwardRef<HTMLDivElement, TemplateProps>(({ cour
           lineHeight: 1.2,
         }}
       >
-        {course.title}
+        {englishText(course.title)}
       </h2>
-      {course.note && (
+      {englishText(course.note && (
         <p style={{ margin: '6px 0 0', fontSize: 11, color: 'rgba(255,255,255,0.7)', fontStyle: 'italic' }}>
-          {course.note}
+          {englishText(course.note)}
         </p>
-      )}
+      ))}
       <div style={{ display: 'flex', gap: 12, marginTop: 12 }}>
         <span style={{ fontSize: 10, color: 'rgba(255,255,255,0.6)' }}>
           {course.distanceKm}km
         </span>
         <span style={{ fontSize: 10, color: 'rgba(255,255,255,0.6)' }}>·</span>
         <span style={{ fontSize: 10, color: 'rgba(255,255,255,0.6)' }}>
-          {course.places.length}곳
+          {course.places.length} restaurants
         </span>
-        {course.region && (
+        {englishText(course.region && (
           <>
             <span style={{ fontSize: 10, color: 'rgba(255,255,255,0.6)' }}>·</span>
-            <span style={{ fontSize: 10, color: 'rgba(255,255,255,0.6)' }}>{course.region}</span>
+            <span style={{ fontSize: 10, color: 'rgba(255,255,255,0.6)' }}>{englishText(course.region)}</span>
           </>
-        )}
+        ))}
       </div>
       <p style={{ margin: '14px 0 0', fontSize: 8, fontWeight: 700, color: '#EB5053', letterSpacing: 1.2, textAlign: 'center' }}>
         LUNCHIE MUNCHIE

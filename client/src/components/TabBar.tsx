@@ -1,38 +1,19 @@
+import { englishText } from '@shared/englishCopy';
 import { motion } from "framer-motion";
 import { useLocation } from "wouter";
 
 const ACTIVE_STROKE = "#FFFFFF";
-const INACTIVE_STROKE = "#FFD5DD";
+const INACTIVE_STROKE = "#777477";
 
 function iconProps(active: boolean) {
   return {
-    className: "h-[35px] w-[35px]",
+    className: "h-[27px] w-[27px]",
     fill: "none",
     stroke: active ? ACTIVE_STROKE : INACTIVE_STROKE,
     strokeLinecap: "round" as const,
     strokeLinejoin: "round" as const,
     style: { opacity: 1 },
   };
-}
-
-function MunchIcon({ active }: { active: boolean }) {
-  return (
-    <svg {...iconProps(active)} viewBox="0 0 40 40" aria-hidden="true">
-      <rect
-        x="7.5"
-        y="8"
-        width="25"
-        height="24"
-        rx="4.2"
-        strokeWidth="2.6"
-      />
-      <path
-        d="M8.7 16 H31.3 M8.7 24 H31.3"
-        stroke={active ? ACTIVE_STROKE : INACTIVE_STROKE}
-        strokeWidth="2.6"
-      />
-    </svg>
-  );
 }
 
 function BookmarkIcon({ active }: { active: boolean }) {
@@ -49,7 +30,7 @@ function BookmarkIcon({ active }: { active: boolean }) {
 function LightningIcon({ active }: { active: boolean }) {
   return (
     <svg
-      className="h-[43px] w-[43px]"
+      className="h-[30px] w-[30px]"
       fill="none"
       stroke={active ? ACTIVE_STROKE : INACTIVE_STROKE}
       strokeLinecap="round"
@@ -71,16 +52,15 @@ function FaceIcon({ active }: { active: boolean }) {
       alt=""
       aria-hidden="true"
       className="tab-profile-icon object-contain"
-      style={{ opacity: active ? 1 : 0.85 }}
+      style={{ opacity: active ? 1 : 0.48, filter: active ? 'none' : 'grayscale(1)' }}
     />
   );
 }
 
 const TABS = [
+  { path: "/saved", label: "Save", Icon: BookmarkIcon },
   { path: "/lunchie/settings", label: "Quick Match", Icon: LightningIcon },
-  { path: "/feed", label: "피드", Icon: MunchIcon },
-  { path: "/saved", label: "저장", Icon: BookmarkIcon },
-  { path: "/profile", label: "프로필", Icon: FaceIcon },
+  { path: "/profile", label: "Profile", Icon: FaceIcon },
 ] as const;
 
 export default function TabBar() {
@@ -88,7 +68,7 @@ export default function TabBar() {
 
   return (
     <div className="tab-bar">
-      <div className="tab-bar-content grid grid-cols-4 items-center px-[18px]">
+      <div className="tab-bar-content grid grid-cols-3 items-center px-5">
         {TABS.map((tab) => {
           const isActive =
             location === tab.path ||
@@ -100,8 +80,8 @@ export default function TabBar() {
             <button
               key={tab.path}
               onClick={() => navigate(tab.path)}
-              aria-label={tab.label}
-              className={`flex items-center justify-center justify-self-center transition-all active:scale-95 ${isProfile ? "h-14 w-14" : "h-[52px] w-[52px]"}`}
+              aria-label={englishText(tab.label)}
+              className={`relative flex h-12 w-12 items-center justify-center justify-self-center transition-all active:scale-95 ${isActive ? 'after:absolute after:bottom-0 after:h-0.5 after:w-4 after:rounded-full after:bg-white' : ''}`}
             >
               <motion.div
                 animate={isActive && !isProfile ? { scale: 1.06 } : { scale: 1 }}

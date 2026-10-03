@@ -1,3 +1,4 @@
+import { englishText } from '@shared/englishCopy';
 import * as React from "react";
 import useEmblaCarousel, {
   type UseEmblaCarouselType,
@@ -124,7 +125,7 @@ function Carousel({
         data-slot="carousel"
         {...props}
       >
-        {children}
+        {englishText(children)}
       </div>
     </CarouselContext.Provider>
   );

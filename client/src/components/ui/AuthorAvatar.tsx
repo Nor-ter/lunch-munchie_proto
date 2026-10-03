@@ -1,3 +1,4 @@
+import { englishText } from '@shared/englishCopy';
 import { useState } from 'react';
 
 export function AuthorAvatar({
@@ -24,5 +25,5 @@ export function AuthorAvatar({
       />
     );
   }
-  return <span className={className}>{emoji || name?.trim().slice(0, 1) || '🍽️'}</span>;
+  return <span className={className}>{englishText(emoji || name?.trim().slice(0, 1) || '🍽️')}</span>;
 }

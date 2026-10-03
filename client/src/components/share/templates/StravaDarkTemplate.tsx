@@ -1,3 +1,4 @@
+import { englishText } from '@shared/englishCopy';
 import { forwardRef } from 'react';
 import { Course } from '@/types/course';
 import { StravaRouteMap } from '@/components/share/StravaRouteMap';
@@ -79,10 +80,10 @@ const StravaDarkTemplate = forwardRef<HTMLDivElement, TemplateProps>(({ course }
         {stats.map((s) => (
           <div key={s.label} style={{ textAlign: 'center', flex: 1 }}>
             <p style={{ margin: 0, fontSize: 8, color: '#888', textTransform: 'uppercase', letterSpacing: 0.8 }}>
-              {s.label}
+              {englishText(s.label)}
             </p>
             <p style={{ margin: '6px 0 0', fontSize: 20, fontWeight: 800, color: '#FFFFFF', lineHeight: 1.1 }}>
-              {s.value}
+              {englishText(s.value)}
             </p>
           </div>
         ))}
@@ -98,8 +99,8 @@ const StravaDarkTemplate = forwardRef<HTMLDivElement, TemplateProps>(({ course }
           maxWidth: '90%',
         }}
       >
-        {course.title}
-        {course.region && ` · ${course.region}`}
+        {englishText(course.title)}
+        {englishText(course.region && ` · ${course.region}`)}
       </p>
 
       {/* Food icon footer */}

@@ -31,6 +31,6 @@ describe('SavedPage list bookmark presentation', () => {
   it('restores the Lunchie restaurant tab from navigation query state', () => {
     expect(savedSource).toContain('getSavedTabFromSearch(search)');
     expect(savedSource).toContain("get('tab') === 'restaurants'");
-    expect(savedSource).toContain('aria-pressed={tab === key}');
+    expect(savedSource).not.toContain('aria-label="저장 목록 탭"');
   });
 });

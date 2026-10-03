@@ -1,3 +1,4 @@
+import { englishText } from '@shared/englishCopy';
 /**
  * Lunchie Munchie — App Context
  * Design: Soft Coral (Option 8)
@@ -30,6 +31,7 @@ import { logCourseSave, logFeedLike } from '@/lib/eventLogger';
 import { feedPostFromApi, normalizeFeedApiPage } from '@/lib/feedApi';
 import { isAuthenticatedContentOwner } from '@/lib/profileFeed';
 import { persistSessionSwipe } from '@/services/sessionApi';
+import { readSavedLunchPicks, upsertSavedLunchPick, SAVED_LUNCH_PICKS_KEY, type SavedLunchPick } from '@/lib/savedLunchPicks';
 import { mergeCanonicalRestaurantPresentation } from '@/lib/restaurantPresentation';
 import {
   isActiveQuickMatchStatus,
@@ -106,7 +108,7 @@ function formatSessionDistance(metres: number) {
   const rounded = metres < 1_000
     ? `${Math.round(metres / 10) * 10}m`
     : `${(metres / 1_000).toFixed(metres < 10_000 ? 1 : 0)}km`;
-  return `직선거리 ${rounded}`;
+  return `Straight-line Distance ${rounded}`;
 }
 
 function withSessionDistances(
@@ -200,6 +202,8 @@ export interface GroupSession {
   memberKey?: string;
   restaurants: Restaurant[];
   results: { restaurantId: string; score: number }[];
+  /** Personal ranking; the shared seven-restaurant deck stays immutable. */
+  ranking?: import('@shared/lunchieRanking').RestaurantRanking;
   /** 런치 엔진 추천 슬레이트 식별자 (로깅 propensity 승계용) */
   slateId?: string;
   /** restaurant_id → {추천 propensity, 노출 position} (스와이프 로깅에 사용) */
@@ -253,7 +257,7 @@ export interface UserProfile {
 
 export interface SwipeRecord {
   restaurantId: string;
-  action: 'like' | 'save' | 'skip';
+  action: 'like' | 'save' | 'skip' | 'neutral';
   timestamp: string;
   sessionId?: string;
 }
@@ -341,7 +345,7 @@ function generateUserId() {
 
 const DEFAULT_PROFILE: UserProfile = {
   id: 'me',
-  name: '사용자',
+  name: "User",
   emoji: '😊',
   dietary: [],
   categoryPrefs: [
@@ -400,6 +404,9 @@ interface AppContextValue {
   savedRestaurantIds: string[];
   saveRestaurant: (restaurantId: string) => void;
   unsaveRestaurant: (restaurantId: string) => void;
+  savedLunchPicks: SavedLunchPick[];
+  saveLunchPick: (restaurant: Restaurant, session: GroupSession | null) => void;
+  unsaveLunchPick: (restaurantId: string) => void;
 
   profile: UserProfile;
   updateProfile: (updates: Partial<UserProfile>) => void;
@@ -676,6 +683,10 @@ export function AppProvider({
     try { const s = localStorage.getItem('lm_saved_restaurants'); return s ? JSON.parse(s) : []; }
     catch { return []; }
   });
+  const [savedLunchPicks, setSavedLunchPicks] = useState<SavedLunchPick[]>(() => {
+    try { return readSavedLunchPicks(localStorage.getItem(SAVED_LUNCH_PICKS_KEY)); }
+    catch { return []; }
+  });
 
   const [feedPosts, setFeedPosts] = useState<FeedPost[]>(() => {
     // v3: 데모 글을 첫 로그인 사용자에게 귀속시키던 v2 캐시는 신뢰할 수 없다.
@@ -732,6 +743,7 @@ export function AppProvider({
           ...parsed,
           emoji: normalizeLunchieSessionAvatar(parsed.emoji),
           avatarPhoto: normalizeLunchieProfileImage(parsed.avatarPhoto),
+          dietary: normalizeDietaryPreferences(parsed.dietary),
           lunchmateLoadout: normalizeLunchmateProfileLoadout(parsed.lunchmateLoadout),
           lunchmateOwnedItemIds: normalizeLunchmateOwnedItemIds(parsed.lunchmateOwnedItemIds),
           lunchmateRewardClaims: normalizeLunchmateRewardClaims(parsed.lunchmateRewardClaims),
@@ -768,7 +780,7 @@ export function AppProvider({
       params.set('radiusKm', String(locationFilter.radiusKm));
     }
     const response = await fetch(`/api/feed?${params.toString()}`);
-    if (!response.ok) throw new Error('피드를 불러오지 못했어요.');
+    if (!response.ok) throw new Error("Couldn't load the feed.");
     const page = normalizeFeedApiPage(await response.json());
     const remoteFeeds = page.items
       .map(feed => feedPostFromApi(feed, profile))
@@ -961,7 +973,12 @@ export function AppProvider({
       .then(response => response.ok ? response.json() : null)
       .then((data: {
         user?: { sub?: string; name?: string; picture?: string };
-        profile?: { username?: string | null; handle?: string | null; profile_image_url?: string | null } | null;
+        profile?: {
+          username?: string | null;
+          handle?: string | null;
+          profile_image_url?: string | null;
+          dietary_preferences?: string[] | null;
+        } | null;
       } | null) => {
         const googleUser = data?.user;
         if (!googleUser || googleUser.sub !== initialAuthUserId) return;
@@ -970,6 +987,9 @@ export function AppProvider({
           ...previous,
           ...(serverProfile?.username || googleUser.name ? { name: serverProfile?.username || googleUser.name! } : {}),
           ...(serverProfile?.handle ? { handle: serverProfile.handle } : {}),
+          ...(serverProfile?.dietary_preferences
+            ? { dietary: normalizeDietaryPreferences(serverProfile.dietary_preferences) }
+            : {}),
           // A null server value is meaningful: the user deliberately removed
           // their photo and chose the emoji avatar. Never fall back to Google
           // in that case.
@@ -1236,7 +1256,7 @@ export function AppProvider({
           }),
         });
         const data = await res.json().catch(() => ({})) as { session?: { id: string }; token?: string; memberKey?: string; error?: string };
-        if (!res.ok || !data.session?.id || !data.token || !data.memberKey) throw new Error(data.error ?? '세션을 서버에 저장하지 못했어요.');
+        if (!res.ok || !data.session?.id || !data.token || !data.memberKey) throw new Error(data.error ?? "Couldn't save the session.");
         const session: GroupSession = {
             id: data.session.id,
             name,
@@ -1338,7 +1358,7 @@ export function AppProvider({
     const members = Array.isArray(data.members) ? data.members : [];
     const session: GroupSession = {
       id: data.session.id,
-      name: '점심 세션',
+      name: "Lunch Session",
       inviteCode: token,
       hostId: data.session.host_user_id,
       members: members.map((m: { user_id: string; user_name: string; emoji: string; is_ready: boolean }) => ({
@@ -1365,7 +1385,7 @@ export function AppProvider({
     // 서버 응답에는 없는 로컬 정보(세션 이름, 마감 타이밍 설정)는 유지한다
     setCurrentSession(prev =>
       prev && prev.inviteCode === token
-        ? { ...session, name: prev.name, deadlineMinutes: prev.deadlineMinutes }
+        ? { ...session, name: prev.name, deadlineMinutes: prev.deadlineMinutes, ranking: prev.ranking }
         : session,
     );
     return session;
@@ -1387,8 +1407,8 @@ export function AppProvider({
       }),
     });
     const payload = await response.json().catch(() => ({})) as { error?: string; memberKey?: string };
-    if (!response.ok) throw new Error(payload.error ?? '세션에 참가하지 못했어요.');
-    if (!payload.memberKey) throw new Error('세션 자격 증명을 받지 못했어요.');
+    if (!response.ok) throw new Error(payload.error ?? "Couldn't join the session.");
+    if (!payload.memberKey) throw new Error("Couldn't obtain session credentials.");
     const fetched = await fetchSession(token);
     const joined = { ...fetched, memberKey: payload.memberKey };
     setCurrentSession(joined);
@@ -1408,7 +1428,7 @@ export function AppProvider({
       }),
     });
     const payload = await response.json().catch(() => ({})) as { error?: string };
-    if (!response.ok) throw new Error(payload.error ?? '준비 상태를 바꾸지 못했어요.');
+    if (!response.ok) throw new Error(payload.error ?? "Couldn't update your ready status.");
     return fetchSession(token);
   }, [profile, fetchSession]);
 
@@ -1431,7 +1451,7 @@ export function AppProvider({
     });
     const payload = await res.json().catch(() => ({})) as { error?: string; code?: string };
     if (!res.ok) {
-      const error = new Error(payload.error ?? '세션을 시작하지 못했어요.') as Error & { code?: string; status?: number };
+      const error = new Error(payload.error ?? "Couldn't start the session.") as Error & { code?: string; status?: number };
       error.code = payload.code;
       error.status = res.status;
       throw error;
@@ -1470,7 +1490,7 @@ export function AppProvider({
         setCurrentSession(null);
         return;
       }
-      const error = new Error(payload.error ?? '세션 상태를 바꾸지 못했어요.') as Error & { code?: string; status?: number };
+      const error = new Error(payload.error ?? "Couldn't update the session.") as Error & { code?: string; status?: number };
       error.code = payload.code;
       error.status = response.status;
       throw error;
@@ -1498,7 +1518,7 @@ export function AppProvider({
         userId: profile.id,
         restaurantId,
         round: 2 * (currentSession.generation ?? 1) - 1,
-        action: action === 'like' || action === 'save' ? 'LIKE' : 'DISLIKE',
+        action: action === 'like' || action === 'save' ? 'LIKE' : action === 'neutral' ? 'NEUTRAL' : 'DISLIKE',
         createdAt: record.timestamp,
       });
     }
@@ -1546,6 +1566,21 @@ export function AppProvider({
     setSavedRestaurantIds(prev => prev.filter(i => i !== id));
   }, []);
 
+  const saveLunchPick = useCallback((restaurant: Restaurant, session: GroupSession | null) => {
+    const pick = structuredClone({ restaurant, session: session ? { ...session, memberKey: undefined } : null, savedAt: Date.now() });
+    const next = upsertSavedLunchPick(savedLunchPicks, pick);
+    localStorage.setItem(SAVED_LUNCH_PICKS_KEY, JSON.stringify(next));
+    setSavedLunchPicks(next);
+    saveRestaurant(restaurant.id);
+  }, [savedLunchPicks, saveRestaurant]);
+
+  const unsaveLunchPick = useCallback((restaurantId: string) => {
+    const next = savedLunchPicks.filter(pick => pick.restaurant.id !== restaurantId);
+    localStorage.setItem(SAVED_LUNCH_PICKS_KEY, JSON.stringify(next));
+    setSavedLunchPicks(next);
+    unsaveRestaurant(restaurantId);
+  }, [savedLunchPicks, unsaveRestaurant]);
+
   const updateProfile = useCallback((updates: Partial<UserProfile>) => {
     setProfile(prev => ({ ...prev, ...updates }));
     if (
@@ -1584,6 +1619,7 @@ export function AppProvider({
       currentSession, setCurrentSession, createSession, joinSession, fetchSession, toggleReady, startSession, cancelSession, leaveSession,
       swipeRecords, addSwipe, clearSessionSwipes, rerollSession, likedRestaurantIds,
       savedRestaurantIds, saveRestaurant, unsaveRestaurant,
+      savedLunchPicks, saveLunchPick, unsaveLunchPick,
       profile, updateProfile,
       feedPosts, feedSyncVersion, refreshFeedPosts, loadMoreFeedPosts, hasMoreFeedPosts, isLoadingMoreFeedPosts, addFeedPost, updateFeedPost, deleteFeedPost, incrementFeedShare,
       likedFeedIds, dislikedFeedIds, toggleFeedLike, toggleFeedDislike, addFeedComment,
@@ -1598,7 +1634,7 @@ export function AppProvider({
         data-testid="app-identity"
         data-identity-aligned={initialAuthUserId ? String(profile.id === initialAuthUserId) : 'auth-unavailable'}
       >
-        {children}
+        {englishText(children)}
       </div>
     </AppContext.Provider>
   );

@@ -1,3 +1,4 @@
+import { englishText } from '@shared/englishCopy';
 import { useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { AnimatePresence, motion } from 'framer-motion';
@@ -13,16 +14,16 @@ import type { LunchmateLevelUpEvent } from '@/utils/lunchmateProgress';
 import { acquireDocumentScrollLock } from '@/lib/documentScrollLock';
 
 const SLOT_LABELS: Readonly<Record<LunchmateSlot, string>> = {
-  outfit: '의상',
-  headwear: '모자',
-  eyewear: '안경',
-  bag: '가방',
+  outfit: "Outfit",
+  headwear: "Hat",
+  eyewear: "Glasses",
+  bag: "Bag",
 };
 
 const RARITY_LABELS: Readonly<Record<LunchmateRarity, string>> = {
-  common: '일반',
-  rare: '레어',
-  special: '스페셜',
+  common: "Common",
+  rare: "Rare",
+  special: "Special",
 };
 
 const RARITY_STYLES: Readonly<Record<LunchmateRarity, string>> = {
@@ -118,7 +119,7 @@ export default function LunchmateLevelUpModal({
                 levelUpActive
                 size={80}
                 renderSize="compact"
-                alt="레벨업을 기뻐하며 점프하는 런치메이트"
+                alt="Lunchmate jumping after leveling up"
                 loadout={loadout}
                 artwork="chicken"
                 fallback={<Sparkles size={35} aria-hidden="true" />}
@@ -139,8 +140,8 @@ export default function LunchmateLevelUpModal({
             </div>
 
             <div className="mt-3.5">
-              <p className="text-[10px] font-bold tracking-[0.04em] text-[#A18C80]">새 칭호</p>
-              <p className="mt-0.5 text-[20px] font-black text-[#31231D]">{event.levelName}</p>
+              <p className="text-[10px] font-bold tracking-[0.04em] text-[#A18C80]">New Title</p>
+              <p className="mt-0.5 text-[20px] font-black text-[#31231D]">{englishText(event.levelName)}</p>
             </div>
 
             {rewardItem ? (
@@ -151,26 +152,26 @@ export default function LunchmateLevelUpModal({
                     size={72}
                     renderSize="compact"
                     animated={false}
-                    alt={`${rewardItem.name}을 착용한 런치메이트`}
+                    alt={englishText(`${rewardItem.name} outfit on Lunchmate`)}
                     loadout={createRewardPreviewLoadout(rewardItem)}
                     artwork="chicken"
                     fallback={<Gift size={22} className="text-[#D8774D]" aria-hidden="true" />}
                   />
                 </div>
                 <div className="min-w-0 flex-1">
-                  <p className="text-[9px] font-bold tracking-[0.02em] text-[#B07D65]">이번 레벨 보상</p>
+                  <p className="text-[9px] font-bold tracking-[0.02em] text-[#B07D65]">Level Reward</p>
                   <p className="mt-0.5 truncate text-[14px] font-black text-[#49372E]">
-                    {rewardItem.name}
+                    {englishText(rewardItem.name)}
                   </p>
                   <div className="mt-1.5 flex items-center gap-1.5">
                     <span className="text-[10px] font-bold text-[#8F7C72]">
-                      {SLOT_LABELS[rewardItem.slot]}
+                      {englishText(SLOT_LABELS[rewardItem.slot])}
                     </span>
                     <span className={`rounded-full px-2 py-0.5 text-[9px] font-black ${RARITY_STYLES[rewardItem.rarity]}`}>
-                      {RARITY_LABELS[rewardItem.rarity]}
+                      {englishText(RARITY_LABELS[rewardItem.rarity])}
                     </span>
                   </div>
-                  <p className="mt-1.5 text-[10px] text-[#8F7C72]">옷장에서 확인할 수 있어요</p>
+                  <p className="mt-1.5 text-[10px] text-[#8F7C72]">Find it in your wardrobe</p>
                 </div>
               </div>
             ) : (
@@ -179,16 +180,18 @@ export default function LunchmateLevelUpModal({
                   <Gift size={19} />
                 </span>
                 <div className="min-w-0">
-                  <p className="text-[9px] font-bold tracking-[0.02em] text-[#B07D65]">이번 레벨 보상</p>
+                  <p className="text-[9px] font-bold tracking-[0.02em] text-[#B07D65]">Level Reward</p>
                   <p className="mt-0.5 text-[13px] font-black text-[#49372E]">
-                    모든 꾸미기 아이템을 모았어요
+
+                    You've Collected Every Item
                   </p>
                 </div>
               </div>
             )}
 
             <p className="mt-2.5 text-[10px] leading-relaxed text-[#A99990]">
-              현재 기기의 미리보기 보상으로 저장됐어요.
+
+              Saved as a preview reward on this device.
             </p>
             <button
               ref={confirmButtonRef}
@@ -196,7 +199,8 @@ export default function LunchmateLevelUpModal({
               onClick={onClose}
               className="mt-4 h-11 w-full rounded-2xl bg-[#E85053] text-[14px] font-black text-white transition-transform active:scale-[0.99] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#E85053] focus-visible:ring-offset-2"
             >
-              확인
+
+              Confirm
             </button>
           </motion.section>
         </motion.div>

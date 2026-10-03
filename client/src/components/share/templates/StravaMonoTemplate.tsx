@@ -1,3 +1,4 @@
+import { englishText } from '@shared/englishCopy';
 import { forwardRef } from 'react';
 import { Course } from '@/types/course';
 import { StravaRouteMap } from '@/components/share/StravaRouteMap';
@@ -37,7 +38,7 @@ const StravaMonoTemplate = forwardRef<HTMLDivElement, TemplateProps>(
               letterSpacing: 0.02,
             }}
           >
-            {course.title}
+            {englishText(course.title)}
           </p>
           <p
             style={{
@@ -47,7 +48,7 @@ const StravaMonoTemplate = forwardRef<HTMLDivElement, TemplateProps>(
               fontFamily: "'Baloo 2', 'Pretendard Variable', 'Pretendard', cursive",
             }}
           >
-            {course.distanceKm} km · {course.durationHours}h · @{course.authorHandle}
+            {course.distanceKm} km · {course.durationHours}h · @{englishText(course.authorHandle)}
           </p>
         </div>
       </div>

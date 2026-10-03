@@ -1,3 +1,4 @@
+import { englishText } from '@shared/englishCopy';
 /**
  * Lunchie Munchie — Explore (Course List) Page
  * Design: Soft Coral (Option 8)
@@ -27,7 +28,7 @@ function CourseListCard({ course, onTap }: { course: Course; onTap: () => void }
       onClick={onTap}
     >
       <div className="relative h-40">
-        <img src={course.heroImage} alt={course.title} className="w-full h-full object-cover" />
+        <img src={course.heroImage} alt={englishText(course.title)} className="w-full h-full object-cover" />
         <CourseMapOverlay course={course} />
         <div className="absolute inset-0 z-10 bg-gradient-to-t from-black/50 to-transparent" />
         <button
@@ -39,16 +40,16 @@ function CourseListCard({ course, onTap }: { course: Course; onTap: () => void }
         <div className="absolute bottom-3 left-3 z-30 flex gap-1.5 flex-wrap">
           {course.tags.slice(0, 2).map(tag => (
             <span key={tag} className="tag" style={getCourseTagStyle(tag)}>
-              {tag}
+              {englishText(tag)}
             </span>
           ))}
         </div>
       </div>
       <div className="p-4">
-        <h3 className="font-bold text-[15px] text-[#1A1A1A] mb-1">{course.title}</h3>
+        <h3 className="font-bold text-[15px] text-[#1A1A1A] mb-1">{englishText(course.title)}</h3>
         <div className="flex gap-1.5 flex-wrap mb-2">
           {course.hashtags.slice(0, 3).map(h => (
-            <span key={h} className="tag tag-hash">{h}</span>
+            <span key={h} className="tag tag-hash">{englishText(h)}</span>
           ))}
         </div>
         <div className="flex items-center gap-3 text-[#9B9B9B]">
@@ -56,10 +57,10 @@ function CourseListCard({ course, onTap }: { course: Course; onTap: () => void }
             <MapPin size={11} /> {course.metadata.distance}km
           </span>
           <span className="flex items-center gap-1 text-[12px]">
-            <Clock size={11} /> {Math.floor(course.metadata.duration / 60)}시간
+            <Clock size={11} /> {Math.floor(course.metadata.duration / 60)} hours
           </span>
           <span className="flex items-center gap-1 text-[12px]">
-            📍 {course.metadata.placeCount}개 장소
+            📍 {course.metadata.placeCount} places
           </span>
           <span className="flex items-center gap-1 text-[12px] ml-auto">
             <Bookmark size={11} /> {course.savedCount}
@@ -95,11 +96,11 @@ export default function ExplorePage() {
                 <circle cx="20" cy="11.8" r="2.4" fill="#FF3E4D" strokeWidth="0" />
               </svg>
             </div>
-            <p className="text-[12px] mt-0.5" style={{ color: '#9B9B9B' }}>코스를 탐색해보아요</p>
+            <p className="text-[12px] mt-0.5" style={{ color: '#9B9B9B' }}>Explore courses</p>
           </div>
           <div className="flex gap-2">
             <button
-              onClick={() => navigate('/feed')}
+              onClick={() => navigate('/templates')}
               aria-label="Munchie Feed"
               className="w-10 h-10 rounded-full bg-[#FDE1E1] flex items-center justify-center"
             >
@@ -128,7 +129,7 @@ export default function ExplorePage() {
                   : { background: '#F5F5F5', color: '#4A4A4A' }
                 : getCourseTagStyle(f.value, activeFilter === f.value)}
             >
-              {f.label}
+              {englishText(f.label)}
             </button>
           ))}
         </div>
@@ -149,8 +150,8 @@ export default function ExplorePage() {
         {filtered.length === 0 && (
           <div className="text-center py-16">
             <div className="text-5xl mb-3">🔍</div>
-            <p className="font-bold text-[16px] text-[#1A1A1A] mb-1">코스가 없어요</p>
-            <p className="text-[13px] text-[#9B9B9B]">다른 필터를 선택해보세요</p>
+            <p className="font-bold text-[16px] text-[#1A1A1A] mb-1">No courses yet</p>
+            <p className="text-[13px] text-[#9B9B9B]">Try a different filter</p>
           </div>
         )}
       </div>
@@ -167,7 +168,8 @@ export default function ExplorePage() {
         transition={{ type: 'spring', stiffness: 300, damping: 20, delay: 0.2 }}
       >
         <Plus size={18} />
-        새 코스 만들기
+
+        Create Course
       </motion.button>
     </div>
   );

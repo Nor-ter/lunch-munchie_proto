@@ -1,3 +1,4 @@
+import { englishText } from '@shared/englishCopy';
 import { useMemo, useRef, useState } from 'react';
 import { motion } from 'framer-motion';
 import { useLocation, useParams } from 'wouter';
@@ -64,9 +65,9 @@ export default function StorySharePage() {
   if (!course || !post || !template) {
     return (
       <main className="mx-auto flex min-h-dvh max-w-[430px] flex-col items-center justify-center bg-[#FFF8F3] px-6 text-center">
-        <p className="text-[17px] font-black text-[#3B2A23]">공유할 Munchie 피드를 찾을 수 없어요</p>
-        <p className="mt-2 text-[12px] font-semibold text-[#9A8377]">먼치피드에서 게시물의 공유 버튼을 다시 눌러주세요.</p>
-        <button type="button" onClick={() => navigate('/feed')} className="mt-5 rounded-2xl bg-[#EF575B] px-6 py-3 text-[13px] font-black text-white">먼치피드로</button>
+        <p className="text-[17px] font-black text-[#3B2A23]">Munchie Post Not Found</p>
+        <p className="mt-2 text-[12px] font-semibold text-[#9A8377]">Try the course map's Share button from your profile again.</p>
+        <button type="button" onClick={() => navigate('/profile')} className="mt-5 rounded-2xl bg-[#EF575B] px-6 py-3 text-[13px] font-black text-white">Profile</button>
       </main>
     );
   }
@@ -79,11 +80,11 @@ export default function StorySharePage() {
       const delivery = await saveImageToDevice(cardRef, shareFilename, { preferNativeShare: true, targetWidth: 1080 });
       incrementFeedShare(post.id);
       toast.success(delivery === 'share'
-        ? '공유 앱에서 Instagram 스토리를 선택해 주세요.'
-        : '9:16 스토리 이미지가 저장됐어요.');
+        ? "Choose Instagram Stories in the share menu."
+        : "9:16 story image saved.");
     } catch (error) {
       if (error instanceof DOMException && error.name === 'AbortError') return;
-      toast.error('스토리 이미지를 공유하지 못했어요.');
+      toast.error("Couldn't share the story image.");
     } finally {
       setSharing(false);
     }
@@ -94,9 +95,9 @@ export default function StorySharePage() {
       setSharing(true);
       const dataUrl = await captureCard(cardRef, { targetWidth: 1080 });
       await downloadImage(dataUrl, shareFilename);
-      toast.success('9:16 스토리 이미지를 저장했어요.');
+      toast.success("9:16 story image saved.");
     } catch {
-      toast.error('이미지를 저장하지 못했어요.');
+      toast.error("Couldn't save the image.");
     } finally {
       setSharing(false);
     }
@@ -106,31 +107,31 @@ export default function StorySharePage() {
     try {
       await navigator.clipboard.writeText(`${window.location.origin}/feed/${post.id}`);
       incrementFeedShare(post.id);
-      toast.success('Munchie 피드 링크를 복사했어요.');
+      toast.success("Munchie post link copied.");
     } catch {
-      toast.error('링크를 복사하지 못했어요.');
+      toast.error("Couldn't copy the link.");
     }
   };
 
   return (
     <main className="mx-auto min-h-dvh max-w-[430px] overscroll-contain bg-[#FFF8F3] pb-32 text-[#35241D]">
       <header className="sticky top-0 z-30 flex items-center border-b border-[#F0E1D9] bg-[#FFFDFC]/95 px-5 pb-3 pt-[max(12px,env(safe-area-inset-top))] backdrop-blur">
-        <BackButton onClick={() => navigate(`/feed/${post.id}`)} aria-label="피드로 돌아가기" />
+        <BackButton onClick={() => navigate(`/feed/${post.id}`)} aria-label="Back to Feed" />
         <div className="min-w-0 flex-1 text-center">
           <p className="text-[9px] font-black uppercase tracking-[0.18em] text-[#EA7472]">Munchie story</p>
-          <h1 className="mt-0.5 text-[16px] font-black">스토리 공유하기</h1>
+          <h1 className="mt-0.5 text-[16px] font-black">Share Story</h1>
         </div>
         <span className="w-9" />
       </header>
 
       <section className="px-5 pt-5">
-        <div className="mx-auto flex max-w-[292px] rounded-[17px] border border-[#E9D8CF] bg-white p-1.5 shadow-[0_7px_20px_rgba(91,57,42,0.08)]" aria-label="공유할 화면 선택">
+        <div className="mx-auto flex max-w-[292px] rounded-[17px] border border-[#E9D8CF] bg-white p-1.5 shadow-[0_7px_20px_rgba(91,57,42,0.08)]" aria-label="Choose a Share View">
           {([
-            { id: 'feed' as const, label: '피드', Icon: Newspaper },
-            { id: 'map' as const, label: '맵', Icon: Map },
+            { id: 'feed' as const, label: "Feed", Icon: Newspaper },
+            { id: 'map' as const, label: "Map", Icon: Map },
           ]).map(item => (
             <button key={item.id} type="button" onClick={() => setView(item.id)} aria-pressed={view === item.id} className={`flex h-10 flex-1 items-center justify-center gap-1.5 rounded-[12px] text-[12px] font-black transition ${view === item.id ? 'bg-[#EF575B] text-white shadow-sm' : 'text-[#8A7469]'}`}>
-              <item.Icon size={15} /> {item.label}
+              <item.Icon size={15} /> {englishText(item.label)}
             </button>
           ))}
         </div>
@@ -143,7 +144,7 @@ export default function StorySharePage() {
               <div className="absolute inset-x-[7%] top-[4.2%] z-10 flex items-center justify-between">
                 <div>
                   <p className="text-[7px] font-black uppercase tracking-[0.24em] text-[#E85E60]">Lunchie Munchie</p>
-                  <p className="mt-0.5 text-[11px] font-black text-[#34241E]">{view === 'feed' ? 'Munchie Feed' : 'Munchie Map'}</p>
+                  <p className="mt-0.5 text-[11px] font-black text-[#34241E]">{englishText(view === 'feed' ? 'Munchie Feed' : 'Munchie Map')}</p>
                 </div>
                 <span className="rounded-full border border-[#F2C7BC] bg-white/75 px-2 py-1 text-[6px] font-black uppercase tracking-[0.15em] text-[#B1665A]">9:16 story</span>
               </div>
@@ -155,11 +156,11 @@ export default function StorySharePage() {
                   </div>
                   <div className="mt-3 rounded-[13px] border border-white/80 bg-white/76 px-3 py-2.5 shadow-sm backdrop-blur-sm">
                     <div className="flex items-center gap-1.5">
-                      <span className="flex h-5 w-5 items-center justify-center rounded-full bg-[#FFE1D8] text-[10px]">{post.authorEmoji}</span>
-                      <strong className="truncate text-[8px] text-[#4A342B]">{post.authorName}</strong>
-                      <span className="ml-auto text-[7px] font-bold text-[#B17C6E]">앨범 {post.photos.length}장</span>
+                      <span className="flex h-5 w-5 items-center justify-center rounded-full bg-[#FFE1D8] text-[10px]">{englishText(post.authorEmoji)}</span>
+                      <strong className="truncate text-[8px] text-[#4A342B]">{englishText(post.authorName)}</strong>
+                      <span className="ml-auto text-[7px] font-bold text-[#B17C6E]">Album {post.photos.length} photos</span>
                     </div>
-                    <p className="mt-1.5 line-clamp-2 text-[9px] font-bold leading-[1.45] text-[#3B2A23]">{post.caption}</p>
+                    <p className="mt-1.5 line-clamp-2 text-[9px] font-bold leading-[1.45] text-[#3B2A23]">{englishText(post.caption)}</p>
                   </div>
                 </div>
               ) : (
@@ -168,7 +169,7 @@ export default function StorySharePage() {
                     {places.length > 0 ? (
                       <CourseMap places={places} width={300} height={270} className="block h-auto w-full !rounded-none" />
                     ) : (
-                      <div className="flex aspect-square items-center justify-center bg-[#F4ECE6] text-[10px] font-bold text-[#A58A7D]">저장된 코스 위치가 없어요</div>
+                      <div className="flex aspect-square items-center justify-center bg-[#F4ECE6] text-[10px] font-bold text-[#A58A7D]">No Saved Course Locations</div>
                     )}
                   </div>
                   <div className="mt-3 space-y-1.5">
@@ -176,8 +177,8 @@ export default function StorySharePage() {
                       <div key={place.id} className="flex items-center gap-2 rounded-[11px] border border-white/80 bg-white/78 px-2.5 py-2 shadow-sm">
                         <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-[#EF575B] text-[8px] font-black text-white">{index + 1}</span>
                         <div className="min-w-0 flex-1">
-                          <p className="truncate text-[8px] font-black text-[#3A2922]">{place.name}</p>
-                          <p className="truncate text-[6px] font-bold text-[#9D8174]">{place.category} · {place.time}</p>
+                          <p className="truncate text-[8px] font-black text-[#3A2922]">{englishText(place.name)}</p>
+                          <p className="truncate text-[6px] font-bold text-[#9D8174]">{englishText(place.category)} · {englishText(place.time)}</p>
                         </div>
                       </div>
                     ))}
@@ -186,7 +187,7 @@ export default function StorySharePage() {
               )}
 
               <div className="absolute inset-x-[7%] bottom-[3.5%] z-10 flex items-end justify-between gap-2">
-                <p className="max-w-[78%] line-clamp-1 text-[7px] font-black text-[#8E685B]">{course.title || post.caption}</p>
+                <p className="max-w-[78%] line-clamp-1 text-[7px] font-black text-[#8E685B]">{englishText(course.title || post.caption)}</p>
                 <span className="text-[7px] font-black text-[#E85E60]">@MUNCHIE</span>
               </div>
             </div>
@@ -194,24 +195,24 @@ export default function StorySharePage() {
 
         <div className="mt-4 text-center">
           <div className="inline-flex items-center gap-1.5 rounded-full bg-[#F5E9E3] px-3 py-1.5 text-[10px] font-black text-[#8A6C5F]">
-            <LockKeyhole size={12} /> 원본 피드 고정 · 사진 변경 불가
+            <LockKeyhole size={12} />  Original post · photos can't be changed
           </div>
-          <p className="mt-2 text-[11px] font-semibold text-[#9A8377]">작성한 사진 앨범과 배치를 그대로 9:16 스토리로 공유해요.</p>
+          <p className="mt-2 text-[11px] font-semibold text-[#9A8377]">Share your photo album and layout as a 9:16 story.</p>
         </div>
       </section>
 
       <section className="mx-5 mt-5 rounded-[22px] border border-[#EEDDD5] bg-white px-4 py-4 shadow-[0_8px_22px_rgba(91,57,42,0.07)]">
-        <p className="text-[12px] font-black text-[#4A342A]">어디에 공유할까요?</p>
+        <p className="text-[12px] font-black text-[#4A342A]">Where Would You Like to Share?</p>
         <div className="mt-3 grid grid-cols-3 gap-2">
-          <button type="button" onClick={shareToStory} disabled={sharing} className="flex flex-col items-center gap-1.5 rounded-2xl bg-[#EF575B] px-2 py-3 text-white disabled:opacity-60"><Instagram size={20} /><span className="text-[10px] font-black">IG 스토리</span></button>
-          <button type="button" onClick={copyFeedLink} className="flex flex-col items-center gap-1.5 rounded-2xl border border-[#E7DCD5] bg-[#FFFDFC] px-2 py-3 text-[#71877B]"><Link2 size={20} /><span className="text-[10px] font-black">피드 링크</span></button>
-          <button type="button" onClick={saveImage} disabled={sharing} className="flex flex-col items-center gap-1.5 rounded-2xl border border-[#E7DCD5] bg-[#FFFDFC] px-2 py-3 text-[#897367] disabled:opacity-60"><Download size={20} /><span className="text-[10px] font-black">저장하기</span></button>
+          <button type="button" onClick={shareToStory} disabled={sharing} className="flex flex-col items-center gap-1.5 rounded-2xl bg-[#EF575B] px-2 py-3 text-white disabled:opacity-60"><Instagram size={20} /><span className="text-[10px] font-black">IG Story</span></button>
+          <button type="button" onClick={copyFeedLink} className="flex flex-col items-center gap-1.5 rounded-2xl border border-[#E7DCD5] bg-[#FFFDFC] px-2 py-3 text-[#71877B]"><Link2 size={20} /><span className="text-[10px] font-black">Post Link</span></button>
+          <button type="button" onClick={saveImage} disabled={sharing} className="flex flex-col items-center gap-1.5 rounded-2xl border border-[#E7DCD5] bg-[#FFFDFC] px-2 py-3 text-[#897367] disabled:opacity-60"><Download size={20} /><span className="text-[10px] font-black">Save</span></button>
         </div>
       </section>
 
       <div className="page-bottom-bar fixed bottom-0 left-1/2 z-40 w-full max-w-[430px] -translate-x-1/2 gap-2 border-t border-[#F0E1D9] bg-[#FFFDFC]/96 px-4 backdrop-blur">
-        <button type="button" onClick={shareToStory} disabled={sharing} className="flex h-13 flex-1 items-center justify-center gap-2 rounded-2xl bg-[#EF575B] text-[13px] font-black text-white disabled:opacity-60"><Share2 size={16} /> {sharing ? '스토리 만드는 중…' : `${view === 'feed' ? '피드' : '맵'} 스토리 공유`}</button>
-        <button type="button" onClick={() => navigate(`/feed/${post.id}`)} className="h-13 flex-1 rounded-2xl border border-[#E9D9D1] bg-white text-[13px] font-black text-[#6B554B]">피드로 돌아가기</button>
+        <button type="button" onClick={shareToStory} disabled={sharing} className="flex h-13 flex-1 items-center justify-center gap-2 rounded-2xl bg-[#EF575B] text-[13px] font-black text-white disabled:opacity-60"><Share2 size={16} /> {englishText(sharing ? "Creating story…" : `${view === 'feed' ? "Feed" : "Map"} Share Story`)}</button>
+        <button type="button" onClick={() => navigate(`/feed/${post.id}`)} className="h-13 flex-1 rounded-2xl border border-[#E9D9D1] bg-white text-[13px] font-black text-[#6B554B]">Back to Feed</button>
       </div>
     </main>
   );

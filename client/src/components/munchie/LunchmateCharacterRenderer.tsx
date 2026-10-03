@@ -1,3 +1,4 @@
+import { englishText } from '@shared/englishCopy';
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { motion, useReducedMotion, type MotionProps, type Transition } from 'framer-motion';
 import {
@@ -83,15 +84,15 @@ export function shouldUseLunchmateChickenFaceSystem(
 }
 
 const STATE_ALT: Record<LunchmateStateAssetKey, string> = {
-  default: '편안하게 서 있는 런치메이트',
-  happy: '행복한 런치메이트',
-  excited: '신이 난 런치메이트',
-  surprised: '새 음식에 놀란 런치메이트',
-  sad: '속상한 런치메이트',
-  thinking: '어떤 음식을 고를지 생각하는 런치메이트',
-  eating: '한입을 기다리며 행복해하는 런치메이트',
-  like: '한입을 받고 기뻐하는 런치메이트',
-  jump: '레벨업을 기뻐하며 점프하는 런치메이트',
+  default: "Lunchmate standing calmly",
+  happy: "Happy Lunchmate",
+  excited: "Excited Lunchmate",
+  surprised: "Lunchmate surprised by new food",
+  sad: "Sad Lunchmate",
+  thinking: "Lunchmate choosing food",
+  eating: "Lunchmate happily waiting for a bite",
+  like: "Lunchmate enjoying a bite",
+  jump: "Lunchmate jumping after leveling up",
 };
 
 const assetLoadCache = new Map<string, Promise<boolean>>();
@@ -406,7 +407,7 @@ export default function LunchmateCharacterRenderer({
           <img
             src={chickenBaseAsset.src}
             srcSet={chickenBaseAsset.srcSet}
-            alt={alt ?? '편안하게 서 있는 치킨 런치메이트'}
+            alt={englishText(alt ?? "Chicken Lunchmate standing calmly")}
             width={size}
             height={size}
             data-lunchmate-layer="chicken-base"
@@ -422,16 +423,16 @@ export default function LunchmateCharacterRenderer({
             <span
               className="absolute inset-0 flex h-full w-full items-center justify-center"
               role="img"
-              aria-label="런치메이트 이미지 대체 표시"
+              aria-label="Lunchmate Image Placeholder"
               data-lunchmate-layer="legacy-fallback"
             >
-              {fallback ?? '🙂'}
+              {englishText(fallback ?? '🙂')}
             </span>
           ) : (
             <img
               src={legacyAsset.src}
               srcSet={legacyAsset.srcSet}
-              alt={alt ?? STATE_ALT[renderPlan.visualAssetKey]}
+              alt={englishText(alt ?? STATE_ALT[renderPlan.visualAssetKey])}
               width={size}
               height={size}
               data-lunchmate-layer="legacy-base"
@@ -445,7 +446,7 @@ export default function LunchmateCharacterRenderer({
           <img
             src={lunchmateFacelessBaseAsset.src}
             srcSet={lunchmateFacelessBaseAsset.srcSet}
-            alt={alt ?? STATE_ALT[renderPlan.visualAssetKey]}
+            alt={englishText(alt ?? STATE_ALT[renderPlan.visualAssetKey])}
             width={size}
             height={size}
             data-lunchmate-layer="faceless-base"

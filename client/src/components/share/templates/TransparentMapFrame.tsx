@@ -1,3 +1,4 @@
+import { englishText } from '@shared/englishCopy';
 import { forwardRef, ReactNode } from 'react';
 
 /** Checkerboard outer + transparent inner capture target for PNG export */
@@ -31,7 +32,7 @@ export const TransparentMapFrame = forwardRef<
         boxSizing: 'border-box',
       }}
     >
-      {children}
+      {englishText(children)}
     </div>
   </div>
 ));

@@ -1,3 +1,4 @@
+import { englishText } from '@shared/englishCopy';
 import { useEffect, useState } from "react";
 
 import { Button } from "@/components/ui/button";
@@ -62,7 +63,7 @@ export function ManusDialog({
           {/* Title and subtitle */}
           {title ? (
             <DialogTitle className="text-xl font-semibold text-[#34322d] leading-[26px] tracking-[-0.44px]">
-              {title}
+              {englishText(title)}
             </DialogTitle>
           ) : null}
           <DialogDescription className="text-sm text-[#858481] leading-5 tracking-[-0.154px]">

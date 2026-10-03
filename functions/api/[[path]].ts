@@ -184,7 +184,7 @@ async function ensurePublicUser(db: any, session: GoogleSession) {
       )
       .bind(
         session.sub,
-        session.name?.trim().slice(0, 80) || "Lunchie 사용자",
+        session.name?.trim().slice(0, 80) || "Lunchie User",
         session.picture?.slice(0, 2_000) || null,
         Date.now(),
       )
@@ -344,11 +344,12 @@ app.get("/api/auth/session", async (c) => {
   const profile =
     session && hasPublicProfile
       ? await c.env.DB.prepare(
-          "SELECT id, username, handle, profile_image_url, bio, location FROM users WHERE id = ?",
+          "SELECT id, username, handle, profile_image_url, bio, location, dietary_preferences FROM users WHERE id = ?",
         )
           .bind(session.sub)
           .first<any>()
       : null;
+  if (profile) profile.dietary_preferences = json<string[]>(profile.dietary_preferences, []);
   return c.json({
     user: session,
     profile,
@@ -867,12 +868,12 @@ app.get("/api/admin/metrics", async (c) => {
       };
     }),
     policyContributions: contributionResult?.count ? [
-      { factor: "평판", contribution: Number(contributionResult.reputation ?? 0) },
-      { factor: "맥락 적합", contribution: Number(contributionResult.context ?? 0) },
-      { factor: "개인 취향", contribution: Number(contributionResult.taste ?? 0) },
-      { factor: "최근 노출", contribution: Number(contributionResult.exposure_fatigue ?? 0) },
-      { factor: "재소비", contribution: Number(contributionResult.satiation ?? 0) },
-      { factor: "여정 연쇄", contribution: Number(contributionResult.journey_chain ?? 0) },
+      { factor: "Reputation", contribution: Number(contributionResult.reputation ?? 0) },
+      { factor: "Context Fit", contribution: Number(contributionResult.context ?? 0) },
+      { factor: "Personal Taste", contribution: Number(contributionResult.taste ?? 0) },
+      { factor: "Recent Exposure", contribution: Number(contributionResult.exposure_fatigue ?? 0) },
+      { factor: "Repeat Visits", contribution: Number(contributionResult.satiation ?? 0) },
+      { factor: "Journey Sequence", contribution: Number(contributionResult.journey_chain ?? 0) },
     ] : [],
     contributionSampleSize: Number(contributionResult?.count ?? 0),
     catalogue: {
@@ -916,7 +917,7 @@ app.get("/api/admin/metrics", async (c) => {
 
 // The old public endpoint was an accidental information disclosure. Keep no
 // backwards-compatible public aggregate route; only /api/admin/metrics exists.
-app.get("/api/metrics", (c) => c.json({ error: "운영 지표는 관리자 대시보드에서만 볼 수 있습니다." }, 410));
+app.get("/api/metrics", (c) => c.json({ error: "Operational metrics are available only in the admin dashboard." }, 410));
 
 // Posts store stable R2 object keys behind `/photos/*`, not environment-specific
 // URLs. Local development can opt into a read-only media origin so it never has
@@ -946,7 +947,7 @@ app.post("/api/uploads", async (c) => {
   const session = await readSession(c.req.raw, c.env.AUTH_SESSION_SECRET);
   if (!session)
     return c.json(
-      { error: "로그인이 필요합니다.", code: "AUTH_REQUIRED" },
+      { error: "Sign-in is required.", code: "AUTH_REQUIRED" },
       401,
     );
   const body = await c.req.json<{ dataUrl?: string }>().catch(() => ({}));
@@ -955,12 +956,12 @@ app.post("/api/uploads", async (c) => {
   );
   if (!match)
     return c.json(
-      { error: "JPEG, PNG, WebP 이미지만 업로드할 수 있습니다." },
+      { error: "Only JPEG, PNG and WebP images can be uploaded." },
       400,
     );
   const bytes = Uint8Array.from(atob(match[2]), (char) => char.charCodeAt(0));
   if (!bytes.length || bytes.length > 4 * 1024 * 1024)
-    return c.json({ error: "이미지는 4MB 이하여야 합니다." }, 400);
+    return c.json({ error: "Images must be 4 MB or smaller." }, 400);
   const extension = match[1] === "jpeg" ? "jpg" : match[1];
   const key = `uploads/${session.sub}/${crypto.randomUUID()}.${extension}`;
   await c.env.PHOTOS_R2.put(`photos/${key}`, bytes, {
@@ -976,20 +977,26 @@ app.patch("/api/profile", async (c) => {
   const session = await readSession(c.req.raw, c.env.AUTH_SESSION_SECRET);
   if (!session)
     return c.json(
-      { error: "로그인이 필요합니다.", code: "AUTH_REQUIRED" },
+      { error: "Sign-in is required.", code: "AUTH_REQUIRED" },
       401,
     );
   if (!(await ensurePublicUser(c.env.DB, session)))
     return c.json(
-      { error: "로컬 사용자 스키마를 갱신한 뒤 프로필을 수정할 수 있습니다." },
+      { error: "Update the local user schema before editing profiles." },
       409,
     );
-  const body = await c.req.json<{ avatarUrl?: unknown; username?: unknown; handle?: unknown }>().catch(() => ({}));
+  const body = await c.req.json<{
+    avatarUrl?: unknown;
+    username?: unknown;
+    handle?: unknown;
+    dietaryPreferences?: unknown;
+  }>().catch(() => ({}));
   const hasAvatarUrl = "avatarUrl" in body;
   const hasUsername = "username" in body;
   const hasHandle = "handle" in body;
-  if (!hasAvatarUrl && !hasUsername && !hasHandle)
-    return c.json({ error: "변경할 프로필 정보가 없습니다." }, 400);
+  const hasDietaryPreferences = "dietaryPreferences" in body;
+  if (!hasAvatarUrl && !hasUsername && !hasHandle && !hasDietaryPreferences)
+    return c.json({ error: "No profile changes provided." }, 400);
 
   const statements: any[] = [];
   if (hasAvatarUrl) {
@@ -1001,7 +1008,7 @@ app.patch("/api/profile", async (c) => {
         avatarUrl.length > 2_000)
     ) {
       return c.json(
-        { error: "내가 업로드한 프로필 사진만 사용할 수 있습니다." },
+        { error: "You can only use a profile photo you've uploaded." },
         400,
       );
     }
@@ -1013,10 +1020,10 @@ app.patch("/api/profile", async (c) => {
 
   if (hasUsername) {
     if (typeof body.username !== "string")
-      return c.json({ error: "이름을 입력해 주세요." }, 400);
+      return c.json({ error: "Please enter your name." }, 400);
     const username = body.username.trim();
     if (!username || username.length > 80)
-      return c.json({ error: "이름은 1~80자로 입력해 주세요." }, 400);
+      return c.json({ error: "Names must be 1–80 characters." }, 400);
     statements.push(
       c.env.DB.prepare("UPDATE users SET username = ? WHERE id = ?")
         .bind(username, session.sub),
@@ -1026,29 +1033,47 @@ app.patch("/api/profile", async (c) => {
   if (hasHandle) {
     const handle = normalizePublicHandle(body.handle);
     if (!handle)
-      return c.json({ error: "아이디는 영문 소문자, 숫자, 밑줄로 3~20자까지 입력해 주세요." }, 400);
+      return c.json({ error: "Use 3–20 lowercase letters, numbers or underscores for your handle." }, 400);
     const owner = await c.env.DB.prepare(
       "SELECT id FROM users WHERE handle = ? COLLATE NOCASE AND id <> ?",
     ).bind(handle, session.sub).first<{ id: string }>();
     if (owner)
-      return c.json({ error: "이미 사용 중인 아이디입니다.", code: "HANDLE_TAKEN" }, 409);
+      return c.json({ error: "This handle is already taken.", code: "HANDLE_TAKEN" }, 409);
     statements.push(
       c.env.DB.prepare("UPDATE users SET handle = ? WHERE id = ?")
         .bind(handle, session.sub),
+    );
+  }
+
+  if (hasDietaryPreferences) {
+    if (!Array.isArray(body.dietaryPreferences))
+      return c.json({ error: "Invalid dietary preference format." }, 400);
+    const dietaryPreferences = Array.from(new Set(
+      body.dietaryPreferences
+        .filter((value): value is string => typeof value === "string")
+        .map(normalizeDiet)
+        .filter((value): value is DietRestriction => Boolean(value && isHardRestriction(value))),
+    ));
+    if (dietaryPreferences.length !== body.dietaryPreferences.length)
+      return c.json({ error: "Some dietary preferences aren't supported." }, 400);
+    statements.push(
+      c.env.DB.prepare("UPDATE users SET dietary_preferences = ? WHERE id = ?")
+        .bind(JSON.stringify(dietaryPreferences), session.sub),
     );
   }
   try {
     await c.env.DB.batch(statements);
   } catch (error) {
     if (hasHandle)
-      return c.json({ error: "이미 사용 중인 아이디입니다.", code: "HANDLE_TAKEN" }, 409);
+      return c.json({ error: "This handle is already taken.", code: "HANDLE_TAKEN" }, 409);
     throw error;
   }
   const profile = await c.env.DB.prepare(
-    "SELECT id, username, handle, profile_image_url, bio, location FROM users WHERE id = ?",
+    "SELECT id, username, handle, profile_image_url, bio, location, dietary_preferences FROM users WHERE id = ?",
   )
     .bind(session.sub)
     .first<any>();
+  if (profile) profile.dietary_preferences = json<string[]>(profile.dietary_preferences, []);
   return c.json({ profile });
 });
 
@@ -1081,11 +1106,11 @@ async function requireGoogleSession(c: { req: { raw: Request }; env: EnvBindings
 // profile fields are returned; OAuth subject IDs are used solely as route keys.
 app.get("/api/users/search", async (c) => {
   const session = await requireGoogleSession(c);
-  if (!session) return c.json({ error: "로그인이 필요합니다." }, 401);
+  if (!session) return c.json({ error: "Sign-in is required." }, 401);
   const rawQuery = (c.req.query("q") ?? "").trim();
   const query = rawQuery.replace(/^@/, "");
   if (!query || query.length > 40)
-    return c.json({ error: "검색어는 1~40자로 입력해 주세요." }, 400);
+    return c.json({ error: "Enter a search term of 1–40 characters." }, 400);
   const escaped = escapeUserSearchTerm(query.toLowerCase());
   const namePattern = `%${escaped}%`;
   const handlePattern = `${escaped}%`;
@@ -1135,13 +1160,13 @@ app.get("/api/users/search", async (c) => {
 app.get("/api/users/:id", async (c) => {
   const id = c.req.param("id");
   if (!id || id.length > 256)
-    return c.json({ error: "사용자 정보가 올바르지 않습니다." }, 400);
+    return c.json({ error: "Invalid user details." }, 400);
   const user = await c.env.DB.prepare(
     "SELECT id, username, handle, profile_image_url, bio, location, created_at FROM users WHERE id = ?",
   )
     .bind(id)
     .first<any>();
-  if (!user) return c.json({ error: "사용자를 찾을 수 없습니다." }, 404);
+  if (!user) return c.json({ error: "User not found." }, 404);
   const count = await c.env.DB.prepare(
     "SELECT COUNT(*) AS count FROM courses WHERE author_id = ? AND is_public = 1",
   )
@@ -1161,9 +1186,9 @@ app.get("/api/users/:id", async (c) => {
 
 async function requireAdminSession(c: { req: { raw: Request }; env: EnvBindings; json: (value: unknown, status?: number) => Response }) {
   const session = await readSession(c.req.raw, c.env.AUTH_SESSION_SECRET);
-  if (!session) return c.json({ error: "관리자 로그인이 필요합니다." }, 401);
+  if (!session) return c.json({ error: "Admin sign-in is required." }, 401);
   if (!isAdminEmail(session.email, c.env.ADMIN_EMAILS))
-    return c.json({ error: "관리자 권한이 없습니다." }, 403);
+    return c.json({ error: "Admin access is required." }, 403);
   return session;
 }
 
@@ -1339,17 +1364,17 @@ app.patch("/api/admin/photos/:id", async (c) => {
   const admin = await requireAdminSession(c);
   if (admin instanceof Response) return admin;
   const id = c.req.param("id");
-  if (!id || id.length > 200) return c.json({ error: "사진 식별자가 올바르지 않습니다." }, 400);
+  if (!id || id.length > 200) return c.json({ error: "Invalid photo ID." }, 400);
   const current = await c.env.DB.prepare(
     "SELECT review_status, kind, has_person, quality, review_notes FROM restaurant_photos WHERE id = ?",
   ).bind(id).first<PhotoReviewRecord>();
-  if (!current) return c.json({ error: "사진을 찾을 수 없습니다." }, 404);
+  if (!current) return c.json({ error: "Photo not found." }, 404);
 
   let body: unknown;
   try {
     body = await c.req.json();
   } catch {
-    return c.json({ error: "검수 내용이 올바르지 않습니다." }, 400);
+    return c.json({ error: "Invalid review details." }, 400);
   }
   const parsed = parsePhotoReviewUpdate(body, current);
   if (!parsed.ok) return c.json({ error: parsed.error }, 400);
@@ -1372,7 +1397,7 @@ app.get("/api/users/:id/follows", async (c) => {
 
 app.get("/api/users/:id/follow", async (c) => {
   const session = await requireGoogleSession(c);
-  if (!session) return c.json({ error: "로그인이 필요합니다." }, 401);
+  if (!session) return c.json({ error: "Sign-in is required." }, 401);
   const row = await c.env.DB.prepare(
     "SELECT 1 AS following FROM user_follows WHERE follower_id = ? AND following_id = ?",
   ).bind(session.sub, c.req.param("id")).first<{ following: number }>();
@@ -1382,10 +1407,10 @@ app.get("/api/users/:id/follow", async (c) => {
 app.post("/api/users/:id/follow", async (c) => {
   const session = await requireGoogleSession(c);
   const followingId = c.req.param("id");
-  if (!session) return c.json({ error: "로그인이 필요합니다." }, 401);
-  if (!followingId || followingId === session.sub) return c.json({ error: "자기 자신은 팔로우할 수 없습니다." }, 400);
+  if (!session) return c.json({ error: "Sign-in is required." }, 401);
+  if (!followingId || followingId === session.sub) return c.json({ error: "You can't follow yourself." }, 400);
   const target = await c.env.DB.prepare("SELECT id FROM users WHERE id = ?").bind(followingId).first();
-  if (!target) return c.json({ error: "사용자를 찾을 수 없습니다." }, 404);
+  if (!target) return c.json({ error: "User not found." }, 404);
   await c.env.DB.prepare(
     "INSERT INTO user_follows (follower_id, following_id, created_at) VALUES (?, ?, ?) ON CONFLICT(follower_id, following_id) DO NOTHING",
   ).bind(session.sub, followingId, Date.now()).run();
@@ -1394,7 +1419,7 @@ app.post("/api/users/:id/follow", async (c) => {
 
 app.delete("/api/users/:id/follow", async (c) => {
   const session = await requireGoogleSession(c);
-  if (!session) return c.json({ error: "로그인이 필요합니다." }, 401);
+  if (!session) return c.json({ error: "Sign-in is required." }, 401);
   await c.env.DB.prepare("DELETE FROM user_follows WHERE follower_id = ? AND following_id = ?")
     .bind(session.sub, c.req.param("id")).run();
   return c.json({ following: false });
@@ -1799,7 +1824,7 @@ app.post("/api/courses", async (c) => {
   const session = await readSession(c.req.raw, c.env.AUTH_SESSION_SECRET);
   if (!session)
     return c.json(
-      { error: "로그인이 필요합니다.", code: "AUTH_REQUIRED" },
+      { error: "Sign-in is required.", code: "AUTH_REQUIRED" },
       401,
     );
 
@@ -1813,13 +1838,13 @@ app.post("/api/courses", async (c) => {
         : "";
     const stops = Array.isArray(body.stops) ? body.stops : [];
     if (!title || stops.length < 1 || stops.length > 3) {
-      return c.json({ error: "제목과 1~3개의 장소가 필요합니다." }, 400);
+      return c.json({ error: "A title and 1–3 places are required." }, 400);
     }
     const restaurantIds = stops.map((stop: any) =>
       typeof stop?.placeId === "string" ? stop.placeId : "",
     );
     if (restaurantIds.some((id) => !id))
-      return c.json({ error: "장소 정보가 올바르지 않습니다." }, 400);
+      return c.json({ error: "Invalid place details." }, 400);
     const placeholders = restaurantIds.map(() => "?").join(",");
     const known = await c.env.DB.prepare(
       `SELECT id, photos FROM restaurants WHERE id IN (${placeholders})`,
@@ -1827,7 +1852,7 @@ app.post("/api/courses", async (c) => {
       .bind(...restaurantIds)
       .all();
     if ((known.results?.length ?? 0) !== restaurantIds.length)
-      return c.json({ error: "존재하지 않는 장소가 포함되어 있습니다." }, 400);
+      return c.json({ error: "One or more places don't exist." }, 400);
 
     const strings = (value: unknown, limit: number) =>
       Array.isArray(value)
@@ -1896,7 +1921,7 @@ app.post("/api/courses", async (c) => {
       : [];
     if (!feedPhotos.length || !feedDecor.length) {
       return c.json(
-        { error: "포스팅하려면 배치한 사진을 1장 이상 저장해야 합니다." },
+        { error: "Save at least one placed photo before posting." },
         400,
       );
     }
@@ -1918,7 +1943,7 @@ app.post("/api/courses", async (c) => {
         ? item.restaurantId
         : null;
       if (classification === "restaurant" && !restaurantId) {
-        return c.json({ error: "사진은 이 코스에 포함된 식당에만 연결할 수 있습니다." }, 400);
+        return c.json({ error: "Photos can only be linked to restaurants in this course." }, 400);
       }
       const source = item.source === "gps_suggestion" || item.source === "user_selected"
         ? item.source
@@ -2020,7 +2045,7 @@ app.post("/api/courses", async (c) => {
     await c.env.DB.batch(statements);
     return c.json({ id, authorId: session.sub, createdAt }, 201);
   } catch (err: any) {
-    return c.json({ error: err.message ?? "코스를 저장하지 못했습니다." }, 400);
+    return c.json({ error: err.message ?? "Couldn't save the course." }, 400);
   }
 });
 
@@ -2028,17 +2053,17 @@ app.post("/api/feed-like", async (c) => {
   const session = await readSession(c.req.raw, c.env.AUTH_SESSION_SECRET);
   if (!session)
     return c.json(
-      { error: "로그인이 필요합니다.", code: "AUTH_REQUIRED" },
+      { error: "Sign-in is required.", code: "AUTH_REQUIRED" },
       401,
     );
   const { courseId } = await c.req.json<{ courseId?: string }>();
-  if (!courseId) return c.json({ error: "게시물 정보가 필요합니다." }, 400);
+  if (!courseId) return c.json({ error: "Post details are required." }, 400);
   const exists = await c.env.DB.prepare(
     "SELECT id FROM courses WHERE id = ? AND is_public = 1",
   )
     .bind(courseId)
     .first();
-  if (!exists) return c.json({ error: "게시물을 찾을 수 없습니다." }, 404);
+  if (!exists) return c.json({ error: "Post not found." }, 404);
   const prior = await c.env.DB.prepare(
     "SELECT 1 FROM feed_likes WHERE user_id = ? AND course_id = ?",
   )
@@ -2081,13 +2106,13 @@ app.post("/api/journey-winner", async (c) => {
     !body.idempotencyKey ||
     body.idempotencyKey.length > 160
   )
-    return c.json({ error: "식당과 멱등성 키가 필요합니다." }, 400);
+    return c.json({ error: "A restaurant and idempotency key are required." }, 400);
   const restaurant = await c.env.DB.prepare(
     "SELECT id FROM restaurants WHERE id = ?",
   )
     .bind(body.restaurantId)
     .first();
-  if (!restaurant) return c.json({ error: "식당을 찾을 수 없습니다." }, 404);
+  if (!restaurant) return c.json({ error: "Restaurant not found." }, 404);
   const guestId = cookieValue(c.req.raw, "lm_guest_id") ?? crypto.randomUUID();
   const userId = session?.sub ?? `guest:${guestId}`;
   const result = await c.env.DB.prepare(
@@ -2467,7 +2492,7 @@ app.post("/api/sessions/create", async (c) => {
   const body = await c.req.json<Record<string, unknown>>().catch(() => ({}));
   const hostId =
     nullableText(body.hostId, 256) ?? `guest:${crypto.randomUUID()}`;
-  const hostName = nullableText(body.hostName, 80) ?? "호스트";
+  const hostName = nullableText(body.hostName, 80) ?? "Host";
   const emoji = normalizeLunchieSessionAvatar(nullableText(body.emoji, 16));
   const groupSize =
     typeof body.groupSize === "number" && Number.isFinite(body.groupSize)
@@ -2483,7 +2508,7 @@ app.post("/api/sessions/create", async (c) => {
   const originLongitude = body.originLongitude;
   if (distanceEnabled && !isValidCoordinate(originLatitude, originLongitude))
     return c.json(
-      { error: "거리 제한을 사용하려면 현재 위치 권한이 필요합니다. 거리 제한 없음을 선택하면 위치 없이 시작할 수 있어요." },
+      { error: "Enable location to use a radius limit, or choose no radius limit to continue without location." },
       400,
     );
   const filterBudget =
@@ -2581,10 +2606,10 @@ app.post("/api/sessions/create", async (c) => {
       // is surfaced so the client never gives out a non-existent invitation.
       console.error("Lunchie session creation failed", error);
       if (attempt === 2 || !String(error?.message ?? "").includes("UNIQUE"))
-        return c.json({ error: "세션을 서버에 저장하지 못했습니다." }, 500);
+        return c.json({ error: "Couldn't save the session." }, 500);
     }
   }
-  return c.json({ error: "초대 코드를 만들지 못했습니다." }, 500);
+  return c.json({ error: "Couldn't create an invite code." }, 500);
 });
 
 app.get("/api/sessions/:token", async (c) => {
@@ -2635,14 +2660,14 @@ app.post("/api/sessions/:token/join", async (c) => {
     : [];
   const suppliedMemberKey = nullableText(body.memberKey, 256);
   if (!userId || !userName)
-    return c.json({ error: "참여자 정보가 필요합니다." }, 400);
+    return c.json({ error: "Participant details are required." }, 400);
   const session = await c.env.DB.prepare(
     "SELECT id, group_size, status FROM sessions WHERE share_token = ?",
   )
     .bind(token)
     .first<{ id: string; group_size: number; status: string }>();
   if (!session)
-    return c.json({ error: "세션을 찾을 수 없거나 만료되었습니다." }, 404);
+    return c.json({ error: "Session not found or expired." }, 404);
   const existing = await c.env.DB.prepare(
     "SELECT id, member_secret_hash FROM session_members WHERE session_id = ? AND user_id = ?",
   )
@@ -2650,9 +2675,9 @@ app.post("/api/sessions/:token/join", async (c) => {
     .first<{ id: string; member_secret_hash: string | null }>();
   const currentStatus = sessionStatus(session.status);
   if (TERMINAL_SESSION_STATUSES.has(currentStatus))
-    return c.json({ error: "이미 종료된 세션입니다.", code: `SESSION_${currentStatus}` }, 410);
+    return c.json({ error: "This session has ended.", code: `SESSION_${currentStatus}` }, 410);
   if (currentStatus !== "WAITING" && !existing)
-    return c.json({ error: "이미 투표가 시작된 세션입니다.", code: "SESSION_STARTED" }, 409);
+    return c.json({ error: "Voting has already started.", code: "SESSION_STARTED" }, 409);
   if (existing) {
     if (
       !suppliedMemberKey ||
@@ -2660,7 +2685,7 @@ app.post("/api/sessions/:token/join", async (c) => {
       (await sessionMemberKeyHash(suppliedMemberKey)) !== existing.member_secret_hash
     ) {
       return c.json(
-        { error: "이 기기의 세션 자격 증명을 확인할 수 없습니다.", code: "MEMBER_CREDENTIAL_REQUIRED" },
+        { error: "Couldn't verify this device's session credentials.", code: "MEMBER_CREDENTIAL_REQUIRED" },
         403,
       );
     }
@@ -2705,8 +2730,8 @@ app.post("/api/sessions/:token/join", async (c) => {
     return c.json(
       {
         error: solo
-          ? "호스트가 혼자 세션으로 만들었어요. 호스트가 '같이' 세션을 새로 만들어야 합니다."
-          : "정원이 찼어요.",
+          ? "The host created a solo session. They need to create a group session to invite others."
+          : "This session is full.",
         code: solo ? "SOLO_SESSION" : "SESSION_FULL",
       },
       409,
@@ -2720,21 +2745,21 @@ app.post("/api/sessions/:token/cancel", async (c) => {
   const body = await c.req.json<Record<string, unknown>>().catch(() => ({}));
   const userId = nullableText(body.userId, 256);
   const memberKey = nullableText(body.memberKey, 256);
-  if (!userId) return c.json({ error: "사용자 정보가 필요합니다." }, 400);
+  if (!userId) return c.json({ error: "User details are required." }, 400);
   const session = await c.env.DB.prepare(
     "SELECT id, host_user_id, status FROM sessions WHERE share_token = ?",
   )
     .bind(token)
     .first<Pick<SessionRow, "id" | "host_user_id" | "status">>();
-  if (!session) return c.json({ error: "세션을 찾을 수 없습니다." }, 404);
+  if (!session) return c.json({ error: "Session not found." }, 404);
   if (session.host_user_id !== userId)
-    return c.json({ error: "세션 취소는 호스트만 할 수 있습니다.", code: "HOST_ONLY" }, 403);
+    return c.json({ error: "Only the host can cancel this session.", code: "HOST_ONLY" }, 403);
   if (!(await authorizedSessionMember(c.env.DB, session.id, userId, memberKey)))
-    return c.json({ error: "호스트 자격 증명을 확인할 수 없습니다.", code: "INVALID_MEMBER_CREDENTIAL" }, 403);
+    return c.json({ error: "Couldn't verify host credentials.", code: "INVALID_MEMBER_CREDENTIAL" }, 403);
   const currentStatus = sessionStatus(session.status);
   if (currentStatus === "CANCELLED") return c.json({ ok: true, alreadyCancelled: true });
   if (currentStatus === "COMPLETED" || currentStatus === "EXPIRED")
-    return c.json({ error: "이미 종료된 세션입니다.", code: `SESSION_${currentStatus}` }, 409);
+    return c.json({ error: "This session has ended.", code: `SESSION_${currentStatus}` }, 409);
   await c.env.DB.prepare("UPDATE sessions SET status = 'CANCELLED' WHERE id = ?")
     .bind(session.id)
     .run();
@@ -2746,15 +2771,15 @@ app.post("/api/sessions/:token/leave", async (c) => {
   const body = await c.req.json<Record<string, unknown>>().catch(() => ({}));
   const userId = nullableText(body.userId, 256);
   const memberKey = nullableText(body.memberKey, 256);
-  if (!userId) return c.json({ error: "사용자 정보가 필요합니다." }, 400);
+  if (!userId) return c.json({ error: "User details are required." }, 400);
   const session = await c.env.DB.prepare(
     "SELECT id, host_user_id, status FROM sessions WHERE share_token = ?",
   )
     .bind(token)
     .first<Pick<SessionRow, "id" | "host_user_id" | "status">>();
-  if (!session) return c.json({ error: "세션을 찾을 수 없습니다." }, 404);
+  if (!session) return c.json({ error: "Session not found." }, 404);
   if (session.host_user_id === userId)
-    return c.json({ error: "호스트는 세션을 취소해야 합니다.", code: "HOST_MUST_CANCEL" }, 409);
+    return c.json({ error: "The host must cancel the session instead of leaving.", code: "HOST_MUST_CANCEL" }, 409);
   if (TERMINAL_SESSION_STATUSES.has(sessionStatus(session.status)))
     return c.json({ ok: true, alreadyEnded: true });
   const existingMember = await c.env.DB.prepare(
@@ -2768,7 +2793,7 @@ app.post("/api/sessions/:token/leave", async (c) => {
     !existingMember.member_secret_hash ||
     (await sessionMemberKeyHash(memberKey)) !== existingMember.member_secret_hash
   )
-    return c.json({ error: "참여자 자격 증명을 확인할 수 없습니다.", code: "INVALID_MEMBER_CREDENTIAL" }, 403);
+    return c.json({ error: "Couldn't verify participant credentials.", code: "INVALID_MEMBER_CREDENTIAL" }, 403);
   const result = await c.env.DB.prepare(
     "DELETE FROM session_members WHERE session_id = ? AND user_id = ?",
   )
@@ -2783,24 +2808,24 @@ app.post("/api/sessions/:token/ready", async (c) => {
   const userId = nullableText(body.userId, 256);
   const memberKey = nullableText(body.memberKey, 256);
   if (!userId || typeof body.isReady !== "boolean")
-    return c.json({ error: "준비 상태 정보가 필요합니다." }, 400);
+    return c.json({ error: "Ready status is required." }, 400);
   const session = await c.env.DB.prepare(
     "SELECT id, status FROM sessions WHERE share_token = ?",
   )
     .bind(token)
     .first<{ id: string; status: string }>();
-  if (!session) return c.json({ error: "세션을 찾을 수 없습니다." }, 404);
+  if (!session) return c.json({ error: "Session not found." }, 404);
   if (sessionStatus(session.status) !== "WAITING")
-    return c.json({ error: "대기 중인 세션에서만 준비 상태를 바꿀 수 있습니다." }, 409);
+    return c.json({ error: "Ready status can only change while waiting." }, 409);
   if (!(await authorizedSessionMember(c.env.DB, session.id, userId, memberKey)))
-    return c.json({ error: "참여자 자격 증명을 확인할 수 없습니다.", code: "INVALID_MEMBER_CREDENTIAL" }, 403);
+    return c.json({ error: "Couldn't verify participant credentials.", code: "INVALID_MEMBER_CREDENTIAL" }, 403);
   const result = await c.env.DB.prepare(
     "UPDATE session_members SET is_ready = ? WHERE session_id = ? AND user_id = ?",
   )
     .bind(body.isReady ? 1 : 0, session.id, userId)
     .run();
   if ((result.meta?.changes ?? 0) === 0)
-    return c.json({ error: "세션 참여자를 찾을 수 없습니다." }, 404);
+    return c.json({ error: "Session participant not found." }, 404);
   return c.json({ ok: true });
 });
 
@@ -2808,9 +2833,9 @@ app.post("/api/sessions/:token/status", async (c) => {
   const token = c.req.param("token").trim().toUpperCase();
   const body = await c.req.json<Record<string, unknown>>().catch(() => ({}));
   const status = nullableText(body.status, 40)?.toUpperCase();
-  if (!status) return c.json({ error: "세션 상태가 필요합니다." }, 400);
+  if (!status) return c.json({ error: "Session status is required." }, 400);
   if (status !== "SWIPING_1")
-    return c.json({ error: "지원하지 않는 세션 상태입니다." }, 400);
+    return c.json({ error: "Unsupported session status." }, 400);
   const userId = nullableText(body.userId, 256);
   const memberKey = nullableText(body.memberKey, 256);
   const session = await c.env.DB.prepare(
@@ -2818,19 +2843,19 @@ app.post("/api/sessions/:token/status", async (c) => {
   )
     .bind(token)
     .first<SessionRow>();
-  if (!session) return c.json({ error: "세션을 찾을 수 없습니다." }, 404);
+  if (!session) return c.json({ error: "Session not found." }, 404);
   if (status === "SWIPING_1") {
     if (!userId || userId !== session.host_user_id)
-      return c.json({ error: "세션 시작은 호스트만 할 수 있습니다." }, 403);
+      return c.json({ error: "Only the host can start the session." }, 403);
     if (!(await authorizedSessionMember(c.env.DB, session.id, userId, memberKey)))
-      return c.json({ error: "호스트 자격 증명을 확인할 수 없습니다.", code: "INVALID_MEMBER_CREDENTIAL" }, 403);
+      return c.json({ error: "Couldn't verify host credentials.", code: "INVALID_MEMBER_CREDENTIAL" }, 403);
     const currentStatus = sessionStatus(session.status);
     // Starting twice must preserve both the shared deck and its attribution
     // identity. Replacing it after people began swiping would corrupt the
     // evidence chain.
     if (currentStatus === "SWIPING_1") return c.json({ ok: true, alreadyStarted: true, already_started: true });
     if (currentStatus !== "WAITING")
-      return c.json({ error: "종료되거나 취소된 세션은 시작할 수 없습니다.", code: `SESSION_${currentStatus}` }, 409);
+      return c.json({ error: "Ended or cancelled sessions can't be started.", code: `SESSION_${currentStatus}` }, 409);
     const { results: members } = await c.env.DB.prepare(
       "SELECT user_id, preferences_json FROM session_members WHERE session_id = ? ORDER BY joined_at",
     )
@@ -2839,7 +2864,7 @@ app.post("/api/sessions/:token/status", async (c) => {
     const minParticipants = Number(session.group_size) === 1 ? 1 : 2;
     if (members.length < minParticipants)
       return c.json(
-        { error: `투표를 시작하려면 최소 ${minParticipants}명이 필요합니다.` },
+        { error: `Voting needs at least  ${minParticipants} participants.` },
         409,
       );
     const { results: catalogue } = await c.env.DB.prepare(
@@ -2914,14 +2939,14 @@ app.post("/api/sessions/:token/status", async (c) => {
       );
     }
     if (!(catalogue as any[]).length)
-      return c.json({ error: "식당 후보를 준비하지 못했습니다.", code: "CATALOG_EMPTY" }, 409);
+      return c.json({ error: "Couldn't prepare restaurant options.", code: "CATALOG_EMPTY" }, 409);
     const deck = buildSharedSessionDeck(session.id, pool, members as any[]);
     if (!deck.length)
       return c.json(
         {
           error: Number(session.distance_enabled) !== 0
-            ? `${Number(session.filter_distance) >= 1000 ? `${Number(session.filter_distance) / 1000}km` : `${session.filter_distance}m`} 반경 안에 현재 조건과 맞는 식당이 없어요. 반경 또는 조건을 바꿔 주세요.`
-            : "현재 조건과 맞는 식당이 없어요. 조건을 바꿔 주세요.",
+            ? `${Number(session.filter_distance) >= 1000 ? `${Number(session.filter_distance) / 1000}km` : `${session.filter_distance}m`} No matching restaurants within this radius. Adjust your radius or preferences.`
+            : "No matching restaurants. Adjust your preferences.",
           code: "NO_ELIGIBLE_RESTAURANTS",
         },
         409,
@@ -3000,7 +3025,7 @@ app.post("/api/sessions/:token/status", async (c) => {
     .bind(status, deadline, session.id)
     .run();
   if ((result.meta?.changes ?? 0) === 0)
-    return c.json({ error: "세션을 찾을 수 없습니다." }, 404);
+    return c.json({ error: "Session not found." }, 404);
   return c.json({ ok: true });
 });
 
@@ -3025,14 +3050,14 @@ app.post("/api/swipes", async (c) => {
     round > 12 ||
     !action
   ) {
-    return c.json({ error: "올바른 스와이프 정보가 필요합니다." }, 400);
+    return c.json({ error: "Valid swipe details are required." }, 400);
   }
   const member = await c.env.DB.prepare(
     "SELECT id FROM session_members WHERE session_id = ? AND user_id = ?",
   )
     .bind(sessionId, userId)
     .first();
-  if (!member) return c.json({ error: "세션 참여자를 찾을 수 없습니다." }, 403);
+  if (!member) return c.json({ error: "Session participant not found." }, 403);
   const isSignal =
     restaurantId === PRELIM_DONE_ID ||
     restaurantId.startsWith(DECK_SIZE_PREFIX) ||
@@ -3041,13 +3066,14 @@ app.post("/api/swipes", async (c) => {
   const allowedAction =
     action === "LIKE" ||
     action === "DISLIKE" ||
+    (!isSignal && round % 2 === 1 && action === "NEUTRAL") ||
     (isSignal && action === "SYSTEM");
   if (
     !allowedAction ||
     restaurantId.startsWith(FORCE_PREFIX) ||
     (statSignalPrefix !== null && (round !== 1 || action !== "SYSTEM"))
   )
-    return c.json({ error: "유효하지 않은 투표입니다." }, 400);
+    return c.json({ error: "Invalid vote." }, 400);
   const now = Date.now();
   const requestId = nullableText(body.id, 128) ?? crypto.randomUUID();
   // A final vote is replaceable before the group is completed, but there is
@@ -3143,13 +3169,13 @@ app.post("/api/sessions/:token/force", async (c) => {
       ? body.round
       : Number(body.round);
   if (!userId || !Number.isInteger(round) || round < 1 || round > 12)
-    return c.json({ error: "올바른 진행 정보가 필요합니다." }, 400);
+    return c.json({ error: "Valid progress details are required." }, 400);
   const session = await c.env.DB.prepare(
     "SELECT id, host_user_id FROM sessions WHERE share_token = ?",
   )
     .bind(token)
     .first<{ id: string; host_user_id: string }>();
-  if (!session) return c.json({ error: "세션을 찾을 수 없습니다." }, 404);
+  if (!session) return c.json({ error: "Session not found." }, 404);
   if (session.host_user_id !== userId)
     return c.json({ error: "host_only" }, 403);
   // Force is a durable marker, rather than Worker memory, so a new Pages
@@ -3176,7 +3202,7 @@ app.get("/api/sessions/:token/results", async (c) => {
   )
     .bind(token)
     .first<SessionRow>();
-  if (!session) return c.json({ error: "세션을 찾을 수 없습니다." }, 404);
+  if (!session) return c.json({ error: "Session not found." }, 404);
   const [memberRows, swipeRows, restaurantRows] = await Promise.all([
     c.env.DB.prepare(
       "SELECT user_id, user_name, emoji FROM session_members WHERE session_id = ? ORDER BY joined_at",
@@ -3263,7 +3289,7 @@ app.patch("/api/feed-post", async (c) => {
   const session = await readSession(c.req.raw, c.env.AUTH_SESSION_SECRET);
   if (!session)
     return c.json(
-      { error: "로그인이 필요합니다.", code: "AUTH_REQUIRED" },
+      { error: "Sign-in is required.", code: "AUTH_REQUIRED" },
       401,
     );
   const body = await c.req.json<{
@@ -3273,13 +3299,13 @@ app.patch("/api/feed-post", async (c) => {
   }>();
   const caption = body.caption?.trim().slice(0, 2_000);
   if (!body.courseId || !caption)
-    return c.json({ error: "게시물과 한줄평을 입력해주세요." }, 400);
+    return c.json({ error: "A post and short review are required." }, 400);
   const owned = await c.env.DB.prepare(
     "SELECT id FROM courses WHERE id = ? AND author_id = ? AND is_public = 1",
   )
     .bind(body.courseId, session.sub)
     .first();
-  if (!owned) return c.json({ error: "수정 권한이 없습니다." }, 403);
+  if (!owned) return c.json({ error: "You don't have permission to edit this." }, 403);
   const heroImage =
     typeof body.heroImage === "string" && body.heroImage.startsWith("/photos/")
       ? body.heroImage
@@ -3297,7 +3323,7 @@ app.patch("/api/course-media", async (c) => {
   const session = await readSession(c.req.raw, c.env.AUTH_SESSION_SECRET);
   if (!session)
     return c.json(
-      { error: "로그인이 필요합니다.", code: "AUTH_REQUIRED" },
+      { error: "Sign-in is required.", code: "AUTH_REQUIRED" },
       401,
     );
   const body = await c.req.json<{
@@ -3307,13 +3333,13 @@ app.patch("/api/course-media", async (c) => {
     templateId?: unknown;
   }>();
   if (!body.courseId)
-    return c.json({ error: "게시물 정보가 필요합니다." }, 400);
+    return c.json({ error: "Post details are required." }, 400);
   const owned = await c.env.DB.prepare(
     "SELECT id FROM courses WHERE id = ? AND author_id = ? AND is_public = 1",
   )
     .bind(body.courseId, session.sub)
     .first();
-  if (!owned) return c.json({ error: "수정 권한이 없습니다." }, 403);
+  if (!owned) return c.json({ error: "You don't have permission to edit this." }, 403);
   const photos = Array.isArray(body.feedPhotos)
     ? body.feedPhotos
         .filter(
@@ -3359,7 +3385,7 @@ app.patch("/api/course-media", async (c) => {
         })
     : [];
   if (!decor.length)
-    return c.json({ error: "승계할 서버 사진 배치가 없습니다." }, 400);
+    return c.json({ error: "No server photo layout to inherit." }, 400);
   const templateId =
     typeof body.templateId === "string" ? body.templateId.slice(0, 80) : null;
   await c.env.DB.batch([
@@ -3398,12 +3424,12 @@ app.delete("/api/feed-post", async (c) => {
   const session = await readSession(c.req.raw, c.env.AUTH_SESSION_SECRET);
   if (!session)
     return c.json(
-      { error: "로그인이 필요합니다.", code: "AUTH_REQUIRED" },
+      { error: "Sign-in is required.", code: "AUTH_REQUIRED" },
       401,
     );
   const courseId = new URL(c.req.url).searchParams.get("courseId");
   if (!courseId || courseId.length > 128)
-    return c.json({ error: "게시물 정보가 필요합니다." }, 400);
+    return c.json({ error: "Post details are required." }, 400);
   // A feed is its course's public representation. Normal users may delete only
   // their own content; ADMIN_EMAILS grants this delete operation only and does
   // not grant edit ownership.
@@ -3414,7 +3440,7 @@ app.delete("/api/feed-post", async (c) => {
     .bind(courseId)
     .first<{ id: string; author_id: string }>();
   if (!course || (!isAdmin && course.author_id !== session.sub))
-    return c.json({ error: "이 게시물을 삭제할 권한이 없습니다." }, 403);
+    return c.json({ error: "You don't have permission to delete this post." }, 403);
   const { results: comments } = await c.env.DB.prepare(
     "SELECT id FROM feed_comments WHERE course_id = ?",
   )
@@ -3460,7 +3486,7 @@ app.post("/api/feed-comment", async (c) => {
   const session = await readSession(c.req.raw, c.env.AUTH_SESSION_SECRET);
   if (!session)
     return c.json(
-      { error: "로그인이 필요합니다.", code: "AUTH_REQUIRED" },
+      { error: "Sign-in is required.", code: "AUTH_REQUIRED" },
       401,
     );
   const body = await c.req.json<{
@@ -3470,14 +3496,14 @@ app.post("/api/feed-comment", async (c) => {
   }>();
   const text = body.text?.trim().slice(0, 500);
   if (!text || !body.courseId)
-    return c.json({ error: "게시물과 댓글 내용을 입력해주세요." }, 400);
+    return c.json({ error: "A post and comment text are required." }, 400);
   const courseId = body.courseId;
   const course = await c.env.DB.prepare(
     "SELECT id FROM courses WHERE id = ? AND is_public = 1",
   )
     .bind(courseId)
     .first();
-  if (!course) return c.json({ error: "게시물을 찾을 수 없습니다." }, 404);
+  if (!course) return c.json({ error: "Post not found." }, 404);
   if (body.parentId) {
     const parent = await c.env.DB.prepare(
       "SELECT id FROM feed_comments WHERE id = ? AND course_id = ? AND status = 'visible'",
@@ -3485,7 +3511,7 @@ app.post("/api/feed-comment", async (c) => {
       .bind(body.parentId, courseId)
       .first();
     if (!parent)
-      return c.json({ error: "답글을 달 댓글을 찾을 수 없습니다." }, 400);
+      return c.json({ error: "The comment you're replying to wasn't found." }, 400);
   }
   const id = crypto.randomUUID();
   const createdAt = Date.now();
@@ -3496,7 +3522,7 @@ app.post("/api/feed-comment", async (c) => {
       id,
       courseId,
       session.sub,
-      session.name?.slice(0, 80) || "Lunchie 사용자",
+      session.name?.slice(0, 80) || "Lunchie User",
       body.parentId || null,
       text,
       createdAt,
@@ -3509,7 +3535,7 @@ app.post("/api/feed-comment", async (c) => {
     {
       id,
       authorId: session.sub,
-      authorName: session.name || "Lunchie 사용자",
+      authorName: session.name || "Lunchie User",
       text,
       parentId: body.parentId,
       createdAt,
@@ -3522,12 +3548,12 @@ app.post("/api/reports", async (c) => {
   const session = await readSession(c.req.raw, c.env.AUTH_SESSION_SECRET);
   if (!session)
     return c.json(
-      { error: "로그인이 필요합니다.", code: "AUTH_REQUIRED" },
+      { error: "Sign-in is required.", code: "AUTH_REQUIRED" },
       401,
     );
   const body = await c.req.json<{ targetType?: string; targetId?: string }>();
   if (!body.targetId || !["course", "comment"].includes(body.targetType || ""))
-    return c.json({ error: "신고 대상이 올바르지 않습니다." }, 400);
+    return c.json({ error: "Invalid report target." }, 400);
   await c.env.DB.prepare(
     "INSERT OR IGNORE INTO content_reports (id, reporter_id, target_type, target_id, created_at) VALUES (?, ?, ?, ?, ?)",
   )
@@ -3553,7 +3579,7 @@ app.get("/api/feed", async (c) => {
     const cursor = Math.max(0, Math.floor(Number(c.req.query("cursor")) || 0));
     const requestedAuthorId = c.req.query("authorId")?.trim() || null;
     if (requestedAuthorId && requestedAuthorId.length > 256)
-      return c.json({ error: "작성자 정보가 올바르지 않습니다." }, 400);
+      return c.json({ error: "Invalid author details." }, 400);
     const locationFilter = parseFeedLocationFilter((name) => c.req.query(name));
     const viewer = await readSession(c.req.raw, c.env.AUTH_SESSION_SECRET);
     // Older local databases may predate the public-profile columns. Keep the

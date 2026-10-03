@@ -1,3 +1,4 @@
+import { englishText } from '@shared/englishCopy';
 import type { ReactNode } from 'react';
 
 export default function OneLineReviewBox({
@@ -30,7 +31,7 @@ export default function OneLineReviewBox({
       >
         “
       </span>
-      <div className="min-w-0 flex-1">{children}</div>
+      <div className="min-w-0 flex-1">{englishText(children)}</div>
       <span
         aria-hidden="true"
         className={`pointer-events-none absolute right-1.5 font-serif font-black leading-none text-[#EE857B] ${

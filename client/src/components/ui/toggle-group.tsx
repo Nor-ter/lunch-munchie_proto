@@ -1,3 +1,4 @@
+import { englishText } from '@shared/englishCopy';
 "use client";
 
 import * as React from "react";
@@ -34,7 +35,7 @@ function ToggleGroup({
       {...props}
     >
       <ToggleGroupContext.Provider value={{ variant, size }}>
-        {children}
+        {englishText(children)}
       </ToggleGroupContext.Provider>
     </ToggleGroupPrimitive.Root>
   );
@@ -65,7 +66,7 @@ function ToggleGroupItem({
       )}
       {...props}
     >
-      {children}
+      {englishText(children)}
     </ToggleGroupPrimitive.Item>
   );
 }

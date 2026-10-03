@@ -48,7 +48,7 @@ async function main() {
   // 기본: UPDATE SQL 생성 (컬럼별로 있는 것만 SET)
   const esc = (s: string) => s.replace(/'/g, "''");
   const sql = [
-    `-- 메뉴·사진 반영 (${updates.length}곳, 메뉴 ${dishes}개 요리 · 사진 ${withImage}곳) — D1 마이그레이션으로 적용`,
+    `-- Menu and photo update (${updates.length} restaurants, menus  ${dishes} dishes · photos  ${withImage} restaurants) — apply as a D1 migration`,
     ...updates.map((u) => {
       const sets = [
         u.menu_items ? `menu_items = '${esc(JSON.stringify(u.menu_items))}'::jsonb` : null,

@@ -54,7 +54,7 @@ describe('getLobbyPresentation', () => {
     expect(state.minParticipants).toBe(2);
     expect(state.canStart).toBe(false);
     expect(state.remainingSlots).toBe(3);
-    expect(state.disabledReason).toContain('최소 2명');
+    expect(state.disabledReason).toContain('at least 2 people');
   });
 
   it('그룹 방의 호스트는 두 명부터 시작할 수 있고 ready는 gate가 아니다', () => {
@@ -69,8 +69,8 @@ describe('getLobbyPresentation', () => {
 
     expect(state.isHost).toBe(false);
     expect(state.canStart).toBe(false);
-    expect(state.ctaLabel).toBe('호스트를 기다리는 중');
-    expect(state.disabledReason).toContain('지민님만');
+    expect(state.ctaLabel).toBe('Waiting for Host');
+    expect(state.disabledReason).toContain('지민 can start');
   });
 
   it('새 참여자를 감지하고 정원이 차면 남은 자리를 0으로 제한한다', () => {
@@ -81,7 +81,7 @@ describe('getLobbyPresentation', () => {
     });
 
     expect(state.recentlyJoinedName).toBe('수아');
-    expect(state.statusCopy).toBe('수아님이 참여했어요!');
+    expect(state.statusCopy).toBe('수아 joined!');
     expect(state.isFull).toBe(true);
     expect(state.remainingSlots).toBe(0);
   });

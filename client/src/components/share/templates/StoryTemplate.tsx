@@ -1,3 +1,4 @@
+import { englishText } from '@shared/englishCopy';
 import { forwardRef } from 'react';
 import { Course } from '@/types/course';
 import { CourseMap } from '@/components/course/CourseMap';
@@ -23,18 +24,19 @@ const StoryTemplate = forwardRef<HTMLDivElement, TemplateProps>(({ course }, ref
     >
       {/* Author row */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-        <span style={{ fontSize: 10, color: '#9E9E9E' }}>@{course.authorHandle}</span>
+        <span style={{ fontSize: 10, color: '#9E9E9E' }}>@{englishText(course.authorHandle)}</span>
         <span style={{ fontSize: 10, color: '#9E9E9E' }}>▶ My Course Map</span>
       </div>
 
       {/* Title */}
       <p style={{ fontSize: 18, fontWeight: 'bold', color: '#1A1A1A', margin: '8px 0 0 0' }}>
-        {course.title}
+        {englishText(course.title)}
       </p>
 
       {/* Sub comment */}
       <p style={{ fontSize: 12, color: '#EB5053', fontStyle: 'italic', margin: '4px 0 0 0' }}>
-        맛있는 하루 코스 ♥
+
+        A Delicious Day ♥
       </p>
 
       {/* Map */}
@@ -44,7 +46,8 @@ const StoryTemplate = forwardRef<HTMLDivElement, TemplateProps>(({ course }, ref
 
       {/* Bottom comment */}
       <p style={{ fontSize: 11, color: '#1A1A1A', margin: '12px 0 0 0', flexGrow: 1 }}>
-        맛있는 하루, 너무 완벽해! ♥
+
+        A delicious day, just perfect! ♥
       </p>
 
       {/* Footer */}

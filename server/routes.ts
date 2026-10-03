@@ -459,7 +459,7 @@ router.post("/sessions/:token/join", async (req: any, res: any) => {
     if ('started' in r.value && r.value.started) return res.status(409).json({ error: "session_started" });
     if ('credential' in r.value && !r.value.credential) return res.status(403).json({ error: "member_credential_required" });
     if (r.value.full) {
-      return res.status(409).json({ error: "session_full", message: "정원이 찼어요", cap: r.value.cap });
+      return res.status(409).json({ error: "session_full", message: "Session Full", cap: r.value.cap });
     }
     return res.status(200).json({ success: true, memberKey });
   }
@@ -478,7 +478,7 @@ router.post("/sessions/:token/join", async (req: any, res: any) => {
     } else {
       const cap = (mem.session as { group_size?: number }).group_size ?? 99;
       if (mem.members.length >= cap) {
-        return res.status(409).json({ error: "session_full", message: "정원이 찼어요", cap });
+        return res.status(409).json({ error: "session_full", message: "Session Full", cap });
       }
       mem.members.push({
         id: nanoid(),

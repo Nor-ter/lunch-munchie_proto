@@ -49,16 +49,16 @@ export function getRepresentativeMenuLabel(
   menuItems?: readonly { name?: string | null }[] | null,
 ): string {
   const firstNamedItem = menuItems?.find(item => typeof item.name === 'string' && item.name.trim());
-  return firstNamedItem?.name?.trim() || '대표 메뉴 정보 준비 중';
+  return firstNamedItem?.name?.trim() || "Featured menu coming soon";
 }
 
 export function getLunchieLocationLabel(address?: string | null): string {
-  return address?.trim() || '지역 정보 준비 중';
+  return address?.trim() || "Location coming soon";
 }
 
 export function formatLunchieDateLabel(value: Date | string | number = new Date()): string {
   const date = value instanceof Date ? value : new Date(value);
-  if (Number.isNaN(date.getTime())) return '날짜 정보 준비 중';
+  if (Number.isNaN(date.getTime())) return "Date unavailable";
 
   const year = date.getFullYear();
   const month = String(date.getMonth() + 1).padStart(2, '0');
@@ -92,7 +92,7 @@ export function getLunchieVoteLabel({
     isPositiveInteger(finalVotedCount) &&
     finalVotes <= finalVotedCount
   ) {
-    return `${finalVotes} / ${finalVotedCount}명 최종 투표`;
+    return `${finalVotes} / ${finalVotedCount} final voters`;
   }
 
   if (
@@ -100,10 +100,10 @@ export function getLunchieVoteLabel({
     isPositiveInteger(totalMembers) &&
     likeCount <= totalMembers
   ) {
-    return `${likeCount} / ${totalMembers}명 LIKE`;
+    return `${likeCount} / ${totalMembers} likes`;
   }
 
-  return isSolo ? '나의 최종 선택' : '친구들과 함께 고른 최종 선택';
+  return isSolo ? "My Final Choice" : "Our Final Choice";
 }
 
 export function getLunchieParticipantLabel(
@@ -112,7 +112,7 @@ export function getLunchieParticipantLabel(
   const names = (participants ?? [])
     .map(participant => participant.name.trim())
     .filter(Boolean);
-  return names.length > 0 ? names.join(' · ') : '참여자 정보 없음';
+  return names.length > 0 ? names.join(' · ') : "No Participant Information";
 }
 
 export function chooseShareDelivery(canShareFiles: boolean): 'share' | 'download' {

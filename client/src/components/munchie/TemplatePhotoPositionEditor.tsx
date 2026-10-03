@@ -1,3 +1,4 @@
+import { englishText } from '@shared/englishCopy';
 import { useRef, useState, type ChangeEvent, type Dispatch, type PointerEvent, type SetStateAction } from 'react';
 import { Plus, RotateCcw, RotateCw, Trash2, Upload, X } from 'lucide-react';
 import { toast } from 'sonner';
@@ -61,7 +62,7 @@ export default function TemplatePhotoPositionEditor({
       return;
     }
     if (placed.length >= MAX_MUNCHIE_FEED_PHOTOS) {
-      toast.info(`사진은 최대 ${MAX_MUNCHIE_FEED_PHOTOS}장까지 배치할 수 있어요.`);
+      toast.info(`Up to  ${MAX_MUNCHIE_FEED_PHOTOS} photos can be placed.`);
       return;
     }
     const next = createTemplatePhotoPlacement(src, placed.length, template);
@@ -117,7 +118,7 @@ export default function TemplatePhotoPositionEditor({
         const src = await fileToResizedDataUrl(file, 900, 0.8);
         uploaded.push(src);
       } catch {
-        toast.error('사진을 불러오지 못했어요.');
+        toast.error("Couldn't load the photo.");
       }
     }
     const existing = new Set(placed.map(photo => photo.src));
@@ -135,7 +136,7 @@ export default function TemplatePhotoPositionEditor({
     <div>
       <div className="mb-2 flex items-end justify-between">
         <div>
-          <p className="text-[13px] font-black text-[#3B2A22]">템플릿에서 바로 편집</p>
+          <p className="text-[13px] font-black text-[#3B2A22]">Edit in Template</p>
         </div>
       </div>
 
@@ -209,7 +210,7 @@ export default function TemplatePhotoPositionEditor({
             className="absolute left-1/2 top-1/2 flex -translate-x-1/2 -translate-y-1/2 flex-col items-center gap-1 rounded-2xl bg-white/85 px-5 py-4 text-[#D94D52] shadow backdrop-blur"
           >
             <Upload size={22} />
-            <span className="text-[11px] font-black">첫 사진 올리기</span>
+            <span className="text-[11px] font-black">Upload Your First Photo</span>
           </button>
         )}
         <TemplateFrameLayer template={template} loading="eager" />
@@ -218,9 +219,9 @@ export default function TemplatePhotoPositionEditor({
       {selected && (
         <div className="mx-auto mt-3 w-full max-w-[350px] rounded-2xl border border-[#EFE3D8] bg-white px-3 py-2.5 shadow-sm">
           <div className="flex items-center justify-center gap-1.5">
-            <button type="button" onClick={() => updateSelected({ rotate: selected.rotate - 8 })} aria-label="사진 반시계 방향 회전" className="flex h-8 w-8 items-center justify-center rounded-full bg-[#FFF4EF] active:scale-90"><RotateCcw size={14} /></button>
-            <button type="button" onClick={() => updateSelected({ rotate: selected.rotate + 8 })} aria-label="사진 시계 방향 회전" className="flex h-8 w-8 items-center justify-center rounded-full bg-[#FFF4EF] active:scale-90"><RotateCw size={14} /></button>
-            <button type="button" onClick={() => { setPlaced(current => current.filter(photo => photo.id !== selected.id)); setSelectedId(null); }} aria-label="사진 삭제" className="flex h-8 w-8 items-center justify-center rounded-full bg-[#FFF0F0] text-[#D94447] active:scale-90"><Trash2 size={14} /></button>
+            <button type="button" onClick={() => updateSelected({ rotate: selected.rotate - 8 })} aria-label="Rotate Photo Counterclockwise" className="flex h-8 w-8 items-center justify-center rounded-full bg-[#FFF4EF] active:scale-90"><RotateCcw size={14} /></button>
+            <button type="button" onClick={() => updateSelected({ rotate: selected.rotate + 8 })} aria-label="Rotate Photo Clockwise" className="flex h-8 w-8 items-center justify-center rounded-full bg-[#FFF4EF] active:scale-90"><RotateCw size={14} /></button>
+            <button type="button" onClick={() => { setPlaced(current => current.filter(photo => photo.id !== selected.id)); setSelectedId(null); }} aria-label="Delete Photo" className="flex h-8 w-8 items-center justify-center rounded-full bg-[#FFF0F0] text-[#D94447] active:scale-90"><Trash2 size={14} /></button>
           </div>
         </div>
       )}
@@ -233,12 +234,12 @@ export default function TemplatePhotoPositionEditor({
             <button
               type="button"
               onClick={() => addPhoto(src)}
-              aria-label={active ? '배치된 사진 선택' : '사진을 템플릿에 추가'}
+              aria-label={englishText(active ? "Select Placed Photo" : "Add Photo to Template")}
               className={`h-full w-full overflow-hidden rounded-xl border-2 active:scale-95 ${active ? 'border-[#EB5053]' : 'border-[#EFE3D8]'}`}
             >
               <img src={src} alt="" className="h-full w-full object-cover" draggable={false} />
             </button>
-            <button type="button" onClick={() => { setHiddenSources(current => [...current, src]); setPlaced(current => current.filter(photo => photo.src !== src)); }} aria-label="사진 목록에서 삭제" className="absolute right-1 top-1 flex h-5 w-5 items-center justify-center rounded-full border border-white/80 bg-[#D94447] text-white shadow"><X size={11} /></button>
+            <button type="button" onClick={() => { setHiddenSources(current => [...current, src]); setPlaced(current => current.filter(photo => photo.src !== src)); }} aria-label="Remove Photo" className="absolute right-1 top-1 flex h-5 w-5 items-center justify-center rounded-full border border-white/80 bg-[#D94447] text-white shadow"><X size={11} /></button>
             </div>
           );
         })}
@@ -246,10 +247,10 @@ export default function TemplatePhotoPositionEditor({
           type="button"
           onClick={() => uploadRef.current?.click()}
           className="flex h-16 w-16 shrink-0 flex-col items-center justify-center gap-0.5 rounded-xl border-2 border-dashed border-[#E0D2C6] text-[#B0A090] active:scale-95"
-          aria-label="새 사진 업로드"
+          aria-label="Upload New Photo"
         >
           <Plus size={18} />
-          <span className="text-[8px] font-bold">사진 추가</span>
+          <span className="text-[8px] font-bold">Add Photos</span>
         </button>
         <input ref={uploadRef} type="file" accept="image/*" multiple className="hidden" onChange={uploadPhotos} />
       </div>

@@ -1,3 +1,4 @@
+import { englishText } from '@shared/englishCopy';
 import { useState, type KeyboardEvent } from 'react';
 import { motion } from 'framer-motion';
 import { useLocation } from 'wouter';
@@ -40,10 +41,10 @@ export interface FoodieRoomNavigationState {
 type FoodieRoomTab = 'wardrobe' | 'room' | 'tastebook' | 'growth';
 
 const ROOM_TABS: readonly { id: FoodieRoomTab; label: string }[] = [
-  { id: 'wardrobe', label: '옷장' },
-  { id: 'room', label: '방 꾸미기' },
-  { id: 'tastebook', label: '맛도감' },
-  { id: 'growth', label: '성장일지' },
+  { id: 'wardrobe', label: "Wardrobe" },
+  { id: 'room', label: "Decorate Room" },
+  { id: 'tastebook', label: "Food Collection" },
+  { id: 'growth', label: "Growth Journal" },
 ];
 
 const ROOM_CONTENT_GRID_CLASS = 'grid grid-cols-3 gap-3 min-[450px]:grid-cols-4';
@@ -143,18 +144,19 @@ export default function FoodieRoomPage() {
   return (
     <main className="min-h-dvh bg-[#FCF4EE] pb-[calc(6.5rem+env(safe-area-inset-bottom,0px))] text-[#33251F]">
       <header className="flex items-start gap-3 px-5 pb-4 pt-[max(12px,env(safe-area-inset-top))]">
-        <BackButton onClick={handleBack} aria-label="프로필로 돌아가기" />
+        <BackButton onClick={handleBack} aria-label="Back to Profile" />
         <div className="min-w-0 flex-1">
           <h1 className="text-[25px] font-black leading-none tracking-[-0.03em] text-[#DB2837]">RUNCHICKEN ROOM</h1>
-          <p className="mt-0.5 text-[10px] font-semibold text-[#A18C80]">나만의 런치메이트 공간</p>
+          <p className="mt-0.5 text-[10px] font-semibold text-[#A18C80]">Your Lunchmate Space</p>
         </div>
         <span className="rounded-full bg-[#FFE7DF] px-2.5 py-1 text-[10px] font-black text-[#D94B4E]">
-          준비 중
+
+          Coming Soon
         </span>
       </header>
 
       <section className="px-4" aria-labelledby="foodie-room-preview-title">
-        <h2 id="foodie-room-preview-title" className="sr-only">런치메이트 미리보기</h2>
+        <h2 id="foodie-room-preview-title" className="sr-only">Lunchmate Preview</h2>
         <div
           ref={roomMotion.stageRef}
           className="relative aspect-[3/2] overflow-hidden rounded-[28px] bg-[#F7EEE8] shadow-sm"
@@ -172,15 +174,15 @@ export default function FoodieRoomPage() {
               style={{ color: skin.accent }}
             >
               <RoomLevelIcon size={14} strokeWidth={2.6} aria-hidden="true" />
-              Lv.{progressSnapshot.level} {progressSnapshot.levelName}
+              Lv.{progressSnapshot.level} {englishText(progressSnapshot.levelName)}
             </span>
             <p className="mt-1.5 pl-1 text-[11px] font-bold" style={{ color: skin.sub }}>
-              {progressSnapshot.totalXp} 맛추억
+              {progressSnapshot.totalXp}  Food Memories
             </p>
           </div>
 
           <div className="absolute right-4 top-4 z-30 rounded-full bg-white/90 px-2.5 py-1 text-[9px] font-bold shadow-sm" style={{ color: skin.text }}>
-            {roomTheme.labelKo}
+            {englishText(roomTheme.labelKo)}
           </div>
 
           <div className="absolute inset-x-0 bottom-[15.625%] z-10 flex justify-center">
@@ -219,8 +221,8 @@ export default function FoodieRoomPage() {
                     flowState="idle"
                     size={156}
                     renderSize="room"
-                    alt="런치메이트 룸에서 움직이는 런치메이트"
-                    fallback={<span className="text-[92px] leading-none">{profile.foodieChar ?? '🐥'}</span>}
+                    alt="Lunchmate moving in the room"
+                    fallback={<span className="text-[92px] leading-none">{englishText(profile.foodieChar ?? '🐥')}</span>}
                     loadout={draftLoadout}
                     artwork="chicken"
                     chickenAssetKeyOverride={roomMotion.assetKey}
@@ -233,20 +235,22 @@ export default function FoodieRoomPage() {
           </div>
 
           <p className="absolute inset-x-0 bottom-0 z-30 bg-gradient-to-t from-[#33251F]/45 to-transparent px-3 pb-2 pt-6 text-center text-[9px] font-semibold text-white drop-shadow-sm">
-            레이어 조합을 확인하는 미리보기예요
+
+            A preview of your selected layers
           </p>
         </div>
         {!hasProfileSnapshot && (
           <p className="mt-2 px-1 text-center text-[10px] leading-relaxed text-[#A18C80]">
-            직접 들어온 화면이라 맛추억은 초기 미리보기 상태로 표시돼요.
+
+            Food memories are shown in their initial preview state.
           </p>
         )}
       </section>
 
-      <section className="mt-5 px-4" aria-label="런치메이트 룸 기능">
+      <section className="mt-5 px-4" aria-label="Lunchmate Room Features">
         <div
           role="tablist"
-          aria-label="런치메이트 룸 메뉴"
+          aria-label="Lunchmate Room Menu"
           className="grid grid-cols-4 rounded-2xl bg-[#F2E7DF] p-1"
         >
           {ROOM_TABS.map((tab, index) => {
@@ -266,7 +270,7 @@ export default function FoodieRoomPage() {
                   selected ? 'bg-white text-[#E85053] shadow-sm' : 'text-[#8C7A70]'
                 }`}
               >
-                {tab.label}
+                {englishText(tab.label)}
               </button>
             );
           })}
@@ -292,9 +296,10 @@ export default function FoodieRoomPage() {
 
           {activeTab === 'room' && (
             <div>
-              <h2 className="text-[16px] font-black">방 꾸미기</h2>
+              <h2 className="text-[16px] font-black">Decorate Room</h2>
               <p className="mt-1 text-[11px] leading-relaxed text-[#927E73]">
-                선택한 방 구성은 프로필과 런치메이트룸에 바로 적용돼요.
+
+                Room changes appear immediately in your profile and Lunchmate room.
               </p>
               <div className="mt-4">
                 <SkinPicker
@@ -309,44 +314,46 @@ export default function FoodieRoomPage() {
 
           {activeTab === 'tastebook' && (
             <div>
-              <h2 className="text-[16px] font-black">맛도감</h2>
+              <h2 className="text-[16px] font-black">Food Collection</h2>
               <p className="mt-1 text-[11px] leading-relaxed text-[#927E73]">
-                런치메이트에게 나눈 음식 기록이 여기에 모일 예정이에요.
+
+                Food you've shared with your Lunchmate will appear here.
               </p>
-              <div className={`mt-4 ${ROOM_CONTENT_GRID_CLASS}`} aria-label="음식 8종 준비 중">
+              <div className={`mt-4 ${ROOM_CONTENT_GRID_CLASS}`} aria-label="8 Foods Coming Soon">
                 {Array.from({ length: 8 }, (_, index) => (
                   <div key={index} className="aspect-square rounded-2xl border border-[#EEE2DB] bg-[#F8F2EE]" aria-hidden="true">
                     <span className="flex h-full items-center justify-center text-[16px] text-[#CDBDB4]">?</span>
                   </div>
                 ))}
               </div>
-              <p className="mt-3 text-center text-[9px] font-semibold text-[#B09A8E]">음식 8종을 준비하고 있어요</p>
+              <p className="mt-3 text-center text-[9px] font-semibold text-[#B09A8E]">Preparing 8 food options</p>
             </div>
           )}
 
           {activeTab === 'growth' && (
             <div>
-              <h2 className="text-[16px] font-black">성장일지</h2>
-              <p className="mt-1 text-[11px] leading-relaxed text-[#927E73]">레벨과 칭호 기록을 준비하고 있어요.</p>
+              <h2 className="text-[16px] font-black">Growth Journal</h2>
+              <p className="mt-1 text-[11px] leading-relaxed text-[#927E73]">Your level and title history is coming soon.</p>
               <div className="mt-4 rounded-2xl bg-[#FFF6F1] p-3">
                 <div className="flex items-end justify-between gap-3">
                   <div>
-                    <p className="text-[10px] font-bold text-[#B08169]">현재 Preview Level</p>
-                    <p className="mt-0.5 text-[18px] font-black">Lv.{progressSnapshot.level} {progressSnapshot.levelName}</p>
+                    <p className="text-[10px] font-bold text-[#B08169]">Current Preview Level</p>
+                    <p className="mt-0.5 text-[18px] font-black">Lv.{progressSnapshot.level} {englishText(progressSnapshot.levelName)}</p>
                   </div>
                   <p className="text-[16px] font-black text-[#E85053]">{progressSnapshot.totalXp} XP</p>
                 </div>
-                <div className="mt-3 h-3 overflow-hidden rounded-full bg-[#F0DDD2]" role="progressbar" aria-label="맛추억 미리보기 진행도" aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round(progressSnapshot.progressPercent)}>
+                <div className="mt-3 h-3 overflow-hidden rounded-full bg-[#F0DDD2]" role="progressbar" aria-label="Food memory preview progress" aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round(progressSnapshot.progressPercent)}>
                   <div className="h-full rounded-full bg-[#E85053]" style={{ width: `${progressSnapshot.progressPercent}%` }} />
                 </div>
                 <p className="mt-2 text-[10px] font-semibold text-[#9A8377]">
-                  다음 Level까지 {progressSnapshot.xpRemainingToNextLevel} XP
+
+                  Until the next level {progressSnapshot.xpRemainingToNextLevel} XP
                 </p>
                 <p className="mt-1 text-[10px] font-semibold text-[#A18C80]">
                   {progressSnapshot.xpIntoCurrentLevel} / {progressSnapshot.xpRequiredForNextLevel} XP
                 </p>
               </div>
-              <div className={`mt-4 ${ROOM_CONTENT_GRID_CLASS}`} aria-label="레벨별 성장 보상">
+              <div className={`mt-4 ${ROOM_CONTENT_GRID_CLASS}`} aria-label="Level Rewards">
                 {LUNCHMATE_LEVELS.map(level => {
                   const iconDefinition = getLunchmateLevelIcon(level.level);
                   const LevelRewardIcon = iconDefinition.Icon;
@@ -369,7 +376,7 @@ export default function FoodieRoomPage() {
                       </span>
                       <p className="mt-2 text-[10px] font-black text-[#5A463C]">Lv.{level.level}</p>
                       <p className="mt-0.5 line-clamp-2 text-[8px] font-semibold leading-3 text-[#9A8377]">
-                        {level.levelName}
+                        {englishText(level.levelName)}
                       </p>
                     </div>
                   );
@@ -385,11 +392,11 @@ export default function FoodieRoomPage() {
           <NextRewardIcon size={21} />
         </span>
         <div className="min-w-0 flex-1">
-          <p className="text-[9px] font-bold text-[#AA806C]">다음 레벨 보상</p>
-          <h2 id="foodie-room-next-reward-title" className="mt-0.5 text-[13px] font-black">새로운 꾸미기 아이템</h2>
-          <p className="mt-0.5 text-[10px] leading-relaxed text-[#8F7C72]">레벨이 오르면 옷장 아이템을 받을 수 있어요.</p>
+          <p className="text-[9px] font-bold text-[#AA806C]">Next Level Reward</p>
+          <h2 id="foodie-room-next-reward-title" className="mt-0.5 text-[13px] font-black">New Customization Items</h2>
+          <p className="mt-0.5 text-[10px] leading-relaxed text-[#8F7C72]">Earn wardrobe items as you level up.</p>
         </div>
-        <span className="shrink-0 rounded-full bg-[#FFE7DF] px-2 py-1 text-[8px] font-black text-[#D94B4E]">준비 중</span>
+        <span className="shrink-0 rounded-full bg-[#FFE7DF] px-2 py-1 text-[8px] font-black text-[#D94B4E]">Coming Soon</span>
       </section>
     </main>
   );

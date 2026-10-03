@@ -1,3 +1,4 @@
+import { englishText } from '@shared/englishCopy';
 import { forwardRef } from 'react';
 import { Course } from '@/types/course';
 import { StravaRouteMap } from '@/components/share/StravaRouteMap';
@@ -34,7 +35,7 @@ const StravaCoralTemplate = forwardRef<HTMLDivElement, TemplateProps>(
             textShadow: '0 1px 8px rgba(255,255,255,0.9)',
           }}
         >
-          {course.title}
+          {englishText(course.title)}
         </p>
 
         <StravaRouteMap

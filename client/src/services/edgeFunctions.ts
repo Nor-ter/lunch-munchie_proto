@@ -23,13 +23,13 @@ export async function invokeEdgeFunction<T>(
   });
   if (!response.ok) {
     let code = 'internal_error';
-    let message = '알 수 없는 오류가 발생했어요.';
+    let message = "An unexpected error occurred.";
     try { const error = await response.json() as { code?: string; message?: string }; code = error.code ?? code; message = error.message ?? message; } catch { /* default */ }
     throw new EdgeFunctionError(code, message);
   }
   const data = await response.json() as T;
   if (!data) {
-    throw new EdgeFunctionError('internal_error', `${name} 응답이 비어있어요.`);
+    throw new EdgeFunctionError('internal_error', `${name} The response was empty.`);
   }
   return data;
 }

@@ -1,3 +1,4 @@
+import { englishText } from '@shared/englishCopy';
 import { forwardRef } from 'react';
 import { Course } from '@/types/course';
 import { FoodCourseMap } from '@/components/share/FoodCourseMap';
@@ -63,17 +64,17 @@ const FoodCourseStoryTemplate = forwardRef<HTMLDivElement, TemplateProps>(({ cou
         >
           MY FOOD COURSE
         </h1>
-        {course.subtitle && (
-          <p style={{ margin: '4px 0 0', fontSize: 11, color: '#666' }}>{course.subtitle}</p>
-        )}
+        {englishText(course.subtitle && (
+          <p style={{ margin: '4px 0 0', fontSize: 11, color: '#666' }}>{englishText(course.subtitle)}</p>
+        ))}
 
         {/* Stats row */}
         <div style={{ display: 'flex', gap: 16, marginTop: 14 }}>
           {stats.map((s) => (
             <div key={s.label}>
-              <p style={{ margin: 0, fontSize: 15, fontWeight: 800, color: '#1A1A1A' }}>{s.value}</p>
+              <p style={{ margin: 0, fontSize: 15, fontWeight: 800, color: '#1A1A1A' }}>{englishText(s.value)}</p>
               <p style={{ margin: '1px 0 0', fontSize: 8, color: '#9E9E9E', textTransform: 'uppercase', letterSpacing: 0.5 }}>
-                {s.label}
+                {englishText(s.label)}
               </p>
             </div>
           ))}
@@ -93,7 +94,7 @@ const FoodCourseStoryTemplate = forwardRef<HTMLDivElement, TemplateProps>(({ cou
         >
           {course.hashtags.slice(0, 3).map((tag) => (
             <span key={tag} style={{ fontSize: 9, color: '#666', fontWeight: 600 }}>
-              #{tag}
+              #{englishText(tag)}
             </span>
           ))}
         </div>
@@ -128,8 +129,8 @@ const FoodCourseStoryTemplate = forwardRef<HTMLDivElement, TemplateProps>(({ cou
             >
               <span style={{ fontSize: 8, fontWeight: 800, color: '#FFF' }}>{i + 1}</span>
             </div>
-            <span style={{ fontSize: 10, fontWeight: 600, color: '#1A1A1A', flex: 1 }}>{place.name}</span>
-            {place.time && <span style={{ fontSize: 9, color: '#9E9E9E' }}>{place.time}</span>}
+            <span style={{ fontSize: 10, fontWeight: 600, color: '#1A1A1A', flex: 1 }}>{englishText(place.name)}</span>
+            {englishText(place.time && <span style={{ fontSize: 9, color: '#9E9E9E' }}>{englishText(place.time)}</span>)}
           </div>
         ))}
         {course.places.length > 3 && (
@@ -151,12 +152,12 @@ const FoodCourseStoryTemplate = forwardRef<HTMLDivElement, TemplateProps>(({ cou
         }}
       >
         <div>
-          {course.date && (
-            <p style={{ margin: 0, fontSize: 9, color: '#9E9E9E' }}>{course.date}</p>
-          )}
-          {course.weather && (
-            <p style={{ margin: '2px 0 0', fontSize: 9, color: '#9E9E9E' }}>{course.weather} ☀️</p>
-          )}
+          {englishText(course.date && (
+            <p style={{ margin: 0, fontSize: 9, color: '#9E9E9E' }}>{englishText(course.date)}</p>
+          ))}
+          {englishText(course.weather && (
+            <p style={{ margin: '2px 0 0', fontSize: 9, color: '#9E9E9E' }}>{englishText(course.weather)} ☀️</p>
+          ))}
         </div>
         <span style={{ fontSize: 9, fontWeight: 700, color: '#EB5053', letterSpacing: 0.8 }}>
           LUNCHIE

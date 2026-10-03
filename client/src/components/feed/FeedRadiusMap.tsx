@@ -58,7 +58,7 @@ export default function FeedRadiusMap({ center, radiusKm, onCenterChange }: Prop
           <AdvancedMarker
             position={center}
             draggable
-            title="피드 검색 기준 위치"
+            title="Feed Search Location"
             onDragEnd={event => updateFromLatLng(event.latLng)}
           >
             <div className="flex size-10 items-center justify-center rounded-full border-[3px] border-white bg-[#E95259] text-white shadow-[0_7px_18px_rgba(170,55,62,0.34)]">

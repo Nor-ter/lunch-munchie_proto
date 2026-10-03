@@ -1,3 +1,4 @@
+import { englishText } from '@shared/englishCopy';
 import { forwardRef } from 'react';
 import { Course } from '@/types/course';
 import { ScrapPalette, SCRAP_PALETTES, gingham } from './scrapTheme';
@@ -89,7 +90,7 @@ const ReceiptTemplate = forwardRef<HTMLDivElement, Props>(({ course, palette }, 
           Munchie
         </p>
         <p style={{ margin: '4px 0 0', textAlign: 'center', fontSize: 8, color: '#777', letterSpacing: 1 }}>
-          ─── ✻ ─── {dateLabel} ─── ✻ ───
+          ─── ✻ ─── {englishText(dateLabel)} ─── ✻ ───
         </p>
 
         {/* 코스맵 이름 박스 */}
@@ -113,7 +114,7 @@ const ReceiptTemplate = forwardRef<HTMLDivElement, Props>(({ course, palette }, 
               textOverflow: 'ellipsis',
             }}
           >
-            {course.title}
+            {englishText(course.title)}
           </p>
         </div>
 
@@ -126,7 +127,7 @@ const ReceiptTemplate = forwardRef<HTMLDivElement, Props>(({ course, palette }, 
         <div style={{ marginTop: 7 }}>
           {places.map((place, i) => (
             <div key={place.id} style={{ display: 'flex', alignItems: 'baseline', gap: 4, marginBottom: 5 }}>
-              <span style={{ fontSize: 10, color: ink, flexShrink: 0 }}>{CIRCLED[i]}</span>
+              <span style={{ fontSize: 10, color: ink, flexShrink: 0 }}>{englishText(CIRCLED[i])}</span>
               <span
                 style={{
                   fontSize: 9,
@@ -138,10 +139,10 @@ const ReceiptTemplate = forwardRef<HTMLDivElement, Props>(({ course, palette }, 
                   maxWidth: 96,
                 }}
               >
-                {place.name}
+                {englishText(place.name)}
               </span>
               <span style={{ flex: 1, borderBottom: '1px dotted #999', transform: 'translateY(-2px)' }} />
-              <span style={{ fontSize: 8, color: '#666', flexShrink: 0 }}>{String(i + 1).padStart(3, '0')}</span>
+              <span style={{ fontSize: 8, color: '#666', flexShrink: 0 }}>{englishText(String(i + 1).padStart(3, '0'))}</span>
             </div>
           ))}
         </div>

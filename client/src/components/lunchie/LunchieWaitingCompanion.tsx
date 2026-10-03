@@ -1,3 +1,4 @@
+import { englishText } from '@shared/englishCopy';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { useLocation } from 'wouter';
@@ -27,11 +28,11 @@ function clearLunchieWaitingCompanion(): void {
 }
 
 function remainingLabel(deadlineAt: string | null, now: number): string {
-  if (!deadlineAt) return '마감 전';
+  if (!deadlineAt) return "Before Deadline";
   const seconds = Math.max(0, Math.ceil((new Date(deadlineAt).getTime() - now) / 1000));
-  if (seconds < 60) return `${seconds}초`;
+  if (seconds < 60) return `${seconds} sec`;
   const minutes = Math.ceil(seconds / 60);
-  return `${minutes}분`;
+  return `${minutes} min`;
 }
 
 export default function LunchieWaitingCompanion() {
@@ -117,22 +118,22 @@ export default function LunchieWaitingCompanion() {
 
   const primaryCopy = interactionCopy ?? (
     phase === 'DONE'
-      ? 'Lunchie 결과가 나왔어요!'
+      ? "Lunchie Results Are Ready!"
       : phase === 'NO_CONSENSUS'
-        ? '이번에는 합의가 어려웠어요'
+        ? "No Agreement This Time"
         : needsFinalVote
-      ? '결승전 투표가 열렸어요!'
+      ? "Final Voting Is Open!"
       : isReroll
-        ? '새로운 후보가 도착했어요!'
+        ? "New Options Are Here!"
         : phase === 'FINAL'
-          ? '친구들의 결승 선택을 모으는 중이에요'
-          : `런치 투표 ${countdown} 남았어요`
+          ? "Collecting everyone's final choices"
+          : `Lunch Vote ${countdown}  left`
   );
   const secondaryCopy = hasFinalOutcome
-    ? '눌러서 결과를 확인해요'
+    ? "Tap to See Results"
     : needsFinalVote || isReroll
-      ? '눌러서 투표 페이지로 돌아가요'
-    : '친구들이 고르는 동안 먼치피드를 둘러봐요';
+      ? "Tap to Return to Voting"
+    : "Spend time with your Lunchkin while friends choose";
 
   useEffect(() => {
     if (location === '/lunchie/swipe' && hasFinalOutcome && activeSessionId) {
@@ -142,12 +143,12 @@ export default function LunchieWaitingCompanion() {
 
   const handleBubbleClick = () => {
     if (hasFinalOutcome || needsFinalVote || isReroll) navigate('/lunchie/swipe');
-    else if (location !== '/feed') navigate('/feed');
+    else if (location !== '/profile') navigate('/profile');
   };
 
   const handleCharacterTap = () => {
     setIsHappy(true);
-    setInteractionCopy('콕! 런치 투표는 내가 지켜보고 있어요');
+    setInteractionCopy("I'm keeping an eye on your lunch vote!");
     if (interactionTimerRef.current) clearTimeout(interactionTimerRef.current);
     interactionTimerRef.current = setTimeout(() => {
       setIsHappy(false);
@@ -168,20 +169,20 @@ export default function LunchieWaitingCompanion() {
           <motion.button
             type="button"
             onClick={handleBubbleClick}
-            className={`pointer-events-auto relative mb-11 max-w-[220px] rounded-[20px] border bg-white px-4 py-3 text-left shadow-[0_12px_32px_rgba(86,53,43,0.18)] ${hasFinalOutcome || needsFinalVote || isReroll ? 'border-[#EB5053]' : 'border-[#F0DCD3]'}`}
+            className={`pointer-events-auto relative mb-11 max-w-[220px] rounded-[20px] border bg-white px-4 py-3 text-left shadow-[0_12px_32px_rgba(86,53,43,0.18)] ${hasFinalOutcome || needsFinalVote || isReroll ? 'border-[#AA1A0D]' : 'border-[#E8E6E7]'}`}
             animate={hasFinalOutcome || needsFinalVote ? { scale: [1, 1.035, 1] } : undefined}
             transition={hasFinalOutcome || needsFinalVote ? { duration: 1.25, repeat: Infinity } : undefined}
           >
-            <span className="block text-[12px] font-black leading-snug text-[#3D322E]">{primaryCopy}</span>
-            <span className="mt-1 block text-[10px] font-bold leading-snug text-[#A08B82]">{secondaryCopy}</span>
-            <span className="absolute -right-2 bottom-3 size-4 rotate-45 border-b border-r border-[#F0DCD3] bg-white" aria-hidden="true" />
+            <span className="block text-[12px] font-black leading-snug text-[#171717]">{englishText(primaryCopy)}</span>
+            <span className="mt-1 block text-[10px] font-bold leading-snug text-[#858185]">{englishText(secondaryCopy)}</span>
+            <span className="absolute -right-2 bottom-3 size-4 rotate-45 border-b border-r border-[#E8E6E7] bg-white" aria-hidden="true" />
           </motion.button>
 
           <motion.button
             type="button"
             onClick={handleCharacterTap}
-            aria-label="기다림 도우미 런치킨과 상호작용"
-            className="pointer-events-auto flex size-[86px] shrink-0 items-center justify-center rounded-[27px] bg-[#FFF7F1] shadow-[0_12px_32px_rgba(218,82,78,0.2)]"
+            aria-label="Interact with your waiting companion"
+            className="pointer-events-auto flex size-[86px] shrink-0 items-center justify-center rounded-[27px] bg-[#F5F4F5] shadow-[0_12px_32px_rgba(218,82,78,0.2)]"
             animate={isHappy ? { y: [0, -12, 0], rotate: [0, -8, 8, 0], scale: [1, 1.08, 1] } : { y: [0, -4, 0] }}
             transition={isHappy ? { duration: 0.65 } : { duration: 2, repeat: Infinity, ease: 'easeInOut' }}
           >
@@ -194,7 +195,7 @@ export default function LunchieWaitingCompanion() {
               loadout={loadout}
               size={80}
               renderSize="compact"
-              alt="런치 투표를 알려주는 런치킨"
+              alt="Lunchkin vote notifications"
             />
           </motion.button>
         </motion.aside>

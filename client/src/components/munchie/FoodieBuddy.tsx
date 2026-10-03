@@ -1,3 +1,4 @@
+import { englishText } from '@shared/englishCopy';
 import {
   useEffect,
   useRef,
@@ -33,14 +34,14 @@ import {
  */
 
 export const FOODIE_CHARS = [
-  { emoji: '🍙', name: '주먹밥' },
-  { emoji: '🍞', name: '식빵' },
-  { emoji: '🥟', name: '만두' },
-  { emoji: '🍩', name: '도넛' },
-  { emoji: '🍜', name: '라멘' },
-  { emoji: '🍓', name: '딸기' },
-  { emoji: '🥑', name: '아보카도' },
-  { emoji: '🍤', name: '새우튀김' },
+  { emoji: '🍙', name: "Rice Ball" },
+  { emoji: '🍞', name: "Bread" },
+  { emoji: '🥟', name: "Dumplings" },
+  { emoji: '🍩', name: "Donut" },
+  { emoji: '🍜', name: "Ramen" },
+  { emoji: '🍓', name: "Strawberry" },
+  { emoji: '🥑', name: "Avocado" },
+  { emoji: '🍤', name: "Shrimp Tempura" },
 ] as const;
 
 interface FoodieLevel {
@@ -49,10 +50,10 @@ interface FoodieLevel {
 }
 
 const LEVELS: FoodieLevel[] = [
-  { min: 0, name: '알' },
-  { min: 2, name: '새싹 푸디' },
-  { min: 5, name: '먹보 푸디' },
-  { min: 10, name: '전설의 미식가' },
+  { min: 0, name: "Egg" },
+  { min: 2, name: "Budding Foodie" },
+  { min: 5, name: "Hungry Foodie" },
+  { min: 10, name: "Legendary Foodie" },
 ];
 
 export function foodieLevel(score: number): { level: FoodieLevel; index: number; next: FoodieLevel | null; progress: number } {
@@ -66,7 +67,7 @@ export function foodieLevel(score: number): { level: FoodieLevel; index: number;
   return { level, index, next, progress };
 }
 
-const BUBBLES = ['냠냠 😋', '오늘 뭐 먹지?', '코스맵 더 줘!', '맛집 가고 싶다…', '먹부림 최고 🍴'];
+const BUBBLES = ["Yum Yum 😋", "What Shall We Eat?", "More course maps, please!", "Let's find something delicious…", "Food adventures are the best 🍴"];
 const LUNCHMATE_RENDER_SIZE = 86;
 export const PROFILE_TAP_STREAK_RESET_MS = 2_000;
 
@@ -359,28 +360,28 @@ export default function FoodieBuddy({
       ? kimbapCountForProgress(previousKimbapProgress)
       : 0;
   const progressLabel = progressSnapshot
-    ? `${progressSnapshot.xpIntoCurrentLevel} / ${progressSnapshot.xpRequiredForNextLevel} 맛추억`
+    ? `${progressSnapshot.xpIntoCurrentLevel} / ${progressSnapshot.xpRequiredForNextLevel} Food Memories`
     : next
-      ? `다음 진화까지 ${next.min - score}점`
+      ? `Until the next evolution:  ${next.min - score} points`
       : 'MAX 🎖️';
   // idle 말풍선은 점수 기반으로 고정하고, mock flow 상태에서만 짧은 안내로 교체한다.
   const bubble = isFoodDragOver
-    ? '여기에 놓아주세요!'
+    ? "Drop It Here!"
     : isFoodDragging
       ? null
       : isFeeding
-        ? '맛있게 먹는 중…'
+        ? "Enjoying a bite…"
         : isReaction
-          ? (resultMessage ?? '맛있는 한입 고마워! 😋')
+          ? (resultMessage ?? "Thanks for the tasty bite! 😋")
           : effectiveUiState === 'error'
-            ? '다시 한 번 해볼까?'
+            ? "Shall we try again?"
             : isFoodAvailable
               && selectedFood
-              ? `${selectedFood.placeholder ?? '음식'}을 나에게 끌어다 줘!`
+              ? `${selectedFood.placeholder ?? "Food"} — drag it over to me!`
               : isFoodAvailable
               ? normalizedUnseenCount > 0
-                ? `새 음식 ${unseenCountLabel}개 도착! 🍱`
-                : '새 음식이 도착했어! 🍱'
+                ? `New food:  ${unseenCountLabel} arrived! 🍱`
+                : "New food is here! 🍱"
               : BUBBLES[score % BUBBLES.length];
   const openFoodieRoom = onFoodieRoomOpen ?? onCustomize;
   const reducedMotion = useReducedMotion();
@@ -524,7 +525,7 @@ export default function FoodieBuddy({
           onClick={onProgressOpen}
           tabIndex={onProgressOpen ? 0 : -1}
           aria-disabled={!onProgressOpen}
-          aria-label="맛추억 미리보기 상세"
+          aria-label="Food Memory Preview Details"
           className={`absolute bottom-2.5 left-2.5 top-2.5 z-20 flex w-[38px] flex-col items-center rounded-[17px] border border-white/80 bg-white/75 px-1 py-1.5 shadow-sm backdrop-blur-[2px] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white ${
             onProgressOpen ? 'pointer-events-auto cursor-pointer' : 'pointer-events-none'
           }`}
@@ -539,12 +540,12 @@ export default function FoodieBuddy({
             EXP
           </span>
           <span className="mt-0.5 text-[7px] font-black leading-none text-[#49372E]">
-            {progressSnapshot?.isMaxLevel ? 'MAX' : `${progressSnapshot?.xpIntoCurrentLevel ?? 0}/${progressSnapshot?.xpRequiredForNextLevel ?? 0}`}
+            {englishText(progressSnapshot?.isMaxLevel ? 'MAX' : `${progressSnapshot?.xpIntoCurrentLevel ?? 0}/${progressSnapshot?.xpRequiredForNextLevel ?? 0}`)}
           </span>
 
           <div
             role="progressbar"
-            aria-label={`김밥 EXP ${progressLabel}`}
+            aria-label={englishText(`Gimbap EXP  ${progressLabel}`)}
             aria-valuemin={0}
             aria-valuemax={kimbapSnapshot?.isMaxLevel ? 1 : kimbapSnapshot?.xpRequiredForNextLevel ?? 100}
             aria-valuenow={kimbapSnapshot?.isMaxLevel ? 1 : kimbapSnapshot?.xpIntoCurrentLevel ?? 0}
@@ -623,7 +624,7 @@ export default function FoodieBuddy({
           disabled={profileMotion.grab.isActive}
           className="absolute right-2.5 top-2.5 z-20 flex h-8 w-8 items-center justify-center rounded-full shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white disabled:cursor-default"
           style={{ background: 'rgba(255,255,255,0.85)', color: skin.sub }}
-          aria-label="런치메이트 룸 열기"
+          aria-label="Open Lunchmate Room"
         >
           <HangerIcon />
         </button>
@@ -644,9 +645,9 @@ export default function FoodieBuddy({
           transition={isFoodAvailable
             ? { repeat: Infinity, repeatType: 'reverse', duration: 1.15, ease: 'easeInOut' }
             : { duration: 0.2 }}
-          aria-label={isFoodAvailable && normalizedUnseenCount > 0
-            ? `새 음식 ${normalizedUnseenCount}개가 있는 런치박스`
-            : '런치박스'}
+          aria-label={englishText(isFoodAvailable && normalizedUnseenCount > 0
+            ? `New food:  ${normalizedUnseenCount} items in Lunchbox`
+            : "Lunchbox")}
         >
           <span aria-hidden="true">🍱</span>
           {isFoodAvailable && normalizedUnseenCount > 0 && (
@@ -656,7 +657,7 @@ export default function FoodieBuddy({
               animate={{ scale: 1.05 }}
               transition={{ repeat: Infinity, repeatType: 'reverse', duration: 0.75, ease: 'easeInOut' }}
             >
-              {unseenCountLabel}
+              {englishText(unseenCountLabel)}
             </motion.span>
           )}
         </motion.button>
@@ -676,7 +677,7 @@ export default function FoodieBuddy({
             transition={motionIsReduced
               ? { duration: 0 }
               : { type: 'spring', stiffness: 360, damping: 22, mass: 0.55 }}
-            aria-label={`${selectedFood.name}, 런치메이트에게 끌어다 놓기`}
+            aria-label={englishText(`${selectedFood.name}, drag to your Lunchmate`)}
             data-profile-selected-food={selectedFood.id}
             data-profile-food-drag-handle="true"
             onPointerDown={handleProfileFoodPointerDown}
@@ -712,14 +713,14 @@ export default function FoodieBuddy({
                 />
               ) : (
                 <span className="relative z-10 leading-none drop-shadow-sm" aria-hidden="true">
-                  {selectedFood.placeholder ?? '🍽️'}
+                  {englishText(selectedFood.placeholder ?? '🍽️')}
                 </span>
               )}
             </motion.span>
           </motion.button>
         )}
 
-        {isSharingAnimation && sharedFoodPlaceholder && (
+        {englishText(isSharingAnimation && sharedFoodPlaceholder && (
           <motion.span
             className="pointer-events-none absolute bottom-10 z-30 text-[24px] drop-shadow-md"
             style={{ marginLeft: -12 }}
@@ -747,17 +748,17 @@ export default function FoodieBuddy({
             data-lunchmate-food-flight="true"
             aria-hidden="true"
           >
-            {sharedFoodPlaceholder}
+            {englishText(sharedFoodPlaceholder)}
           </motion.span>
-        )}
+        ))}
 
         {/* Profile 전용 작은 순찰. drop target 자체는 중앙에 고정해 pointer 판정을 보존한다. */}
         <div
           ref={foodDropTargetRef}
           role="region"
-          aria-label={isFoodDragOver
-            ? '런치메이트 음식 놓기 영역, 지금 놓을 수 있어요'
-            : '런치메이트 음식 놓기 영역'}
+          aria-label={englishText(isFoodDragOver
+            ? "Lunchmate food drop area, ready to drop"
+            : "Lunchmate Food Drop Area")}
           data-lunchmate-drop-active={isFoodDragging ? 'true' : 'false'}
           data-lunchmate-drop-over={isFoodDragOver ? 'true' : 'false'}
           data-lunchmate-profile-grab-anchor="true"
@@ -799,9 +800,9 @@ export default function FoodieBuddy({
             data-lunchmate-profile-grab={profileMotion.grab.phase}
             data-lunchmate-profile-expression={profileMotion.grab.phase === 'grabbed' ? 'surprised' : 'default'}
             role="img"
-            aria-label={profileMotion.grab.phase === 'grabbed'
-              ? '놀란 런치메이트 캐릭터, 드래그 중'
-              : '런치메이트 캐릭터'}
+            aria-label={englishText(profileMotion.grab.phase === 'grabbed'
+              ? "Surprised Lunchmate while dragging"
+              : "Lunchmate Character")}
             onPointerDown={(event) => {
               const tapEligible = event.isPrimary
                 && !(event.pointerType === 'mouse' && event.button !== 0)
@@ -918,7 +919,7 @@ export default function FoodieBuddy({
                     >
                       <div className="relative">
                         {/* 말풍선 */}
-                        {bubble && (!isEgg || effectiveUiState !== 'idle') && (
+                        {englishText(bubble && (!isEgg || effectiveUiState !== 'idle') && (
                           <motion.span
                             className="absolute left-1/2 -translate-x-1/2 whitespace-nowrap rounded-full border border-white bg-white/95 px-2.5 py-1 text-[9px] font-black text-[#49372E] shadow-md"
                             style={{ top: -20 }}
@@ -926,9 +927,9 @@ export default function FoodieBuddy({
                             animate={{ opacity: 1 }}
                             transition={{ repeat: Infinity, repeatType: 'reverse', duration: 3, ease: 'easeInOut' }}
                           >
-                            {bubble}
+                            {englishText(bubble)}
                           </motion.span>
-                        )}
+                        ))}
                         {/* 왕관 (만렙) */}
                         {displayedIsMax && (
                           <motion.span
@@ -965,8 +966,8 @@ export default function FoodieBuddy({
                             onChickenImageLoad={profileMotion.handleCharacterImageLoad}
                             animated={false}
                             fallback={(
-                              <span className="text-[60px] leading-none" role="img" aria-label="런치메이트 대체 표시">
-                                {char ?? '🐥'}
+                              <span className="text-[60px] leading-none" role="img" aria-label="Lunchmate Placeholder">
+                                {englishText(char ?? '🐥')}
                               </span>
                             )}
                           />
@@ -1046,7 +1047,7 @@ export default function FoodieBuddy({
               />
             ) : (
               <span className="relative z-10 leading-none drop-shadow-[0_8px_8px_rgba(75,50,35,0.35)]">
-                {profileFoodDragPreview.item.placeholder ?? '🍽️'}
+                {englishText(profileFoodDragPreview.item.placeholder ?? '🍽️')}
               </span>
             )}
           </motion.div>

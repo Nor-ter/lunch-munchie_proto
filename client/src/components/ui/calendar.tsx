@@ -1,3 +1,4 @@
+import { englishText } from '@shared/englishCopy';
 import * as React from "react";
 import {
   ChevronDownIcon,
@@ -158,7 +159,7 @@ function Calendar({
           return (
             <td {...props}>
               <div className="flex size-(--cell-size) items-center justify-center text-center">
-                {children}
+                {englishText(children)}
               </div>
             </td>
           );

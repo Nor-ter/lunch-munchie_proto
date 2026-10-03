@@ -1,3 +1,4 @@
+import { englishText } from '@shared/englishCopy';
 import { forwardRef } from 'react';
 import { Course } from '@/types/course';
 import { CourseMap } from '@/components/course/CourseMap';
@@ -38,10 +39,11 @@ const MinimalTemplate = forwardRef<HTMLDivElement, TemplateProps>(({ course }, r
       </span>
 
       <p style={{ fontSize: 20, fontWeight: 'bold', color: '#1A1A1A', margin: 0, textAlign: 'center' }}>
-        {course.title}
+        {englishText(course.title)}
       </p>
       <p style={{ fontSize: 12, color: '#EB5053', margin: 0 }}>
-        맛있는 하루 코스 ♥
+
+        A Delicious Day ♥
       </p>
       <CourseMap places={course.places} width={200} height={150} />
     </div>

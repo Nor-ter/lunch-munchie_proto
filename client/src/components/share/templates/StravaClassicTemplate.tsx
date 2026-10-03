@@ -1,3 +1,4 @@
+import { englishText } from '@shared/englishCopy';
 import { forwardRef } from 'react';
 import { Course } from '@/types/course';
 import { StravaRouteMap } from '@/components/share/StravaRouteMap';
@@ -50,9 +51,9 @@ const StravaClassicTemplate = forwardRef<HTMLDivElement, TemplateProps>(
           }}
         >
           {[
-            { label: '거리', value: `${course.distanceKm} km` },
-            { label: '시간', value: `${course.durationHours} h` },
-            { label: '스팟', value: `${course.places.length}` },
+            { label: "Distance", value: `${course.distanceKm} km` },
+            { label: " hours", value: `${course.durationHours} h` },
+            { label: "Spots", value: `${course.places.length}` },
           ].map((s) => (
             <div
               key={s.label}
@@ -65,9 +66,9 @@ const StravaClassicTemplate = forwardRef<HTMLDivElement, TemplateProps>(
                 minWidth: 56,
               }}
             >
-              <p style={{ margin: 0, fontSize: 13, fontWeight: 700, color: '#1A1A1A' }}>{s.value}</p>
+              <p style={{ margin: 0, fontSize: 13, fontWeight: 700, color: '#1A1A1A' }}>{englishText(s.value)}</p>
               <p style={{ margin: '2px 0 0', fontSize: 9, color: '#9E9E9E', textTransform: 'uppercase' }}>
-                {s.label}
+                {englishText(s.label)}
               </p>
             </div>
           ))}

@@ -1,3 +1,4 @@
+import { englishText } from '@shared/englishCopy';
 import { forwardRef } from 'react';
 import { Course } from '@/types/course';
 import { StravaRouteMap } from '@/components/share/StravaRouteMap';
@@ -60,7 +61,7 @@ const StravaNeonTemplate = forwardRef<HTMLDivElement, TemplateProps>(
           >
             <p style={{ margin: 0, fontSize: 8, color: '#9E9E9E' }}>START</p>
             <p style={{ margin: '2px 0 0', fontSize: 10, fontWeight: 600, color: '#1A1A1A', maxWidth: 72 }}>
-              {course.places[0]?.name ?? '—'}
+              {englishText(course.places[0]?.name ?? '—')}
             </p>
           </div>
           <div
@@ -74,7 +75,7 @@ const StravaNeonTemplate = forwardRef<HTMLDivElement, TemplateProps>(
           >
             <p style={{ margin: 0, fontSize: 8, color: '#9E9E9E' }}>FINISH</p>
             <p style={{ margin: '2px 0 0', fontSize: 10, fontWeight: 600, color: '#1A1A1A', maxWidth: 72 }}>
-              {course.places[course.places.length - 1]?.name ?? '—'}
+              {englishText(course.places[course.places.length - 1]?.name ?? '—')}
             </p>
           </div>
         </div>

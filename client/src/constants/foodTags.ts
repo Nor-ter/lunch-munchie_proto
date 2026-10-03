@@ -12,7 +12,7 @@ export const FOOD_TAGS = [
 export type TagType = (typeof FOOD_TAGS)[number];
 
 export const FOOD_FILTER_TAGS: { label: string; value: TagType | 'all' }[] = [
-  { label: '전체', value: 'all' },
+  { label: "All", value: 'all' },
   ...FOOD_TAGS.map(tag => ({ label: tag, value: tag })),
 ];
 

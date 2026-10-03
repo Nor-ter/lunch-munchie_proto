@@ -1,4 +1,4 @@
-export type SessionSwipeAction = 'LIKE' | 'DISLIKE' | 'SYSTEM';
+export type SessionSwipeAction = 'LIKE' | 'DISLIKE' | 'NEUTRAL' | 'SYSTEM';
 
 export interface SessionSwipeInput {
   id?: string;
@@ -70,19 +70,19 @@ export async function persistSessionSwipe(
 
       const payload = await response.json().catch(() => ({})) as { error?: string };
       const error = Object.assign(
-        new Error(payload.error ?? '선택을 저장하지 못했어요.'),
+        new Error(payload.error ?? "Couldn't save your choice."),
         { retryable: response.status >= 500 },
       );
       if (response.status < 500 || attempt === attempts) throw error;
       lastError = error;
     } catch (error) {
-      lastError = error instanceof Error ? error : new Error('선택을 저장하지 못했어요.');
+      lastError = error instanceof Error ? error : new Error("Couldn't save your choice.");
       if ('retryable' in lastError && lastError.retryable === false) throw lastError;
       if (attempt === attempts) throw lastError;
     }
     await retryDelay(attempt);
   }
-  throw lastError ?? new Error('선택을 저장하지 못했어요.');
+  throw lastError ?? new Error("Couldn't save your choice.");
 }
 
 /**
@@ -104,10 +104,10 @@ export async function completeSoloSessionChoice(
     winnerId?: string | null;
   };
   if (!response.ok) {
-    throw new Error(payload.error ?? '세션 종료를 확인하지 못했어요.');
+    throw new Error(payload.error ?? "Couldn't confirm that the session ended.");
   }
   if (payload.phase !== 'DONE' || payload.winnerId !== input.restaurantId) {
-    throw new Error('최종 선택이 아직 세션에 반영되지 않았어요.');
+    throw new Error("Your final choice hasn't been recorded yet.");
   }
   return { phase: 'DONE', winnerId: payload.winnerId };
 }

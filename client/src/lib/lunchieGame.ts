@@ -9,10 +9,10 @@ export const LUNCHIE_CUISINE_CHOICES: ReadonlyArray<{
   emoji: string;
   color: string;
 }> = [
-  { id: 'korean', label: '든든한 한식', hint: '밥 · 찌개 · 고기', emoji: '🍚', color: '#E64B55' },
-  { id: 'asian', label: '아시안', hint: '면 · 딤섬 · 일식', emoji: '🍜', color: '#2474E5' },
-  { id: 'western', label: '양식·브런치', hint: '파스타 · 카페 · 베이커리', emoji: '🍝', color: '#D39513' },
-  { id: 'surprise', label: '오늘의 랜덤', hint: '추천 순서 그대로', emoji: '🎲', color: '#6545D8' },
+  { id: 'korean', label: "Korean Comfort Food", hint: "Rice · stews · meat", emoji: '🍚', color: '#AA1A0D' },
+  { id: 'asian', label: "Asian", hint: "Noodles · dim sum · Japanese", emoji: '🍜', color: '#AA1A0D' },
+  { id: 'western', label: "Western & Brunch", hint: "Pasta · cafes · bakeries", emoji: '🍝', color: '#AA1A0D' },
+  { id: 'surprise', label: "Surprise Me", hint: "Keep the recommended order", emoji: '🎲', color: '#80140A' },
 ] as const;
 
 const CUISINE_KEYWORDS: Record<Exclude<LunchieCuisineChoice, 'surprise'>, string[]> = {

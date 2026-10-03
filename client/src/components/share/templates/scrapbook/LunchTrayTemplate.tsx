@@ -1,3 +1,4 @@
+import { englishText } from '@shared/englishCopy';
 import { forwardRef } from 'react';
 import { Course } from '@/types/course';
 import { ScrapPalette, SCRAP_PALETTES, gingham, photoFallback } from './scrapTheme';
@@ -6,7 +7,7 @@ const CARD_W = 270;
 const CARD_H = 480;
 
 /** "What I ate today" 스티커 레터링 색 */
-const TITLE_COLORS = ['#E85053', '#3E719B', '#DB9000', '#2E8F35', '#C77DC4', '#E85053'];
+const TITLE_COLORS = ['#E85053', '#3E719B', '#DB9000', '#2E8F35', '#C46A62', '#E85053'];
 const OUTLINE =
   '2px 0 #FFF, -2px 0 #FFF, 0 2px #FFF, 0 -2px #FFF, 1.5px 1.5px #FFF, -1.5px -1.5px #FFF, 1.5px -1.5px #FFF, -1.5px 1.5px #FFF, 0 3px 4px rgba(0,0,0,0.18)';
 
@@ -27,7 +28,7 @@ function StickerWord({ word, italic = false, size = 24 }: { word: string; italic
             transform: `rotate(${(i % 2 === 0 ? -1 : 1) * 3}deg)`,
           }}
         >
-          {ch}
+          {englishText(ch)}
         </span>
       ))}
     </span>
@@ -112,7 +113,7 @@ function TrayCell({
                 textAlign: 'center',
               }}
             >
-              {place.name}
+              {englishText(place.name)}
             </span>
           </>
         )}
@@ -174,7 +175,7 @@ const LunchTrayTemplate = forwardRef<HTMLDivElement, Props>(({ course, palette }
             textShadow: '1px 1px 0 rgba(255,255,255,0.9)',
           }}
         >
-          {dateLabel} · {course.title}
+          {englishText(dateLabel)} · {englishText(course.title)}
         </p>
       </div>
 

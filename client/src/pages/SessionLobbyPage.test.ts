@@ -26,4 +26,12 @@ describe('resolveInviteOrigin', () => {
     expect(lobbySource).toContain('NO LIVE SCORE');
     expect(lobbySource).toContain('GROUP REVEAL');
   });
+
+  it('keeps the voting action visible above the persistent navigation without scrolling', () => {
+    expect(lobbySource).toContain('flex-1 pb-28');
+    expect(lobbySource).toContain('createPortal(<footer');
+    expect(lobbySource).toContain('fixed bottom-[var(--lm-tab-bar-height)]');
+    expect(lobbySource).toContain('border-t border-[#E8E6E7] bg-white px-5 py-4');
+    expect(lobbySource).toContain('className="lunchie-session-primary-action"');
+  });
 });

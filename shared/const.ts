@@ -24,24 +24,24 @@ export type DietTag = DietRestriction | DietPreference;
 
 // 하드 제약 — 후보 생성에서 제외(필터)
 export const DIET_RESTRICTIONS: { id: DietRestriction; label: string }[] = [
-  { id: "VEGAN", label: "비건" },
-  { id: "VEGETARIAN", label: "채식" },
-  { id: "PESCATARIAN", label: "페스코" },
-  { id: "GLUTEN_FREE", label: "글루텐프리" },
-  { id: "HALAL", label: "할랄" },
-  { id: "NO_PORK", label: "돼지고기 제외" },
-  { id: "NO_BEEF", label: "소고기 제외" },
-  { id: "NO_LAMB", label: "양고기 제외" },
-  { id: "NO_SEAFOOD", label: "해산물 제외" },
-  { id: "NO_SHELLFISH", label: "갑각류·조개류 제외" },
-  { id: "NO_NUTS", label: "견과류 제외" },
-  { id: "NO_DAIRY", label: "유제품 제외" },
-  { id: "NO_EGGS", label: "달걀 제외" },
+  { id: "VEGAN", label: "Vegan" },
+  { id: "VEGETARIAN", label: "Vegetarian" },
+  { id: "PESCATARIAN", label: "Pescatarian" },
+  { id: "GLUTEN_FREE", label: "Gluten-free" },
+  { id: "HALAL", label: "Halal" },
+  { id: "NO_PORK", label: "No Pork" },
+  { id: "NO_BEEF", label: "No Beef" },
+  { id: "NO_LAMB", label: "No Lamb" },
+  { id: "NO_SEAFOOD", label: "No Seafood" },
+  { id: "NO_SHELLFISH", label: "No Shellfish" },
+  { id: "NO_NUTS", label: "No Nuts" },
+  { id: "NO_DAIRY", label: "No Dairy" },
+  { id: "NO_EGGS", label: "No Eggs" },
 ];
 
 // 소프트 선호 — 제약이 아니라 스코어러 가점
 export const DIET_PREFERENCES: { id: DietPreference; label: string }[] = [
-  { id: "MEAT_LOVER", label: "육식" },
+  { id: "MEAT_LOVER", label: "Meat Lover" },
 ];
 
 // 한국어 라벨·식당 태그·영문 → enum 정규화 매핑

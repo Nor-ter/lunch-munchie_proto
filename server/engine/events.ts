@@ -119,9 +119,9 @@ export function getMetrics() {
   const slateLinked = ev.filter((e) => e.event_type === "IMPRESSION" || e.event_type === "SWIPE");
   const userActed = ev.filter((e) => ["IMPRESSION", "SWIPE", "WINNER", "NAVIGATE", "REROLL"].includes(String(e.event_type)));
   const essential = [
-    { key: "slate_id", label: "slate_id (노출·스와이프 연결)", coverage: cov(slateLinked, (e) => nonNull(e.slate_id)), n: slateLinked.length },
-    { key: "propensity", label: "propensity 승계 (스와이프)", coverage: cov(swp, (e) => typeof e.propensity === "number"), n: swp.length },
-    { key: "user_id", label: "안정적 user_id", coverage: cov(userActed, (e) => nonNull(e.user_id)), n: userActed.length },
+    { key: "slate_id", label: "slate_id (impression/swipe attribution)", coverage: cov(slateLinked, (e) => nonNull(e.slate_id)), n: slateLinked.length },
+    { key: "propensity", label: "Propensity Attribution (Swipes)", coverage: cov(swp, (e) => typeof e.propensity === "number"), n: swp.length },
+    { key: "user_id", label: "Stable user_id", coverage: cov(userActed, (e) => nonNull(e.user_id)), n: userActed.length },
     { key: "timestamp", label: "timestamp (created_at)", coverage: cov(ev, (e) => nonNull(e.created_at)), n: ev.length },
   ];
 

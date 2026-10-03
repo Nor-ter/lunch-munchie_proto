@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { Restaurant } from '@/contexts/AppContext';
-import { mergeCanonicalRestaurantPresentation, restaurantSummary } from './restaurantPresentation';
+import { mergeCanonicalRestaurantPresentation, restaurantSummary, restaurantRatingLabel, restaurantPriceLabel } from './restaurantPresentation';
 
 const baseRestaurant: Restaurant = {
   id: 'r1',
@@ -23,6 +23,20 @@ const baseRestaurant: Restaurant = {
 };
 
 describe('restaurant presentation data', () => {
+  it('labels missing ratings honestly', () => {
+    expect(restaurantRatingLabel(0)).toBe('평가 없음');
+    expect(restaurantRatingLabel(NaN)).toBe('평가 없음');
+    expect(restaurantRatingLabel(4.7)).toBe('4.7');
+  });
+
+  it('shows Australian dollar prices only when actual menu prices are available', () => {
+    expect(restaurantPriceLabel(baseRestaurant)).toBeNull();
+    expect(restaurantPriceLabel({ ...baseRestaurant, menuItems: [
+      { name: 'Coffee', price: 5 }, { name: 'Lunch', price: 24.5 },
+      { name: 'Unknown', price: null }, { name: 'Invalid', price: -1 },
+    ] })).toBe('$5.00-$24.50');
+    expect(restaurantPriceLabel({ ...baseRestaurant, menuItems: [{ name: 'Coffee', price: 5 }] })).toBe('$5.00');
+  });
   it('uses the stored description and falls back to honest DB fields when absent', () => {
     expect(restaurantSummary({ ...baseRestaurant, description: 'A neighbourhood favourite.' }))
       .toBe('A neighbourhood favourite.');

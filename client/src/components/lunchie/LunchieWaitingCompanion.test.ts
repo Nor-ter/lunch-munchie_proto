@@ -36,6 +36,6 @@ describe('Lunchie waiting companion', () => {
 
   it('can be launched from the group waiting screen', () => {
     expect(swipeSource).toContain('activateLunchieWaitingCompanion(currentSession.id)');
-    expect(swipeSource).toContain('기다리는 동안 먼치피드 같이 둘러봐요');
+    expect(swipeSource).toContain('기다리는 동안 내 런치킨을 만나봐요');
   });
 });

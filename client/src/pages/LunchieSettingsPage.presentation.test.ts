@@ -3,6 +3,7 @@ import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 
 const settingsSource = readFileSync(join(import.meta.dirname, 'LunchieSettingsPage.tsx'), 'utf8');
+const profileSource = readFileSync(join(import.meta.dirname, 'ProfilePage.tsx'), 'utf8');
 const lobbySource = readFileSync(join(import.meta.dirname, 'SessionLobbyPage.tsx'), 'utf8');
 const tabBarSource = readFileSync(join(import.meta.dirname, '..', 'components', 'TabBar.tsx'), 'utf8');
 const preferenceSource = readFileSync(join(import.meta.dirname, '..', 'lib', 'quickMatch.ts'), 'utf8');
@@ -61,7 +62,7 @@ describe('Lunchie Quick Match presentation', () => {
     expect(settingsSource).toContain("return radius >= 5000 ? '5km+' : `${radius / 1000}km`");
   });
 
-  it('restores people settings and enables every canonical dietary filter', () => {
+  it('keeps canonical dietary filters in the profile and applies them automatically', () => {
     expect(settingsSource).not.toContain('원하는 평점');
     expect(settingsSource).not.toContain('>참여자</CardTitle>');
     expect(settingsSource).toContain('QUICK_MATCH_SETTINGS_STORAGE_KEY');
@@ -70,7 +71,13 @@ describe('Lunchie Quick Match presentation', () => {
     expect(preferenceSource).toContain("value: 'NO_SEAFOOD'");
     expect(preferenceSource).not.toContain("label: 'Carnivore'");
     expect(preferenceSource).not.toContain("label: 'Small Appetite'");
-    expect(settingsSource).toContain('선택 초기화');
+    expect(settingsSource).not.toContain('title="식단 요구 사항"');
+    expect(settingsSource).not.toContain('title="피하고 싶은 재료"');
+    expect(settingsSource).toContain('normalizeDietaryPreferences(profile.dietary)');
+    expect(profileSource).toContain('title="식단 요구 사항"');
+    expect(profileSource).toContain('title="피하고 싶은 재료"');
+    expect(profileSource).toContain('dietaryPreferences: next');
+    expect(profileSource).not.toContain('나의 피드 {myPosts.length}');
     expect(settingsSource).not.toContain('No ingredients selected');
     expect(settingsSource).not.toContain('dietary-exclusion-menu');
     expect(settingsSource).not.toContain('Not available');
@@ -100,9 +107,10 @@ describe('Lunchie Quick Match presentation', () => {
   });
 
   it('presents solo Quick Match as the same game-show experience without group claims', () => {
-    expect(settingsSource).toContain('SOLO LUNCH GAME');
-    expect(settingsSource).toContain("['음식 종류', '추천 투표', 'TOP 2', '만족도']");
-    expect(settingsSource).toContain('솔로 게임 시작! 🎮');
+    expect(settingsSource).not.toContain('SOLO LUNCH GAME');
+    expect(settingsSource).not.toContain('solo-game-title');
+    expect(settingsSource).toContain('솔로 게임 시작!');
+    expect(settingsSource).not.toContain('🎮');
     expect(swipeSource).toContain('오늘 어떤 음식이 끌려요?');
     expect(swipeSource).toContain('이 식당을 추천할까요?');
     expect(swipeSource).toContain('내가 고른 TOP 2');

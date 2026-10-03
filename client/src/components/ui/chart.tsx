@@ -1,3 +1,4 @@
+import { englishText } from '@shared/englishCopy';
 import * as React from "react";
 import * as RechartsPrimitive from "recharts";
 
@@ -142,7 +143,7 @@ function ChartTooltipContent({
     if (labelFormatter) {
       return (
         <div className={cn("font-medium", labelClassName)}>
-          {labelFormatter(value, payload)}
+          {englishText(labelFormatter(value, payload))}
         </div>
       );
     }
@@ -151,7 +152,7 @@ function ChartTooltipContent({
       return null;
     }
 
-    return <div className={cn("font-medium", labelClassName)}>{value}</div>;
+    return <div className={cn("font-medium", labelClassName)}>{englishText(value)}</div>;
   }, [
     label,
     labelFormatter,
@@ -192,7 +193,7 @@ function ChartTooltipContent({
                   indicator === "dot" && "items-center"
                 )}
               >
-                {formatter && item?.value !== undefined && item.name ? (
+                {englishText(formatter && item?.value !== undefined && item.name ? (
                   formatter(item.value, item.name, item, index, item.payload)
                 ) : (
                   <>
@@ -229,17 +230,17 @@ function ChartTooltipContent({
                       <div className="grid gap-1.5">
                         {nestLabel ? tooltipLabel : null}
                         <span className="text-muted-foreground">
-                          {itemConfig?.label || item.name}
+                          {englishText(itemConfig?.label || item.name)}
                         </span>
                       </div>
-                      {item.value && (
+                      {englishText(item.value && (
                         <span className="text-foreground font-mono font-medium tabular-nums">
-                          {item.value.toLocaleString()}
+                          {englishText(item.value.toLocaleString())}
                         </span>
-                      )}
+                      ))}
                     </div>
                   </>
-                )}
+                ))}
               </div>
             );
           })}
@@ -298,7 +299,7 @@ function ChartLegendContent({
                   }}
                 />
               )}
-              {itemConfig?.label}
+              {englishText(itemConfig?.label)}
             </div>
           );
         })}

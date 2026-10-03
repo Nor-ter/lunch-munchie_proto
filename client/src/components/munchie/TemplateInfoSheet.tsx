@@ -1,3 +1,4 @@
+import { englishText } from '@shared/englishCopy';
 import { createPortal } from 'react-dom';
 import { AnimatePresence, motion } from 'framer-motion';
 import { ImageIcon, Layers3, X } from 'lucide-react';
@@ -16,7 +17,7 @@ export default function TemplateInfoSheet({
         <>
           <motion.button
             type="button"
-            aria-label="템플릿 정보 닫기"
+            aria-label="Close Template Details"
             className="fixed inset-0 z-[70] bg-black/45"
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
@@ -37,12 +38,12 @@ export default function TemplateInfoSheet({
             <div className="mb-4 flex items-start justify-between">
               <div>
                 <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-[#B09A8C]">Original design</p>
-                <h2 id="template-info-title" className="mt-0.5 text-[22px] font-black text-[#2D211C]">{template.name}</h2>
+                <h2 id="template-info-title" className="mt-0.5 text-[22px] font-black text-[#2D211C]">{englishText(template.name)}</h2>
               </div>
               <button
                 type="button"
                 onClick={onClose}
-                aria-label="닫기"
+                aria-label="Close"
                 className="flex h-9 w-9 items-center justify-center rounded-full bg-white text-[#6C574C] shadow-sm"
               >
                 <X size={18} />
@@ -52,7 +53,7 @@ export default function TemplateInfoSheet({
             <div className="mx-auto w-full max-w-[285px] rounded-[24px] bg-white p-2 shadow-[0_14px_35px_rgba(91,57,42,0.15)]">
               <img
                 src={template.image}
-                alt={`${template.name} 사진을 넣기 전 기본 양식`}
+                alt={englishText(`${template.name} Base Layout without Photos`)}
                 className="aspect-[3/4] w-full rounded-[18px] object-cover"
               />
             </div>
@@ -60,16 +61,16 @@ export default function TemplateInfoSheet({
             <div className="mt-5">
               <div className="flex items-center gap-2">
                 <span className="flex items-center gap-1 rounded-full bg-[#FDE1E1] px-2.5 py-1 text-[11px] font-bold text-[#D94447]">
-                  <ImageIcon size={12} /> 사진 {template.slots.length}장
+                  <ImageIcon size={12} />  Photos {template.slots.length} photos
                 </span>
                 <span className="flex items-center gap-1 rounded-full bg-[#F1E9E3] px-2.5 py-1 text-[11px] font-bold text-[#79645A]">
-                  <Layers3 size={12} /> 4:3 규격
+                  <Layers3 size={12} />  4:3 Format
                 </span>
               </div>
-              <p className="mt-3 text-[14px] leading-relaxed text-[#6C574C]">{template.description}</p>
+              <p className="mt-3 text-[14px] leading-relaxed text-[#6C574C]">{englishText(template.description)}</p>
               <div className="mt-3 rounded-2xl bg-white px-4 py-3">
-                <p className="text-[10px] font-bold uppercase tracking-[0.12em] text-[#B09A8C]">잘 어울리는 코스</p>
-                <p className="mt-1 text-[13px] font-bold text-[#3B2A22]">{template.bestFor}</p>
+                <p className="text-[10px] font-bold uppercase tracking-[0.12em] text-[#B09A8C]">Best for These Courses</p>
+                <p className="mt-1 text-[13px] font-bold text-[#3B2A22]">{englishText(template.bestFor)}</p>
               </div>
             </div>
           </motion.section>

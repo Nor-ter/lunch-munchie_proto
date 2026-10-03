@@ -17,33 +17,33 @@ export interface LunchmateLevelIconDefinition {
 export const LUNCHMATE_LEVEL_ICON_CONFIG: Readonly<Record<number, LunchmateLevelIconDefinition>> = {
   1: {
     Icon: Sprout,
-    label: '새싹',
+    label: "Seedling",
     color: '#4F8A5B',
     background: '#EAF6EA',
   },
   2: {
     Icon: UtensilsCrossed,
-    label: '맛 탐험',
+    label: "Food Explorer",
     color: '#D96A4C',
     background: '#FFF0E7',
   },
   3: {
     Icon: ChefHat,
-    label: '한상 수집',
+    label: "Meal Collector",
     color: '#B16F42',
     background: '#FFF4D9',
   },
   4: {
     Icon: Crown,
-    label: '맛추억 마스터',
-    color: '#A45A8A',
-    background: '#F8EAF4',
+    label: "Food Memory Master",
+    color: '#B75147',
+    background: '#FBECE9',
   },
 };
 
 export const LUNCHMATE_LEVEL_ICON_FALLBACK: LunchmateLevelIconDefinition = {
   Icon: Star,
-  label: '런치메이트 성장',
+  label: "Lunchmate Growth",
   color: '#D87756',
   background: '#FFF0E8',
 };

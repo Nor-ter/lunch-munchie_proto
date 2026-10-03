@@ -1,3 +1,4 @@
+import { englishText } from '@shared/englishCopy';
 import { forwardRef } from 'react';
 import { Course } from '@/types/course';
 import { CourseMap } from '@/components/course/CourseMap';
@@ -8,10 +9,10 @@ interface TemplateProps {
 
 const StatsCardTemplate = forwardRef<HTMLDivElement, TemplateProps>(({ course }, ref) => {
   const stats = [
-    { label: '거리', value: `${course.distanceKm}km` },
-    { label: '소요', value: `${course.durationHours}h` },
-    { label: '장소', value: `${course.places.length}곳` },
-    { label: '저장', value: course.saveCount.toLocaleString() },
+    { label: "Distance", value: `${course.distanceKm}km` },
+    { label: "Duration", value: `${course.durationHours}h` },
+    { label: "Places", value: `${course.places.length} restaurants` },
+    { label: "Save", value: course.saveCount.toLocaleString() },
   ];
 
   return (
@@ -29,10 +30,10 @@ const StatsCardTemplate = forwardRef<HTMLDivElement, TemplateProps>(({ course },
       }}
     >
       <p style={{ fontSize: 16, fontWeight: 'bold', color: '#1A1A1A', margin: 0 }}>
-        {course.title}
+        {englishText(course.title)}
       </p>
       <p style={{ fontSize: 10, color: '#EB5053', margin: '4px 0 12px' }}>
-        {course.hashtags.map((t) => `#${t}`).join(' ')}
+        {englishText(course.hashtags.map((t) => `#${t}`).join(' '))}
       </p>
 
       <div
@@ -53,8 +54,8 @@ const StatsCardTemplate = forwardRef<HTMLDivElement, TemplateProps>(({ course },
               textAlign: 'center',
             }}
           >
-            <p style={{ fontSize: 14, fontWeight: 'bold', color: '#1A1A1A', margin: 0 }}>{s.value}</p>
-            <p style={{ fontSize: 9, color: '#9E9E9E', margin: '2px 0 0' }}>{s.label}</p>
+            <p style={{ fontSize: 14, fontWeight: 'bold', color: '#1A1A1A', margin: 0 }}>{englishText(s.value)}</p>
+            <p style={{ fontSize: 9, color: '#9E9E9E', margin: '2px 0 0' }}>{englishText(s.label)}</p>
           </div>
         ))}
       </div>

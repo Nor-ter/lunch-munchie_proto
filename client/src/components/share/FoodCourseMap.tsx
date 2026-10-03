@@ -1,3 +1,4 @@
+import { englishText } from '@shared/englishCopy';
 import { CoursePlace } from '@/types/course';
 
 const DEFAULT_COLORS = ['#FF6B35', '#4CAF50', '#2196F3', '#9C27B0', '#E91E63'];
@@ -144,7 +145,8 @@ export function FoodCourseMap({
                     fill={isDark ? '#AAA' : '#666'}
                     fontFamily="'Baloo 2', 'Pretendard Variable', 'Pretendard', cursive"
                   >
-                    도보 {4 + i * 3}분
+
+                    Walking {4 + i * 3} min
                   </text>
                 </g>
               )}
@@ -186,11 +188,11 @@ export function FoodCourseMap({
                 {/* Colored icon square instead of external image (html2canvas SVG image 미지원) */}
                 <rect x={3} y={3} width={22} height={22} rx={4} fill={color} opacity={0.2} />
                 <text x={14} y={17} textAnchor="middle" fontSize={9} fill={color} fontFamily="'Baloo 2', 'Pretendard Variable', 'Pretendard', cursive">
-                  {i === 0 ? '🍽' : i === 1 ? '☕' : i === 2 ? '🍷' : i === 3 ? '🎂' : '🍸'}
+                  {englishText(i === 0 ? '🍽' : i === 1 ? '☕' : i === 2 ? '🍷' : i === 3 ? '🎂' : '🍸')}
                 </text>
                 <rect x={28} y={5} width={28} height={10} rx={3} fill={color} opacity={0.15} />
                 <text x={30} y={12.5} fontSize={6} fontWeight={700} fill={color} fontFamily="'Baloo 2', 'Pretendard Variable', 'Pretendard', cursive">
-                  {place.label ?? place.category}
+                  {englishText(place.label ?? place.category)}
                 </text>
                 <text
                   x={28}
@@ -200,9 +202,9 @@ export function FoodCourseMap({
                   fill="#1A1A1A"
                   fontFamily="'Baloo 2', 'Pretendard Variable', 'Pretendard', cursive"
                 >
-                  {place.name.length > 8 ? `${place.name.slice(0, 7)}…` : place.name}
+                  {englishText(place.name.length > 8 ? `${place.name.slice(0, 7)}…` : place.name)}
                 </text>
-                {place.time && (
+                {englishText(place.time && (
                   <text
                     x={cardW - 4}
                     y={12}
@@ -211,9 +213,9 @@ export function FoodCourseMap({
                     fill="#9E9E9E"
                     fontFamily="'Baloo 2', 'Pretendard Variable', 'Pretendard', cursive"
                   >
-                    {place.time}
+                    {englishText(place.time)}
                   </text>
-                )}
+                ))}
               </g>
             )}
           </g>

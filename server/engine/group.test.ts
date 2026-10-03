@@ -7,6 +7,17 @@ const vote = (rid: string, uid: string): SwipeRow => ({ restaurant_id: rid, swip
 const reject = (uid: string): SwipeRow => ({ restaurant_id: REJECT_ID, swipe_action: "LIKE", round: 2, user_id: uid });
 
 describe("rankResultsLeastMisery", () => {
+  it("counts neutral answers without treating them as recommendations or dislikes", () => {
+    const ranked = rankResultsLeastMisery([
+      like("A", "u0"),
+      { restaurant_id: "A", swipe_action: "NEUTRAL", user_id: "u1" },
+      { restaurant_id: "B", swipe_action: "NEUTRAL", user_id: "u0" },
+    ], 2);
+    expect(ranked).toEqual([
+      { restaurantId: "A", likeCount: 1, dislikeCount: 0, neutralCount: 1, score: 1 },
+      { restaurantId: "B", likeCount: 0, dislikeCount: 0, neutralCount: 1, score: 0 },
+    ]);
+  });
   it("싫어요 적은 곳이 우선 (인기보다 least-misery)", () => {
     // A: 4 좋아요·1 싫어요 (인기 1위지만 미워하는 사람 있음)
     // B: 3 좋아요·0 싫어요 (덜 인기지만 아무도 안 싫어함)
@@ -32,6 +43,14 @@ describe("rankResultsLeastMisery", () => {
 });
 
 describe("decideGroup", () => {
+  it("does not mistake a neutral response for unanimous approval or rejection", () => {
+    const decision = decideGroup([
+      like("A", "u0"),
+      { restaurant_id: "A", swipe_action: "NEUTRAL", round: 1, user_id: "u1" },
+    ], [], 2, 2, false);
+    expect(decision.phase).toBe("FINAL");
+    expect(decision.finalists[0]).toMatchObject({ likeCount: 1, dislikeCount: 0, neutralCount: 1 });
+  });
   it("예선 미완료 → PRELIM", () => {
     const r1 = [like("A", "u0"), like("B", "u0")];
     const d = decideGroup(r1, [], 3, 1, false); // 3명 중 1명만 완료

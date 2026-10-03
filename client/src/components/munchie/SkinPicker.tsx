@@ -1,3 +1,4 @@
+import { englishText } from '@shared/englishCopy';
 import { useState } from 'react';
 import { Check, CircleOff } from 'lucide-react';
 import {
@@ -14,11 +15,11 @@ import type { LunchmateRoomLoadout } from '@/types/lunchmateCustomization';
 type PickerCategory = 'presets' | 'wallpaper' | 'floor' | 'furniture' | 'props';
 
 const CATEGORY_TABS: readonly { id: PickerCategory; label: string }[] = [
-  { id: 'presets', label: '추천 테마' },
-  { id: 'wallpaper', label: '벽지' },
-  { id: 'floor', label: '바닥' },
-  { id: 'furniture', label: '가구' },
-  { id: 'props', label: '소품' },
+  { id: 'presets', label: "Suggested Themes" },
+  { id: 'wallpaper', label: "Wallpaper" },
+  { id: 'floor', label: "Floor" },
+  { id: 'furniture', label: "Furniture" },
+  { id: 'props', label: "Decor" },
 ];
 
 function SelectionFrame({
@@ -36,7 +37,7 @@ function SelectionFrame({
         outlineOffset: selected ? 1 : 0,
       }}
     >
-      {children}
+      {englishText(children)}
       {selected && (
         <span className="absolute right-2 top-2 flex h-6 w-6 items-center justify-center rounded-full border-2 border-white bg-[#E85053] text-white shadow">
           <Check size={14} strokeWidth={3} aria-hidden="true" />
@@ -60,7 +61,7 @@ function ThemeCard({
       type="button"
       onClick={onSelect}
       aria-pressed={selected}
-      aria-label={`${theme.labelKo} 추천 테마 선택`}
+      aria-label={`${englishText(theme.labelKo)} Choose Suggested Theme`}
       className="min-w-0 rounded-2xl text-left transition-transform active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#E85053] focus-visible:ring-offset-2"
     >
       <SelectionFrame selected={selected}>
@@ -73,7 +74,7 @@ function ThemeCard({
         />
       </SelectionFrame>
       <p className={`mt-2 truncate text-center text-[12px] ${selected ? 'font-black text-[#E85053]' : 'font-bold text-[#4A4A4A]'}`}>
-        {theme.labelKo}
+        {englishText(theme.labelKo)}
       </p>
     </button>
   );
@@ -95,7 +96,7 @@ function ItemCard({
       type="button"
       onClick={onSelect}
       aria-pressed={selected}
-      aria-label={`${item.labelKo} ${categoryLabel} 선택`}
+      aria-label={`${englishText(item.labelKo)} ${categoryLabel} Select`}
       className="min-w-0 rounded-2xl text-left transition-transform active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#E85053] focus-visible:ring-offset-2"
     >
       <SelectionFrame selected={selected}>
@@ -107,7 +108,7 @@ function ItemCard({
         />
       </SelectionFrame>
       <p className={`mt-2 truncate text-center text-[12px] ${selected ? 'font-black text-[#E85053]' : 'font-bold text-[#4A4A4A]'}`}>
-        {item.labelKo}
+        {englishText(item.labelKo)}
       </p>
     </button>
   );
@@ -127,17 +128,18 @@ function NoneCard({
       type="button"
       onClick={onSelect}
       aria-pressed={selected}
-      aria-label={`${categoryLabel} 없음 선택`}
+      aria-label={englishText(`${categoryLabel} Choose None`)}
       className="min-w-0 rounded-2xl text-left transition-transform active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#E85053] focus-visible:ring-offset-2"
     >
       <SelectionFrame selected={selected}>
         <span className="flex h-full w-full flex-col items-center justify-center gap-1.5 text-[#A18C80]">
           <CircleOff size={25} strokeWidth={1.8} aria-hidden="true" />
-          <span className="text-[11px] font-bold">없음</span>
+          <span className="text-[11px] font-bold">None</span>
         </span>
       </SelectionFrame>
       <p className={`mt-2 text-center text-[12px] ${selected ? 'font-black text-[#E85053]' : 'font-bold text-[#4A4A4A]'}`}>
-        없음
+
+        None
       </p>
     </button>
   );
@@ -157,13 +159,13 @@ export default function SkinPicker({
   const [category, setCategory] = useState<PickerCategory>('presets');
 
   const itemConfig = category === 'wallpaper'
-    ? { items: LUNCHMATE_ROOM_WALLPAPERS, field: 'wallpaperId' as const, label: '벽지' }
+    ? { items: LUNCHMATE_ROOM_WALLPAPERS, field: 'wallpaperId' as const, label: "Wallpaper" }
     : category === 'floor'
-      ? { items: LUNCHMATE_ROOM_FLOORS, field: 'floorId' as const, label: '바닥' }
+      ? { items: LUNCHMATE_ROOM_FLOORS, field: 'floorId' as const, label: "Floor" }
       : category === 'furniture'
-        ? { items: LUNCHMATE_ROOM_FURNITURE, field: 'furnitureId' as const, label: '가구' }
+        ? { items: LUNCHMATE_ROOM_FURNITURE, field: 'furnitureId' as const, label: "Furniture" }
         : category === 'props'
-          ? { items: LUNCHMATE_ROOM_PROPS, field: 'propsId' as const, label: '소품' }
+          ? { items: LUNCHMATE_ROOM_PROPS, field: 'propsId' as const, label: "Decor" }
           : null;
 
   return (
@@ -171,7 +173,7 @@ export default function SkinPicker({
       <div
         className="-mx-1 flex max-w-full gap-2 overflow-x-auto px-1 pb-2 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
         role="tablist"
-        aria-label="방 꾸미기 카테고리"
+        aria-label="Room Decor Categories"
       >
         {CATEGORY_TABS.map(tab => (
           <button
@@ -186,7 +188,7 @@ export default function SkinPicker({
                 : 'bg-[#F4EAE4] text-[#806D63]'
             }`}
           >
-            {tab.label}
+            {englishText(tab.label)}
           </button>
         ))}
       </div>

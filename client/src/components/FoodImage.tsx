@@ -1,3 +1,4 @@
+import { englishText } from '@shared/englishCopy';
 // 식당 사진 — 없거나 로드 실패 시 카테고리 이모지 + 인텐트별 그라디언트 placeholder.
 // OSM 데이터엔 사진이 없어서, 외부 이미지 라이선스 없이 채운다.
 import { useEffect, useState } from "react";
@@ -49,11 +50,11 @@ export default function FoodImage({
   if (!src || failed) {
     return (
       <div className={`${className ?? ""} flex items-center justify-center`} style={{ background: gradientFor(category) }}>
-        <span className={emojiClass} role="img" aria-label={category || "food"}>{foodEmoji(category)}</span>
+        <span className={emojiClass} role="img" aria-label={englishText(category || "food")}>{englishText(foodEmoji(category))}</span>
       </div>
     );
   }
-  return <img src={src} alt={name ?? ""} className={className} draggable={false} onError={() => {
+  return <img src={src} alt={englishText(name ?? "")} className={className} draggable={false} onError={() => {
     setFailed(true);
     onLoadError?.(src);
   }} />;

@@ -1,3 +1,4 @@
+import { englishText } from '@shared/englishCopy';
 import { forwardRef, type SyntheticEvent } from 'react';
 import {
   formatLunchieDateLabel,
@@ -36,7 +37,7 @@ function handleFoodImageError(event: SyntheticEvent<HTMLImageElement>, foodFallb
   image.src = BRAND_MARK;
   image.style.objectFit = 'contain';
   image.style.padding = '20%';
-  image.style.background = '#F9E0CF';
+  image.style.background = '#F5F4F5';
 }
 
 /** Export-only 9:16 Lunchie result record. App controls intentionally live outside this node. */
@@ -51,7 +52,7 @@ const WinnerShareCard = forwardRef<HTMLDivElement, WinnerShareCardProps>(({
 }, ref) => {
   const foodFallback = restaurant.photos?.[0]; // 실제 사진만 (스톡 폴백 제거)
   const resolvedVoteLabel = voteLabel?.trim() || (
-    participants.length === 1 ? '나의 최종 선택' : '친구들과 함께 고른 최종 선택'
+    participants.length === 1 ? "My Final Choice" : "Our Final Choice"
   );
   const resolvedMenuLabel = menuLabel?.trim() || getRepresentativeMenuLabel(restaurant.menuItems);
   const resolvedLocationLabel = locationLabel?.trim() || getLunchieLocationLabel(restaurant.address);
@@ -63,7 +64,7 @@ const WinnerShareCard = forwardRef<HTMLDivElement, WinnerShareCardProps>(({
   return (
     <div
       ref={ref}
-      aria-label={`${restaurant.name} Lunchie 결과 공유 카드`}
+      aria-label={englishText(`${restaurant.name}  Lunchie share card`)}
       style={{
         position: 'relative',
         width: 'min(360px, calc(100vw - 32px))',
@@ -72,9 +73,9 @@ const WinnerShareCard = forwardRef<HTMLDivElement, WinnerShareCardProps>(({
         overflow: 'hidden',
         display: 'flex',
         flexDirection: 'column',
-        color: '#2D201B',
-        background: 'linear-gradient(145deg, rgba(255,255,255,0.38), transparent 46%), repeating-linear-gradient(0deg, rgba(138,90,67,0.025) 0, rgba(138,90,67,0.025) 1px, transparent 1px, transparent 5px), #FFF6E8',
-        border: '1px solid #F1D9C7',
+        color: '#171717',
+        background: 'linear-gradient(145deg, rgba(255,255,255,0.38), transparent 46%), repeating-linear-gradient(0deg, rgba(138,90,67,0.025) 0, rgba(138,90,67,0.025) 1px, transparent 1px, transparent 5px), #FCFCFC',
+        border: '1px solid #ECC1BB',
         borderRadius: 24,
         padding: 16,
         boxShadow: '0 14px 36px rgba(105, 65, 45, 0.16)',
@@ -83,7 +84,7 @@ const WinnerShareCard = forwardRef<HTMLDivElement, WinnerShareCardProps>(({
     >
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', minHeight: 28 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 7, minWidth: 0 }}>
-          <div style={{ width: 42, height: 42, display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: 14, background: '#FFE8DE' }}>
+          <div style={{ width: 42, height: 42, display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: 14, background: '#FBECE9' }}>
             <LunchmateCharacterRenderer
               flowState="idle"
               artwork="chicken"
@@ -93,25 +94,26 @@ const WinnerShareCard = forwardRef<HTMLDivElement, WinnerShareCardProps>(({
               loadout={loadout}
               size={40}
               renderSize="compact"
-              alt="Lunchie 런치킨"
+              alt="Lunchie Lunchkin"
             />
           </div>
           <div style={{ minWidth: 0 }}>
-            <p style={{ margin: 0, color: '#E85053', fontSize: 11, fontWeight: 950, letterSpacing: '0.03em' }}>LUNCHIE PICK</p>
-            <p style={{ margin: '1px 0 0', color: '#9A7665', fontSize: 8.5, fontWeight: 750 }}>picked with friends</p>
+            <p style={{ margin: 0, color: '#AA1A0D', fontSize: 11, fontWeight: 950, letterSpacing: '0.03em' }}>LUNCHIE PICK</p>
+            <p style={{ margin: '1px 0 0', color: '#858185', fontSize: 8.5, fontWeight: 750 }}>picked with friends</p>
           </div>
         </div>
-        <span style={{ color: '#A26B54', fontSize: 10, fontWeight: 800, letterSpacing: '0.08em' }}>
+        <span style={{ color: '#858185', fontSize: 10, fontWeight: 800, letterSpacing: '0.08em' }}>
           MEAL RECORD
         </span>
       </div>
 
       <div style={{ marginTop: 9, display: 'flex', alignItems: 'center', gap: 8 }}>
-        <span style={{ flex: 1, borderTop: '1px dashed #D9B9A3' }} />
-        <p style={{ margin: 0, color: '#E85053', fontSize: 13, fontWeight: 900, letterSpacing: '-0.01em' }}>
-          오늘의 Lunchie Pick
+        <span style={{ flex: 1, borderTop: '1px dashed #ECC1BB' }} />
+        <p style={{ margin: 0, color: '#AA1A0D', fontSize: 13, fontWeight: 900, letterSpacing: '-0.01em' }}>
+
+          Today's Lunchie Pick
         </p>
-        <span style={{ flex: 1, borderTop: '1px dashed #D9B9A3' }} />
+        <span style={{ flex: 1, borderTop: '1px dashed #ECC1BB' }} />
       </div>
 
       <div
@@ -123,12 +125,12 @@ const WinnerShareCard = forwardRef<HTMLDivElement, WinnerShareCardProps>(({
           flexShrink: 0,
           overflow: 'hidden',
           borderRadius: 16,
-          background: '#F4DCCB',
+          background: '#F5F4F5',
         }}
       >
         <img
           src={restaurant.image || foodFallback}
-          alt={restaurant.name}
+          alt={englishText(restaurant.name)}
           crossOrigin="anonymous"
           onError={event => handleFoodImageError(event, foodFallback ?? '')}
           style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
@@ -145,24 +147,24 @@ const WinnerShareCard = forwardRef<HTMLDivElement, WinnerShareCardProps>(({
             whiteSpace: 'nowrap',
             borderRadius: 999,
             padding: '4px 9px',
-            color: '#FFFDF8',
-            background: 'rgba(232,80,83,0.92)',
+            color: '#FCFCFC',
+            background: 'rgba(170,26,13,0.92)',
             fontSize: 10,
             fontWeight: 800,
           }}
         >
-          {restaurant.category}
+          {englishText(restaurant.category)}
         </span>
       </div>
 
       <h2
-        title={restaurant.name}
+        title={englishText(restaurant.name)}
         style={{
           margin: '11px 0 0',
           minHeight: 42,
           maxHeight: 48,
           overflow: 'hidden',
-          color: '#261A16',
+          color: '#171717',
           fontSize: 22,
           fontWeight: 950,
           lineHeight: 1.08,
@@ -173,7 +175,7 @@ const WinnerShareCard = forwardRef<HTMLDivElement, WinnerShareCardProps>(({
           WebkitLineClamp: 2,
         }}
       >
-        {restaurant.name}
+        {englishText(restaurant.name)}
       </h2>
 
       <div
@@ -181,18 +183,18 @@ const WinnerShareCard = forwardRef<HTMLDivElement, WinnerShareCardProps>(({
           marginTop: 8,
           borderRadius: 12,
           padding: '8px 11px',
-          color: '#B8383C',
-          background: '#FDE5DE',
+          color: '#AA1A0D',
+          background: '#FBECE9',
           fontSize: 12,
           fontWeight: 900,
           textAlign: 'center',
         }}
       >
-        ♥ {resolvedVoteLabel}
+        ♥ {englishText(resolvedVoteLabel)}
       </div>
 
-      <div style={{ marginTop: 10, minHeight: 62 }} aria-label={participantLabel}>
-        <p style={{ margin: 0, color: '#8C6C5C', fontSize: 9, fontWeight: 800, letterSpacing: '0.08em' }}>
+      <div style={{ marginTop: 10, minHeight: 62 }} aria-label={englishText(participantLabel)}>
+        <p style={{ margin: 0, color: '#858185', fontSize: 9, fontWeight: 800, letterSpacing: '0.08em' }}>
           TOGETHER WITH
         </p>
         {visibleParticipants.length > 0 ? (
@@ -213,13 +215,13 @@ const WinnerShareCard = forwardRef<HTMLDivElement, WinnerShareCardProps>(({
                     alignItems: 'center',
                     justifyContent: 'center',
                     borderRadius: '50%',
-                    color: '#5C3D30',
-                    background: '#F5D6C1',
+                    color: '#565256',
+                    background: '#FBECE9',
                     fontSize: 13,
                   }}
                 >
-                  {participant.emoji || '🙂'}
-                  {participant.profileImage && (
+                  {englishText(participant.emoji || '🙂')}
+                  {englishText(participant.profileImage && (
                     <img
                       src={participant.profileImage}
                       alt=""
@@ -227,7 +229,7 @@ const WinnerShareCard = forwardRef<HTMLDivElement, WinnerShareCardProps>(({
                       onError={event => { event.currentTarget.style.display = 'none'; }}
                       style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
                     />
-                  )}
+                  ))}
                 </span>
                 <span
                   style={{
@@ -235,58 +237,60 @@ const WinnerShareCard = forwardRef<HTMLDivElement, WinnerShareCardProps>(({
                     overflow: 'hidden',
                     textOverflow: 'ellipsis',
                     whiteSpace: 'nowrap',
-                    color: '#4B342B',
+                    color: '#565256',
                     fontSize: 10,
                     fontWeight: 750,
                   }}
                 >
-                  {participant.name}
+                  {englishText(participant.name)}
                 </span>
               </div>
             ))}
             {remainingParticipantCount > 0 && (
-              <span style={{ flexShrink: 0, color: '#E85053', fontSize: 10, fontWeight: 900 }}>
+              <span style={{ flexShrink: 0, color: '#AA1A0D', fontSize: 10, fontWeight: 900 }}>
                 +{remainingParticipantCount}
               </span>
             )}
           </div>
         ) : (
-          <p style={{ margin: '7px 0 0', color: '#A58B7D', fontSize: 10, fontWeight: 650 }}>
-            참여자 정보 없음
+          <p style={{ margin: '7px 0 0', color: '#858185', fontSize: 10, fontWeight: 650 }}>
+
+            No Participant Information
           </p>
         )}
       </div>
 
-      <div style={{ marginTop: 7, borderTop: '1px dashed #D9B9A3', paddingTop: 8, display: 'grid', gap: 5 }}>
+      <div style={{ marginTop: 7, borderTop: '1px dashed #ECC1BB', paddingTop: 8, display: 'grid', gap: 5 }}>
         {([
-          ['대표 메뉴', resolvedMenuLabel],
-          ['지역', resolvedLocationLabel],
-          ['날짜', resolvedDateLabel],
+          ["Signature Dishes", resolvedMenuLabel],
+          ["Area", resolvedLocationLabel],
+          ["Date", resolvedDateLabel],
         ] as const).map(([label, value]) => (
           <div key={label} style={{ display: 'grid', gridTemplateColumns: '54px minmax(0, 1fr)', alignItems: 'baseline', gap: 7 }}>
-            <span style={{ color: '#A26B54', fontSize: 9, fontWeight: 850 }}>{label}</span>
+            <span style={{ color: '#858185', fontSize: 9, fontWeight: 850 }}>{englishText(label)}</span>
             <span
               style={{
                 overflow: 'hidden',
                 textOverflow: 'ellipsis',
                 whiteSpace: 'nowrap',
-                color: '#392820',
+                color: '#171717',
                 fontSize: 10,
                 fontWeight: 750,
               }}
             >
-              {value}
+              {englishText(value)}
             </span>
           </div>
         ))}
       </div>
 
-      <p style={{ margin: 'auto 0 0', paddingTop: 7, color: '#A98978', fontSize: 8.5, fontWeight: 700, textAlign: 'center' }}>
-        친구들과 같이 고른 오늘의 한 끼 · Lunchie Munchie
+      <p style={{ margin: 'auto 0 0', paddingTop: 7, color: '#858185', fontSize: 8.5, fontWeight: 700, textAlign: 'center' }}>
+
+        Today's meal, chosen together · Lunchie Munchie
       </p>
 
-      <span aria-hidden="true" style={{ position: 'absolute', left: -8, top: '72%', width: 16, height: 16, borderRadius: '50%', background: '#FFFDF8' }} />
-      <span aria-hidden="true" style={{ position: 'absolute', right: -8, top: '72%', width: 16, height: 16, borderRadius: '50%', background: '#FFFDF8' }} />
+      <span aria-hidden="true" style={{ position: 'absolute', left: -8, top: '72%', width: 16, height: 16, borderRadius: '50%', background: '#FCFCFC' }} />
+      <span aria-hidden="true" style={{ position: 'absolute', right: -8, top: '72%', width: 16, height: 16, borderRadius: '50%', background: '#FCFCFC' }} />
     </div>
   );
 });

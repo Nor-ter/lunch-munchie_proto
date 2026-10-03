@@ -1,3 +1,4 @@
+import { englishText } from '@shared/englishCopy';
 import { type ReactNode } from 'react';
 import { type MunchieSkin } from '@/constants/skins';
 
@@ -20,7 +21,7 @@ export default function SkinFrame({
   className?: string;
   showStickers?: boolean;
 }) {
-  if (!skin) return <div className={className}>{children}</div>;
+  if (!skin) return <div className={className}>{englishText(children)}</div>;
 
   return (
     <div
@@ -40,13 +41,13 @@ export default function SkinFrame({
             className="absolute z-10 select-none pointer-events-none"
             style={{ top: -7, left: 14, fontSize: 18, transform: 'rotate(-14deg)' }}
           >
-            {skin.stickers[0]}
+            {englishText(skin.stickers[0])}
           </span>
           <span
             className="absolute z-10 select-none pointer-events-none"
             style={{ bottom: -6, right: 16, fontSize: 16, transform: 'rotate(10deg)' }}
           >
-            {skin.stickers[1]}
+            {englishText(skin.stickers[1])}
           </span>
         </>
       )}
@@ -54,7 +55,7 @@ export default function SkinFrame({
         className="overflow-hidden"
         style={{ background: skin.paper, borderRadius: Math.max(radius - 8, 8) }}
       >
-        {children}
+        {englishText(children)}
       </div>
     </div>
   );

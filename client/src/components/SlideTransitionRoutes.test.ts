@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { getSlideDirection, isFeedListLocation } from "./SlideTransitionRoutes";
+import { getSlideDirection } from "./SlideTransitionRoutes";
 
 describe("Quick Match route slide transitions", () => {
   it("does not animate the removed home route", () => {
@@ -12,15 +12,5 @@ describe("Quick Match route slide transitions", () => {
     expect(getSlideDirection("/lunchie/settings", "/session/lobby")).toBe(1);
     expect(getSlideDirection("/session/lobby", "/lunchie/swipe")).toBe(1);
     expect(getSlideDirection("/lunchie/swipe", "/session/lobby")).toBe(-1);
-  });
-});
-
-describe("feed list scroll restoration route matching", () => {
-  it("treats the template-tab return URL as the feed list", () => {
-    expect(isFeedListLocation("/feed?tab=template")).toBe(true);
-  });
-
-  it("does not treat feed detail routes as the feed list", () => {
-    expect(isFeedListLocation("/feed/post-1")).toBe(false);
   });
 });

@@ -19,7 +19,7 @@ export function parseFeedLocationFilter(query: QueryReader): FeedLocationFilter 
   const longitude = Number(rawLongitude);
   const radiusKm = Number(rawRadius);
   if (!isValidCoordinate(latitude, longitude) || !Number.isFinite(radiusKm) || radiusKm < 1 || radiusKm > 50) {
-    throw new Error('위치와 반경은 유효한 좌표 및 1~50km 값이어야 합니다.');
+    throw new Error("Use valid coordinates and a radius of 1–50 km.");
   }
   return { latitude, longitude, radiusKm };
 }

@@ -1,3 +1,4 @@
+import { englishText } from '@shared/englishCopy';
 import { useEffect, useState, type ReactElement } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 
@@ -106,9 +107,9 @@ const FACES: Record<FruitKind, () => ReactElement> = {
 };
 
 export const FRUIT_LABELS: Record<FruitKind, string> = {
-  kiwi: '키위',
-  strawberry: '딸기',
-  apple: '사과',
+  kiwi: "Kiwi",
+  strawberry: "Strawberry",
+  apple: "Apple",
 };
 
 export default function FruitCharacter({
@@ -126,7 +127,7 @@ export default function FruitCharacter({
       className={`inline-block shrink-0 drop-shadow-[0_2px_4px_rgba(72,38,25,0.25)] ${className}`}
       style={{ width: size, height: size }}
       role="img"
-      aria-label={`${FRUIT_LABELS[kind]} 캐릭터`}
+      aria-label={englishText(`${FRUIT_LABELS[kind]}  character`)}
     >
       <Face />
     </span>
@@ -153,7 +154,7 @@ export function FruitCharacterWithBubble({
   return (
     <span className={`relative inline-flex flex-col items-center ${className}`}>
       <AnimatePresence>
-        {active && label && (
+        {englishText(active && label && (
           <motion.span
             initial={{ opacity: 0, y: 6, scale: 0.85 }}
             animate={{ opacity: 1, y: 0, scale: 1 }}
@@ -161,10 +162,10 @@ export function FruitCharacterWithBubble({
             transition={{ duration: 0.22 }}
             className="absolute bottom-full z-20 mb-1 max-w-[110px] truncate whitespace-nowrap rounded-lg border border-[#EAD9CE] bg-white px-2 py-1 text-[9px] font-black text-[#3B2A22] shadow-[0_4px_10px_rgba(60,35,22,0.16)]"
           >
-            {label}
+            {englishText(label)}
             <span className="absolute left-1/2 top-full -ml-1 border-4 border-transparent border-t-white" />
           </motion.span>
-        )}
+        ))}
       </AnimatePresence>
       <motion.span
         animate={active ? { y: [0, -3, 0] } : { y: 0 }}

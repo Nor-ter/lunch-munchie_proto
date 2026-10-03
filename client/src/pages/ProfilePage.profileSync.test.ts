@@ -4,7 +4,6 @@ import { describe, expect, it } from 'vitest';
 
 const profileSource = readFileSync(join(import.meta.dirname, 'ProfilePage.tsx'), 'utf8');
 const contextSource = readFileSync(join(import.meta.dirname, '..', 'contexts', 'AppContext.tsx'), 'utf8');
-const buddySource = readFileSync(join(import.meta.dirname, '..', 'components', 'munchie', 'FoodieBuddy.tsx'), 'utf8');
 const progressSource = readFileSync(join(import.meta.dirname, '..', 'components', 'munchie', 'LunchmateProgressSheet.tsx'), 'utf8');
 
 describe('Profile information and level synchronization', () => {
@@ -16,12 +15,15 @@ describe('Profile information and level synchronization', () => {
     expect(profileSource).toContain('🏅 배지');
   });
 
-  it('persists canonical lunchmate XP while keeping the clickable kimbap level UI', () => {
-    expect(profileSource).toContain('initialTotalXp: lunchmateTotalXp');
-    expect(profileSource).toContain('updateProfile({ lunchmateTotalXp: nextTotalXp })');
-    expect(profileSource).toContain('progressButtonRef={progressButtonRef}');
-    expect(buddySource).toContain('aria-label={`김밥 EXP ${progressLabel}`}');
-    expect(buddySource).toContain('Array.from({ length: filledKimbapCount }');
+  it('removes character interactions from both profile states', () => {
+    expect(profileSource).not.toContain('FoodieBuddy');
+    expect(profileSource).not.toContain('useLunchmateFlow');
+    expect(profileSource).not.toContain('LunchboxBottomSheet');
+    expect(profileSource).not.toContain('LunchmateProgressSheet');
+    expect(profileSource).not.toContain('LunchmateLevelUpModal');
+    expect(profileSource).not.toContain('/profile/foodie-room');
+    expect(profileSource).not.toContain('-mt-9');
+    expect(profileSource).not.toContain('pt-11');
   });
 
   it('keeps existing feed author identity aligned with profile edits', () => {
@@ -41,6 +43,17 @@ describe('Profile information and level synchronization', () => {
   it('retains the current production guest profile preview', () => {
     expect(profileSource).toContain('function ProfileGuestPreview()');
     expect(profileSource).toContain('return <ProfileGuestPreview />;');
+    expect(profileSource).toContain('border border-[#E8E6E7] bg-[#F5F4F5]');
+    expect(profileSource).toContain('bg-[#AA1A0D] text-sm font-bold text-white');
+    expect(profileSource).not.toContain("style={{ background: '#F8DCD2' }}");
+  });
+
+  it('owns dietary editing in the profile instead of the Quick Match screen', () => {
+    expect(profileSource).toContain('DIETARY_REQUIREMENTS');
+    expect(profileSource).toContain('INGREDIENT_AVOIDANCES');
+    expect(profileSource).toContain('선택한 항목은 Quick Match에 자동 적용됩니다.');
+    expect(profileSource).toContain('body: JSON.stringify({ dietaryPreferences: next })');
+    expect(profileSource).not.toContain('나의 피드 {myPosts.length}');
   });
 
   it('shows every level stage with its configured icon', () => {
