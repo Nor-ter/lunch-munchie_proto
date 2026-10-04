@@ -1,4 +1,5 @@
 import type { Restaurant } from '@/contexts/AppContext';
+import { englishText } from '@shared/englishCopy';
 
 function nonEmpty(value: string | null | undefined): string {
   return typeof value === 'string' ? value.trim() : '';
@@ -21,7 +22,8 @@ export function restaurantPriceLabel(restaurant: Restaurant): string | null {
 export function restaurantSummary(restaurant: Restaurant): string {
   const description = nonEmpty(restaurant.description);
   if (description) return description;
-  const fallback = [nonEmpty(restaurant.category), nonEmpty(restaurant.address)].filter(Boolean);
+  const category = englishText(nonEmpty(restaurant.category));
+  const fallback = [category, nonEmpty(restaurant.address)].filter(Boolean);
   return fallback.length > 0 ? fallback.join(' · ') : "Details coming soon.";
 }
 

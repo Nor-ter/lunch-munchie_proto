@@ -24,8 +24,8 @@ const baseRestaurant: Restaurant = {
 
 describe('restaurant presentation data', () => {
   it('labels missing ratings honestly', () => {
-    expect(restaurantRatingLabel(0)).toBe('평가 없음');
-    expect(restaurantRatingLabel(NaN)).toBe('평가 없음');
+    expect(restaurantRatingLabel(0)).toBe('Not Rated');
+    expect(restaurantRatingLabel(NaN)).toBe('Not Rated');
     expect(restaurantRatingLabel(4.7)).toBe('4.7');
   });
 
@@ -42,6 +42,8 @@ describe('restaurant presentation data', () => {
       .toBe('A neighbourhood favourite.');
     expect(restaurantSummary({ ...baseRestaurant, category: 'Vietnamese', address: 'Fitzroy' }))
       .toBe('Vietnamese · Fitzroy');
+    expect(restaurantSummary({ ...baseRestaurant, category: '중식', address: 'Tim Ho Wan, Bourke Street' }))
+      .toBe('Chinese · Tim Ho Wan, Bourke Street');
   });
 
   it('hydrates restored session cards with canonical D1 detail without changing distance', () => {

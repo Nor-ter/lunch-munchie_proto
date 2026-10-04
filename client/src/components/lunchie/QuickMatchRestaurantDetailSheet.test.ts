@@ -14,9 +14,9 @@ describe('QuickMatchRestaurantDetailSheet', () => {
   });
 
   it('shows only available stored details without a direct Google client request', () => {
-    expect(source).toContain('{detail.address && (');
-    expect(source).toContain('{detail.openHours && (');
-    expect(source).toContain('{detail.phone && (');
+    expect(source).toContain('englishText(detail.address && (');
+    expect(source).toContain('englishText(detail.openHours && (');
+    expect(source).toContain('englishText(detail.phone && (');
     expect(source).not.toContain('places.googleapis.com');
   });
 });
