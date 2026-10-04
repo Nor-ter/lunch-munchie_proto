@@ -147,7 +147,7 @@ export default function SessionLobbyPage() {
 
   const inviteOrigin = resolveInviteOrigin(import.meta.env.VITE_INVITE_ORIGIN, window.location.origin);
   const inviteUrl = `${inviteOrigin}/join/${currentSession.inviteCode}`;
-  const isSoloSession = currentSession.filters.partySize <= 1;
+  const participantLabel = `${presentation.memberCount} ${presentation.memberCount === 1 ? 'person' : 'people'}`;
 
   // Invitees only need confirmation that they joined. QR controls and room
   // management belong to the host; this screen disappears automatically as
@@ -272,7 +272,7 @@ export default function SessionLobbyPage() {
           <h1 className="truncate text-[20px] font-extrabold text-[var(--lm-text)]">{englishText(currentSession.name)}</h1>
           <p className="mt-0.5 truncate text-[12px] text-[var(--lm-sub)]">
 
-            Host {englishText(presentation.hostName)} · {presentation.memberCount}/{presentation.capacity} people
+            Host {englishText(presentation.hostName)} · {participantLabel}
           </p>
         </div>
         <StatusBadge
@@ -312,13 +312,6 @@ export default function SessionLobbyPage() {
 
         <section aria-labelledby="lobby-invite-title">
           <AppCard className="mb-4 p-4">
-            {isSoloSession ? (
-              <div className="py-2">
-                <span id="lobby-invite-title" className="text-[14px] font-bold text-[var(--lm-text)]">This Is a Solo Lunchie</span>
-                <p className="mt-1 text-[12px] leading-relaxed text-[var(--lm-sub)]">Solo sessions don't support invitations. Choose Together in settings to create a group session.</p>
-                <button type="button" onClick={() => navigate('/lunchie/settings')} className="mt-3 min-h-10 rounded-xl bg-[var(--lm-primary)] px-4 text-[12px] font-bold text-white">Create Group Session</button>
-              </div>
-            ) : <>
             <button
               type="button"
               onClick={() => setShowQR(open => !open)}
@@ -336,6 +329,9 @@ export default function SessionLobbyPage() {
                 aria-hidden="true"
               />
             </button>
+            <p className="mt-1 text-[11px] leading-relaxed text-[var(--lm-sub)]">
+              Anyone with this link can join before you start. Start now to play solo.
+            </p>
 
             <AnimatePresence initial={false}>
               {showQR && (
@@ -379,7 +375,6 @@ export default function SessionLobbyPage() {
                 </motion.div>
               )}
             </AnimatePresence>
-            </>}
           </AppCard>
         </section>
 
@@ -396,7 +391,7 @@ export default function SessionLobbyPage() {
                 <Users size={18} className="text-[var(--lm-primary)]" aria-hidden="true" />
                 <span id="lobby-members-title" className="text-[14px] font-bold text-[var(--lm-text)]">
 
-                  Participants {presentation.memberCount} people
+                  Participants · {participantLabel}
                 </span>
               </span>
               <ChevronDown
@@ -465,7 +460,7 @@ export default function SessionLobbyPage() {
                         </span>
                         <span className="min-w-0 flex-1">
                           <span className="block text-[12px] font-bold text-[var(--lm-text)]">Invite a Friend</span>
-                          <span className="block text-[10px] text-[var(--lm-sub)]">{presentation.remainingSlots} seats left · tap to copy link</span>
+                          <span className="block text-[10px] text-[var(--lm-sub)]">Anyone with the link can join · tap to copy</span>
                         </span>
                       </button>
                     )}
@@ -482,7 +477,9 @@ export default function SessionLobbyPage() {
             <p className="mt-1 text-[11px] text-[var(--lm-sub)]">
               {englishText(presentation.isFull
                 ? "This session is full."
-                : `${presentation.remainingSlots} more seats available.`)}
+                : presentation.memberCount === 1
+                  ? "No one else has joined yet."
+                  : `${presentation.memberCount} participants will play this session.`)}
             </p>
           </div>
         </AppCard>

@@ -46,7 +46,7 @@ for (const width of [390, 1280]) {
     }
     await page.goto("/lunchie/settings");
     await expect(
-      page.getByRole("button", { name: "Create Session & Invite" }),
+      page.getByRole("button", { name: "Create Lobby & Invite" }),
     ).toBeVisible();
     await page.getByText("What's the occasion?").click();
     await expect(page.getByText("Solo Dining", { exact: true })).toBeVisible();

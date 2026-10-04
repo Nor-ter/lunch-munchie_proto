@@ -39,28 +39,24 @@ function session(
 }
 
 describe('getLobbyPresentation', () => {
-  it('solo 방은 한 명으로 시작할 수 있다', () => {
-    const state = getLobbyPresentation({ session: session(1, [host]), currentUserId: host.id });
+  it('초대 가능한 로비도 호스트 한 명으로 솔로 시작할 수 있다', () => {
+    const state = getLobbyPresentation({ session: session(30, [host]), currentUserId: host.id });
 
     expect(state.minParticipants).toBe(1);
     expect(state.canStart).toBe(true);
-    expect(state.isFull).toBe(true);
+    expect(state.isFull).toBe(false);
+    expect(state.remainingSlots).toBe(29);
+    expect(state.ctaLabel).toBe('Start Solo');
+    expect(state.statusCopy).toContain('Invite friends');
     expect(state.disabledReason).toBeNull();
   });
 
-  it('그룹 방은 한 명일 때 최소 인원 미달이다', () => {
-    const state = getLobbyPresentation({ session: session(4, [host]), currentUserId: host.id });
-
-    expect(state.minParticipants).toBe(2);
-    expect(state.canStart).toBe(false);
-    expect(state.remainingSlots).toBe(3);
-    expect(state.disabledReason).toContain('at least 2 people');
-  });
-
-  it('그룹 방의 호스트는 두 명부터 시작할 수 있고 ready는 gate가 아니다', () => {
-    const state = getLobbyPresentation({ session: session(4, [host, guest]), currentUserId: host.id });
+  it('링크로 들어온 현재 참여자 수 그대로 시작하며 ready는 gate가 아니다', () => {
+    const state = getLobbyPresentation({ session: session(30, [host, guest]), currentUserId: host.id });
 
     expect(state.canStart).toBe(true);
+    expect(state.ctaLabel).toBe('Start with 2 People');
+    expect(state.statusCopy).toContain('2 people are here');
     expect(state.members.map(member => member.ready)).toEqual([false, true]);
   });
 

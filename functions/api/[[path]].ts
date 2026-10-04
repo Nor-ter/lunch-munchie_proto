@@ -11,7 +11,10 @@ import {
 import { categoryMatchesIntent, type Intent } from "../../shared/intent";
 import { intentForMenuSection, menuSectionIntents } from "../../shared/menuTaxonomy";
 import { isValidCoordinate, isWithinRadius } from "../../shared/geo";
-import { normalizeQuickMatchPartySize } from "../../shared/quickMatchParty";
+import {
+  QUICK_MATCH_PARTY_SIZE_MAX,
+  normalizeQuickMatchPartySize,
+} from "../../shared/quickMatchParty";
 import { normalizeRestaurantPayload } from "../../shared/restaurantContract";
 import { normalizeLunchieSessionAvatar } from "../../shared/lunchieAvatar";
 import {
@@ -2497,7 +2500,7 @@ app.post("/api/sessions/create", async (c) => {
   const groupSize =
     typeof body.groupSize === "number" && Number.isFinite(body.groupSize)
       ? normalizeQuickMatchPartySize(Math.floor(body.groupSize))
-      : 4;
+      : QUICK_MATCH_PARTY_SIZE_MAX;
   const filterDistance =
     typeof body.filterDistance === "number" &&
     Number.isFinite(body.filterDistance)
@@ -2861,7 +2864,10 @@ app.post("/api/sessions/:token/status", async (c) => {
     )
       .bind(session.id)
       .all();
-    const minParticipants = Number(session.group_size) === 1 ? 1 : 2;
+    // A lobby is both the solo and group entry point. The actual party size is
+    // the number of members present when the host starts, so the host alone is
+    // a valid session.
+    const minParticipants = 1;
     if (members.length < minParticipants)
       return c.json(
         { error: `Voting needs at least  ${minParticipants} participants.` },
@@ -2956,7 +2962,7 @@ app.post("/api/sessions/:token/status", async (c) => {
     const groupContext: RecContext = {
       intent: session.intent,
       budget: Number(session.filter_budget) as 1 | 2 | 3 | 4,
-      companions: Number(session.group_size),
+      companions: members.length,
       diet: requiredDietary,
     };
     // The group deck is deterministic for the exact member-preference

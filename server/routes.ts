@@ -22,7 +22,10 @@ import type { Candidate, RecContext, RecEventInput } from "../shared/engine.js";
 import { normalizeDiet, isHardRestriction, isIngredientAvoidance, restaurantSatisfiesDietRestriction } from "../shared/const.js";
 import type { DietRestriction } from "../shared/const.js";
 import { intentForCategory, intentForHour } from "../shared/intent.js";
-import { normalizeQuickMatchPartySize } from "../shared/quickMatchParty.js";
+import {
+  QUICK_MATCH_PARTY_SIZE_MAX,
+  normalizeQuickMatchPartySize,
+} from "../shared/quickMatchParty.js";
 import { normalizeLunchieSessionAvatar } from "../shared/lunchieAvatar.js";
 import { buildLunchieRoundStats, roundStatSignalPrefix } from "../shared/lunchieRoundStats.js";
 
@@ -353,7 +356,9 @@ router.post("/sessions/create", async (req: any, res: any) => {
       share_token: token,
       status: "WAITING",
       deadline_at: deadlineAt,
-      group_size: normalizeQuickMatchPartySize(groupSize),
+      // `group_size` remains the join-capacity column; the live member count
+      // determines whether this run is solo or shared when the host starts.
+      group_size: normalizeQuickMatchPartySize(groupSize, QUICK_MATCH_PARTY_SIZE_MAX),
       filter_distance: filterDistance || 1000,
       filter_budget: filterBudget || 2,
       filter_min_rating: 0,

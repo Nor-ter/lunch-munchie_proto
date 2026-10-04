@@ -4,7 +4,7 @@ import { englishText } from '@shared/englishCopy';
  * Session persistence remains server-first through AppContext.
  */
 
-import { useEffect, useMemo, useRef, useState, type Dispatch, type MouseEvent as ReactMouseEvent, type PointerEvent as ReactPointerEvent, type ReactNode, type SetStateAction } from 'react';
+import { useEffect, useMemo, useRef, useState, type Dispatch, type PointerEvent as ReactPointerEvent, type ReactNode, type SetStateAction } from 'react';
 import { motion } from 'framer-motion';
 import { useLocation, useSearch } from 'wouter';
 import {
@@ -16,7 +16,6 @@ import {
   Ruler,
   Sparkles,
   Triangle,
-  Users,
   UtensilsCrossed,
 } from 'lucide-react';
 import { useApp } from '@/contexts/AppContext';
@@ -24,22 +23,9 @@ import { FOOD_TAGS } from '@/constants/foodTags';
 import { toast } from 'sonner';
 import type { Intent } from '@shared/intent';
 import { localityForCoordinate } from '@shared/melbourneLocality';
-import {
-  QUICK_MATCH_PARTY_SIZE_MAX,
-  normalizeQuickMatchPartySize,
-} from '@shared/quickMatchParty';
+import { QUICK_MATCH_PARTY_SIZE_MAX } from '@shared/quickMatchParty';
 import { logSessionCreated } from '@/lib/eventLogger';
 import SessionManagementMenu from '@/components/lunchie/SessionManagementMenu';
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from '@/components/ui/alert-dialog';
 import {
   DEFAULT_QUICK_MATCH_SETTINGS,
   QUICK_MATCH_SETTINGS_STORAGE_KEY,
@@ -56,14 +42,6 @@ const PREFERENCE_CARDS: { value: Intent | null; label: string; image?: string }[
 ];
 
 const RADIUS_OPTIONS = [1000, 2000, 3000, 4000, 5000];
-const GROUP_SIZE_OPTIONS = Array.from({ length: QUICK_MATCH_PARTY_SIZE_MAX }, (_, index) => index + 1);
-const GROUP_SIZE_QUICK_OPTIONS = [1, 2, 4, 10, 20, QUICK_MATCH_PARTY_SIZE_MAX];
-const GROUP_SIZE_ITEM_HEIGHT = 48;
-const GROUP_SIZE_MAX_SCROLL = (GROUP_SIZE_OPTIONS.length - 1) * GROUP_SIZE_ITEM_HEIGHT;
-/** Strong Alarm-app-like coast: higher = longer carry after a flick. */
-const GROUP_SIZE_FLICK_FRICTION = 0.0032;
-const GROUP_SIZE_FLICK_MIN_VELOCITY = 0.04;
-const GROUP_SIZE_FLICK_MAX_VELOCITY = 3.2;
 const TAG_META: Record<string, { icon: string; hint: string }> = {
   맛집: { icon: '🍽️', hint: "Popular Favorites" },
   데이트코스: { icon: '💞', hint: "Great Atmosphere" },
@@ -297,270 +275,6 @@ function DeadlineDial({ minutes, onChange }: { minutes: number; onChange: (minut
   );
 }
 
-function GroupSizeRuler({ value, onChange }: { value: number; onChange: (value: number) => void }) {
-  const scrollerRef = useRef<HTMLDivElement>(null);
-  const initialIndexRef = useRef(Math.max(0, GROUP_SIZE_OPTIONS.indexOf(value)));
-  const dragRef = useRef<{
-    pointerId: number;
-    startY: number;
-    startScrollTop: number;
-    lastY: number;
-    lastTime: number;
-    velocity: number;
-    moved: boolean;
-  } | null>(null);
-  const suppressClickRef = useRef(false);
-  const inertiaFrameRef = useRef<number | null>(null);
-  const onChangeRef = useRef(onChange);
-  onChangeRef.current = onChange;
-
-  const valueFromScrollTop = (scrollTop: number) => {
-    const nextIndex = Math.max(0, Math.min(GROUP_SIZE_OPTIONS.length - 1, Math.round(scrollTop / GROUP_SIZE_ITEM_HEIGHT)));
-    return GROUP_SIZE_OPTIONS[nextIndex]!;
-  };
-
-  const stopInertia = () => {
-    if (inertiaFrameRef.current == null) return;
-    cancelAnimationFrame(inertiaFrameRef.current);
-    inertiaFrameRef.current = null;
-  };
-
-  const setScrollerTop = (scrollTop: number, publish: boolean) => {
-    const scroller = scrollerRef.current;
-    if (!scroller) return;
-    const clamped = Math.max(0, Math.min(GROUP_SIZE_MAX_SCROLL, scrollTop));
-    scroller.scrollTop = clamped;
-    if (!publish) return;
-    const nextValue = valueFromScrollTop(clamped);
-    onChangeRef.current(nextValue);
-  };
-
-  const selectValue = (next: number) => {
-    const normalized = normalizeQuickMatchPartySize(next);
-    onChangeRef.current(normalized);
-    setScrollerTop((normalized - 1) * GROUP_SIZE_ITEM_HEIGHT, false);
-  };
-
-  const snapToNearest = (fromScrollTop: number) => {
-    const scroller = scrollerRef.current;
-    if (!scroller) return;
-    const target = Math.round(fromScrollTop / GROUP_SIZE_ITEM_HEIGHT) * GROUP_SIZE_ITEM_HEIGHT;
-    const clampedTarget = Math.max(0, Math.min(GROUP_SIZE_MAX_SCROLL, target));
-    const start = performance.now();
-    const duration = 160;
-    const from = fromScrollTop;
-
-    const tick = (now: number) => {
-      const t = Math.min(1, (now - start) / duration);
-      const eased = 1 - (1 - t) ** 3;
-      setScrollerTop(from + (clampedTarget - from) * eased, true);
-      if (t < 1) {
-        inertiaFrameRef.current = requestAnimationFrame(tick);
-        return;
-      }
-      inertiaFrameRef.current = null;
-      scroller.style.scrollSnapType = 'y mandatory';
-      selectValue(valueFromScrollTop(clampedTarget));
-    };
-    inertiaFrameRef.current = requestAnimationFrame(tick);
-  };
-
-  const startInertia = (velocityPxPerMs: number) => {
-    const scroller = scrollerRef.current;
-    if (!scroller) return;
-    let velocity = Math.max(
-      -GROUP_SIZE_FLICK_MAX_VELOCITY,
-      Math.min(GROUP_SIZE_FLICK_MAX_VELOCITY, velocityPxPerMs),
-    );
-    if (Math.abs(velocity) < GROUP_SIZE_FLICK_MIN_VELOCITY) {
-      snapToNearest(scroller.scrollTop);
-      return;
-    }
-
-    scroller.style.scrollSnapType = 'none';
-    let scrollTop = scroller.scrollTop;
-    let lastFrame = performance.now();
-    let lastPublishedIndex = Math.round(scrollTop / GROUP_SIZE_ITEM_HEIGHT);
-
-    const tick = (now: number) => {
-      const dt = Math.min(34, Math.max(8, now - lastFrame));
-      lastFrame = now;
-      velocity *= Math.exp(-GROUP_SIZE_FLICK_FRICTION * dt);
-      scrollTop += velocity * dt;
-
-      if (scrollTop <= 0) {
-        scrollTop = 0;
-        velocity = 0;
-      } else if (scrollTop >= GROUP_SIZE_MAX_SCROLL) {
-        scrollTop = GROUP_SIZE_MAX_SCROLL;
-        velocity = 0;
-      }
-
-      setScrollerTop(scrollTop, false);
-      const index = Math.round(scrollTop / GROUP_SIZE_ITEM_HEIGHT);
-      if (index !== lastPublishedIndex) {
-        lastPublishedIndex = index;
-        onChangeRef.current(GROUP_SIZE_OPTIONS[Math.max(0, Math.min(GROUP_SIZE_OPTIONS.length - 1, index))]!);
-      }
-
-      if (Math.abs(velocity) < GROUP_SIZE_FLICK_MIN_VELOCITY) {
-        snapToNearest(scrollTop);
-        return;
-      }
-      inertiaFrameRef.current = requestAnimationFrame(tick);
-    };
-    inertiaFrameRef.current = requestAnimationFrame(tick);
-  };
-
-  useEffect(() => {
-    const scroller = scrollerRef.current;
-    if (!scroller) return;
-    scroller.scrollTop = initialIndexRef.current * GROUP_SIZE_ITEM_HEIGHT;
-    return () => stopInertia();
-  }, []);
-
-  const endDrag = (pointerId: number) => {
-    const drag = dragRef.current;
-    if (!drag || drag.pointerId !== pointerId) return;
-    const { moved, velocity } = drag;
-    dragRef.current = null;
-    suppressClickRef.current = moved;
-    const scroller = scrollerRef.current;
-    if (!scroller) return;
-    scroller.classList.remove('cursor-grabbing');
-    scroller.classList.add('cursor-grab');
-    if (!moved) {
-      scroller.style.scrollSnapType = 'y mandatory';
-      selectValue(valueFromScrollTop(scroller.scrollTop));
-      return;
-    }
-    startInertia(velocity);
-  };
-
-  return (
-    <div className="w-full">
-      <div className="relative h-36 w-full overflow-hidden rounded-[10px] bg-[#F5F4F5]">
-        <div className="pointer-events-none absolute inset-x-3 top-1/2 z-10 h-12 -translate-y-1/2 rounded-[8px] border-y border-[#ECC1BB] bg-white/80" aria-hidden="true" />
-        <div
-          ref={scrollerRef}
-          className="scrollbar-hide relative z-20 h-full cursor-grab touch-none snap-y snap-mandatory overflow-y-auto overscroll-y-contain outline-none focus:outline-none focus-visible:outline-none"
-          role="slider"
-          tabIndex={0}
-          aria-label="Group Size"
-          aria-valuemin={1}
-          aria-valuemax={QUICK_MATCH_PARTY_SIZE_MAX}
-          aria-valuenow={value}
-          aria-valuetext={value === 1 ? "Solo" : `${value} people`}
-          onScroll={event => {
-            if (dragRef.current || inertiaFrameRef.current != null) return;
-            const nextValue = valueFromScrollTop(event.currentTarget.scrollTop);
-            if (nextValue !== value) onChange(nextValue);
-          }}
-          onPointerDown={event => {
-            if (event.pointerType === 'mouse' && event.button !== 0) return;
-            event.preventDefault();
-            stopInertia();
-            const now = performance.now();
-            dragRef.current = {
-              pointerId: event.pointerId,
-              startY: event.clientY,
-              startScrollTop: event.currentTarget.scrollTop,
-              lastY: event.clientY,
-              lastTime: now,
-              velocity: 0,
-              moved: false,
-            };
-            event.currentTarget.style.scrollSnapType = 'none';
-            event.currentTarget.classList.remove('cursor-grab');
-            event.currentTarget.classList.add('cursor-grabbing');
-            event.currentTarget.setPointerCapture(event.pointerId);
-          }}
-          onPointerMove={event => {
-            const drag = dragRef.current;
-            if (!drag || drag.pointerId !== event.pointerId) return;
-            const now = performance.now();
-            const dt = Math.max(1, now - drag.lastTime);
-            const scrollDelta = drag.lastY - event.clientY;
-            const instantVelocity = scrollDelta / dt;
-            drag.velocity = drag.velocity * 0.65 + instantVelocity * 0.35;
-            drag.lastY = event.clientY;
-            drag.lastTime = now;
-            const delta = event.clientY - drag.startY;
-            if (Math.abs(delta) > 3) drag.moved = true;
-            setScrollerTop(drag.startScrollTop - delta, true);
-          }}
-          onPointerUp={event => endDrag(event.pointerId)}
-          onPointerCancel={event => endDrag(event.pointerId)}
-          onLostPointerCapture={event => endDrag(event.pointerId)}
-          onKeyDown={event => {
-            stopInertia();
-            if (event.key === 'ArrowUp') {
-              event.preventDefault();
-              selectValue(value - 1);
-            }
-            if (event.key === 'ArrowDown') {
-              event.preventDefault();
-              selectValue(value + 1);
-            }
-            if (event.key === 'Home') {
-              event.preventDefault();
-              selectValue(1);
-            }
-            if (event.key === 'End') {
-              event.preventDefault();
-              selectValue(QUICK_MATCH_PARTY_SIZE_MAX);
-            }
-          }}
-          style={{ WebkitOverflowScrolling: 'touch', scrollSnapType: 'y mandatory' }}
-        >
-          <div className="h-12 shrink-0" aria-hidden="true" />
-          {GROUP_SIZE_OPTIONS.map(option => (
-            <div
-              key={option}
-              role="option"
-              aria-selected={option === value}
-              onClick={() => {
-                if (suppressClickRef.current) {
-                  suppressClickRef.current = false;
-                  return;
-                }
-                stopInertia();
-                selectValue(option);
-                scrollerRef.current && (scrollerRef.current.style.scrollSnapType = 'y mandatory');
-              }}
-              className={`flex h-12 w-full shrink-0 snap-center items-center justify-center text-[18px] font-black transition-[color,transform,opacity] ${
-                option === value ? 'scale-110 text-[#AA1A0D]' : 'scale-95 text-[#8F8A8E] opacity-55'
-              }`}
-              aria-label={englishText(option === 1 ? "Solo" : `${option} people`)}
-            >
-              {englishText(option === 1 ? "Solo" : `${option} people`)}
-            </div>
-          ))}
-          <div className="h-12 shrink-0" aria-hidden="true" />
-        </div>
-        <div className="pointer-events-none absolute inset-x-0 top-0 z-30 h-12 bg-gradient-to-b from-[#F5F4F5] via-[#F5F4F5]/90 to-transparent" />
-        <div className="pointer-events-none absolute inset-x-0 bottom-0 z-30 h-12 bg-gradient-to-t from-[#F5F4F5] via-[#F5F4F5]/90 to-transparent" />
-      </div>
-      <div className="mt-2 grid grid-cols-6 gap-1.5" aria-label="Quick Group Size">
-        {GROUP_SIZE_QUICK_OPTIONS.map(option => (
-          <button
-            key={option}
-            type="button"
-            onClick={() => selectValue(option)}
-            aria-label={englishText(option === 1 ? "Choose Solo" : `${option} people`)}
-            aria-pressed={option === value}
-            className={`min-h-9 rounded-xl text-[11px] font-black transition-colors ${
-              option === value ? 'bg-[#AA1A0D] text-white' : 'bg-[#FBECE9] text-[#AA1A0D]'
-            }`}
-          >
-            {englishText(option === 1 ? "Solo" : option)}
-          </button>
-        ))}
-      </div>
-    </div>
-  );
-}
-
 function PreferenceCard({ option, selected, onClick }: {
   option: (typeof PREFERENCE_CARDS)[number];
   selected: boolean;
@@ -660,10 +374,7 @@ export default function LunchieSettingsPage() {
   const search = useSearch();
   const {
     createSession,
-    startSession,
     fetchSession,
-    cancelSession,
-    leaveSession,
     currentSession,
     setCurrentSession,
     restaurants,
@@ -680,7 +391,6 @@ export default function LunchieSettingsPage() {
   });
 
   const [deadlineMin, setDeadlineMin] = useState(storedSettings.deadlineMinutes);
-  const [partySize, setPartySize] = useState(storedSettings.partySize);
   const [radius, setRadius] = useState(storedSettings.radius);
   const [distanceEnabled, setDistanceEnabled] = useState(storedSettings.distanceEnabled);
   const [intent, setIntent] = useState<Intent | null>(initialIntent ?? storedSettings.intent);
@@ -695,15 +405,11 @@ export default function LunchieSettingsPage() {
   const [isCheckingSession, setIsCheckingSession] = useState(Boolean(currentSession?.inviteCode));
   const [sessionCheckFailed, setSessionCheckFailed] = useState(false);
   const [sessionCheckAttempt, setSessionCheckAttempt] = useState(0);
-  const [replacementOpen, setReplacementOpen] = useState(false);
-  const [replacementBusy, setReplacementBusy] = useState(false);
-  const [replacementError, setReplacementError] = useState<string | null>(null);
   const dietary = useMemo(
     () => normalizeDietaryPreferences(profile.dietary),
     [profile.dietary],
   );
 
-  const isSolo = partySize === 1;
   const budget = 2 as const;
   const selectedPreferenceLabel = PREFERENCE_CARDS.find(option => option.value === intent)?.label ?? "Surprise Me";
   const hasActiveSession = Boolean(
@@ -712,24 +418,21 @@ export default function LunchieSettingsPage() {
     && currentSession.membershipActive !== false
     && isActiveQuickMatchStatus(currentSession.status),
   );
-  const hasPartySizeConflict = Boolean(
-    hasActiveSession
-    && currentSession
-    && partySize !== currentSession.filters.partySize,
-  );
   const realCategories = useMemo(() => new Set(restaurants.map(restaurant => restaurant.category)), [restaurants]);
 
   useEffect(() => {
     localStorage.setItem(QUICK_MATCH_SETTINGS_STORAGE_KEY, JSON.stringify({
       deadlineMinutes: deadlineMin,
-      partySize,
+      // Kept in the legacy settings shape as the room capacity. The actual
+      // party size is whoever is in the lobby when the host starts.
+      partySize: QUICK_MATCH_PARTY_SIZE_MAX,
       radius,
       distanceEnabled,
       intent,
       tags,
       dietary: normalizeDietaryPreferences(dietary),
     }));
-  }, [deadlineMin, partySize, radius, distanceEnabled, intent, tags, dietary]);
+  }, [deadlineMin, radius, distanceEnabled, intent, tags, dietary]);
 
   useEffect(() => {
     const token = currentSession?.inviteCode;
@@ -775,10 +478,6 @@ export default function LunchieSettingsPage() {
     setter(current => current.includes(value) ? current.filter(item => item !== value) : [...current, value]);
   };
 
-  const setGroupSize = (next: number) => {
-    setPartySize(normalizeQuickMatchPartySize(next));
-  };
-
   const confirmCurrentLocation = async () => {
     setIsLocating(true);
     try {
@@ -811,7 +510,9 @@ export default function LunchieSettingsPage() {
     const session = await createSession(
       `${hostName}'s Lunch Session`,
       {
-        partySize,
+        // `partySize` is the join capacity in the existing API contract. It is
+        // no longer a headcount the user must choose before creating a lobby.
+        partySize: QUICK_MATCH_PARTY_SIZE_MAX,
         dietary,
         budget,
         radius,
@@ -828,7 +529,8 @@ export default function LunchieSettingsPage() {
 
     logSessionCreated(session.id, {
       intent: intent ?? 'auto',
-      party_size: partySize,
+      party_size: session.members.length,
+      lobby_capacity: QUICK_MATCH_PARTY_SIZE_MAX,
       radius_m: distanceEnabled ? radius : null,
       budget,
       dietary_count: dietary.length,
@@ -836,23 +538,12 @@ export default function LunchieSettingsPage() {
       deadline_minutes: deadlineMin,
     });
 
-    if (isSolo) {
-      await startSession(session.inviteCode, deadlineMin);
-      toast.success("Starting Quick Match.");
-      navigate('/lunchie/swipe');
-    } else {
-      toast.success("Session created. Invite your friends!");
-      navigate('/session/lobby');
-    }
+    toast.success("Lobby created. Invite friends or start solo!");
+    navigate('/session/lobby');
   };
 
   const handleStart = async () => {
     if (creationLockRef.current || isCheckingSession || sessionCheckFailed) return;
-    if (hasPartySizeConflict) {
-      setReplacementError(null);
-      setReplacementOpen(true);
-      return;
-    }
 
     creationLockRef.current = true;
     setIsCreating(true);
@@ -885,34 +576,6 @@ export default function LunchieSettingsPage() {
       toast.error("Couldn't create a session. Please try again shortly.");
     } finally {
       setIsCreating(false);
-      creationLockRef.current = false;
-    }
-  };
-
-  const handleReplaceSession = async (event: ReactMouseEvent<HTMLButtonElement>) => {
-    event.preventDefault();
-    if (!currentSession || replacementBusy || creationLockRef.current) return;
-    let endedExistingSession = false;
-    creationLockRef.current = true;
-    setReplacementBusy(true);
-    setReplacementError(null);
-    try {
-      const isHost = currentSession.hostId === profile.id;
-      if (isHost) await cancelSession(currentSession.inviteCode);
-      else await leaveSession(currentSession.inviteCode);
-      endedExistingSession = true;
-      await createAndEnterSession();
-      setReplacementOpen(false);
-    } catch (error) {
-      const message = error instanceof Error ? error.message : "Couldn't start a new Quick Match.";
-      if (endedExistingSession) {
-        setReplacementOpen(false);
-        toast.error(`Your previous session ended, but a new one couldn't be created. Please try again. ${message}`);
-      } else {
-        setReplacementError(message);
-      }
-    } finally {
-      setReplacementBusy(false);
       creationLockRef.current = false;
     }
   };
@@ -952,10 +615,12 @@ export default function LunchieSettingsPage() {
               <SessionManagementMenu onEnded={() => navigate('/lunchie/settings')} className="text-[#6F6468]" />
             </div>
             <div className="mt-3 grid grid-cols-2 gap-2 text-[11px]">
-              <span className="rounded-lg bg-white px-3 py-2 font-semibold text-[#565256]">👥 {currentSession.members.length}/{currentSession.filters.partySize} people</span>
+              <span className="rounded-lg bg-white px-3 py-2 font-semibold text-[#565256]">
+                👥 {currentSession.members.length} {currentSession.members.length === 1 ? 'person' : 'people'}
+              </span>
               <span className="rounded-lg bg-white px-3 py-2 font-semibold text-[#565256]">⏱ {currentSession.deadlineMinutes ?? deadlineMin} min</span>
               <span className="rounded-lg bg-white px-3 py-2 font-semibold text-[#565256]">📍 {englishText(formatRadius(currentSession.filters.radius))}</span>
-              <span className="rounded-lg bg-white px-3 py-2 font-semibold text-[#565256]">{englishText(currentSession.filters.partySize === 1 ? "🙋 Solo" : "🤝 Together")}</span>
+              <span className="rounded-lg bg-white px-3 py-2 font-semibold text-[#565256]">{englishText(currentSession.members.length === 1 ? "🙋 Ready for Solo" : "🤝 Together")}</span>
             </div>
             <button
               type="button"
@@ -1040,16 +705,6 @@ export default function LunchieSettingsPage() {
         </Card>
 
         <Card>
-          <div className="mb-3 flex items-center gap-2 text-[14px] font-extrabold text-[#26232A]">
-            <Users size={17} className="text-[#AA1A0D]" />
-            <span>People</span>
-            <span className="ml-auto rounded-full bg-[#FBECE9] px-2.5 py-1 text-[11px] text-[#AA1A0D]">{englishText(partySize === 1 ? "Solo" : `${partySize} people`)}</span>
-          </div>
-          <GroupSizeRuler value={partySize} onChange={setGroupSize} />
-          <p className="mt-2 text-center text-[10px] font-semibold text-[#948A8E]">Up to  {QUICK_MATCH_PARTY_SIZE_MAX} people can choose together.</p>
-        </Card>
-
-        <Card>
           <CardTitle icon={<Clock3 size={16} />}>Deadline</CardTitle>
           <div className="flex flex-col items-center">
             <DeadlineDial minutes={deadlineMin} onChange={setDeadlineMin} />
@@ -1068,46 +723,14 @@ export default function LunchieSettingsPage() {
               ? "Checking active session…"
               : isCreating
               ? "Preparing…"
-              : hasPartySizeConflict
-                ? `After ending your current session,  ${isSolo ? "solo" : `${partySize} people`} Start`
               : hasActiveSession && currentSession
                 ? currentSession.status === 'waiting' ? "Back to Lobby" : "Continue Voting"
-                : isSolo ? "Start Quick Match!" : "Create Session & Invite")}
+                : "Create Lobby & Invite")}
           </motion.button>
         </div>
 
       </main>
 
-      <AlertDialog open={replacementOpen} onOpenChange={open => !replacementBusy && setReplacementOpen(open)}>
-        <AlertDialogContent className="max-w-[390px] rounded-[22px] border-[#F0D9D3] bg-[#FFFBF8] p-5">
-          <AlertDialogHeader className="text-left">
-            <AlertDialogTitle className="text-[19px] font-black text-[#26232A]">
-
-              Start with a new group size?
-            </AlertDialogTitle>
-            <AlertDialogDescription className="text-[13px] leading-relaxed text-[#746A6E]">
-
-              Current:  {currentSession?.filters.partySize ?? 1} people in an active session. {englishText(isSolo ? "Solo" : `${partySize} people`)}  To apply these settings,
-              {englishText(currentSession?.hostId === profile.id ? " end your current session and " : " leave your current session and ")}  create a new Quick Match.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          {englishText(replacementError && (
-            <p role="alert" className="rounded-xl bg-[#FFF0EE] px-3 py-2 text-[12px] font-semibold text-[#C93742]">
-              {englishText(replacementError)}
-            </p>
-          ))}
-          <AlertDialogFooter>
-            <AlertDialogCancel disabled={replacementBusy} className="min-h-11 rounded-xl">Continue Current Session</AlertDialogCancel>
-            <AlertDialogAction
-              onClick={event => void handleReplaceSession(event)}
-              disabled={replacementBusy}
-              className="min-h-11 rounded-xl bg-[#C93742] font-bold text-white hover:bg-[#AE2D37]"
-            >
-              {englishText(replacementBusy ? "Preparing new session…" : `${currentSession?.hostId === profile.id ? "End" : "Leave"}  & Start Again`)}
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
     </div>
   );
 }

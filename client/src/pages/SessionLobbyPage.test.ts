@@ -27,6 +27,14 @@ describe('resolveInviteOrigin', () => {
     expect(lobbySource).toContain('GROUP REVEAL');
   });
 
+  it('keeps every lobby inviteable and explains that starting alone becomes solo', () => {
+    expect(lobbySource).toContain('Anyone with this link can join before you start. Start now to play solo.');
+    expect(lobbySource).toContain("presentation.memberCount === 1 ? 'person' : 'people'");
+    expect(lobbySource).not.toContain('This Is a Solo Lunchie');
+    expect(lobbySource).not.toContain('Solo sessions don\'t support invitations');
+    expect(lobbySource).not.toContain('{presentation.memberCount}/{presentation.capacity}');
+  });
+
   it('keeps the voting action visible above the persistent navigation without scrolling', () => {
     expect(lobbySource).toContain('flex-1 pb-28');
     expect(lobbySource).toContain('createPortal(<footer');

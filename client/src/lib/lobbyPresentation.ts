@@ -58,9 +58,9 @@ function memberPresentation(
 /**
  * Lobby-only presentation state.
  *
- * `partySize` is the room capacity, not a required headcount. A solo room can
- * start with one member; a group room needs two. Ready state remains display
- * information and intentionally never gates the existing start flow.
+ * `partySize` is only the room's safety capacity, not a required headcount.
+ * The host can start alone or with however many people joined through the
+ * invite link. Ready state remains display information and never gates start.
  */
 export function getLobbyPresentation({
   session,
@@ -68,7 +68,7 @@ export function getLobbyPresentation({
   previousMemberIds,
 }: GetLobbyPresentationOptions): LobbyPresentation {
   const capacity = validCapacity(session.filters.partySize);
-  const minParticipants = capacity === 1 ? 1 : 2;
+  const minParticipants = 1;
   const memberCount = session.members.length;
   const remainingSlots = Math.max(capacity - memberCount, 0);
   const isFull = remainingSlots === 0;
@@ -90,10 +90,10 @@ export function getLobbyPresentation({
     statusCopy = `${recentlyJoinedName} joined!`;
   } else if (isFull) {
     statusCopy = 'Everyone is here. You can start voting now.';
-  } else if (capacity === 1) {
-    statusCopy = 'Ready to go. You can start voting now.';
+  } else if (memberCount === 1) {
+    statusCopy = 'Invite friends, or start now for a solo Quick Match.';
   } else {
-    statusCopy = `Waiting for participants. Currently ${memberCount} participants`;
+    statusCopy = `${memberCount} people are here. Start whenever you are ready.`;
   }
 
   let ctaLabel: string;
@@ -104,10 +104,7 @@ export function getLobbyPresentation({
     ctaLabel = 'Waiting for Host';
     disabledReason = `${hostName} can start the vote.`;
   } else {
-    ctaLabel = 'Start Voting';
-    if (memberCount < minParticipants) {
-      disabledReason = `Voting needs at least ${minParticipants} people.`;
-    }
+    ctaLabel = memberCount === 1 ? 'Start Solo' : `Start with ${memberCount} People`;
   }
 
   return {

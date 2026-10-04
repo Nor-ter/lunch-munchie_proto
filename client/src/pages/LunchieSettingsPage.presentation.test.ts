@@ -20,26 +20,15 @@ describe('Lunchie Quick Match presentation', () => {
     expect(settingsSource).not.toContain('-rotate-2 rounded-full bg-[#FFD5D1]');
   });
 
-  it('uses a vertical people wheel plus direct distance and dietary controls without a budget section', () => {
-    expect(settingsSource).toContain('aria-label="인원 수"');
-    expect(settingsSource).toContain('snap-y snap-mandatory overflow-y-auto');
-    expect(settingsSource).toContain('touch-none');
-    expect(settingsSource).toContain('onPointerDown={event =>');
-    expect(settingsSource).toContain('onLostPointerCapture={event => endDrag(event.pointerId)}');
-    expect(settingsSource).toContain('startInertia');
-    expect(settingsSource).toContain('GROUP_SIZE_FLICK_FRICTION');
-    expect(settingsSource).toContain("value === 1 ? '혼자'");
-    expect(settingsSource).toContain('initialIndexRef.current * GROUP_SIZE_ITEM_HEIGHT');
-    expect(settingsSource).not.toContain('aria-label="식사 인원 모드"');
-    expect(settingsSource).not.toContain('함께 먹을 정원');
-    expect(settingsSource).not.toContain('위아래로 스크롤해 인원을 선택해요');
-    expect(settingsSource).not.toContain('focus-within:ring-2');
-    expect(settingsSource).toContain('aria-valuemax={QUICK_MATCH_PARTY_SIZE_MAX}');
-    expect(settingsSource).toContain('GROUP_SIZE_QUICK_OPTIONS');
-    expect(settingsSource).toContain('`${option}명 빠른 선택`');
-    expect(settingsSource).toContain('최대 {QUICK_MATCH_PARTY_SIZE_MAX}명');
-    expect(settingsSource).toContain('onScroll={event =>');
-    expect(settingsSource).toContain('aria-label="검색 거리"');
+  it('removes headcount setup and keeps direct distance controls without a budget section', () => {
+    expect(settingsSource).not.toContain('GroupSizeRuler');
+    expect(settingsSource).not.toContain('<span>People</span>');
+    expect(settingsSource).not.toContain('GROUP_SIZE_QUICK_OPTIONS');
+    expect(settingsSource).toContain('partySize: QUICK_MATCH_PARTY_SIZE_MAX');
+    expect(settingsSource).toContain('Create Lobby & Invite');
+    expect(settingsSource).toContain("navigate('/session/lobby')");
+    expect(settingsSource).not.toContain("navigate('/lunchie/swipe')");
+    expect(settingsSource).toContain('aria-label="Search Radius"');
     expect(settingsSource).not.toContain('런치킨을 좌우로 움직여 검색 범위를 정해요');
     expect(settingsSource).not.toContain('aria-label="한 사람당 예산 세로 선택"');
     expect(settingsSource).not.toContain('1인 예산');
@@ -106,10 +95,12 @@ describe('Lunchie Quick Match presentation', () => {
     expect(swipeSource).toContain('다시 시도');
   });
 
-  it('presents solo Quick Match as the same game-show experience without group claims', () => {
+  it('uses one inviteable lobby for both solo and shared Quick Match', () => {
     expect(settingsSource).not.toContain('SOLO LUNCH GAME');
     expect(settingsSource).not.toContain('solo-game-title');
-    expect(settingsSource).toContain('솔로 게임 시작!');
+    expect(settingsSource).toContain('Lobby created. Invite friends or start solo!');
+    expect(lobbySource).toContain('Start now to play solo.');
+    expect(lobbySource).not.toContain('Solo sessions don\'t support invitations');
     expect(settingsSource).not.toContain('🎮');
     expect(swipeSource).toContain('오늘 어떤 음식이 끌려요?');
     expect(swipeSource).toContain('이 식당을 추천할까요?');
