@@ -73,7 +73,9 @@ export default function TabBar() {
           const isActive =
             location === tab.path ||
             location.startsWith(`${tab.path}/`) ||
-            (tab.path === "/lunchie/settings" && location === "/session/lobby");
+            (tab.path === "/lunchie/settings" && (
+              location.startsWith('/lunchie/') || location === "/session/lobby"
+            ));
           const isProfile = tab.path === "/profile";
 
           return (

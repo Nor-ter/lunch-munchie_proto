@@ -62,9 +62,10 @@ const variants = {
 
 type SlideTransitionRoutesProps = {
   children: ReactNode;
+  reserveTabBar?: boolean;
 };
 
-export default function SlideTransitionRoutes({ children }: SlideTransitionRoutesProps) {
+export default function SlideTransitionRoutes({ children, reserveTabBar = false }: SlideTransitionRoutesProps) {
   const [location] = useLocation();
   const previousLocation = usePrevious(location);
   const shouldReduceMotion = useReducedMotion();
@@ -78,7 +79,10 @@ export default function SlideTransitionRoutes({ children }: SlideTransitionRoute
     : children;
 
   return (
-    <div className="relative min-h-dvh overflow-x-hidden">
+    <div className={reserveTabBar
+      ? "relative h-[calc(100dvh-var(--lm-tab-bar-height))] overflow-x-hidden"
+      : "relative min-h-dvh overflow-x-hidden"}
+    >
       <AnimatePresence initial={false} custom={direction}>
         <motion.div
           key={location}

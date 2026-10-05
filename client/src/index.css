@@ -241,7 +241,8 @@
   .lunchie-distance-range::-moz-range-thumb { width: 42px; height: 56px; opacity: 0; border: 0; }
 
   .app-content-with-tab-bar {
-    padding-bottom: var(--lm-tab-bar-height);
+    /* The route viewport reserves this height; avoid a second body-level gap. */
+    padding-bottom: 0;
   }
 
   .page-bottom-bar {

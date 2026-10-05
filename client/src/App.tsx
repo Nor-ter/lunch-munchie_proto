@@ -44,9 +44,7 @@ import PlaceExplorePage from "./pages/PlaceExplorePage";
 import StorySharePage from "./pages/StorySharePage";
 import LunchieWaitingCompanion from "./components/lunchie/LunchieWaitingCompanion";
 import { startGoogleAuth } from "./services/authApi";
-
-const NO_TABBAR = ['/onboarding', '/tour-mode', '/course/', '/coursemap', '/template/', '/templates', '/lunchie', '/session', '/join', '/feed/', '/explore/places', '/auth', '/admin'];
-const LUNCHIE_TABBAR_ROUTES = new Set(['/lunchie/settings', '/session/lobby']);
+import { shouldShowTabBar } from "./lib/tabBarVisibility";
 
 function CoursesRedirect() {
   const params = useParams<{ id: string }>();
@@ -74,12 +72,12 @@ function RequireGoogleAuth({ userId, children }: { userId: string | null; childr
 
 function AppShell({ userId }: { userId: string | null }) {
   const [location] = useLocation();
-  const showTabBar = LUNCHIE_TABBAR_ROUTES.has(location) || !NO_TABBAR.some(p => location.startsWith(p));
+  const showTabBar = shouldShowTabBar(location);
   const isAdminDashboard = location.startsWith('/admin');
   return (
     <div className={isAdminDashboard ? "app-shell app-shell--admin" : "app-shell"}>
       <div className={showTabBar ? "app-content-with-tab-bar min-h-dvh" : "min-h-dvh"}>
-        <SlideTransitionRoutes>
+        <SlideTransitionRoutes reserveTabBar={showTabBar}>
           <Switch>
             <Route path="/onboarding" component={OnboardingPage} />
             {/* Keep legacy bookmarks and older shared links on the direct Google OAuth flow. */}
