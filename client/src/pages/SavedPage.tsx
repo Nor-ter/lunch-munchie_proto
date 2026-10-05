@@ -8,7 +8,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useLocation, useSearch } from 'wouter';
-import { MapPin, Bookmark, Map as MapIcon, LayoutList, X } from 'lucide-react';
+import { MapPin, Bookmark, Map as MapIcon, LayoutList, X, Star, Utensils } from 'lucide-react';
 import { useApp, TagType } from '@/contexts/AppContext';
 import { FOOD_FILTER_TAGS, hasFoodTag } from '@/constants/foodTags';
 import UnifiedMunchieCard, { SAVED_BOOKMARK_BUTTON_CLASS } from '@/components/munchie/UnifiedMunchieCard';
@@ -17,19 +17,23 @@ import { useSavedFeedMapPoints } from '@/hooks/useSavedFeedMapPoints';
 import { getSavedViewFromSearch, type SavedViewMode } from '@/lib/savedNavigation';
 import { useAuthStatus } from '@/hooks/useAuthStatus';
 import FoodImage from '@/components/FoodImage';
-import { intentForCategory } from '@shared/intent';
 import { toast } from 'sonner';
+import {
+  mergeFoodJourneyStops,
+  readFoodJourneyStops,
+  updateFoodJourneyRating,
+  type FoodJourneyStop,
+} from '@/lib/foodJourney';
 
 type Tab = 'coursemaps' | 'restaurants';
 
 export function getSavedTabFromSearch(search: string): Tab {
-  return new URLSearchParams(search).get('tab') === 'restaurants' ? 'restaurants' : 'coursemaps';
+  return new URLSearchParams(search).get('tab') === 'coursemaps' ? 'coursemaps' : 'restaurants';
 }
 
-type JourneyStop = { restaurant_id: string; name: string; category: string | null; at: number };
-type JourneyDay = { key: string; label: string; stops: JourneyStop[] };
+type JourneyDay = { key: string; label: string; stops: FoodJourneyStop[] };
 
-function groupJourneyByDay(stops: JourneyStop[]): JourneyDay[] {
+function groupJourneyByDay(stops: FoodJourneyStop[]): JourneyDay[] {
   const days = new Map<string, JourneyDay>();
   [...stops].sort((a, b) => b.at - a.at).forEach(stop => {
     const date = new Date(stop.at);
@@ -51,35 +55,35 @@ export default function SavedPage() {
   const [, navigate] = useLocation();
   const search = useSearch();
   const {
-    feedPosts, savedCourseIds, unsaveCourse, savedLunchPicks, unsaveLunchPick,
+    feedPosts, savedCourseIds, unsaveCourse, savedLunchPicks, profile,
   } = useApp();
   const auth = useAuthStatus();
-  const [tab] = useState<Tab>(() => getSavedTabFromSearch(search));
+  const tab = getSavedTabFromSearch(search);
   const [activeFilter, setActiveFilter] = useState<TagType | 'all'>('all');
   const [munchieView, setMunchieView] = useState<SavedViewMode>(
     () => getSavedViewFromSearch(search),
   );
-  const [journeyStops, setJourneyStops] = useState<JourneyStop[]>([]);
+  const [journeyStops, setJourneyStops] = useState<FoodJourneyStop[]>([]);
   const [journeyLoading, setJourneyLoading] = useState(true);
+  const [savingRatingKey, setSavingRatingKey] = useState<string | null>(null);
   const [pendingUnsaveCourseId, setPendingUnsaveCourseId] = useState<string | null>(null);
 
   useEffect(() => {
     let active = true;
-    let localStops: JourneyStop[] = [];
-    try {
-      localStops = JSON.parse(localStorage.getItem('lm_lunchie_journey') ?? localStorage.getItem('lm_today_journey') ?? '[]');
-    } catch { /* browser fallback is optional */ }
+    const localStops = readFoodJourneyStops(
+      localStorage.getItem('lm_lunchie_journey') ?? localStorage.getItem('lm_today_journey'),
+    );
     if (auth.isError || auth.data?.isAnonymous) {
       setJourneyStops(localStops);
       setJourneyLoading(false);
       return;
     }
     if (!auth.data) return;
-    fetch('/api/journey?days=30', { credentials: 'same-origin' })
+    fetch('/api/journey?days=90', { credentials: 'same-origin' })
       .then(response => response.ok ? response.json() : { stops: [] })
-      .then((data: { stops?: JourneyStop[] }) => {
+      .then((data: { stops?: FoodJourneyStop[] }) => {
         if (!active) return;
-        setJourneyStops(data.stops?.length ? data.stops : localStops);
+        setJourneyStops(data.stops?.length ? mergeFoodJourneyStops(data.stops, localStops) : localStops);
         setJourneyLoading(false);
       })
       .catch(() => { if (active) { setJourneyStops(localStops); setJourneyLoading(false); } });
@@ -99,25 +103,59 @@ export default function SavedPage() {
     ? savedPosts
     : savedPosts.filter(post => hasFoodTag(post.tags, activeFilter as TagType));
   const savedFeedMapPoints = useSavedFeedMapPoints(filteredPosts);
-  const filteredLunchPicks = savedLunchPicks.filter(({ restaurant }) => {
-    if (activeFilter === 'all') return true;
-    const intent = intentForCategory(restaurant.category);
-    return hasFoodTag(restaurant.tags, activeFilter)
-      || (activeFilter === '맛집' && intent === 'meal')
-      || (activeFilter === '카페' && intent === 'cafe')
-      || (activeFilter === '디저트' && intent === 'dessert');
-  });
   const journeyDays = useMemo(() => groupJourneyByDay(journeyStops), [journeyStops]);
   const selectedMapFeedId = munchieView === 'map'
     ? new URLSearchParams(search).get('selectedFeed')
     : null;
   const selectMunchieView = (view: SavedViewMode) => {
     setMunchieView(view);
-    navigate(`/saved?view=${view}`, { replace: true });
+    navigate(`/saved?tab=coursemaps&view=${view}`, { replace: true });
   };
   const selectSavedMapFeed = (feedId: string | null) => {
     const selectedFeedQuery = feedId ? `&selectedFeed=${encodeURIComponent(feedId)}` : '';
-    navigate(`/saved?view=map${selectedFeedQuery}`, { replace: true });
+    navigate(`/saved?tab=coursemaps&view=map${selectedFeedQuery}`, { replace: true });
+  };
+  const selectTab = (nextTab: Tab) => {
+    navigate(nextTab === 'restaurants' ? '/saved' : '/saved?tab=coursemaps', { replace: true });
+  };
+  const closestSavedPick = (stop: FoodJourneyStop) => savedLunchPicks
+    .filter(pick => pick.restaurant.id === stop.restaurant_id)
+    .sort((a, b) => Math.abs(a.savedAt - stop.at) - Math.abs(b.savedAt - stop.at))[0];
+  const rateJourneyStop = async (stop: FoodJourneyStop, rating: number) => {
+    const key = `${stop.restaurant_id}:${stop.at}`;
+    if (savingRatingKey === key) return;
+    setSavingRatingKey(key);
+    try {
+      const sessionId = stop.session_id ?? closestSavedPick(stop)?.session?.id ?? null;
+      if (auth.data && !auth.data.isAnonymous && sessionId) {
+        const response = await fetch('/api/journey-rating', {
+          method: 'PUT',
+          credentials: 'same-origin',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ sessionId, rating }),
+        });
+        if (!response.ok) {
+          const payload = await response.json().catch(() => ({})) as { error?: string };
+          throw new Error(payload.error ?? "Couldn't save your rating.");
+        }
+      }
+
+      setJourneyStops(current => updateFoodJourneyRating(current, stop, rating));
+      const stored = readFoodJourneyStops(
+        localStorage.getItem('lm_lunchie_journey') ?? localStorage.getItem('lm_today_journey'),
+      );
+      const updated = updateFoodJourneyRating(stored, stop, rating);
+      localStorage.setItem('lm_lunchie_journey', JSON.stringify(updated));
+      localStorage.setItem('lm_today_journey', JSON.stringify(
+        updated.filter(item => new Date(item.at).toDateString() === new Date().toDateString()),
+      ));
+      toast.success(stop.meal_rating ? 'Meal rating updated!' : 'Meal rating saved!');
+    } catch (error) {
+      console.error('Food Journey rating failed', error);
+      toast.error(error instanceof Error ? error.message : "Couldn't save your rating.");
+    } finally {
+      setSavingRatingKey(null);
+    }
   };
   const confirmUnsave = () => {
     if (!pendingUnsaveCourseId) return;
@@ -129,7 +167,29 @@ export default function SavedPage() {
     <div className="saved-page min-h-dvh bg-[#FCFCFC] pb-24">
       {/* Header */}
       <div className="border-b border-[#E8E6E7] bg-[#F5F4F5] px-5 pt-12 pb-4">
-        <h1 className="text-[22px] font-semibold text-[#1A1A1A]">Saved Lunchie Picks</h1>
+        <h1 className="text-[22px] font-semibold text-[#1A1A1A]">Food Journey</h1>
+        <p className="mt-1 text-[12px] font-medium text-[#858185]">Your Lunchie decisions and after-meal memories.</p>
+
+        <div className="mt-4 grid grid-cols-2 rounded-xl bg-white p-1" role="tablist" aria-label="Saved Content">
+          <button
+            type="button"
+            role="tab"
+            aria-selected={tab === 'restaurants'}
+            onClick={() => selectTab('restaurants')}
+            className={`h-10 rounded-lg text-[12px] font-bold ${tab === 'restaurants' ? 'bg-[#AA1A0D] text-white' : 'text-[#858185]'}`}
+          >
+            Food Journey
+          </button>
+          <button
+            type="button"
+            role="tab"
+            aria-selected={tab === 'coursemaps'}
+            onClick={() => selectTab('coursemaps')}
+            className={`h-10 rounded-lg text-[12px] font-bold ${tab === 'coursemaps' ? 'bg-[#AA1A0D] text-white' : 'text-[#858185]'}`}
+          >
+            Saved Courses
+          </button>
+        </div>
 
         {/* Munchie 템플릿 필터 */}
         {tab === 'coursemaps' && (
@@ -151,40 +211,6 @@ export default function SavedPage() {
           </div>
         )}
       </div>
-
-      {filteredLunchPicks.length > 0 && (
-        <div className="grid grid-cols-2 gap-3 px-3 py-3">
-          {filteredLunchPicks.map(({ restaurant }) => (
-            <article key={restaurant.id} className="relative min-w-0 overflow-hidden rounded-lg border border-[var(--lm-divider)] bg-white">
-              <button
-                type="button"
-                onClick={() => navigate(`/lunchie/results/${encodeURIComponent(restaurant.id)}`)}
-                className="block w-full text-left"
-                aria-label={englishText(`${restaurant.name} View Lunchie Pick`)}
-              >
-                <FoodImage src={restaurant.image || restaurant.photos?.[0]} name={restaurant.name} category={restaurant.category} className="aspect-[4/3] w-full object-cover" />
-                <div className="p-3 pr-10">
-                  <span className="text-[10px] font-bold text-[var(--lm-primary)]">Lunchie Picks</span>
-                  <p className="mt-1 break-words text-[14px] font-bold text-[var(--lm-text)]">{englishText(restaurant.name)}</p>
-                  <p className="mt-1 text-[11px] text-[var(--lm-sub)]">{englishText(restaurant.category)}</p>
-                </div>
-              </button>
-              <button
-                type="button"
-                className="absolute bottom-3 right-2 flex size-8 items-center justify-center rounded-full bg-[var(--lm-card-warm)] text-[var(--lm-primary)]"
-                aria-label={englishText(`${restaurant.name} Remove Saved Lunchie Pick`)}
-                title="Remove Saved Lunchie Pick"
-                onClick={() => {
-                  try { unsaveLunchPick(restaurant.id); }
-                  catch { toast.error("Couldn't remove this saved item. Please try again."); }
-                }}
-              >
-                <Bookmark size={17} fill="currentColor" />
-              </button>
-            </article>
-          ))}
-        </div>
-      )}
 
       {/* ── 코스맵 탭 ─────────────────────────────────────────────────────── */}
       {tab === 'coursemaps' && (
@@ -229,7 +255,7 @@ export default function SavedPage() {
                 </motion.div>
               )}
             </AnimatePresence>
-          ) : filteredLunchPicks.length === 0 ? (
+          ) : (
             <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="text-center py-12">
               <div className="text-5xl mb-3">🔖</div>
               <p className="font-semibold text-[16px] text-[#1A1A1A]">
@@ -239,31 +265,73 @@ export default function SavedPage() {
                 <p className="mt-1 text-[13px] text-[#9B9B9B]">Try a different filter</p>
               )}
             </motion.div>
-          ) : null}
+          )}
         </div>
       )}
 
-      {/* ── Lunchie 런치픽 탭 ─────────────────────────────────────────────── */}
+      {/* ── Food Journey ─────────────────────────────────────────────────── */}
       {tab === 'restaurants' && (
-        <div className="px-5 space-y-3">
+        <div className="space-y-5 px-5 py-5">
           {journeyDays.map(day => (
             <section key={day.key}>
-              <p className="mb-2 text-[12px] font-black text-[#B26A62]">{englishText(day.label)} · {day.stops.length} restaurants</p>
-              <div className="space-y-2">
-                {day.stops.map((stop, index) => (
-                  <button
-                    type="button"
-                    key={`${stop.restaurant_id}-${stop.at}`}
-                    onClick={() => navigate(savedLunchPicks.some(pick => pick.restaurant.id === stop.restaurant_id)
-                      ? `/lunchie/results/${encodeURIComponent(stop.restaurant_id)}`
-                      : `/lunchie/map?id=${stop.restaurant_id}`)}
-                    className="flex w-full items-center gap-3 rounded-2xl border border-[#F0E8E0] bg-white p-3 text-left active:scale-[0.98]"
-                  >
-                    <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[#F6B5AC] text-[11px] font-black text-white">{day.stops.length - index}</span>
-                    <span className="min-w-0 flex-1 truncate text-[14px] font-bold text-[#1A1A1A]">{englishText(stop.name)}</span>
-                    <span className="flex items-center gap-1 text-[11px] font-semibold text-[#9B9B9B]"><MapPin size={11} />{englishText(stop.category ?? "Food Spots")}</span>
-                  </button>
-                ))}
+              <p className="mb-2 text-[12px] font-black text-[#B26A62]">{englishText(day.label)} · {day.stops.length} decisions</p>
+              <div className="space-y-3">
+                {day.stops.map((stop, index) => {
+                  const savedPick = closestSavedPick(stop);
+                  const image = stop.photo ?? savedPick?.restaurant.image ?? savedPick?.restaurant.photos?.[0];
+                  const rating = stop.meal_rating ?? 0;
+                  const ratingKey = `${stop.restaurant_id}:${stop.at}`;
+                  const time = new Intl.DateTimeFormat('en-AU', { hour: 'numeric', minute: '2-digit' }).format(new Date(stop.at));
+                  return (
+                    <article key={ratingKey} className="overflow-hidden rounded-2xl border border-[#E8E6E7] bg-white shadow-[0_6px_18px_rgba(49,35,29,0.06)]">
+                      <button
+                        type="button"
+                        onClick={() => navigate(savedPick
+                          ? `/lunchie/results/${encodeURIComponent(stop.restaurant_id)}`
+                          : `/lunchie/map?id=${stop.restaurant_id}`)}
+                        className="flex w-full gap-3 p-3 text-left active:bg-[#F9F7F6]"
+                        aria-label={`${stop.name} decision details`}
+                      >
+                        <FoodImage
+                          src={image}
+                          name={stop.name}
+                          category={stop.category ?? undefined}
+                          className="h-[78px] w-[88px] shrink-0 rounded-xl object-cover"
+                          emojiClass="text-[34px]"
+                        />
+                        <span className="min-w-0 flex-1 py-1">
+                          <span className="flex items-center gap-1 text-[10px] font-black uppercase tracking-[0.5px] text-[#AA1A0D]"><Utensils size={11} /> Lunchie Decision #{day.stops.length - index}</span>
+                          <span className="mt-1 block truncate text-[15px] font-bold text-[#1A1A1A]">{englishText(stop.name)}</span>
+                          <span className="mt-1 flex items-center gap-1 text-[11px] font-semibold text-[#858185]"><MapPin size={11} />{englishText(stop.category ?? 'Food Spots')} · {time}</span>
+                        </span>
+                      </button>
+
+                      <div className="border-t border-[#F0E8E0] bg-[#FFFDFC] px-3 py-3">
+                        <div className="flex items-center justify-between gap-3">
+                          <div>
+                            <p className="text-[11px] font-bold text-[#3A302C]">{rating ? 'Your meal rating' : 'How was it after your visit?'}</p>
+                            <p className="mt-0.5 text-[10px] font-medium text-[#9A8B84]">{rating ? 'Tap a star to update it' : 'Add a rating when you have been there'}</p>
+                          </div>
+                          <div className="flex items-center" role="group" aria-label={`${stop.name} meal rating`}>
+                            {[1, 2, 3, 4, 5].map(star => (
+                              <button
+                                type="button"
+                                key={star}
+                                disabled={savingRatingKey === ratingKey}
+                                onClick={() => void rateJourneyStop(stop, star)}
+                                aria-label={`Rate ${stop.name} ${star} stars`}
+                                aria-pressed={rating === star}
+                                className="flex size-8 items-center justify-center rounded-full transition-transform active:scale-90 disabled:opacity-50"
+                              >
+                                <Star size={21} fill={star <= rating ? '#AA1A0D' : 'transparent'} color={star <= rating ? '#AA1A0D' : '#C9C3C0'} />
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+                      </div>
+                    </article>
+                  );
+                })}
               </div>
             </section>
           ))}
@@ -271,10 +339,9 @@ export default function SavedPage() {
           {!journeyLoading && journeyStops.length === 0 && (
             <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="text-center py-16">
               <div className="text-5xl mb-3">⚡</div>
-              <p className="font-bold text-[16px] text-[#1A1A1A] mb-1">No Final Lunchie Picks Yet!</p>
+              <p className="font-bold text-[16px] text-[#1A1A1A] mb-1">Your Food Journey Starts Here</p>
               <p className="text-[13px] text-[#9B9B9B] mb-6">
-
-                Quick Match choices are automatically added to your daily journey
+                Every final Quick Match decision will appear here automatically.
               </p>
               <button onClick={() => navigate('/lunchie/settings')} className="lm-btn-primary px-6 inline-flex items-center justify-center">
 

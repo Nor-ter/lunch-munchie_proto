@@ -30,6 +30,7 @@ import { restaurantSummary, restaurantRatingLabel, restaurantPriceLabel } from '
 import { LUNCHIE_CUISINE_CHOICES, prioritizeRestaurantsForCuisine, type LunchieCuisineChoice } from '@/lib/lunchieGame';
 import { cuisineSignal, mealRatingSignal, satisfactionSignal } from '@shared/lunchieRoundStats';
 import { lunchieSwipeArc, resolveLunchieSwipeGesture } from '@/lib/lunchieSwipeGesture';
+import { readFoodJourneyStops, updateFoodJourneyRating } from '@/lib/foodJourney';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -1212,14 +1213,25 @@ export function WinnerScreen({ selectedWinner, onReset, resultSession, savedResu
       winnerEventKeyRef.current = idempotencyKey;
       // WINNER의 정본은 바로 아래 journey-winner API가 멱등 키와 함께 저장한다.
       // eventLogger로도 보내면 같은 결정을 두 번 학습하게 된다.
-      const journeyStop = { restaurant_id: winner.id, name: winner.name, category: winner.category, intent: intentForCategory(winner.category) ?? null, at: Date.now(), satisfaction: null };
+      const journeyStop = {
+        restaurant_id: winner.id,
+        session_id: currentSession?.id ?? null,
+        name: winner.name,
+        category: winner.category,
+        address: winner.address,
+        photo: winner.image || winner.photos?.[0] || null,
+        intent: intentForCategory(winner.category) ?? null,
+        at: Date.now(),
+        meal_rating: null,
+        satisfaction: null,
+      };
       try {
         const legacy = JSON.parse(localStorage.getItem('lm_today_journey') ?? '[]') as typeof journeyStop[];
         const stored = JSON.parse(localStorage.getItem('lm_lunchie_journey') ?? JSON.stringify(legacy)) as typeof journeyStop[];
-        const thirtyDaysAgo = Date.now() - 30 * 24 * 60 * 60 * 1000;
+        const ninetyDaysAgo = Date.now() - 90 * 24 * 60 * 60 * 1000;
         // 같은 세션 결과 화면이 다시 렌더되어도 한 번만 남긴다. 다른 날의 같은
         // 식당 선택은 실제 여정이므로 보존한다.
-        const current = stored.filter(item => item.at >= thirtyDaysAgo && !(item.restaurant_id === winner.id && Math.abs(item.at - journeyStop.at) < 60_000));
+        const current = stored.filter(item => item.at >= ninetyDaysAgo && !(item.restaurant_id === winner.id && Math.abs(item.at - journeyStop.at) < 60_000));
         localStorage.setItem('lm_lunchie_journey', JSON.stringify([...current, journeyStop]));
         localStorage.setItem('lm_today_journey', JSON.stringify([...current, journeyStop].filter(item => new Date(item.at).toDateString() === new Date().toDateString())));
       } catch { /* 여정 저장 실패가 결과 화면을 막으면 안 된다. */ }
@@ -1340,6 +1352,22 @@ export function WinnerScreen({ selectedWinner, onReset, resultSession, savedResu
         round: 1,
         action: 'SYSTEM',
       });
+      try {
+        const stored = readFoodJourneyStops(
+          localStorage.getItem('lm_lunchie_journey') ?? localStorage.getItem('lm_today_journey'),
+        );
+        const matchingStop = [...stored].reverse().find(stop =>
+          stop.restaurant_id === winner.id
+          && (!stop.session_id || stop.session_id === currentSession.id),
+        );
+        if (matchingStop) {
+          const updated = updateFoodJourneyRating(stored, matchingStop, mealRating);
+          localStorage.setItem('lm_lunchie_journey', JSON.stringify(updated));
+          localStorage.setItem('lm_today_journey', JSON.stringify(
+            updated.filter(item => new Date(item.at).toDateString() === new Date().toDateString()),
+          ));
+        }
+      } catch { /* The server rating remains authoritative. */ }
       setMealRatingSubmitted(true);
       setLiveResults(previous => {
         const previousCount = previous.visitedCount ?? 0;

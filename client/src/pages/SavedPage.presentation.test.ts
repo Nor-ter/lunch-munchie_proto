@@ -18,7 +18,7 @@ describe('SavedPage list bookmark presentation', () => {
     expect(savedSource).toContain('<Bookmark size={20} strokeWidth={2} fill="currentColor" />');
     expect(savedSource).not.toContain('BookmarkX');
     expect(savedSource).toContain('setPendingUnsaveCourseId(post.courseId)');
-    expect(savedSource).toContain('저장을 취소할까요?');
+    expect(savedSource).toContain('Remove this saved pick?');
     expect(savedSource).toContain('confirmUnsave');
   });
 
@@ -28,9 +28,16 @@ describe('SavedPage list bookmark presentation', () => {
     expect(savedSource).toContain('onSelectedFeedIdChange={selectSavedMapFeed}');
   });
 
-  it('restores the Lunchie restaurant tab from navigation query state', () => {
+  it('uses Food Journey as the default and keeps Saved Courses available', () => {
     expect(savedSource).toContain('getSavedTabFromSearch(search)');
-    expect(savedSource).toContain("get('tab') === 'restaurants'");
-    expect(savedSource).not.toContain('aria-label="저장 목록 탭"');
+    expect(savedSource).toContain("get('tab') === 'coursemaps'");
+    expect(savedSource).toContain('Food Journey');
+    expect(savedSource).toContain('Saved Courses');
+  });
+
+  it('lets people add or update an after-meal rating from each decision', () => {
+    expect(savedSource).toContain("fetch('/api/journey-rating'");
+    expect(savedSource).toContain('Tap a star to update it');
+    expect(savedSource).toContain('rateJourneyStop(stop, star)');
   });
 });

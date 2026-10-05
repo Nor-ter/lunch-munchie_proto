@@ -25,11 +25,13 @@ describe('merge4_v1_jp client connections', () => {
 
   it('uses the server journey history while preserving the Saved map/list UI', () => {
     const source = readClientSource('SavedPage.tsx');
-    expect(source).toContain("fetch('/api/journey?days=30'");
+    expect(source).toContain("fetch('/api/journey?days=90'");
     expect(source).toContain('groupJourneyByDay');
     expect(source).toContain('<SavedMunchieMap');
     expect(source).toContain("['map', 'Map', MapIcon]");
     expect(source).toContain("['list', 'List', LayoutList]");
+    expect(source).toContain("fetch('/api/journey-rating'");
+    expect(source).toContain('Food Journey');
   });
 
   it('renders canonical feed media without substituting course covers', () => {

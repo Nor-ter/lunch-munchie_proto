@@ -20,6 +20,8 @@ import { normalizeRestaurantPayload } from "../../shared/restaurantContract";
 import { normalizeLunchieSessionAvatar } from "../../shared/lunchieAvatar";
 import {
   buildLunchieRoundStats,
+  MEAL_RATING_SIGNAL_PREFIX,
+  mealRatingSignal,
   roundStatSignalPrefix,
 } from "../../shared/lunchieRoundStats";
 import { buildSlate, scoreCandidateBreakdown } from "../../server/engine/scorer";
@@ -3251,17 +3253,21 @@ app.get("/api/journey-today", async (c) => {
   const start = new Date();
   start.setHours(0, 0, 0, 0);
   const { results } = await c.env.DB.prepare(
-    "SELECT e.restaurant_id, r.name, r.category, e.context_json, e.created_at FROM rec_events e JOIN restaurants r ON r.id = e.restaurant_id WHERE e.user_id = ? AND e.event_type = 'WINNER' AND e.created_at >= ? ORDER BY e.created_at ASC",
+    "SELECT e.restaurant_id, e.session_id, r.name, r.category, r.address, r.photos, e.context_json, e.created_at, (SELECT CAST(substr(s.restaurant_id, ?) AS INTEGER) FROM swipes s WHERE s.session_id = e.session_id AND s.user_id = e.user_id AND s.restaurant_id LIKE ? ORDER BY s.created_at DESC LIMIT 1) AS meal_rating FROM rec_events e JOIN restaurants r ON r.id = e.restaurant_id WHERE e.user_id = ? AND e.event_type = 'WINNER' AND e.created_at >= ? ORDER BY e.created_at ASC",
   )
-    .bind(userId, start.getTime())
+    .bind(MEAL_RATING_SIGNAL_PREFIX.length + 1, `${MEAL_RATING_SIGNAL_PREFIX}%`, userId, start.getTime())
     .all();
   return c.json({
     stops: results.map((row: any) => ({
       restaurant_id: row.restaurant_id,
+      session_id: row.session_id,
       name: row.name,
       category: row.category,
+      address: row.address,
+      photo: json<string[]>(row.photos, [])[0] ?? null,
       intent: json<{ intent?: string }>(row.context_json, {}).intent ?? null,
       at: row.created_at,
+      meal_rating: Number(row.meal_rating) || null,
       satisfaction: null,
     })),
   });
@@ -3278,20 +3284,51 @@ app.get("/api/journey", async (c) => {
     : 30;
   const since = Date.now() - days * 24 * 60 * 60 * 1000;
   const { results } = await c.env.DB.prepare(
-    "SELECT e.restaurant_id, r.name, r.category, e.context_json, e.created_at FROM rec_events e JOIN restaurants r ON r.id = e.restaurant_id WHERE e.user_id = ? AND e.event_type = 'WINNER' AND e.created_at >= ? ORDER BY e.created_at DESC LIMIT 200",
+    "SELECT e.restaurant_id, e.session_id, r.name, r.category, r.address, r.photos, e.context_json, e.created_at, (SELECT CAST(substr(s.restaurant_id, ?) AS INTEGER) FROM swipes s WHERE s.session_id = e.session_id AND s.user_id = e.user_id AND s.restaurant_id LIKE ? ORDER BY s.created_at DESC LIMIT 1) AS meal_rating FROM rec_events e JOIN restaurants r ON r.id = e.restaurant_id WHERE e.user_id = ? AND e.event_type = 'WINNER' AND e.created_at >= ? ORDER BY e.created_at DESC LIMIT 200",
   )
-    .bind(session.sub, since)
+    .bind(MEAL_RATING_SIGNAL_PREFIX.length + 1, `${MEAL_RATING_SIGNAL_PREFIX}%`, session.sub, since)
     .all();
   return c.json({
     stops: results.map((row: any) => ({
       restaurant_id: row.restaurant_id,
+      session_id: row.session_id,
       name: row.name,
       category: row.category,
+      address: row.address,
+      photo: json<string[]>(row.photos, [])[0] ?? null,
       intent: json<{ intent?: string }>(row.context_json, {}).intent ?? null,
       at: row.created_at,
+      meal_rating: Number(row.meal_rating) || null,
       satisfaction: null,
     })),
   });
+});
+
+app.put("/api/journey-rating", async (c) => {
+  const session = await readSession(c.req.raw, c.env.AUTH_SESSION_SECRET);
+  if (!session) return c.json({ error: "Sign-in is required.", code: "AUTH_REQUIRED" }, 401);
+  const body = await c.req.json<{ sessionId?: string; rating?: number }>().catch(() => ({}));
+  const sessionId = nullableText(body.sessionId, 128);
+  const rating = Number(body.rating);
+  if (!sessionId || !Number.isInteger(rating) || rating < 1 || rating > 5) {
+    return c.json({ error: "A session and rating from 1 to 5 are required." }, 400);
+  }
+  const decision = await c.env.DB.prepare(
+    "SELECT 1 FROM rec_events WHERE user_id = ? AND session_id = ? AND event_type = 'WINNER' LIMIT 1",
+  ).bind(session.sub, sessionId).first();
+  if (!decision) return c.json({ error: "Food Journey decision not found." }, 404);
+
+  const ratingId = `journey-rating:${sessionId}:${session.sub}`;
+  const now = Date.now();
+  await c.env.DB.batch([
+    c.env.DB.prepare(
+      "DELETE FROM swipes WHERE session_id = ? AND user_id = ? AND restaurant_id LIKE ?",
+    ).bind(sessionId, session.sub, `${MEAL_RATING_SIGNAL_PREFIX}%`),
+    c.env.DB.prepare(
+      "INSERT INTO swipes (id, session_id, user_id, restaurant_id, round, swipe_action, created_at) VALUES (?, ?, ?, ?, 1, 'SYSTEM', ?)",
+    ).bind(ratingId, sessionId, session.sub, mealRatingSignal(rating), now),
+  ]);
+  return c.json({ ok: true, rating });
 });
 
 // 수정과 삭제는 UI의 버튼 노출만으로 판단하지 않는다. 수정은 작성자만 가능하고,
