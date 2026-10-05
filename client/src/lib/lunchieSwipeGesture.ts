@@ -1,0 +1,43 @@
+export type LunchieSwipeGestureAction = "like" | "dislike" | "neutral";
+
+type SwipeGestureInput = {
+  offsetX: number;
+  offsetY: number;
+  velocityX?: number;
+  velocityY?: number;
+  distanceThreshold?: number;
+  velocityProjection?: number;
+};
+
+/**
+ * Maps a deliberate card gesture to the same three actions as the buttons.
+ * Upward and short gestures intentionally return null to avoid accidental votes.
+ */
+export function resolveLunchieSwipeGesture({
+  offsetX,
+  offsetY,
+  velocityX = 0,
+  velocityY = 0,
+  distanceThreshold = 88,
+  velocityProjection = 0.08,
+}: SwipeGestureInput): LunchieSwipeGestureAction | null {
+  const projectedX = offsetX + velocityX * velocityProjection;
+  const projectedY = offsetY + velocityY * velocityProjection;
+  const horizontalDistance = Math.abs(projectedX);
+
+  if (
+    projectedY >= distanceThreshold &&
+    projectedY >= horizontalDistance * 0.82
+  ) {
+    return "neutral";
+  }
+
+  if (
+    horizontalDistance >= distanceThreshold &&
+    horizontalDistance >= Math.abs(projectedY)
+  ) {
+    return projectedX > 0 ? "like" : "dislike";
+  }
+
+  return null;
+}

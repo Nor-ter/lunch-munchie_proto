@@ -6,7 +6,7 @@ import { englishText } from '@shared/englishCopy';
  */
 
 import { useState, useCallback, useEffect, useMemo, useRef } from 'react';
-import { motion, useMotionValue, useTransform, useMotionTemplate, AnimatePresence, type MotionValue } from 'framer-motion';
+import { motion, useMotionValue, useTransform, useMotionTemplate, useAnimation, AnimatePresence, type MotionValue, type PanInfo } from 'framer-motion';
 import { useLocation } from 'wouter';
 import { Heart, X, Minus, Star, MapPin, Clock, Phone, Navigation, Share2, Download, Link2, Home, Bookmark, RotateCcw, Loader2, RefreshCw, SlidersHorizontal, Info, LockKeyhole, MessageCircleHeart, Sparkles, Users } from 'lucide-react';
 import { toast } from 'sonner';
@@ -29,6 +29,7 @@ import QuickMatchRestaurantDetailSheet from '@/components/lunchie/QuickMatchRest
 import { restaurantSummary, restaurantRatingLabel, restaurantPriceLabel } from '@/lib/restaurantPresentation';
 import { LUNCHIE_CUISINE_CHOICES, prioritizeRestaurantsForCuisine, type LunchieCuisineChoice } from '@/lib/lunchieGame';
 import { cuisineSignal, mealRatingSignal, satisfactionSignal } from '@shared/lunchieRoundStats';
+import { resolveLunchieSwipeGesture } from '@/lib/lunchieSwipeGesture';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -558,6 +559,8 @@ function SwipeCard({
   progress,
   total,
   onOpenRestaurantDetails,
+  onSwipe,
+  interactionDisabled,
 }: {
   restaurant: any;
   isTop: boolean;
@@ -565,6 +568,8 @@ function SwipeCard({
   progress: number;
   total: number;
   onOpenRestaurantDetails: (restaurant: Restaurant) => void;
+  onSwipe: (action: SwipeAction) => Promise<boolean>;
+  interactionDisabled: boolean;
 }) {
   const [isRevealed, setIsRevealed] = useState(false);
   // 큐브 회전 단계(단조). photoIndex는 foodPhotos 길이로 파생 — 도트/사진 순번 표시에 사용.
@@ -572,10 +577,14 @@ function SwipeCard({
   const photoRotationLock = useRef(false);
   const [isPhotoRotating, setIsPhotoRotating] = useState(false);
   const [detailIndex, setDetailIndex] = useState<number | null>(null);
+  const [isSwipeCommitting, setIsSwipeCommitting] = useState(false);
+  const controls = useAnimation();
   const x = useMotionValue(0);
+  const y = useMotionValue(0);
   const rotate = useTransform(x, [-220, 220], [-16, 16]);
-  const likeOp = useTransform(x, [0, 70], [0, 1]);
-  const nopeOp = useTransform(x, [-70, 0], [1, 0]);
+  const likeOp = useTransform(x, [12, 82], [0, 1]);
+  const nopeOp = useTransform(x, [-82, -12], [1, 0]);
+  const neutralOp = useTransform(y, [12, 82], [0, 1]);
   const shineX = useTransform(x, [0, 220], ['-150%', '150%']);
   const shineX2 = useTransform(x, [0, 220], ['-80%', '220%']);
   const shineOp2 = useTransform(likeOp, value => value * 0.7);
@@ -637,6 +646,32 @@ function SwipeCard({
     ? `All Menu Photos ${foodPhotos.length} photos ·  ${photoIndex + 1}`
     : undefined;
 
+  const finishSwipeGesture = useCallback(async (_event: MouseEvent | TouchEvent | PointerEvent, info: PanInfo) => {
+    const action = resolveLunchieSwipeGesture({
+      offsetX: info.offset.x,
+      offsetY: info.offset.y,
+      velocityX: info.velocity.x,
+      velocityY: info.velocity.y,
+    });
+
+    if (!action) {
+      await controls.start({ x: 0, y: 0, transition: { type: 'spring', stiffness: 440, damping: 32 } });
+      return;
+    }
+
+    setIsSwipeCommitting(true);
+    if (typeof navigator !== 'undefined' && 'vibrate' in navigator) navigator.vibrate(12);
+    const exit = action === 'neutral'
+      ? { x: 0, y: 720 }
+      : { x: action === 'like' ? 520 : -520, y: 18 };
+    await controls.start({ ...exit, transition: { duration: 0.18, ease: [0.22, 1, 0.36, 1] } });
+    const saved = await onSwipe(action);
+    if (!saved) {
+      await controls.start({ x: 0, y: 0, transition: { type: 'spring', stiffness: 360, damping: 28 } });
+      setIsSwipeCommitting(false);
+    }
+  }, [controls, onSwipe]);
+
   if (!isTop) {
     return (
       <div
@@ -654,15 +689,23 @@ function SwipeCard({
   return (
     <motion.div
       className="absolute inset-0"
+      data-ui="quick-match-swipe-card"
+      animate={controls}
       style={{
         x,
+        y,
         rotate,
+        touchAction: isRevealed ? 'auto' : 'none',
         zIndex: 20,
         // Swipe rotateZ must not flatten the menu flip; keep a 3D containing block.
         transformStyle: 'preserve-3d',
         WebkitTransformStyle: 'preserve-3d',
       }}
-      drag={false}
+      drag={!isRevealed && !interactionDisabled && !isSwipeCommitting}
+      dragConstraints={{ left: 0, right: 0, top: 0, bottom: 0 }}
+      dragElastic={0.62}
+      dragMomentum={false}
+      onDragEnd={finishSwipeGesture}
       onTap={(event) => {
         const target = event.target;
         const openedDetail = target instanceof Element
@@ -736,7 +779,7 @@ function SwipeCard({
           <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 pointer-events-none">
             <div className="bg-black/30 text-white text-[11px] font-semibold px-3 py-1.5 rounded-full opacity-70">
 
-              Tap → View Menu
+              Tap to view · ← Dislike · ↓ Neutral · Like →
             </div>
           </div>
         )}
@@ -783,19 +826,37 @@ function SwipeCard({
 
         {/* LIKE overlay */}
         <motion.div
-          className="absolute top-8 left-5 border-[3px] border-[#AA1A0D] rounded-2xl px-4 py-2"
+          className="absolute top-8 left-5 rounded-2xl border-[3px] border-[#16A34A] bg-[#DCFCE7]/90 px-4 py-2"
           style={{ opacity: likeOp, rotate: -12 }}
         >
-          <span className="text-[#AA1A0D] font-black text-[18px]">Like ♡</span>
+          <span className="text-[#15803D] font-black text-[18px]">Like ♥</span>
         </motion.div>
 
         {/* NOPE overlay */}
         <motion.div
-          className="absolute top-8 right-5 border-[3px] border-[#AA1A0D] rounded-2xl px-4 py-2"
+          className="absolute top-8 right-5 rounded-2xl border-[3px] border-[#DC2626] bg-[#FEE2E2]/90 px-4 py-2"
           style={{ opacity: nopeOp, rotate: 12 }}
         >
-          <span className="text-[#AA1A0D] font-black text-[18px]">Pass ✕</span>
+          <span className="text-[#B91C1C] font-black text-[18px]">Dislike ✕</span>
         </motion.div>
+        <motion.div
+          className="absolute bottom-24 left-1/2 -translate-x-1/2 rounded-2xl border-[3px] border-[#EAB308] bg-[#FEF9C3]/90 px-4 py-2"
+          style={{ opacity: neutralOp }}
+        >
+          <span className="whitespace-nowrap text-[#A16207] font-black text-[18px]">Neutral −</span>
+        </motion.div>
+        <motion.div
+          className="absolute inset-0 pointer-events-none rounded-3xl"
+          style={{ opacity: likeOp, boxShadow: 'inset 0 0 80px 28px rgba(34,197,94,0.58)' }}
+        />
+        <motion.div
+          className="absolute inset-0 pointer-events-none rounded-3xl"
+          style={{ opacity: nopeOp, boxShadow: 'inset 0 0 80px 28px rgba(239,68,68,0.58)' }}
+        />
+        <motion.div
+          className="absolute inset-0 pointer-events-none rounded-3xl"
+          style={{ opacity: neutralOp, boxShadow: 'inset 0 0 80px 28px rgba(234,179,8,0.62)' }}
+        />
         {/* 좋아요 샤이닝 효과 — 두 겹의 대각선 빛이 어긋나게 스치고, 전체 플래시 + 사방으로 빛 파티클이 튄다 */}
         <motion.div
           className="absolute inset-0 pointer-events-none"
@@ -2428,6 +2489,7 @@ function QuickMatchExperience() {
   const [rerollPrompt, setRerollPrompt] = useState<'none' | 'lastChance' | 'exhausted'>('none');
   const [showIntro, setShowIntro] = useState(true);
   const [isSubmittingSwipe, setIsSubmittingSwipe] = useState(false);
+  const [activeSwipeAction, setActiveSwipeAction] = useState<SwipeAction | null>(null);
   const [isSubmittingFinalChoice, setIsSubmittingFinalChoice] = useState(false);
   const [detailRestaurant, setDetailRestaurant] = useState<Restaurant | null>(null);
   const submittingSwipeRef = useRef(false);
@@ -2619,13 +2681,14 @@ function QuickMatchExperience() {
     if (!showIntro) cardShownAtRef.current = Date.now();
   }, [showIntro]);
 
-  const handleAction = useCallback(async (action: SwipeAction) => {
-    if (submittingSwipeRef.current) return;
+  const handleAction = useCallback(async (action: SwipeAction): Promise<boolean> => {
+    if (submittingSwipeRef.current) return false;
     const restaurant = targetRestaurants[currentIndex];
-    if (!restaurant) return;
+    if (!restaurant) return false;
 
     submittingSwipeRef.current = true;
     setIsSubmittingSwipe(true);
+    setActiveSwipeAction(action);
     try {
       await addSwipe(restaurant.id, action === 'dislike' ? 'skip' : action);
     } catch (error) {
@@ -2633,7 +2696,8 @@ function QuickMatchExperience() {
       toast.error("Couldn't save your choice. Please try again.");
       submittingSwipeRef.current = false;
       setIsSubmittingSwipe(false);
-      return;
+      setActiveSwipeAction(null);
+      return false;
     }
     const meta = currentSession?.recMeta?.[restaurant.id];
     const dwell = Date.now() - cardShownAtRef.current; // 이 카드를 본 시간
@@ -2660,6 +2724,8 @@ function QuickMatchExperience() {
     }
     submittingSwipeRef.current = false;
     setIsSubmittingSwipe(false);
+    setActiveSwipeAction(null);
+    return true;
   }, [currentIndex, targetRestaurants, addSwipe, total, currentSession, profile.id]);
 
   // ── 중도 이탈(ABANDON): 예선 중 나가면 "어디서 몇 장 봤는지" 명시 로깅 ──
@@ -2994,6 +3060,8 @@ function QuickMatchExperience() {
                 progress={progress}
                 total={total}
                 onOpenRestaurantDetails={openRestaurantDetails}
+                onSwipe={handleAction}
+                interactionDisabled={isSubmittingSwipe}
               />
             ))}
           </AnimatePresence>
@@ -3002,34 +3070,37 @@ function QuickMatchExperience() {
 
       <div className="grid grid-cols-3 gap-2 px-5 pb-10 pt-4">
         <motion.button
+          data-action="dislike"
           onClick={() => handleAction('dislike')}
           disabled={isSubmittingSwipe}
           aria-label="Not Recommended"
-          className="h-[84px] min-w-0 rounded-lg border border-[#E8E6E7] bg-[#F5F4F5] px-2 text-center text-[#565256] outline-none focus-visible:ring-2 focus-visible:ring-[#AA1A0D] disabled:cursor-wait disabled:opacity-50"
-          whileTap={{ scale: 0.96 }}
+          className={`h-[84px] min-w-0 rounded-lg border px-2 text-center outline-none transition-[transform,box-shadow] focus-visible:ring-2 focus-visible:ring-[#DC2626] disabled:cursor-wait disabled:opacity-70 ${activeSwipeAction === 'dislike' ? 'border-[#DC2626] bg-[#FEE2E2] text-[#B91C1C] shadow-[0_0_0_3px_rgba(220,38,38,0.16)]' : 'border-[#E8E6E7] bg-[#F5F4F5] text-[#565256]'}`}
+          whileTap={{ scale: 0.94, backgroundColor: '#FEE2E2', borderColor: '#DC2626', color: '#B91C1C' }}
         >
           <X size={24} className="mx-auto" strokeWidth={2} />
-          <span className="mt-1 block text-[13px] font-semibold">Not for Me</span>
+          <span className="mt-1 block text-[13px] font-semibold">Dislike</span>
         </motion.button>
         <motion.button
+          data-action="neutral"
           onClick={() => handleAction('neutral')}
           disabled={isSubmittingSwipe}
           aria-label="Neutral"
-          className="h-[84px] min-w-0 rounded-lg border border-[#E8E6E7] bg-[#F5F4F5] px-2 text-center text-[#565256] outline-none focus-visible:ring-2 focus-visible:ring-[#AA1A0D] disabled:cursor-wait disabled:opacity-50"
-          whileTap={{ scale: 0.96 }}
+          className={`h-[84px] min-w-0 rounded-lg border px-2 text-center outline-none transition-[transform,box-shadow] focus-visible:ring-2 focus-visible:ring-[#EAB308] disabled:cursor-wait disabled:opacity-70 ${activeSwipeAction === 'neutral' ? 'border-[#EAB308] bg-[#FEF9C3] text-[#A16207] shadow-[0_0_0_3px_rgba(234,179,8,0.18)]' : 'border-[#E8E6E7] bg-[#F5F4F5] text-[#565256]'}`}
+          whileTap={{ scale: 0.94, backgroundColor: '#FEF9C3', borderColor: '#EAB308', color: '#A16207' }}
         >
           <Minus size={24} className="mx-auto" strokeWidth={2} />
           <span className="mt-1 block text-[13px] font-semibold">Neutral</span>
         </motion.button>
         <motion.button
+          data-action="like"
           onClick={() => handleAction('like')}
           disabled={isSubmittingSwipe}
           aria-label="Recommend"
-          className="h-[84px] min-w-0 rounded-lg border border-[#E8E6E7] bg-[#F5F4F5] px-2 text-center text-[#565256] outline-none focus-visible:ring-2 focus-visible:ring-[#AA1A0D] disabled:cursor-wait disabled:opacity-50"
-          whileTap={{ scale: 0.96 }}
+          className={`h-[84px] min-w-0 rounded-lg border px-2 text-center outline-none transition-[transform,box-shadow] focus-visible:ring-2 focus-visible:ring-[#16A34A] disabled:cursor-wait disabled:opacity-70 ${activeSwipeAction === 'like' ? 'border-[#16A34A] bg-[#DCFCE7] text-[#15803D] shadow-[0_0_0_3px_rgba(22,163,74,0.16)]' : 'border-[#E8E6E7] bg-[#F5F4F5] text-[#565256]'}`}
+          whileTap={{ scale: 0.94, backgroundColor: '#DCFCE7', borderColor: '#16A34A', color: '#15803D' }}
         >
           <Heart size={24} className="mx-auto" strokeWidth={2} />
-          <span className="mt-1 block text-[13px] font-semibold">Recommend</span>
+          <span className="mt-1 block text-[13px] font-semibold">Like</span>
         </motion.button>
       </div>
 
