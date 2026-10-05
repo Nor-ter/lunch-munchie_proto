@@ -10,6 +10,24 @@ export function lunchieButtonSwipePreview(action: LunchieSwipeGestureAction): { 
   return { x: action === "like" ? 42 : -42, y: 4, scale: 0.985 };
 }
 
+export function lunchieSwipeArc(
+  action: LunchieSwipeGestureAction,
+  start: { x: number; y: number },
+): { x: number[]; y: number[] } {
+  if (action === "neutral") {
+    return {
+      x: [start.x, start.x + 34, start.x + 48],
+      y: [start.y, start.y + 250, 720],
+    };
+  }
+
+  const exit = lunchieSwipeExit(action);
+  return {
+    x: [start.x, start.x + (exit.x - start.x) * 0.48, exit.x],
+    y: [start.y, Math.min(start.y - 64, -48), 38],
+  };
+}
+
 type SwipeGestureInput = {
   offsetX: number;
   offsetY: number;

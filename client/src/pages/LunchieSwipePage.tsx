@@ -29,7 +29,7 @@ import QuickMatchRestaurantDetailSheet from '@/components/lunchie/QuickMatchRest
 import { restaurantSummary, restaurantRatingLabel, restaurantPriceLabel } from '@/lib/restaurantPresentation';
 import { LUNCHIE_CUISINE_CHOICES, prioritizeRestaurantsForCuisine, type LunchieCuisineChoice } from '@/lib/lunchieGame';
 import { cuisineSignal, mealRatingSignal, satisfactionSignal } from '@shared/lunchieRoundStats';
-import { lunchieButtonSwipePreview, lunchieSwipeExit, resolveLunchieSwipeGesture } from '@/lib/lunchieSwipeGesture';
+import { lunchieButtonSwipePreview, lunchieSwipeArc, resolveLunchieSwipeGesture } from '@/lib/lunchieSwipeGesture';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -665,12 +665,14 @@ function SwipeCard({
         transition: { duration: 0.14, ease: [0.16, 1, 0.3, 1] },
       });
     }
-    const exit = lunchieSwipeExit(action);
+    const arc = lunchieSwipeArc(action, { x: x.get(), y: y.get() });
     await controls.start({
-      ...exit,
+      x: arc.x,
+      y: arc.y,
       scale: 0.97,
       transition: {
-        duration: source === 'button' ? 0.38 : 0.3,
+        duration: source === 'button' ? 0.42 : 0.32,
+        times: [0, 0.46, 1],
         ease: [0.32, 0.72, 0, 1],
       },
     });
@@ -681,7 +683,7 @@ function SwipeCard({
       swipeCommitRef.current = false;
     }
     return saved;
-  }, [controls, onSwipe]);
+  }, [controls, onSwipe, x, y]);
 
   const finishSwipeGesture = useCallback(async (_event: MouseEvent | TouchEvent | PointerEvent, info: PanInfo) => {
     const action = resolveLunchieSwipeGesture({

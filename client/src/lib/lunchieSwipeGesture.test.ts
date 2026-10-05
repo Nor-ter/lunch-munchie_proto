@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   lunchieButtonSwipePreview,
+  lunchieSwipeArc,
   lunchieSwipeExit,
   resolveLunchieSwipeGesture,
 } from "./lunchieSwipeGesture";
@@ -47,5 +48,20 @@ describe("resolveLunchieSwipeGesture", () => {
     expect(lunchieButtonSwipePreview("dislike")).toEqual({ x: -42, y: 4, scale: 0.985 });
     expect(lunchieButtonSwipePreview("neutral")).toEqual({ x: 0, y: 42, scale: 0.985 });
     expect(lunchieButtonSwipePreview("like")).toEqual({ x: 42, y: 4, scale: 0.985 });
+  });
+
+  it("curves horizontal votes upward and the neutral vote gently sideways", () => {
+    expect(lunchieSwipeArc("like", { x: 42, y: 4 })).toEqual({
+      x: [42, 271.44, 520],
+      y: [4, -60, 38],
+    });
+    expect(lunchieSwipeArc("dislike", { x: -42, y: 4 })).toEqual({
+      x: [-42, -271.44, -520],
+      y: [4, -60, 38],
+    });
+    expect(lunchieSwipeArc("neutral", { x: 0, y: 42 })).toEqual({
+      x: [0, 34, 48],
+      y: [42, 292, 720],
+    });
   });
 });
