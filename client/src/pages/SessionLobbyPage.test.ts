@@ -42,4 +42,10 @@ describe('resolveInviteOrigin', () => {
     expect(lobbySource).toContain('border-t border-[#E8E6E7] bg-white px-5 py-4');
     expect(lobbySource).toContain('className="lunchie-session-primary-action"');
   });
+
+  it('uses one inline recovery action when no restaurants match', () => {
+    expect(lobbySource).toContain("failure.code !== 'NO_ELIGIBLE_RESTAURANTS'");
+    expect(lobbySource).toContain("startFailure?.code !== 'NO_ELIGIBLE_RESTAURANTS'");
+    expect(lobbySource).toContain('Adjust Radius & Preferences');
+  });
 });

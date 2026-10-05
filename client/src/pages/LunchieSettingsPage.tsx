@@ -24,6 +24,7 @@ import { toast } from 'sonner';
 import type { Intent } from '@shared/intent';
 import { localityForCoordinate } from '@shared/melbourneLocality';
 import { QUICK_MATCH_PARTY_SIZE_MAX } from '@shared/quickMatchParty';
+import { categoryFiltersForOccasions } from '@shared/occasionFilters';
 import { logSessionCreated } from '@/lib/eventLogger';
 import SessionManagementMenu from '@/components/lunchie/SessionManagementMenu';
 import {
@@ -502,7 +503,7 @@ export default function LunchieSettingsPage() {
   };
 
   const createAndEnterSession = async () => {
-    const categories = tags.filter(tag => realCategories.has(tag));
+    const categories = categoryFiltersForOccasions(tags, realCategories);
     const hostName = profile.name && !["User", 'User'].includes(profile.name) ? profile.name : "Host";
     const currentOrigin = distanceEnabled
       ? origin ?? await currentPosition()

@@ -248,7 +248,9 @@ export default function SessionLobbyPage() {
         ? "No matching restaurants. Adjust your radius or preferences."
         : "Couldn't start voting. Please try again shortly.";
       setStartFailure({ message, code: failure.code });
-      toast.error(message);
+      // The actionable catalogue error is already rendered beside the CTA.
+      // Avoid a duplicate floating toast that obscures the top of the lobby.
+      if (failure.code !== 'NO_ELIGIBLE_RESTAURANTS') toast.error(message);
       setIsStarting(false);
     }
   };
@@ -501,14 +503,16 @@ export default function SessionLobbyPage() {
             )}
           </div>
         )}
-        <PrimaryButton
-          className="lunchie-session-primary-action"
-          onClick={handlePrimaryAction}
-          disabled={presentation.isWaiting && (!presentation.canStart || isStarting)}
-          aria-describedby={presentation.disabledReason ? 'lobby-cta-reason' : undefined}
-        >
-          {englishText(isStarting ? "Starting vote…" : presentation.ctaLabel)}
-        </PrimaryButton>
+        {startFailure?.code !== 'NO_ELIGIBLE_RESTAURANTS' && (
+          <PrimaryButton
+            className="lunchie-session-primary-action"
+            onClick={handlePrimaryAction}
+            disabled={presentation.isWaiting && (!presentation.canStart || isStarting)}
+            aria-describedby={presentation.disabledReason ? 'lobby-cta-reason' : undefined}
+          >
+            {englishText(isStarting ? "Starting vote…" : presentation.ctaLabel)}
+          </PrimaryButton>
+        )}
         {englishText(presentation.disabledReason && (
           <p id="lobby-cta-reason" className="mt-2 text-center text-[11px] font-semibold text-[var(--lm-sub)]">
             {englishText(presentation.disabledReason)}

@@ -9,6 +9,7 @@ import {
   type DietRestriction,
 } from "../../shared/const";
 import { categoryMatchesIntent, type Intent } from "../../shared/intent";
+import { normalizePersistedSessionCategories } from "../../shared/occasionFilters";
 import { intentForMenuSection, menuSectionIntents } from "../../shared/menuTaxonomy";
 import { isValidCoordinate, isWithinRadius } from "../../shared/geo";
 import {
@@ -2401,7 +2402,9 @@ export function sessionResults(
   for (const swipe of prelimRows)
     countByUser.set(swipe.user_id, (countByUser.get(swipe.user_id) ?? 0) + 1);
   const filtered = restaurants.filter((restaurant) => {
-    const categories = json<string[]>(session.filter_categories, []);
+    const categories = normalizePersistedSessionCategories(
+      json<string[]>(session.filter_categories, []),
+    );
     const hasOrigin = Number(session.distance_enabled) !== 0 && isValidCoordinate(
       session.origin_latitude,
       session.origin_longitude,
@@ -2884,7 +2887,9 @@ app.post("/api/sessions/:token/status", async (c) => {
       c.env.DB,
       (catalogue as any[]).map((restaurant) => String(restaurant.id)),
     );
-    const categories = json<string[]>(session.filter_categories, []);
+    const categories = normalizePersistedSessionCategories(
+      json<string[]>(session.filter_categories, []),
+    );
     const memberDietary = (members as any[]).flatMap((member) =>
       sessionDietary(member.preferences_json),
     );

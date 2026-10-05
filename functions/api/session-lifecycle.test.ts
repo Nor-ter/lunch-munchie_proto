@@ -217,6 +217,18 @@ describe('Quick Match session lifecycle API', () => {
     expect(database.session.status).toBe('SWIPING_1');
   });
 
+  it('starts a legacy Food Spots room without treating 맛집 as a literal category', async () => {
+    const database = new FakeD1({ filter_categories: '["맛집"]' }, 3);
+    const response = await post(database, '/api/sessions/ABC123/status', {
+      status: 'SWIPING_1',
+      deadlineMinutes: 10,
+      userId: 'host-user',
+      memberKey: HOST_KEY,
+    });
+    expect(response.status).toBe(200);
+    expect(database.session.status).toBe('SWIPING_1');
+  });
+
   it('starts a max-capacity invite lobby as solo when only the host is present', async () => {
     const database = new FakeD1({ group_size: 30 }, 3);
     database.members = [database.members[0]];
