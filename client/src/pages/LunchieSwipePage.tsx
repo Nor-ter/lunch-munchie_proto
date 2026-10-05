@@ -29,7 +29,7 @@ import QuickMatchRestaurantDetailSheet from '@/components/lunchie/QuickMatchRest
 import { restaurantSummary, restaurantRatingLabel, restaurantPriceLabel } from '@/lib/restaurantPresentation';
 import { LUNCHIE_CUISINE_CHOICES, prioritizeRestaurantsForCuisine, type LunchieCuisineChoice } from '@/lib/lunchieGame';
 import { cuisineSignal, mealRatingSignal, satisfactionSignal } from '@shared/lunchieRoundStats';
-import { lunchieSwipeExit, resolveLunchieSwipeGesture } from '@/lib/lunchieSwipeGesture';
+import { lunchieButtonSwipePreview, lunchieSwipeExit, resolveLunchieSwipeGesture } from '@/lib/lunchieSwipeGesture';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -651,16 +651,32 @@ function SwipeCard({
     ? `All Menu Photos ${foodPhotos.length} photos ·  ${photoIndex + 1}`
     : undefined;
 
-  const commitSwipeWithAnimation = useCallback(async (action: SwipeAction) => {
+  const commitSwipeWithAnimation = useCallback(async (
+    action: SwipeAction,
+    source: 'button' | 'gesture',
+  ) => {
     if (swipeCommitRef.current) return false;
     swipeCommitRef.current = true;
     setIsSwipeCommitting(true);
     if (typeof navigator !== 'undefined' && 'vibrate' in navigator) navigator.vibrate(12);
+    if (source === 'button') {
+      await controls.start({
+        ...lunchieButtonSwipePreview(action),
+        transition: { duration: 0.14, ease: [0.16, 1, 0.3, 1] },
+      });
+    }
     const exit = lunchieSwipeExit(action);
-    await controls.start({ ...exit, transition: { duration: 0.24, ease: [0.22, 1, 0.36, 1] } });
+    await controls.start({
+      ...exit,
+      scale: 0.97,
+      transition: {
+        duration: source === 'button' ? 0.38 : 0.3,
+        ease: [0.32, 0.72, 0, 1],
+      },
+    });
     const saved = await onSwipe(action);
     if (!saved) {
-      await controls.start({ x: 0, y: 0, transition: { type: 'spring', stiffness: 360, damping: 28 } });
+      await controls.start({ x: 0, y: 0, scale: 1, transition: { type: 'spring', stiffness: 360, damping: 28 } });
       setIsSwipeCommitting(false);
       swipeCommitRef.current = false;
     }
@@ -680,12 +696,12 @@ function SwipeCard({
       return;
     }
 
-    await commitSwipeWithAnimation(action);
+    await commitSwipeWithAnimation(action, 'gesture');
   }, [commitSwipeWithAnimation, controls]);
 
   useEffect(() => {
     if (!isTop || !requestedSwipe) return;
-    void commitSwipeWithAnimation(requestedSwipe.action)
+    void commitSwipeWithAnimation(requestedSwipe.action, 'button')
       .finally(() => onRequestedSwipeHandled(requestedSwipe.id));
   }, [commitSwipeWithAnimation, isTop, onRequestedSwipeHandled, requestedSwipe]);
 
@@ -3110,7 +3126,7 @@ function QuickMatchExperience() {
           aria-label="Not Recommended"
           className={`h-[84px] min-w-0 rounded-lg border-2 px-2 text-center outline-none transition-[transform,background-color,color,box-shadow] focus-visible:ring-2 focus-visible:ring-[#DC2626] disabled:cursor-wait disabled:opacity-70 ${activeSwipeAction === 'dislike' ? 'border-[#DC2626] bg-[#DC2626] text-white shadow-[0_0_0_4px_rgba(220,38,38,0.20)]' : 'border-[#F87171] bg-[#FEE2E2] text-[#B91C1C] shadow-sm'}`}
           animate={activeSwipeAction === 'dislike' ? { scale: [1, 0.92, 1.04] } : { scale: 1 }}
-          transition={{ duration: 0.24 }}
+          transition={{ duration: 0.36, ease: [0.16, 1, 0.3, 1] }}
           whileTap={{ scale: 0.92, backgroundColor: '#DC2626', borderColor: '#DC2626', color: '#FFFFFF' }}
         >
           <X size={24} className="mx-auto" strokeWidth={2} />
@@ -3123,7 +3139,7 @@ function QuickMatchExperience() {
           aria-label="Neutral"
           className={`h-[84px] min-w-0 rounded-lg border-2 px-2 text-center outline-none transition-[transform,background-color,color,box-shadow] focus-visible:ring-2 focus-visible:ring-[#EAB308] disabled:cursor-wait disabled:opacity-70 ${activeSwipeAction === 'neutral' ? 'border-[#EAB308] bg-[#FACC15] text-[#422006] shadow-[0_0_0_4px_rgba(234,179,8,0.22)]' : 'border-[#FACC15] bg-[#FEF9C3] text-[#854D0E] shadow-sm'}`}
           animate={activeSwipeAction === 'neutral' ? { scale: [1, 0.92, 1.04] } : { scale: 1 }}
-          transition={{ duration: 0.24 }}
+          transition={{ duration: 0.36, ease: [0.16, 1, 0.3, 1] }}
           whileTap={{ scale: 0.92, backgroundColor: '#FACC15', borderColor: '#EAB308', color: '#422006' }}
         >
           <Minus size={24} className="mx-auto" strokeWidth={2} />
@@ -3136,7 +3152,7 @@ function QuickMatchExperience() {
           aria-label="Recommend"
           className={`h-[84px] min-w-0 rounded-lg border-2 px-2 text-center outline-none transition-[transform,background-color,color,box-shadow] focus-visible:ring-2 focus-visible:ring-[#16A34A] disabled:cursor-wait disabled:opacity-70 ${activeSwipeAction === 'like' ? 'border-[#16A34A] bg-[#16A34A] text-white shadow-[0_0_0_4px_rgba(22,163,74,0.20)]' : 'border-[#4ADE80] bg-[#DCFCE7] text-[#15803D] shadow-sm'}`}
           animate={activeSwipeAction === 'like' ? { scale: [1, 0.92, 1.04] } : { scale: 1 }}
-          transition={{ duration: 0.24 }}
+          transition={{ duration: 0.36, ease: [0.16, 1, 0.3, 1] }}
           whileTap={{ scale: 0.92, backgroundColor: '#16A34A', borderColor: '#16A34A', color: '#FFFFFF' }}
         >
           <Heart size={24} className="mx-auto" strokeWidth={2} />

@@ -5,6 +5,11 @@ export function lunchieSwipeExit(action: LunchieSwipeGestureAction): { x: number
   return { x: action === "like" ? 520 : -520, y: 18 };
 }
 
+export function lunchieButtonSwipePreview(action: LunchieSwipeGestureAction): { x: number; y: number; scale: number } {
+  if (action === "neutral") return { x: 0, y: 42, scale: 0.985 };
+  return { x: action === "like" ? 42 : -42, y: 4, scale: 0.985 };
+}
+
 type SwipeGestureInput = {
   offsetX: number;
   offsetY: number;

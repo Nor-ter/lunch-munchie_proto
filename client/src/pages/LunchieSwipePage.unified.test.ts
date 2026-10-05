@@ -84,7 +84,9 @@ describe('unified Lunchie group flow', () => {
     expect(swipeSource).toContain("onClick={() => requestButtonSwipe('dislike')}");
     expect(swipeSource).toContain("onClick={() => requestButtonSwipe('neutral')}");
     expect(swipeSource).toContain("onClick={() => requestButtonSwipe('like')}");
-    expect(swipeSource).toContain('commitSwipeWithAnimation(requestedSwipe.action)');
+    expect(swipeSource).toContain("commitSwipeWithAnimation(requestedSwipe.action, 'button')");
+    expect(swipeSource).toContain("duration: source === 'button' ? 0.38 : 0.3");
+    expect(swipeSource).toContain('lunchieButtonSwipePreview(action)');
     expect(swipeSource).toContain('requestedSwipe?.restaurantId === restaurant.id');
     expect(swipeSource).toContain("bg-[#FEE2E2] text-[#B91C1C]");
     expect(swipeSource).toContain("bg-[#FEF9C3] text-[#854D0E]");

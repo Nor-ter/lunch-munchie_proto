@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { lunchieSwipeExit, resolveLunchieSwipeGesture } from "./lunchieSwipeGesture";
+import {
+  lunchieButtonSwipePreview,
+  lunchieSwipeExit,
+  resolveLunchieSwipeGesture,
+} from "./lunchieSwipeGesture";
 
 describe("resolveLunchieSwipeGesture", () => {
   it("maps left, right, and down to the three vote actions", () => {
@@ -37,5 +41,11 @@ describe("resolveLunchieSwipeGesture", () => {
     expect(lunchieSwipeExit("dislike")).toEqual({ x: -520, y: 18 });
     expect(lunchieSwipeExit("neutral")).toEqual({ x: 0, y: 720 });
     expect(lunchieSwipeExit("like")).toEqual({ x: 520, y: 18 });
+  });
+
+  it("eases button-triggered cards toward the selected direction before exit", () => {
+    expect(lunchieButtonSwipePreview("dislike")).toEqual({ x: -42, y: 4, scale: 0.985 });
+    expect(lunchieButtonSwipePreview("neutral")).toEqual({ x: 0, y: 42, scale: 0.985 });
+    expect(lunchieButtonSwipePreview("like")).toEqual({ x: 42, y: 4, scale: 0.985 });
   });
 });
