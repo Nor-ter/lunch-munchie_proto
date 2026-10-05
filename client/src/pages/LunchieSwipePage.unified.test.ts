@@ -85,10 +85,10 @@ describe('unified Lunchie group flow', () => {
     expect(swipeSource).toContain("onClick={() => requestButtonSwipe('neutral')}");
     expect(swipeSource).toContain("onClick={() => requestButtonSwipe('like')}");
     expect(swipeSource).toContain("commitSwipeWithAnimation(requestedSwipe.action, 'button')");
-    expect(swipeSource).toContain("duration: source === 'button' ? 0.42 : 0.32");
-    expect(swipeSource).toContain('lunchieButtonSwipePreview(action)');
+    expect(swipeSource).toContain("duration: source === 'button' ? 0.58 : 0.42");
     expect(swipeSource).toContain('lunchieSwipeArc(action, { x: x.get(), y: y.get() })');
-    expect(swipeSource).toContain('times: [0, 0.46, 1]');
+    expect(swipeSource).toContain('times: arc.times');
+    expect(swipeSource).toContain("ease: 'linear'");
     expect(swipeSource).toContain('data-ui="quick-match-voting-surface"');
     expect(swipeSource).toContain("detailRestaurant ? 'select-text' : 'select-none'");
     expect(swipeSource).toContain("WebkitUserSelect: 'none'");

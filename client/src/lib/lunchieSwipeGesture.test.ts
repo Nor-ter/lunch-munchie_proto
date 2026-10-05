@@ -1,6 +1,5 @@
 import { describe, expect, it } from "vitest";
 import {
-  lunchieButtonSwipePreview,
   lunchieSwipeArc,
   lunchieSwipeExit,
   resolveLunchieSwipeGesture,
@@ -44,24 +43,24 @@ describe("resolveLunchieSwipeGesture", () => {
     expect(lunchieSwipeExit("like")).toEqual({ x: 520, y: 18 });
   });
 
-  it("eases button-triggered cards toward the selected direction before exit", () => {
-    expect(lunchieButtonSwipePreview("dislike")).toEqual({ x: -42, y: 4, scale: 0.985 });
-    expect(lunchieButtonSwipePreview("neutral")).toEqual({ x: 0, y: 42, scale: 0.985 });
-    expect(lunchieButtonSwipePreview("like")).toEqual({ x: 42, y: 4, scale: 0.985 });
-  });
+  it("builds one smooth sampled curve from rest through the full exit", () => {
+    for (const action of ["like", "dislike", "neutral"] as const) {
+      const arc = lunchieSwipeArc(action, { x: 0, y: 0 });
+      expect(arc.x).toHaveLength(9);
+      expect(arc.y).toHaveLength(9);
+      expect(arc.scale).toHaveLength(9);
+      expect(arc.times).toEqual([0, 0.125, 0.25, 0.375, 0.5, 0.625, 0.75, 0.875, 1]);
+      expect({ x: arc.x[0], y: arc.y[0], scale: arc.scale[0] }).toEqual({ x: 0, y: 0, scale: 1 });
+      expect(arc.scale.at(-1)).toBe(0.97);
+    }
 
-  it("curves horizontal votes upward and the neutral vote gently sideways", () => {
-    expect(lunchieSwipeArc("like", { x: 42, y: 4 })).toEqual({
-      x: [42, 271.44, 520],
-      y: [4, -60, 38],
-    });
-    expect(lunchieSwipeArc("dislike", { x: -42, y: 4 })).toEqual({
-      x: [-42, -271.44, -520],
-      y: [4, -60, 38],
-    });
-    expect(lunchieSwipeArc("neutral", { x: 0, y: 42 })).toEqual({
-      x: [0, 34, 48],
-      y: [42, 292, 720],
-    });
+    const like = lunchieSwipeArc("like", { x: 0, y: 0 });
+    const dislike = lunchieSwipeArc("dislike", { x: 0, y: 0 });
+    const neutral = lunchieSwipeArc("neutral", { x: 0, y: 0 });
+    expect(like.x.at(-1)).toBe(520);
+    expect(dislike.x.at(-1)).toBe(-520);
+    expect(neutral.y.at(-1)).toBe(720);
+    expect(Math.min(...like.y)).toBeLessThan(-40);
+    expect(Math.max(...neutral.x)).toBeGreaterThan(40);
   });
 });

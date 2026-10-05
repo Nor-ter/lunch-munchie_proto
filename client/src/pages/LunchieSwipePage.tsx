@@ -29,7 +29,7 @@ import QuickMatchRestaurantDetailSheet from '@/components/lunchie/QuickMatchRest
 import { restaurantSummary, restaurantRatingLabel, restaurantPriceLabel } from '@/lib/restaurantPresentation';
 import { LUNCHIE_CUISINE_CHOICES, prioritizeRestaurantsForCuisine, type LunchieCuisineChoice } from '@/lib/lunchieGame';
 import { cuisineSignal, mealRatingSignal, satisfactionSignal } from '@shared/lunchieRoundStats';
-import { lunchieButtonSwipePreview, lunchieSwipeArc, resolveLunchieSwipeGesture } from '@/lib/lunchieSwipeGesture';
+import { lunchieSwipeArc, resolveLunchieSwipeGesture } from '@/lib/lunchieSwipeGesture';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -659,21 +659,15 @@ function SwipeCard({
     swipeCommitRef.current = true;
     setIsSwipeCommitting(true);
     if (typeof navigator !== 'undefined' && 'vibrate' in navigator) navigator.vibrate(12);
-    if (source === 'button') {
-      await controls.start({
-        ...lunchieButtonSwipePreview(action),
-        transition: { duration: 0.14, ease: [0.16, 1, 0.3, 1] },
-      });
-    }
     const arc = lunchieSwipeArc(action, { x: x.get(), y: y.get() });
     await controls.start({
       x: arc.x,
       y: arc.y,
-      scale: 0.97,
+      scale: arc.scale,
       transition: {
-        duration: source === 'button' ? 0.42 : 0.32,
-        times: [0, 0.46, 1],
-        ease: [0.32, 0.72, 0, 1],
+        duration: source === 'button' ? 0.58 : 0.42,
+        times: arc.times,
+        ease: 'linear',
       },
     });
     const saved = await onSwipe(action);
