@@ -27,7 +27,7 @@ describe('Lunchie swipe card menu flip', () => {
     // Outer swipe shell must not clip — that flattens preserve-3d on WebKit/Blink.
     expect(source).toContain("data-ui=\"quick-match-card-flipper\"");
     expect(source).toMatch(
-      /className="absolute inset-0"[\s\S]{0,180}style=\{\{\s*\n\s*x,\s*\n\s*y,\s*\n\s*rotate,/,
+      /className="absolute inset-0[^"]*"[\s\S]{0,220}style=\{\{\s*\n\s*x,\s*\n\s*y,\s*\n\s*rotate,/,
     );
 
     expect(front).toContain('rounded-3xl overflow-hidden');

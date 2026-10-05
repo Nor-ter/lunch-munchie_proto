@@ -723,7 +723,7 @@ function SwipeCard({
 
   return (
     <motion.div
-      className="absolute inset-0"
+      className="absolute inset-0 select-none"
       data-ui="quick-match-swipe-card"
       animate={controls}
       style={{
@@ -731,6 +731,8 @@ function SwipeCard({
         y,
         rotate,
         touchAction: isRevealed ? 'auto' : 'none',
+        userSelect: 'none',
+        WebkitUserSelect: 'none',
         zIndex: 20,
         // Swipe rotateZ must not flatten the menu flip; keep a 3D containing block.
         transformStyle: 'preserve-3d',
@@ -3022,7 +3024,11 @@ function QuickMatchExperience() {
   const urgent = remainingMs > 0 && remainingMs <= 30000;
 
   return (
-    <div className="min-h-dvh bg-[#FCFCFC] relative">
+    <div
+      className={`min-h-dvh bg-[#FCFCFC] relative ${detailRestaurant ? 'select-text' : 'select-none'}`}
+      data-ui="quick-match-voting-surface"
+      style={detailRestaurant ? undefined : { userSelect: 'none', WebkitUserSelect: 'none' }}
+    >
       <div className="border-b border-[#E8E6E7] bg-[#F5F4F5] px-5 pb-3 pt-[max(14px,env(safe-area-inset-top))]">
         <GameStageRail current={2} />
       </div>

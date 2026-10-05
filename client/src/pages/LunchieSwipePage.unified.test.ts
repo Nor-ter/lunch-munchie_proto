@@ -89,6 +89,9 @@ describe('unified Lunchie group flow', () => {
     expect(swipeSource).toContain('lunchieButtonSwipePreview(action)');
     expect(swipeSource).toContain('lunchieSwipeArc(action, { x: x.get(), y: y.get() })');
     expect(swipeSource).toContain('times: [0, 0.46, 1]');
+    expect(swipeSource).toContain('data-ui="quick-match-voting-surface"');
+    expect(swipeSource).toContain("detailRestaurant ? 'select-text' : 'select-none'");
+    expect(swipeSource).toContain("WebkitUserSelect: 'none'");
     expect(swipeSource).toContain('requestedSwipe?.restaurantId === restaurant.id');
     expect(swipeSource).toContain("bg-[#FEE2E2] text-[#B91C1C]");
     expect(swipeSource).toContain("bg-[#FEF9C3] text-[#854D0E]");
