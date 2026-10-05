@@ -29,7 +29,7 @@ import QuickMatchRestaurantDetailSheet from '@/components/lunchie/QuickMatchRest
 import { restaurantSummary, restaurantRatingLabel, restaurantPriceLabel } from '@/lib/restaurantPresentation';
 import { LUNCHIE_CUISINE_CHOICES, prioritizeRestaurantsForCuisine, type LunchieCuisineChoice } from '@/lib/lunchieGame';
 import { cuisineSignal, mealRatingSignal, satisfactionSignal } from '@shared/lunchieRoundStats';
-import { resolveLunchieSwipeGesture } from '@/lib/lunchieSwipeGesture';
+import { lunchieSwipeExit, resolveLunchieSwipeGesture } from '@/lib/lunchieSwipeGesture';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -561,6 +561,8 @@ function SwipeCard({
   onOpenRestaurantDetails,
   onSwipe,
   interactionDisabled,
+  requestedSwipe,
+  onRequestedSwipeHandled,
 }: {
   restaurant: any;
   isTop: boolean;
@@ -570,6 +572,8 @@ function SwipeCard({
   onOpenRestaurantDetails: (restaurant: Restaurant) => void;
   onSwipe: (action: SwipeAction) => Promise<boolean>;
   interactionDisabled: boolean;
+  requestedSwipe: { id: number; action: SwipeAction; restaurantId: string } | null;
+  onRequestedSwipeHandled: (requestId: number) => void;
 }) {
   const [isRevealed, setIsRevealed] = useState(false);
   // 큐브 회전 단계(단조). photoIndex는 foodPhotos 길이로 파생 — 도트/사진 순번 표시에 사용.
@@ -578,6 +582,7 @@ function SwipeCard({
   const [isPhotoRotating, setIsPhotoRotating] = useState(false);
   const [detailIndex, setDetailIndex] = useState<number | null>(null);
   const [isSwipeCommitting, setIsSwipeCommitting] = useState(false);
+  const swipeCommitRef = useRef(false);
   const controls = useAnimation();
   const x = useMotionValue(0);
   const y = useMotionValue(0);
@@ -646,6 +651,22 @@ function SwipeCard({
     ? `All Menu Photos ${foodPhotos.length} photos ·  ${photoIndex + 1}`
     : undefined;
 
+  const commitSwipeWithAnimation = useCallback(async (action: SwipeAction) => {
+    if (swipeCommitRef.current) return false;
+    swipeCommitRef.current = true;
+    setIsSwipeCommitting(true);
+    if (typeof navigator !== 'undefined' && 'vibrate' in navigator) navigator.vibrate(12);
+    const exit = lunchieSwipeExit(action);
+    await controls.start({ ...exit, transition: { duration: 0.24, ease: [0.22, 1, 0.36, 1] } });
+    const saved = await onSwipe(action);
+    if (!saved) {
+      await controls.start({ x: 0, y: 0, transition: { type: 'spring', stiffness: 360, damping: 28 } });
+      setIsSwipeCommitting(false);
+      swipeCommitRef.current = false;
+    }
+    return saved;
+  }, [controls, onSwipe]);
+
   const finishSwipeGesture = useCallback(async (_event: MouseEvent | TouchEvent | PointerEvent, info: PanInfo) => {
     const action = resolveLunchieSwipeGesture({
       offsetX: info.offset.x,
@@ -659,18 +680,14 @@ function SwipeCard({
       return;
     }
 
-    setIsSwipeCommitting(true);
-    if (typeof navigator !== 'undefined' && 'vibrate' in navigator) navigator.vibrate(12);
-    const exit = action === 'neutral'
-      ? { x: 0, y: 720 }
-      : { x: action === 'like' ? 520 : -520, y: 18 };
-    await controls.start({ ...exit, transition: { duration: 0.18, ease: [0.22, 1, 0.36, 1] } });
-    const saved = await onSwipe(action);
-    if (!saved) {
-      await controls.start({ x: 0, y: 0, transition: { type: 'spring', stiffness: 360, damping: 28 } });
-      setIsSwipeCommitting(false);
-    }
-  }, [controls, onSwipe]);
+    await commitSwipeWithAnimation(action);
+  }, [commitSwipeWithAnimation, controls]);
+
+  useEffect(() => {
+    if (!isTop || !requestedSwipe) return;
+    void commitSwipeWithAnimation(requestedSwipe.action)
+      .finally(() => onRequestedSwipeHandled(requestedSwipe.id));
+  }, [commitSwipeWithAnimation, isTop, onRequestedSwipeHandled, requestedSwipe]);
 
   if (!isTop) {
     return (
@@ -2490,6 +2507,8 @@ function QuickMatchExperience() {
   const [showIntro, setShowIntro] = useState(true);
   const [isSubmittingSwipe, setIsSubmittingSwipe] = useState(false);
   const [activeSwipeAction, setActiveSwipeAction] = useState<SwipeAction | null>(null);
+  const [requestedSwipe, setRequestedSwipe] = useState<{ id: number; action: SwipeAction; restaurantId: string } | null>(null);
+  const requestedSwipeIdRef = useRef(0);
   const [isSubmittingFinalChoice, setIsSubmittingFinalChoice] = useState(false);
   const [detailRestaurant, setDetailRestaurant] = useState<Restaurant | null>(null);
   const submittingSwipeRef = useRef(false);
@@ -2727,6 +2746,19 @@ function QuickMatchExperience() {
     setActiveSwipeAction(null);
     return true;
   }, [currentIndex, targetRestaurants, addSwipe, total, currentSession, profile.id]);
+
+  const requestButtonSwipe = useCallback((action: SwipeAction) => {
+    if (submittingSwipeRef.current || requestedSwipe) return;
+    const restaurant = targetRestaurants[currentIndex];
+    if (!restaurant) return;
+    requestedSwipeIdRef.current += 1;
+    setActiveSwipeAction(action);
+    setRequestedSwipe({ id: requestedSwipeIdRef.current, action, restaurantId: restaurant.id });
+  }, [currentIndex, requestedSwipe, targetRestaurants]);
+
+  const handleRequestedSwipeHandled = useCallback((requestId: number) => {
+    setRequestedSwipe(current => current?.id === requestId ? null : current);
+  }, []);
 
   // ── 중도 이탈(ABANDON): 예선 중 나가면 "어디서 몇 장 봤는지" 명시 로깅 ──
   const phaseRef = useRef(phase);
@@ -3061,7 +3093,9 @@ function QuickMatchExperience() {
                 total={total}
                 onOpenRestaurantDetails={openRestaurantDetails}
                 onSwipe={handleAction}
-                interactionDisabled={isSubmittingSwipe}
+                interactionDisabled={isSubmittingSwipe || requestedSwipe !== null}
+                requestedSwipe={i === 0 && requestedSwipe?.restaurantId === restaurant.id ? requestedSwipe : null}
+                onRequestedSwipeHandled={handleRequestedSwipeHandled}
               />
             ))}
           </AnimatePresence>
@@ -3071,33 +3105,39 @@ function QuickMatchExperience() {
       <div className="grid grid-cols-3 gap-2 px-5 pb-10 pt-4">
         <motion.button
           data-action="dislike"
-          onClick={() => handleAction('dislike')}
-          disabled={isSubmittingSwipe}
+          onClick={() => requestButtonSwipe('dislike')}
+          disabled={isSubmittingSwipe || requestedSwipe !== null}
           aria-label="Not Recommended"
-          className={`h-[84px] min-w-0 rounded-lg border px-2 text-center outline-none transition-[transform,box-shadow] focus-visible:ring-2 focus-visible:ring-[#DC2626] disabled:cursor-wait disabled:opacity-70 ${activeSwipeAction === 'dislike' ? 'border-[#DC2626] bg-[#FEE2E2] text-[#B91C1C] shadow-[0_0_0_3px_rgba(220,38,38,0.16)]' : 'border-[#E8E6E7] bg-[#F5F4F5] text-[#565256]'}`}
-          whileTap={{ scale: 0.94, backgroundColor: '#FEE2E2', borderColor: '#DC2626', color: '#B91C1C' }}
+          className={`h-[84px] min-w-0 rounded-lg border-2 px-2 text-center outline-none transition-[transform,background-color,color,box-shadow] focus-visible:ring-2 focus-visible:ring-[#DC2626] disabled:cursor-wait disabled:opacity-70 ${activeSwipeAction === 'dislike' ? 'border-[#DC2626] bg-[#DC2626] text-white shadow-[0_0_0_4px_rgba(220,38,38,0.20)]' : 'border-[#F87171] bg-[#FEE2E2] text-[#B91C1C] shadow-sm'}`}
+          animate={activeSwipeAction === 'dislike' ? { scale: [1, 0.92, 1.04] } : { scale: 1 }}
+          transition={{ duration: 0.24 }}
+          whileTap={{ scale: 0.92, backgroundColor: '#DC2626', borderColor: '#DC2626', color: '#FFFFFF' }}
         >
           <X size={24} className="mx-auto" strokeWidth={2} />
           <span className="mt-1 block text-[13px] font-semibold">Dislike</span>
         </motion.button>
         <motion.button
           data-action="neutral"
-          onClick={() => handleAction('neutral')}
-          disabled={isSubmittingSwipe}
+          onClick={() => requestButtonSwipe('neutral')}
+          disabled={isSubmittingSwipe || requestedSwipe !== null}
           aria-label="Neutral"
-          className={`h-[84px] min-w-0 rounded-lg border px-2 text-center outline-none transition-[transform,box-shadow] focus-visible:ring-2 focus-visible:ring-[#EAB308] disabled:cursor-wait disabled:opacity-70 ${activeSwipeAction === 'neutral' ? 'border-[#EAB308] bg-[#FEF9C3] text-[#A16207] shadow-[0_0_0_3px_rgba(234,179,8,0.18)]' : 'border-[#E8E6E7] bg-[#F5F4F5] text-[#565256]'}`}
-          whileTap={{ scale: 0.94, backgroundColor: '#FEF9C3', borderColor: '#EAB308', color: '#A16207' }}
+          className={`h-[84px] min-w-0 rounded-lg border-2 px-2 text-center outline-none transition-[transform,background-color,color,box-shadow] focus-visible:ring-2 focus-visible:ring-[#EAB308] disabled:cursor-wait disabled:opacity-70 ${activeSwipeAction === 'neutral' ? 'border-[#EAB308] bg-[#FACC15] text-[#422006] shadow-[0_0_0_4px_rgba(234,179,8,0.22)]' : 'border-[#FACC15] bg-[#FEF9C3] text-[#854D0E] shadow-sm'}`}
+          animate={activeSwipeAction === 'neutral' ? { scale: [1, 0.92, 1.04] } : { scale: 1 }}
+          transition={{ duration: 0.24 }}
+          whileTap={{ scale: 0.92, backgroundColor: '#FACC15', borderColor: '#EAB308', color: '#422006' }}
         >
           <Minus size={24} className="mx-auto" strokeWidth={2} />
           <span className="mt-1 block text-[13px] font-semibold">Neutral</span>
         </motion.button>
         <motion.button
           data-action="like"
-          onClick={() => handleAction('like')}
-          disabled={isSubmittingSwipe}
+          onClick={() => requestButtonSwipe('like')}
+          disabled={isSubmittingSwipe || requestedSwipe !== null}
           aria-label="Recommend"
-          className={`h-[84px] min-w-0 rounded-lg border px-2 text-center outline-none transition-[transform,box-shadow] focus-visible:ring-2 focus-visible:ring-[#16A34A] disabled:cursor-wait disabled:opacity-70 ${activeSwipeAction === 'like' ? 'border-[#16A34A] bg-[#DCFCE7] text-[#15803D] shadow-[0_0_0_3px_rgba(22,163,74,0.16)]' : 'border-[#E8E6E7] bg-[#F5F4F5] text-[#565256]'}`}
-          whileTap={{ scale: 0.94, backgroundColor: '#DCFCE7', borderColor: '#16A34A', color: '#15803D' }}
+          className={`h-[84px] min-w-0 rounded-lg border-2 px-2 text-center outline-none transition-[transform,background-color,color,box-shadow] focus-visible:ring-2 focus-visible:ring-[#16A34A] disabled:cursor-wait disabled:opacity-70 ${activeSwipeAction === 'like' ? 'border-[#16A34A] bg-[#16A34A] text-white shadow-[0_0_0_4px_rgba(22,163,74,0.20)]' : 'border-[#4ADE80] bg-[#DCFCE7] text-[#15803D] shadow-sm'}`}
+          animate={activeSwipeAction === 'like' ? { scale: [1, 0.92, 1.04] } : { scale: 1 }}
+          transition={{ duration: 0.24 }}
+          whileTap={{ scale: 0.92, backgroundColor: '#16A34A', borderColor: '#16A34A', color: '#FFFFFF' }}
         >
           <Heart size={24} className="mx-auto" strokeWidth={2} />
           <span className="mt-1 block text-[13px] font-semibold">Like</span>

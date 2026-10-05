@@ -1,5 +1,10 @@
 export type LunchieSwipeGestureAction = "like" | "dislike" | "neutral";
 
+export function lunchieSwipeExit(action: LunchieSwipeGestureAction): { x: number; y: number } {
+  if (action === "neutral") return { x: 0, y: 720 };
+  return { x: action === "like" ? 520 : -520, y: 18 };
+}
+
 type SwipeGestureInput = {
   offsetX: number;
   offsetY: number;
