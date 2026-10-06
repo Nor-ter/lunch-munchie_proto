@@ -12,11 +12,13 @@ describe('Quick Match cover', () => {
     expect(source).toContain('Lunchie Munchie chick ready for Quick Match');
   });
 
-  it('keeps the current settings visible in the cover', () => {
+  it('keeps only distance visible as a pre-game setting', () => {
     expect(source).toContain('aria-label="Current Quick Match settings"');
-    expect(source).toContain("['Craving', preference]");
-    expect(source).toContain("['Occasion', occasionLabel]");
+    expect(source).toContain('Search distance');
     expect(source).toContain("distanceEnabled ? formatRadius(radius) : 'No limit'");
-    expect(source).toContain("['Round time', `${deadlineMinutes} min`]");
+    expect(source).toContain('Cuisine, mood and the final pick happen together during the game.');
+    expect(source).not.toContain('<PreferenceCard key=');
+    expect(source).not.toContain('<CollapsibleOptionPanel');
+    expect(source).not.toContain('<DeadlineDial minutes=');
   });
 });

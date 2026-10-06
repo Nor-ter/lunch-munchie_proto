@@ -6,7 +6,7 @@ import { englishText } from '@shared/englishCopy';
 
 import { useEffect, useMemo, useRef, useState, type Dispatch, type PointerEvent as ReactPointerEvent, type ReactNode, type SetStateAction } from 'react';
 import { motion } from 'framer-motion';
-import { useLocation, useSearch } from 'wouter';
+import { useLocation } from 'wouter';
 import {
   Check,
   ChevronDown,
@@ -371,22 +371,12 @@ function DistanceRuler({ radius, onChange }: { radius: number; onChange: (value:
 }
 
 function QuickMatchCover({
-  preference,
-  occasions,
   radius,
   distanceEnabled,
-  deadlineMinutes,
 }: {
-  preference: string;
-  occasions: string[];
   radius: number;
   distanceEnabled: boolean;
-  deadlineMinutes: number;
 }) {
-  const occasionLabel = occasions.length
-    ? occasions.slice(0, 2).map(englishText).join(' · ')
-    : 'Any occasion';
-
   return (
     <section
       data-ui="quick-match-cover"
@@ -412,7 +402,7 @@ function QuickMatchCover({
             What are we eating today?
           </h1>
           <p className="mt-3 max-w-[250px] text-[12px] font-semibold leading-[1.55] text-[#FBECE9]">
-            Set the mood, invite your crew, and reveal the winner together.
+            Set the distance, invite your crew, and make every other choice together.
           </p>
         </div>
 
@@ -435,18 +425,16 @@ function QuickMatchCover({
         </div>
       </div>
 
-      <div className="relative z-10 mt-3 grid grid-cols-2 gap-2" aria-label="Current Quick Match settings">
-        {[
-          ['Craving', preference],
-          ['Occasion', occasionLabel],
-          ['Distance', distanceEnabled ? formatRadius(radius) : 'No limit'],
-          ['Round time', `${deadlineMinutes} min`],
-        ].map(([label, value]) => (
-          <div key={label} className="min-w-0 rounded-[14px] border border-white/15 bg-white/10 px-3 py-2.5 backdrop-blur-sm">
-            <span className="block text-[8px] font-black uppercase tracking-[0.14em] text-[#F8C9C2]">{label}</span>
-            <strong className="mt-1 block truncate text-[11px] font-extrabold text-white">{value}</strong>
+      <div className="relative z-10 mt-3" aria-label="Current Quick Match settings">
+        <div className="rounded-[14px] border border-white/15 bg-white/10 px-4 py-3 backdrop-blur-sm">
+          <div className="flex items-center justify-between gap-3">
+            <span className="text-[8px] font-black uppercase tracking-[0.14em] text-[#F8C9C2]">Search distance</span>
+            <strong className="text-[12px] font-extrabold text-white">{distanceEnabled ? formatRadius(radius) : 'No limit'}</strong>
           </div>
-        ))}
+          <p className="mt-1.5 text-[9px] font-semibold leading-relaxed text-[#FBECE9]">
+            Cuisine, mood and the final pick happen together during the game.
+          </p>
+        </div>
       </div>
     </section>
   );
@@ -454,17 +442,13 @@ function QuickMatchCover({
 
 export default function LunchieSettingsPage() {
   const [, navigate] = useLocation();
-  const search = useSearch();
   const {
     createSession,
     fetchSession,
     currentSession,
     setCurrentSession,
-    restaurants,
     profile,
   } = useApp();
-  const urlIntent = new URLSearchParams(search).get('intent');
-  const initialIntent: Intent | null = urlIntent === 'meal' || urlIntent === 'cafe' || urlIntent === 'dessert' ? urlIntent : null;
   const [storedSettings] = useState(() => {
     try {
       return normalizeQuickMatchSettings(JSON.parse(localStorage.getItem(QUICK_MATCH_SETTINGS_STORAGE_KEY) ?? 'null'));
@@ -473,12 +457,8 @@ export default function LunchieSettingsPage() {
     }
   });
 
-  const [deadlineMin, setDeadlineMin] = useState(storedSettings.deadlineMinutes);
   const [radius, setRadius] = useState(storedSettings.radius);
   const [distanceEnabled, setDistanceEnabled] = useState(storedSettings.distanceEnabled);
-  const [intent, setIntent] = useState<Intent | null>(initialIntent ?? storedSettings.intent);
-  const [tags, setTags] = useState<string[]>(storedSettings.tags);
-  const [moodOptionsOpen, setMoodOptionsOpen] = useState(false);
   const [isCreating, setIsCreating] = useState(false);
   const [origin, setOrigin] = useState<LocationFix | null>(null);
   const [originLabel, setOriginLabel] = useState<string | null>(null);
@@ -494,15 +474,13 @@ export default function LunchieSettingsPage() {
   );
 
   const budget = 2 as const;
-  const selectedPreferenceLabel = PREFERENCE_CARDS.find(option => option.value === intent)?.label ?? "Surprise Me";
+  const deadlineMin = DEFAULT_QUICK_MATCH_SETTINGS.deadlineMinutes;
   const hasActiveSession = Boolean(
     activeSessionVerified
     && currentSession
     && currentSession.membershipActive !== false
     && isActiveQuickMatchStatus(currentSession.status),
   );
-  const realCategories = useMemo(() => new Set(restaurants.map(restaurant => restaurant.category)), [restaurants]);
-
   useEffect(() => {
     localStorage.setItem(QUICK_MATCH_SETTINGS_STORAGE_KEY, JSON.stringify({
       deadlineMinutes: deadlineMin,
@@ -511,11 +489,11 @@ export default function LunchieSettingsPage() {
       partySize: QUICK_MATCH_PARTY_SIZE_MAX,
       radius,
       distanceEnabled,
-      intent,
-      tags,
+      intent: null,
+      tags: [],
       dietary: normalizeDietaryPreferences(dietary),
     }));
-  }, [deadlineMin, radius, distanceEnabled, intent, tags, dietary]);
+  }, [deadlineMin, radius, distanceEnabled, dietary]);
 
   useEffect(() => {
     const token = currentSession?.inviteCode;
@@ -557,10 +535,6 @@ export default function LunchieSettingsPage() {
     return () => { active = false; };
   }, [currentSession?.inviteCode, currentSession?.memberKey, fetchSession, sessionCheckAttempt, setCurrentSession]);
 
-  const toggleMany = (value: string, setter: Dispatch<SetStateAction<string[]>>) => {
-    setter(current => current.includes(value) ? current.filter(item => item !== value) : [...current, value]);
-  };
-
   const confirmCurrentLocation = async () => {
     setIsLocating(true);
     try {
@@ -585,7 +559,7 @@ export default function LunchieSettingsPage() {
   };
 
   const createAndEnterSession = async () => {
-    const categories = categoryFiltersForOccasions(tags, realCategories);
+    const categories: string[] = [];
     const hostName = profile.name && !["User", 'User'].includes(profile.name) ? profile.name : "Host";
     const currentOrigin = distanceEnabled
       ? origin ?? await currentPosition()
@@ -603,7 +577,7 @@ export default function LunchieSettingsPage() {
         originLatitude: currentOrigin?.latitude,
         originLongitude: currentOrigin?.longitude,
         categories,
-        intent: intent ?? undefined,
+        intent: undefined,
       },
       hostName,
       profile.emoji,
@@ -611,7 +585,7 @@ export default function LunchieSettingsPage() {
     );
 
     logSessionCreated(session.id, {
-      intent: intent ?? 'auto',
+      intent: 'auto',
       party_size: session.members.length,
       lobby_capacity: QUICK_MATCH_PARTY_SIZE_MAX,
       radius_m: distanceEnabled ? radius : null,
@@ -667,11 +641,8 @@ export default function LunchieSettingsPage() {
     <div className="min-h-dvh bg-[#FCFCFC] pb-6 text-[#171717]">
       <main className="mx-auto max-w-[480px] px-5 pb-24">
         <QuickMatchCover
-          preference={selectedPreferenceLabel}
-          occasions={tags}
           radius={radius}
           distanceEnabled={distanceEnabled}
-          deadlineMinutes={deadlineMin}
         />
 
         {sessionCheckFailed && currentSession && (
@@ -702,9 +673,7 @@ export default function LunchieSettingsPage() {
               <span className="rounded-lg bg-white px-3 py-2 font-semibold text-[#565256]">
                 👥 {currentSession.members.length} {currentSession.members.length === 1 ? 'person' : 'people'}
               </span>
-              <span className="rounded-lg bg-white px-3 py-2 font-semibold text-[#565256]">⏱ {currentSession.deadlineMinutes ?? deadlineMin} min</span>
               <span className="rounded-lg bg-white px-3 py-2 font-semibold text-[#565256]">📍 {englishText(formatRadius(currentSession.filters.radius))}</span>
-              <span className="rounded-lg bg-white px-3 py-2 font-semibold text-[#565256]">{englishText(currentSession.members.length === 1 ? "🙋 Ready for Solo" : "🤝 Together")}</span>
             </div>
             <button
               type="button"
@@ -715,48 +684,6 @@ export default function LunchieSettingsPage() {
             </button>
           </section>
         )}
-
-        <Card>
-          <CardTitle icon={<UtensilsCrossed size={16} />} badge={selectedPreferenceLabel}>Today's Quick Match</CardTitle>
-          <div className="grid grid-cols-4 gap-2">
-            {PREFERENCE_CARDS.map(option => (
-              <PreferenceCard key={option.label} option={option} selected={intent === option.value} onClick={() => setIntent(option.value)} />
-            ))}
-          </div>
-        </Card>
-
-        <CollapsibleOptionPanel
-          title="What's the occasion?"
-          icon={<Sparkles size={15} />}
-          summary={tags.length ? tags.map(englishText).join(', ') : "No Preference"}
-          open={moodOptionsOpen}
-          onToggle={() => setMoodOptionsOpen(current => !current)}
-          controlsId="quick-match-mood-options"
-        >
-          <div className="grid grid-cols-2 gap-2">
-            {FOOD_TAGS.map(tag => {
-              const selected = tags.includes(tag);
-              const meta = TAG_META[tag];
-              return (
-                <motion.button
-                  key={tag}
-                  type="button"
-                  onClick={() => toggleMany(tag, setTags)}
-                  whileTap={{ scale: 0.97 }}
-                  aria-pressed={selected}
-                  className={`flex min-h-[54px] items-center gap-2 rounded-[8px] border px-3 text-left transition-colors ${selected ? 'border-[#AA1A0D] bg-[#FBECE9]' : 'border-[#E8E6E7] bg-white'}`}
-                >
-                  <span className="text-xl">{englishText(meta?.icon)}</span>
-                  <span className="min-w-0">
-                    <strong className="block text-[12px] text-[#3E373B]">{englishText(tag)}</strong>
-                    <span className="block truncate text-[9px] font-semibold text-[#A39A9E]">{englishText(meta?.hint)}</span>
-                  </span>
-                  <span className={`ml-auto flex size-4 shrink-0 items-center justify-center rounded-sm border ${selected ? 'border-[#AA1A0D] bg-[#AA1A0D] text-white' : 'border-[#C9C6C8] text-transparent'}`}><Check size={10} strokeWidth={3} /></span>
-                </motion.button>
-              );
-            })}
-          </div>
-        </CollapsibleOptionPanel>
 
         <Card>
           <div className="mb-3 flex items-center justify-between gap-2">
@@ -785,13 +712,6 @@ export default function LunchieSettingsPage() {
               : distanceEnabled
                 ? "Enable location to use your selected radius."
                 : "Get recommendations without location permission.")}
-          </div>
-        </Card>
-
-        <Card>
-          <CardTitle icon={<Clock3 size={16} />}>Deadline</CardTitle>
-          <div className="flex flex-col items-center">
-            <DeadlineDial minutes={deadlineMin} onChange={setDeadlineMin} />
           </div>
         </Card>
 
