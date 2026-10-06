@@ -5,6 +5,7 @@ import { englishText } from '@shared/englishCopy';
  */
 
 import { useEffect, useMemo, useRef, useState, type Dispatch, type PointerEvent as ReactPointerEvent, type ReactNode, type SetStateAction } from 'react';
+import { createPortal } from 'react-dom';
 import { motion } from 'framer-motion';
 import { useLocation } from 'wouter';
 import {
@@ -639,7 +640,7 @@ export default function LunchieSettingsPage() {
 
   return (
     <div className="min-h-dvh bg-[#FCFCFC] pb-6 text-[#171717]">
-      <main className="mx-auto max-w-[480px] px-5 pb-24">
+      <main className="mx-auto max-w-[480px] px-5 pb-36">
         <QuickMatchCover
           radius={radius}
           distanceEnabled={distanceEnabled}
@@ -715,7 +716,13 @@ export default function LunchieSettingsPage() {
           </div>
         </Card>
 
-        <div className="pb-1 pt-5">
+      </main>
+
+      {createPortal(
+        <footer
+          aria-label="Quick Match primary action"
+          className="fixed bottom-[var(--lm-tab-bar-height)] left-1/2 z-40 w-full max-w-[480px] -translate-x-1/2 border-t border-[#E8E6E7] bg-[#FCFCFC]/95 px-5 py-4 shadow-[0_-8px_24px_rgba(45,31,27,0.08)] backdrop-blur"
+        >
           <motion.button
             type="button"
             onClick={() => void handleStart()}
@@ -731,9 +738,9 @@ export default function LunchieSettingsPage() {
                 ? currentSession.status === 'waiting' ? "Back to Lobby" : "Continue Voting"
                 : "Create Lobby & Invite")}
           </motion.button>
-        </div>
-
-      </main>
+        </footer>,
+        document.body,
+      )}
 
     </div>
   );

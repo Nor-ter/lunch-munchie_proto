@@ -21,4 +21,11 @@ describe('Quick Match cover', () => {
     expect(source).not.toContain('<CollapsibleOptionPanel');
     expect(source).not.toContain('<DeadlineDial minutes=');
   });
+
+  it('pins the primary action immediately above the persistent tab bar', () => {
+    expect(source).toContain("import { createPortal } from 'react-dom'");
+    expect(source).toContain('aria-label="Quick Match primary action"');
+    expect(source).toContain('bottom-[var(--lm-tab-bar-height)]');
+    expect(source).toContain('px-5 pb-36');
+  });
 });
