@@ -18,4 +18,14 @@ describe('recommendation vote viewport layout', () => {
     expect(source).toContain('h-[72px]');
     expect(source).toContain("width: 'min(100%, calc(75dvh - 190px))'");
   });
+
+  it('uses colored circular thumb controls for recommendation voting', () => {
+    expect(source).toContain('ThumbsDown');
+    expect(source).toContain('ThumbsUp');
+    expect(source).toContain('flex size-12 items-center justify-center rounded-full');
+    expect(source).toContain("bg-[#EF4444] text-white");
+    expect(source).toContain("bg-[#FACC15] text-[#422006]");
+    expect(source).toContain("bg-[#22C55E] text-white");
+    expect(source).toContain('fill="currentColor"');
+  });
 });

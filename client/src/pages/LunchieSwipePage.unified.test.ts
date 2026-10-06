@@ -79,9 +79,9 @@ describe('unified Lunchie group flow', () => {
     expect(swipeSource).toContain('>Like</span>');
     expect(swipeSource).toContain("drag={!isRevealed && !interactionDisabled && !isSwipeCommitting}");
     expect(swipeSource).toContain('← Dislike · ↓ Neutral · Like →');
-    expect(swipeSource).toContain("backgroundColor: '#DC2626'");
-    expect(swipeSource).toContain("backgroundColor: '#FACC15'");
-    expect(swipeSource).toContain("backgroundColor: '#16A34A'");
+    expect(swipeSource).toContain("bg-[#EF4444] text-white");
+    expect(swipeSource).toContain("bg-[#FACC15] text-[#422006]");
+    expect(swipeSource).toContain("bg-[#22C55E] text-white");
     expect(swipeSource).toContain("onClick={() => requestButtonSwipe('dislike')}");
     expect(swipeSource).toContain("onClick={() => requestButtonSwipe('neutral')}");
     expect(swipeSource).toContain("onClick={() => requestButtonSwipe('like')}");
@@ -94,9 +94,9 @@ describe('unified Lunchie group flow', () => {
     expect(swipeSource).toContain("detailRestaurant ? 'select-text' : 'select-none'");
     expect(swipeSource).toContain("WebkitUserSelect: 'none'");
     expect(swipeSource).toContain('requestedSwipe?.restaurantId === restaurant.id');
-    expect(swipeSource).toContain("bg-[#FEE2E2] text-[#B91C1C]");
-    expect(swipeSource).toContain("bg-[#FEF9C3] text-[#854D0E]");
-    expect(swipeSource).toContain("bg-[#DCFCE7] text-[#15803D]");
+    expect(swipeSource).toContain('<ThumbsDown size={23}');
+    expect(swipeSource).toContain('<ThumbsUp size={23}');
+    expect(swipeSource).toContain('rounded-full border-2');
     expect(swipeSource).toContain('SOLO LUNCH GAME');
     expect(swipeSource).toContain('SOLO SHOWDOWN');
     expect(swipeSource).toContain('SOLO WINNER!');

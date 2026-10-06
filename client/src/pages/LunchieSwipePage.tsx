@@ -9,7 +9,7 @@ import { useState, useCallback, useEffect, useMemo, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { motion, useMotionValue, useTransform, useMotionTemplate, useAnimation, AnimatePresence, type MotionValue, type PanInfo } from 'framer-motion';
 import { useLocation } from 'wouter';
-import { Heart, X, Minus, Star, MapPin, Clock, Phone, Navigation, Share2, Download, Link2, Home, Bookmark, RotateCcw, Loader2, RefreshCw, SlidersHorizontal, Info, LockKeyhole, MessageCircleHeart, Sparkles, Users } from 'lucide-react';
+import { Heart, X, Minus, ThumbsDown, ThumbsUp, Star, MapPin, Clock, Phone, Navigation, Share2, Download, Link2, Home, Bookmark, RotateCcw, Loader2, RefreshCw, SlidersHorizontal, Info, LockKeyhole, MessageCircleHeart, Sparkles, Users } from 'lucide-react';
 import { toast } from 'sonner';
 import { useApp, type Restaurant, type MenuItem, type GroupSession } from '@/contexts/AppContext';
 import { useCourseShare } from '@/hooks/useCourseShare';
@@ -3155,39 +3155,45 @@ function QuickMatchExperience() {
           onClick={() => requestButtonSwipe('dislike')}
           disabled={isSubmittingSwipe || requestedSwipe !== null}
           aria-label="Not Recommended"
-          className={`h-[72px] min-w-0 rounded-lg border-2 px-2 text-center outline-none transition-[transform,background-color,color,box-shadow] focus-visible:ring-2 focus-visible:ring-[#DC2626] disabled:cursor-wait disabled:opacity-70 ${activeSwipeAction === 'dislike' ? 'border-[#DC2626] bg-[#DC2626] text-white shadow-[0_0_0_4px_rgba(220,38,38,0.20)]' : 'border-[#F87171] bg-[#FEE2E2] text-[#B91C1C] shadow-sm'}`}
+          className="group flex h-[72px] min-w-0 flex-col items-center justify-center gap-1 rounded-2xl text-center text-[#B91C1C] outline-none focus-visible:ring-2 focus-visible:ring-[#DC2626] focus-visible:ring-offset-2 disabled:cursor-wait disabled:opacity-70"
           animate={activeSwipeAction === 'dislike' ? { scale: [1, 0.92, 1.04] } : { scale: 1 }}
           transition={{ duration: 0.36, ease: [0.16, 1, 0.3, 1] }}
-          whileTap={{ scale: 0.92, backgroundColor: '#DC2626', borderColor: '#DC2626', color: '#FFFFFF' }}
+          whileTap={{ scale: 0.92 }}
         >
-          <X size={21} className="mx-auto" strokeWidth={2} />
-          <span className="mt-1 block text-[12px] font-semibold">Dislike</span>
+          <span className={`flex size-12 items-center justify-center rounded-full border-2 transition-[transform,background-color,border-color,box-shadow] group-hover:scale-105 ${activeSwipeAction === 'dislike' ? 'border-[#991B1B] bg-[#B91C1C] text-white shadow-[0_0_0_5px_rgba(248,113,113,0.28)]' : 'border-[#EF4444] bg-[#EF4444] text-white shadow-[0_4px_10px_rgba(185,28,28,0.24)]'}`}>
+            <ThumbsDown size={23} strokeWidth={2.5} fill="currentColor" aria-hidden="true" />
+          </span>
+          <span className="block text-[11px] font-bold leading-none">Dislike</span>
         </motion.button>
         <motion.button
           data-action="neutral"
           onClick={() => requestButtonSwipe('neutral')}
           disabled={isSubmittingSwipe || requestedSwipe !== null}
           aria-label="Neutral"
-          className={`h-[72px] min-w-0 rounded-lg border-2 px-2 text-center outline-none transition-[transform,background-color,color,box-shadow] focus-visible:ring-2 focus-visible:ring-[#EAB308] disabled:cursor-wait disabled:opacity-70 ${activeSwipeAction === 'neutral' ? 'border-[#EAB308] bg-[#FACC15] text-[#422006] shadow-[0_0_0_4px_rgba(234,179,8,0.22)]' : 'border-[#FACC15] bg-[#FEF9C3] text-[#854D0E] shadow-sm'}`}
+          className="group flex h-[72px] min-w-0 flex-col items-center justify-center gap-1 rounded-2xl text-center text-[#854D0E] outline-none focus-visible:ring-2 focus-visible:ring-[#EAB308] focus-visible:ring-offset-2 disabled:cursor-wait disabled:opacity-70"
           animate={activeSwipeAction === 'neutral' ? { scale: [1, 0.92, 1.04] } : { scale: 1 }}
           transition={{ duration: 0.36, ease: [0.16, 1, 0.3, 1] }}
-          whileTap={{ scale: 0.92, backgroundColor: '#FACC15', borderColor: '#EAB308', color: '#422006' }}
+          whileTap={{ scale: 0.92 }}
         >
-          <Minus size={21} className="mx-auto" strokeWidth={2} />
-          <span className="mt-1 block text-[12px] font-semibold">Neutral</span>
+          <span className={`flex size-12 items-center justify-center rounded-full border-2 transition-[transform,background-color,border-color,box-shadow] group-hover:scale-105 ${activeSwipeAction === 'neutral' ? 'border-[#A16207] bg-[#EAB308] text-[#422006] shadow-[0_0_0_5px_rgba(250,204,21,0.30)]' : 'border-[#FACC15] bg-[#FACC15] text-[#422006] shadow-[0_4px_10px_rgba(161,98,7,0.22)]'}`}>
+            <Minus size={27} strokeWidth={3.25} aria-hidden="true" />
+          </span>
+          <span className="block text-[11px] font-bold leading-none">Neutral</span>
         </motion.button>
         <motion.button
           data-action="like"
           onClick={() => requestButtonSwipe('like')}
           disabled={isSubmittingSwipe || requestedSwipe !== null}
           aria-label="Recommend"
-          className={`h-[72px] min-w-0 rounded-lg border-2 px-2 text-center outline-none transition-[transform,background-color,color,box-shadow] focus-visible:ring-2 focus-visible:ring-[#16A34A] disabled:cursor-wait disabled:opacity-70 ${activeSwipeAction === 'like' ? 'border-[#16A34A] bg-[#16A34A] text-white shadow-[0_0_0_4px_rgba(22,163,74,0.20)]' : 'border-[#4ADE80] bg-[#DCFCE7] text-[#15803D] shadow-sm'}`}
+          className="group flex h-[72px] min-w-0 flex-col items-center justify-center gap-1 rounded-2xl text-center text-[#15803D] outline-none focus-visible:ring-2 focus-visible:ring-[#16A34A] focus-visible:ring-offset-2 disabled:cursor-wait disabled:opacity-70"
           animate={activeSwipeAction === 'like' ? { scale: [1, 0.92, 1.04] } : { scale: 1 }}
           transition={{ duration: 0.36, ease: [0.16, 1, 0.3, 1] }}
-          whileTap={{ scale: 0.92, backgroundColor: '#16A34A', borderColor: '#16A34A', color: '#FFFFFF' }}
+          whileTap={{ scale: 0.92 }}
         >
-          <Heart size={21} className="mx-auto" strokeWidth={2} />
-          <span className="mt-1 block text-[12px] font-semibold">Like</span>
+          <span className={`flex size-12 items-center justify-center rounded-full border-2 transition-[transform,background-color,border-color,box-shadow] group-hover:scale-105 ${activeSwipeAction === 'like' ? 'border-[#166534] bg-[#16A34A] text-white shadow-[0_0_0_5px_rgba(74,222,128,0.28)]' : 'border-[#22C55E] bg-[#22C55E] text-white shadow-[0_4px_10px_rgba(21,128,61,0.24)]'}`}>
+            <ThumbsUp size={23} strokeWidth={2.5} fill="currentColor" aria-hidden="true" />
+          </span>
+          <span className="block text-[11px] font-bold leading-none">Like</span>
         </motion.button>
       </div>
       </footer>, document.body)}
