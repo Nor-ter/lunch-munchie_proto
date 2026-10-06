@@ -381,24 +381,12 @@ function QuickMatchCover() {
       <span className="pointer-events-none absolute -right-12 top-10 size-56 rounded-full bg-[#FBECE9]/10" aria-hidden="true" />
       <span className="pointer-events-none absolute -left-20 bottom-5 size-44 rounded-full bg-[#FBECE9]/10" aria-hidden="true" />
 
-      <div className="relative z-10 flex items-center justify-between gap-3">
-        <span className="rounded-full border border-white/25 bg-white/10 px-3 py-1.5 text-[9px] font-black uppercase tracking-[0.18em]">
-          Lunchie · Quick Match
-        </span>
-        <span className="rounded-full bg-[#FBECE9] px-3 py-1.5 text-[9px] font-black uppercase tracking-[0.12em] text-[#AA1A0D]">
-          Ready to play
-        </span>
-      </div>
-
-      <div className="relative z-10 mt-5 grid grid-cols-[minmax(0,1fr)_132px] items-center gap-1">
+      <div className="relative z-10 grid grid-cols-[minmax(0,1fr)_132px] items-center gap-1">
         <div className="min-w-0 pb-3">
           <p className="text-[10px] font-black uppercase tracking-[0.18em] text-[#F8C9C2]">Today's lunch game</p>
           <h1 className="mt-2 max-w-[235px] text-[34px] font-black leading-[0.98] tracking-[-0.045em]">
             What are we eating today?
           </h1>
-          <p className="mt-3 max-w-[250px] text-[12px] font-semibold leading-[1.55] text-[#FBECE9]">
-            Set the distance, invite your crew, and make every other choice together.
-          </p>
         </div>
 
         <div className="relative flex h-[154px] items-end justify-center">
