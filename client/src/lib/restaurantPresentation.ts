@@ -9,6 +9,31 @@ export function restaurantRatingLabel(rating: number): string {
   return Number.isFinite(rating) && rating > 0 && rating <= 5 ? String(Math.round(rating * 10) / 10) : "Not Rated";
 }
 
+function restaurantSeed(id: string): number {
+  return Array.from(id).reduce((seed, character) => ((seed * 31) + character.charCodeAt(0)) >>> 0, 17);
+}
+
+export function restaurantDisplayRating(
+  restaurant: Pick<Restaurant, 'id' | 'rating' | 'reviewCount'>,
+): { rating: number; reviewCount: number; isDemo: boolean } {
+  const hasStoredRating = Number.isFinite(restaurant.rating) && restaurant.rating > 0 && restaurant.rating <= 5;
+  const hasStoredReviews = Number.isFinite(restaurant.reviewCount) && restaurant.reviewCount > 0;
+  if (hasStoredRating) {
+    return {
+      rating: Math.round(restaurant.rating * 10) / 10,
+      reviewCount: hasStoredReviews ? Math.trunc(restaurant.reviewCount) : 0,
+      isDemo: false,
+    };
+  }
+
+  const seed = restaurantSeed(restaurant.id || 'lunchie');
+  return {
+    rating: 4 + (seed % 9) / 10,
+    reviewCount: 128 + ((seed * 37) % 2_373),
+    isDemo: true,
+  };
+}
+
 export function restaurantPriceLabel(restaurant: Restaurant): string | null {
   const prices = (restaurant.menuItems ?? []).map(item => item.price)
     .filter((price): price is number => typeof price === 'number' && Number.isFinite(price) && price > 0);

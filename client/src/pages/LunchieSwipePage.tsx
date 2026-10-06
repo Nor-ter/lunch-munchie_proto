@@ -27,7 +27,7 @@ import { normalizeRestaurantPayload } from '@shared/restaurantContract';
 import SessionManagementMenu from '@/components/lunchie/SessionManagementMenu';
 import BackButton from '@/components/ui/BackButton';
 import QuickMatchRestaurantDetailSheet from '@/components/lunchie/QuickMatchRestaurantDetailSheet';
-import { restaurantSummary, restaurantRatingLabel, restaurantPriceLabel } from '@/lib/restaurantPresentation';
+import { restaurantDisplayRating, restaurantSummary, restaurantRatingLabel, restaurantPriceLabel } from '@/lib/restaurantPresentation';
 import { LUNCHIE_CUISINE_CHOICES, prioritizeRestaurantsForCuisine, type LunchieCuisineChoice } from '@/lib/lunchieGame';
 import { cuisineSignal, mealRatingSignal, satisfactionSignal } from '@shared/lunchieRoundStats';
 import { lunchieSwipeArc, resolveLunchieSwipeGesture } from '@/lib/lunchieSwipeGesture';
@@ -631,6 +631,7 @@ function SwipeCard({
   const primaryPhoto = hasCanonicalPhotoList ? foodPhotos[0] : restaurant.image;
   const photoIndex = foodPhotos.length ? ((photoStep % foodPhotos.length) + foodPhotos.length) % foodPhotos.length : 0;
   const detailSummary = restaurantSummary(restaurant);
+  const displayRating = restaurantDisplayRating(restaurant);
   const rotateMenuPhoto = useCallback((direction: -1 | 1) => {
     const accepted = beginMenuPhotoRotation(photoRotationLock, direction, delta => {
       setPhotoStep(step => step + delta);
@@ -844,7 +845,7 @@ function SwipeCard({
           <div className="flex flex-wrap items-center gap-x-3 gap-y-1 mt-2">
             <div className="flex items-center gap-1">
               <Star size={12} fill="#AA1A0D" color="#AA1A0D" />
-              <span className="text-white text-[12px] font-semibold">{englishText(restaurantRatingLabel(restaurant.rating))}</span>
+              <span className="text-white text-[12px] font-semibold">{englishText(restaurantRatingLabel(displayRating.rating))}</span>
             </div>
             {englishText(restaurant.distance?.trim() && <div className="flex items-center gap-1">
               <MapPin size={11} color="rgba(255,255,255,0.6)" />

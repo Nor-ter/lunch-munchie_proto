@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { Restaurant } from '@/contexts/AppContext';
-import { mergeCanonicalRestaurantPresentation, restaurantSummary, restaurantRatingLabel, restaurantPriceLabel } from './restaurantPresentation';
+import { mergeCanonicalRestaurantPresentation, restaurantDisplayRating, restaurantSummary, restaurantRatingLabel, restaurantPriceLabel } from './restaurantPresentation';
 
 const baseRestaurant: Restaurant = {
   id: 'r1',
@@ -27,6 +27,21 @@ describe('restaurant presentation data', () => {
     expect(restaurantRatingLabel(0)).toBe('Not Rated');
     expect(restaurantRatingLabel(NaN)).toBe('Not Rated');
     expect(restaurantRatingLabel(4.7)).toBe('4.7');
+  });
+
+  it('provides stable demo ratings for restaurants without stored ratings', () => {
+    const first = restaurantDisplayRating(baseRestaurant);
+    const repeated = restaurantDisplayRating(baseRestaurant);
+    const different = restaurantDisplayRating({ ...baseRestaurant, id: 'r2' });
+
+    expect(first).toEqual(repeated);
+    expect(first.isDemo).toBe(true);
+    expect(first.rating).toBeGreaterThanOrEqual(4);
+    expect(first.rating).toBeLessThanOrEqual(4.8);
+    expect(first.reviewCount).toBeGreaterThan(0);
+    expect(different).not.toEqual(first);
+    expect(restaurantDisplayRating({ ...baseRestaurant, rating: 4.9, reviewCount: 321 }))
+      .toEqual({ rating: 4.9, reviewCount: 321, isDemo: false });
   });
 
   it('shows Australian dollar prices only when actual menu prices are available', () => {

@@ -13,10 +13,18 @@ describe('QuickMatchRestaurantDetailSheet', () => {
     expect(source).toContain('data-ui="quick-match-restaurant-detail-sheet"');
   });
 
-  it('shows only available stored details without a direct Google client request', () => {
+  it('shows ratings, reviews, distance, map, and stored menu details', () => {
     expect(source).toContain('englishText(detail.address && (');
     expect(source).toContain('englishText(detail.openHours && (');
     expect(source).toContain('englishText(detail.phone && (');
+    expect(source).toContain('restaurantDisplayRating(detail)');
+    expect(source).toContain('Review snapshot');
+    expect(source).toContain('Demo data');
+    expect(source).toContain('aria-label="Restaurant map"');
+    expect(source).toContain('<GoogleMap');
+    expect(source).toContain('Open Map');
+    expect(source).toContain('aria-label="Restaurant menu"');
+    expect(source).toContain('(detail.menuItems ?? []).slice(0, 8)');
     expect(source).not.toContain('places.googleapis.com');
   });
 });
