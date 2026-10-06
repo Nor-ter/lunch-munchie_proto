@@ -370,6 +370,88 @@ function DistanceRuler({ radius, onChange }: { radius: number; onChange: (value:
   );
 }
 
+function QuickMatchCover({
+  preference,
+  occasions,
+  radius,
+  distanceEnabled,
+  deadlineMinutes,
+}: {
+  preference: string;
+  occasions: string[];
+  radius: number;
+  distanceEnabled: boolean;
+  deadlineMinutes: number;
+}) {
+  const occasionLabel = occasions.length
+    ? occasions.slice(0, 2).map(englishText).join(' · ')
+    : 'Any occasion';
+
+  return (
+    <section
+      data-ui="quick-match-cover"
+      aria-label="Quick Match cover"
+      className="relative -mx-5 overflow-hidden rounded-b-[32px] bg-[#AA1A0D] px-5 pb-5 pt-[max(18px,env(safe-area-inset-top))] text-white shadow-[0_16px_34px_rgba(112,25,17,0.22)]"
+    >
+      <span className="pointer-events-none absolute -right-12 top-10 size-56 rounded-full bg-[#FBECE9]/10" aria-hidden="true" />
+      <span className="pointer-events-none absolute -left-20 bottom-5 size-44 rounded-full bg-[#FBECE9]/10" aria-hidden="true" />
+
+      <div className="relative z-10 flex items-center justify-between gap-3">
+        <span className="rounded-full border border-white/25 bg-white/10 px-3 py-1.5 text-[9px] font-black uppercase tracking-[0.18em]">
+          Lunchie · Quick Match
+        </span>
+        <span className="rounded-full bg-[#FBECE9] px-3 py-1.5 text-[9px] font-black uppercase tracking-[0.12em] text-[#AA1A0D]">
+          Ready to play
+        </span>
+      </div>
+
+      <div className="relative z-10 mt-5 grid grid-cols-[minmax(0,1fr)_132px] items-center gap-1">
+        <div className="min-w-0 pb-3">
+          <p className="text-[10px] font-black uppercase tracking-[0.18em] text-[#F8C9C2]">Today's lunch game</p>
+          <h1 className="mt-2 max-w-[235px] text-[34px] font-black leading-[0.98] tracking-[-0.045em]">
+            What are we eating today?
+          </h1>
+          <p className="mt-3 max-w-[250px] text-[12px] font-semibold leading-[1.55] text-[#FBECE9]">
+            Set the mood, invite your crew, and reveal the winner together.
+          </p>
+        </div>
+
+        <div className="relative flex h-[154px] items-end justify-center">
+          <motion.span
+            className="absolute right-0 top-0 rounded-[12px] bg-[#F4C54A] px-2.5 py-1.5 text-center text-[9px] font-black leading-tight text-[#5A321A] shadow-md"
+            animate={{ rotate: [2, -1, 2], y: [0, -3, 0] }}
+            transition={{ duration: 3.2, repeat: Infinity, ease: 'easeInOut' }}
+          >
+            Let’s pick<br />together!
+          </motion.span>
+          <motion.img
+            src="/assets/lunchmate/chicken/chicken-happy.png"
+            alt="Lunchie Munchie chick ready for Quick Match"
+            draggable={false}
+            className="h-[132px] w-[132px] select-none object-contain drop-shadow-[0_12px_18px_rgba(61,18,12,0.24)]"
+            animate={{ y: [0, -5, 0], rotate: [0, -1.5, 0, 1.5, 0] }}
+            transition={{ duration: 3.6, repeat: Infinity, ease: 'easeInOut' }}
+          />
+        </div>
+      </div>
+
+      <div className="relative z-10 mt-3 grid grid-cols-2 gap-2" aria-label="Current Quick Match settings">
+        {[
+          ['Craving', preference],
+          ['Occasion', occasionLabel],
+          ['Distance', distanceEnabled ? formatRadius(radius) : 'No limit'],
+          ['Round time', `${deadlineMinutes} min`],
+        ].map(([label, value]) => (
+          <div key={label} className="min-w-0 rounded-[14px] border border-white/15 bg-white/10 px-3 py-2.5 backdrop-blur-sm">
+            <span className="block text-[8px] font-black uppercase tracking-[0.14em] text-[#F8C9C2]">{label}</span>
+            <strong className="mt-1 block truncate text-[11px] font-extrabold text-white">{value}</strong>
+          </div>
+        ))}
+      </div>
+    </section>
+  );
+}
+
 export default function LunchieSettingsPage() {
   const [, navigate] = useLocation();
   const search = useSearch();
@@ -583,14 +665,15 @@ export default function LunchieSettingsPage() {
 
   return (
     <div className="min-h-dvh bg-[#FCFCFC] pb-6 text-[#171717]">
-      <header className="sticky top-0 z-20 border-b border-[#E8E6E7] bg-[#FCFCFC]/95 px-5 pb-4 pt-[max(16px,env(safe-area-inset-top))] backdrop-blur">
-        <div className="text-center">
-          <h1 className="text-[18px] font-bold leading-none text-[#171717]">Quick Match</h1>
-          <p className="mt-1.5 text-[11px] font-medium text-[#858185]">What are you craving today?</p>
-        </div>
-      </header>
-
       <main className="mx-auto max-w-[480px] px-5 pb-24">
+        <QuickMatchCover
+          preference={selectedPreferenceLabel}
+          occasions={tags}
+          radius={radius}
+          distanceEnabled={distanceEnabled}
+          deadlineMinutes={deadlineMin}
+        />
+
         {sessionCheckFailed && currentSession && (
           <section role="alert" className="my-4 rounded-[10px] border border-[#ECC1BB] bg-[#FDF6F4] p-4">
             <h2 className="text-[14px] font-black text-[#302B2E]">Couldn't check your active Quick Match</h2>
