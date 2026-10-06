@@ -4,8 +4,8 @@ import { createPortal } from 'react-dom';
 import { AnimatePresence, motion } from 'framer-motion';
 import { Map as GoogleMap, Marker } from '@vis.gl/react-google-maps';
 import { Clock, ExternalLink, MapPin, MessageSquareText, Navigation, Phone, Star, UtensilsCrossed, X } from 'lucide-react';
-import { useApp, type Restaurant } from '@/contexts/AppContext';
-import { restaurantDisplayRating, restaurantPriceLabel, restaurantSummary } from '@/lib/restaurantPresentation';
+import { useApp, type MenuItem, type Restaurant } from '@/contexts/AppContext';
+import { mergeCanonicalRestaurantPresentation, restaurantDisplayRating, restaurantPriceLabel, restaurantSummary } from '@/lib/restaurantPresentation';
 import { getRestaurantById } from '@/services/restaurantsApi';
 
 const GOOGLE_MAPS_API_KEY = import.meta.env.VITE_GOOGLE_MAPS_API_KEY;
@@ -13,6 +13,36 @@ const GOOGLE_MAPS_API_KEY = import.meta.env.VITE_GOOGLE_MAPS_API_KEY;
 function formatMenuPrice(price: number | null): string {
   if (price == null || !Number.isFinite(price) || price <= 0) return '';
   return new Intl.NumberFormat('en-AU', { style: 'currency', currency: 'AUD' }).format(price);
+}
+
+function sampleMenuForCategory(category: string): MenuItem[] {
+  const normalized = category.toLocaleLowerCase();
+  if (normalized.includes('cafe') || normalized.includes('coffee')) {
+    return [
+      { name: 'Flat White', price: 5.5, category: 'Sample Menu' },
+      { name: 'Seasonal Pastry', price: 8, category: 'Sample Menu' },
+      { name: 'Brunch Plate', price: 19, category: 'Sample Menu' },
+    ];
+  }
+  if (normalized.includes('korean')) {
+    return [
+      { name: 'Bibimbap', price: 18, category: 'Sample Menu' },
+      { name: 'Bulgogi Bowl', price: 21, category: 'Sample Menu' },
+      { name: 'Kimchi Pancake', price: 15, category: 'Sample Menu' },
+    ];
+  }
+  if (normalized.includes('japanese')) {
+    return [
+      { name: 'Salmon Don', price: 22, category: 'Sample Menu' },
+      { name: 'Karaage', price: 14, category: 'Sample Menu' },
+      { name: 'Miso Soup', price: 5, category: 'Sample Menu' },
+    ];
+  }
+  return [
+    { name: 'House Special', price: 22, category: 'Sample Menu' },
+    { name: 'Share Plate', price: 16, category: 'Sample Menu' },
+    { name: 'Dessert of the Day', price: 10, category: 'Sample Menu' },
+  ];
 }
 
 export default function QuickMatchRestaurantDetailSheet({
@@ -48,7 +78,9 @@ export default function QuickMatchRestaurantDetailSheet({
   }, [restaurant.id]);
 
   if (typeof document === 'undefined') return null;
-  const detail = canonicalRestaurant ?? restaurant;
+  const detail = canonicalRestaurant
+    ? mergeCanonicalRestaurantPresentation(restaurant, canonicalRestaurant)
+    : restaurant;
   const summary = restaurantSummary(detail);
   const displayRating = restaurantDisplayRating(detail);
   const priceLabel = restaurantPriceLabel(detail);
@@ -64,6 +96,9 @@ export default function QuickMatchRestaurantDetailSheet({
     { label: 'Service', value: Math.min(96, Math.round(displayRating.rating * 19 + 4)) },
     { label: 'Value', value: Math.min(94, Math.round(displayRating.rating * 18 + 6)) },
   ];
+  const storedMenuItems = detail.menuItems ?? [];
+  const menuIsDemo = storedMenuItems.length === 0;
+  const menuItems = menuIsDemo ? sampleMenuForCategory(detail.category) : storedMenuItems;
 
   return createPortal(
     <AnimatePresence>
@@ -196,10 +231,12 @@ export default function QuickMatchRestaurantDetailSheet({
               </section>
 
               <section className="mt-5" aria-label="Restaurant menu">
-                <h3 className="flex items-center gap-1.5 text-[13px] font-black text-[#171717]"><UtensilsCrossed size={15} className="text-[#AA1A0D]" /> Menu</h3>
-                {(detail.menuItems ?? []).length > 0 ? (
-                  <div className="mt-2 overflow-hidden rounded-2xl border border-[#E8E6E7] bg-white">
-                    {(detail.menuItems ?? []).slice(0, 8).map((item, index) => (
+                <div className="flex items-center justify-between gap-3">
+                  <h3 className="flex items-center gap-1.5 text-[13px] font-black text-[#171717]"><UtensilsCrossed size={15} className="text-[#AA1A0D]" /> {menuIsDemo ? 'Sample menu' : 'Menu'}</h3>
+                  {menuIsDemo && <span className="text-[9px] font-black uppercase tracking-wide text-[#9B9B9B]">Demo data</span>}
+                </div>
+                <div className="mt-2 overflow-hidden rounded-2xl border border-[#E8E6E7] bg-white">
+                    {menuItems.slice(0, 8).map((item, index) => (
                       <div key={`${item.name}-${index}`} className="flex items-center gap-3 border-b border-[#F0EEEE] px-3 py-3 last:border-b-0">
                         {item.image ? <img src={item.image} alt="" className="size-11 shrink-0 rounded-xl object-cover" /> : <span className="flex size-11 shrink-0 items-center justify-center rounded-xl bg-[#FBECE9] text-lg" aria-hidden="true">🍽️</span>}
                         <div className="min-w-0 flex-1">
@@ -209,10 +246,7 @@ export default function QuickMatchRestaurantDetailSheet({
                         {formatMenuPrice(item.price) && <span className="shrink-0 text-[11px] font-black text-[#AA1A0D]">{formatMenuPrice(item.price)}</span>}
                       </div>
                     ))}
-                  </div>
-                ) : (
-                  <div className="mt-2 rounded-2xl bg-[#F5F4F5] px-4 py-4 text-[11px] font-semibold text-[#858185]">Menu details are not available yet.</div>
-                )}
+                </div>
               </section>
 
               <div className="mt-5 space-y-3 border-t border-[#E8E6E7] pt-4">
