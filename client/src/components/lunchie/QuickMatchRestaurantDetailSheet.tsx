@@ -17,21 +17,21 @@ function formatMenuPrice(price: number | null): string {
 
 function sampleMenuForCategory(category: string): MenuItem[] {
   const normalized = category.toLocaleLowerCase();
-  if (normalized.includes('cafe') || normalized.includes('coffee')) {
+  if (normalized.includes('cafe') || normalized.includes('coffee') || normalized.includes('카페')) {
     return [
       { name: 'Flat White', price: 5.5, category: 'Sample Menu' },
       { name: 'Seasonal Pastry', price: 8, category: 'Sample Menu' },
       { name: 'Brunch Plate', price: 19, category: 'Sample Menu' },
     ];
   }
-  if (normalized.includes('korean')) {
+  if (normalized.includes('korean') || normalized.includes('한식')) {
     return [
       { name: 'Bibimbap', price: 18, category: 'Sample Menu' },
       { name: 'Bulgogi Bowl', price: 21, category: 'Sample Menu' },
       { name: 'Kimchi Pancake', price: 15, category: 'Sample Menu' },
     ];
   }
-  if (normalized.includes('japanese')) {
+  if (normalized.includes('japanese') || normalized.includes('일식')) {
     return [
       { name: 'Salmon Don', price: 22, category: 'Sample Menu' },
       { name: 'Karaage', price: 14, category: 'Sample Menu' },
