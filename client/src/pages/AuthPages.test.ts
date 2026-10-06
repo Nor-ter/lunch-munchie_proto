@@ -15,7 +15,7 @@ describe('web auth routes and integration boundaries', () => {
     expect(APP_SOURCE).toContain('<Route path="/login">');
     expect(APP_SOURCE).toContain('<Route path="/auth/login"');
     expect(APP_SOURCE).toContain('<Route path="/auth/callback"');
-    expect(APP_SOURCE).toContain("'/auth'");
+    expect(APP_SOURCE).toContain('shouldShowTabBar(location)');
   });
 
   it('relies on automatic URL session detection without a manual code exchange', () => {
@@ -36,12 +36,19 @@ describe('web auth routes and integration boundaries', () => {
 
   it('keeps OAuth errors visible instead of immediately restarting login', () => {
     expect(LOGIN_SOURCE).toContain('if (authError) return;');
-    expect(LOGIN_SOURCE).toContain('오류 코드: {authError}');
+    expect(LOGIN_SOURCE).toContain('Error code: {englishText(authError)}');
+  });
+
+  it('does not tell public deployments to repair local .dev.vars', () => {
+    expect(LOGIN_SOURCE).toContain("hostname === 'localhost'");
+    expect(LOGIN_SOURCE).toContain('Google sign-in is not configured for this deployment.');
+    expect(LOGIN_SOURCE).toContain('Local Google sign-in settings are missing.');
   });
 
   it('adds auth controls only inside the existing Profile settings sheet', () => {
     expect(PROFILE_SOURCE).toContain("activeSheet === 'settings'");
-    expect(PROFILE_SOURCE).toContain('Google로 로그인');
+    expect(PROFILE_SOURCE).toContain('<AccountBanner />');
+    expect(PROFILE_SOURCE).toContain('Sign in with Google');
     expect(PROFILE_SOURCE).toContain('<AccountLogoutButton');
   });
 

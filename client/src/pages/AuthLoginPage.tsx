@@ -9,6 +9,13 @@ import {
 } from './authNavigation';
 import { replaceWithGoogleAuth, startGoogleAuth } from '@/services/authApi';
 
+export function getOAuthConfigMessage(hostname: string = window.location.hostname) {
+  const isLocal = hostname === 'localhost' || hostname === '127.0.0.1';
+  return isLocal
+    ? 'Local Google sign-in settings are missing. Restore Google OAuth settings in .dev.vars and restart the development server.'
+    : 'Google sign-in is not configured for this deployment. Ask the deployment owner to restore the Google OAuth secrets and redeploy.';
+}
+
 export default function AuthLoginPage() {
   const [, navigate] = useLocation();
   const auth = useAuthStatus();
@@ -47,7 +54,7 @@ export default function AuthLoginPage() {
 
   if (authError) {
     const message = authError === 'oauth_config'
-      ? "Local Google sign-in settings are missing. Restore Google OAuth settings in .dev.vars and restart the development server."
+      ? getOAuthConfigMessage()
       : authError === 'oauth_profile'
       ? "Couldn't read your Google account. Sign-in should work without a name or photo. If this persists, report the error code."
       : authError === 'oauth_exchange'
