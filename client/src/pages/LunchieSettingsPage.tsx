@@ -371,13 +371,7 @@ function DistanceRuler({ radius, onChange }: { radius: number; onChange: (value:
   );
 }
 
-function QuickMatchCover({
-  radius,
-  distanceEnabled,
-}: {
-  radius: number;
-  distanceEnabled: boolean;
-}) {
+function QuickMatchCover() {
   return (
     <section
       data-ui="quick-match-cover"
@@ -426,17 +420,6 @@ function QuickMatchCover({
         </div>
       </div>
 
-      <div className="relative z-10 mt-3" aria-label="Current Quick Match settings">
-        <div className="rounded-[14px] border border-white/15 bg-white/10 px-4 py-3 backdrop-blur-sm">
-          <div className="flex items-center justify-between gap-3">
-            <span className="text-[8px] font-black uppercase tracking-[0.14em] text-[#F8C9C2]">Search distance</span>
-            <strong className="text-[12px] font-extrabold text-white">{distanceEnabled ? formatRadius(radius) : 'No limit'}</strong>
-          </div>
-          <p className="mt-1.5 text-[9px] font-semibold leading-relaxed text-[#FBECE9]">
-            Cuisine, mood and the final pick happen together during the game.
-          </p>
-        </div>
-      </div>
     </section>
   );
 }
@@ -641,10 +624,7 @@ export default function LunchieSettingsPage() {
   return (
     <div className="min-h-dvh bg-[#FCFCFC] pb-6 text-[#171717]">
       <main className="mx-auto max-w-[480px] px-5 pb-36">
-        <QuickMatchCover
-          radius={radius}
-          distanceEnabled={distanceEnabled}
-        />
+        <QuickMatchCover />
 
         {sessionCheckFailed && currentSession && (
           <section role="alert" className="my-4 rounded-[10px] border border-[#ECC1BB] bg-[#FDF6F4] p-4">
