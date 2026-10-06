@@ -73,7 +73,8 @@ describe('unified Lunchie group flow', () => {
     expect(swipeSource).toContain('Choose all the cuisines you like, then confirm.');
     expect(swipeSource).toContain('Choose multiple cuisines. Results appear after confirmation.');
     expect(swipeSource).toContain('aria-pressed={isSelected}');
-    expect(swipeSource).toContain('ROUND 2 · RECOMMENDATION VOTE');
+    expect(swipeSource).toContain('Recommendation Vote</p>');
+    expect(swipeSource).toContain('aria-label="Recommendation vote actions"');
     expect(swipeSource).toContain('>Dislike</span>');
     expect(swipeSource).toContain('>Like</span>');
     expect(swipeSource).toContain("drag={!isRevealed && !interactionDisabled && !isSwipeCommitting}");

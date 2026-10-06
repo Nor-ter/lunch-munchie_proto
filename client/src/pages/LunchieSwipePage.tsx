@@ -6,6 +6,7 @@ import { englishText } from '@shared/englishCopy';
  */
 
 import { useState, useCallback, useEffect, useMemo, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import { motion, useMotionValue, useTransform, useMotionTemplate, useAnimation, AnimatePresence, type MotionValue, type PanInfo } from 'framer-motion';
 import { useLocation } from 'wouter';
 import { Heart, X, Minus, Star, MapPin, Clock, Phone, Navigation, Share2, Download, Link2, Home, Bookmark, RotateCcw, Loader2, RefreshCw, SlidersHorizontal, Info, LockKeyhole, MessageCircleHeart, Sparkles, Users } from 'lucide-react';
@@ -3047,23 +3048,19 @@ function QuickMatchExperience() {
 
   return (
     <div
-      className={`min-h-dvh bg-[#FCFCFC] relative ${detailRestaurant ? 'select-text' : 'select-none'}`}
+      className={`relative min-h-dvh bg-[#FCFCFC] pb-[118px] ${detailRestaurant ? 'select-text' : 'select-none'}`}
       data-ui="quick-match-voting-surface"
       style={detailRestaurant ? undefined : { userSelect: 'none', WebkitUserSelect: 'none' }}
     >
-      <div className="border-b border-[#E8E6E7] bg-[#F5F4F5] px-5 pb-3 pt-[max(14px,env(safe-area-inset-top))]">
-        <GameStageRail current={2} />
-      </div>
-      {/* Header */}
-      <div className="flex items-center justify-between px-5 pb-3 pt-3">
+      {/* Compact vote header: the full stage rail remains on reveal screens. */}
+      <header className="flex min-h-[62px] items-center justify-between gap-3 border-b border-[#E8E6E7] bg-[#FCFCFC] px-5 pb-2 pt-[max(8px,env(safe-area-inset-top))]">
         <BackButton
           onClick={() => { logAbandon('back'); navigate('/lunchie/settings'); }}
           aria-label="Back to Quick Match Settings"
         />
-        <div className="text-center">
-          <span className="inline-flex rounded-full bg-[#FBECE9] px-2 py-0.5 text-[8px] font-black tracking-[0.7px] text-[#AA1A0D]">ROUND 2 · RECOMMENDATION VOTE</span>
-          <p className="font-bold text-[16px] text-[#1A1A1A]">Would you recommend this restaurant?</p>
-          <p className="text-[11px] text-[#9B9B9B]">Rate each restaurant ·  {progress}/{total}</p>
+        <div className="min-w-0 flex-1 text-center">
+          <p className="truncate text-[13px] font-black text-[#1A1A1A]">Recommendation Vote</p>
+          <p className="mt-0.5 text-[10px] font-semibold text-[#858185]">{progress} / {total}</p>
         </div>
         {currentSession?.deadline ? (
           <motion.div
@@ -3080,7 +3077,7 @@ function QuickMatchExperience() {
         ) : (
           <div className="w-10 flex-shrink-0" />
         )}
-      </div>
+      </header>
 
       {currentSession.dietaryBestEffort && (
         <div role="note" className="mx-5 mb-2 rounded-2xl border border-[#ECC1BB] bg-[#FBECE9] px-4 py-3 text-center">
@@ -3126,8 +3123,8 @@ function QuickMatchExperience() {
         )}
       </AnimatePresence>
       {/* Card stack — 9:12 ratio */}
-      <div className="px-5 py-2 relative flex items-center justify-center">
-        <div className="relative w-full" style={{ aspectRatio: '9/12', maxHeight: '64dvh' }}>
+      <div className="relative flex items-center justify-center px-5 pb-3 pt-2">
+        <div className="relative" style={{ aspectRatio: '9/12', width: 'min(100%, calc(75dvh - 190px))', maxWidth: '100%' }}>
           <AnimatePresence>
             {visibleCards.map((restaurant, i) => (
               <SwipeCard
@@ -3148,47 +3145,52 @@ function QuickMatchExperience() {
         </div>
       </div>
 
-      <div className="grid grid-cols-3 gap-2 px-5 pb-10 pt-4">
+      {createPortal(<footer
+        aria-label="Recommendation vote actions"
+        className="fixed bottom-[var(--lm-tab-bar-height)] left-1/2 z-40 w-full max-w-[480px] -translate-x-1/2 border-t border-[#E8E6E7] bg-[#FCFCFC]/95 px-5 py-3 shadow-[0_-8px_24px_rgba(45,31,27,0.08)] backdrop-blur"
+      >
+      <div className="grid grid-cols-3 gap-2">
         <motion.button
           data-action="dislike"
           onClick={() => requestButtonSwipe('dislike')}
           disabled={isSubmittingSwipe || requestedSwipe !== null}
           aria-label="Not Recommended"
-          className={`h-[84px] min-w-0 rounded-lg border-2 px-2 text-center outline-none transition-[transform,background-color,color,box-shadow] focus-visible:ring-2 focus-visible:ring-[#DC2626] disabled:cursor-wait disabled:opacity-70 ${activeSwipeAction === 'dislike' ? 'border-[#DC2626] bg-[#DC2626] text-white shadow-[0_0_0_4px_rgba(220,38,38,0.20)]' : 'border-[#F87171] bg-[#FEE2E2] text-[#B91C1C] shadow-sm'}`}
+          className={`h-[72px] min-w-0 rounded-lg border-2 px-2 text-center outline-none transition-[transform,background-color,color,box-shadow] focus-visible:ring-2 focus-visible:ring-[#DC2626] disabled:cursor-wait disabled:opacity-70 ${activeSwipeAction === 'dislike' ? 'border-[#DC2626] bg-[#DC2626] text-white shadow-[0_0_0_4px_rgba(220,38,38,0.20)]' : 'border-[#F87171] bg-[#FEE2E2] text-[#B91C1C] shadow-sm'}`}
           animate={activeSwipeAction === 'dislike' ? { scale: [1, 0.92, 1.04] } : { scale: 1 }}
           transition={{ duration: 0.36, ease: [0.16, 1, 0.3, 1] }}
           whileTap={{ scale: 0.92, backgroundColor: '#DC2626', borderColor: '#DC2626', color: '#FFFFFF' }}
         >
-          <X size={24} className="mx-auto" strokeWidth={2} />
-          <span className="mt-1 block text-[13px] font-semibold">Dislike</span>
+          <X size={21} className="mx-auto" strokeWidth={2} />
+          <span className="mt-1 block text-[12px] font-semibold">Dislike</span>
         </motion.button>
         <motion.button
           data-action="neutral"
           onClick={() => requestButtonSwipe('neutral')}
           disabled={isSubmittingSwipe || requestedSwipe !== null}
           aria-label="Neutral"
-          className={`h-[84px] min-w-0 rounded-lg border-2 px-2 text-center outline-none transition-[transform,background-color,color,box-shadow] focus-visible:ring-2 focus-visible:ring-[#EAB308] disabled:cursor-wait disabled:opacity-70 ${activeSwipeAction === 'neutral' ? 'border-[#EAB308] bg-[#FACC15] text-[#422006] shadow-[0_0_0_4px_rgba(234,179,8,0.22)]' : 'border-[#FACC15] bg-[#FEF9C3] text-[#854D0E] shadow-sm'}`}
+          className={`h-[72px] min-w-0 rounded-lg border-2 px-2 text-center outline-none transition-[transform,background-color,color,box-shadow] focus-visible:ring-2 focus-visible:ring-[#EAB308] disabled:cursor-wait disabled:opacity-70 ${activeSwipeAction === 'neutral' ? 'border-[#EAB308] bg-[#FACC15] text-[#422006] shadow-[0_0_0_4px_rgba(234,179,8,0.22)]' : 'border-[#FACC15] bg-[#FEF9C3] text-[#854D0E] shadow-sm'}`}
           animate={activeSwipeAction === 'neutral' ? { scale: [1, 0.92, 1.04] } : { scale: 1 }}
           transition={{ duration: 0.36, ease: [0.16, 1, 0.3, 1] }}
           whileTap={{ scale: 0.92, backgroundColor: '#FACC15', borderColor: '#EAB308', color: '#422006' }}
         >
-          <Minus size={24} className="mx-auto" strokeWidth={2} />
-          <span className="mt-1 block text-[13px] font-semibold">Neutral</span>
+          <Minus size={21} className="mx-auto" strokeWidth={2} />
+          <span className="mt-1 block text-[12px] font-semibold">Neutral</span>
         </motion.button>
         <motion.button
           data-action="like"
           onClick={() => requestButtonSwipe('like')}
           disabled={isSubmittingSwipe || requestedSwipe !== null}
           aria-label="Recommend"
-          className={`h-[84px] min-w-0 rounded-lg border-2 px-2 text-center outline-none transition-[transform,background-color,color,box-shadow] focus-visible:ring-2 focus-visible:ring-[#16A34A] disabled:cursor-wait disabled:opacity-70 ${activeSwipeAction === 'like' ? 'border-[#16A34A] bg-[#16A34A] text-white shadow-[0_0_0_4px_rgba(22,163,74,0.20)]' : 'border-[#4ADE80] bg-[#DCFCE7] text-[#15803D] shadow-sm'}`}
+          className={`h-[72px] min-w-0 rounded-lg border-2 px-2 text-center outline-none transition-[transform,background-color,color,box-shadow] focus-visible:ring-2 focus-visible:ring-[#16A34A] disabled:cursor-wait disabled:opacity-70 ${activeSwipeAction === 'like' ? 'border-[#16A34A] bg-[#16A34A] text-white shadow-[0_0_0_4px_rgba(22,163,74,0.20)]' : 'border-[#4ADE80] bg-[#DCFCE7] text-[#15803D] shadow-sm'}`}
           animate={activeSwipeAction === 'like' ? { scale: [1, 0.92, 1.04] } : { scale: 1 }}
           transition={{ duration: 0.36, ease: [0.16, 1, 0.3, 1] }}
           whileTap={{ scale: 0.92, backgroundColor: '#16A34A', borderColor: '#16A34A', color: '#FFFFFF' }}
         >
-          <Heart size={24} className="mx-auto" strokeWidth={2} />
-          <span className="mt-1 block text-[13px] font-semibold">Like</span>
+          <Heart size={21} className="mx-auto" strokeWidth={2} />
+          <span className="mt-1 block text-[12px] font-semibold">Like</span>
         </motion.button>
       </div>
+      </footer>, document.body)}
 
       <AnimatePresence>
         {detailRestaurant && (
