@@ -13,6 +13,7 @@ import {
   ChevronDown,
   CircleHelp,
   Clock3,
+  MapPin,
   Navigation,
   Ruler,
   Sparkles,
@@ -28,6 +29,7 @@ import { QUICK_MATCH_PARTY_SIZE_MAX } from '@shared/quickMatchParty';
 import { categoryFiltersForOccasions } from '@shared/occasionFilters';
 import { logSessionCreated } from '@/lib/eventLogger';
 import SessionManagementMenu from '@/components/lunchie/SessionManagementMenu';
+import QuickMatchRadiusMap from '@/components/lunchie/QuickMatchRadiusMap';
 import {
   DEFAULT_QUICK_MATCH_SETTINGS,
   QUICK_MATCH_SETTINGS_STORAGE_KEY,
@@ -420,6 +422,8 @@ export default function LunchieSettingsPage() {
     currentSession,
     setCurrentSession,
     profile,
+    restaurants,
+    isLoading,
   } = useApp();
   const [storedSettings] = useState(() => {
     try {
@@ -436,6 +440,7 @@ export default function LunchieSettingsPage() {
   const [originLabel, setOriginLabel] = useState<string | null>(null);
   const [isLocating, setIsLocating] = useState(false);
   const creationLockRef = useRef(false);
+  const locationWatchRef = useRef<number | null>(null);
   const [activeSessionVerified, setActiveSessionVerified] = useState(false);
   const [isCheckingSession, setIsCheckingSession] = useState(Boolean(currentSession?.inviteCode));
   const [sessionCheckFailed, setSessionCheckFailed] = useState(false);
@@ -466,6 +471,12 @@ export default function LunchieSettingsPage() {
       dietary: normalizeDietaryPreferences(dietary),
     }));
   }, [deadlineMin, radius, distanceEnabled, dietary]);
+
+  useEffect(() => () => {
+    if (locationWatchRef.current !== null && navigator.geolocation) {
+      navigator.geolocation.clearWatch(locationWatchRef.current);
+    }
+  }, []);
 
   useEffect(() => {
     const token = currentSession?.inviteCode;
@@ -507,14 +518,35 @@ export default function LunchieSettingsPage() {
     return () => { active = false; };
   }, [currentSession?.inviteCode, currentSession?.memberKey, fetchSession, sessionCheckAttempt, setCurrentSession]);
 
+  const applyLocationFix = (fix: LocationFix) => {
+    setOrigin(fix);
+    setOriginLabel(localityForCoordinate(fix.latitude, fix.longitude));
+  };
+
+  const beginLocationWatch = () => {
+    if (!navigator.geolocation || locationWatchRef.current !== null) return;
+    locationWatchRef.current = navigator.geolocation.watchPosition(
+      ({ coords }) => applyLocationFix({
+        latitude: coords.latitude,
+        longitude: coords.longitude,
+        accuracy: coords.accuracy,
+      }),
+      () => {
+        if (locationWatchRef.current !== null) navigator.geolocation.clearWatch(locationWatchRef.current);
+        locationWatchRef.current = null;
+      },
+      { enableHighAccuracy: true, timeout: 15_000, maximumAge: 15_000 },
+    );
+  };
+
   const confirmCurrentLocation = async () => {
     setIsLocating(true);
     try {
       const fix = await currentPosition();
       const label = localityForCoordinate(fix.latitude, fix.longitude);
-      setOrigin(fix);
-      setOriginLabel(label);
-      toast.success(`Your location is  ${label}.`);
+      applyLocationFix(fix);
+      beginLocationWatch();
+      toast.success(`Live location is on · ${label}`);
       return fix;
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Couldn't find your location.");
@@ -528,6 +560,15 @@ export default function LunchieSettingsPage() {
     setRadius(nextRadius);
     setDistanceEnabled(true);
     if (!origin && !isLocating) void confirmCurrentLocation().catch(() => undefined);
+    else beginLocationWatch();
+  };
+
+  const disableDistance = () => {
+    setDistanceEnabled(false);
+    if (locationWatchRef.current !== null && navigator.geolocation) {
+      navigator.geolocation.clearWatch(locationWatchRef.current);
+      locationWatchRef.current = null;
+    }
   };
 
   const createAndEnterSession = async () => {
@@ -655,33 +696,62 @@ export default function LunchieSettingsPage() {
         )}
 
         <Card>
-          <div className="mb-3 flex items-center justify-between gap-2">
-            <button
-              type="button"
-              onClick={() => setDistanceEnabled(false)}
-              aria-pressed={!distanceEnabled}
-              className={`min-h-9 rounded-full px-3 text-[10px] font-bold ${!distanceEnabled ? 'bg-[#AA1A0D] text-white' : 'bg-[#FBECE9] text-[#AA1A0D]'}`}
-            >
+          <section
+            aria-label="Quick Match search area"
+            className="overflow-hidden rounded-[20px] border border-[#E4D7D3] bg-white shadow-[0_12px_30px_rgba(73,43,36,0.09)]"
+          >
+            <header className="flex items-center gap-3 px-4 py-3.5">
+              <span className="flex size-9 shrink-0 items-center justify-center rounded-full bg-[#FBECE9] text-[#AA1A0D]">
+                <MapPin size={17} strokeWidth={2.5} />
+              </span>
+              <span className="min-w-0 flex-1">
+                <strong className="block text-[13px] font-black text-[#26232A]">Search Area</strong>
+                <span className="mt-0.5 block truncate text-[10px] font-semibold text-[#8A8184]">
+                  {originLabel ?? 'Set your live location'}
+                </span>
+              </span>
+              <button
+                type="button"
+                onClick={disableDistance}
+                aria-pressed={!distanceEnabled}
+                className={`min-h-8 shrink-0 rounded-full border px-2.5 text-[9px] font-black transition-colors ${!distanceEnabled ? 'border-[#AA1A0D] bg-[#AA1A0D] text-white' : 'border-[#EACCC6] bg-[#FFF5F2] text-[#AA1A0D]'}`}
+              >
+                No Radius
+              </button>
+              <button
+                type="button"
+                onClick={() => void confirmCurrentLocation().catch(() => undefined)}
+                disabled={isLocating}
+                aria-label={origin ? 'Refresh Location' : 'Find My Location'}
+                className="flex size-8 shrink-0 items-center justify-center rounded-full bg-[#F5F4F5] text-[#AA1A0D] transition-colors active:bg-[#FBECE9] disabled:opacity-50"
+              >
+                <Navigation size={14} fill={origin ? 'currentColor' : 'none'} />
+              </button>
+            </header>
 
-              No Radius Limit
-            </button>
-            <button
-              type="button"
-              onClick={() => void confirmCurrentLocation().catch(() => undefined)}
-              disabled={isLocating}
-              className="flex min-h-9 items-center gap-1 rounded-full px-2 text-[10px] font-bold text-[#AA1A0D] disabled:opacity-50"
-            >
-              <Navigation size={12} /> {englishText(isLocating ? "Checking…" : origin ? "Refresh Location" : "Find My Location")}
-            </button>
-          </div>
-          <DistanceRuler radius={radius} onChange={selectRadius} />
-          <div className="mt-3 rounded-[8px] bg-[#F5F4F5] px-3 py-2 text-[10px] font-semibold leading-relaxed text-[#706B6F]">
-            {englishText(origin
-              ? `Current location ·  ${originLabel ?? "Near your location"}${distanceEnabled ? ` · ${formatRadius(radius)}  radius` : " · No radius limit"}`
-              : distanceEnabled
-                ? "Enable location to use your selected radius."
-                : "Get recommendations without location permission.")}
-          </div>
+            <QuickMatchRadiusMap
+              center={origin ? { lat: origin.latitude, lng: origin.longitude } : null}
+              radiusMetres={radius}
+              distanceEnabled={distanceEnabled}
+              restaurants={restaurants}
+              isLoadingRestaurants={isLoading && restaurants.length === 0}
+              isLocating={isLocating}
+              onRequestLocation={() => void confirmCurrentLocation().catch(() => undefined)}
+              embedded
+            />
+
+            <div className="bg-white px-4 pb-4 pt-3.5">
+              <DistanceRuler radius={radius} onChange={selectRadius} />
+              <p className="mt-2 flex items-center gap-1.5 px-1 text-[10px] font-semibold leading-relaxed text-[#706B6F]">
+                <span className={`size-1.5 shrink-0 rounded-full ${origin ? 'bg-[#39A96B]' : 'bg-[#C6BFC1]'}`} aria-hidden="true" />
+                {englishText(origin
+                  ? `Current location · ${originLabel ?? "Near your location"}${distanceEnabled ? ` · ${formatRadius(radius)} radius` : " · No radius limit"}`
+                  : distanceEnabled
+                    ? "Enable location to use your selected radius."
+                    : "Get recommendations without location permission.")}
+              </p>
+            </div>
+          </section>
         </Card>
 
       </main>

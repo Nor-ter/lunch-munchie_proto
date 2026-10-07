@@ -817,34 +817,38 @@ export function AppProvider({
 
   useEffect(() => {
     setIsLoading(true);
-    Promise.all([
-      fetch('/api/restaurants').then(r => (r.ok ? r.json() : Promise.reject())),
-      fetch('/api/courses').then(r => (r.ok ? r.json() : Promise.reject())),
-      // The home preview shares the same bounded first page as Munchie Feed.
-      // Never hydrate the entire public feed just because the app booted.
-      fetch('/api/feed?limit=8&cursor=0').then(r => (r.ok ? r.json() : Promise.reject())),
-    ])
-      .then(([resData, courseData, feedData]) => {
-        if (Array.isArray(resData) && resData.length > 0) {
-          setRestaurants(previous => {
-            // 실데이터가 도착하면 mock 시드는 걷어낸다. 예전엔 previous(=MOCK_RESTAURANTS)에
-            // 더하기만 해서 id가 안 겹치는 mock(서울 샘플)이 덱에 영구히 섞였다.
-            // 세션 중 등록된 로컬 식당(registerRestaurants)은 보존한다.
-            const mockIds = new Set(MOCK_RESTAURANTS.map(r => r.id));
-            const merged = new Map(
-              previous.filter(r => !mockIds.has(r.id)).map(restaurant => [restaurant.id, restaurant]),
-            );
-            resData.forEach((rawRestaurant: Record<string, unknown>) => {
-              const normalized = normalizeRestaurantPayload(rawRestaurant);
-              merged.set(normalized.id, {
-                ...normalized,
-                tags: normalized.tags.map(normalizeFoodTag),
-                photos: normalized.photos.map(p => p.startsWith('http') || p.startsWith('/') ? p : `/photos/${p}`),
-              });
+    const restaurantRequest = fetch('/api/restaurants').then(r => (r.ok ? r.json() : Promise.reject()));
+    const courseRequest = fetch('/api/courses').then(r => (r.ok ? r.json() : Promise.reject()));
+    // The home preview shares the same bounded first page as Munchie Feed.
+    // Never hydrate the entire public feed just because the app booted.
+    const feedRequest = fetch('/api/feed?limit=8&cursor=0').then(r => (r.ok ? r.json() : Promise.reject()));
+
+    // Each surface hydrates as soon as its own endpoint responds. In particular,
+    // a slow feed must not leave Quick Match with an empty restaurant catalogue.
+    void restaurantRequest.then(resData => {
+      if (Array.isArray(resData) && resData.length > 0) {
+        setRestaurants(previous => {
+          // 실데이터가 도착하면 mock 시드는 걷어낸다. 예전엔 previous(=MOCK_RESTAURANTS)에
+          // 더하기만 해서 id가 안 겹치는 mock(서울 샘플)이 덱에 영구히 섞였다.
+          // 세션 중 등록된 로컬 식당(registerRestaurants)은 보존한다.
+          const mockIds = new Set(MOCK_RESTAURANTS.map(r => r.id));
+          const merged = new Map(
+            previous.filter(r => !mockIds.has(r.id)).map(restaurant => [restaurant.id, restaurant]),
+          );
+          resData.forEach((rawRestaurant: Record<string, unknown>) => {
+            const normalized = normalizeRestaurantPayload(rawRestaurant);
+            merged.set(normalized.id, {
+              ...normalized,
+              tags: normalized.tags.map(normalizeFoodTag),
+              photos: normalized.photos.map(p => p.startsWith('http') || p.startsWith('/') ? p : `/photos/${p}`),
             });
-            return Array.from(merged.values());
           });
-        }
+          return Array.from(merged.values());
+        });
+      }
+    }).catch(() => undefined);
+
+    void courseRequest.then(courseData => {
         if (Array.isArray(courseData) && courseData.length > 0) {
           const remoteCourses = courseData.map((course: Course) => limitCourseToThreeStops({
             ...course,
@@ -858,6 +862,9 @@ export function AppProvider({
             return Array.from(merged.values());
           });
         }
+    }).catch(() => undefined);
+
+    void feedRequest.then(feedData => {
         const initialFeedItems = Array.isArray(feedData) ? feedData : feedData?.items;
         if (Array.isArray(initialFeedItems)) {
           const remoteFeeds = initialFeedItems
@@ -871,9 +878,10 @@ export function AppProvider({
         const initialNextCursor = typeof feedData?.nextCursor === 'string' ? feedData.nextCursor : null;
         setFeedCursor(initialNextCursor);
         setHasMoreFeedPosts(Boolean(feedData?.hasMore && initialNextCursor));
-        setApiAvailable(true);
-      })
-      .catch(() => setApiAvailable(false))
+    }).catch(() => undefined);
+
+    Promise.allSettled([restaurantRequest, courseRequest, feedRequest])
+      .then(results => setApiAvailable(results.every(result => result.status === 'fulfilled')))
       .finally(() => setIsLoading(false));
   }, []);
 

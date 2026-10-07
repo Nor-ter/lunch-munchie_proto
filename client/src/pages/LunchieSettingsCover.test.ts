@@ -26,4 +26,15 @@ describe('Quick Match cover', () => {
     expect(source).toContain('bottom-[var(--lm-tab-bar-height)]');
     expect(source).toContain('px-5 pb-36');
   });
+
+  it('keeps the live location map connected to radius and catalogue state', () => {
+    expect(source).toContain("import QuickMatchRadiusMap from '@/components/lunchie/QuickMatchRadiusMap'");
+    expect(source).toContain('navigator.geolocation.watchPosition');
+    expect(source).toContain('radiusMetres={radius}');
+    expect(source).toContain('restaurants={restaurants}');
+    expect(source).toContain('isLoadingRestaurants={isLoading && restaurants.length === 0}');
+    expect(source).toContain('aria-label="Quick Match search area"');
+    expect(source).toContain('embedded');
+    expect(source.indexOf('<QuickMatchRadiusMap')).toBeLessThan(source.indexOf('<DistanceRuler radius={radius}'));
+  });
 });
